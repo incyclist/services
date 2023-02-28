@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { IncyclistCapability, SerialPortProvider } from "incyclist-devices";
+import { AdapterFactory, IncyclistCapability, SerialPortProvider } from "incyclist-devices";
 import clone from "../../utils/clone";
 import { DeviceConfigurationService } from "./service"
 import DeviceConfigurationSettings from "./model/devices";
@@ -48,9 +48,6 @@ const SampleLegacySettings:LegacySettings = {
 describe( 'DeviceConfigurationService',()=>{
 
     describe('init',()=>{
-
-
-        
         let service;
         let testData
         beforeEach( ()=>{            
@@ -62,6 +59,10 @@ describe( 'DeviceConfigurationService',()=>{
                 set: jest.fn(),
                 get: jest.fn( (key,defVal) => testData[key]||defVal)
             }
+        })
+
+        afterEach( ()=>{
+            AdapterFactory.reset()
         })
 
         test('empty configuration',async ()=>{
@@ -79,7 +80,7 @@ describe( 'DeviceConfigurationService',()=>{
         })
 
         test('proper configuration',async ()=>{
-            const settings = Object.assign( {},SampleSettings)
+            const settings = clone(SampleSettings)
             testData = settings
 
             await service.init()
@@ -89,8 +90,18 @@ describe( 'DeviceConfigurationService',()=>{
             expect(service.initFromLegacy).not.toHaveBeenCalled()
         })
 
+
+        test('new and legacy',async ()=>{
+            const settings = clone({...SampleSettings, ...SampleLegacySettings})
+            testData = settings
+            await service.init()
+            
+            expect(service.emit).toHaveBeenCalledWith('initialized')
+            expect(service.initFromLegacy).not.toHaveBeenCalled()
+        })
+
         test('no capabilities',async ()=>{
-            const settings = Object.assign( {},SampleSettings)
+            const settings = clone (SampleSettings)
             delete settings.capabilities
             testData= settings
           
@@ -141,6 +152,10 @@ describe( 'DeviceConfigurationService',()=>{
             SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue( {})
         })
 
+        afterEach( ()=>{
+            AdapterFactory.reset()
+        })
+
         afterAll( ()=>{
             (SerialPortProvider as any)._instance = undefined
         })
@@ -148,21 +163,46 @@ describe( 'DeviceConfigurationService',()=>{
         test('normal legacy settings',()=>{
             const settings = clone(SampleLegacySettings)            
 
+            testData = settings
             service.initFromLegacy(settings)
 
+            //expect(service.settings).toMatchSnapshot()
             const {devices,capabilities,interfaces} = service.settings
-            expect(devices.map(d=>d.settings.name).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+Hrm 3250')
+            expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
+            expect(devices.map(d=>d.settings.name).join(',')).toBe(',,Simulator,Daum8i,HRM-Dual:068786,')
 
+            expect(devices[0].settings.selected).toBeUndefined()
+            expect(devices[0].settings.protocol).toBeUndefined()
             expect(interfaces.length).toBe(4)
 
+            const keys = Object.keys(service.adapters)
+            const emptyAdapters = keys.find( k=> service.adapters[k]===undefined)
+            expect (emptyAdapters).toBeUndefined();
+
             expect(capabilities.length).toBe(4) // Bike, Control, Heartrate, Power
-            const AntFe2606 = devices.find(d=>d.settings.name==='Ant+FE 2606')
-            const AntHrm3250  = devices.find(d=>d.settings.name==='Ant+Hrm 3250')
+            const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
+            const AntHrm3250  = devices.find(d=>d.settings.profile==='HR' && d.settings.deviceID==='3250')
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
             expect(getCap('bike')?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Control)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Power)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.HeartRate)?.selected).toBe(AntHrm3250.udid)            
+        })
+
+        test('legacy settings with two devices having the same name',()=>{
+            const settings = clone(SampleLegacySettings)            
+
+            const Daum2 = clone(settings.gearSelection.bikes[3])
+            Daum2.host = '192.168.2.116'
+            Daum2.displayName = 'Daum8i (192.168.2.116)'
+            settings.gearSelection.bikes.push(Daum2)
+
+            service.initFromLegacy(settings)
+
+            //expect(service.settings).toMatchSnapshot()
+            const {devices} = service.settings
+            expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,Daum8i,HRM-Dual:068786,Ant+HR 3250')
+            expect(devices.map(d=>d.displayName||'').join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,,Daum8i (192.168.2.115),Daum8i (192.168.2.116),,')
         })
 
         test('legacy settings: Hrm disabled',()=>{
@@ -171,12 +211,12 @@ describe( 'DeviceConfigurationService',()=>{
             service.initFromLegacy(settings)
 
             const {devices,capabilities,interfaces} = service.settings
-            expect(devices.map(d=>d.settings.name).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+Hrm 3250')
+            expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
 
             expect(interfaces.length).toBe(4)
             expect(capabilities.length).toBe(4) // Bike, Control, Heartrate, Power
 
-            const AntFe2606 = devices.find(d=>d.settings.name==='Ant+FE 2606')
+            const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
 
             expect(getCap('bike')?.selected).toBe(AntFe2606.udid)
@@ -198,7 +238,7 @@ describe( 'DeviceConfigurationService',()=>{
 
             const {devices,capabilities,interfaces} = service.settings
 
-            expect(devices.map(d=>d.settings.name).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+Hrm 3250')
+            expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
 
             expect(devices.length).toBe(6)
             expect(interfaces.length).toBe(4)
@@ -213,10 +253,30 @@ describe( 'DeviceConfigurationService',()=>{
             expect(getCap(IncyclistCapability.HeartRate)?.selected).toBe(daum.udid)            
         })
 
+        test('migration',async ()=>{
+            const settings = clone(SampleLegacySettings)
+            testData = settings
+            service.initFromLegacy(settings)
+            
+            // reset service
+            service.adapters = {}
+            AdapterFactory.reset()
 
-        
+            // now run with converted data
+            const converted = service.settings
+            testData = clone( {devices:converted.devices, capabilities:converted.capabilities,interfaces:converted.interfaces})
+             await service.init(testData)
+            
+
+            const {devices} = service.settings
+            expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
+            expect(devices.map(d=>d.settings.name).join(',')).toBe(',,Simulator,Daum8i,HRM-Dual:068786,')
+
+        })
 
     })
+
+
 
     describe( 'select',()=>{
 
@@ -283,4 +343,45 @@ describe( 'DeviceConfigurationService',()=>{
 
 
     })
+
+    describe( 'setInterfaceSettings',()=>{
+
+
+        let service;
+        beforeEach( ()=>{            
+            service = new DeviceConfigurationService()
+            service.updateUserSettings =jest.fn()
+
+            service.settings ={
+                interfaces: [
+                    {name:'ble', enabled:true},
+                    {name:'ant', enabled:false},
+                    {name:'serial', enabled:false}                              
+                ]
+            }
+
+        })
+
+        test('setting protocol',()=>{           
+            service.setInterfaceSettings('serial',{protocol:'Daum Classic'})
+
+            expect(service.settings.interfaces[2]).toMatchObject( {name:'serial', enabled:false, protocol:'Daum Classic'}  )
+        })
+
+        test('deleting protocol',()=>{           
+            service.setInterfaceSettings('serial',{protocol:'Daum Classic'})
+            service.setInterfaceSettings('serial',{protocol:null})
+            expect(service.settings.interfaces[2]).toMatchObject( {name:'serial', enabled:false}  )
+        })
+
+        test('cannot overwrite name',()=>{            
+            service.setInterfaceSettings('serial',{name: 'tcpip', protocol:'Daum Classic'})
+
+            expect(service.settings.interfaces[2]).toMatchObject( {name:'serial', enabled:false}  ) // was not changed
+        })
+
+    })
+
+
+    
 })

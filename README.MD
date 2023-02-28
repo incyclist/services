@@ -7,19 +7,22 @@ Incyclist uses React to render the App Front-End for PC platforms ( Windows, Mac
 All Services will be accessed by the Front-End using 
 
 ```
-import {XXXService} from {incyclist-devices}
+import {useXXX, initXXX} from {incyclist-devices}
 
 ```
+
+- useXXX  can be used to consume a Service (e.g. `useDeviceConfiguration()` ) 
+- initXXX can be used to perform a lazy initialization of the Service (e.g. `initUserSettings(binding)` ) 
 
 where XXX represents the Service name
 
 The following Services are currently implemnted in this library:
 
 ## Settings
-- [UserSettings](./src/settings/user/README.MD): manages the user settings 
+- [UserSettings](./docs/classes/UserSettingsService.md): manages the user settings 
 
 
 ## Devices
-- [DeviceConfiguration](./src/devices/configuration/README.MD): manages the user configuration of scanned/added/selected devices
+- [DeviceConfiguration](./docs/classes/DeviceConfigurationService.md): manages the user configuration of scanned/added/selected devices
 - [DeviceAccess](./src/devices/access/README.MD): manages the basic communication to the device (setting up interfacs, scanning,... )
 - [Device](./src/devices/device/README.MD): allows the Front-End to communicate with a device (reading, writing data)

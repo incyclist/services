@@ -1,11 +1,33 @@
 import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
-import DevicesSettings, { IncyclistDeviceSettings } from "./model/devices"
+import DevicesSettings, { IncyclistDeviceSettings, InterfaceSetting } from "./model/devices"
 import { LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacySettings } from "./model/legacy"
 import { v4 as generateUdid } from 'uuid';
 import EventEmitter from "events";
+import { merge } from "../../utils/merge";
 
 interface DeviceAdapterList {[index: string]: IncyclistDeviceAdapter}
+
+export interface DeviceInformation {
+    name: string,
+    udid: string,
+    adapter: IncyclistDeviceAdapter
+}
+
+export interface CapabilityListDetails { 
+    adapters:IncyclistDeviceAdapter[], 
+    selectedIdx?: number,
+    disabled?:boolean 
+}
+
+
+// TODO change return value of getCapabilityInfo to this format
+export interface CapabilityListDetailsNew { 
+    capability: IncyclistCapability|'bike'
+    devices:DeviceInformation[], 
+    selectedIdx?: number,
+    disabled?:boolean 
+}
 
 /**
  * Manages the user configuration of devices and interfaces
@@ -69,13 +91,15 @@ export class DeviceConfigurationService  extends EventEmitter{
     async init():Promise<void> {
         await this.userSettings.init()
        
-        if ( this.userSettings.get('devices',null)==null &&  this.userSettings.get('gearSelection',null)!==null|| this.userSettings.get('connections',null)!==null) {       
+        if ( this.userSettings.get('devices',null)==null &&  (this.userSettings.get('gearSelection',null)!==null|| this.userSettings.get('connections',null)!==null)) {      
+
             const settings: LegacySettings= {};
 
             settings.connections = this.userSettings.get('connections',{}) as LegacyDeviceConnectionSettings
             settings.gearSelection = this.userSettings.get('gearSelection',{}) as LegacyDeviceSelectionSettings
             await this.initFromLegacy(settings)
             this.emit('initialized')
+            
 
         }
 
@@ -84,6 +108,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             capabilities:this.userSettings.get('capabilities',[]),
             interfaces: this.userSettings.get('interfaces',[])
         }
+        this.settings.devices.forEach( d=> this.adapters[d.udid] = AdapterFactory.create(d.settings))
         this.emit('initialized')
     }
 
@@ -92,7 +117,6 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     initFromLegacy(settings:LegacySettings={}):void {
-      
         const {gearSelection,connections} = settings
         const {bikes=[], hrms=[]} = gearSelection||{}
         
@@ -107,21 +131,46 @@ export class DeviceConfigurationService  extends EventEmitter{
         bikes.forEach( bike=> {
             if (bike.protocol==='Simulator')
                 bike.interface='simulator'
+
+            // delete some legay properties
+            const isSelected = bike.selected
+            delete bike.selected
+            delete bike.displayName
+            // special case ANT - we need to remove name as all necessar information is in the DeviceId
+            if (bike.interface==='ant')
+                delete bike.name
+
             const adapter = AdapterFactory.create(bike);
+            if (!adapter) {
+                return;
+            }
             const bikeSettings = adapter.getSettings()
+            // special case ANT - we need to remove legacy protocol information as otherwise profile would be incorrectly interpreted
+            if (bike.interface==='ant')
+                delete bikeSettings.protocol
 
             const existing = devices.find( device=> adapter.isEqual(device.settings))
+            const sameNameIdx = devices.findIndex( device=> device.settings.interface===bikeSettings.interface && device.settings.name===bikeSettings.name && !adapter.isEqual(device.settings))
+            const sameNameDevice = sameNameIdx!==-1 ? devices[sameNameIdx] : undefined
+
             let udid = existing?.udid
             if (!existing) {
                 udid=generateUdid()
-                devices.push( {udid, settings:bikeSettings})
+                if (!sameNameDevice) {
+                    devices.push( {udid, settings:bikeSettings})
+                }
+                else {
+                    devices.push( {udid, settings:bikeSettings,displayName:adapter.getUniqueName()})
+                    sameNameDevice.displayName = this.adapters[sameNameDevice.udid].getUniqueName()
+                }
+                
                 this.adapters[udid] = adapter
             }
 
             // ensure that devices is included in capability device list, also ensures that capabilty exists
             ['bike',IncyclistCapability.Control, IncyclistCapability.Power].forEach( (cc:IncyclistCapability|'bike') => {            
                 this.addToCapability(udid,cc)  
-                if (bike.selected) {               
+                if (isSelected) {               
                     const cap = cc as IncyclistCapability|'bike'
                     if (cap==='bike' || adapter.hasCapability(cap)) {
                         const selectedDevice = capabilities.find(c => c.capability===cap )
@@ -134,8 +183,22 @@ export class DeviceConfigurationService  extends EventEmitter{
         })
 
         hrms.forEach( hrm=> {
+            // delete some legay properties
+            const isSelected = hrm.selected
+            delete hrm.selected
+            delete hrm.displayName
+            // special case ANT - we need to remove name 
+            if (hrm.interface==='ant') 
+                delete hrm.name
+            
             const adapter = AdapterFactory.create(hrm);
+            if (!adapter) {
+                return;
+            }
             const hrmSettings = adapter.getSettings()
+            // special case ANT - we need to remove legacy protocol information as otherwise profile would be incorrectly interpreted
+            if (hrm.interface==='ant')
+               delete hrmSettings.protocol
 
             const existing = devices.find( device=> {
                 const equal = adapter.isEqual(device.settings)
@@ -148,7 +211,7 @@ export class DeviceConfigurationService  extends EventEmitter{
                 this.adapters[udid] = adapter
             }
             this.addToCapability(udid,IncyclistCapability.HeartRate)  
-            if (hrm.selected && !settings.gearSelection.disableHrm) {               
+            if (isSelected&& !settings.gearSelection.disableHrm) {               
                 const cap = IncyclistCapability.HeartRate
                 if (adapter.hasCapability(cap)) {
                     const selectedDevice = capabilities.find(c => c.capability===cap )
@@ -168,8 +231,8 @@ export class DeviceConfigurationService  extends EventEmitter{
                 capabilities.push( {capability:IncyclistCapability.HeartRate, devices:[], selected:undefined, disabled:true})
         }
 
-        this.userSettings.set('connections',null)
-        this.userSettings.set('gearSelection',null)
+        this.userSettings.set('connections',{} /*null*/)
+        this.userSettings.set('gearSelection',{} /*null*/)
 
         this.settings = { devices, capabilities, interfaces}
         this.updateUserSettings()
@@ -204,13 +267,16 @@ export class DeviceConfigurationService  extends EventEmitter{
                 this.settings.devices = []
             udid = generateUdid() as string
             this.settings.devices.push( {udid,settings:adapter.getSettings()})
-            this.emit('device-added',adapter.getSettings(),udid )
-
+            this.emit('device-added',adapter.getSettings(),udid ) 
+            
+            this.adapters[udid] = adapter
         }
 
-        // ensure that devices is included in capability device list, also ensures that capabilty exists
+        // ensure that devices is included in capability device list. 
+        // This also ensures that the capability exists
         this.addToCapability(udid,capability)  
 
+        // mark device udid as selected in capability, remove disabled flag
         const capSettings = this.settings.capabilities?.find( c=>c.capability===capability)       
         capSettings.selected = udid
         if (capSettings.disabled)
@@ -218,12 +284,42 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         this.emit('device-changed', capability)
 
-        if (isControl && (capability!=='bike' && capability!==IncyclistCapability.Control)) {
-            this.select(adapter,'bike')
-            this.select(adapter,IncyclistCapability.Control)            
+        // the next to blocks are special logic to avoid that Controllable Devices are launched without really using them to Control
+        // which could lead to conflicts
+
+        // if we select a controllable device as hrm or any other non controllable source, make sure that this device is also selected as controllable
+        if (isControl) {
+            if (capability!=='bike' && capability!==IncyclistCapability.Control) {
+                this.select(adapter,'bike')
+                this.select(adapter,IncyclistCapability.Control)            
+            }
+            else {
+                const otherCapabilties = this.settings.capabilities.filter( c=>c.capability!=='bike' && c.capability!==IncyclistCapability.Control && !c.disabled && c.selected!==udid)
+                const selectedControllable = otherCapabilties.filter( c => this.adapters[c.selected].hasCapability(IncyclistCapability.Control))
+                
+                selectedControllable.forEach(c => {
+                    if (adapter.hasCapability(c.capability)) {
+                        this.select(adapter,c.capability)
+                    }
+                    else 
+                        this.unselect(c.capability)
+                })
+            }
         }
 
         this.updateUserSettings()
+    }
+
+    unselect( capability:IncyclistCapability|'bike'):void {
+        console.log('~~~ unselect', capability)
+        if (this.settings || !this.settings.capabilities)
+            return;
+
+        const settings = this.settings.capabilities.find( c =>c.capability===capability)
+        if (settings) {
+            settings.selected= undefined
+            this.emit('device-changed', settings.capability)
+        }
     }
 
     add(device:IncyclistDeviceSettings|IncyclistDeviceAdapter):void {
@@ -314,6 +410,10 @@ export class DeviceConfigurationService  extends EventEmitter{
             if (!record.devices.includes(udid))
                 record.devices.push(udid)
         }            
+
+        if (capability!=='bike' && !this.adapters[udid].hasCapability(capability)) {
+            this.adapters[udid].addCapability(capability)
+        }
     }
 
     updateUserSettings() {
@@ -352,7 +452,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         return this.adapters[udid]
     }
 
-    getCapabilityInfo(capability:IncyclistCapability|'bike'): { adapters:IncyclistDeviceAdapter[], selectedIdx?: number,disabled?:boolean } {
+    getCapabilityInfo(capability:IncyclistCapability|'bike'): CapabilityListDetails {
         const {capabilities} = this.settings||{}
         const adapters=[]
         let selectedIdx
@@ -375,14 +475,14 @@ export class DeviceConfigurationService  extends EventEmitter{
 
     //  Interface methods
 
-    protected getInterfaceSettings(ifName:string) {
+    protected getInterfaceSettings(ifName:string):InterfaceSetting {
         if (!this.settings) this.settings={interfaces:[]}
         if (!this.settings.interfaces) this.settings.interfaces=[]
         const setting = this.settings.interfaces.find(i => i.name===ifName)
         return setting;
     }
 
-    isInterfaceEnabled(ifName:string) {
+    isInterfaceEnabled(ifName:string):boolean {
         const setting = this.getInterfaceSettings(ifName)
         if (!setting)
             return false;
@@ -390,7 +490,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
     }
 
-    enableInterface(ifName:string) {
+    enableInterface(ifName:string):void {
         const setting = this.getInterfaceSettings(ifName)
         if (setting)
             setting.enabled = true
@@ -399,12 +499,21 @@ export class DeviceConfigurationService  extends EventEmitter{
         
     }
 
-    disableInterface(ifName:string) {
+    disableInterface(ifName:string):void {
         const setting = this.getInterfaceSettings(ifName)
         if (setting)
             setting.enabled = false
         else 
             this.settings.interfaces.push( {name:ifName, enabled:false})
+    }
+
+    setInterfaceSettings(ifName, settings:InterfaceSetting):void {
+        if (settings.name && settings.name!==ifName)
+            return;
+
+        const setting = this.getInterfaceSettings(ifName)
+        merge(setting,settings)
+        return 
     }
 
 

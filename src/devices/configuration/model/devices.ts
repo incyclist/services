@@ -5,11 +5,13 @@ export type IncyclistDeviceSettings = SerialDeviceSettings | AntDeviceSettings |
 export interface DeviceListEntry {
     udid: string
     settings: IncyclistDeviceSettings
+    displayName?: string
 }
 
 export interface InterfaceSetting {
     name: string;
     enabled: boolean;
+    protocol?: string
 }
 
 export type CapabilitySetting = {

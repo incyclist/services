@@ -166,6 +166,7 @@ export class UserSettingsService {
             return;
         }
         
+        console.log('~~~saving ', this.settings.gearSelection)
         this.savePromise =  this.binding.save(this.settings)
         try {
             await this.savePromise;
