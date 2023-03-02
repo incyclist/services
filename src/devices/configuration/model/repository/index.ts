@@ -1,6 +1,9 @@
 import {SerialDeviceSettings, AntDeviceSettings, BleDeviceSettings, IncyclistCapability} from 'incyclist-devices'
 
 export type IncyclistDeviceSettings = SerialDeviceSettings | AntDeviceSettings | BleDeviceSettings
+export * from './legacy'
+
+// repository interfaces
 
 export interface DeviceListEntry {
     udid: string
@@ -21,8 +24,10 @@ export type CapabilitySetting = {
     devices:string[];
 }
 
-export default interface DeviceConfigurationSettings {
+export interface DeviceConfigurationSettings {
     interfaces?: InterfaceSetting[]
     capabilities?: CapabilitySetting[]
     devices?: DeviceListEntry[]
 }
+
+

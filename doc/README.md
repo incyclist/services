@@ -1,11 +1,12 @@
-incyclist-services
+incyclist-services - v1.0.0-beta.1
 
-# incyclist-services
+# incyclist-services - v1.0.0-beta.1
 
 ## Table of contents
 
 ### Classes
 
+- [DeviceAccessService](classes/DeviceAccessService.md)
 - [DeviceConfigurationService](classes/DeviceConfigurationService.md)
 - [UserSettingsBinding](classes/UserSettingsBinding.md)
 - [UserSettingsService](classes/UserSettingsService.md)
@@ -13,10 +14,13 @@ incyclist-services
 ### Interfaces
 
 - [IUserSettingsBinding](interfaces/IUserSettingsBinding.md)
+- [InterfaceInfo](interfaces/InterfaceInfo.md)
+- [InterfaceList](interfaces/InterfaceList.md)
 
 ### Functions
 
 - [initUserSettings](README.md#initusersettings)
+- [useDeviceAccess](README.md#usedeviceaccess)
 - [useDeviceConfiguration](README.md#usedeviceconfiguration)
 - [useUserSettings](README.md#useusersettings)
 
@@ -36,9 +40,15 @@ incyclist-services
 
 [`UserSettingsService`](classes/UserSettingsService.md)
 
-#### Defined in
+___
 
-[src/settings/user/service.ts:192](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L192)
+### useDeviceAccess
+
+▸ **useDeviceAccess**(): [`DeviceAccessService`](classes/DeviceAccessService.md)
+
+#### Returns
+
+[`DeviceAccessService`](classes/DeviceAccessService.md)
 
 ___
 
@@ -50,10 +60,6 @@ ___
 
 [`DeviceConfigurationService`](classes/DeviceConfigurationService.md)
 
-#### Defined in
-
-[src/devices/configuration/service.ts:415](https://github.com/incyclist/services/blob/9ad4caf/src/devices/configuration/service.ts#L415)
-
 ___
 
 ### useUserSettings
@@ -63,7 +69,3 @@ ___
 #### Returns
 
 [`UserSettingsService`](classes/UserSettingsService.md)
-
-#### Defined in
-
-[src/settings/user/service.ts:190](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L190)

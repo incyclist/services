@@ -1,0 +1,15 @@
+{
+    "$schema": "https://typedoc.org/schema.json",
+    "entryPoints": ["src/index.ts"],
+    "out": "doc",
+    "readme":"none",
+    "excludeProtected":true ,
+    "excludePrivate":true,
+    "disableSources":true,
+    "includeVersion": true,
+    "plugin": [
+        "typedoc-plugin-no-inherit" ,
+        "typedoc-plugin-markdown"
+    ]
+
+}

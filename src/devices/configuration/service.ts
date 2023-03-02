@@ -1,7 +1,7 @@
-import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface } from "incyclist-devices"
+import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
-import DevicesSettings, { IncyclistDeviceSettings, InterfaceSetting } from "./model/devices"
-import { LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacySettings } from "./model/legacy"
+import { DeviceConfigurationSettings, IncyclistDeviceSettings, InterfaceSetting, 
+         LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacySettings } from "./model"
 import { v4 as generateUdid } from 'uuid';
 import EventEmitter from "events";
 import { merge } from "../../utils/merge";
@@ -29,6 +29,9 @@ export interface CapabilityListDetailsNew {
     disabled?:boolean 
 }
 
+
+
+
 /**
  * Manages the user configuration of devices and interfaces
  *  - Detected Devices and Sensors
@@ -36,32 +39,12 @@ export interface CapabilityListDetailsNew {
  *  - Cycling Mode settings for all devices.
  *  - Enabled/Disabled Interfaces
  * 
- * @public
+ * @noInheritDoc
+ * 
  */
 export class DeviceConfigurationService  extends EventEmitter{
 
-    // @internal
-    static _instance: DeviceConfigurationService
-
-    // Events
-
-    /**
-     * Triggered when the user settings have been read
-     * @event
-    */
-    static readonly INITIALIZED = 'initialzed'
-
-    /**
-     * Triggered when a device has been added to the device settings
-     * @event
-    */
-    static readonly DEVICE_ADDED = 'device-added'
-
-    /**
-     * Triggered when the settings of a device has changed in the device seetings 
-     * @event
-    */
-    static readonly DEVICE_CHANGED = 'device-changed'
+    protected static _instance: DeviceConfigurationService
 
     static getInstance():DeviceConfigurationService{
         if (!DeviceConfigurationService._instance)
@@ -69,7 +52,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         return DeviceConfigurationService._instance
     }
 
-    settings: DevicesSettings
+    settings: DeviceConfigurationSettings
     userSettings
     adapters: DeviceAdapterList = {}
 
@@ -84,8 +67,7 @@ export class DeviceConfigurationService  extends EventEmitter{
      * 
      * The init method will check if the settings format is 
      * 
-     * @event emits 'initialized'
-     * 
+     * @emits __initialized__ Emitted once the configuration is fully initialized 
      * 
     */
     async init():Promise<void> {
@@ -112,7 +94,10 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.emit('initialized')
     }
 
-    isInitialized() {
+    /** 
+     * Provides the initialization state of the interface
+     * @returns `true` if the interface has been initialized, `false` otherwise */
+    isInitialized():boolean {
         return this.settings!==undefined
     }
 
@@ -245,8 +230,8 @@ export class DeviceConfigurationService  extends EventEmitter{
      * @param capability    The cability for which the device should be marked as selected
      * 
      * 
-     * @event emits 'device-changed'    in case the settings were changed
-     * @event emits 'device-added'      in case the device was not yet known
+     * @event device-changed    in case the settings were changed
+     * @event device-added      in case the device was not yet known
     */
 
     select(device:IncyclistDeviceSettings|IncyclistDeviceAdapter, capability:IncyclistCapability|'bike'):void {

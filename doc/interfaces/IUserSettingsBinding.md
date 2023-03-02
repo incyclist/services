@@ -1,4 +1,4 @@
-[incyclist-services](../README.md) / IUserSettingsBinding
+[incyclist-services - v1.0.0-beta.1](../README.md) / IUserSettingsBinding
 
 # Interface: IUserSettingsBinding
 
@@ -24,10 +24,6 @@
 
 `Promise`<`any`\>
 
-#### Defined in
-
-[src/settings/user/bindings/types.ts:4](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/bindings/types.ts#L4)
-
 ___
 
 ### save
@@ -43,10 +39,6 @@ ___
 #### Returns
 
 `Promise`<`boolean`\>
-
-#### Defined in
-
-[src/settings/user/bindings/types.ts:6](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/bindings/types.ts#L6)
 
 ___
 
@@ -64,7 +56,3 @@ ___
 #### Returns
 
 `Promise`<`boolean`\>
-
-#### Defined in
-
-[src/settings/user/bindings/types.ts:5](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/bindings/types.ts#L5)

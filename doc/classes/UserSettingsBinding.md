@@ -1,4 +1,4 @@
-[incyclist-services](../README.md) / UserSettingsBinding
+[incyclist-services - v1.0.0-beta.1](../README.md) / UserSettingsBinding
 
 # Class: UserSettingsBinding
 
@@ -39,10 +39,6 @@
 
 [IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[getAll](../interfaces/IUserSettingsBinding.md#getall)
 
-#### Defined in
-
-[src/settings/user/bindings/types.ts:13](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/bindings/types.ts#L13)
-
 ___
 
 ### save
@@ -62,10 +58,6 @@ ___
 #### Implementation of
 
 [IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[save](../interfaces/IUserSettingsBinding.md#save)
-
-#### Defined in
-
-[src/settings/user/bindings/types.ts:15](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/bindings/types.ts#L15)
 
 ___
 
@@ -88,10 +80,6 @@ ___
 
 [IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[set](../interfaces/IUserSettingsBinding.md#set)
 
-#### Defined in
-
-[src/settings/user/bindings/types.ts:14](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/bindings/types.ts#L14)
-
 ___
 
 ### getInstance
@@ -101,7 +89,3 @@ ___
 #### Returns
 
 [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md)
-
-#### Defined in
-
-[src/settings/user/bindings/types.ts:10](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/bindings/types.ts#L10)

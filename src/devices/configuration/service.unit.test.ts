@@ -2,8 +2,8 @@
 import { AdapterFactory, IncyclistCapability, SerialPortProvider } from "incyclist-devices";
 import clone from "../../utils/clone";
 import { DeviceConfigurationService } from "./service"
-import DeviceConfigurationSettings from "./model/devices";
-import { LegacySettings,LegacyGearSetting } from "./model/legacy";
+import { DeviceConfigurationSettings,
+         LegacySettings,LegacyGearSetting } from "./model";
 
 
 const SampleSettings: DeviceConfigurationSettings= {                

@@ -1,4 +1,4 @@
-[incyclist-services](../README.md) / UserSettingsService
+[incyclist-services - v1.0.0-beta.1](../README.md) / UserSettingsService
 
 # Class: UserSettingsService
 
@@ -35,19 +35,11 @@
 
 • **new UserSettingsService**()
 
-#### Defined in
-
-[src/settings/user/service.ts:30](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L30)
-
 ## Properties
 
 ### binding
 
 • **binding**: [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md)
-
-#### Defined in
-
-[src/settings/user/service.ts:16](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L16)
 
 ___
 
@@ -55,19 +47,11 @@ ___
 
 • **isDirty**: `boolean`
 
-#### Defined in
-
-[src/settings/user/service.ts:19](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L19)
-
 ___
 
 ### isInitialized
 
 • **isInitialized**: `boolean`
-
-#### Defined in
-
-[src/settings/user/service.ts:18](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L18)
 
 ___
 
@@ -75,19 +59,11 @@ ___
 
 • **logger**: `default`
 
-#### Defined in
-
-[src/settings/user/service.ts:17](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L17)
-
 ___
 
 ### savePromise
 
 • **savePromise**: `Promise`<`boolean`\>
-
-#### Defined in
-
-[src/settings/user/service.ts:20](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L20)
 
 ___
 
@@ -95,19 +71,11 @@ ___
 
 • **settings**: `any`
 
-#### Defined in
-
-[src/settings/user/service.ts:15](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L15)
-
 ___
 
 ### \_instance
 
 ▪ `Static` **\_instance**: [`UserSettingsService`](UserSettingsService.md)
-
-#### Defined in
-
-[src/settings/user/service.ts:13](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L13)
 
 ## Methods
 
@@ -126,10 +94,6 @@ ___
 
 `any`
 
-#### Defined in
-
-[src/settings/user/service.ts:63](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L63)
-
 ___
 
 ### init
@@ -140,10 +104,6 @@ ___
 
 `Promise`<`boolean`\>
 
-#### Defined in
-
-[src/settings/user/service.ts:44](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L44)
-
 ___
 
 ### save
@@ -153,10 +113,6 @@ ___
 #### Returns
 
 `Promise`<`void`\>
-
-#### Defined in
-
-[src/settings/user/service.ts:160](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L160)
 
 ___
 
@@ -175,10 +131,6 @@ ___
 
 `void`
 
-#### Defined in
-
-[src/settings/user/service.ts:93](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L93)
-
 ___
 
 ### setBinding
@@ -194,10 +146,6 @@ ___
 #### Returns
 
 `void`
-
-#### Defined in
-
-[src/settings/user/service.ts:39](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L39)
 
 ___
 
@@ -215,10 +163,6 @@ ___
 
 `Promise`<`boolean`\>
 
-#### Defined in
-
-[src/settings/user/service.ts:141](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L141)
-
 ___
 
 ### updateSettings
@@ -235,10 +179,6 @@ ___
 
 `Promise`<`boolean`\>
 
-#### Defined in
-
-[src/settings/user/service.ts:145](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L145)
-
 ___
 
 ### getInstance
@@ -248,7 +188,3 @@ ___
 #### Returns
 
 [`UserSettingsService`](UserSettingsService.md)
-
-#### Defined in
-
-[src/settings/user/service.ts:23](https://github.com/incyclist/services/blob/9ad4caf/src/settings/user/service.ts#L23)
