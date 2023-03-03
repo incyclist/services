@@ -2,6 +2,7 @@ import { IncyclistCapability} from "incyclist-devices"
 
 
 export type InterfaceState = 'connected'| 'disconnected' | 'unknown' | 'connecting' | 'disconnecting'
+export type ScanState = 'start-requested' | 'started' | 'stop-requested' | 'stopped' | 'idle'
 
 /*
  * Provides the information about a single Interface

@@ -16,13 +16,13 @@ import {useXXX, initXXX} from {incyclist-devices}
 
 where XXX represents the Service name
 
-The following Services are currently implemnted in this library:
+The following Services are currently implemented in this library:
 
 ## Settings
-- [UserSettings](./docs/classes/UserSettingsService.md): manages the user settings 
+- [UserSettings](./doc/classes/UserSettingsService.md): manages the user settings 
 
 
 ## Devices
-- [DeviceConfiguration](./docs/classes/DeviceConfigurationService.md): manages the user configuration of scanned/added/selected devices
-- [DeviceAccess](./src/devices/access/README.MD): manages the basic communication to the device (setting up interfacs, scanning,... )
+- [DeviceConfiguration](./doc/classes/DeviceConfigurationService.md): manages the user configuration of scanned/added/selected devices
+- [DeviceAccess](./doc/classes/DeviceAccessService.md): manages the basic communication to the device (setting up interfacs, scanning,... )
 - [Device](./src/devices/device/README.MD): allows the Front-End to communicate with a device (reading, writing data)

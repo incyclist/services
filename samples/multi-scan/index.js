@@ -41,18 +41,19 @@ class App {
     async scan() {
         this.logger.logEvent({message:'scan'})
         
-        this.deviceAccess.setDefaultInterfaceProperties({connectTimeout:2000, scanTimeout:5000})
-        this.deviceAccess.enableInterface('serial',autodetect(),{protocol:'Daum Classic'})
+        this.deviceAccess.setDefaultInterfaceProperties({connectTimeout:2000, scanTimeout:5000,log:false})
+        //this.deviceAccess.enableInterface('serial',autoDetect(),{protocol:'Daum Classic'})
         this.deviceAccess.enableInterface('tcpip',TCPBinding,{port:51955, protocol:'Daum Premium'})
         this.deviceAccess.enableInterface('ant',AntDevice)
         //this.deviceAccess.enableInterface('ble',BleBinding)
 
+        
         this.deviceAccess.on('device', (device)=> {this.logger.logEvent({message:'device detected'},device)})
         this.deviceAccess.on('scan-started', ()=> {
             this.logger.logEvent({message:'scan started'})
         })
         this.deviceAccess.on('scan-stopped', ()=> {this.logger.logEvent({message:'scan stopped'})})
-        this.deviceAccess.on('interface-state-changed', (ifaceName,state)=> {this.logger.logEvent({message:'interface state',interface:ifaceName,state})})
+        this.deviceAccess.on('interface-changed', (ifaceName,state)=> {this.logger.logEvent({message:'interface state',interface:ifaceName,state})})
 
         try {
             const devices = await this.deviceAccess.scan()
@@ -80,4 +81,4 @@ process.on('SIGTERM', () => app.exit() ); // `kill` command
 
 app.run()
     //.then(()=>process.exit(0))
-    .catch(()=>process.exit(1))
+    .catch(err=>{ console.error(err); process.exit(1)})
