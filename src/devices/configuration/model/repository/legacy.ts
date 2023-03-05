@@ -48,7 +48,22 @@ export interface LegacyDeviceConnectionSettings {
     }
 }
 
+export interface IncyclistModeSettings {
+    mode: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    settings: any 
+}
+
+export interface LegacyModeSettings {
+    [index: string] :IncyclistModeSettings 
+}
+
+export interface LegacyPreferences {
+    gear: LegacyModeSettings
+}
+
 export interface LegacySettings {
     connections?: LegacyDeviceConnectionSettings;
     gearSelection?: LegacyDeviceSelectionSettings;
+    modeSettings?: LegacyModeSettings;
 }

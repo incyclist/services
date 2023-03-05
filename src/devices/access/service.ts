@@ -1,6 +1,6 @@
 import EventEmitter from "events";
 import { EventLogger } from "gd-eventlog";
-import {DeviceSettings, IncyclistInterface, InterfaceFactory} from "incyclist-devices";
+import {AdapterFactory, DeviceSettings, IncyclistInterface, InterfaceFactory} from "incyclist-devices";
 import { SerialScannerProps } from "incyclist-devices/lib/serial/serial-interface";
 import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
@@ -87,7 +87,6 @@ export class DeviceAccessService  extends EventEmitter{
     constructor() {
         super()
 
-        console.log('~~~ new DeviceAccessService')
         this.scanState = null;
         this.logger = new EventLogger('DeviceAccess')
         this.defaultProps = {}
@@ -270,13 +269,36 @@ export class DeviceAccessService  extends EventEmitter{
             }
 
             const interfaces = this.scanState.interfaces = this.getInterfacesForScan(filter);
-            
+            const adapters = []
 
             interfaces.forEach( (i:IncyclistInterface) => {
 
-                i.on('device',(deviceSettings)=>{ 
+                i.on('device',async (deviceSettings)=>{ 
+
+                    // already found during this scan? ignore
+                    if (adapters.find(a=> a.isEqual(deviceSettings)))
+                        return;
+
                     this.emit('device',deviceSettings )
+                    const adapter = AdapterFactory.create(deviceSettings)
+                    adapters.push(adapter)
+                    
+                    adapter.on('device-info',(info)=>{ 
+                        this.emit('device-info',deviceSettings,{displayName:adapter.getUniqueName()})                                                
+                    })
+
+                    adapter.on('data',(info,data)=>{console.log('~~~ got data', deviceSettings,data)})
+                    
+                    
                     detected.push(deviceSettings)
+
+                    try {
+                        await adapter.start()
+                    }
+                    catch(err) {
+                        console.log('~~~ start error',err)
+                    }
+
                 })
 
                 const ifaceName = i.getName()
@@ -303,8 +325,12 @@ export class DeviceAccessService  extends EventEmitter{
             this.emitScanStateChange('started')
 
             try {
-               const res = await Promise.allSettled(this.scanState.promises)
-               console.log('~~ result',res)
+
+                if (this.scanState.promises.length===0) {
+                    this.scanState.promises.push(this.dummyScan())
+                }
+                const res = await Promise.allSettled(this.scanState.promises)
+                console.log('~~ result',res)
             }
             catch(err) {
                 this.logger.logEvent({message:'device scan finished with errors', filter, error:err.message, stack:err.stack})
@@ -321,6 +347,27 @@ export class DeviceAccessService  extends EventEmitter{
             this.logger.logEvent({message:'device scan finished', filter, detected} )
             return detected;    
         }
+    }
+
+    protected async dummyScan():Promise<DeviceSettings[]> {
+        return new Promise<DeviceSettings[]>( done=> {
+
+            const timeout = this.defaultProps.scanTimeout || 5000;
+            const timeDone = Date.now()+timeout
+            const iv = setInterval( ()=>{
+                if (Date.now()>timeDone) {
+                    clearInterval(iv)
+                    done([])
+                }
+
+            }, 100)
+
+            this.once('stop-requested', ()=>{
+                clearInterval(iv)
+                done([])
+            })
+        })
+        
     }
 
     protected emitScanStateChange(state:ScanState) {
@@ -367,7 +414,6 @@ export class DeviceAccessService  extends EventEmitter{
         }
         return interfaces
     }
-
 
 
 }

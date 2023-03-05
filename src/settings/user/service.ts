@@ -96,7 +96,8 @@ export class UserSettingsService {
         if (!this.isInitialized)
             throw new Error('Settings are not yet initialized')
 
-        //this.binding.set(key,value)
+        if (!this.binding.canOverwrite())
+            this.binding.set(key,value)
 
         const settings = this.settings;
 
@@ -110,7 +111,8 @@ export class UserSettingsService {
                 delete settings[key]
             else 
                 settings[key] = value 
-            this.save()           
+            
+            this.save()      
             return value;
         }
     
@@ -166,7 +168,6 @@ export class UserSettingsService {
             return;
         }
         
-        console.log('~~~saving ', this.settings.gearSelection)
         this.savePromise =  this.binding.save(this.settings)
         try {
             await this.savePromise;
@@ -191,7 +192,6 @@ export class UserSettingsService {
 export const useUserSettings = ()=>UserSettingsService.getInstance()
 
 export const initUserSettings = (binding: IUserSettingsBinding)=> {
-    console.log('~~~ initUserSettings', binding)
     const us = UserSettingsService.getInstance()
     us.setBinding(binding)
     return us

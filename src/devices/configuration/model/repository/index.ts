@@ -1,4 +1,5 @@
 import {SerialDeviceSettings, AntDeviceSettings, BleDeviceSettings, IncyclistCapability} from 'incyclist-devices'
+import { ExtendedIncyclistCapability } from '../app'
 
 export type IncyclistDeviceSettings = SerialDeviceSettings | AntDeviceSettings | BleDeviceSettings
 export * from './legacy'
@@ -6,9 +7,12 @@ export * from './legacy'
 // repository interfaces
 
 export interface DeviceListEntry {
-    udid: string
-    settings: IncyclistDeviceSettings
-    displayName?: string
+    udid: string,
+    settings: IncyclistDeviceSettings,
+    displayName?: string,
+    mode?:string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    modes?:{ [index:string]:any  }
 }
 
 export interface InterfaceSetting {
@@ -17,9 +21,16 @@ export interface InterfaceSetting {
     protocol?: string
 }
 
+export interface ModeListEntry {
+    mid: string;
+    mode: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setting: any
+}
+
 export type CapabilitySetting = {
     selected: string | undefined
-    capability: IncyclistCapability | 'bike'
+    capability: ExtendedIncyclistCapability
     disabled?: boolean
     devices:string[];
 }
@@ -28,6 +39,7 @@ export interface DeviceConfigurationSettings {
     interfaces?: InterfaceSetting[]
     capabilities?: CapabilitySetting[]
     devices?: DeviceListEntry[]
+    
 }
 
 

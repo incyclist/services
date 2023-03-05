@@ -49,6 +49,10 @@ export default class JSONFileBindig extends UserSettingsBinding{
 
     }
 
+    canOverwrite(): boolean {
+        return true
+    }
+
     async save(settings?:any):Promise<boolean> {
         if (settings) {
             this.verify(settings)

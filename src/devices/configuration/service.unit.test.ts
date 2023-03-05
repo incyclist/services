@@ -8,7 +8,7 @@ import { DeviceConfigurationSettings,
 
 const SampleSettings: DeviceConfigurationSettings= {                
     devices: [
-        {udid:'1', settings: {interface:'ble', name:'1', protocol:'fm'}},
+        {udid:'1', settings: {interface:'ble', name:'1', protocol:'fm'}, mode:'ERG', modes:{ "ERG": { "startPower": "100" }} },
         {udid:'2', settings: {interface:'ble', name:'2', protocol:'fm'}},
         {udid:'3', settings: {interface:'ble', name:'3', protocol:'hr'}},
     ],
@@ -41,6 +41,21 @@ const SampleLegacySettings:LegacySettings = {
             {name: "Daum8i",displayName: "Daum8i (192.168.2.115)",selected: false,protocol: "Daum Premium",interface: "tcpip",host: "192.168.2.115",port: "51955"}
           ],
           "disableHrm": false        
+    }, 
+    modeSettings: {
+        "Simulator": {
+            "mode": "Simulator",
+            "settings": {
+              "power": "150",
+              "mode": "Power"
+            }
+          },
+          "Ant-Smart Trainer": {
+            "mode": "ERG",
+            "settings": {
+              "startPower": "100"
+            }
+          }
     }
 }
 
@@ -59,6 +74,7 @@ describe( 'DeviceConfigurationService',()=>{
                 set: jest.fn(),
                 get: jest.fn( (key,defVal) => testData[key]||defVal)
             }
+            service.emitInitialized = jest.fn()
         })
 
         afterEach( ()=>{
@@ -86,8 +102,9 @@ describe( 'DeviceConfigurationService',()=>{
             await service.init()
 
             expect(service.settings).toEqual( settings)
-            expect(service.emit).toHaveBeenCalledWith('initialized')
+            expect(service.emitInitialized).toHaveBeenCalled()
             expect(service.initFromLegacy).not.toHaveBeenCalled()
+
         })
 
 
@@ -96,8 +113,9 @@ describe( 'DeviceConfigurationService',()=>{
             testData = settings
             await service.init()
             
-            expect(service.emit).toHaveBeenCalledWith('initialized')
+            expect(service.emitInitialized).toHaveBeenCalled()
             expect(service.initFromLegacy).not.toHaveBeenCalled()
+            expect(service.settings.devices.length).toBe(3)
         })
 
         test('no capabilities',async ()=>{
@@ -109,8 +127,6 @@ describe( 'DeviceConfigurationService',()=>{
             await service.init()
 
             expect(service.settings.capabilities).toEqual( [])
-            
-
         })
 
 
@@ -217,12 +233,13 @@ describe( 'DeviceConfigurationService',()=>{
             expect(capabilities.length).toBe(4) // Bike, Control, Heartrate, Power
 
             const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
+            const AntHr3250 = devices.find(d=>d.settings.profile==='HR' && d.settings.deviceID==='3250')
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
 
             expect(getCap('bike')?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Control)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Power)?.selected).toBe(AntFe2606.udid)
-            expect(getCap(IncyclistCapability.HeartRate)?.selected).toBeUndefined()            
+            expect(getCap(IncyclistCapability.HeartRate)?.selected).toBe(AntHr3250.udid)
             expect(getCap(IncyclistCapability.HeartRate)?.disabled).toBeTruthy()
         })
 
@@ -284,36 +301,17 @@ describe( 'DeviceConfigurationService',()=>{
         beforeEach( ()=>{            
             service = new DeviceConfigurationService()
             service.updateUserSettings =jest.fn()
-
+            service.emitCapabiltyChanged = jest.fn()
         })
+
         test('devices are undefined',()=>{
             service.settings={}
-            service.select({interface:'ble',address:'123',protocol:'fm'},'bike')
+            service.select('1234','bike')
 
             const settings = service.settings
-            expect(settings.devices.length).toBe(1)
-            expect(settings.devices[0]).toMatchObject( {udid:expect.any(String), settings:{interface:'ble',address:'123',protocol:'fm'}})
-            const udid = settings.devices[0].udid
-            expect(settings.capabilities).toMatchObject( [ {capability:'bike', selected:udid}])
-        })
+            expect(settings.devices).toBeUndefined()
+            expect(service.emitCapabiltyChanged).not.toHaveBeenCalled()
 
-        test('adding and selecting at the same time',()=>{
-            service.settings = {
-                devices:[
-                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}}
-                ], 
-                capabilities:[
-                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1']}
-                ]
-            }
-            
-            service.select({interface:'ant',address:'123',profile:'HR'},IncyclistCapability.HeartRate)
-
-            const settings = service.settings
-            expect(settings.devices.length).toBe(2)
-
-            const udid = settings.devices[1].udid
-            expect(settings.capabilities).toMatchObject( [ {capability:IncyclistCapability.HeartRate, selected:udid}])
         })
 
         test('selecting bike as heartrate',()=>{
@@ -328,21 +326,108 @@ describe( 'DeviceConfigurationService',()=>{
                     {capability:'bike', selected:'2',devices:['2']}
                 ]
             }
+            service.adapters = {
+                "2" : {
+                    hasCapability: jest.fn().mockReturnValue(true)
+                }
+            }
 
-            service.select({interface:'ble',address:'123',protocol:'fm'},IncyclistCapability.HeartRate)
+            service.select('2',IncyclistCapability.HeartRate)
 
             const settings = service.settings
-            expect(settings.devices.length).toBe(3)
-            expect(settings.devices[2]).toMatchObject( {udid:expect.any(String), settings:{interface:'ble',address:'123',protocol:'fm'}})
+            expect(settings.devices.length).toBe(2)
 
-            const udid = settings.devices[2].udid
-            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:udid})
-            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'2'})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'2'})
         })
 
 
 
     })
+
+    describe( 'delete',()=>{
+
+        let service;
+        beforeEach( ()=>{            
+            service = new DeviceConfigurationService()
+            service.updateUserSettings =jest.fn()
+
+        })
+
+        test('deleting selected control device in middle of category',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                    {udid:'3',settings:{interface:'simulator',name:'Simulator'}},
+                    {udid:'4',settings:{interface:'ble',address:'126',protocol:'fm'}},
+                    {udid:'5',settings:{interface:'ble',address:'127',protocol:'fm'}},
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2']},
+                    {capability:IncyclistCapability.Control, selected:'3', devices:['2','3','4','5']},
+                ]
+            }
+
+            service.delete('3',IncyclistCapability.Control)
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(4)
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'4', devices:['2','4','5']})
+
+        })
+
+        test('deleting not selected control device in middle of category',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                    {udid:'3',settings:{interface:'simulator',name:'Simulator'}},
+                    {udid:'4',settings:{interface:'ble',address:'126',protocol:'fm'}},
+                    {udid:'5',settings:{interface:'ble',address:'127',protocol:'fm'}},
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2']},
+                    {capability:IncyclistCapability.Control, selected:'3', devices:['2','3','4','5']},
+                ]
+            }
+
+            service.delete('4',IncyclistCapability.Control)
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(4)
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'3', devices:['2','3','5']})
+
+        })
+
+
+        test('deleting control device in non-control capability',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                    {udid:'3',settings:{interface:'simulator',name:'Simulator'}},
+                    {udid:'4',settings:{interface:'ble',address:'126',protocol:'fm'}},
+                    {udid:'5',settings:{interface:'ble',address:'127',protocol:'fm'}},
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2']},
+                    {capability:IncyclistCapability.Control, selected:'3', devices:['2','3','4','5']},
+                ]
+            }
+           
+
+            service.delete('2',IncyclistCapability.HeartRate)
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(5)
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:'1', devices:['1']})
+
+        })
+
+
+
+    })    
 
     describe( 'setInterfaceSettings',()=>{
 
@@ -380,6 +465,26 @@ describe( 'DeviceConfigurationService',()=>{
             expect(service.settings.interfaces[2]).toMatchObject( {name:'serial', enabled:false}  ) // was not changed
         })
 
+    })
+
+    describe( 'getDeviceConfigurationInfo',()=>{
+        let service
+        beforeEach( ()=>{
+            service = new DeviceConfigurationService()
+            service.settings =  clone(SampleSettings)
+            service.adapters = {}
+            service.settings.devices?.forEach(d => {
+                const settings = d.settings;
+                const adapter = AdapterFactory.create(d.settings)
+                service.adapters[d.udid]=adapter
+            })
+
+        })
+        test('normal setup',()=>{
+            const res = service.getDeviceConfigurationInfo()
+            expect(res[IncyclistCapability.Control]).toBeDefined()
+            expect(res[IncyclistCapability.Control]).toMatchObject( {capability:'control', devices:[ {name:'1',selected:true, udid:'1'},{name:'2',selected:false, udid:'2'}], disabled:false})
+        })
     })
 
 
