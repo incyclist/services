@@ -86,11 +86,7 @@ describe( 'DeviceConfigurationService',()=>{
 
             await service.init()
 
-            expect(service.settings).toEqual( {
-                devices:[], 
-                capabilities:[],
-                interfaces:[]
-            })
+            expect(service.settings).toMatchSnapshot()
             expect(service.initFromLegacy).not.toHaveBeenCalled()
 
         })
@@ -126,7 +122,7 @@ describe( 'DeviceConfigurationService',()=>{
             service.initFromLegacy = jest.fn()
             await service.init()
 
-            expect(service.settings.capabilities).toEqual( [])
+            expect(service.settings.capabilities).toMatchSnapshot()
         })
 
 
@@ -273,11 +269,13 @@ describe( 'DeviceConfigurationService',()=>{
         test('migration',async ()=>{
             const settings = clone(SampleLegacySettings)
             testData = settings
-            service.initFromLegacy(settings)
-            
+
             // reset service
             service.adapters = {}
             AdapterFactory.reset()
+            
+            service.initFromLegacy(settings)
+            
 
             // now run with converted data
             const converted = service.settings
@@ -327,8 +325,13 @@ describe( 'DeviceConfigurationService',()=>{
                 ]
             }
             service.adapters = {
+                "1" : {
+                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.HeartRate),
+                    isControllable: jest.fn().mockReturnValue(false)
+                },
                 "2" : {
-                    hasCapability: jest.fn().mockReturnValue(true)
+                    hasCapability: jest.fn().mockReturnValue(true),
+                    isControllable: jest.fn().mockReturnValue(true)
                 }
             }
 
@@ -340,6 +343,90 @@ describe( 'DeviceConfigurationService',()=>{
             expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'2'})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'2'})
         })
+
+
+        test('selecting power when bike is currently selected',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'fe'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                    {udid:'3',settings:{interface:'ble',address:'125',protocol:'cp'}},
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.Power, selected:'1',devices:['1','2','3']},
+                    {capability:IncyclistCapability.Control, selected:'1', devices:['1','2']},
+                    {capability:'bike', selected:'1',devices:['1','2','3']}
+                ]
+            }
+            service.adapters = {
+                "1" : {
+                    hasCapability: jest.fn().mockReturnValue(true),
+                    isControllable: jest.fn().mockReturnValue(true)
+                },
+                "2" : {
+                    hasCapability: jest.fn().mockReturnValue(true),
+                    isControllable: jest.fn().mockReturnValue(true)
+                },
+                "3" : {
+                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.Power),
+                    isControllable: jest.fn().mockReturnValue(true)
+                }
+
+            }
+
+            service.select('3','bike')
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(3)
+
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'3'})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:null})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:'3'})
+        })
+
+
+        test('selecting any Smart Trainer in capability bike, when Power is currently selected',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'fe'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                    {udid:'3',settings:{interface:'ble',address:'125',protocol:'cp'}},
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.Power, selected:'3',devices:['1','2','3']},
+                    {capability:IncyclistCapability.Control, devices:['1','2']},
+                    {capability:'bike', selected:'3',devices:['1','2','3']}
+                ]
+            }
+            service.adapters = {
+                "1" : {
+                    test:1,
+                    hasCapability: jest.fn().mockReturnValue(true),
+                    isControllable: jest.fn().mockReturnValue(true)
+                },
+                "2" : {
+                    test:2,
+                    hasCapability: jest.fn().mockReturnValue(true),
+                    isControllable: jest.fn().mockReturnValue(true)
+                },
+                "3" : {
+                    test:3,
+                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.Power),
+                    isControllable: jest.fn().mockReturnValue(true)
+                }
+
+            }
+
+            service.select('2','bike')
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(3)
+
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'2'})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'2'})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:'2'})
+        })
+
 
 
 
@@ -474,7 +561,7 @@ describe( 'DeviceConfigurationService',()=>{
             service.settings =  clone(SampleSettings)
             service.adapters = {}
             service.settings.devices?.forEach(d => {
-                const settings = d.settings;
+                
                 const adapter = AdapterFactory.create(d.settings)
                 service.adapters[d.udid]=adapter
             })

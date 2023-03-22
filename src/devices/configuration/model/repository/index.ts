@@ -1,4 +1,4 @@
-import {SerialDeviceSettings, AntDeviceSettings, BleDeviceSettings, IncyclistCapability} from 'incyclist-devices'
+import {SerialDeviceSettings, AntDeviceSettings, BleDeviceSettings} from 'incyclist-devices'
 import { ExtendedIncyclistCapability } from '../app'
 
 export type IncyclistDeviceSettings = SerialDeviceSettings | AntDeviceSettings | BleDeviceSettings
@@ -18,6 +18,7 @@ export interface DeviceListEntry {
 export interface InterfaceSetting {
     name: string;
     enabled: boolean;
+    port?: number|string;
     protocol?: string
 }
 

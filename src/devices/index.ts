@@ -1,8 +1,4 @@
-import useDeviceConfiguration, {DeviceConfigurationService}  from "./configuration/service";
-import { useDeviceAccess, DeviceAccessService } from "./access/service";
-import { InterfaceList,InterfaceInfo } from "./access/model";
+export * from './configuration';
+export * from './access';
+export * from './ride';
 
-export {
-    useDeviceConfiguration,DeviceConfigurationService,
-    useDeviceAccess, DeviceAccessService, InterfaceList, InterfaceInfo
-}

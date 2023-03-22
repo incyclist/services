@@ -1,4 +1,4 @@
-# Device Service
+# DeviceRide Service
 
 Pseudo Declaration
 
@@ -6,6 +6,9 @@ Pseudo Declaration
 DeviceService <Singleton>
     startRide()
     stopRide()
+
+    pause()
+    resume()
 
     check(capability|adapter)
   

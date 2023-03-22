@@ -1,0 +1,107 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`DeviceConfigurationService init empty configuration 1`] = `
+{
+  "capabilities": [
+    {
+      "capability": "control",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+    {
+      "capability": "power",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+    {
+      "capability": "cadence",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+    {
+      "capability": "heartrate",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+    {
+      "capability": "speed",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+    {
+      "capability": "bike",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+  ],
+  "devices": [],
+  "interfaces": [
+    {
+      "enabled": true,
+      "name": "ant",
+    },
+    {
+      "enabled": true,
+      "name": "ble",
+    },
+    {
+      "enabled": true,
+      "name": "serial",
+      "protocol": "Daum Classic",
+    },
+    {
+      "enabled": false,
+      "name": "tcpip",
+      "port": 51955,
+      "protocol": "Daum Premium",
+    },
+  ],
+}
+`;
+
+exports[`DeviceConfigurationService init no capabilities 1`] = `
+[
+  {
+    "capability": "control",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "power",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "cadence",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "heartrate",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "speed",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "bike",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+]
+`;

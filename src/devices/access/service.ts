@@ -1,9 +1,11 @@
 import EventEmitter from "events";
 import { EventLogger } from "gd-eventlog";
-import {AdapterFactory, DeviceSettings, IncyclistInterface, InterfaceFactory} from "incyclist-devices";
+import {AdapterFactory, DeviceSettings, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, SerialAdapterFactory} from "incyclist-devices";
 import { SerialScannerProps } from "incyclist-devices/lib/serial/serial-interface";
 import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
+import { sleep } from "../../utils/sleep";
+import { useDeviceConfiguration } from "../configuration";
 import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState } from "./model";
 
 interface InternalScanState {
@@ -90,9 +92,8 @@ export class DeviceAccessService  extends EventEmitter{
         this.scanState = null;
         this.logger = new EventLogger('DeviceAccess')
         this.defaultProps = {}
-
-        this.logger.log('test')
     }
+
 
     /**
      * Sets the default properties
@@ -113,11 +114,7 @@ export class DeviceAccessService  extends EventEmitter{
      * 
      * @param ifaceName the name of the interface (one of `ant`, `ble`, `serial`, `tcpip`)
      * @param binding the Binding class to be used. Upon first call the binding must be specified, otherwise the method will throw an `Error`. On subsequent calls ( to re-enable an interface that was disabled via [[disableInterface]]) the parameters binding and props are ignored
-     * @param props Properties to be used. If no properites are provided, or some of the properties are not set, the default properties (see[[setDefaultInterfaceProperties]] will be used
-     * @param props.scanTimeout the timeout (in ms) for device scan
-     * @param props.connectTimeout the timeout (in ms) for connect attempt
-     * @param props.port (only required for `tcpip`, the TCP/IP port to be used for a scan)
-     * @param props.protocol (only required for `tcpip` and `serial`, the protocol to be used for a scan)
+     * @param props Properties to be used. If no properites are provided, or some of the properties are not set, the default properties (see [[setDefaultInterfaceProperties]] will be used
      * 
      * @example
      * ```
@@ -130,42 +127,46 @@ export class DeviceAccessService  extends EventEmitter{
     enableInterface( ifaceName:string, binding?, props:InterfaceAccessProps={}):void {
         const existing = this.interfaces[ifaceName] as InterfaceInfoInternal
 
-        if (!binding ) {
-            if (existing)
-                existing.enabled=true;
-            else
-                throw new Error('Interface has not been initialized with binding')
+        if (!binding && !existing) {
+            throw new Error('Interface has not been initialized with binding')
         }
-
-        
+       
         if (!existing) {
             const properties = clone(this.defaultProps)            
             merge(properties, props)
             const info: InterfaceInfoInternal = { name:ifaceName,interface:InterfaceFactory.create(ifaceName,{binding}), enabled:true, isScanning:false, properties,state: 'unknown'}
             this.interfaces[ifaceName]= info
+            info.interface.setBinding(binding)
+
+            const keys = Object.keys(this.interfaces)
+            const interfaces = keys.map( name=> ({...this.interfaces[name],name}) )
+
+            this.emit('interface-changed', ifaceName,this.interfaces[ifaceName], interfaces)
         }
             
         else  {                       
             if (this.isScanning(ifaceName)) {
                 throw new Error( 'Illegal State, enable Interface cannot be called during an ongoing scan')
             }
-            existing.interface.setBinding(binding)
+            if (binding)
+                existing.interface.setBinding(binding)
             existing.enabled = true            
             merge(existing.properties||this.defaultProps, props)
+            this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
         }
-        this.emit('interface-changed', 'ifaceName',this.interfaces[ifaceName], this.interfaces)
     }
 
    /**
      * Disables an interface 
      * 
-     * By disabling an interfacem it will be omitted during device scans and connection attempts
+     * By disabling an interface it will be omitted during device scans and connection attempts
      * 
      * If this method is called during an ongoing device scan on that interface, the ongoing scan will first be stopped before changing the interface enablement state
      * 
      * @param ifaceName the name of the interface (one of `ant`, `ble`, `serial`, `tcpip`)
      */
     disableInterface( ifaceName:string):void {
+
         const existing = this.interfaces[ifaceName]
         if (!existing) 
             return;
@@ -174,7 +175,7 @@ export class DeviceAccessService  extends EventEmitter{
             const info:InterfaceInfoInternal = this.interfaces[ifaceName] as InterfaceInfoInternal;
             
             info.interface.stopScan().then( (stopped)=> {
-                this.emit('interface-changed', 'ifaceName',this.interfaces[ifaceName])
+                this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
                 info.isScanning = !stopped
                 if (stopped)
                     this.disableInterface(ifaceName)
@@ -183,9 +184,20 @@ export class DeviceAccessService  extends EventEmitter{
         }
 
         existing.enabled = false;
-        this.emit('interface-changed', 'ifaceName',this.interfaces[ifaceName])
+        this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
     }       
 
+   /**
+     * Set the current interface properties
+     * 
+     * This method allows to overwrite the interface properties for a given interface
+     * 
+     * If this method is called during an ongoing scan, the scan will be interrupted before the new properties will be set
+     * 
+     * @param ifaceName the name of the interface (one of `ant`, `ble`, `serial`, `tcpip`)
+     * @param props Properties to be used. If no properites are provided, or some of the properties are not set, the default properties (see [[setDefaultInterfaceProperties]] will be used
+     * 
+     */
     setInterfaceProperties( ifaceName:string, props:InterfaceAccessProps):void {
         if (this.isScanning(ifaceName)) {
             const info:InterfaceInfoInternal = this.interfaces[ifaceName] as InterfaceInfoInternal;
@@ -204,7 +216,21 @@ export class DeviceAccessService  extends EventEmitter{
         const properties = clone(this.defaultProps)
         merge(properties,props)
         info.properties = properties
+        info.isScanning = false;
         this.emit('interface-changed', 'ifaceName',this.interfaces[ifaceName])
+    }
+
+   /**
+     * Get interface information
+     * 
+     * This method provides information (e.g. scanning state, connection state) about an interface
+     * 
+     * @returns [[InterfaceInfo]] the information about the interface
+     * 
+     */
+
+    getInterfaceInfo(ifaceName:string):InterfaceInfo {
+        return this.interfaces[ifaceName]
     }
 
     protected getInterface( ifaceName:string):IncyclistInterface {
@@ -213,19 +239,27 @@ export class DeviceAccessService  extends EventEmitter{
     }
 
 
+
     async connect( ifaceName:string):Promise<boolean> {
         const impl = this.getInterface(ifaceName)
-        if (!impl) 
+
+        if (!impl) {
+            this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
             return false;
+        }
 
         const prevState = this.interfaces[ifaceName].state
+        if (prevState==='connected')
+            return true;
+
         this.interfaces[ifaceName].state = 'connecting'
         this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])    
     
         const connected = await impl.connect()
 
-        const state:InterfaceState = connected ? 'connected': prevState
+        const state:InterfaceState = connected ? 'connected': 'disconnected'
         this.interfaces[ifaceName].state = state
+        
         this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])
 
         return connected
@@ -259,6 +293,7 @@ export class DeviceAccessService  extends EventEmitter{
     async scan( filter:ScanFilter={} ): Promise<DeviceSettings[]> {
         this.logger.logEvent({message:'device scan start', filter} )
         const detected = [];
+        const startedAdapters:IncyclistDeviceAdapter[] = []
 
         if (!this.isScanning()) {
             this.emitScanStateChange('start-requested')
@@ -272,7 +307,6 @@ export class DeviceAccessService  extends EventEmitter{
             const adapters = []
 
             interfaces.forEach( (i:IncyclistInterface) => {
-
                 i.on('device',async (deviceSettings)=>{ 
 
                     // already found during this scan? ignore
@@ -283,20 +317,25 @@ export class DeviceAccessService  extends EventEmitter{
                     const adapter = AdapterFactory.create(deviceSettings)
                     adapters.push(adapter)
                     
-                    adapter.on('device-info',(info)=>{ 
-                        this.emit('device-info',deviceSettings,{displayName:adapter.getUniqueName()})                                                
+                    adapter.on('device-info',(settings, info)=>{ 
+                        this.emit('device-info',deviceSettings,{...info,displayName:adapter.getUniqueName()})                                                
                     })
-
-                    adapter.on('data',(info,data)=>{console.log('~~~ got data', deviceSettings,data)})
-                    
+                  
                     
                     detected.push(deviceSettings)
 
-                    try {
-                        await adapter.start()
-                    }
-                    catch(err) {
-                        console.log('~~~ start error',err)
+                    if (adapter.getSettings().interface!=='ble') {
+                        try {
+                            await adapter.start()
+                            while (this.scanState) {
+                                await sleep(100)
+                            }
+                            await adapter.stop()
+                        }
+                        catch(err) {
+                            console.log('~~~ start error',err)
+                        }
+    
                     }
 
                 })
@@ -308,17 +347,7 @@ export class DeviceAccessService  extends EventEmitter{
                 const {scanTimeout, port, protocol} = props;
                 const properties = ifaceName==='tcpip' || ifaceName==='serial' ? {timeout:scanTimeout,port:port?.toString(),protocol} as SerialScannerProps : {timeout:scanTimeout}
 
-                if (!i.isConnected()) {                    
-                    this.scanState.promises.push( 
-                        this.connect(i.getName()).then(()=> {
-                            
-                            return i.scan(properties)
-                        })                        
-                    )
-                }
-                else {
-                    this.scanState.promises.push( i.scan(properties) )
-                }
+                this.scanState.promises.push( i.scan(properties) )
 
                 
             })
@@ -326,27 +355,44 @@ export class DeviceAccessService  extends EventEmitter{
 
             try {
 
+                // if no interfaces are enabled, perform a dummy scan (simple timeout)
+                // so that the user has a chance to press the hotkey for the simulator
                 if (this.scanState.promises.length===0) {
-                    this.scanState.promises.push(this.dummyScan())
+                    this.scanState.promises.push(this.dummyScan()) 
                 }
-                const res = await Promise.allSettled(this.scanState.promises)
-                console.log('~~ result',res)
+                
+                await Promise.allSettled(this.scanState.promises)
+                
+                
             }
             catch(err) {
                 this.logger.logEvent({message:'device scan finished with errors', filter, error:err.message, stack:err.stack})
-                console.log('~~~ error',err)
             }
 
             this.scanState = null;
             interfaces.forEach( (i:IncyclistInterface) => {
                 i.removeAllListeners('device')
                 this.interfaces[i.getName()].isScanning = false;
+
+                if (i.getName()==='tcpip')
+                    this.interfaces[i.getName()]
             })
+
 
             this.emitScanStateChange('stopped')
             this.logger.logEvent({message:'device scan finished', filter, detected} )
             return detected;    
         }
+    }
+
+    getProtocols(ifaceName:string) {
+        if (ifaceName!=='serial' && ifaceName!=='tcpip')
+            return [];
+
+        if (ifaceName==='tcpip')
+            return ['Daum Premium']
+
+        return SerialAdapterFactory.getInstance().adapters.map(a=>a.protocol)
     }
 
     protected async dummyScan():Promise<DeviceSettings[]> {
@@ -371,7 +417,7 @@ export class DeviceAccessService  extends EventEmitter{
     }
 
     protected emitScanStateChange(state:ScanState) {
-        this.emit('scanstate-changed',state)
+        this.emit('scanstate-changed',state)        
     }
 
     async stopScan():Promise<boolean> {
@@ -391,6 +437,10 @@ export class DeviceAccessService  extends EventEmitter{
             this.logger.logEvent({message:'stop device scan finished with errors', error:err.message, stack:err.stack} )
             return false;
         }
+
+
+        this.scanState.promises = []
+
         this.emitScanStateChange('stopped')
         this.logger.logEvent({message:'stop device scan finished', stopScanresult: result} )
         return true;
@@ -404,8 +454,15 @@ export class DeviceAccessService  extends EventEmitter{
 
     protected getInterfacesForScan( filter?:ScanFilter): IncyclistInterface[] {
         const keys = Object.keys(this.interfaces)
-       
-        const enabledInterfaces = keys.filter(i=> this.interfaces[i].enabled)
+
+        const config = useDeviceConfiguration()
+        
+        
+        const enabledInterfaces = keys.filter(i=> this.interfaces[i].enabled && config.isInterfaceEnabled(i) )
+
+
+
+
         const interfaceFilter = filter?.interfaces
         let interfaces = enabledInterfaces.map(name=>(this.interfaces[name] as InterfaceInfoInternal).interface);
         if (interfaceFilter) {
@@ -418,6 +475,6 @@ export class DeviceAccessService  extends EventEmitter{
 
 }
 
-const useDeviceAccess=() => DeviceAccessService.getInstance()
-export {useDeviceAccess}
+export const useDeviceAccess=() => DeviceAccessService.getInstance()
+
 

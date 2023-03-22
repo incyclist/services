@@ -59,6 +59,13 @@ export class UserSettingsService {
         }
     }
 
+    getAll() {
+        if (!this.isInitialized)
+            throw new Error('Settings are not yet initialized')
+
+        const settings = clone(this.settings)
+        return settings
+    }
 
     get( key:string, defValue:any ):any {
 
@@ -151,6 +158,7 @@ export class UserSettingsService {
 
             merge(this.settings,data);
             await this.save()
+
             return true;
         }
         catch ( err) {
