@@ -5,7 +5,7 @@ export function merge(base:any,data:any,depth=0) {
     for (key in data) {
         if (typeof(data[key])==='object' && depth<4) {
             if (base[key]!==undefined && data[key]!==null) 
-                this.merge(base[key],data[key])
+                merge(base[key],data[key])
             else if (base[key]!==undefined && data[key]===null) 
                 delete base[key]
             else if (base[key]!==undefined && data[key]===undefined) {
