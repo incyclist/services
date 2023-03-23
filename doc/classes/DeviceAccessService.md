@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0-beta.1](../README.md) / DeviceAccessService
+[incyclist-services - v1.0.0](../README.md) / DeviceAccessService
 
 # Class: DeviceAccessService
 
@@ -74,6 +74,8 @@ const connected = await connect();
 - [disableInterface](DeviceAccessService.md#disableinterface)
 - [disconnect](DeviceAccessService.md#disconnect)
 - [enableInterface](DeviceAccessService.md#enableinterface)
+- [getInterfaceInfo](DeviceAccessService.md#getinterfaceinfo)
+- [getProtocols](DeviceAccessService.md#getprotocols)
 - [isScanning](DeviceAccessService.md#isscanning)
 - [scan](DeviceAccessService.md#scan)
 - [setDefaultInterfaceProperties](DeviceAccessService.md#setdefaultinterfaceproperties)
@@ -113,11 +115,17 @@ ___
 
 ▸ **disableInterface**(`ifaceName`): `void`
 
+Disables an interface 
+
+By disabling an interface it will be omitted during device scans and connection attempts
+
+If this method is called during an ongoing device scan on that interface, the ongoing scan will first be stopped before changing the interface enablement state
+
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `ifaceName` | `string` |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `ifaceName` | `string` | the name of the interface (one of `ant`, `ble`, `serial`, `tcpip`) |
 
 #### Returns
 
@@ -149,17 +157,64 @@ Enables an interface to be used for device access
 
 only enabled interfaces will be considered during device scans and connection attempts
 
+**`Example`**
+
+```
+// first call 
+service.enableInterface('serial',autodetect(), {protocol:'Daum Premium})
+// re-enablement
+* service.enableInterface('serial')
+```
+
 #### Parameters
 
 | Name | Type | Description |
 | :------ | :------ | :------ |
 | `ifaceName` | `string` | the name of the interface (one of `ant`, `ble`, `serial`, `tcpip`) |
-| `binding?` | `any` | the Binding class to be used. Upon first call the binding must be specified. On subsequent calls ( to re-enable an interface that was disabled via [disableInterface](DeviceAccessService.md#disableinterface)) this parameter can be omitted |
-| `props` | `InterfaceAccessProps` | Properties to be used. If no properites are provided, or some of the properties are not set, the default properties (see[setDefaultInterfaceProperties](DeviceAccessService.md#setdefaultinterfaceproperties) will be used |
+| `binding?` | `any` | the Binding class to be used. Upon first call the binding must be specified, otherwise the method will throw an `Error`. On subsequent calls ( to re-enable an interface that was disabled via [disableInterface](DeviceAccessService.md#disableinterface)) the parameters binding and props are ignored |
+| `props` | [`InterfaceAccessProps`](../interfaces/InterfaceAccessProps.md) | Properties to be used. If no properites are provided, or some of the properties are not set, the default properties (see [setDefaultInterfaceProperties](DeviceAccessService.md#setdefaultinterfaceproperties) will be used |
 
 #### Returns
 
 `void`
+
+___
+
+### getInterfaceInfo
+
+▸ **getInterfaceInfo**(`ifaceName`): [`InterfaceInfo`](../interfaces/InterfaceInfo.md)
+
+Get interface information
+
+This method provides information (e.g. scanning state, connection state) about an interface
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifaceName` | `string` |
+
+#### Returns
+
+[`InterfaceInfo`](../interfaces/InterfaceInfo.md)
+
+[InterfaceInfo](../interfaces/InterfaceInfo.md) the information about the interface
+
+___
+
+### getProtocols
+
+▸ **getProtocols**(`ifaceName`): `string`[]
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifaceName` | `string` |
+
+#### Returns
+
+`string`[]
 
 ___
 
@@ -187,7 +242,7 @@ ___
 
 | Name | Type |
 | :------ | :------ |
-| `filter` | `ScanFilter` |
+| `filter` | [`ScanFilter`](../interfaces/ScanFilter.md) |
 
 #### Returns
 
@@ -207,7 +262,7 @@ These will be used if there are no properties given in an [enableInterface](Devi
 
 | Name | Type | Description |
 | :------ | :------ | :------ |
-| `props` | `InterfaceAccessProps` | Properties to be used as default ( e.g. scan timeout) |
+| `props` | [`InterfaceAccessProps`](../interfaces/InterfaceAccessProps.md) | Properties to be used as default ( e.g. scan timeout) |
 
 #### Returns
 
@@ -219,12 +274,18 @@ ___
 
 ▸ **setInterfaceProperties**(`ifaceName`, `props`): `void`
 
+Set the current interface properties
+
+This method allows to overwrite the interface properties for a given interface
+
+If this method is called during an ongoing scan, the scan will be interrupted before the new properties will be set
+
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `ifaceName` | `string` |
-| `props` | `InterfaceAccessProps` |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `ifaceName` | `string` | the name of the interface (one of `ant`, `ble`, `serial`, `tcpip`) |
+| `props` | [`InterfaceAccessProps`](../interfaces/InterfaceAccessProps.md) | Properties to be used. If no properites are provided, or some of the properties are not set, the default properties (see [setDefaultInterfaceProperties](DeviceAccessService.md#setdefaultinterfaceproperties) will be used |
 
 #### Returns
 

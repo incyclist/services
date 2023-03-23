@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0-beta.1](../README.md) / UserSettingsBinding
+[incyclist-services - v1.0.0](../README.md) / UserSettingsBinding
 
 # Class: UserSettingsBinding
 
@@ -14,6 +14,7 @@
 
 ### Methods
 
+- [canOverwrite](UserSettingsBinding.md#canoverwrite)
 - [getAll](UserSettingsBinding.md#getall)
 - [save](UserSettingsBinding.md#save)
 - [set](UserSettingsBinding.md#set)
@@ -26,6 +27,20 @@
 • **new UserSettingsBinding**()
 
 ## Methods
+
+### canOverwrite
+
+▸ `Abstract` **canOverwrite**(): `boolean`
+
+#### Returns
+
+`boolean`
+
+#### Implementation of
+
+[IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[canOverwrite](../interfaces/IUserSettingsBinding.md#canoverwrite)
+
+___
 
 ### getAll
 

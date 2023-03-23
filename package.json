@@ -2,7 +2,8 @@
   "name": "incyclist-services",
   "version": "1.0.0",
   "peerDependencies": {
-    "gd-eventlog": "^0.1.22"
+    "gd-eventlog": "^0.1.22",
+    "incyclist-devices": "^2.0.1"
   },
   "devDependencies": {
     "@types/jest": "^29.4.0",
@@ -36,7 +37,6 @@
     "lib": "./src"
   },
   "dependencies": {
-    "incyclist-devices": "^2.0.1",
     "uuid": "^9.0.0"
   }
 }

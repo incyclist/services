@@ -22,13 +22,13 @@ exports[`DeviceConfigurationService init empty configuration 1`] = `
       "selected": undefined,
     },
     {
-      "capability": "heartrate",
+      "capability": "speed",
       "devices": [],
       "disabled": false,
       "selected": undefined,
     },
     {
-      "capability": "speed",
+      "capability": "heartrate",
       "devices": [],
       "disabled": false,
       "selected": undefined,
@@ -86,13 +86,13 @@ exports[`DeviceConfigurationService init no capabilities 1`] = `
     "selected": undefined,
   },
   {
-    "capability": "heartrate",
+    "capability": "speed",
     "devices": [],
     "disabled": false,
     "selected": undefined,
   },
   {
-    "capability": "speed",
+    "capability": "heartrate",
     "devices": [],
     "disabled": false,
     "selected": undefined,

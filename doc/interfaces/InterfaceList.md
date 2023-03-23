@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0-beta.1](../README.md) / InterfaceList
+[incyclist-services - v1.0.0](../README.md) / InterfaceList
 
 # Interface: InterfaceList
 

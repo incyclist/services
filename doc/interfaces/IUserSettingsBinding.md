@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0-beta.1](../README.md) / IUserSettingsBinding
+[incyclist-services - v1.0.0](../README.md) / IUserSettingsBinding
 
 # Interface: IUserSettingsBinding
 
@@ -10,11 +10,22 @@
 
 ### Methods
 
+- [canOverwrite](IUserSettingsBinding.md#canoverwrite)
 - [getAll](IUserSettingsBinding.md#getall)
 - [save](IUserSettingsBinding.md#save)
 - [set](IUserSettingsBinding.md#set)
 
 ## Methods
+
+### canOverwrite
+
+▸ **canOverwrite**(): `boolean`
+
+#### Returns
+
+`boolean`
+
+___
 
 ### getAll
 

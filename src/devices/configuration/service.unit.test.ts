@@ -191,7 +191,7 @@ describe( 'DeviceConfigurationService',()=>{
             const emptyAdapters = keys.find( k=> service.adapters[k]===undefined)
             expect (emptyAdapters).toBeUndefined();
 
-            expect(capabilities.length).toBe(4) // Bike, Control, Heartrate, Power
+            expect(capabilities.length).toBe(6) // Bike, Control, Heartrate, Power, Cadence, Speed
             const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
             const AntHrm3250  = devices.find(d=>d.settings.profile==='HR' && d.settings.deviceID==='3250')
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
@@ -226,7 +226,7 @@ describe( 'DeviceConfigurationService',()=>{
             expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
 
             expect(interfaces.length).toBe(4)
-            expect(capabilities.length).toBe(4) // Bike, Control, Heartrate, Power
+            expect(capabilities.length).toBe(6) // Bike, Control, Heartrate, Power, Cadence, Speed
 
             const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
             const AntHr3250 = devices.find(d=>d.settings.profile==='HR' && d.settings.deviceID==='3250')
@@ -235,6 +235,7 @@ describe( 'DeviceConfigurationService',()=>{
             expect(getCap('bike')?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Control)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Power)?.selected).toBe(AntFe2606.udid)
+            expect(getCap(IncyclistCapability.Cadence)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.HeartRate)?.selected).toBe(AntHr3250.udid)
             expect(getCap(IncyclistCapability.HeartRate)?.disabled).toBeTruthy()
         })
@@ -255,13 +256,14 @@ describe( 'DeviceConfigurationService',()=>{
 
             expect(devices.length).toBe(6)
             expect(interfaces.length).toBe(4)
-            expect(capabilities.length).toBe(4) // Bike, Control, Heartrate, Power
+            expect(capabilities.length).toBe(6) // Bike, Control, Heartrate, Power, Cadence, Speed
 
             const daum = devices.find( d=>d.settings.name==='Daum8i')
             
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
             expect(getCap('bike')?.selected).toBe(daum.udid)
             expect(getCap(IncyclistCapability.Control)?.selected).toBe(daum.udid)
+            expect(getCap(IncyclistCapability.Cadence)?.selected).toBe(daum.udid)
             expect(getCap(IncyclistCapability.Power)?.selected).toBe(daum.udid)
             expect(getCap(IncyclistCapability.HeartRate)?.selected).toBe(daum.udid)            
         })
@@ -292,6 +294,189 @@ describe( 'DeviceConfigurationService',()=>{
     })
 
 
+    describe( 'add',()=>{
+
+        let service;
+        beforeEach( ()=>{            
+            service = new DeviceConfigurationService()
+            service.updateUserSettings =jest.fn()
+            service.emitCapabiltyChanged = jest.fn()
+        })
+
+        test('adding bike to empty list',()=>{
+            service.settings={}
+            service.adapters={}
+
+            service.add( {interface:'ble',address:'124',protocol:'fm'} )
+
+            const settings = service.settings
+            expect(settings.devices).toBeDefined()
+            expect(settings.capabilities).toBeDefined()
+            const udid = settings.devices[0].udid
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Speed)).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Cadence)).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:undefined})
+
+            expect(service.emitCapabiltyChanged).toHaveBeenCalled()
+
+        })
+
+        test('adding first bike to existing list',()=>{
+
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}}
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1']},
+                    {capability:IncyclistCapability.Control, selected:undefined, devices:[]},
+                    {capability:'bike', selected:undefined,devices:[]}
+                ]
+            }
+            service.adapters = {
+                "1" : {
+                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.HeartRate),
+                    isControllable: jest.fn().mockReturnValue(false),
+                    isEqual:jest.fn().mockReturnValue(false)
+                }
+            }
+
+            service.add( {interface:'ant',deviceID:'4711',profile:'FE'})
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(2)
+            expect(settings.capabilities.length).toBe(6) 
+            const udid = settings.devices[1].udid
+
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:udid})
+
+            // hearrate sensor was not overwritten
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:'1'})
+        })
+
+        test('adding another bike to existing list',()=>{
+
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}}
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2']},
+                    {capability:IncyclistCapability.Control, selected:'2', devices:['2']},
+                    {capability:'bike', selected:'2',devices:['2']}
+                ]
+            }
+            service.adapters = {
+                "1" : {
+                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.HeartRate),
+                    isControllable: jest.fn().mockReturnValue(false),
+                    isEqual:jest.fn().mockReturnValue(false)
+                },
+                "2" : {
+                    hasCapability: jest.fn().mockReturnValue(true),
+                    isControllable: jest.fn().mockReturnValue(true),
+                    isEqual: jest.fn().mockReturnValue(false)
+                }
+            }
+
+            service.add( {interface:'ant',deviceID:'4711',profile:'FE'})
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(3)
+            expect(settings.capabilities.length).toBe(6)  
+
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'2'})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'2'})
+
+            // hearrate sensor was not overwritten
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:'1'})
+        })
+
+        test('adding a sensor to existing list',()=>{
+
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'ant',deviceID:'4711',profile:'FE'}}
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2']},
+                    {capability:IncyclistCapability.Control, selected:'2', devices:['2']},
+                    {capability:IncyclistCapability.Power, selected:'2', devices:['2']},
+                    {capability:'bike', selected:'2',devices:['2']}
+                ]
+            }
+            service.adapters = {
+                "1" : {
+                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.HeartRate),
+                    isControllable: jest.fn().mockReturnValue(false),
+                    isEqual:jest.fn().mockReturnValue(false)
+                },
+                "2" : {
+                    hasCapability: jest.fn().mockReturnValue(true),
+                    isControllable: jest.fn().mockReturnValue(true),
+                    isEqual: jest.fn().mockReturnValue(false)
+                }
+            }
+
+            service.add( {interface:'ant',deviceID:'4711',profile:'PWR'})
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(3)
+            expect(settings.capabilities.length).toBe(6)  
+
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'2'})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'2'})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:'2'})
+
+            // hearrate sensor was not overwritten
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:'1'})
+        })
+
+        test('adding existing bike to a list',()=>{
+
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}}
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2']},
+                    {capability:IncyclistCapability.Control, selected:'2', devices:['2']},
+                    {capability:'bike', selected:'2',devices:['2']}
+                ]
+            }
+            service.adapters = {
+                "1" : {
+                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.HeartRate),
+                    isControllable: jest.fn().mockReturnValue(false),
+                    isEqual:jest.fn().mockReturnValue(false)
+                },
+                "2" : {
+                    hasCapability: jest.fn().mockReturnValue(true),
+                    isControllable: jest.fn().mockReturnValue(true),
+                    isEqual: jest.fn().mockReturnValue(false)
+                }
+            }
+
+            service.add( {interface:'serial',name:'Daum 8080',port:'COM4'})
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(2)
+
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'2'})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'2'})
+
+            // hearrate sensor was not overwritten
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:'1'})
+        })
+
+
+    })    
 
     describe( 'select',()=>{
 
@@ -431,6 +616,7 @@ describe( 'DeviceConfigurationService',()=>{
 
 
     })
+
 
     describe( 'delete',()=>{
 

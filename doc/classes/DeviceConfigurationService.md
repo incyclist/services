@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0-beta.1](../README.md) / DeviceConfigurationService
+[incyclist-services - v1.0.0](../README.md) / DeviceConfigurationService
 
 # Class: DeviceConfigurationService
 
@@ -31,15 +31,25 @@ Manages the user configuration of devices and interfaces
 - [add](DeviceConfigurationService.md#add)
 - [canStartRide](DeviceConfigurationService.md#canstartride)
 - [delete](DeviceConfigurationService.md#delete)
+- [disableCapability](DeviceConfigurationService.md#disablecapability)
 - [disableInterface](DeviceConfigurationService.md#disableinterface)
+- [emitInterfaceChanged](DeviceConfigurationService.md#emitinterfacechanged)
+- [emitModeChanged](DeviceConfigurationService.md#emitmodechanged)
 - [enableInterface](DeviceConfigurationService.md#enableinterface)
-- [getCapabilityInfo](DeviceConfigurationService.md#getcapabilityinfo)
+- [getAdapter](DeviceConfigurationService.md#getadapter)
+- [getAdapters](DeviceConfigurationService.md#getadapters)
+- [getInterfaceSettings](DeviceConfigurationService.md#getinterfacesettings)
+- [getModeSettings](DeviceConfigurationService.md#getmodesettings)
 - [getSelected](DeviceConfigurationService.md#getselected)
+- [getUdid](DeviceConfigurationService.md#getudid)
 - [init](DeviceConfigurationService.md#init)
 - [initFromLegacy](DeviceConfigurationService.md#initfromlegacy)
 - [isInitialized](DeviceConfigurationService.md#isinitialized)
 - [isInterfaceEnabled](DeviceConfigurationService.md#isinterfaceenabled)
+- [setDisplayName](DeviceConfigurationService.md#setdisplayname)
 - [setInterfaceSettings](DeviceConfigurationService.md#setinterfacesettings)
+- [setMode](DeviceConfigurationService.md#setmode)
+- [setModeSettings](DeviceConfigurationService.md#setmodesettings)
 - [unselect](DeviceConfigurationService.md#unselect)
 - [updateUserSettings](DeviceConfigurationService.md#updateusersettings)
 - [getInstance](DeviceConfigurationService.md#getinstance)
@@ -68,7 +78,7 @@ ___
 
 ### settings
 
-• **settings**: `DeviceConfigurationSettings`
+• **settings**: [`DeviceConfigurationSettings`](../interfaces/DeviceConfigurationSettings.md)
 
 ___
 
@@ -80,13 +90,13 @@ ___
 
 ### add
 
-▸ **add**(`device`): `void`
+▸ **add**(`deviceSettings`): `void`
 
 #### Parameters
 
 | Name | Type |
 | :------ | :------ |
-| `device` | `IncyclistDeviceAdapter` \| `IncyclistDeviceSettings` |
+| `deviceSettings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
 
 #### Returns
 
@@ -108,14 +118,32 @@ ___
 
 ### delete
 
-▸ **delete**(`device`, `capability?`): `void`
+▸ **delete**(`udid`, `capability?`, `forceSingle?`): `void`
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `device` | `IncyclistDeviceAdapter` \| `IncyclistDeviceSettings` |
-| `capability?` | `IncyclistCapability` \| ``"bike"`` |
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `udid` | `string` | `undefined` |
+| `capability?` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) | `undefined` |
+| `forceSingle` | `boolean` | `false` |
+
+#### Returns
+
+`void`
+
+___
+
+### disableCapability
+
+▸ **disableCapability**(`cability`, `disabled?`): `void`
+
+#### Parameters
+
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `cability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) | `undefined` |
+| `disabled` | `boolean` | `true` |
 
 #### Returns
 
@@ -139,6 +167,40 @@ ___
 
 ___
 
+### emitInterfaceChanged
+
+▸ **emitInterfaceChanged**(`ifName`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifName` | `string` |
+
+#### Returns
+
+`void`
+
+___
+
+### emitModeChanged
+
+▸ **emitModeChanged**(`udid`, `mode`, `settings`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `udid` | `string` |
+| `mode` | `string` |
+| `settings` | `any` |
+
+#### Returns
+
+`void`
+
+___
+
 ### enableInterface
 
 ▸ **enableInterface**(`ifName`): `void`
@@ -155,19 +217,64 @@ ___
 
 ___
 
-### getCapabilityInfo
+### getAdapter
 
-▸ **getCapabilityInfo**(`capability`): `CapabilityListDetails`
+▸ **getAdapter**(`udid`): `IncyclistDeviceAdapter`
 
 #### Parameters
 
 | Name | Type |
 | :------ | :------ |
-| `capability` | `IncyclistCapability` \| ``"bike"`` |
+| `udid` | `string` |
 
 #### Returns
 
-`CapabilityListDetails`
+`IncyclistDeviceAdapter`
+
+___
+
+### getAdapters
+
+▸ **getAdapters**(): [`AdapterInfo`](../interfaces/AdapterInfo.md)[]
+
+provides the list of selected adapters (to be used by the DeviceRideService)
+
+#### Returns
+
+[`AdapterInfo`](../interfaces/AdapterInfo.md)[]
+
+___
+
+### getInterfaceSettings
+
+▸ **getInterfaceSettings**(`ifName`): [`InterfaceSetting`](../interfaces/InterfaceSetting.md)
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifName` | `string` |
+
+#### Returns
+
+[`InterfaceSetting`](../interfaces/InterfaceSetting.md)
+
+___
+
+### getModeSettings
+
+▸ **getModeSettings**(`requestedUdid?`, `requestedMode?`): [`DeviceModeInfo`](../interfaces/DeviceModeInfo.md)
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `requestedUdid?` | `string` |
+| `requestedMode?` | `string` |
+
+#### Returns
+
+[`DeviceModeInfo`](../interfaces/DeviceModeInfo.md)
 
 ___
 
@@ -179,11 +286,27 @@ ___
 
 | Name | Type |
 | :------ | :------ |
-| `capability` | `IncyclistCapability` \| ``"bike"`` |
+| `capability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) |
 
 #### Returns
 
 `IncyclistDeviceAdapter`
+
+___
+
+### getUdid
+
+▸ **getUdid**(`deviceSettings`): `string`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `deviceSettings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
+
+#### Returns
+
+`string`
 
 ___
 
@@ -215,7 +338,7 @@ ___
 
 | Name | Type |
 | :------ | :------ |
-| `settings` | `LegacySettings` |
+| `settings` | [`LegacySettings`](../interfaces/LegacySettings.md) |
 
 #### Returns
 
@@ -253,6 +376,23 @@ ___
 
 ___
 
+### setDisplayName
+
+▸ **setDisplayName**(`deviceSettings`, `displayName?`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `deviceSettings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
+| `displayName?` | `string` |
+
+#### Returns
+
+`void`
+
+___
+
 ### setInterfaceSettings
 
 ▸ **setInterfaceSettings**(`ifName`, `settings`): `void`
@@ -262,7 +402,42 @@ ___
 | Name | Type |
 | :------ | :------ |
 | `ifName` | `any` |
-| `settings` | `InterfaceSetting` |
+| `settings` | [`InterfaceSetting`](../interfaces/InterfaceSetting.md) |
+
+#### Returns
+
+`void`
+
+___
+
+### setMode
+
+▸ **setMode**(`udid`, `mode`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `udid` | `string` |
+| `mode` | `string` |
+
+#### Returns
+
+`void`
+
+___
+
+### setModeSettings
+
+▸ **setModeSettings**(`udid`, `mode`, `settings`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `udid` | `string` |
+| `mode` | `string` |
+| `settings` | `any` |
 
 #### Returns
 
@@ -278,7 +453,7 @@ ___
 
 | Name | Type |
 | :------ | :------ |
-| `capability` | `IncyclistCapability` \| ``"bike"`` |
+| `capability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) |
 
 #### Returns
 
@@ -308,16 +483,17 @@ ___
 
 ### select
 
-▸ **select**(`device`, `capability`): `void`
+▸ **select**(`udid`, `capability`, `noRecursive?`): `void`
 
 Marks a device as selected for a given capability
 
 #### Parameters
 
-| Name | Type | Description |
-| :------ | :------ | :------ |
-| `device` | `IncyclistDeviceAdapter` \| `IncyclistDeviceSettings` | The device (either specified by the adapter or via the DeviceSettings) |
-| `capability` | `IncyclistCapability` \| ``"bike"`` | The cability for which the device should be marked as selected device-changed in case the settings were changed device-added in case the device was not yet known |
+| Name | Type | Default value | Description |
+| :------ | :------ | :------ | :------ |
+| `udid` | `string` | `undefined` | The unique device id of the device |
+| `capability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) | `undefined` | The cability for which the device should be marked as selected device-changed in case the settings were changed device-added in case the device was not yet known |
+| `noRecursive` | `boolean` | `false` | - |
 
 #### Returns
 

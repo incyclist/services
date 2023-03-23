@@ -1,6 +1,6 @@
 import EventEmitter from "events";
 import { EventLogger } from "gd-eventlog";
-import {AdapterFactory, DeviceSettings, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, SerialAdapterFactory} from "incyclist-devices";
+import {AdapterFactory, AntDeviceSettings, DeviceSettings, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, SerialAdapterFactory} from "incyclist-devices";
 import { SerialScannerProps } from "incyclist-devices/lib/serial/serial-interface";
 import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
@@ -323,14 +323,21 @@ export class DeviceAccessService  extends EventEmitter{
                   
                     
                     detected.push(deviceSettings)
+                    const ifName = adapter.getSettings().interface
 
-                    if (adapter.getSettings().interface!=='ble') {
+                    // at the moment, only ANT and BLE are transmitting data during the scan
+                    if (ifName!=='ble' && ifName!=='ant') {
                         try {
                             await adapter.start()
-                            while (this.scanState) {
+                            while (this.scanState && this.scanState?.promises?.length>0 && adapter.started) {
                                 await sleep(100)
                             }
-                            await adapter.stop()
+                            try {
+                                await adapter.stop()
+                            }
+                            catch(err) {
+                                console.log(err)
+                            }
                         }
                         catch(err) {
                             console.log('~~~ start error',err)
@@ -338,6 +345,19 @@ export class DeviceAccessService  extends EventEmitter{
     
                     }
 
+                })
+
+                
+                i.on('data',(...args)=>{
+                    if (i.getName()==='ant') {
+                        const settings: AntDeviceSettings = { profile:args[0], interface:'ant', deviceID:args[1]}
+                        const adapter = AdapterFactory.create( settings)
+                        adapter.onDeviceData(args[2])
+                    }
+                    else if (i.getName()==='ble') {
+                        const adapter = AdapterFactory.create(args[0])
+                        adapter.onDeviceData(args[1])
+                    }
                 })
 
                 const ifaceName = i.getName()

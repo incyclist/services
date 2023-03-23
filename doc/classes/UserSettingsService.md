@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0-beta.1](../README.md) / UserSettingsService
+[incyclist-services - v1.0.0](../README.md) / UserSettingsService
 
 # Class: UserSettingsService
 
@@ -21,6 +21,7 @@
 ### Methods
 
 - [get](UserSettingsService.md#get)
+- [getAll](UserSettingsService.md#getall)
 - [init](UserSettingsService.md#init)
 - [save](UserSettingsService.md#save)
 - [set](UserSettingsService.md#set)
@@ -89,6 +90,16 @@ ___
 | :------ | :------ |
 | `key` | `string` |
 | `defValue` | `any` |
+
+#### Returns
+
+`any`
+
+___
+
+### getAll
+
+▸ **getAll**(): `any`
 
 #### Returns
 

@@ -5,6 +5,7 @@ import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConf
 import { v4 as generateUdid } from 'uuid';
 import EventEmitter from "events";
 import { merge } from "../../utils/merge";
+import { EventLogger } from "gd-eventlog";
 
 
 interface DeviceAdapterList {[index: string]: IncyclistDeviceAdapter}
@@ -41,11 +42,22 @@ export class DeviceConfigurationService  extends EventEmitter{
     settings: DeviceConfigurationSettings
     userSettings
     adapters: DeviceAdapterList = {}
+    protected logger: EventLogger
 
     constructor() {
         super()
         this.userSettings = useUserSettings();
+        this.logger = new EventLogger('DeviceConfig')     
     }
+
+    protected logEvent(e) {
+        this.logger?.logEvent(e)
+    }
+
+    protected logError(err:Error, fn:string) {
+        this.logEvent( {message:'error',fn,error:err.message, stack:err.stack})
+    }
+
     /**
      * Initializes the Device Settings
      * 
@@ -77,7 +89,7 @@ export class DeviceConfigurationService  extends EventEmitter{
                 await this.initFromLegacy(settings)
             }
             catch(err) {
-                console.log('~~~ERROR', err)
+                this.logError(err,'init()')
             }
 
             this.emitInitialized()            
@@ -92,26 +104,62 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         // first time initialization?
         let emptyConfig = false
-        if (this.settings.capabilities.length===0) {
-            [IncyclistCapability.Control,IncyclistCapability.Power, IncyclistCapability.Cadence,IncyclistCapability.HeartRate, IncyclistCapability.Speed, 'bike' as ExtendedIncyclistCapability ].forEach( capability => {
-                this.settings.capabilities.push({capability,devices:[],selected:undefined,disabled:false})
-            })
+        if (!this.settings.capabilities || this.settings.capabilities.length===0) {
+            this.initCapabilties()
             emptyConfig = true
         }
-        if (this.settings.interfaces.length===0) { 
-            this.settings.interfaces.push( {name:'ant', enabled:true})
-            this.settings.interfaces.push( {name:'ble', enabled:true})
-            this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
-            this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
+        if (!this.settings.interfaces || this.settings.interfaces.length===0) { 
+            this.initInterfaces()
             emptyConfig = true
         }
         if (emptyConfig)
             this.updateUserSettings()
 
-        this.settings.devices.forEach( d=> this.adapters[d.udid] = AdapterFactory.create(d.settings))
+        if (!this.settings.devices)
+            this.settings.devices = []
+
+        this.settings.devices.forEach( d=> {
+            
+            try {
+                this.adapters[d.udid] = AdapterFactory.create(d.settings)
+            }
+            catch(err) {
+                this.logError(err,'init()->Adapterfactory.create()')
+
+                
+            }
+        })
 
         this.emitInitialized()
         
+    }
+
+    protected initCapabilties():void {
+
+        if (!this.settings)
+            this.settings = {}
+
+        if (!this.settings.capabilities)
+            this.settings.capabilities = [];
+
+        [IncyclistCapability.Control,IncyclistCapability.Power, IncyclistCapability.Cadence,IncyclistCapability.Speed, IncyclistCapability.HeartRate,  'bike' as ExtendedIncyclistCapability ].forEach( capability => {
+            if (!this.settings.capabilities.find( c=> c.capability===capability ))
+                this.settings.capabilities.push({capability,devices:[],selected:undefined,disabled:false})
+        })
+    }
+
+    protected initInterfaces():void {
+        if (this.settings?.interfaces?.length>0)
+            return;
+
+        if (!this.settings)
+            this.settings = {}
+        this.settings.interfaces = [];
+
+        this.settings.interfaces.push( {name:'ant', enabled:true})
+        this.settings.interfaces.push( {name:'ble', enabled:true})
+        this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
+        this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
     }
 
     /** 
@@ -181,7 +229,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             }
 
             // ensure that devices is included in capability device list, also ensures that capabilty exists
-            ['bike',IncyclistCapability.Control, IncyclistCapability.Power].forEach( (cc:ExtendedIncyclistCapability) => {            
+            ['bike',IncyclistCapability.Control, IncyclistCapability.Power,IncyclistCapability.Speed, IncyclistCapability.Cadence].forEach( (cc:ExtendedIncyclistCapability) => {            
                 this.addToCapability(udid,cc)  
                 if (isSelected) {               
                     const cap = cc as ExtendedIncyclistCapability
@@ -424,15 +472,21 @@ export class DeviceConfigurationService  extends EventEmitter{
     
         }
 
-
+        this.initCapabilties()
+            
         this.settings.capabilities.forEach( c=> {
             if (c.devices.includes(udid))
                 return;
 
-            if (adapter.hasCapability(c.capability) || 
-                c.capability==='bike' && (adapter.hasCapability(IncyclistCapability.Control)||adapter.hasCapability(IncyclistCapability.Power))) {
+            const isBike = adapter.hasCapability(IncyclistCapability.Control)
+
+
+
+            if ( adapter.hasCapability(c.capability) ||  (c.capability==='bike' && isBike)) {
                 c.devices.push(udid)
-                if (!c.selected && !c.disabled)
+
+                // TODO: Change once we have changed the UI
+                if (!c.selected && !c.disabled && (isBike || c.capability===IncyclistCapability.HeartRate))
                     c.selected = udid
             }
         })
@@ -539,7 +593,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
     getUdid(deviceSettings:IncyclistDeviceSettings) {
         const udids = Object.keys(this.adapters)
-        const udid = udids.find( key=> this.adapters[key].isEqual(deviceSettings))
+        const udid = udids.find( key=> this.adapters[key]?.isEqual(deviceSettings))
         return udid;
     }
 
@@ -634,7 +688,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         }
         catch(err) {
-            console.log('~~~ERROR',err)
+            this.logError(err,'getModeSettings()')
             return;
         }
     }
@@ -804,12 +858,6 @@ export class DeviceConfigurationService  extends EventEmitter{
             this.emit('interface-changed', ifName, setting, this.settings.interfaces)
         }
     }
-
-
-
-
-
-    
 
 }
 

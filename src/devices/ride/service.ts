@@ -8,7 +8,8 @@ import CyclingMode, { UpdateRequest } from "incyclist-devices/lib/modes/cycling-
 import { AdapterRideInfo, PreparedRoute, RideServiceDeviceProperties } from "./model";
 import clone from "../../utils/clone";
 import { UserSettingsService, useUserSettings } from "../../settings";
-
+import { EventLogger } from 'gd-eventlog';
+import { getLegacyInterface } from "../../utils/logging";
 /**
  * Provides method to consume a devcie
  *  - start/stop/pause/resume a ride
@@ -29,6 +30,8 @@ export class DeviceRideService  extends EventEmitter{
     protected startPromises: Promise<boolean>[]
     protected data:DeviceData  ={}
     protected simulatorEnforced:boolean
+    protected logger: EventLogger
+    protected debug;
 
     protected deviceDataHandler = this.onData.bind(this)
 
@@ -42,6 +45,18 @@ export class DeviceRideService  extends EventEmitter{
         super()
         this.initizialized = false;
         this.simulatorEnforced = false
+        this.logger = new EventLogger('Ride')
+        this.debug = false;
+    }
+
+    logEvent(event) {
+        this.logger.logEvent(event)
+        if (this.debug) 
+            console.log('~~~ RIDE', event)
+    }
+
+    setDebug(enabled:boolean) {
+        this.debug = enabled
     }
 
     protected waitForInit():Promise<void> {
@@ -101,7 +116,7 @@ export class DeviceRideService  extends EventEmitter{
 
         let res:PreparedRoute
 
-//        this.logger.logEvent( { message:'prepareRoute', route: route.getTitle() , start: startPos, reality: realityFactor})
+        this.logEvent( { message:'prepareRoute', route: route.getTitle() , start: startPos, reality: realityFactor})
         
         // TODO: should move into a User/AppState Service
         const eppPreferences = clone(this.userSettings.get('eppPreferences',{}))
@@ -387,7 +402,17 @@ export class DeviceRideService  extends EventEmitter{
                      
                 }
 
+
             }
+            // TODO: if Control and Power are started, only log for Control
+            const sType = ai.adapter.hasCapability(IncyclistCapability.Control) ? 'bike' : 'sensor'
+            
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const logProps = {} as any
+            logProps[sType] = ai.adapter.getUniqueName()
+            logProps.cability = ai.adapter.getCapabilities().join('/')
+            logProps.interface = getLegacyInterface(ai.adapter) 
+            this.logEvent( {message:`start ${sType} request`,...logProps})
 
             return ai.adapter.start(startProps)
                 .then(success=>{
@@ -396,10 +421,16 @@ export class DeviceRideService  extends EventEmitter{
 
                     }
                     ai.isStarted = true;
+
+                    this.logEvent( {message:`start ${sType} request finished`,...logProps})
+
                     return success
                 })
                 .catch(err=>{                    
                     ai.isStarted = false;
+
+                    this.logEvent( {message:`start ${sType} request failed`,...logProps, reason:err.message })
+
                     this.emit('start-error', this.getAdapterStateInfo(ai), err)
                     return false
                 })
@@ -485,6 +516,9 @@ export class DeviceRideService  extends EventEmitter{
 
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
         const adapters = this.getAdapterList();
+
+        // TODO: only take data from the selected sensor
+        // unless sensor was skipped during start
 
 
         const hasControl = adapters.find( ai=>ai.capabilities.includes(IncyclistCapability.Control))!==undefined
