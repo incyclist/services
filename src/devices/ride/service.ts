@@ -5,11 +5,12 @@ import { sleep } from "../../utils/sleep";
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import {AdapterInfo, DeviceConfigurationService, useDeviceConfiguration} from "../configuration";
 import CyclingMode, { UpdateRequest } from "incyclist-devices/lib/modes/cycling-mode";
-import { AdapterRideInfo, PreparedRoute, RideServiceDeviceProperties } from "./model";
+import { AdapterRideInfo, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./model";
 import clone from "../../utils/clone";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
+
 /**
  * Provides method to consume a devcie
  *  - start/stop/pause/resume a ride
@@ -344,66 +345,132 @@ export class DeviceRideService  extends EventEmitter{
         return res;
 
     }
-   
+
+
+    protected async waitForPreviousStartToFinish():Promise<boolean> {        
+        const TIMEOUT = 3000;
+
+        if (!this.startPromises)
+            return true;
+
+        const prevStartState = await Promise.race( [ 
+            sleep(TIMEOUT).then(()=>'timeout'), 
+            Promise.allSettled(this.startPromises)] ).then( ()=>'finished')
+        
+        return (prevStartState==='finished')
+    }
+
+    /**
+     * Performs a check if a given device or a group of devices can be started
+     * The check can be filltered by various criteria: interface(s), capability, udid
+     * If multiple filter criteria are specified, the will be combined with an AND operation
+     * 
+     * @param filter allows to filter the devices that should be started
+     * @returns void
+     */
+
+    async startCheck(filter: RideServiceCheckFilter):Promise<void> {
+        await this.lazyInit();
+        const adapters = this.getAdapters(filter)
+        const goodToGo = await this.waitForPreviousStartToFinish()
+        if (!goodToGo) 
+            return;
+
+        this.emit('check-request', adapters.map( this.getAdapterStateInfo ))
+        await this.startAdapters(adapters,'check')
+    }
+
+    /**
+     * Filters the list of adapters based on various criteria: interface(s), capability, udid
+     * If multiple filter criteria are specified, the will be combined with an AND operation
+     * 
+     * @param filter allows to filter the devices that should be started
+     * @returns void
+     */
+    protected getAdapters(filter:RideServiceCheckFilter):AdapterRideInfo[] {
+        const {udid,interface: ifName, interfaces, capability} = filter
+
+        let adapters:AdapterRideInfo[] = this.getAdapterList()
         
 
-    async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
-        this.lazyInit();
-
-        const { forceErgMode, startPos, realityFactor, rideMode, route} = props;
-
-        while (this.startPromises) {
-            sleep(500)
+        const getIf = (adapter) => {
+            const i = adapter?.getSettings()?.interface   
+            if (!i)
+                return
+            if ( typeof(i)==='string')
+                return i
+            return i.getName()
         }
 
-        const adapters = this.getAdapterList()
+        if (udid) {
+            adapters = adapters?.filter( ai => ai.udid===udid)    
+        }
+        if (ifName) {
+            adapters = adapters?.filter( ai => getIf(ai.adapter)===ifName)    
+        }
+        if (interfaces) {            
+            adapters = adapters?.filter( ai => interfaces.includes( getIf(ai.adapter)))    
+        }
 
-        this.emit('start-request', adapters.map( this.getAdapterStateInfo ))
+        return adapters||[]
+    }
+   
+    protected async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check',props?:RideServiceDeviceProperties ):Promise<boolean> {
+        
+        const { forceErgMode, startPos, realityFactor, rideMode, route} = props||{};
 
         this.startPromises = adapters.map( ai=> {
-            const startProps = clone(props)
+            const startProps = clone(props||{})
 
-            if (ai.adapter.isControllable()) {
-                const d = ai.adapter as ControllableDeviceAdapter
+            if (startType==='check') {
+                startProps.timeout = 5000;
+            }
 
-                let mode,settings;
+            if (startType==='start') {
 
-                if (!this.simulatorEnforced) {
+                if (ai.adapter.isControllable()) {
+                    const d = ai.adapter as ControllableDeviceAdapter
 
-                    if (forceErgMode) {
-                        const modes = d.getSupportedCyclingModes().filter( C => C.isERG)
-                        if (modes.length>0)  {
-                            mode = new modes[0](d)                            
-                            const modeInfo = this.configurationService.getModeSettings(ai.udid,mode)
+                    let mode,settings;
+
+                    if (!this.simulatorEnforced) {
+
+                        if (forceErgMode) {
+                            const modes = d.getSupportedCyclingModes().filter( C => C.isERG)
+                            if (modes.length>0)  {
+                                mode = new modes[0](d)                            
+                                const modeInfo = this.configurationService.getModeSettings(ai.udid,mode)
+                                settings = modeInfo.settings
+                            }
+                        }                    
+                        if (!mode) {
+                            const modeInfo = this.configurationService.getModeSettings(ai.udid)
+                            mode = modeInfo.mode
                             settings = modeInfo.settings
                         }
-                    }                    
-                    if (!mode) {
-                        const modeInfo = this.configurationService.getModeSettings(ai.udid)
-                        mode = modeInfo.mode
-                        settings = modeInfo.settings
+        
                     }
-    
-                }
 
-                if (!mode)
-                    mode = d.getDefaultCyclingMode();
+                    if (!mode)
+                        mode = d.getDefaultCyclingMode();
 
 
-                d.setCyclingMode(mode,settings)
+                    d.setCyclingMode(mode,settings)
 
-                // Special Case Daum8i "Daum Classic" mode:
-                // we need to upload the route data (in Epp format) as part of the start commands
-                if (d.getCyclingMode().getModeProperty('eppSupport')) {
-                    startProps.route = this.prepareEppRoute({route,startPos,realityFactor,rideMode})
-                    startProps.onStatusUpdate = (completed:number, total:number) => {                         
-                        this.emit('start-update',this.getAdapterStateInfo(ai), completed,total)                    
+                    // Special Case Daum8i "Daum Classic" mode:
+                    // we need to upload the route data (in Epp format) as part of the start commands
+                    if (d.getCyclingMode().getModeProperty('eppSupport')) {
+                        startProps.route = this.prepareEppRoute({route,startPos,realityFactor,rideMode})
+                        startProps.onStatusUpdate = (completed:number, total:number) => {                         
+                            this.emit('start-update',this.getAdapterStateInfo(ai), completed,total)                    
+                        }
+                        
                     }
-                     
+
+
                 }
-
-
             }
+
             // TODO: if Control and Power are started, only log for Control
             const sType = ai.adapter.hasCapability(IncyclistCapability.Control) ? 'bike' : 'sensor'
             
@@ -412,33 +479,33 @@ export class DeviceRideService  extends EventEmitter{
             logProps[sType] = ai.adapter.getUniqueName()
             logProps.cability = ai.adapter.getCapabilities().join('/')
             logProps.interface = getLegacyInterface(ai.adapter) 
-            this.logEvent( {message:`start ${sType} request`,...logProps})
+            this.logEvent( {message:`${startType} ${sType} request`,...logProps})
 
             return ai.adapter.start(startProps)
                 .then(success=>{
                     if (success) {
-                        this.emit('start-success', this.getAdapterStateInfo(ai))
+                        this.emit(`${startType}-success`, this.getAdapterStateInfo(ai))
 
                     }
                     ai.isStarted = true;
 
-                    this.logEvent( {message:`start ${sType} request finished`,...logProps})
+                    this.logEvent( {message:`${startType} ${sType} request finished`,...logProps})
 
                     return success
                 })
                 .catch(err=>{                    
                     ai.isStarted = false;
 
-                    this.logEvent( {message:`start ${sType} request failed`,...logProps, reason:err.message })
+                    this.logEvent( {message:`${startType} ${sType} request failed`,...logProps, reason:err.message })
 
-                    this.emit('start-error', this.getAdapterStateInfo(ai), err)
+                    this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err)
                     return false
                 })
         })
         
         const status = await Promise.all(this.startPromises)
         const allOK = status.find( s=>s===false)===undefined
-        this.emit('start-result', allOK)
+        this.emit(`${startType}-result`, allOK)
 
         if (allOK) {
             this.startRide(props)
@@ -447,6 +514,21 @@ export class DeviceRideService  extends EventEmitter{
         this.startPromises = null;
 
         return allOK;
+        
+    }
+
+    async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
+        await this.lazyInit();
+        const adapters = this.getAdapterList()
+
+        this.emit('start-request', adapters.map( this.getAdapterStateInfo ))
+
+        const goodToGo = await this.waitForPreviousStartToFinish()
+        if (!goodToGo) 
+            return;
+
+
+        return this.startAdapters( adapters,'start',props)
     }
 
     async cancelStart():Promise<boolean> {
@@ -525,6 +607,9 @@ export class DeviceRideService  extends EventEmitter{
         const hasPower   = adapters.find( ai=>ai.capabilities.includes(IncyclistCapability.Power))!==undefined
 
         const adapterInfo = adapters.find( ai=>ai.adapter.isEqual(deviceSettings))
+        if (!adapterInfo)
+        return;
+
         adapterInfo.capabilities.forEach( capability=> {
             switch(capability) {
                 case IncyclistCapability.HeartRate:
