@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0](../README.md) / LegacyGearSetting
+[incyclist-services - v1.0.4](../README.md) / LegacyGearSetting
 
 # Interface: LegacyGearSetting
 

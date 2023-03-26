@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0](../README.md) / LegacyDeviceSelectionSettings
+[incyclist-services - v1.0.4](../README.md) / LegacyDeviceSelectionSettings
 
 # Interface: LegacyDeviceSelectionSettings
 

@@ -1,6 +1,6 @@
-incyclist-services - v1.0.0
+incyclist-services - v1.0.4
 
-# incyclist-services - v1.0.0
+# incyclist-services - v1.0.4
 
 ## Table of contents
 
@@ -40,6 +40,7 @@ incyclist-services - v1.0.0
 - [ModeListEntry](interfaces/ModeListEntry.md)
 - [Point](interfaces/Point.md)
 - [PreparedRoute](interfaces/PreparedRoute.md)
+- [RideServiceCheckFilter](interfaces/RideServiceCheckFilter.md)
 - [RideServiceDeviceProperties](interfaces/RideServiceDeviceProperties.md)
 - [ScanFilter](interfaces/ScanFilter.md)
 

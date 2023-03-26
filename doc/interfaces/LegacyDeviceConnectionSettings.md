@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0](../README.md) / LegacyDeviceConnectionSettings
+[incyclist-services - v1.0.4](../README.md) / LegacyDeviceConnectionSettings
 
 # Interface: LegacyDeviceConnectionSettings
 

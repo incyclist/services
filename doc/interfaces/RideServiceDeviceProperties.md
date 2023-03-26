@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0](../README.md) / RideServiceDeviceProperties
+[incyclist-services - v1.0.4](../README.md) / RideServiceDeviceProperties
 
 # Interface: RideServiceDeviceProperties
 

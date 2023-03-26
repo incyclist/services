@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0](../README.md) / ScanFilter
+[incyclist-services - v1.0.4](../README.md) / ScanFilter
 
 # Interface: ScanFilter
 

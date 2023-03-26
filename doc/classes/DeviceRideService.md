@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.0](../README.md) / DeviceRideService
+[incyclist-services - v1.0.4](../README.md) / DeviceRideService
 
 # Class: DeviceRideService
 
@@ -35,6 +35,7 @@ Provides method to consume a devcie
 - [sendUpdate](DeviceRideService.md#sendupdate)
 - [setDebug](DeviceRideService.md#setdebug)
 - [start](DeviceRideService.md#start)
+- [startCheck](DeviceRideService.md#startcheck)
 - [startRide](DeviceRideService.md#startride)
 - [stop](DeviceRideService.md#stop)
 - [getInstance](DeviceRideService.md#getinstance)
@@ -235,6 +236,28 @@ ___
 #### Returns
 
 `Promise`<`boolean`\>
+
+___
+
+### startCheck
+
+▸ **startCheck**(`filter`): `Promise`<`void`\>
+
+Performs a check if a given device or a group of devices can be started
+The check can be filltered by various criteria: interface(s), capability, udid
+If multiple filter criteria are specified, the will be combined with an AND operation
+
+#### Parameters
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `filter` | [`RideServiceCheckFilter`](../interfaces/RideServiceCheckFilter.md) | allows to filter the devices that should be started |
+
+#### Returns
+
+`Promise`<`void`\>
+
+void
 
 ___
 
