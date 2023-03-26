@@ -388,7 +388,7 @@ export class DeviceRideService  extends EventEmitter{
      * @returns void
      */
     protected getAdapters(filter:RideServiceCheckFilter):AdapterRideInfo[] {
-        const {udid,interface: ifName, interfaces, capability} = filter
+        const {udid,interface: ifName, interfaces} = filter
 
         let adapters:AdapterRideInfo[] = this.getAdapterList()
         
@@ -423,7 +423,7 @@ export class DeviceRideService  extends EventEmitter{
             const startProps = clone(props||{})
 
             if (startType==='check') {
-                startProps.timeout = 5000;
+                startProps.timeout = 10000;
             }
 
             if (startType==='start') {
@@ -567,13 +567,22 @@ export class DeviceRideService  extends EventEmitter{
         })
     }
 
-    async stop():Promise<boolean> {
+    async stop(udid?:string):Promise<boolean> {
+
+
         const adapters = this.getAdapterList();
 
         this.emit('stop-ride')
-        adapters.forEach(ai=> {
+
+        const promises = adapters
+        .filter( ai=> udid ? ai.udid===udid : true)        
+        .map(ai => {
             ai.adapter.off('data',this.deviceDataHandler)
+            return ai.adapter.stop()
+
         })
+        
+        await Promise.allSettled(promises)
 
         return true
     }

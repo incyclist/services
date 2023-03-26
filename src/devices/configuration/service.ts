@@ -318,7 +318,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             const ci:CapabilityInformation = {
                 capability: c.capability,
                 disabled: c.disabled||false,
-                devices: c.devices.map( udid=>  {
+                devices: c.devices.filter( udid => devices.find( d=> d.udid===udid)).map( udid=>  {
                     const adapter = adapters[udid]                                   
                     const device = devices.find( d=> d.udid===udid)
                     const mode = device.mode
@@ -479,10 +479,11 @@ export class DeviceConfigurationService  extends EventEmitter{
                 return;
 
             const isBike = adapter.hasCapability(IncyclistCapability.Control)
+            const isPower = adapter.hasCapability(IncyclistCapability.Power)
 
 
 
-            if ( adapter.hasCapability(c.capability) ||  (c.capability==='bike' && isBike)) {
+            if ( adapter.hasCapability(c.capability) ||  (c.capability==='bike' && (isBike || isPower))) {
                 c.devices.push(udid)
 
                 // TODO: Change once we have changed the UI
@@ -739,14 +740,17 @@ export class DeviceConfigurationService  extends EventEmitter{
      */
 
     getAdapters():AdapterInfo[] {
-        const {capabilities} = this.settings||{}
+        const {capabilities,devices} = this.settings||{}
         const adapters: AdapterInfo[] = []
 
         capabilities.forEach( c=> {
             if (c.disabled || !c.selected)
                 return;
-            
-            const adapter = this.adapters[c.selected]
+        
+            if (!devices.find( d=> d.udid===c.selected))
+                return;
+
+            const adapter = this.adapters[c.selected]            
             const idx = adapters.findIndex( a => a.udid===c.selected)
 
             if (idx===-1) {

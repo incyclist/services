@@ -240,7 +240,18 @@ export class DeviceAccessService  extends EventEmitter{
 
 
 
-    async connect( ifaceName:string):Promise<boolean> {
+   /**
+     * Tries to open a connection to the interface. 
+     * 
+     * For serial and tcpip interface this will always return true -as long as a valid binding was used
+     * For Ant+ and BLE, this will try to establish a connection to the USB port
+     * 
+     * 
+     * 
+     * 
+     * @returns true if the interface could be connected, otherwise false
+     */
+   async connect( ifaceName:string):Promise<boolean> {
         const impl = this.getInterface(ifaceName)
 
         if (!impl) {
@@ -265,7 +276,14 @@ export class DeviceAccessService  extends EventEmitter{
         return connected
     }
 
-    async disconnect( ifaceName?:string):Promise<boolean> {
+   /**
+     * Closes the connection to the interface. 
+     * 
+     * This will _not_ automatically stop all connected Device Adapters. This needs to be done seperately
+     * 
+     * @returns true if the interface could be disconnected, otherwise false
+     */
+   async disconnect( ifaceName?:string):Promise<boolean> {
         if (!ifaceName) {
             const promises = Object.keys(this.interfaces).map( i=> this.disconnect(i))
             const result = await Promise.allSettled(promises)
@@ -290,10 +308,17 @@ export class DeviceAccessService  extends EventEmitter{
         return disconnected
     }
     
-    async scan( filter:ScanFilter={} ): Promise<DeviceSettings[]> {
+   /**
+     * Performs a device scan. 
+     * 
+     * This will _not_ automatically stop all connected Device Adapters. This needs to be done seperately
+     * 
+     * @param filter [[ScanFilter]] allows to limit the search on specififc interfaces or capabilties
+     * @returns [[DeviceSettings]][] a list of Devices that were detected during the scan
+     */
+   async scan( filter:ScanFilter={} ): Promise<DeviceSettings[]> {
         this.logger.logEvent({message:'device scan start', filter} )
         const detected = [];
-        const startedAdapters:IncyclistDeviceAdapter[] = []
 
         if (!this.isScanning()) {
             this.emitScanStateChange('start-requested')
