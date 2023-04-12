@@ -52,6 +52,13 @@ export class DeviceConfigurationService  extends EventEmitter{
 
     protected logEvent(e) {
         this.logger?.logEvent(e)
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const w = window as any
+        if (w?.SERVICE_DEBUG) {
+            console.log('~~~ CONFIG-SVC', e)
+        }
+    
     }
 
     protected logError(err:Error, fn:string) {
@@ -764,6 +771,25 @@ export class DeviceConfigurationService  extends EventEmitter{
 
     }
 
+     /**
+     * provides the list of all adapters (to be used by the DeviceRideService)
+     * 
+     */
+
+    getAllAdapters():AdapterInfo[] {
+        const adapters: AdapterInfo[] = []
+
+        const udids = Object.keys(this.adapters)
+        if (!udids)
+            return []
+
+        udids.forEach( udid => {
+            adapters.push( {udid, adapter:this.adapters[udid], capabilities:this.adapters[udid].getCapabilities()})
+        })
+        return adapters;
+
+    }
+    
     getSelected(capability:ExtendedIncyclistCapability): IncyclistDeviceAdapter|undefined {
         const {capabilities} = this.settings||{}
         if ( !capabilities)

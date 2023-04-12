@@ -19,7 +19,6 @@ export interface RideServiceCheckFilter {
     interface?: string
     interfaces?: string[]
     udid?: string
-    capability?: IncyclistCapability
 }
 
 export interface Point {

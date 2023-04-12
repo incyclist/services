@@ -1,11 +1,11 @@
 import EventEmitter from "events";
 import { EventLogger } from "gd-eventlog";
-import {AdapterFactory, AntDeviceSettings, DeviceSettings, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, SerialAdapterFactory} from "incyclist-devices";
+import {AdapterFactory, AntDeviceSettings, DeviceSettings, IncyclistInterface, InterfaceFactory, SerialAdapterFactory, SerialPortProvider} from "incyclist-devices";
 import { SerialScannerProps } from "incyclist-devices/lib/serial/serial-interface";
 import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
 import { sleep } from "../../utils/sleep";
-import { useDeviceConfiguration } from "../configuration";
+import { AdapterInfo, DeviceConfigurationService, useDeviceConfiguration } from "../configuration";
 import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState } from "./model";
 
 interface InternalScanState {
@@ -94,6 +94,14 @@ export class DeviceAccessService  extends EventEmitter{
         this.defaultProps = {}
     }
 
+    protected logEvent(event) {
+        this.logger.logEvent(event)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const w = window as any
+        if (w?.SERVICE_DEBUG) {
+            console.log('~~~ ACCESS-SVC', event)
+        }
+    }
 
     /**
      * Sets the default properties
@@ -251,7 +259,14 @@ export class DeviceAccessService  extends EventEmitter{
      * 
      * @returns true if the interface could be connected, otherwise false
      */
-   async connect( ifaceName:string):Promise<boolean> {
+   async connect( ifaceName?:string):Promise<boolean> {
+
+        if (!ifaceName) {
+            const interfaces = Object.keys(this.interfaces)
+            interfaces.forEach( name=> { if (name) this.connect(name)})
+            return;
+        }
+
         const impl = this.getInterface(ifaceName)
 
         if (!impl) {
@@ -308,7 +323,7 @@ export class DeviceAccessService  extends EventEmitter{
         return disconnected
     }
     
-   /**
+    /**
      * Performs a device scan. 
      * 
      * This will _not_ automatically stop all connected Device Adapters. This needs to be done seperately
@@ -316,8 +331,8 @@ export class DeviceAccessService  extends EventEmitter{
      * @param filter [[ScanFilter]] allows to limit the search on specififc interfaces or capabilties
      * @returns [[DeviceSettings]][] a list of Devices that were detected during the scan
      */
-   async scan( filter:ScanFilter={} ): Promise<DeviceSettings[]> {
-        this.logger.logEvent({message:'device scan start', filter} )
+    async scan( filter:ScanFilter={} ): Promise<DeviceSettings[]> {
+        this.logEvent({message:'device scan start', filter} )
         const detected = [];
 
         if (!this.isScanning()) {
@@ -328,18 +343,48 @@ export class DeviceAccessService  extends EventEmitter{
                 interfaces:[]
             }
 
-            const interfaces = this.scanState.interfaces = this.getInterfacesForScan(filter);
+            const interfaces = this.scanState.interfaces = this.getInterfacesForScan(filter);            
+
             const adapters = []
 
             interfaces.forEach( (i:IncyclistInterface) => {
                 i.on('device',async (deviceSettings)=>{ 
 
+                    console.log( '~~~ detected device:', deviceSettings)
                     // already found during this scan? ignore
-                    if (adapters.find(a=> a.isEqual(deviceSettings)))
+                    if (adapters.find(a=> a.isEqual(deviceSettings))) {
+                        console.log( '~~~ device already detected')
                         return;
+                    }
+
+                    if (filter.profile && deviceSettings.profile!==filter.profile) {
+                        console.log( '~~~ device does not match profile', filter.profile)
+                        return;
+                    }
+                    if (filter.protocol && deviceSettings.protocol!==filter.protocol) {
+                        console.log( '~~~ device does not match protocol', filter.protocol)
+                        return;
+                    }
+
+                    if (filter.protocols && !filter.protocols.includes(deviceSettings.protocol)) {
+                        console.log( '~~~ device does not match protocols', filter.protocol)
+                    }
+
+                    const adapter = AdapterFactory.create(deviceSettings)
+                    if (filter.capabilities) {
+                        let found = false;
+
+                        filter.capabilities.forEach( capability => {
+                            found = found || adapter.getCapabilities().includes(capability)
+                        })                        
+
+                        if (!found) {
+                            console.log( '~~~ device does not match capabilties', filter.capabilities)
+                            return;
+                        }
+                    }
 
                     this.emit('device',deviceSettings )
-                    const adapter = AdapterFactory.create(deviceSettings)
                     adapters.push(adapter)
                     
                     adapter.on('device-info',(settings, info)=>{ 
@@ -411,7 +456,7 @@ export class DeviceAccessService  extends EventEmitter{
                 
             }
             catch(err) {
-                this.logger.logEvent({message:'device scan finished with errors', filter, error:err.message, stack:err.stack})
+                this.logEvent({message:'device scan finished with errors', filter, error:err.message, stack:err.stack})
             }
 
             this.scanState = null;
@@ -425,9 +470,78 @@ export class DeviceAccessService  extends EventEmitter{
 
 
             this.emitScanStateChange('stopped')
-            this.logger.logEvent({message:'device scan finished', filter, detected} )
+            this.logEvent({message:'device scan finished', filter, detected} )
             return detected;    
         }
+    }
+
+    /**
+     * Scans for devices that were not yet listed in the device configuration
+     * 
+     * This will _not_ automatically stop all connected Device Adapters. This needs to be done seperately
+     * 
+     * @param filter [[ScanFilter]] allows to limit the search on specififc interfaces or capabilties
+     * @param maxDevices allows to limit the number of devices that should be detected (default:1)
+     * @returns [[DeviceSettings]][]|[[DeviceSettings]] if [[maxDevices]] is set to 1, it will return the detected devices, otherwise it will return a list of Devices that were detected during the scan
+     */
+
+    async scanForNew( filter: ScanFilter={}, maxDevices=1, timeout=30000): Promise<DeviceSettings[]|DeviceSettings> {
+        
+        const devices:DeviceSettings[] = []
+        const configuration  = DeviceConfigurationService.getInstance()
+        const knownAdapters = configuration.getAllAdapters()
+        let onDeviceHandler
+
+        const waitForMaxDevices = ():Promise<DeviceSettings[]> => {
+            const detectedAdapters: AdapterInfo[] = []
+
+            return new Promise (resolve => {
+                onDeviceHandler = (deviceSettings)=> {
+
+                    const isNew  = knownAdapters.find( ai => ai.adapter.isEqual(deviceSettings))===undefined &&
+                                   detectedAdapters.find( ai => ai.adapter.isEqual(deviceSettings))===undefined
+
+                    if (isNew) {
+                        const adapter = AdapterFactory.create(deviceSettings)
+                        detectedAdapters.push({udid:`detected #${devices.length+1}`,adapter, capabilities:adapter.getCapabilities()})
+                        devices.push(deviceSettings)
+                        if (devices.length>=maxDevices) {
+                            this.emit('new device',deviceSettings)
+                            resolve(devices)
+                        }
+    
+                    }
+                    else {
+                        this.logEvent({message:'skipped known device', ...deviceSettings})
+                    }
+                    
+                }
+                this.on('device',onDeviceHandler )
+        
+            })
+        }
+
+        const scanPromise = this.scan(filter)
+        const devicePromise = waitForMaxDevices()
+        const timeoutPromise = sleep(timeout)
+
+        await Promise.race( [scanPromise,devicePromise,timeoutPromise])
+        this.off('devices',onDeviceHandler)
+        await this.stopScan()
+        
+        if (maxDevices===1)
+            return devices[0]
+        else 
+            return devices
+
+    }
+
+    async getPaths(ifaceName:string): Promise<string[]> {
+        if (ifaceName==='serial' || ifaceName==='tcpip') {
+            const binding = SerialPortProvider.getInstance().getBinding(ifaceName)
+            return (await binding.list()).map( info => info.path)            
+        }
+        return undefined
     }
 
     getProtocols(ifaceName:string) {
@@ -479,7 +593,7 @@ export class DeviceAccessService  extends EventEmitter{
             result = await Promise.allSettled(promises)
         }
         catch(err) {
-            this.logger.logEvent({message:'stop device scan finished with errors', error:err.message, stack:err.stack} )
+            this.logEvent({message:'stop device scan finished with errors', error:err.message, stack:err.stack} )
             return false;
         }
 
@@ -487,7 +601,7 @@ export class DeviceAccessService  extends EventEmitter{
         this.scanState.promises = []
 
         this.emitScanStateChange('stopped')
-        this.logger.logEvent({message:'stop device scan finished', stopScanresult: result} )
+        this.logEvent({message:'stop device scan finished', stopScanresult: result} )
         return true;
     }
 
@@ -498,22 +612,28 @@ export class DeviceAccessService  extends EventEmitter{
     }
 
     protected getInterfacesForScan( filter?:ScanFilter): IncyclistInterface[] {
+        
+        const filterSet = filter?.interfaces||filter?.capabilities||filter?.profile||filter?.protocol
+        const {excludeDisabled} = filter||{}
         const keys = Object.keys(this.interfaces)
 
         const config = useDeviceConfiguration()
         
         
         const enabledInterfaces = keys.filter(i=> this.interfaces[i].enabled && config.isInterfaceEnabled(i) )
+        const allInterfaces = keys
 
+        
+        const selectedInterfaces = filterSet&&!excludeDisabled ? allInterfaces : enabledInterfaces
 
-
-
+        let interfaces = selectedInterfaces.map(name=>(this.interfaces[name] as InterfaceInfoInternal).interface);
+        
         const interfaceFilter = filter?.interfaces
-        let interfaces = enabledInterfaces.map(name=>(this.interfaces[name] as InterfaceInfoInternal).interface);
-        if (interfaceFilter) {
-            const remaining = enabledInterfaces.filter(i=> interfaceFilter.includes(i))
+        if (interfaceFilter) {    
+            const remaining = selectedInterfaces.filter(i=> interfaceFilter.includes(i))
             interfaces = remaining.map(name=>(this.interfaces[name] as InterfaceInfoInternal).interface);
         }
+
         return interfaces
     }
 

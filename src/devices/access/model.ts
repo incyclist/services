@@ -55,6 +55,10 @@ export interface InterfaceList {[index: string]: InterfaceInfo}
 export interface ScanFilter {
     interfaces?: string[],
     capabilities?: (IncyclistCapability|'bike')[]
+    protocol?: string
+    protocols?: string[]
+    profile?: string
+    excludeDisabled?: boolean
 }
 
 

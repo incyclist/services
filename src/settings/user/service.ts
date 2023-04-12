@@ -99,7 +99,7 @@ export class UserSettingsService {
 
     set( key:string, value:any):void {
 
-
+        
         if (!this.isInitialized)
             throw new Error('Settings are not yet initialized')
 
@@ -176,6 +176,7 @@ export class UserSettingsService {
             return;
         }
         
+        console.log('~~~ save settings', this.settings.capabilities[0].selected)
         this.savePromise =  this.binding.save(this.settings)
         try {
             await this.savePromise;
