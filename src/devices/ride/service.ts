@@ -54,7 +54,7 @@ export class DeviceRideService  extends EventEmitter{
         this.logger.logEvent(event)
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = window as any
+        const w = global.window as any
     
         if (this.debug || w?.SERVICE_DEBUG) 
             console.log('~~~ RIDE-SVC', event)

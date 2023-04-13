@@ -6,7 +6,7 @@ import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
 import { sleep } from "../../utils/sleep";
 import { AdapterInfo, DeviceConfigurationService, useDeviceConfiguration } from "../configuration";
-import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState } from "./model";
+import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState, ScanForNewFilter } from "./model";
 
 interface InternalScanState {
     promises: (Promise<DeviceSettings[]>)[]
@@ -97,7 +97,7 @@ export class DeviceAccessService  extends EventEmitter{
     protected logEvent(event) {
         this.logger.logEvent(event)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = window as any
+        const w = global.window as any
         if (w?.SERVICE_DEBUG) {
             console.log('~~~ ACCESS-SVC', event)
         }
@@ -485,11 +485,20 @@ export class DeviceAccessService  extends EventEmitter{
      * @returns [[DeviceSettings]][]|[[DeviceSettings]] if [[maxDevices]] is set to 1, it will return the detected devices, otherwise it will return a list of Devices that were detected during the scan
      */
 
-    async scanForNew( filter: ScanFilter={}, maxDevices=1, timeout=30000): Promise<DeviceSettings[]|DeviceSettings> {
+    async scanForNew( filter: ScanForNewFilter={}, maxDevices=1, timeout=30000): Promise<DeviceSettings[]|DeviceSettings> {
         
         const devices:DeviceSettings[] = []
         const configuration  = DeviceConfigurationService.getInstance()
         const knownAdapters = configuration.getAllAdapters()
+
+        if (filter.blackList) {
+            filter.blackList.forEach( device=> {
+                const adapter = AdapterFactory.create(device)
+                const capabilities = adapter.getCapabilities()
+                knownAdapters.push( {udid:`temp-${Date.now()}`, adapter:AdapterFactory.create(device),capabilities } )
+            })
+        }
+
         let onDeviceHandler
 
         const waitForMaxDevices = ():Promise<DeviceSettings[]> => {

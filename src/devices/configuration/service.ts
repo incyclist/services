@@ -54,7 +54,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.logger?.logEvent(e)
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = window as any
+        const w = global.window as any
         if (w?.SERVICE_DEBUG) {
             console.log('~~~ CONFIG-SVC', e)
         }
@@ -237,7 +237,10 @@ export class DeviceConfigurationService  extends EventEmitter{
 
             // ensure that devices is included in capability device list, also ensures that capabilty exists
             ['bike',IncyclistCapability.Control, IncyclistCapability.Power,IncyclistCapability.Speed, IncyclistCapability.Cadence].forEach( (cc:ExtendedIncyclistCapability) => {            
-                this.addToCapability(udid,cc)  
+                
+                if (cc!==IncyclistCapability.Control || adapter.hasCapability(cc) )
+                    this.addToCapability(udid,cc)  
+
                 if (isSelected) {               
                     const cap = cc as ExtendedIncyclistCapability
                     if (cap==='bike' || adapter.hasCapability(cap)) {
@@ -377,8 +380,9 @@ export class DeviceConfigurationService  extends EventEmitter{
      * @event device-added      in case the device was not yet known
     */
 
-    select(udid:string, capability:ExtendedIncyclistCapability, noRecursive=false):void {
+    select(udid:string, capability:ExtendedIncyclistCapability, props?:{noRecursive?:boolean,legacy?:boolean}):void {
 
+        const {noRecursive=false, legacy=false} = props||{};
         const deviceSettings:IncyclistDeviceSettings = this.settings.devices?.find(d=>d.udid===udid)?.settings
         if (!deviceSettings)
             return;
@@ -386,7 +390,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         if (capability==='bike' && !adapter.isControllable())  // verify that this is a Bike
             return;
 
-        const isControl = adapter.hasCapability(IncyclistCapability.Control) 
+        const isControl = adapter.hasCapability(IncyclistCapability.Control) || (legacy && capability==='bike')
 
         // ensure that devices is included in capability device list. 
         // This also ensures that the capability exists
@@ -408,13 +412,17 @@ export class DeviceConfigurationService  extends EventEmitter{
         // if we select a controllable device as hrm or any other non controllable source, make sure that this device is also selected as controllable
         if (isControl) {
             if (capability!=='bike' && capability!==IncyclistCapability.Control) {
-                this.select(udid,'bike',true)
-                this.select(udid,IncyclistCapability.Control,true)            
+                this.select(udid,'bike',{noRecursive:true, legacy})
+                this.select(udid,IncyclistCapability.Control,{noRecursive:true, legacy})            
             }
             else {
                 if (capability==='bike' && isControl) {
-                    this.select(udid,IncyclistCapability.Control,true)                    
-                    this.select(udid,IncyclistCapability.Power,true)                    
+                    this.select(udid,IncyclistCapability.Control,{noRecursive:true, legacy})                    
+                    this.select(udid,IncyclistCapability.Power,{noRecursive:true, legacy})    
+                    if (legacy) {
+                        this.select(udid,IncyclistCapability.Speed,{noRecursive:true, legacy})    
+                        this.select(udid,IncyclistCapability.Cadence,{noRecursive:true, legacy})                                                    
+                    }                
                 }
 
                 const otherCapabilties = this.settings.capabilities.filter( c=>c.capability!=='bike' && c.capability!==IncyclistCapability.Control && !c.disabled && c.selected!==udid)
@@ -433,7 +441,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         }
         else if (!isControl && capability==='bike') {
             this.unselect(IncyclistCapability.Control)
-            this.select(udid, IncyclistCapability.Power,true)
+            this.select(udid, IncyclistCapability.Power,{noRecursive:true, legacy})
         }
 
         this.updateUserSettings()
@@ -452,7 +460,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         }
     }
 
-    add(deviceSettings:IncyclistDeviceSettings):void {   
+    add(deviceSettings:IncyclistDeviceSettings, legacyMode=false):void {   
         
         let udid = this.getUdid(deviceSettings) 
         const deviceAlreadyExists = udid!==undefined
@@ -488,15 +496,42 @@ export class DeviceConfigurationService  extends EventEmitter{
             const isBike = adapter.hasCapability(IncyclistCapability.Control)
             const isPower = adapter.hasCapability(IncyclistCapability.Power)
 
+            //legacy mode - as long as new UI is not in place
+            if (legacyMode) {
+                const isBikeCap = c.capability==='bike'
+                const isControlCap = c.capability===IncyclistCapability.Control
+                const isHrmCap = c.capability===IncyclistCapability.HeartRate
 
+                const canAdd = 
+                    (isBikeCap && (isBike || isPower)) ||
+                    (isControlCap && isBike) ||
+                    (!isHrmCap && !isControlCap && (isBike||isPower)) ||
+                    adapter.hasCapability(c.capability) 
+                
+                const canSelect = (isBikeCap || isControlCap || isHrmCap) && 
+                            (!c.selected && !c.disabled && 
+                            (isBike || isPower || c.capability===IncyclistCapability.HeartRate))
+                
+                if (canAdd) {
+                    c.devices.push(udid)
+    
+                    if (canSelect)
+                        c.selected = udid
 
-            if ( adapter.hasCapability(c.capability) ||  (c.capability==='bike' && (isBike || isPower))) {
-                c.devices.push(udid)
+                }
 
-                // TODO: Change once we have changed the UI
-                if (!c.selected && !c.disabled && (isBike || c.capability===IncyclistCapability.HeartRate))
-                    c.selected = udid
             }
+            else {
+                if ( adapter.hasCapability(c.capability) ||  (c.capability==='bike' && (isBike || isPower))) {
+                    c.devices.push(udid)
+    
+                    // TODO: Change once we have changed the UI
+                    if (!c.selected && !c.disabled && (isBike || c.capability===IncyclistCapability.HeartRate))
+                        c.selected = udid
+                }
+    
+            }
+
         })
 
         this.updateUserSettings()

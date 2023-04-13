@@ -1,4 +1,4 @@
-import { IncyclistCapability} from "incyclist-devices"
+import { DeviceSettings, IncyclistCapability} from "incyclist-devices"
 
 
 export type InterfaceState = 'connected'| 'disconnected' | 'unknown' | 'connecting' | 'disconnecting' | 'unavailable'
@@ -59,6 +59,10 @@ export interface ScanFilter {
     protocols?: string[]
     profile?: string
     excludeDisabled?: boolean
+}
+
+export interface ScanForNewFilter extends ScanFilter {
+    blackList?: DeviceSettings[]
 }
 
 

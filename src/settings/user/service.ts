@@ -176,7 +176,7 @@ export class UserSettingsService {
             return;
         }
         
-        console.log('~~~ save settings', this.settings.capabilities[0].selected)
+        //console.log('~~~ save settings', this.settings.capabilities[0].selected)
         this.savePromise =  this.binding.save(this.settings)
         try {
             await this.savePromise;

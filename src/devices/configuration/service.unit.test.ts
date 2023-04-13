@@ -192,9 +192,17 @@ describe( 'DeviceConfigurationService',()=>{
             expect (emptyAdapters).toBeUndefined();
 
             expect(capabilities.length).toBe(6) // Bike, Control, Heartrate, Power, Cadence, Speed
+
             const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
             const AntHrm3250  = devices.find(d=>d.settings.profile==='HR' && d.settings.deviceID==='3250')
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
+            expect(getCap('bike').devices.length).toBe(4)
+            expect(getCap(IncyclistCapability.Control).devices.length).toBe(3)  // PWR does not have Control
+            expect(getCap(IncyclistCapability.Speed).devices.length).toBe(4)
+            expect(getCap(IncyclistCapability.Cadence).devices.length).toBe(4)
+            expect(getCap(IncyclistCapability.Power).devices.length).toBe(4)
+            expect(getCap(IncyclistCapability.HeartRate).devices.length).toBe(3)
+
             expect(getCap('bike')?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Control)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Power)?.selected).toBe(AntFe2606.udid)
@@ -435,6 +443,46 @@ describe( 'DeviceConfigurationService',()=>{
 
             // hearrate sensor was not overwritten
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:'1'})
+        })
+
+        test('legacy: adding a sensor to existing list',()=>{
+
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'ant',deviceID:'4711',profile:'FE'}}
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:undefined,devices:['1','2']},
+                    {capability:IncyclistCapability.Control, selected:undefined, devices:['2']},
+                    {capability:IncyclistCapability.Power, selected:undefined, devices:['2']},
+                    {capability:'bike', selected:undefined,devices:['2']}
+                ]
+            }
+            service.adapters = {
+                "1" : {
+                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.HeartRate),
+                    isControllable: jest.fn().mockReturnValue(false),
+                    isEqual:jest.fn().mockReturnValue(false)
+                },
+                "2" : {
+                    hasCapability: jest.fn().mockReturnValue(true),
+                    isControllable: jest.fn().mockReturnValue(true),
+                    isEqual: jest.fn().mockReturnValue(false)
+                }
+            }
+
+            service.add( {interface:'ant',deviceID:'4711',profile:'PWR'},true)
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(3)
+            const udid = settings.devices[2].udid
+
+            expect(settings.capabilities.length).toBe(6)  
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:undefined})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:undefined})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:undefined})
         })
 
         test('adding existing bike to a list',()=>{
