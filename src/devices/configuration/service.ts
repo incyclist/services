@@ -76,7 +76,6 @@ export class DeviceConfigurationService  extends EventEmitter{
      * 
     */
     async init():Promise<void> {
-
         if (this.isInitialized()) {
             this.emitInitialized()
             return;
@@ -99,9 +98,10 @@ export class DeviceConfigurationService  extends EventEmitter{
                 this.logError(err,'init()')
             }
 
-            this.emitInitialized()            
+            this.emitInitialized()                      
+            return;    
         }
-
+        
 
         this.settings = {
             devices: this.userSettings.get('devices',[]),
@@ -136,6 +136,7 @@ export class DeviceConfigurationService  extends EventEmitter{
                 
             }
         })
+        this.removeLegacySettings() 
 
         this.emitInitialized()
         
@@ -177,6 +178,8 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     initFromLegacy(settings:LegacySettings={}):void {
+        this.logEvent({message:'converting settings.json'})
+
         const {gearSelection,connections, modeSettings={}} = settings
         
         const {bikes=[], hrms=[]} = gearSelection||{}
@@ -204,7 +207,15 @@ export class DeviceConfigurationService  extends EventEmitter{
             if (bike.interface==='ant')
                 delete bike.name
 
-            const adapter = AdapterFactory.create(bike);
+                
+            let adapter;
+            try {
+                adapter =AdapterFactory.create(bike);
+            }
+            catch (err) {
+                this.logError(err,'initFromLegacy#bike')
+            }
+
             if (!adapter) {
                 return;
             }
@@ -271,10 +282,17 @@ export class DeviceConfigurationService  extends EventEmitter{
             if (hrm.interface==='ant') 
                 delete hrm.name
             
-            const adapter = AdapterFactory.create(hrm);
+            let adapter;
+            try {
+                adapter =AdapterFactory.create(hrm);
+            }
+            catch (err) {
+                this.logError(err,'initFromLegacy#bike')
+            }
             if (!adapter) {
                 return;
             }
+
             const hrmSettings = adapter.getSettings()
             // special case ANT - we need to remove legacy protocol information as otherwise profile would be incorrectly interpreted
             if (hrm.interface==='ant')
@@ -311,12 +329,19 @@ export class DeviceConfigurationService  extends EventEmitter{
                 capabilities.push( {capability:IncyclistCapability.HeartRate, devices:[], selected:undefined, disabled:true})
         }
 
-        this.userSettings.set('connections',null)
-        this.userSettings.set('gearSelection',null)
-        this.userSettings.set('preferences.gear',null)
+        this.removeLegacySettings() 
         
         this.settings = { devices, capabilities, interfaces}
         this.updateUserSettings()
+    }
+
+    protected removeLegacySettings() {
+        if (this.userSettings.get('connections',null)!==null)
+            this.userSettings.set('connections',null)
+        if (this.userSettings.get('gearSelection',null)!==null)
+            this.userSettings.set('gearSelection',null)
+        if (this.userSettings.get('preferences.gear',null)!==null)
+            this.userSettings.set('preferences.gear',null)
     }
 
 

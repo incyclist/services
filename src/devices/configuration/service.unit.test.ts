@@ -59,6 +59,25 @@ const SampleLegacySettings:LegacySettings = {
     }
 }
 
+const ErrorLegacySettings:LegacySettings = {
+    gearSelection: {
+        bikes: [
+            {name: "Ant+FE 2606",selected: false,protocol: "Ant",deviceID: "2606",profile: "Smart Trainer",interface: "ant"},
+            {name: "Ant+PWR 2606",selected: false,protocol: "Ant",deviceID: "2606",profile: "Power Meter",interface: "ant"},
+            {name: "Volt",selected: false,protocol: "BLE",profile: "Smart Trainer",interface: "ble"},
+            {name: "Simulator",selected: true,protocol: "Simulator"} as LegacyGearSetting,
+            {name: "Ant+FE 5797",selected: false,protocol: "Ant",deviceID: "5797",profile: "Smart Trainer",interface: "ant"},
+            {name: "Daum8i",displayName: "Daum8i (192.168.2.115)",selected: false,protocol: "Daum Premium",interface: "tcpip",host: "192.168.2.115",port: "51955"}
+          ],
+          hrms: [            
+            {name: "HRM-Dual:068786",selected: false,protocol: "BLE",interface: "ble",profile: "Heartrate Monitor"},
+            {name: "Ant+Hrm 3250",selected: true,protocol: "Ant",deviceID: "3250",profile: "Heartrate Monitor",interface: "ant"},
+            {name: "Daum8i",displayName: "Daum8i (192.168.2.115)",selected: false,protocol: "Daum Premium",interface: "tcpip",host: "192.168.2.115",port: "51955"}
+          ],
+          "disableHrm": false        
+    }
+}
+
 
 describe( 'DeviceConfigurationService',()=>{
 
@@ -207,6 +226,20 @@ describe( 'DeviceConfigurationService',()=>{
             expect(getCap(IncyclistCapability.Control)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Power)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.HeartRate)?.selected).toBe(AntHrm3250.udid)            
+        })
+
+        test('alternatve legacy settings',()=>{
+            const settings = clone(ErrorLegacySettings)            
+
+            testData = settings
+            service.initFromLegacy(settings)
+
+            const {devices,capabilities,interfaces} = service.settings
+            const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
+            expect(devices.length).toBe(8)
+            expect(getCap('bike').devices.length).toBe(6)
+            expect(getCap(IncyclistCapability.HeartRate).devices.length).toBe(3)
+
         })
 
         test('legacy settings with two devices having the same name',()=>{

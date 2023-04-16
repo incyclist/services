@@ -2,7 +2,6 @@
 import {EventLogger} from 'gd-eventlog'
 import clone from '../../utils/clone';
 import { merge } from '../../utils/merge';
-import { sleep } from '../../utils/sleep';
 import { valid } from '../../utils/valid';
 import {IUserSettingsBinding } from './bindings';
 
@@ -98,13 +97,8 @@ export class UserSettingsService {
 
 
     set( key:string, value:any):void {
-
-        
         if (!this.isInitialized)
             throw new Error('Settings are not yet initialized')
-
-        if (!this.binding.canOverwrite())
-            this.binding.set(key,value)
 
         const settings = this.settings;
 
@@ -178,21 +172,27 @@ export class UserSettingsService {
         
         //console.log('~~~ save settings', this.settings.capabilities[0].selected)
         this.savePromise =  this.binding.save(this.settings)
+        this.isDirty = false;
+
         try {
             await this.savePromise;
             this.savePromise =null;
 
-            while (this.isDirty) {
-                await sleep(50)
+            if (this.isDirty) {
                 this.isDirty = false;
                 await this.save()
             }
-
         }
         catch(err) {
-            this.isDirty = true;
+            this.logger.logEvent({message:'Error', fn:'save()', error:err.message, stack:err.stack})
+            this.isDirty = false; // retry will not help
         }
         return
+    }
+
+    
+    async onAppClose(): Promise<void> {
+        this.binding.save(this.settings, true)
     }
 
 
