@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { AdapterFactory, IncyclistCapability, SerialPortProvider } from "incyclist-devices";
+import { AdapterFactory, IncyclistCapability,  SerialPortProvider } from "incyclist-devices";
 import clone from "../../utils/clone";
 import { DeviceConfigurationService } from "./service"
 import { DeviceConfigurationSettings,
@@ -342,9 +342,21 @@ describe( 'DeviceConfigurationService',()=>{
             service = new DeviceConfigurationService()
             service.updateUserSettings =jest.fn()
             service.emitCapabiltyChanged = jest.fn()
+
+            SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue( {})
+
         })
 
-        test('adding bike to empty list',()=>{
+        afterEach( ()=>{
+            AdapterFactory.reset()
+        })
+
+        afterAll( ()=>{
+            (SerialPortProvider as any)._instance = undefined
+        })
+
+
+        test('adding smart trainer to empty list',()=>{
             service.settings={}
             service.adapters={}
 
@@ -359,6 +371,27 @@ describe( 'DeviceConfigurationService',()=>{
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Speed)).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Cadence)).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:undefined})
+
+            expect(service.emitCapabiltyChanged).toHaveBeenCalled()
+
+        })
+
+        test('adding Ergo to empty list',()=>{
+            service.settings={}
+            service.adapters={}
+
+            
+            service.add(  { name: "Daum8i", protocol: "Daum Premium", interface: "tcpip", host: "127.0.0.1", port: "51955"} )
+
+            const settings = service.settings
+            expect(settings.devices).toBeDefined()
+            expect(settings.capabilities).toBeDefined()
+            const udid = settings.devices[0].udid
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Speed)).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Cadence)).toMatchObject( {selected:udid})
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:udid})
 
             expect(service.emitCapabiltyChanged).toHaveBeenCalled()
 

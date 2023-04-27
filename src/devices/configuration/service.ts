@@ -80,7 +80,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             this.emitInitialized()
             return;
         }
-
+        this.logEvent({message:'DeviceConfig.init'})
         await this.userSettings.init()
 
         if ( this.userSettings.get('devices',null)==null &&  (this.userSettings.get('gearSelection',null)!==null|| this.userSettings.get('connections',null)!==null)) {      
@@ -137,6 +137,8 @@ export class DeviceConfigurationService  extends EventEmitter{
             }
         })
         this.removeLegacySettings() 
+
+        this.logEvent({message:'DeviceConfig.init done'})
 
         this.emitInitialized()
         
@@ -406,6 +408,7 @@ export class DeviceConfigurationService  extends EventEmitter{
     */
 
     select(udid:string, capability:ExtendedIncyclistCapability, props?:{noRecursive?:boolean,legacy?:boolean}):void {
+        this.logEvent({message:'select device', udid, capability, props})
 
         const {noRecursive=false, legacy=false} = props||{};
         const deviceSettings:IncyclistDeviceSettings = this.settings.devices?.find(d=>d.udid===udid)?.settings
@@ -473,6 +476,8 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     unselect( capability:ExtendedIncyclistCapability):void {
+        this.logEvent({message:'unselect device', capability})
+
         if (!this.settings || !this.settings.capabilities)
             return;
 
@@ -488,6 +493,8 @@ export class DeviceConfigurationService  extends EventEmitter{
     add(deviceSettings:IncyclistDeviceSettings, legacyMode=false):void {   
         
         let udid = this.getUdid(deviceSettings) 
+        this.logEvent({message:'add device',udid,deviceSettings, legacyMode})
+
         const deviceAlreadyExists = udid!==undefined
 
 
@@ -565,6 +572,7 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     delete(udid:string, capability?:ExtendedIncyclistCapability, forceSingle=false):void {
+        this.logEvent({message:'delete device',udid, capability, forceSingle})
 
         const deviceSettings:IncyclistDeviceSettings = this.settings.devices.find(d=>d.udid===udid)?.settings
         if (!deviceSettings)
@@ -762,6 +770,9 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     setMode(udid:string, mode:string) {
+
+        this.logEvent({message:'set device mode',udid,mode})
+
         if (!this.isInitialized())
             return;
 
@@ -780,6 +791,7 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     setModeSettings(udid:string, mode:string, settings) {
+        this.logEvent({message:'set device mode settings',udid,mode,settings})
         if (!this.isInitialized())
             return;
 
@@ -902,6 +914,7 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     enableInterface(ifName:string):void {
+        this.logEvent({message:'enable interface',ifName})
         const setting = this.getInterfaceSettings(ifName)
         if (setting)
             setting.enabled = true
@@ -914,6 +927,7 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     disableInterface(ifName:string):void {
+        this.logEvent({message:'disable interface',ifName})
         const setting = this.getInterfaceSettings(ifName)
         if (setting)
             setting.enabled = false
@@ -926,6 +940,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
 
     setInterfaceSettings(ifName, settings:InterfaceSetting):void {
+        this.logEvent({message:'set interface settings',ifName,settings})
 
         if (settings.name && settings.name!==ifName)
             return;
