@@ -15,6 +15,7 @@ interface InternalScanState {
 
 interface InterfaceInfoInternal extends InterfaceInfo {
     interface: IncyclistInterface
+    unavailable?: boolean
 }
 
 /**
@@ -173,8 +174,7 @@ export class DeviceAccessService  extends EventEmitter{
      * 
      * @param ifaceName the name of the interface (one of `ant`, `ble`, `serial`, `tcpip`)
      */
-    disableInterface( ifaceName:string):void {
-
+    disableInterface( ifaceName:string, avalailable=true):void {
         const existing = this.interfaces[ifaceName]
         if (!existing) 
             return;
@@ -192,6 +192,13 @@ export class DeviceAccessService  extends EventEmitter{
         }
 
         existing.enabled = false;
+        if (!avalailable) {
+            existing.state = 'unavailable';
+            (existing as InterfaceInfoInternal).unavailable = true;
+            this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
+            return
+        }
+
         this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
     }       
 
@@ -267,7 +274,7 @@ export class DeviceAccessService  extends EventEmitter{
             return;
         }
 
-        const impl = this.getInterface(ifaceName)
+        const impl = this.getInterface(ifaceName) 
 
         if (!impl) {
             this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
@@ -350,24 +357,20 @@ export class DeviceAccessService  extends EventEmitter{
             interfaces.forEach( (i:IncyclistInterface) => {
                 i.on('device',async (deviceSettings)=>{ 
 
-                    console.log( '~~~ detected device:', deviceSettings)
                     // already found during this scan? ignore
                     if (adapters.find(a=> a.isEqual(deviceSettings))) {
-                        console.log( '~~~ device already detected')
                         return;
                     }
 
                     if (filter.profile && deviceSettings.profile!==filter.profile) {
-                        console.log( '~~~ device does not match profile', filter.profile)
                         return;
                     }
                     if (filter.protocol && deviceSettings.protocol!==filter.protocol) {
-                        console.log( '~~~ device does not match protocol', filter.protocol)
                         return;
                     }
 
                     if (filter.protocols && !filter.protocols.includes(deviceSettings.protocol)) {
-                        console.log( '~~~ device does not match protocols', filter.protocol)
+                        return
                     }
 
                     const adapter = AdapterFactory.create(deviceSettings)
@@ -379,7 +382,6 @@ export class DeviceAccessService  extends EventEmitter{
                         })                        
 
                         if (!found) {
-                            console.log( '~~~ device does not match capabilties', filter.capabilities)
                             return;
                         }
                     }
@@ -406,11 +408,11 @@ export class DeviceAccessService  extends EventEmitter{
                                 await adapter.stop()
                             }
                             catch(err) {
-                                console.log(err)
+                                this.logEvent( {message:'could not start device',device:adapter?.getUniqueName(), reason:err.message})
                             }
                         }
                         catch(err) {
-                            console.log('~~~ start error',err)
+                            this.logEvent( {message:'error',fn:'scan#adapte', error:err.message, stack:err.stack})
                         }
     
                     }
