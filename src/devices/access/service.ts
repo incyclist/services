@@ -395,9 +395,10 @@ export class DeviceAccessService  extends EventEmitter{
                   
                     
                     detected.push(deviceSettings)
+                    /*
                     const ifName = adapter.getSettings().interface
 
-                    // at the moment, only ANT and BLE are transmitting data during the scan
+                    // at the moment, only ANT and BLE are transmitting data during the scan                    
                     if (ifName!=='ble' && ifName!=='ant') {
                         try {
                             await adapter.start()
@@ -416,6 +417,7 @@ export class DeviceAccessService  extends EventEmitter{
                         }
     
                     }
+                    */
 
                 })
 
