@@ -136,6 +136,15 @@ export class DeviceConfigurationService  extends EventEmitter{
                 
             }
         })
+
+        const {capabilities} = this.settings
+        for( const capability  in ['bike' , IncyclistCapability.Control]) {
+            const info = capabilities.find(c => c.capability===capability)
+            if (info && info.devices.length>0 && info.selected===undefined)
+                this.select( info.devices[0], capability as ExtendedIncyclistCapability)
+        }
+        
+
         this.removeLegacySettings() 
 
         this.logEvent({message:'DeviceConfig.init done'})

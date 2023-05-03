@@ -122,6 +122,37 @@ describe( 'DeviceConfigurationService',()=>{
 
         })
 
+        test('no device selected in bike capability',async ()=>{
+            const settings = {                
+                devices: [
+                    {udid:'1',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                ],
+                capabilities: [
+                    {capability:'bike',devices:['1']},
+                    {capability:IncyclistCapability.Control,devices:['1']},
+                    {capability:IncyclistCapability.Power,devices:['1']},
+                    {capability:IncyclistCapability.HeartRate,devices:['1']}
+            
+                ],
+                interfaces: [
+                    {name:'ble', enabled:false},
+                    {name:'ant', enabled:false},
+                    {name:'tcpip', enabled:false},
+                    {name:'serial', enabled:true}
+                ]
+            }
+
+            testData = settings
+
+            await service.init()
+            const bike = service.settings.capabilities.find(c=>c.capability==='bike');
+            const hrm = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate);
+
+            expect(bike.devices.find(d=>d.selected!==undefined)?.selected).toBe('1')
+            expect(hrm.devices.find(d=>d.selected!==undefined)?.selected).toBe('1')
+
+        })
+
 
         test('new and legacy',async ()=>{
             const settings = clone({...SampleSettings, ...SampleLegacySettings})
@@ -810,6 +841,36 @@ describe( 'DeviceConfigurationService',()=>{
             expect(settings.devices.length).toBe(5)
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:'1', devices:['1']})
 
+        })
+
+        test('delete last remaining device',()=>{
+            service.settings = {                
+                devices: [
+                    {udid:'1',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                ],
+                capabilities: [
+                    {capability:'bike',selected:'1',devices:['1']},
+                    {capability:IncyclistCapability.Control,selected:'1',devices:['1']},
+                    {capability:IncyclistCapability.Power,selected:'1',devices:['1']},
+                    {capability:IncyclistCapability.HeartRate,selected:'1',devices:['1']}
+            
+                ],
+                interfaces: [
+                    {name:'ble', enabled:false},
+                    {name:'ant', enabled:false},
+                    {name:'tcpip', enabled:false},
+                    {name:'serial', enabled:true}
+                ]
+            }
+
+            service.delete('1','bike')
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(0)
+            //expect(settings.capabilities).toBe(0)
+            expect(settings.capabilities.find(c=>c.capability==='bike')?.devices.length).toBe(0)
+
+            
         })
 
 
