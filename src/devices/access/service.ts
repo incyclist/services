@@ -18,6 +18,8 @@ interface InterfaceInfoInternal extends InterfaceInfo {
     unavailable?: boolean
 }
 
+interface onDataHandlersMap   {[index: string]: (...args)=>void}
+
 /**
  * This service is used by the Front-End to manage the access to devices and interfaces
  * 
@@ -341,6 +343,7 @@ export class DeviceAccessService  extends EventEmitter{
     async scan( filter:ScanFilter={} ): Promise<DeviceSettings[]> {
         this.logEvent({message:'device scan start', filter} )
         const detected = [];
+        const onDataHandlers:onDataHandlersMap  = {}
 
         if (!this.isScanning()) {
             this.emitScanStateChange('start-requested')
@@ -354,8 +357,22 @@ export class DeviceAccessService  extends EventEmitter{
 
             const adapters = []
 
+
             interfaces.forEach( (i:IncyclistInterface) => {
-                i.on('device',async (deviceSettings)=>{ 
+
+                const onData = (...args)=>{
+                    if (i.getName()==='ant') {
+                        const settings: AntDeviceSettings = { profile:args[0], interface:'ant', deviceID:args[1]}
+                        const adapter = AdapterFactory.create( settings)
+                        adapter.onDeviceData(args[2])
+                    }
+                    else if (i.getName()==='ble') {
+                        const adapter = AdapterFactory.create(args[0])
+                        adapter.onDeviceData(args[1])
+                    }
+                }
+
+                const onDevice = async (deviceSettings)=>{ 
 
                     // already found during this scan? ignore
                     if (adapters.find(a=> a.isEqual(deviceSettings))) {
@@ -395,6 +412,7 @@ export class DeviceAccessService  extends EventEmitter{
                   
                     
                     detected.push(deviceSettings)
+
                     /*
                     const ifName = adapter.getSettings().interface
 
@@ -419,20 +437,11 @@ export class DeviceAccessService  extends EventEmitter{
                     }
                     */
 
-                })
-
-                
-                i.on('data',(...args)=>{
-                    if (i.getName()==='ant') {
-                        const settings: AntDeviceSettings = { profile:args[0], interface:'ant', deviceID:args[1]}
-                        const adapter = AdapterFactory.create( settings)
-                        adapter.onDeviceData(args[2])
-                    }
-                    else if (i.getName()==='ble') {
-                        const adapter = AdapterFactory.create(args[0])
-                        adapter.onDeviceData(args[1])
-                    }
-                })
+                }
+    
+                onDataHandlers[i.getName()] = onData
+                i.on('device',onDevice)
+                i.on('data',onDataHandlers[i.getName()])
 
                 const ifaceName = i.getName()
                 const info = this.interfaces[ifaceName]
@@ -466,6 +475,7 @@ export class DeviceAccessService  extends EventEmitter{
             this.scanState = null;
             interfaces.forEach( (i:IncyclistInterface) => {
                 i.removeAllListeners('device')
+                i.off('data',onDataHandlers[i.getName()])
                 this.interfaces[i.getName()].isScanning = false;
 
                 if (i.getName()==='tcpip')

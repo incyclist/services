@@ -138,7 +138,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         })
 
         const {capabilities} = this.settings
-        for( const capability  in ['bike' , IncyclistCapability.Control]) {
+        for( const capability  of ['bike' , IncyclistCapability.Control]) {
             const info = capabilities.find(c => c.capability===capability)
             if (info && info.devices.length>0 && info.selected===undefined)
                 this.select( info.devices[0], capability as ExtendedIncyclistCapability)
@@ -459,7 +459,16 @@ export class DeviceConfigurationService  extends EventEmitter{
                     if (legacy) {
                         this.select(udid,IncyclistCapability.Speed,{noRecursive:true, legacy})    
                         this.select(udid,IncyclistCapability.Cadence,{noRecursive:true, legacy})                                                    
-                    }                
+                    }            
+                    if (adapter.hasCapability(IncyclistCapability.HeartRate)) {
+                        const hrm = this.getSelected(IncyclistCapability.HeartRate)
+                        if ( !hrm && !this.isDisabled(IncyclistCapability.HeartRate)) {
+                            this.select(udid, IncyclistCapability.HeartRate)
+                        }
+                        else if ( hrm && hrm.hasCapability( IncyclistCapability.Control)) {
+                            this.select(udid, IncyclistCapability.HeartRate)
+                        }
+                    }    
                 }
 
                 const otherCapabilties = this.settings.capabilities.filter( c=>c.capability!=='bike' && c.capability!==IncyclistCapability.Control && !c.disabled && c.selected!==udid)
@@ -882,6 +891,14 @@ export class DeviceConfigurationService  extends EventEmitter{
         
         const udid = found.selected
         return this.adapters[udid]
+    }
+
+    protected isDisabled(capability:ExtendedIncyclistCapability): boolean {
+        const info = this.getCapabilityInfo(capability)
+        if (!info)
+            return true;
+
+        return info.disabled
     }
 
     protected getCapabilityInfo(capability:ExtendedIncyclistCapability): CapabilityListDetails {

@@ -94,6 +94,7 @@ describe( 'DeviceConfigurationService',()=>{
                 get: jest.fn( (key,defVal) => testData[key]||defVal)
             }
             service.emitInitialized = jest.fn()
+            SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue( {})
         })
 
         afterEach( ()=>{
@@ -125,7 +126,7 @@ describe( 'DeviceConfigurationService',()=>{
         test('no device selected in bike capability',async ()=>{
             const settings = {                
                 devices: [
-                    {udid:'1',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                    {udid:'1',settings:{interface:'serial',name:'Daum 8080',port:'COM4', protocol:'Daum Classic'}},
                 ],
                 capabilities: [
                     {capability:'bike',devices:['1']},
@@ -148,8 +149,8 @@ describe( 'DeviceConfigurationService',()=>{
             const bike = service.settings.capabilities.find(c=>c.capability==='bike');
             const hrm = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate);
 
-            expect(bike.devices.find(d=>d.selected!==undefined)?.selected).toBe('1')
-            expect(hrm.devices.find(d=>d.selected!==undefined)?.selected).toBe('1')
+            expect(bike.selected).toBe('1')
+            expect(hrm.selected).toBe('1')
 
         })
 
@@ -792,6 +793,29 @@ describe( 'DeviceConfigurationService',()=>{
             const settings = service.settings
             expect(settings.devices.length).toBe(4)
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'4', devices:['2','4','5']})
+
+        })
+
+        test('deleting selected control device at bottom of category',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                    {udid:'3',settings:{interface:'simulator',name:'Simulator'}},
+                    {udid:'4',settings:{interface:'ble',address:'126',protocol:'fm'}},
+                    {udid:'5',settings:{interface:'ble',address:'127',protocol:'fm'}},
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2']},
+                    {capability:'bike', selected:'5', devices:['2','3','4','5']},
+                ]
+            }
+
+            service.delete('5','bike')
+
+            const settings = service.settings
+            expect(settings.devices.length).toBe(4)
+            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'4', devices:['2','3','4']})
 
         })
 

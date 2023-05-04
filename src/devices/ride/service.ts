@@ -509,8 +509,10 @@ export class DeviceRideService  extends EventEmitter{
                     ai.isStarted = true;
 
                     this.logEvent( {message:`${startType} ${sType} request finished`,...logProps})
-                    if (startType==='check')
+                    if (startType==='check') {
                         await ai.adapter.pause().catch( console.log)
+                        ai.adapter.off('data',this.deviceDataHandler)
+                    }
 
                     return success
                 })
@@ -520,6 +522,10 @@ export class DeviceRideService  extends EventEmitter{
                     this.logEvent( {message:`${startType} ${sType} request failed`,...logProps, reason:err.message })
 
                     this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err)
+                    if (startType==='check') {
+                        ai.adapter.off('data',this.deviceDataHandler)
+                    }
+
                     return false
                 })
         })
@@ -576,6 +582,7 @@ export class DeviceRideService  extends EventEmitter{
     startRide(_props) {
         const adapters = this.getAdapterList()
 
+        console.log('~~~ startRide',_props, adapters, adapters.map( ai=> ai.adapter.listenerCount('data')))
         adapters?.forEach(ai=> {
             
 
@@ -586,7 +593,7 @@ export class DeviceRideService  extends EventEmitter{
 
             */
 
-
+            ai.adapter.removeAllListeners('data')
             ai.adapter.on('data',this.deviceDataHandler)
         })
     }
@@ -670,6 +677,7 @@ export class DeviceRideService  extends EventEmitter{
             }
         })
 
+        console.log('~~~ emitting data', this.data, this.listenerCount('data'))
         this.emit( 'data', this.data)
 
 
