@@ -498,6 +498,7 @@ export class DeviceRideService  extends EventEmitter{
             logProps[sType] = ai.adapter.getUniqueName()
             logProps.cability = ai.adapter.getCapabilities().join('/')
             logProps.interface = getLegacyInterface(ai.adapter) 
+            logProps.cyclingMode = (ai.adapter as ControllableDeviceAdapter).getCyclingMode().getName()
             this.logEvent( {message:`${startType} ${sType} request`,...logProps})
 
             return ai.adapter.start(startProps)
