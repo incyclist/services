@@ -131,7 +131,8 @@ export class DeviceConfigurationService  extends EventEmitter{
                 this.adapters[d.udid] = AdapterFactory.create(d.settings)
             }
             catch(err) {
-                this.logError(err,'init()->Adapterfactory.create()')
+                this.logEvent({message:'error',fn:'init()->Adapterfactory.create()',error:err.message,udid:d.udid, settings:d.settings,  devices:this.settings.devices, stack:err.stack,})
+                
 
                 
             }
