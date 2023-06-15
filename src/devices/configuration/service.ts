@@ -764,6 +764,10 @@ export class DeviceConfigurationService  extends EventEmitter{
             let modeObj:CyclingMode
 
             const adapter = AdapterFactory.create(device.settings) 
+            if (!adapter) {
+                this.logEvent({message:'Error: could not find adapter', requestedUdid, requestedMode, devices, adapters:Object.keys(this.adapters)?.join(',')})
+                return;
+            }
             mode = requestedMode || device.mode 
             if (adapter.getSupportedCyclingModes) {
                 modes = adapter.getSupportedCyclingModes()
