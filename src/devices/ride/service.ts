@@ -447,7 +447,7 @@ export class DeviceRideService  extends EventEmitter{
 
             if (startType==='start') {
 
-                if (ai.adapter.isControllable()) {
+                if (ai.adapter && ai.adapter.isControllable()) {
                     const d = ai.adapter as ControllableDeviceAdapter
 
                     let mode,settings;
@@ -689,7 +689,7 @@ export class DeviceRideService  extends EventEmitter{
         const adapters = this.getAdapterList();
 
         adapters?.forEach(ai=> {
-            if ( ai.adapter.isControllable()) {
+            if ( ai.adapter && ai.adapter.isControllable()) {
                 const d = ai.adapter as ControllableDeviceAdapter
                 d.sendUpdate(request)
             }

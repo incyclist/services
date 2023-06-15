@@ -424,6 +424,10 @@ export class DeviceConfigurationService  extends EventEmitter{
         if (!deviceSettings)
             return;
         const adapter = this.adapters[udid] ||  AdapterFactory.create(deviceSettings)
+        if (!adapter) {
+            this.logEvent({message:'error: could not find adapter',fn:'select',  udid, capability, adapters: Object.keys(this.adapters)?.join(',')})
+            return
+        }
         if (capability==='bike' && !adapter.isControllable())  // verify that this is a Bike
             return;
 
