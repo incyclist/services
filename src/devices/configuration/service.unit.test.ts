@@ -266,7 +266,7 @@ describe( 'DeviceConfigurationService',()=>{
             testData = settings
             service.initFromLegacy(settings)
 
-            const {devices,capabilities,interfaces} = service.settings
+            const {devices,capabilities} = service.settings
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
             expect(devices.length).toBe(8)
             expect(getCap('bike').devices.length).toBe(6)

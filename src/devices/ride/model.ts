@@ -1,4 +1,3 @@
-import { IncyclistCapability } from "incyclist-devices";
 import { DeviceProperties } from "incyclist-devices/lib/types/device";
 import { AdapterInfo } from "../configuration";
 
