@@ -190,9 +190,9 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     initFromLegacy(settings:LegacySettings={}):void {
-        this.logEvent({message:'converting settings.json'})
-
         const {gearSelection,connections, modeSettings={}} = settings
+        this.logEvent({message:'converting settings.json', gearSelection})
+
         
         const {bikes=[], hrms=[]} = gearSelection||{}
         
@@ -225,7 +225,8 @@ export class DeviceConfigurationService  extends EventEmitter{
                 adapter =AdapterFactory.create(bike);
             }
             catch (err) {
-                this.logError(err,'initFromLegacy#bike')
+                this.logEvent( {message:'error',fn:'initFromLegacy#bike',error:err.message,bike, stack:err.stack})
+                
             }
 
             if (!adapter) {
@@ -299,7 +300,7 @@ export class DeviceConfigurationService  extends EventEmitter{
                 adapter =AdapterFactory.create(hrm);
             }
             catch (err) {
-                this.logError(err,'initFromLegacy#bike')
+                this.logEvent( {message:'error',fn:'initFromLegacy#hrm',error:err.message,hrm, stack:err.stack})
             }
             if (!adapter) {
                 return;

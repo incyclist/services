@@ -584,7 +584,6 @@ export class DeviceRideService  extends EventEmitter{
     startRide(_props) {
         const adapters = this.getAdapterList()
 
-        console.log('~~~ startRide',_props, adapters, adapters.map( ai=> ai.adapter.listenerCount('data')))
         adapters?.forEach(ai=> {
             
 
@@ -679,7 +678,6 @@ export class DeviceRideService  extends EventEmitter{
             }
         })
 
-        console.log('~~~ emitting data', this.data, this.listenerCount('data'))
         this.emit( 'data', this.data)
 
 
