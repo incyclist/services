@@ -6,6 +6,7 @@ import { v4 as generateUdid } from 'uuid';
 import EventEmitter from "events";
 import { merge } from "../../utils/merge";
 import { EventLogger } from "gd-eventlog";
+import clone from "../../utils/clone";
 
 
 interface DeviceAdapterList {[index: string]: IncyclistDeviceAdapter}
@@ -81,9 +82,9 @@ export class DeviceConfigurationService  extends EventEmitter{
             return;
         }
         this.logEvent({message:'DeviceConfig.init'})
-        await this.userSettings.init()
 
-        if ( this.userSettings.get('devices',null)==null &&  (this.userSettings.get('gearSelection',null)!==null|| this.userSettings.get('connections',null)!==null)) {      
+
+        if (  (this.userSettings.get('gearSelection','removed')!=='removed'|| this.userSettings.get('connections','removed')!=='removed')) {      
 
             const settings: LegacySettings= {};
 
@@ -102,6 +103,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             return;    
         }
         
+        await this.userSettings.init()
 
         this.settings = {
             devices: this.userSettings.get('devices',[]),
@@ -191,10 +193,12 @@ export class DeviceConfigurationService  extends EventEmitter{
 
     initFromLegacy(settings:LegacySettings={}):void {
         const {gearSelection,connections, modeSettings={}} = settings
-        this.logEvent({message:'converting settings.json', gearSelection})
+        this.logEvent({message:'converting settings.json', gearSelection,connections})
 
         
-        const {bikes=[], hrms=[]} = gearSelection||{}
+        const gears = clone(gearSelection||{});
+
+        const {bikes=[], hrms=[]} = gears
         
         this.settings= {interfaces:[], devices:[], capabilities:[]}
         const {interfaces,devices,capabilities} = this.settings;
@@ -348,13 +352,18 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.updateUserSettings()
     }
 
-    protected removeLegacySettings() {
-        if (this.userSettings.get('connections',null)!==null)
-            this.userSettings.set('connections',null)
-        if (this.userSettings.get('gearSelection',null)!==null)
-            this.userSettings.set('gearSelection',null)
-        if (this.userSettings.get('preferences.gear',null)!==null)
-            this.userSettings.set('preferences.gear',null)
+    protected async removeLegacySettings() {
+
+        this.userSettings.set('connections', 'removed',false) // old app versions will not respect NULL and wil loverwrite with previous content
+        this.userSettings.set('gearSelection', 'removed',false) // old app versions will not respect NULL and wil loverwrite with previous content
+        this.userSettings.set('preferences.gear','removed',false)            
+        await this.userSettings.save()
+
+        this.userSettings.set('connections',null,false)
+        this.userSettings.set('gearSelection',null,false)
+        this.userSettings.set('preferences.gear',null,false)
+        await this.userSettings.save()
+
     }
 
 

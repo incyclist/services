@@ -96,7 +96,7 @@ export class UserSettingsService {
     }
 
 
-    set( key:string, value:any):void {
+    set( key:string, value:any, save:boolean=true):void {
         if (!this.isInitialized)
             throw new Error('Settings are not yet initialized')
 
@@ -113,7 +113,8 @@ export class UserSettingsService {
             else 
                 settings[key] = value 
             
-            this.save()      
+            if(save)
+                this.save()      
             return value;
         }
     
@@ -126,7 +127,8 @@ export class UserSettingsService {
                     delete child[k]
                 else 
                     child[k] = value;
-                this.save()
+                if (save)
+                    this.save()
                 return value;
             }
             else { 
