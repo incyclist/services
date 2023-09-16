@@ -282,7 +282,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
             const key = legacyProfile ? `${legacyProtocol}-${legacyProfile}`: legacyProtocol
             const modeInfo = modeSettings[key]
-            if (modeInfo) {
+            if (modeInfo && deviceEntry) {
                 deviceEntry.modes={}
                 deviceEntry.modes[modeInfo.mode] = modeInfo.settings
                 deviceEntry.mode = modeInfo.mode
