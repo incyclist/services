@@ -1,9 +1,9 @@
 import EventEmitter from "events"
 
-import { AdapterFactory, DeviceData, DeviceSettings, IncyclistCapability,ControllableDeviceAdapter } from "incyclist-devices";
+import { AdapterFactory, DeviceData, DeviceSettings, IncyclistCapability,ControllableDeviceAdapter, SerialIncyclistDevice } from "incyclist-devices";
 import { sleep } from "../../utils/sleep";
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
-import {AdapterInfo, DeviceConfigurationService, useDeviceConfiguration} from "../configuration";
+import {AdapterInfo, DeviceConfigurationService, IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
 import CyclingMode, { UpdateRequest } from "incyclist-devices/lib/modes/cycling-mode";
 import { AdapterRideInfo, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./model";
 import clone from "../../utils/clone";
@@ -82,9 +82,11 @@ export class DeviceRideService  extends EventEmitter{
         
         this.adapters = this.configurationService.getAdapters()?.map( ai=> Object.assign({}, {...ai, isStarted:false}))
         const handleModeChange = this.onCyclingModeChanged.bind(this)
+        const handleDeviceDeleted = this.onDeviceDeleted.bind(this)
 
         // TODO: add listeners to config changes
         this.configurationService.on('mode-changed',handleModeChange)
+        this.configurationService.on('device-deleted',handleDeviceDeleted)
         this.userSettings = useUserSettings()
         
     }
@@ -431,6 +433,16 @@ export class DeviceRideService  extends EventEmitter{
 
         return adapters||[]
     }
+
+    setSerialPortInUse(adapter:ControllableDeviceAdapter) {
+        if (adapter.getInterface()==='serial' || adapter.getInterface()==='tcpip') {
+            const device = adapter as SerialIncyclistDevice
+            const serial = device.getSerialInterface()
+            serial.setInUse( device.getPort())
+        }
+
+    }
+
    
     protected async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check',props?:RideServiceDeviceProperties ):Promise<boolean> {
         
@@ -516,6 +528,9 @@ export class DeviceRideService  extends EventEmitter{
                         ai.adapter.off('data',this.deviceDataHandler)
                     }
 
+                    if (ai.adapter.isControllable())
+                    this.setSerialPortInUse(ai.adapter as ControllableDeviceAdapter)
+
                     return success
                 })
                 .catch(err=>{                    
@@ -600,6 +615,11 @@ export class DeviceRideService  extends EventEmitter{
     }
 
     async stop(udid?:string):Promise<boolean> {
+        if (!udid)
+            this.logEvent( {message:'stop devices'})
+        else 
+            this.logEvent( {message:'stop device',udid})
+
 
 
         const adapters = this.getAdapterList();
@@ -726,6 +746,16 @@ export class DeviceRideService  extends EventEmitter{
         else {  // settings changed
 
             currentMode.setSettings(settings)
+        }
+    }
+
+    onDeviceDeleted(settings: IncyclistDeviceSettings) {
+        if (settings.interface==='serial' || settings.interface==='tcpip') {
+
+            const device = AdapterFactory.create(settings)
+            const serial = device.getSerialInterface()
+            serial.releaseInUse( device.getPort() )
+            
         }
     }
 

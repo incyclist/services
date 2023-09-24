@@ -661,10 +661,11 @@ export class DeviceConfigurationService  extends EventEmitter{
 
             // delete from all capabilities and devices and adapters list
             this.deleteFromDeviceList(udid)
-            
             this.emitCapabiltyChanged()                            
             this.updateUserSettings()
         }
+        this.emitDeviceDeleted(deviceSettings)
+
     }
 
     protected deleteFromDeviceList(udid:string) {
@@ -1007,6 +1008,10 @@ export class DeviceConfigurationService  extends EventEmitter{
         if (setting) {
             this.emit('interface-changed', ifName, setting, this.settings.interfaces)
         }
+    }
+
+    emitDeviceDeleted(settings:IncyclistDeviceSettings) {
+        this.emit('device-deleted', settings)
     }
 
 }
