@@ -580,7 +580,7 @@ describe( 'DeviceConfigurationService',()=>{
                 }
             }
 
-            service.add( {interface:'ant',deviceID:'4711',profile:'PWR'},true)
+            service.add( {interface:'ant',deviceID:'4711',profile:'PWR'},{legacy:true})
 
             const settings = service.settings
             expect(settings.devices.length).toBe(3)

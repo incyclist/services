@@ -523,10 +523,12 @@ export class DeviceConfigurationService  extends EventEmitter{
         }
     }
 
-    add(deviceSettings:IncyclistDeviceSettings, legacyMode=false):void {   
+    add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {   
         
         let udid = this.getUdid(deviceSettings) 
-        this.logEvent({message:'add device',udid,deviceSettings, legacyMode})
+
+        const {legacy=false} = props||{}
+        this.logEvent({message:'add device',udid,deviceSettings, legacy})
 
         const deviceAlreadyExists = udid!==undefined
 
@@ -562,7 +564,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             const isPower = adapter.hasCapability(IncyclistCapability.Power)
 
             //legacy mode - as long as new UI is not in place
-            if (legacyMode) {
+            if (legacy) {
                 const isBikeCap = c.capability==='bike'
                 const isControlCap = c.capability===IncyclistCapability.Control
                 const isHrmCap = c.capability===IncyclistCapability.HeartRate
@@ -601,6 +603,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         this.updateUserSettings()
         this.emitCapabiltyChanged()
+        return udid
 
     }
 
