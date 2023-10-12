@@ -1,15 +1,15 @@
 import EventEmitter from "events"
 
-import { AdapterFactory, DeviceData, DeviceSettings, IncyclistCapability,ControllableDeviceAdapter, SerialIncyclistDevice } from "incyclist-devices";
 import { sleep } from "../../utils/sleep";
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import {AdapterInfo, DeviceConfigurationService, IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
-import CyclingMode, { UpdateRequest } from "incyclist-devices/lib/modes/cycling-mode";
 import { AdapterRideInfo, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./model";
 import clone from "../../utils/clone";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { ControllableDevice } from "incyclist-devices/lib/base/adpater";
 
 /**
  * Provides method to consume a devcie
@@ -434,9 +434,9 @@ export class DeviceRideService  extends EventEmitter{
         return adapters||[]
     }
 
-    setSerialPortInUse(adapter:ControllableDeviceAdapter) {
+    setSerialPortInUse(adapter:IncyclistDeviceAdapter) {
         if (adapter.getInterface()==='serial' || adapter.getInterface()==='tcpip') {
-            const device = adapter as SerialIncyclistDevice
+            const device = adapter as SerialIncyclistDevice<ControllableDevice<DeviceProperties>,DeviceProperties>
             const serial = device.getSerialInterface()
             serial.setInUse( device.getPort())
         }
@@ -460,14 +460,14 @@ export class DeviceRideService  extends EventEmitter{
             if (startType==='start') {
 
                 if (ai.adapter && ai.adapter.isControllable()) {
-                    const d = ai.adapter as ControllableDeviceAdapter
+                    const d = ai.adapter as IncyclistDeviceAdapter
 
                     let mode,settings;
 
                     if (!this.simulatorEnforced) {
 
                         if (forceErgMode) {
-                            const modes = d.getSupportedCyclingModes().filter( C => C.isERG)
+                            const modes = d.getSupportedCyclingModes().filter( C => C.supportsERGMode())
                             if (modes.length>0)  {
                                 mode = new modes[0](d)                            
                                 const modeInfo = this.configurationService.getModeSettings(ai.udid,mode)
@@ -511,7 +511,7 @@ export class DeviceRideService  extends EventEmitter{
             logProps.cability = ai.adapter.getCapabilities().join('/')
             logProps.interface = getLegacyInterface(ai.adapter) 
             if (sType==='bike')
-                logProps.cyclingMode = (ai.adapter as ControllableDeviceAdapter).getCyclingMode()?.getName()
+                logProps.cyclingMode = (ai.adapter as IncyclistDeviceAdapter).getCyclingMode()?.getName()
             this.logEvent( {message:`${startType} ${sType} request`,...logProps})
 
             return ai.adapter.start(startProps)
@@ -529,7 +529,7 @@ export class DeviceRideService  extends EventEmitter{
                     }
 
                     if (ai.adapter.isControllable())
-                    this.setSerialPortInUse(ai.adapter as ControllableDeviceAdapter)
+                    this.setSerialPortInUse(ai.adapter as IncyclistDeviceAdapter)
 
                     return success
                 })
@@ -708,7 +708,7 @@ export class DeviceRideService  extends EventEmitter{
 
         adapters?.forEach(ai=> {
             if ( ai.adapter && ai.adapter.isControllable()) {
-                const d = ai.adapter as ControllableDeviceAdapter
+                const d = ai.adapter as IncyclistDeviceAdapter
                 d.sendUpdate(request)
             }
         })
@@ -738,7 +738,7 @@ export class DeviceRideService  extends EventEmitter{
             const adapters = this.getAdapterList();
             const adapter = adapters?.find( ai=> ai.udid===udid)?.adapter
             if (adapter && adapter.isControllable()) {
-                const device = adapter as ControllableDeviceAdapter
+                const device = adapter as IncyclistDeviceAdapter
                 device.setCyclingMode(mode,settings)
                 await device.sendInitCommands()
             }

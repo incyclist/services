@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export function merge(base:any,data:any,depth=0) {       
+
+    if (!base)
+        return;
+
     let key;
     for (key in data) {
         if (typeof(data[key])==='object' && depth<4) {
