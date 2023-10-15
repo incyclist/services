@@ -1,7 +1,6 @@
 import EventEmitter from "events";
 import { EventLogger } from "gd-eventlog";
-import {AdapterFactory, AntDeviceSettings, DeviceSettings, IncyclistInterface, InterfaceFactory, SerialAdapterFactory, SerialPortProvider} from "incyclist-devices";
-import { SerialScannerProps } from "incyclist-devices/lib/serial/serial-interface";
+import {AdapterFactory, AntDeviceSettings, DeviceSettings, IncyclistInterface, InterfaceFactory, SerialAdapterFactory, SerialPortProvider, SerialScannerProps} from "incyclist-devices";
 import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
 import { sleep } from "../../utils/sleep";

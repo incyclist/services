@@ -1,5 +1,4 @@
 import EventEmitter from "events"
-
 import { sleep } from "../../utils/sleep";
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import {AdapterInfo, DeviceConfigurationService, IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
@@ -9,7 +8,6 @@ import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
 import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
-import { ControllableDevice } from "incyclist-devices/lib/base/adpater";
 
 /**
  * Provides method to consume a devcie
@@ -436,7 +434,7 @@ export class DeviceRideService  extends EventEmitter{
 
     setSerialPortInUse(adapter:IncyclistDeviceAdapter) {
         if (adapter.getInterface()==='serial' || adapter.getInterface()==='tcpip') {
-            const device = adapter as SerialIncyclistDevice<ControllableDevice<DeviceProperties>,DeviceProperties>
+            const device = adapter as SerialIncyclistDevice<DeviceProperties>
             const serial = device.getSerialInterface()
             serial.setInUse( device.getPort())
         }
