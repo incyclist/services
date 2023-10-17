@@ -37,7 +37,7 @@
     "lib": "./src"
   },
   "dependencies": {
-    "incyclist-devices": "file:../devices",
+    "incyclist-devices": "^2.1.2",
     "uuid": "^9.0.0"
   }
 }
