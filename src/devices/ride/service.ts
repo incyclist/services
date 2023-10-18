@@ -97,8 +97,9 @@ export class DeviceRideService  extends EventEmitter{
 
         const name = adapter.getUniqueName()
         const isControl = adapter.hasCapability(IncyclistCapability.Control)
+        const isStarted = adapter.isStarted()
 
-        return {udid, name,isControl,capabilities}
+        return {udid, name,isControl,capabilities,isStarted}
 
     }
 
@@ -448,6 +449,7 @@ export class DeviceRideService  extends EventEmitter{
 
         this.startPromises = adapters?.map( async ai=> {
             const startProps = clone(props||{})
+            
 
             if (startType==='check') {
                 startProps.timeout = 10000;
@@ -512,33 +514,34 @@ export class DeviceRideService  extends EventEmitter{
                 logProps.cyclingMode = (ai.adapter as IncyclistDeviceAdapter).getCyclingMode()?.getName()
             this.logEvent( {message:`${startType} ${sType} request`,...logProps})
 
+            
             return ai.adapter.start(startProps)
                 .then( async (success)=>{
                     if (success) {
                         this.emit(`${startType}-success`, this.getAdapterStateInfo(ai))
-
+                        this.logEvent( {message:`${startType} ${sType} request finished`,...logProps})
+                        if (startType==='check') 
+                            await ai.adapter.pause().catch( console.log)                        
+                        if (ai.adapter.isControllable())
+                            this.setSerialPortInUse(ai.adapter as IncyclistDeviceAdapter)
                     }
-                    ai.isStarted = true;
-
-                    this.logEvent( {message:`${startType} ${sType} request finished`,...logProps})
-                    if (startType==='check') {
-                        await ai.adapter.pause().catch( console.log)
-                        ai.adapter.off('data',this.deviceDataHandler)
+                    else {
+                        this.emit(`${startType}-error`, this.getAdapterStateInfo(ai))
+                        this.logEvent( {message:`${startType} ${sType} request failed`,...logProps})
+                        if (startType==='check') 
+                            await ai.adapter.stop().catch( console.log)                        
                     }
-
-                    if (ai.adapter.isControllable())
-                    this.setSerialPortInUse(ai.adapter as IncyclistDeviceAdapter)
-
+                    ai.isStarted = success;
                     return success
                 })
-                .catch(err=>{                    
+                .catch(async err=>{                    
                     ai.isStarted = false;
 
                     this.logEvent( {message:`${startType} ${sType} request failed`,...logProps, reason:err.message })
 
                     this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err)
                     if (startType==='check') {
-                        ai.adapter.off('data',this.deviceDataHandler)
+                        await ai.adapter.stop().catch( console.log)                        
                     }
 
                     return false
@@ -567,6 +570,24 @@ export class DeviceRideService  extends EventEmitter{
         const adapters = this.getAdapterList()
 
         this.emit('start-request', adapters?.map( this.getAdapterStateInfo ))
+
+        const goodToGo = await this.waitForPreviousStartToFinish()
+        if (!goodToGo) 
+            return;
+
+
+        return this.startAdapters( adapters,'start',props)
+    }
+
+    async startRetry( props:RideServiceDeviceProperties  ):Promise<boolean> {
+        await this.lazyInit();
+
+        // notify the start of all adapters
+        const allAdapters = this.getAdapterList()
+        this.emit('start-request', allAdapters?.map( this.getAdapterStateInfo ))
+
+        // only try to start the adapters that are not already started
+        const adapters = this.getAdapterList().filter( ai=> !ai.adapter.isStarted())
 
         const goodToGo = await this.waitForPreviousStartToFinish()
         if (!goodToGo) 
@@ -658,24 +679,32 @@ export class DeviceRideService  extends EventEmitter{
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
         const adapters = this.getAdapterList();
 
-        // TODO: only take data from the selected sensor
-        // unless sensor was skipped during start
+        // get adapterinfo from the device that is sending data
+        const adapterInfo = adapters?.find( ai=>ai.adapter.isEqual(deviceSettings))
+        if (!adapterInfo)
+            return;
 
+        // refresh capabilities from device (might have changed since original scan)
+        adapters?.forEach( ai => ai.capabilities = ai.adapter.getCapabilities())
+
+        // get selected devices for each of the capabilities
+        const selectedDevices = this.configurationService.getSelectedDevices()
+
+        // get list of capabilities, where the device sending the data was selected by the user
+        const enabledCapabilities = selectedDevices.filter( sd => sd.selected===adapterInfo.udid).map( c => c.capability)
 
         const hasControl = adapters?.find( ai=>ai.capabilities.includes(IncyclistCapability.Control))!==undefined
         const hasPower   = adapters?.find( ai=>ai.capabilities.includes(IncyclistCapability.Power))!==undefined
 
-        const adapterInfo = adapters?.find( ai=>ai.adapter.isEqual(deviceSettings))
-        if (!adapterInfo)
-        return;
-
-        adapterInfo.capabilities.forEach( capability=> {
+        enabledCapabilities.forEach( capability=> {
             switch(capability) {
                 case IncyclistCapability.HeartRate:
                     this.data.heartrate = data.heartrate
                     break;
                 case IncyclistCapability.Power:
                     this.data.power = data.power
+                    break;
+                case IncyclistCapability.Speed:
                     this.data.speed = data.speed;
                     break;
                 case IncyclistCapability.Cadence:

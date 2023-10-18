@@ -945,6 +945,18 @@ export class DeviceConfigurationService  extends EventEmitter{
         return {adapters,selectedIdx,disabled}
     }
 
+    getSelectedDevices(capability?:IncyclistCapability): Array<{capability:IncyclistCapability,selected?:string }>{
+        let capabilites = this.settings?.capabilities
+        if (capability) {
+            capabilites = this.settings?.capabilities.filter(c=>c.capability===capability)
+        }
+
+        return capabilites.filter( c=>c.capability!=='bike' && !(c.disabled===true) ).map( c => {
+            const {capability,selected} = c
+            return {capability: capability as IncyclistCapability,selected}
+        })        
+    }
+
     //  Interface methods
 
     getInterfaceSettings(ifName:string):InterfaceSetting {
