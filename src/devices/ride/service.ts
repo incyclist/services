@@ -690,11 +690,29 @@ export class DeviceRideService  extends EventEmitter{
         // get selected devices for each of the capabilities
         const selectedDevices = this.configurationService.getSelectedDevices()
 
+        if (selectedDevices.find( sd => sd.capability===IncyclistCapability.Speed)===undefined) {
+            const control = selectedDevices.find( sd => sd.capability===IncyclistCapability.Control)
+            if (control) {
+                const speed = clone(control)
+                speed.capability  =IncyclistCapability.Speed
+                selectedDevices.push(speed)
+            }
+            else {
+                const power = selectedDevices.find( sd => sd.capability===IncyclistCapability.Power)
+                const speed = clone(power)
+                speed.capability  =IncyclistCapability.Speed
+                selectedDevices.push(speed)
+            }
+
+        }
+
         // get list of capabilities, where the device sending the data was selected by the user
         const enabledCapabilities = selectedDevices.filter( sd => sd.selected===adapterInfo.udid).map( c => c.capability)
 
         const hasControl = adapters?.find( ai=>ai.capabilities.includes(IncyclistCapability.Control))!==undefined
         const hasPower   = adapters?.find( ai=>ai.capabilities.includes(IncyclistCapability.Power))!==undefined
+
+        
 
         enabledCapabilities.forEach( capability=> {
             switch(capability) {
