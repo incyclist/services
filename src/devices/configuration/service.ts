@@ -951,7 +951,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             capabilites = this.settings?.capabilities.filter(c=>c.capability===capability)
         }
 
-        return capabilites.filter( c=>c.capability!=='bike' && !(c.disabled===true) ).map( c => {
+        return capabilites.filter( c=>c.capability!=='bike' && !(c.disabled===true) && c.selected).map( c => {
             const {capability,selected} = c
             return {capability: capability as IncyclistCapability,selected}
         })        
