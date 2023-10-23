@@ -676,6 +676,27 @@ export class DeviceRideService  extends EventEmitter{
         })
     }
 
+    protected verifySelected( selectedDevices, capability:IncyclistCapability) {
+        
+        if (selectedDevices.find( sd => sd.capability===capability)===undefined) {
+
+            const verify = ( toCheck:IncyclistCapability):boolean => {
+                const found = selectedDevices.find( sd => sd.capability===toCheck)
+    
+                if (found) {
+                    const additional = clone(found)
+                    additional.capability  = capability
+                    selectedDevices.push(additional)                
+                }
+                return found;
+            }
+    
+            const added = verify(IncyclistCapability.Control)
+            if (!added && capability!==IncyclistCapability.Power) verify(IncyclistCapability.Power)
+        }
+
+    }
+
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
 
         
@@ -692,28 +713,15 @@ export class DeviceRideService  extends EventEmitter{
         // get selected devices for each of the capabilities
         const selectedDevices = this.configurationService.getSelectedDevices()
 
-        if (selectedDevices.find( sd => sd.capability===IncyclistCapability.Speed)===undefined) {
-            const control = selectedDevices.find( sd => sd.capability===IncyclistCapability.Control)
-            if (control) {
-                const speed = clone(control)
-                speed.capability  =IncyclistCapability.Speed
-                selectedDevices.push(speed)
-            }
-            else {
-                const power = selectedDevices.find( sd => sd.capability===IncyclistCapability.Power)
-                const speed = clone(power)
-                speed.capability  =IncyclistCapability.Speed
-                selectedDevices.push(speed)
-            }
-
-        }
+        // If we are still using the legacy framework, then there will be no device selected
+        // for capabilities Speed and Cadence
+        // We need to take these values from either Bike or Power Sensor
+        this.verifySelected(selectedDevices, IncyclistCapability.Speed)
+        this.verifySelected(selectedDevices, IncyclistCapability.Cadence)
+        this.verifySelected(selectedDevices, IncyclistCapability.Power)
 
         // get list of capabilities, where the device sending the data was selected by the user
         const enabledCapabilities = selectedDevices.filter( sd => sd.selected===adapterInfo.udid).map( c => c.capability)
-
-        const hasControl = adapters?.find( ai=>ai.capabilities.includes(IncyclistCapability.Control))!==undefined
-        const hasPower   = adapters?.find( ai=>ai.capabilities.includes(IncyclistCapability.Power))!==undefined
-
         
         this.logEvent({message:'Data Update', device:adapterInfo.adapter.getName(), data, enabledCapabilities})
 
@@ -730,10 +738,6 @@ export class DeviceRideService  extends EventEmitter{
                     break;
                 case IncyclistCapability.Cadence:
                     this.data.cadence = data.cadence
-                    if (hasControl && !hasPower) {
-                        this.data.speed = data.speed
-                        this.data.power = data.power;
-                    }
                     break;
                 case IncyclistCapability.Control:
                     this.data.deviceDistanceCounter = data.deviceDistanceCounter;
