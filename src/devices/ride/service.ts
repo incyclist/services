@@ -677,6 +677,8 @@ export class DeviceRideService  extends EventEmitter{
     }
 
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
+
+        
         const adapters = this.getAdapterList();
 
         // get adapterinfo from the device that is sending data
@@ -713,6 +715,7 @@ export class DeviceRideService  extends EventEmitter{
         const hasPower   = adapters?.find( ai=>ai.capabilities.includes(IncyclistCapability.Power))!==undefined
 
         
+        this.logEvent({message:'Data Update', device:adapterInfo.adapter.getName(), data, enabledCapabilities})
 
         enabledCapabilities.forEach( capability=> {
             switch(capability) {
