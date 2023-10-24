@@ -146,6 +146,8 @@ export class DeviceConfigurationService  extends EventEmitter{
             if (info && info.devices.length>0 && info.selected===undefined)
                 this.select( info.devices[0], capability as ExtendedIncyclistCapability)
         }
+
+        this.verifyCapabilitySettings()
         
 
         this.removeLegacySettings() 
@@ -153,6 +155,42 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.logEvent({message:'DeviceConfig.init done'})
 
         this.emitInitialized()
+        
+    }
+
+    protected verifyCapabilitySettings() {
+        const {capabilities} = this.settings
+
+        const bikeCap = capabilities.find(c=>c.capability==='bike');
+
+        if (bikeCap && bikeCap.selected) {
+            const bike = bikeCap.selected
+            const power = capabilities.find(c=>c.capability===IncyclistCapability.Power && c.selected!==undefined);
+            const control = capabilities.find(c=>c.capability===IncyclistCapability.Control && c.selected!==undefined);
+            const speed = capabilities.find(c=>c.capability===IncyclistCapability.Speed && c.selected!==undefined);
+            const cadence = capabilities.find(c=>c.capability===IncyclistCapability.Cadence && c.selected!==undefined);
+
+            const adapter = this.getAdapter(bike)
+
+            const verify = (uuid,cap) => {
+                if (!uuid && adapter.hasCapability(cap)) {
+                    const setting = capabilities.find(c=>c.capability===cap);
+                    if (!setting) {
+                        capabilities.push( { capability:cap,devices:[bike],selected:bike,disabled:false})
+                    }
+                    else {
+                        setting.selected = bike;
+                        if (!setting.devices.includes(bike))
+                            setting.devices.push(bike)
+                    }
+                }    
+            }
+
+            verify(control,IncyclistCapability.Control)
+            verify(power,IncyclistCapability.Power)
+            verify(speed,IncyclistCapability.Speed)
+            verify(cadence,IncyclistCapability.Cadence)
+        }
         
     }
 

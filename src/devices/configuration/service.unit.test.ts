@@ -157,6 +157,47 @@ describe( 'DeviceConfigurationService',()=>{
 
         })
 
+        test('device only selected in bike capability',async ()=>{
+            const settings = {                
+                devices: [
+                    {udid:'1',settings:{interface:'serial',name:'Daum 8080',port:'COM4', protocol:'Daum Classic'}},
+                    {udid:'2',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'3',settings:{interface:'ble',address:'124',protocol:'cp'}},
+                ],
+                capabilities: [
+                    {capability:'bike',selected:'1',devices:['1']},
+                    {capability:IncyclistCapability.Control,devices:['1']},
+                    {capability:IncyclistCapability.Power,devices:['3']},
+                    {capability:IncyclistCapability.HeartRate,devices:['1','2'], selected:'2'}
+            
+                ],
+                interfaces: [
+                    {name:'ble', enabled:false},
+                    {name:'ant', enabled:false},
+                    {name:'tcpip', enabled:false},
+                    {name:'serial', enabled:true}
+                ]
+            }
+
+            testData = settings
+
+            await service.init()
+            const bike = service.settings.capabilities.find(c=>c.capability==='bike');
+            const hrm = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate);
+            const power = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.Power);
+            const control = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.Control);
+            const speed = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.Speed);
+            const cadence = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.Cadence);
+
+            expect(bike.selected).toBe('1')
+            expect(hrm.selected).toBe('2')
+            expect(power.selected).toBe('1')
+            expect(power.devices).toEqual(['3','1'])
+            expect(control.selected).toBe('1')
+            expect(speed.selected).toBe('1')
+            expect(cadence.selected).toBe('1')
+        })
+
 
         test('new and legacy',async ()=>{
 
