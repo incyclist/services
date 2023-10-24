@@ -83,7 +83,6 @@ export class DeviceConfigurationService  extends EventEmitter{
         }
         this.logEvent({message:'DeviceConfig.init'})
 
-
         if (  (this.userSettings.get('gearSelection','removed')!=='removed'|| this.userSettings.get('connections','removed')!=='removed')) {      
 
             const settings: LegacySettings= {};
@@ -99,6 +98,7 @@ export class DeviceConfigurationService  extends EventEmitter{
                 this.logError(err,'init()')
             }
 
+            this.verifyCapabilitySettings()
             this.emitInitialized()                      
             return;    
         }
@@ -148,8 +148,6 @@ export class DeviceConfigurationService  extends EventEmitter{
         }
 
         this.verifyCapabilitySettings()
-        
-
         this.removeLegacySettings() 
 
         this.logEvent({message:'DeviceConfig.init done'})
@@ -172,16 +170,19 @@ export class DeviceConfigurationService  extends EventEmitter{
 
             const adapter = this.getAdapter(bike)
 
+            let changed = false;
             const verify = (uuid,cap) => {
                 if (!uuid && adapter.hasCapability(cap)) {
                     const setting = capabilities.find(c=>c.capability===cap);
                     if (!setting) {
                         capabilities.push( { capability:cap,devices:[bike],selected:bike,disabled:false})
+                        changed = true
                     }
                     else {
                         setting.selected = bike;
                         if (!setting.devices.includes(bike))
                             setting.devices.push(bike)
+                        changed = true
                     }
                 }    
             }
@@ -190,6 +191,11 @@ export class DeviceConfigurationService  extends EventEmitter{
             verify(power,IncyclistCapability.Power)
             verify(speed,IncyclistCapability.Speed)
             verify(cadence,IncyclistCapability.Cadence)
+
+            if (changed) {
+                this.updateUserSettings()
+                this.logEvent({message:'capability changed after verification',capabilities})
+            }
         }
         
     }
