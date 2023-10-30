@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { DeviceSettings, IncyclistCapability } from 'incyclist-devices'
+import {  IncyclistCapability } from 'incyclist-devices'
 import { CapabilityInformation, DeviceConfigurationService,} from '../configuration'
 import {DevicePairingService, mappedCapability} from './service'
 import clone from '../../utils/clone'
 import { DeviceAccessService, useDeviceAccess } from '../access'
 import { DeviceRideService, useDeviceRide } from '../ride'
 import UserSettingsMock from '../../settings/user/mock'
-import { DevicePairingStatus, PairingState } from './model'
+import { PairingState } from './model'
 import { UserSettingsService } from '../../settings'
 
 class TestWrapper extends DevicePairingService {
@@ -51,7 +51,7 @@ describe('PairingService',()=>{
             let access:DeviceAccessService
             
             let logEvent
-            let settings:any = {
+            const settings:any = {
                 interfaces: [
                     { name:'ant', enabled:true },
                     { name:'ble', enabled:true },
@@ -92,7 +92,7 @@ describe('PairingService',()=>{
                 settings.devices = []
                 settings.cabilities= {}
 
-                let updates: Array<PairingState> = [];
+                const updates: Array<PairingState> = [];
                 const res = await new Promise (done => {
                     svc.start( (status:PairingState)=>{ updates.push(status);if (updates.length==2) done(updates)  })
                 })
@@ -114,10 +114,10 @@ describe('PairingService',()=>{
                     
                     return [device]
                 })
-                let updates: Array<PairingState> = [];
+                const updates: Array<PairingState> = [];
                 let numLogs = 0;
                 // we are expecting 3 status updates, the last one to contain the 
-                const res = await new Promise (done => {
+                await new Promise (done => {
                     svc.on('log',()=>{ 
                         ++numLogs
                         if (numLogs===3) 
@@ -157,10 +157,10 @@ describe('PairingService',()=>{
                     return [device]
                 })
 
-                let updates: Array<PairingState> = [];
+                const updates: Array<PairingState> = [];
                 let numLogs = 0;
                 // we are expecting 3 status updates, the last one to contain the 
-                const res = await new Promise (done => {
+                await new Promise (done => {
                     svc.on('log',()=>{ 
                         ++numLogs
                         if (numLogs===3) 
@@ -215,10 +215,10 @@ describe('PairingService',()=>{
 
                 
 
-                let updates: Array<PairingState> = [];
+                const updates: Array<PairingState> = [];
                 let numLogs = 0;
                 // we are expecting 3 status updates, the last one to contain the 
-                const res = await new Promise (done => {
+                await new Promise (done => {
                     svc.on('log',()=>{ 
                         ++numLogs
                         if (numLogs===2) 
@@ -284,10 +284,10 @@ describe('PairingService',()=>{
 
             
 
-            let updates: Array<PairingState> = [];
+            const updates: Array<PairingState> = [];
             let numLogs = 0;
             // we are expecting 3 status updates, the last one to contain the 
-            const res = await new Promise (done => {
+            await new Promise (done => {
                 svc.on('log',()=>{ 
                     ++numLogs
                     if (numLogs===2) 

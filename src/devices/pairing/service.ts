@@ -339,7 +339,7 @@ export class DevicePairingService  extends EventEmitter{
                 const adapter = this.getDeviceAdapter(udid)
                 const capabilites = adapter.getCapabilities()
                 capabilites.forEach( c => {
-                    this.selectCapabilityDevice(capability,udid)
+                    this.selectCapabilityDevice(c,udid)
                 })
             }
             else {
@@ -381,7 +381,7 @@ export class DevicePairingService  extends EventEmitter{
                 const adapter = this.getDeviceAdapter(udid)
                 const capabilites = adapter.getCapabilities()
                 capabilites.forEach( c => {
-                    this.deleteCapabilityDevice(capability,udid)
+                    this.deleteCapabilityDevice(c,udid)
                 })
             }
             else {
@@ -574,7 +574,7 @@ export class DevicePairingService  extends EventEmitter{
     protected mergeState(current,newState) {
         const {connectState,value,unit} = current
 
-        const devices = newState.devices.map( d=>  {
+        newState.devices.forEach( d=>  {
         
             if (!current.devices || current.devices.length===0)
                 return; 
@@ -598,7 +598,6 @@ export class DevicePairingService  extends EventEmitter{
             keys.forEach( key => {
                 const newCap = newCapabilities[key]
                 const current = capabilities.find( c=>c.capability===key)
-                const before = clone(current)
                 this.mergeState(current,mappedCapability(newCap))
             })
 
@@ -1072,7 +1071,7 @@ export class DevicePairingService  extends EventEmitter{
         }
     }
 
-    protected getPairingRetryDelay(): any {
+    protected getPairingRetryDelay():number {
         return 1000;
     }
 
@@ -1093,8 +1092,8 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     protected getDeviceAdapter(udid:string) {
-        const {adapters=[],capabilities} = this.state
-        let target = adapters.find( ai=> ai.udid===udid )
+        const {adapters=[]} = this.state
+        const target = adapters.find( ai=> ai.udid===udid )
         return target?.adapter
     }
 
