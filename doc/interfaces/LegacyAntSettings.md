@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / LegacyAntSettings
+[incyclist-services - v1.0.36](../README.md) / LegacyAntSettings
 
 # Interface: LegacyAntSettings
 
@@ -6,21 +6,21 @@
 
 ### Properties
 
-- [bike](LegacyAntSettings.md#bike)
 - [enabled](LegacyAntSettings.md#enabled)
+- [bike](LegacyAntSettings.md#bike)
 - [hrm](LegacyAntSettings.md#hrm)
 
 ## Properties
 
-### bike
-
-• **bike**: `boolean`
-
-___
-
 ### enabled
 
 • **enabled**: `boolean`
+
+___
+
+### bike
+
+• **bike**: `boolean`
 
 ___
 

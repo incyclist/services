@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / UserSettingsBinding
+[incyclist-services - v1.0.36](../README.md) / UserSettingsBinding
 
 # Class: UserSettingsBinding
 
@@ -14,10 +14,10 @@
 
 ### Methods
 
-- [canOverwrite](UserSettingsBinding.md#canoverwrite)
 - [getAll](UserSettingsBinding.md#getall)
-- [save](UserSettingsBinding.md#save)
 - [set](UserSettingsBinding.md#set)
+- [save](UserSettingsBinding.md#save)
+- [canOverwrite](UserSettingsBinding.md#canoverwrite)
 - [getInstance](UserSettingsBinding.md#getinstance)
 
 ## Constructors
@@ -27,20 +27,6 @@
 • **new UserSettingsBinding**()
 
 ## Methods
-
-### canOverwrite
-
-▸ `Abstract` **canOverwrite**(): `boolean`
-
-#### Returns
-
-`boolean`
-
-#### Implementation of
-
-[IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[canOverwrite](../interfaces/IUserSettingsBinding.md#canoverwrite)
-
-___
 
 ### getAll
 
@@ -53,26 +39,6 @@ ___
 #### Implementation of
 
 [IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[getAll](../interfaces/IUserSettingsBinding.md#getall)
-
-___
-
-### save
-
-▸ `Abstract` **save**(`settings`): `Promise`<`boolean`\>
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `settings` | `any` |
-
-#### Returns
-
-`Promise`<`boolean`\>
-
-#### Implementation of
-
-[IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[save](../interfaces/IUserSettingsBinding.md#save)
 
 ___
 
@@ -94,6 +60,41 @@ ___
 #### Implementation of
 
 [IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[set](../interfaces/IUserSettingsBinding.md#set)
+
+___
+
+### save
+
+▸ `Abstract` **save**(`settings`, `final?`): `Promise`<`boolean`\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `settings` | `any` |
+| `final?` | `boolean` |
+
+#### Returns
+
+`Promise`<`boolean`\>
+
+#### Implementation of
+
+[IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[save](../interfaces/IUserSettingsBinding.md#save)
+
+___
+
+### canOverwrite
+
+▸ `Abstract` **canOverwrite**(): `boolean`
+
+#### Returns
+
+`boolean`
+
+#### Implementation of
+
+[IUserSettingsBinding](../interfaces/IUserSettingsBinding.md).[canOverwrite](../interfaces/IUserSettingsBinding.md#canoverwrite)
 
 ___
 

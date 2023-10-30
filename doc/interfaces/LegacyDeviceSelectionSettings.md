@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / LegacyDeviceSelectionSettings
+[incyclist-services - v1.0.36](../README.md) / LegacyDeviceSelectionSettings
 
 # Interface: LegacyDeviceSelectionSettings
 
@@ -7,8 +7,8 @@
 ### Properties
 
 - [bikes](LegacyDeviceSelectionSettings.md#bikes)
-- [disableHrm](LegacyDeviceSelectionSettings.md#disablehrm)
 - [hrms](LegacyDeviceSelectionSettings.md#hrms)
+- [disableHrm](LegacyDeviceSelectionSettings.md#disablehrm)
 
 ## Properties
 
@@ -18,12 +18,12 @@
 
 ___
 
-### disableHrm
-
-• `Optional` **disableHrm**: `boolean`
-
-___
-
 ### hrms
 
 • `Optional` **hrms**: [`LegacyGearSetting`](LegacyGearSetting.md)[]
+
+___
+
+### disableHrm
+
+• `Optional` **disableHrm**: `boolean`

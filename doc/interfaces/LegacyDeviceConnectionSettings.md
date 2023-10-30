@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / LegacyDeviceConnectionSettings
+[incyclist-services - v1.0.36](../README.md) / LegacyDeviceConnectionSettings
 
 # Interface: LegacyDeviceConnectionSettings
 
@@ -6,21 +6,21 @@
 
 ### Properties
 
-- [ant](LegacyDeviceConnectionSettings.md#ant)
 - [serial](LegacyDeviceConnectionSettings.md#serial)
+- [ant](LegacyDeviceConnectionSettings.md#ant)
 - [tcpip](LegacyDeviceConnectionSettings.md#tcpip)
 
 ## Properties
 
-### ant
-
-• **ant**: [`LegacyAntSettings`](LegacyAntSettings.md)
-
-___
-
 ### serial
 
 • **serial**: [`LegacySerialSettings`](LegacySerialSettings.md) & [`LegacySerialPortInfo`](LegacySerialPortInfo.md)
+
+___
+
+### ant
+
+• **ant**: [`LegacyAntSettings`](LegacyAntSettings.md)
 
 ___
 

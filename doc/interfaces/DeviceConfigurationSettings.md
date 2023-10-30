@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / DeviceConfigurationSettings
+[incyclist-services - v1.0.36](../README.md) / DeviceConfigurationSettings
 
 # Interface: DeviceConfigurationSettings
 
@@ -6,11 +6,17 @@
 
 ### Properties
 
+- [interfaces](DeviceConfigurationSettings.md#interfaces)
 - [capabilities](DeviceConfigurationSettings.md#capabilities)
 - [devices](DeviceConfigurationSettings.md#devices)
-- [interfaces](DeviceConfigurationSettings.md#interfaces)
 
 ## Properties
+
+### interfaces
+
+• `Optional` **interfaces**: [`InterfaceSetting`](InterfaceSetting.md)[]
+
+___
 
 ### capabilities
 
@@ -21,9 +27,3 @@ ___
 ### devices
 
 • `Optional` **devices**: [`DeviceListEntry`](DeviceListEntry.md)[]
-
-___
-
-### interfaces
-
-• `Optional` **interfaces**: [`InterfaceSetting`](InterfaceSetting.md)[]

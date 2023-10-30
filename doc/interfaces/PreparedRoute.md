@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / PreparedRoute
+[incyclist-services - v1.0.36](../README.md) / PreparedRoute
 
 # Interface: PreparedRoute
 
@@ -6,42 +6,18 @@
 
 ### Properties
 
-- [description](PreparedRoute.md#description)
-- [lapMode](PreparedRoute.md#lapmode)
-- [maxElevation](PreparedRoute.md#maxelevation)
-- [minElevation](PreparedRoute.md#minelevation)
 - [name](PreparedRoute.md#name)
-- [points](PreparedRoute.md#points)
+- [description](PreparedRoute.md#description)
 - [programId](PreparedRoute.md#programid)
-- [sampleRate](PreparedRoute.md#samplerate)
-- [totalDistance](PreparedRoute.md#totaldistance)
 - [type](PreparedRoute.md#type)
+- [totalDistance](PreparedRoute.md#totaldistance)
+- [lapMode](PreparedRoute.md#lapmode)
+- [minElevation](PreparedRoute.md#minelevation)
+- [maxElevation](PreparedRoute.md#maxelevation)
+- [sampleRate](PreparedRoute.md#samplerate)
+- [points](PreparedRoute.md#points)
 
 ## Properties
-
-### description
-
-• **description**: `string`
-
-___
-
-### lapMode
-
-• **lapMode**: `boolean`
-
-___
-
-### maxElevation
-
-• **maxElevation**: `number`
-
-___
-
-### minElevation
-
-• **minElevation**: `number`
-
-___
 
 ### name
 
@@ -49,9 +25,9 @@ ___
 
 ___
 
-### points
+### description
 
-• **points**: [`Point`](Point.md)[]
+• **description**: `string`
 
 ___
 
@@ -61,9 +37,9 @@ ___
 
 ___
 
-### sampleRate
+### type
 
-• **sampleRate**: `number`
+• **type**: `string`
 
 ___
 
@@ -73,6 +49,30 @@ ___
 
 ___
 
-### type
+### lapMode
 
-• **type**: `string`
+• **lapMode**: `boolean`
+
+___
+
+### minElevation
+
+• **minElevation**: `number`
+
+___
+
+### maxElevation
+
+• **maxElevation**: `number`
+
+___
+
+### sampleRate
+
+• **sampleRate**: `number`
+
+___
+
+### points
+
+• **points**: [`Point`](Point.md)[]

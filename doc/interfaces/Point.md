@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / Point
+[incyclist-services - v1.0.36](../README.md) / Point
 
 # Interface: Point
 
@@ -6,17 +6,17 @@
 
 ### Properties
 
-- [distance](Point.md#distance)
 - [elevation](Point.md#elevation)
+- [distance](Point.md#distance)
 
 ## Properties
-
-### distance
-
-• **distance**: `number`
-
-___
 
 ### elevation
 
 • **elevation**: `number`
+
+___
+
+### distance
+
+• **distance**: `number`

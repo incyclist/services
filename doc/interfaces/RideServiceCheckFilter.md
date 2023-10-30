@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / RideServiceCheckFilter
+[incyclist-services - v1.0.36](../README.md) / RideServiceCheckFilter
 
 # Interface: RideServiceCheckFilter
 
@@ -6,18 +6,11 @@
 
 ### Properties
 
-- [capability](RideServiceCheckFilter.md#capability)
 - [interface](RideServiceCheckFilter.md#interface)
 - [interfaces](RideServiceCheckFilter.md#interfaces)
 - [udid](RideServiceCheckFilter.md#udid)
 
 ## Properties
-
-### capability
-
-• `Optional` **capability**: `IncyclistCapability`
-
-___
 
 ### interface
 

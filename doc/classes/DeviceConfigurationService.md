@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / DeviceConfigurationService
+[incyclist-services - v1.0.36](../README.md) / DeviceConfigurationService
 
 # Class: DeviceConfigurationService
 
@@ -22,36 +22,40 @@ Manages the user configuration of devices and interfaces
 
 ### Properties
 
-- [adapters](DeviceConfigurationService.md#adapters)
 - [settings](DeviceConfigurationService.md#settings)
 - [userSettings](DeviceConfigurationService.md#usersettings)
+- [adapters](DeviceConfigurationService.md#adapters)
 
 ### Methods
 
-- [add](DeviceConfigurationService.md#add)
-- [canStartRide](DeviceConfigurationService.md#canstartride)
-- [delete](DeviceConfigurationService.md#delete)
-- [disableCapability](DeviceConfigurationService.md#disablecapability)
-- [disableInterface](DeviceConfigurationService.md#disableinterface)
-- [emitInterfaceChanged](DeviceConfigurationService.md#emitinterfacechanged)
-- [emitModeChanged](DeviceConfigurationService.md#emitmodechanged)
-- [enableInterface](DeviceConfigurationService.md#enableinterface)
-- [getAdapter](DeviceConfigurationService.md#getadapter)
-- [getAdapters](DeviceConfigurationService.md#getadapters)
-- [getInterfaceSettings](DeviceConfigurationService.md#getinterfacesettings)
-- [getModeSettings](DeviceConfigurationService.md#getmodesettings)
-- [getSelected](DeviceConfigurationService.md#getselected)
-- [getUdid](DeviceConfigurationService.md#getudid)
 - [init](DeviceConfigurationService.md#init)
-- [initFromLegacy](DeviceConfigurationService.md#initfromlegacy)
 - [isInitialized](DeviceConfigurationService.md#isinitialized)
-- [isInterfaceEnabled](DeviceConfigurationService.md#isinterfaceenabled)
+- [initFromLegacy](DeviceConfigurationService.md#initfromlegacy)
+- [load](DeviceConfigurationService.md#load)
+- [disableCapability](DeviceConfigurationService.md#disablecapability)
+- [unselect](DeviceConfigurationService.md#unselect)
+- [add](DeviceConfigurationService.md#add)
+- [delete](DeviceConfigurationService.md#delete)
+- [getUdid](DeviceConfigurationService.md#getudid)
 - [setDisplayName](DeviceConfigurationService.md#setdisplayname)
-- [setInterfaceSettings](DeviceConfigurationService.md#setinterfacesettings)
+- [getAdapter](DeviceConfigurationService.md#getadapter)
+- [updateUserSettings](DeviceConfigurationService.md#updateusersettings)
+- [canStartRide](DeviceConfigurationService.md#canstartride)
+- [getModeSettings](DeviceConfigurationService.md#getmodesettings)
 - [setMode](DeviceConfigurationService.md#setmode)
 - [setModeSettings](DeviceConfigurationService.md#setmodesettings)
-- [unselect](DeviceConfigurationService.md#unselect)
-- [updateUserSettings](DeviceConfigurationService.md#updateusersettings)
+- [emitModeChanged](DeviceConfigurationService.md#emitmodechanged)
+- [getAdapters](DeviceConfigurationService.md#getadapters)
+- [getAllAdapters](DeviceConfigurationService.md#getalladapters)
+- [getSelected](DeviceConfigurationService.md#getselected)
+- [getSelectedDevices](DeviceConfigurationService.md#getselecteddevices)
+- [getInterfaceSettings](DeviceConfigurationService.md#getinterfacesettings)
+- [isInterfaceEnabled](DeviceConfigurationService.md#isinterfaceenabled)
+- [enableInterface](DeviceConfigurationService.md#enableinterface)
+- [disableInterface](DeviceConfigurationService.md#disableinterface)
+- [setInterfaceSettings](DeviceConfigurationService.md#setinterfacesettings)
+- [emitInterfaceChanged](DeviceConfigurationService.md#emitinterfacechanged)
+- [emitDeviceDeleted](DeviceConfigurationService.md#emitdevicedeleted)
 - [getInstance](DeviceConfigurationService.md#getinstance)
 
 ### Events
@@ -70,12 +74,6 @@ EventEmitter.constructor
 
 ## Properties
 
-### adapters
-
-• **adapters**: `DeviceAdapterList` = `{}`
-
-___
-
 ### settings
 
 • **settings**: [`DeviceConfigurationSettings`](../interfaces/DeviceConfigurationSettings.md)
@@ -84,19 +82,59 @@ ___
 
 ### userSettings
 
-• **userSettings**: `any`
+• **userSettings**: [`UserSettingsService`](UserSettingsService.md)
+
+___
+
+### adapters
+
+• **adapters**: `DeviceAdapterList` = `{}`
 
 ## Methods
 
-### add
+### init
 
-▸ **add**(`deviceSettings`): `void`
+▸ **init**(): `Promise`<`void`\>
+
+Initializes the Device Settings
+
+It will use the [[UserSettingsService]] to read the data and stores it in the [[settings]] property
+
+The init method will check if the settings format is
+
+#### Returns
+
+`Promise`<`void`\>
+
+**`Emits`**
+
+__initialized__ Emitted once the configuration is fully initialized
+
+___
+
+### isInitialized
+
+▸ **isInitialized**(): `boolean`
+
+Provides the initialization state of the interface
+
+#### Returns
+
+`boolean`
+
+`true` if the interface has been initialized, `false` otherwise
+
+___
+
+### initFromLegacy
+
+▸ **initFromLegacy**(`settings?`): `void`
 
 #### Parameters
 
 | Name | Type |
 | :------ | :------ |
-| `deviceSettings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
+| `settings` | [`LegacySettings`](../interfaces/LegacySettings.md) |
 
 #### Returns
 
@@ -104,15 +142,69 @@ ___
 
 ___
 
-### canStartRide
+### load
 
-▸ **canStartRide**(): `boolean`
-
-provides information if for all requires capabilities a device has been selected, so that a training can be started
+▸ **load**(): `Object`
 
 #### Returns
 
-`boolean`
+`Object`
+
+| Name | Type |
+| :------ | :------ |
+| `capabilities` | [`DeviceConfigurationInfo`](../interfaces/DeviceConfigurationInfo.md) |
+| `interfaces` | [`InterfaceSetting`](../interfaces/InterfaceSetting.md)[] |
+
+___
+
+### disableCapability
+
+▸ **disableCapability**(`cability`, `disabled?`): `void`
+
+#### Parameters
+
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `cability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) | `undefined` |
+| `disabled` | `boolean` | `true` |
+
+#### Returns
+
+`void`
+
+___
+
+### unselect
+
+▸ **unselect**(`capability`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `capability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) |
+
+#### Returns
+
+`void`
+
+___
+
+### add
+
+▸ **add**(`deviceSettings`, `props?`): `string`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `deviceSettings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
+| `props?` | `Object` |
+| `props.legacy?` | `boolean` |
+
+#### Returns
+
+`string`
 
 ___
 
@@ -134,82 +226,32 @@ ___
 
 ___
 
-### disableCapability
+### getUdid
 
-▸ **disableCapability**(`cability`, `disabled?`): `void`
-
-#### Parameters
-
-| Name | Type | Default value |
-| :------ | :------ | :------ |
-| `cability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) | `undefined` |
-| `disabled` | `boolean` | `true` |
-
-#### Returns
-
-`void`
-
-___
-
-### disableInterface
-
-▸ **disableInterface**(`ifName`): `void`
+▸ **getUdid**(`deviceSettings`): `string`
 
 #### Parameters
 
 | Name | Type |
 | :------ | :------ |
-| `ifName` | `string` |
+| `deviceSettings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
 
 #### Returns
 
-`void`
+`string`
 
 ___
 
-### emitInterfaceChanged
+### setDisplayName
 
-▸ **emitInterfaceChanged**(`ifName`): `void`
+▸ **setDisplayName**(`deviceSettings`, `displayName?`): `void`
 
 #### Parameters
 
 | Name | Type |
 | :------ | :------ |
-| `ifName` | `string` |
-
-#### Returns
-
-`void`
-
-___
-
-### emitModeChanged
-
-▸ **emitModeChanged**(`udid`, `mode`, `settings`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `udid` | `string` |
-| `mode` | `string` |
-| `settings` | `any` |
-
-#### Returns
-
-`void`
-
-___
-
-### enableInterface
-
-▸ **enableInterface**(`ifName`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `ifName` | `string` |
+| `deviceSettings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
+| `displayName?` | `string` |
 
 #### Returns
 
@@ -233,31 +275,25 @@ ___
 
 ___
 
-### getAdapters
+### updateUserSettings
 
-▸ **getAdapters**(): [`AdapterInfo`](../interfaces/AdapterInfo.md)[]
-
-provides the list of selected adapters (to be used by the DeviceRideService)
+▸ **updateUserSettings**(): `void`
 
 #### Returns
 
-[`AdapterInfo`](../interfaces/AdapterInfo.md)[]
+`void`
 
 ___
 
-### getInterfaceSettings
+### canStartRide
 
-▸ **getInterfaceSettings**(`ifName`): [`InterfaceSetting`](../interfaces/InterfaceSetting.md)
+▸ **canStartRide**(): `boolean`
 
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `ifName` | `string` |
+provides information if for all requires capabilities a device has been selected, so that a training can be started
 
 #### Returns
 
-[`InterfaceSetting`](../interfaces/InterfaceSetting.md)
+`boolean`
 
 ___
 
@@ -275,138 +311,6 @@ ___
 #### Returns
 
 [`DeviceModeInfo`](../interfaces/DeviceModeInfo.md)
-
-___
-
-### getSelected
-
-▸ **getSelected**(`capability`): `IncyclistDeviceAdapter`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `capability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) |
-
-#### Returns
-
-`IncyclistDeviceAdapter`
-
-___
-
-### getUdid
-
-▸ **getUdid**(`deviceSettings`): `string`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `deviceSettings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
-
-#### Returns
-
-`string`
-
-___
-
-### init
-
-▸ **init**(): `Promise`<`void`\>
-
-Initializes the Device Settings
-
-It will use the [UserSettingsService](UserSettingsService.md) to read the data and stores it in the [settings](DeviceConfigurationService.md#settings) property
-
-The init method will check if the settings format is
-
-**`Emits`**
-
-__initialized__ Emitted once the configuration is fully initialized
-
-#### Returns
-
-`Promise`<`void`\>
-
-___
-
-### initFromLegacy
-
-▸ **initFromLegacy**(`settings?`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `settings` | [`LegacySettings`](../interfaces/LegacySettings.md) |
-
-#### Returns
-
-`void`
-
-___
-
-### isInitialized
-
-▸ **isInitialized**(): `boolean`
-
-Provides the initialization state of the interface
-
-#### Returns
-
-`boolean`
-
-`true` if the interface has been initialized, `false` otherwise
-
-___
-
-### isInterfaceEnabled
-
-▸ **isInterfaceEnabled**(`ifName`): `boolean`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `ifName` | `string` |
-
-#### Returns
-
-`boolean`
-
-___
-
-### setDisplayName
-
-▸ **setDisplayName**(`deviceSettings`, `displayName?`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `deviceSettings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
-| `displayName?` | `string` |
-
-#### Returns
-
-`void`
-
-___
-
-### setInterfaceSettings
-
-▸ **setInterfaceSettings**(`ifName`, `settings`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `ifName` | `any` |
-| `settings` | [`InterfaceSetting`](../interfaces/InterfaceSetting.md) |
-
-#### Returns
-
-`void`
 
 ___
 
@@ -445,9 +349,51 @@ ___
 
 ___
 
-### unselect
+### emitModeChanged
 
-▸ **unselect**(`capability`): `void`
+▸ **emitModeChanged**(`udid`, `mode`, `settings`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `udid` | `string` |
+| `mode` | `string` |
+| `settings` | `any` |
+
+#### Returns
+
+`void`
+
+___
+
+### getAdapters
+
+▸ **getAdapters**(): [`AdapterInfo`](../interfaces/AdapterInfo.md)[]
+
+provides the list of selected adapters (to be used by the DeviceRideService)
+
+#### Returns
+
+[`AdapterInfo`](../interfaces/AdapterInfo.md)[]
+
+___
+
+### getAllAdapters
+
+▸ **getAllAdapters**(): [`AdapterInfo`](../interfaces/AdapterInfo.md)[]
+
+provides the list of all adapters (to be used by the DeviceRideService)
+
+#### Returns
+
+[`AdapterInfo`](../interfaces/AdapterInfo.md)[]
+
+___
+
+### getSelected
+
+▸ **getSelected**(`capability`): `IncyclistDeviceAdapter`
 
 #### Parameters
 
@@ -457,13 +403,132 @@ ___
 
 #### Returns
 
+`IncyclistDeviceAdapter`
+
+___
+
+### getSelectedDevices
+
+▸ **getSelectedDevices**(`capability?`): { `capability`: `IncyclistCapability` ; `selected?`: `string`  }[]
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `capability?` | `IncyclistCapability` |
+
+#### Returns
+
+{ `capability`: `IncyclistCapability` ; `selected?`: `string`  }[]
+
+___
+
+### getInterfaceSettings
+
+▸ **getInterfaceSettings**(`ifName`): [`InterfaceSetting`](../interfaces/InterfaceSetting.md)
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifName` | `string` |
+
+#### Returns
+
+[`InterfaceSetting`](../interfaces/InterfaceSetting.md)
+
+___
+
+### isInterfaceEnabled
+
+▸ **isInterfaceEnabled**(`ifName`): `boolean`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifName` | `string` |
+
+#### Returns
+
+`boolean`
+
+___
+
+### enableInterface
+
+▸ **enableInterface**(`ifName`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifName` | `string` |
+
+#### Returns
+
 `void`
 
 ___
 
-### updateUserSettings
+### disableInterface
 
-▸ **updateUserSettings**(): `void`
+▸ **disableInterface**(`ifName`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifName` | `string` |
+
+#### Returns
+
+`void`
+
+___
+
+### setInterfaceSettings
+
+▸ **setInterfaceSettings**(`ifName`, `settings`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifName` | `any` |
+| `settings` | [`InterfaceSetting`](../interfaces/InterfaceSetting.md) |
+
+#### Returns
+
+`void`
+
+___
+
+### emitInterfaceChanged
+
+▸ **emitInterfaceChanged**(`ifName`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifName` | `string` |
+
+#### Returns
+
+`void`
+
+___
+
+### emitDeviceDeleted
+
+▸ **emitDeviceDeleted**(`settings`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `settings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
 
 #### Returns
 
@@ -483,17 +548,19 @@ ___
 
 ### select
 
-▸ **select**(`udid`, `capability`, `noRecursive?`): `void`
+▸ **select**(`udid`, `capability`, `props?`): `void`
 
 Marks a device as selected for a given capability
 
 #### Parameters
 
-| Name | Type | Default value | Description |
-| :------ | :------ | :------ | :------ |
-| `udid` | `string` | `undefined` | The unique device id of the device |
-| `capability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) | `undefined` | The cability for which the device should be marked as selected device-changed in case the settings were changed device-added in case the device was not yet known |
-| `noRecursive` | `boolean` | `false` | - |
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `udid` | `string` | The unique device id of the device |
+| `capability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) | The cability for which the device should be marked as selected device-changed in case the settings were changed device-added in case the device was not yet known |
+| `props?` | `Object` | - |
+| `props.noRecursive?` | `boolean` | - |
+| `props.legacy?` | `boolean` | - |
 
 #### Returns
 

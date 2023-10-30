@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / DeviceRideService
+[incyclist-services - v1.0.36](../README.md) / DeviceRideService
 
 # Class: DeviceRideService
 
@@ -22,22 +22,29 @@ Provides method to consume a devcie
 
 ### Methods
 
-- [cancelStart](DeviceRideService.md#cancelstart)
-- [enforceSimulator](DeviceRideService.md#enforcesimulator)
-- [getCyclingMode](DeviceRideService.md#getcyclingmode)
-- [lazyInit](DeviceRideService.md#lazyinit)
 - [logEvent](DeviceRideService.md#logevent)
-- [onCyclingModeChanged](DeviceRideService.md#oncyclingmodechanged)
-- [onData](DeviceRideService.md#ondata)
-- [pause](DeviceRideService.md#pause)
-- [prepareEppRoute](DeviceRideService.md#prepareepproute)
-- [resume](DeviceRideService.md#resume)
-- [sendUpdate](DeviceRideService.md#sendupdate)
 - [setDebug](DeviceRideService.md#setdebug)
-- [start](DeviceRideService.md#start)
+- [lazyInit](DeviceRideService.md#lazyinit)
+- [getAdapterStateInfo](DeviceRideService.md#getadapterstateinfo)
+- [prepareEppRoute](DeviceRideService.md#prepareepproute)
+- [waitForPreviousStartToFinish](DeviceRideService.md#waitforpreviousstarttofinish)
 - [startCheck](DeviceRideService.md#startcheck)
+- [getAdapters](DeviceRideService.md#getadapters)
+- [setSerialPortInUse](DeviceRideService.md#setserialportinuse)
+- [startAdapters](DeviceRideService.md#startadapters)
+- [start](DeviceRideService.md#start)
+- [startRetry](DeviceRideService.md#startretry)
+- [cancelStart](DeviceRideService.md#cancelstart)
 - [startRide](DeviceRideService.md#startride)
 - [stop](DeviceRideService.md#stop)
+- [pause](DeviceRideService.md#pause)
+- [resume](DeviceRideService.md#resume)
+- [onData](DeviceRideService.md#ondata)
+- [sendUpdate](DeviceRideService.md#sendupdate)
+- [getCyclingMode](DeviceRideService.md#getcyclingmode)
+- [onCyclingModeChanged](DeviceRideService.md#oncyclingmodechanged)
+- [onDeviceDeleted](DeviceRideService.md#ondevicedeleted)
+- [enforceSimulator](DeviceRideService.md#enforcesimulator)
 - [getInstance](DeviceRideService.md#getinstance)
 
 ## Constructors
@@ -52,58 +59,6 @@ EventEmitter.constructor
 
 ## Methods
 
-### cancelStart
-
-▸ **cancelStart**(): `Promise`<`boolean`\>
-
-#### Returns
-
-`Promise`<`boolean`\>
-
-___
-
-### enforceSimulator
-
-▸ **enforceSimulator**(`enforced?`): `void`
-
-#### Parameters
-
-| Name | Type | Default value |
-| :------ | :------ | :------ |
-| `enforced` | `boolean` | `true` |
-
-#### Returns
-
-`void`
-
-___
-
-### getCyclingMode
-
-▸ **getCyclingMode**(`udid?`): `default`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `udid?` | `string` |
-
-#### Returns
-
-`default`
-
-___
-
-### lazyInit
-
-▸ **lazyInit**(): `Promise`<`void`\>
-
-#### Returns
-
-`Promise`<`void`\>
-
-___
-
 ### logEvent
 
 ▸ **logEvent**(`event`): `void`
@@ -113,93 +68,6 @@ ___
 | Name | Type |
 | :------ | :------ |
 | `event` | `any` |
-
-#### Returns
-
-`void`
-
-___
-
-### onCyclingModeChanged
-
-▸ **onCyclingModeChanged**(`udid`, `mode`, `settings`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `udid` | `string` |
-| `mode` | `string` |
-| `settings` | `any` |
-
-#### Returns
-
-`void`
-
-___
-
-### onData
-
-▸ **onData**(`deviceSettings`, `data`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `deviceSettings` | `DeviceSettings` |
-| `data` | `DeviceData` |
-
-#### Returns
-
-`void`
-
-___
-
-### pause
-
-▸ **pause**(): `void`
-
-#### Returns
-
-`void`
-
-___
-
-### prepareEppRoute
-
-▸ **prepareEppRoute**(`props`): [`PreparedRoute`](../interfaces/PreparedRoute.md)
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `props` | [`RideServiceDeviceProperties`](../interfaces/RideServiceDeviceProperties.md) |
-
-#### Returns
-
-[`PreparedRoute`](../interfaces/PreparedRoute.md)
-
-___
-
-### resume
-
-▸ **resume**(): `void`
-
-#### Returns
-
-`void`
-
-___
-
-### sendUpdate
-
-▸ **sendUpdate**(`request`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `request` | `UpdateRequest` |
 
 #### Returns
 
@@ -223,15 +91,51 @@ ___
 
 ___
 
-### start
+### lazyInit
 
-▸ **start**(`props`): `Promise`<`boolean`\>
+▸ **lazyInit**(): `Promise`<`void`\>
+
+#### Returns
+
+`Promise`<`void`\>
+
+___
+
+### getAdapterStateInfo
+
+▸ **getAdapterStateInfo**(`adapterInfo`): [`AdapterStateInfo`](../interfaces/AdapterStateInfo.md)
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `adapterInfo` | [`AdapterInfo`](../interfaces/AdapterInfo.md) |
+
+#### Returns
+
+[`AdapterStateInfo`](../interfaces/AdapterStateInfo.md)
+
+___
+
+### prepareEppRoute
+
+▸ **prepareEppRoute**(`props`): [`PreparedRoute`](../interfaces/PreparedRoute.md)
 
 #### Parameters
 
 | Name | Type |
 | :------ | :------ |
 | `props` | [`RideServiceDeviceProperties`](../interfaces/RideServiceDeviceProperties.md) |
+
+#### Returns
+
+[`PreparedRoute`](../interfaces/PreparedRoute.md)
+
+___
+
+### waitForPreviousStartToFinish
+
+▸ **waitForPreviousStartToFinish**(): `Promise`<`boolean`\>
 
 #### Returns
 
@@ -261,6 +165,103 @@ void
 
 ___
 
+### getAdapters
+
+▸ **getAdapters**(`filter`): [`AdapterRideInfo`](../interfaces/AdapterRideInfo.md)[]
+
+Filters the list of adapters based on various criteria: interface(s), capability, udid
+If multiple filter criteria are specified, the will be combined with an AND operation
+
+#### Parameters
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `filter` | [`RideServiceCheckFilter`](../interfaces/RideServiceCheckFilter.md) | allows to filter the devices that should be started |
+
+#### Returns
+
+[`AdapterRideInfo`](../interfaces/AdapterRideInfo.md)[]
+
+void
+
+___
+
+### setSerialPortInUse
+
+▸ **setSerialPortInUse**(`adapter`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `adapter` | `IncyclistDeviceAdapter` |
+
+#### Returns
+
+`void`
+
+___
+
+### startAdapters
+
+▸ **startAdapters**(`adapters`, `startType`, `props?`): `Promise`<`boolean`\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `adapters` | [`AdapterRideInfo`](../interfaces/AdapterRideInfo.md)[] |
+| `startType` | ``"start"`` \| ``"check"`` \| ``"pair"`` |
+| `props?` | [`RideServiceDeviceProperties`](../interfaces/RideServiceDeviceProperties.md) |
+
+#### Returns
+
+`Promise`<`boolean`\>
+
+___
+
+### start
+
+▸ **start**(`props`): `Promise`<`boolean`\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `props` | [`RideServiceDeviceProperties`](../interfaces/RideServiceDeviceProperties.md) |
+
+#### Returns
+
+`Promise`<`boolean`\>
+
+___
+
+### startRetry
+
+▸ **startRetry**(`props`): `Promise`<`boolean`\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `props` | [`RideServiceDeviceProperties`](../interfaces/RideServiceDeviceProperties.md) |
+
+#### Returns
+
+`Promise`<`boolean`\>
+
+___
+
+### cancelStart
+
+▸ **cancelStart**(): `Promise`<`boolean`\>
+
+#### Returns
+
+`Promise`<`boolean`\>
+
+___
+
 ### startRide
 
 ▸ **startRide**(`_props`): `void`
@@ -279,11 +280,136 @@ ___
 
 ### stop
 
-▸ **stop**(): `Promise`<`boolean`\>
+▸ **stop**(`udid?`): `Promise`<`boolean`\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `udid?` | `string` |
 
 #### Returns
 
 `Promise`<`boolean`\>
+
+___
+
+### pause
+
+▸ **pause**(): `void`
+
+#### Returns
+
+`void`
+
+___
+
+### resume
+
+▸ **resume**(): `void`
+
+#### Returns
+
+`void`
+
+___
+
+### onData
+
+▸ **onData**(`deviceSettings`, `data`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `deviceSettings` | `DeviceSettings` |
+| `data` | `IncyclistAdapterData` |
+
+#### Returns
+
+`void`
+
+___
+
+### sendUpdate
+
+▸ **sendUpdate**(`request`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `request` | `UpdateRequest` |
+
+#### Returns
+
+`void`
+
+___
+
+### getCyclingMode
+
+▸ **getCyclingMode**(`udid?`): `CyclingMode`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `udid?` | `string` |
+
+#### Returns
+
+`CyclingMode`
+
+___
+
+### onCyclingModeChanged
+
+▸ **onCyclingModeChanged**(`udid`, `mode`, `settings`): `Promise`<`void`\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `udid` | `string` |
+| `mode` | `string` |
+| `settings` | `any` |
+
+#### Returns
+
+`Promise`<`void`\>
+
+___
+
+### onDeviceDeleted
+
+▸ **onDeviceDeleted**(`settings`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `settings` | [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings) |
+
+#### Returns
+
+`void`
+
+___
+
+### enforceSimulator
+
+▸ **enforceSimulator**(`enforced?`): `void`
+
+#### Parameters
+
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `enforced` | `boolean` | `true` |
+
+#### Returns
+
+`void`
 
 ___
 

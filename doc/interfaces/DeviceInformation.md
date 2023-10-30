@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / DeviceInformation
+[incyclist-services - v1.0.36](../README.md) / DeviceInformation
 
 # Interface: DeviceInformation
 
@@ -6,13 +6,38 @@
 
 ### Properties
 
+- [udid](DeviceInformation.md#udid)
+- [name](DeviceInformation.md#name)
+- [interface](DeviceInformation.md#interface)
+- [selected](DeviceInformation.md#selected)
 - [mode](DeviceInformation.md#mode)
 - [modeSetting](DeviceInformation.md#modesetting)
-- [name](DeviceInformation.md#name)
-- [selected](DeviceInformation.md#selected)
-- [udid](DeviceInformation.md#udid)
 
 ## Properties
+
+### udid
+
+• **udid**: `string`
+
+___
+
+### name
+
+• **name**: `string`
+
+___
+
+### interface
+
+• **interface**: `string`
+
+___
+
+### selected
+
+• **selected**: `boolean`
+
+___
 
 ### mode
 
@@ -23,21 +48,3 @@ ___
 ### modeSetting
 
 • `Optional` **modeSetting**: `any`
-
-___
-
-### name
-
-• **name**: `string`
-
-___
-
-### selected
-
-• **selected**: `boolean`
-
-___
-
-### udid
-
-• **udid**: `string`

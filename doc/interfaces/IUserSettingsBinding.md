@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / IUserSettingsBinding
+[incyclist-services - v1.0.36](../README.md) / IUserSettingsBinding
 
 # Interface: IUserSettingsBinding
 
@@ -10,22 +10,12 @@
 
 ### Methods
 
-- [canOverwrite](IUserSettingsBinding.md#canoverwrite)
 - [getAll](IUserSettingsBinding.md#getall)
-- [save](IUserSettingsBinding.md#save)
 - [set](IUserSettingsBinding.md#set)
+- [save](IUserSettingsBinding.md#save)
+- [canOverwrite](IUserSettingsBinding.md#canoverwrite)
 
 ## Methods
-
-### canOverwrite
-
-▸ **canOverwrite**(): `boolean`
-
-#### Returns
-
-`boolean`
-
-___
 
 ### getAll
 
@@ -34,22 +24,6 @@ ___
 #### Returns
 
 `Promise`<`any`\>
-
-___
-
-### save
-
-▸ **save**(`settings`): `Promise`<`boolean`\>
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `settings` | `any` |
-
-#### Returns
-
-`Promise`<`boolean`\>
 
 ___
 
@@ -67,3 +41,30 @@ ___
 #### Returns
 
 `Promise`<`boolean`\>
+
+___
+
+### save
+
+▸ **save**(`settings`, `final?`): `Promise`<`boolean`\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `settings` | `any` |
+| `final?` | `boolean` |
+
+#### Returns
+
+`Promise`<`boolean`\>
+
+___
+
+### canOverwrite
+
+▸ **canOverwrite**(): `boolean`
+
+#### Returns
+
+`boolean`

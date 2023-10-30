@@ -1,6 +1,6 @@
-incyclist-services - v1.0.4
+incyclist-services
 
-# incyclist-services - v1.0.4
+# incyclist-services - v1.0.36
 
 ## Table of contents
 
@@ -8,73 +8,87 @@ incyclist-services - v1.0.4
 
 - [DeviceAccessService](classes/DeviceAccessService.md)
 - [DeviceConfigurationService](classes/DeviceConfigurationService.md)
+- [DevicePairingService](classes/DevicePairingService.md)
 - [DeviceRideService](classes/DeviceRideService.md)
 - [UserSettingsBinding](classes/UserSettingsBinding.md)
 - [UserSettingsService](classes/UserSettingsService.md)
 
 ### Interfaces
 
-- [AdapterInfo](interfaces/AdapterInfo.md)
-- [AdapterRideInfo](interfaces/AdapterRideInfo.md)
+- [InterfaceInfo](interfaces/InterfaceInfo.md)
+- [InterfaceAccessProps](interfaces/InterfaceAccessProps.md)
+- [InterfaceList](interfaces/InterfaceList.md)
+- [EnrichedInterfaceSetting](interfaces/EnrichedInterfaceSetting.md)
+- [ScanFilter](interfaces/ScanFilter.md)
+- [ScanForNewFilter](interfaces/ScanForNewFilter.md)
+- [DeviceInformation](interfaces/DeviceInformation.md)
 - [CapabilityInformation](interfaces/CapabilityInformation.md)
 - [DeviceConfigurationInfo](interfaces/DeviceConfigurationInfo.md)
-- [DeviceConfigurationSettings](interfaces/DeviceConfigurationSettings.md)
-- [DeviceInformation](interfaces/DeviceInformation.md)
 - [DeviceListEntry](interfaces/DeviceListEntry.md)
-- [DeviceModeInfo](interfaces/DeviceModeInfo.md)
-- [IUserSettingsBinding](interfaces/IUserSettingsBinding.md)
-- [IncyclistModeSettings](interfaces/IncyclistModeSettings.md)
-- [InterfaceAccessProps](interfaces/InterfaceAccessProps.md)
-- [InterfaceInfo](interfaces/InterfaceInfo.md)
-- [InterfaceList](interfaces/InterfaceList.md)
 - [InterfaceSetting](interfaces/InterfaceSetting.md)
-- [LegacyAntSettings](interfaces/LegacyAntSettings.md)
-- [LegacyDeviceConnectionSettings](interfaces/LegacyDeviceConnectionSettings.md)
-- [LegacyDeviceSelectionSettings](interfaces/LegacyDeviceSelectionSettings.md)
+- [ModeListEntry](interfaces/ModeListEntry.md)
+- [DeviceConfigurationSettings](interfaces/DeviceConfigurationSettings.md)
 - [LegacyGearSetting](interfaces/LegacyGearSetting.md)
-- [LegacyModeSettings](interfaces/LegacyModeSettings.md)
-- [LegacyPreferences](interfaces/LegacyPreferences.md)
+- [LegacyDeviceSelectionSettings](interfaces/LegacyDeviceSelectionSettings.md)
 - [LegacySerialPortInfo](interfaces/LegacySerialPortInfo.md)
 - [LegacySerialSettings](interfaces/LegacySerialSettings.md)
+- [LegacyAntSettings](interfaces/LegacyAntSettings.md)
+- [LegacyDeviceConnectionSettings](interfaces/LegacyDeviceConnectionSettings.md)
+- [IncyclistModeSettings](interfaces/IncyclistModeSettings.md)
+- [LegacyModeSettings](interfaces/LegacyModeSettings.md)
+- [LegacyPreferences](interfaces/LegacyPreferences.md)
 - [LegacySettings](interfaces/LegacySettings.md)
-- [ModeListEntry](interfaces/ModeListEntry.md)
+- [AdapterInfo](interfaces/AdapterInfo.md)
+- [DeviceModeInfo](interfaces/DeviceModeInfo.md)
+- [DevicePairingData](interfaces/DevicePairingData.md)
+- [CapabilityData](interfaces/CapabilityData.md)
+- [PairingData](interfaces/PairingData.md)
+- [PairingProps](interfaces/PairingProps.md)
+- [PairingInfo](interfaces/PairingInfo.md)
+- [PairingState](interfaces/PairingState.md)
+- [DeviceSelectState](interfaces/DeviceSelectState.md)
+- [PairingSettings](interfaces/PairingSettings.md)
+- [Services](interfaces/Services.md)
+- [AdapterRideInfo](interfaces/AdapterRideInfo.md)
+- [AdapterStateInfo](interfaces/AdapterStateInfo.md)
+- [RideServiceDeviceProperties](interfaces/RideServiceDeviceProperties.md)
+- [RideServiceCheckFilter](interfaces/RideServiceCheckFilter.md)
 - [Point](interfaces/Point.md)
 - [PreparedRoute](interfaces/PreparedRoute.md)
-- [RideServiceCheckFilter](interfaces/RideServiceCheckFilter.md)
-- [RideServiceDeviceProperties](interfaces/RideServiceDeviceProperties.md)
-- [ScanFilter](interfaces/ScanFilter.md)
+- [IUserSettingsBinding](interfaces/IUserSettingsBinding.md)
 
 ### Type Aliases
 
-- [CapabilitySetting](README.md#capabilitysetting)
-- [ExtendedIncyclistCapability](README.md#extendedincyclistcapability)
-- [IncyclistDeviceSettings](README.md#incyclistdevicesettings)
 - [InterfaceState](README.md#interfacestate)
 - [ScanState](README.md#scanstate)
+- [ExtendedIncyclistCapability](README.md#extendedincyclistcapability)
+- [IncyclistDeviceSettings](README.md#incyclistdevicesettings)
+- [CapabilitySetting](README.md#capabilitysetting)
+- [DevicePairingStatus](README.md#devicepairingstatus)
 
 ### Functions
 
-- [getLegacyInterface](README.md#getlegacyinterface)
-- [initUserSettings](README.md#initusersettings)
 - [useDeviceAccess](README.md#usedeviceaccess)
 - [useDeviceConfiguration](README.md#usedeviceconfiguration)
+- [mappedCapability](README.md#mappedcapability)
+- [mappedCapabilities](README.md#mappedcapabilities)
+- [useDevicePairing](README.md#usedevicepairing)
 - [useDeviceRide](README.md#usedeviceride)
 - [useUserSettings](README.md#useusersettings)
+- [initUserSettings](README.md#initusersettings)
+- [getLegacyInterface](README.md#getlegacyinterface)
 
 ## Type Aliases
 
-### CapabilitySetting
+### InterfaceState
 
-Ƭ **CapabilitySetting**: `Object`
+Ƭ **InterfaceState**: ``"connected"`` \| ``"disconnected"`` \| ``"unknown"`` \| ``"connecting"`` \| ``"disconnecting"`` \| ``"unavailable"``
 
-#### Type declaration
+___
 
-| Name | Type |
-| :------ | :------ |
-| `capability` | [`ExtendedIncyclistCapability`](README.md#extendedincyclistcapability) |
-| `devices` | `string`[] |
-| `disabled?` | `boolean` |
-| `selected` | `string` \| `undefined` |
+### ScanState
+
+Ƭ **ScanState**: ``"start-requested"`` \| ``"started"`` \| ``"stop-requested"`` \| ``"stopped"`` \| ``"idle"``
 
 ___
 
@@ -90,49 +104,26 @@ ___
 
 ___
 
-### InterfaceState
+### CapabilitySetting
 
-Ƭ **InterfaceState**: ``"connected"`` \| ``"disconnected"`` \| ``"unknown"`` \| ``"connecting"`` \| ``"disconnecting"`` \| ``"unavailable"``
+Ƭ **CapabilitySetting**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `selected` | `string` \| `undefined` |
+| `capability` | [`ExtendedIncyclistCapability`](README.md#extendedincyclistcapability) |
+| `disabled?` | `boolean` |
+| `devices` | `string`[] |
 
 ___
 
-### ScanState
+### DevicePairingStatus
 
-Ƭ **ScanState**: ``"start-requested"`` \| ``"started"`` \| ``"stop-requested"`` \| ``"stopped"`` \| ``"idle"``
+Ƭ **DevicePairingStatus**: ``"connecting"`` \| ``"connected"`` \| ``"failed"`` \| ``"waiting"`` \| ``"paused"``
 
 ## Functions
-
-### getLegacyInterface
-
-▸ **getLegacyInterface**(`d`): `string`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `d` | `IncyclistDeviceAdapter` |
-
-#### Returns
-
-`string`
-
-___
-
-### initUserSettings
-
-▸ **initUserSettings**(`binding`): [`UserSettingsService`](classes/UserSettingsService.md)
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `binding` | [`IUserSettingsBinding`](interfaces/IUserSettingsBinding.md) |
-
-#### Returns
-
-[`UserSettingsService`](classes/UserSettingsService.md)
-
-___
 
 ### useDeviceAccess
 
@@ -154,6 +145,48 @@ ___
 
 ___
 
+### mappedCapability
+
+▸ **mappedCapability**(`c`): [`CapabilityData`](interfaces/CapabilityData.md)
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `c` | [`CapabilityInformation`](interfaces/CapabilityInformation.md) |
+
+#### Returns
+
+[`CapabilityData`](interfaces/CapabilityData.md)
+
+___
+
+### mappedCapabilities
+
+▸ **mappedCapabilities**(`capabilities`): [`CapabilityData`](interfaces/CapabilityData.md)[]
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `capabilities` | [`DeviceConfigurationInfo`](interfaces/DeviceConfigurationInfo.md) |
+
+#### Returns
+
+[`CapabilityData`](interfaces/CapabilityData.md)[]
+
+___
+
+### useDevicePairing
+
+▸ **useDevicePairing**(): [`DevicePairingService`](classes/DevicePairingService.md)
+
+#### Returns
+
+[`DevicePairingService`](classes/DevicePairingService.md)
+
+___
+
 ### useDeviceRide
 
 ▸ **useDeviceRide**(): [`DeviceRideService`](classes/DeviceRideService.md)
@@ -171,3 +204,35 @@ ___
 #### Returns
 
 [`UserSettingsService`](classes/UserSettingsService.md)
+
+___
+
+### initUserSettings
+
+▸ **initUserSettings**(`binding`): [`UserSettingsService`](classes/UserSettingsService.md)
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `binding` | [`IUserSettingsBinding`](interfaces/IUserSettingsBinding.md) |
+
+#### Returns
+
+[`UserSettingsService`](classes/UserSettingsService.md)
+
+___
+
+### getLegacyInterface
+
+▸ **getLegacyInterface**(`d`): `string`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `d` | `IncyclistDeviceAdapter` |
+
+#### Returns
+
+`string`

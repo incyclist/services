@@ -1,27 +1,33 @@
-[incyclist-services - v1.0.4](../README.md) / InterfaceSetting
+[incyclist-services - v1.0.36](../README.md) / InterfaceSetting
 
 # Interface: InterfaceSetting
+
+## Hierarchy
+
+- **`InterfaceSetting`**
+
+  ↳ [`EnrichedInterfaceSetting`](EnrichedInterfaceSetting.md)
 
 ## Table of contents
 
 ### Properties
 
-- [enabled](InterfaceSetting.md#enabled)
 - [name](InterfaceSetting.md#name)
+- [enabled](InterfaceSetting.md#enabled)
 - [port](InterfaceSetting.md#port)
 - [protocol](InterfaceSetting.md#protocol)
 
 ## Properties
 
-### enabled
-
-• **enabled**: `boolean`
-
-___
-
 ### name
 
 • **name**: `string`
+
+___
+
+### enabled
+
+• **enabled**: `boolean`
 
 ___
 

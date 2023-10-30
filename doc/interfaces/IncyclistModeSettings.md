@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / IncyclistModeSettings
+[incyclist-services - v1.0.36](../README.md) / IncyclistModeSettings
 
 # Interface: IncyclistModeSettings
 

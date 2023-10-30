@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / AdapterInfo
+[incyclist-services - v1.0.36](../README.md) / AdapterInfo
 
 # Interface: AdapterInfo
 
@@ -12,11 +12,17 @@
 
 ### Properties
 
+- [udid](AdapterInfo.md#udid)
 - [adapter](AdapterInfo.md#adapter)
 - [capabilities](AdapterInfo.md#capabilities)
-- [udid](AdapterInfo.md#udid)
 
 ## Properties
+
+### udid
+
+• **udid**: `string`
+
+___
 
 ### adapter
 
@@ -27,9 +33,3 @@ ___
 ### capabilities
 
 • **capabilities**: [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability)[]
-
-___
-
-### udid
-
-• **udid**: `string`

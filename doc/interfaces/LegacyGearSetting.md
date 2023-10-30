@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / LegacyGearSetting
+[incyclist-services - v1.0.36](../README.md) / LegacyGearSetting
 
 # Interface: LegacyGearSetting
 
@@ -6,21 +6,21 @@
 
 ### Properties
 
-- [deviceID](LegacyGearSetting.md#deviceid)
-- [displayName](LegacyGearSetting.md#displayname)
-- [host](LegacyGearSetting.md#host)
-- [interface](LegacyGearSetting.md#interface)
 - [name](LegacyGearSetting.md#name)
-- [port](LegacyGearSetting.md#port)
-- [profile](LegacyGearSetting.md#profile)
-- [protocol](LegacyGearSetting.md#protocol)
+- [displayName](LegacyGearSetting.md#displayname)
 - [selected](LegacyGearSetting.md#selected)
+- [protocol](LegacyGearSetting.md#protocol)
+- [deviceID](LegacyGearSetting.md#deviceid)
+- [profile](LegacyGearSetting.md#profile)
+- [host](LegacyGearSetting.md#host)
+- [port](LegacyGearSetting.md#port)
+- [interface](LegacyGearSetting.md#interface)
 
 ## Properties
 
-### deviceID
+### name
 
-• `Optional` **deviceID**: `string`
+• **name**: `string`
 
 ___
 
@@ -30,33 +30,9 @@ ___
 
 ___
 
-### host
+### selected
 
-• `Optional` **host**: `string`
-
-___
-
-### interface
-
-• **interface**: `string`
-
-___
-
-### name
-
-• **name**: `string`
-
-___
-
-### port
-
-• `Optional` **port**: `string`
-
-___
-
-### profile
-
-• `Optional` **profile**: `string`
+• **selected**: `boolean`
 
 ___
 
@@ -66,6 +42,30 @@ ___
 
 ___
 
-### selected
+### deviceID
 
-• **selected**: `boolean`
+• `Optional` **deviceID**: `string`
+
+___
+
+### profile
+
+• `Optional` **profile**: `string`
+
+___
+
+### host
+
+• `Optional` **host**: `string`
+
+___
+
+### port
+
+• `Optional` **port**: `string`
+
+___
+
+### interface
+
+• **interface**: `string`

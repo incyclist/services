@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / LegacyModeSettings
+[incyclist-services - v1.0.36](../README.md) / LegacyModeSettings
 
 # Interface: LegacyModeSettings
 

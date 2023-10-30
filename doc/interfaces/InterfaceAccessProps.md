@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / InterfaceAccessProps
+[incyclist-services - v1.0.36](../README.md) / InterfaceAccessProps
 
 # Interface: InterfaceAccessProps
 
@@ -6,27 +6,27 @@
 
 ### Properties
 
-- [autoConnect](InterfaceAccessProps.md#autoconnect)
 - [connectTimeout](InterfaceAccessProps.md#connecttimeout)
+- [scanTimeout](InterfaceAccessProps.md#scantimeout)
 - [port](InterfaceAccessProps.md#port)
 - [protocol](InterfaceAccessProps.md#protocol)
-- [scanTimeout](InterfaceAccessProps.md#scantimeout)
+- [autoConnect](InterfaceAccessProps.md#autoconnect)
 
 ## Properties
-
-### autoConnect
-
-• `Optional` **autoConnect**: `boolean`
-
-If set to `true` the service will continously try to connect to this interface, otherwise connect needs to be explicitely called
-
-___
 
 ### connectTimeout
 
 • `Optional` **connectTimeout**: `number`
 
 Timeout for a connect attempt
+
+___
+
+### scanTimeout
+
+• `Optional` **scanTimeout**: `number`
+
+Timeout for a scan attempt
 
 ___
 
@@ -46,8 +46,8 @@ Protocol to be used (only relevant for 'tcpip' and 'serial' interface)
 
 ___
 
-### scanTimeout
+### autoConnect
 
-• `Optional` **scanTimeout**: `number`
+• `Optional` **autoConnect**: `boolean`
 
-Timeout for a scan attempt
+If set to `true` the service will continously try to connect to this interface, otherwise [[connect]] needs to be explicitely called

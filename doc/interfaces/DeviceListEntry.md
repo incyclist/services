@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / DeviceListEntry
+[incyclist-services - v1.0.36](../README.md) / DeviceListEntry
 
 # Interface: DeviceListEntry
 
@@ -6,13 +6,25 @@
 
 ### Properties
 
+- [udid](DeviceListEntry.md#udid)
+- [settings](DeviceListEntry.md#settings)
 - [displayName](DeviceListEntry.md#displayname)
 - [mode](DeviceListEntry.md#mode)
 - [modes](DeviceListEntry.md#modes)
-- [settings](DeviceListEntry.md#settings)
-- [udid](DeviceListEntry.md#udid)
 
 ## Properties
+
+### udid
+
+• **udid**: `string`
+
+___
+
+### settings
+
+• **settings**: [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings)
+
+___
 
 ### displayName
 
@@ -33,15 +45,3 @@ ___
 #### Index signature
 
 ▪ [index: `string`]: `any`
-
-___
-
-### settings
-
-• **settings**: [`IncyclistDeviceSettings`](../README.md#incyclistdevicesettings)
-
-___
-
-### udid
-
-• **udid**: `string`

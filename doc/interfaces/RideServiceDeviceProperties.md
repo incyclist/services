@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / RideServiceDeviceProperties
+[incyclist-services - v1.0.36](../README.md) / RideServiceDeviceProperties
 
 # Interface: RideServiceDeviceProperties
 
@@ -12,56 +12,16 @@
 
 ### Properties
 
+- [user](RideServiceDeviceProperties.md#user)
+- [userWeight](RideServiceDeviceProperties.md#userweight)
 - [bikeWeight](RideServiceDeviceProperties.md#bikeweight)
 - [forceErgMode](RideServiceDeviceProperties.md#forceergmode)
+- [startPos](RideServiceDeviceProperties.md#startpos)
 - [realityFactor](RideServiceDeviceProperties.md#realityfactor)
 - [rideMode](RideServiceDeviceProperties.md#ridemode)
 - [route](RideServiceDeviceProperties.md#route)
-- [startPos](RideServiceDeviceProperties.md#startpos)
-- [user](RideServiceDeviceProperties.md#user)
-- [userWeight](RideServiceDeviceProperties.md#userweight)
 
 ## Properties
-
-### bikeWeight
-
-• `Optional` **bikeWeight**: `number`
-
-#### Inherited from
-
-DeviceProperties.bikeWeight
-
-___
-
-### forceErgMode
-
-• `Optional` **forceErgMode**: `boolean`
-
-___
-
-### realityFactor
-
-• `Optional` **realityFactor**: `number`
-
-___
-
-### rideMode
-
-• `Optional` **rideMode**: `string`
-
-___
-
-### route
-
-• `Optional` **route**: `any`
-
-___
-
-### startPos
-
-• `Optional` **startPos**: `number`
-
-___
 
 ### user
 
@@ -80,3 +40,43 @@ ___
 #### Inherited from
 
 DeviceProperties.userWeight
+
+___
+
+### bikeWeight
+
+• `Optional` **bikeWeight**: `number`
+
+#### Inherited from
+
+DeviceProperties.bikeWeight
+
+___
+
+### forceErgMode
+
+• `Optional` **forceErgMode**: `boolean`
+
+___
+
+### startPos
+
+• `Optional` **startPos**: `number`
+
+___
+
+### realityFactor
+
+• `Optional` **realityFactor**: `number`
+
+___
+
+### rideMode
+
+• `Optional` **rideMode**: `string`
+
+___
+
+### route
+
+• `Optional` **route**: `any`

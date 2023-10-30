@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / InterfaceInfo
+[incyclist-services - v1.0.36](../README.md) / InterfaceInfo
 
 # Interface: InterfaceInfo
 
@@ -6,19 +6,35 @@
 
 ### Properties
 
-- [enabled](InterfaceInfo.md#enabled)
-- [isScanning](InterfaceInfo.md#isscanning)
 - [name](InterfaceInfo.md#name)
-- [properties](InterfaceInfo.md#properties)
+- [enabled](InterfaceInfo.md#enabled)
 - [state](InterfaceInfo.md#state)
+- [isScanning](InterfaceInfo.md#isscanning)
+- [properties](InterfaceInfo.md#properties)
 
 ## Properties
+
+### name
+
+• **name**: `string`
+
+name of the interface
+
+___
 
 ### enabled
 
 • **enabled**: `boolean`
 
 is the interface enabled by the user/system
+
+___
+
+### state
+
+• **state**: [`InterfaceState`](../README.md#interfacestate)
+
+connection state, only when state is 'connected', the interface is ready to be used
 
 ___
 
@@ -30,24 +46,8 @@ provides information if the interface is currently performing a scan
 
 ___
 
-### name
-
-• **name**: `string`
-
-name of the interface
-
-___
-
 ### properties
 
 • `Optional` **properties**: [`InterfaceAccessProps`](InterfaceAccessProps.md)
 
 additional properties provided to the Interface ( e.g. timeouts, protocol for SerialInterface, ...)
-
-___
-
-### state
-
-• **state**: [`InterfaceState`](../README.md#interfacestate)
-
-connection state, only when state is 'connected', the interface is ready to be used

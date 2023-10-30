@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.4](../README.md) / UserSettingsService
+[incyclist-services - v1.0.36](../README.md) / UserSettingsService
 
 # Class: UserSettingsService
 
@@ -10,49 +10,50 @@
 
 ### Properties
 
-- [binding](UserSettingsService.md#binding)
-- [isDirty](UserSettingsService.md#isdirty)
-- [isInitialized](UserSettingsService.md#isinitialized)
-- [logger](UserSettingsService.md#logger)
-- [savePromise](UserSettingsService.md#savepromise)
 - [settings](UserSettingsService.md#settings)
+- [binding](UserSettingsService.md#binding)
+- [logger](UserSettingsService.md#logger)
+- [isInitialized](UserSettingsService.md#isinitialized)
+- [isDirty](UserSettingsService.md#isdirty)
+- [savePromise](UserSettingsService.md#savepromise)
 - [\_instance](UserSettingsService.md#_instance)
 
 ### Methods
 
-- [get](UserSettingsService.md#get)
-- [getAll](UserSettingsService.md#getall)
-- [init](UserSettingsService.md#init)
-- [save](UserSettingsService.md#save)
-- [set](UserSettingsService.md#set)
 - [setBinding](UserSettingsService.md#setbinding)
+- [init](UserSettingsService.md#init)
+- [getAll](UserSettingsService.md#getall)
+- [get](UserSettingsService.md#get)
+- [set](UserSettingsService.md#set)
 - [update](UserSettingsService.md#update)
 - [updateSettings](UserSettingsService.md#updatesettings)
+- [save](UserSettingsService.md#save)
+- [onAppClose](UserSettingsService.md#onappclose)
 - [getInstance](UserSettingsService.md#getinstance)
 
 ## Constructors
 
 ### constructor
 
-• **new UserSettingsService**()
+• **new UserSettingsService**(`binding?`)
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `binding?` | [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md) |
 
 ## Properties
+
+### settings
+
+• **settings**: `any`
+
+___
 
 ### binding
 
 • **binding**: [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md)
-
-___
-
-### isDirty
-
-• **isDirty**: `boolean`
-
-___
-
-### isInitialized
-
-• **isInitialized**: `boolean`
 
 ___
 
@@ -62,15 +63,21 @@ ___
 
 ___
 
-### savePromise
+### isInitialized
 
-• **savePromise**: `Promise`<`boolean`\>
+• **isInitialized**: `boolean`
 
 ___
 
-### settings
+### isDirty
 
-• **settings**: `any`
+• **isDirty**: `boolean`
+
+___
+
+### savePromise
+
+• **savePromise**: `Promise`<`boolean`\>
 
 ___
 
@@ -79,6 +86,42 @@ ___
 ▪ `Static` **\_instance**: [`UserSettingsService`](UserSettingsService.md)
 
 ## Methods
+
+### setBinding
+
+▸ **setBinding**(`binding`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `binding` | [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md) |
+
+#### Returns
+
+`void`
+
+___
+
+### init
+
+▸ **init**(): `Promise`<`boolean`\>
+
+#### Returns
+
+`Promise`<`boolean`\>
+
+___
+
+### getAll
+
+▸ **getAll**(): `any`
+
+#### Returns
+
+`any`
+
+___
 
 ### get
 
@@ -97,62 +140,17 @@ ___
 
 ___
 
-### getAll
-
-▸ **getAll**(): `any`
-
-#### Returns
-
-`any`
-
-___
-
-### init
-
-▸ **init**(): `Promise`<`boolean`\>
-
-#### Returns
-
-`Promise`<`boolean`\>
-
-___
-
-### save
-
-▸ **save**(): `Promise`<`void`\>
-
-#### Returns
-
-`Promise`<`void`\>
-
-___
-
 ### set
 
-▸ **set**(`key`, `value`): `void`
+▸ **set**(`key`, `value`, `save?`): `void`
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `key` | `string` |
-| `value` | `any` |
-
-#### Returns
-
-`void`
-
-___
-
-### setBinding
-
-▸ **setBinding**(`binding`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `binding` | [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md) |
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `key` | `string` | `undefined` |
+| `value` | `any` | `undefined` |
+| `save` | `boolean` | `true` |
 
 #### Returns
 
@@ -189,6 +187,26 @@ ___
 #### Returns
 
 `Promise`<`boolean`\>
+
+___
+
+### save
+
+▸ **save**(): `Promise`<`void`\>
+
+#### Returns
+
+`Promise`<`void`\>
+
+___
+
+### onAppClose
+
+▸ **onAppClose**(): `Promise`<`void`\>
+
+#### Returns
+
+`Promise`<`void`\>
 
 ___
 
