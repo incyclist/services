@@ -9,6 +9,9 @@ module.exports = {
       "src/**/*.{js,ts}",
       "!src/**/*.d.ts",
       "!src/**/index.ts",
+      "!src/**/model.ts",
+      "!src/**/types.ts",
+      "!src/**/mock.ts",
       "!src/Device.ts",
       "!src/**/*.unit.{test,tests}.{js,ts}",
       "!src/**/*.test.util.{js,ts}"

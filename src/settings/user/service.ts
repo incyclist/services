@@ -26,13 +26,14 @@ export class UserSettingsService {
         return UserSettingsService._instance;
     }
 
-    constructor () {
+    constructor (binding?: IUserSettingsBinding) {
         this.settings = {};
         this.logger = new EventLogger('UserSettings')
         this.isInitialized = false;
         this.isDirty = false
         this.savePromise = null;
-       
+
+        this.setBinding(binding)
     }
 
     setBinding(binding: IUserSettingsBinding) {
@@ -41,6 +42,7 @@ export class UserSettingsService {
 
 
     async init():Promise<boolean> {
+
         if (this.isInitialized)
             return true;
         if (!this.binding)

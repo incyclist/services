@@ -26,3 +26,4 @@ The following Services are currently implemented in this library:
 - [DeviceConfiguration](./doc/classes/DeviceConfigurationService.md): manages the user configuration of scanned/added/selected devices
 - [DeviceAccess](./doc/classes/DeviceAccessService.md): manages the basic communication to the device (setting up interfacs, scanning,... )
 - [Device](./src/devices/device/README.MD): allows the Front-End to communicate with a device (reading, writing data)
+- [DevicePairing](./doc/classes/DevicePairingService.md): implements the business logic og the DevicePairing screens

@@ -4,8 +4,8 @@ import {AdapterFactory, AntDeviceSettings, DeviceSettings, IncyclistInterface, I
 import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
 import { sleep } from "../../utils/sleep";
-import { AdapterInfo, DeviceConfigurationService, useDeviceConfiguration } from "../configuration";
-import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState, ScanForNewFilter } from "./model";
+import { AdapterInfo, DeviceConfigurationService, InterfaceSetting, useDeviceConfiguration } from "../configuration";
+import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState, ScanForNewFilter, EnrichedInterfaceSetting } from "./model";
 
 interface InternalScanState {
     promises: (Promise<DeviceSettings[]>)[]
@@ -136,9 +136,10 @@ export class DeviceAccessService  extends EventEmitter{
      */
     enableInterface( ifaceName:string, binding?, props:InterfaceAccessProps={}):void {
         const existing = this.interfaces[ifaceName] as InterfaceInfoInternal
-
-        if (!binding && !existing) {
-            throw new Error('Interface has not been initialized with binding')
+        
+        if (!binding && !existing) {           
+            this.logEvent( {message:'Interface has not been initialized with binding',interface:ifaceName})
+            this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
         }
        
         if (!existing) {
@@ -156,7 +157,8 @@ export class DeviceAccessService  extends EventEmitter{
             
         else  {                       
             if (this.isScanning(ifaceName)) {
-                throw new Error( 'Illegal State, enable Interface cannot be called during an ongoing scan')
+                this.logEvent( {message:'Illegal State, enable Interface cannot be called during an ongoing scan'})
+                return;
             }
             if (binding)
                 existing.interface.setBinding(binding)
@@ -249,6 +251,32 @@ export class DeviceAccessService  extends EventEmitter{
         return this.interfaces[ifaceName]
     }
 
+   /**
+     * enrich interface configuration retrieved from DeviceConfiguration service with 
+     * current status information from Access Service
+     * 
+     * This method provides information (e.g. scanning state, connection state) about an interface
+     * 
+     * @returns [[InterfaceInfo]] the information about the interface
+     * 
+     */
+    enrichWithAccessState( interfaces:InterfaceSetting[] ) {
+        return interfaces.map( i => {
+            const info = this.interfaces[i.name]
+            const enriched=Object.assign({},i) as EnrichedInterfaceSetting
+
+            if(!info) {
+                enriched.state = 'unavailable'
+                enriched.isScanning = false
+            }
+            else {
+                enriched.state = info.state
+                enriched.isScanning = info.isScanning                
+            }
+            return enriched
+        })
+    }
+
     protected getInterface( ifaceName:string):IncyclistInterface {
         const info = this.interfaces[ifaceName] as InterfaceInfoInternal
         return info?.interface
@@ -279,6 +307,7 @@ export class DeviceAccessService  extends EventEmitter{
 
         if (!impl) {
             this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
+            this.interfaces[ifaceName].state = 'unavailable'
             return false;
         }
 
@@ -297,6 +326,19 @@ export class DeviceAccessService  extends EventEmitter{
         this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])
 
         return connected
+    }
+
+    private getScanTimeout(propsTimeout, interfaceSettingsTimeout) {
+        if (propsTimeout) {
+            if (propsTimeout===-1)
+                return undefined
+            else 
+                return propsTimeout
+
+        }
+        else {
+            return interfaceSettingsTimeout
+        }
     }
 
    /**
@@ -339,10 +381,13 @@ export class DeviceAccessService  extends EventEmitter{
      * @param filter [[ScanFilter]] allows to limit the search on specififc interfaces or capabilties
      * @returns [[DeviceSettings]][] a list of Devices that were detected during the scan
      */
-    async scan( filter:ScanFilter={} ): Promise<DeviceSettings[]> {
-        this.logEvent({message:'device scan start', filter} )
+    async scan( filter:ScanFilter={},props:{timeout?:number,includeKnown?:boolean }={} ): Promise<DeviceSettings[]> {
+        this.logEvent({message:'device scan start', filter,props} )
         const detected = [];
         const onDataHandlers:onDataHandlersMap  = {}
+        const {includeKnown=false} = props
+
+    
 
         if (!this.isScanning()) {
             this.emitScanStateChange('start-requested')
@@ -364,29 +409,35 @@ export class DeviceAccessService  extends EventEmitter{
                         const settings: AntDeviceSettings = { profile:args[0], interface:'ant', deviceID:args[1]}
                         const adapter = AdapterFactory.create( settings)
                         adapter.onDeviceData(args[2])
+                        
                     }
                     else if (i.getName()==='ble') {
                         const adapter = AdapterFactory.create(args[0])
                         adapter.onDeviceData(args[1])
+                        
                     }
                 }
 
                 const onDevice = async (deviceSettings)=>{ 
+                    
 
                     // already found during this scan? ignore
-                    if (adapters.find(a=> a.isEqual(deviceSettings))) {
-                        return;
-                    }
-
-                    if (filter.profile && deviceSettings.profile!==filter.profile) {
-                        return;
-                    }
-                    if (filter.protocol && deviceSettings.protocol!==filter.protocol) {
-                        return;
-                    }
-
-                    if (filter.protocols && !filter.protocols.includes(deviceSettings.protocol)) {
-                        return
+                    if (!includeKnown) {
+                        if (adapters.find(a=> a.isEqual(deviceSettings))) {
+                            return;
+                        }
+    
+                        if (filter.profile && deviceSettings.profile!==filter.profile) {
+                            return;
+                        }
+                        if (filter.protocol && deviceSettings.protocol!==filter.protocol) {
+                            return;
+                        }
+    
+                        if (filter.protocols && !filter.protocols.includes(deviceSettings.protocol)) {
+                            return
+                        }
+    
                     }
 
                     const adapter = AdapterFactory.create(deviceSettings)
@@ -411,31 +462,6 @@ export class DeviceAccessService  extends EventEmitter{
                   
                     
                     detected.push(deviceSettings)
-
-                    /*
-                    const ifName = adapter.getSettings().interface
-
-                    // at the moment, only ANT and BLE are transmitting data during the scan                    
-                    if (ifName!=='ble' && ifName!=='ant') {
-                        try {
-                            await adapter.start()
-                            while (this.scanState && this.scanState?.promises?.length>0 && adapter.started) {
-                                await sleep(100)
-                            }
-                            try {
-                                await adapter.stop()
-                            }
-                            catch(err) {
-                                this.logEvent( {message:'could not start device',device:adapter?.getUniqueName(), reason:err.message})
-                            }
-                        }
-                        catch(err) {
-                            this.logEvent( {message:'error',fn:'scan#adapte', error:err.message, stack:err.stack})
-                        }
-    
-                    }
-                    */
-
                 }
     
                 onDataHandlers[i.getName()] = onData
@@ -445,9 +471,10 @@ export class DeviceAccessService  extends EventEmitter{
                 const ifaceName = i.getName()
                 const info = this.interfaces[ifaceName]
                 info.isScanning = true;
-                const props = info.properties||this.defaultProps
-                const {scanTimeout, port, protocol} = props;
-                const properties = ifaceName==='tcpip' || ifaceName==='serial' ? {timeout:scanTimeout,port:port?.toString(),protocol} as SerialScannerProps : {timeout:scanTimeout}
+                const scanProps = info.properties||this.defaultProps
+                const {scanTimeout, port, protocol} = scanProps;
+                const timeout = this.getScanTimeout(props.timeout,scanTimeout)
+                const properties = ifaceName==='tcpip' || ifaceName==='serial' ? {timeout,port:port?.toString(),protocol} as SerialScannerProps : {timeout:scanTimeout}
 
                 this.scanState.promises.push( i.scan(properties) )
 
@@ -459,11 +486,11 @@ export class DeviceAccessService  extends EventEmitter{
 
                 // if no interfaces are enabled, perform a dummy scan (simple timeout)
                 // so that the user has a chance to press the hotkey for the simulator
-                if (this.scanState.promises.length===0) {
-                    this.scanState.promises.push(this.dummyScan()) 
+                if (this.scanState?.promises.length===0) {
+                    this.scanState?.promises.push(this.dummyScan()) 
                 }
                 
-                await Promise.allSettled(this.scanState.promises)
+                await Promise.allSettled(this.scanState?.promises)
                 
                 
             }
@@ -480,6 +507,7 @@ export class DeviceAccessService  extends EventEmitter{
                 if (i.getName()==='tcpip')
                     this.interfaces[i.getName()]
             })
+            adapters.forEach( adapter=>adapter.removeAllListeners('data'))
 
 
             this.emitScanStateChange('stopped')
@@ -602,7 +630,7 @@ export class DeviceAccessService  extends EventEmitter{
     }
 
     async stopScan():Promise<boolean> {
-        if (!this.isScanning())
+        if (!this.isScanning() )
             return
 
         this.emitScanStateChange('stop-requested')
@@ -620,7 +648,7 @@ export class DeviceAccessService  extends EventEmitter{
         }
 
 
-        this.scanState.promises = []
+        this.scanState = null
 
         this.emitScanStateChange('stopped')
         this.logEvent({message:'stop device scan finished', stopScanresult: result} )
@@ -628,6 +656,8 @@ export class DeviceAccessService  extends EventEmitter{
     }
 
     isScanning( ifaceName?:string) {
+        if (!this.scanState)
+            return false;
         if (!ifaceName)
             return this.scanState!==null && this.scanState.promises!==null && this.scanState.promises.length>0
         else return this.interfaces[ifaceName].isScanning;
@@ -656,6 +686,7 @@ export class DeviceAccessService  extends EventEmitter{
             interfaces = remaining.map(name=>(this.interfaces[name] as InterfaceInfoInternal).interface);
         }
 
+        console.log('~~getINterfacesForScan',filter,interfaces)
         return interfaces
     }
 

@@ -1,10 +1,20 @@
 import { DeviceProperties } from "incyclist-devices/lib/types/device";
-import { AdapterInfo } from "../configuration";
+import { AdapterInfo, ExtendedIncyclistCapability } from "../configuration";
 
 export interface AdapterRideInfo extends AdapterInfo {
     isStarted: boolean
 
 }
+
+export interface AdapterStateInfo {
+    udid: string,
+    name:string,
+    isControl:boolean,
+    capabilities:Array<ExtendedIncyclistCapability>
+    isStarted:boolean
+}
+
+
 
 export interface RideServiceDeviceProperties extends DeviceProperties {
     forceErgMode?: boolean
@@ -37,3 +47,4 @@ export interface PreparedRoute {
     sampleRate:number,
     points: Point[]    
 }
+

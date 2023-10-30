@@ -1,0 +1,138 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`PairingService api start FE device in configuration 1`] = `[Function]`;
+
+exports[`PairingService api start no devices in configuration will start scan 1`] = `
+[
+  {
+    "canStartRide": false,
+    "capabilities": [
+      {
+        "capability": "control",
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+      },
+      {
+        "capability": "power",
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+      },
+      {
+        "capability": "cadence",
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+      },
+      {
+        "capability": "speed",
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+      },
+      {
+        "capability": "heartrate",
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+      },
+      {
+        "capability": "bike",
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+      },
+    ],
+    "interfaces": [
+      {
+        "enabled": true,
+        "isScanning": false,
+        "name": "ant",
+        "state": "connected",
+      },
+      {
+        "enabled": true,
+        "isScanning": false,
+        "name": "ble",
+        "state": "connected",
+      },
+      {
+        "enabled": false,
+        "isScanning": false,
+        "name": "serial",
+        "protocol": "Daum Classic",
+        "state": "connected",
+      },
+      {
+        "enabled": true,
+        "isScanning": false,
+        "name": "tcpip",
+        "state": "connected",
+      },
+    ],
+  },
+  {
+    "capabilities": [
+      {
+        "capability": "control",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "power",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "cadence",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "speed",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "heartrate",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "bike",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+    ],
+  },
+]
+`;
+
+exports[`PairingService api start no devices in configuration; FE device found in scan 1`] = `[Function]`;
+
+exports[`PairingService api start no devices in configuration; HRM sensor found in scan 1`] = `[Function]`;

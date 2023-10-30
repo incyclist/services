@@ -4,7 +4,8 @@ export type ExtendedIncyclistCapability = IncyclistCapability|'bike'
 
 export interface DeviceInformation {
     udid: string;
-    name: string,
+    name: string;
+    interface: string;
     selected: boolean;
     mode?: string;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

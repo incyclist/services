@@ -7,6 +7,10 @@
     "excludePrivate":true,
     "disableSources":true,
     "includeVersion": true,
+    "sort": [
+        "instance-first",
+        "source-order"
+    ],
     "plugin": [
         "typedoc-plugin-no-inherit" ,
         "typedoc-plugin-markdown"

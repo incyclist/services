@@ -1,5 +1,5 @@
 import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode } from "incyclist-devices"
-import { useUserSettings } from "../../settings"
+import { UserSettingsService, useUserSettings } from "../../settings"
 import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceModeInfo, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting, 
          LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"
 import { v4 as generateUdid } from 'uuid';
@@ -41,7 +41,7 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     settings: DeviceConfigurationSettings
-    userSettings
+    userSettings:UserSettingsService
     adapters: DeviceAdapterList = {}
     protected logger: EventLogger
 
@@ -56,7 +56,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const w = global.window as any
-        if (w?.SERVICE_DEBUG) {
+        if (w?.SERVICE_DEBUG || process.env.DEBUG) {
             console.log('~~~ CONFIG-SVC', e)
         }
     
@@ -77,6 +77,8 @@ export class DeviceConfigurationService  extends EventEmitter{
      * 
     */
     async init():Promise<void> {
+
+        await this.userSettings.init()
         if (this.isInitialized()) {
             this.emitInitialized()
             return;
@@ -93,12 +95,12 @@ export class DeviceConfigurationService  extends EventEmitter{
             
             try {
                 await this.initFromLegacy(settings)
+                this.verifyCapabilitySettings()
             }
             catch(err) {
                 this.logError(err,'init()')
             }
 
-            this.verifyCapabilitySettings()
             this.emitInitialized()                      
             return;    
         }
@@ -140,13 +142,6 @@ export class DeviceConfigurationService  extends EventEmitter{
             }
         })
 
-        const {capabilities} = this.settings
-        for( const capability  of ['bike' , IncyclistCapability.Control]) {
-            const info = capabilities.find(c => c.capability===capability)
-            if (info && info.devices.length>0 && info.selected===undefined)
-                this.select( info.devices[0], capability as ExtendedIncyclistCapability)
-        }
-
         this.verifyCapabilitySettings()
         this.removeLegacySettings() 
 
@@ -158,6 +153,16 @@ export class DeviceConfigurationService  extends EventEmitter{
 
     protected verifyCapabilitySettings() {
         const {capabilities} = this.settings
+
+        const isNewUi = this.userSettings.get('NEW_UI',false)
+        if (isNewUi)
+            return;
+
+        for( const capability  of ['bike' , IncyclistCapability.Control]) {
+            const info = capabilities.find(c => c.capability===capability)
+            if (info && info.devices.length>0 && info.selected===undefined)
+                this.select( info.devices[0], capability as ExtendedIncyclistCapability)
+        }
 
         const bikeCap = capabilities.find(c=>c.capability==='bike');
 
@@ -424,7 +429,9 @@ export class DeviceConfigurationService  extends EventEmitter{
                     const device = devices.find( d=> d.udid===udid)
                     const mode = device.mode
                     const modeSetting = device.modes ? device.modes[mode] : undefined
-                    return { udid, name:device?.displayName||adapter?.getUniqueName()||adapter?.getName(), selected:udid===c.selected, mode, modeSetting}
+                    const interfaceName = device.settings.interface as string
+                    const name = device?.displayName||adapter?.getUniqueName()||adapter?.getName()
+                    return { udid, name,interface:interfaceName, selected:udid===c.selected, mode, modeSetting}
                 })
             }
             return ci;
@@ -450,6 +457,15 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         const configuration = this.getDeviceConfigurationInfo()
         this.emit('initialized',configuration, this.settings.interfaces)
+    }
+
+    load():{capabilities:DeviceConfigurationInfo,interfaces:Array<InterfaceSetting>} {
+        if (!this.isInitialized())
+            throw new Error('load cannot be called before init')
+
+        const capabilities = this.getDeviceConfigurationInfo()
+        const interfaces = this.settings.interfaces
+        return {capabilities,interfaces}
     }
 
     disableCapability(cability:ExtendedIncyclistCapability, disabled=true):void {
@@ -666,6 +682,8 @@ export class DeviceConfigurationService  extends EventEmitter{
         if (singleDelete) { 
             // only delete from capability
             const record = capabilities.find( c => c.capability===capability)
+
+            console.log('~~~ record', record)
             if (record) {
                 const deviceIdx = record.devices.findIndex(d=>d===udid)
 
@@ -682,8 +700,10 @@ export class DeviceConfigurationService  extends EventEmitter{
                 }                
                 
                 if (deviceIdx!==-1) {
+                    console.log('~~~ remove device',deviceIdx)
                     record.devices.splice(deviceIdx,1)               
-                    if (!forceSingle) {
+                    if (forceSingle) {
+                        console.log('~~~ emit Update',deviceIdx)
                         this.emitCapabiltyChanged(capability)            
                         this.updateUserSettings()
                     }
@@ -788,16 +808,24 @@ export class DeviceConfigurationService  extends EventEmitter{
      * 
     */
     canStartRide():boolean {
+
+        const isNewUi = this.userSettings.get('NEW_UI',false)
+
+        
         const {devices, capabilities} = this.settings||{}
         if (!devices || !capabilities)
             return false;
 
-        return (
-            this.getSelected('bike')!==undefined || 
+        const canStart =  (
+            (!isNewUi && this.getSelected('bike')!==undefined) || 
             this.getSelected(IncyclistCapability.Control)!==undefined || 
             this.getSelected(IncyclistCapability.Power)!==undefined || 
             this.getSelected(IncyclistCapability.Speed)!==undefined
         )
+
+        
+        return canStart
+
     }
 
     getModeSettings( requestedUdid?:string, requestedMode?:string ):DeviceModeInfo {

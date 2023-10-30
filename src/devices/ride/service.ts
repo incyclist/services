@@ -2,12 +2,13 @@ import EventEmitter from "events"
 import { sleep } from "../../utils/sleep";
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import {AdapterInfo, DeviceConfigurationService, IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
-import { AdapterRideInfo, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./model";
+import { AdapterRideInfo, AdapterStateInfo, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./model";
 import clone from "../../utils/clone";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
 import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+
 
 /**
  * Provides method to consume a devcie
@@ -34,6 +35,8 @@ export class DeviceRideService  extends EventEmitter{
 
     protected deviceDataHandler = this.onData.bind(this)
 
+
+
     static getInstance():DeviceRideService{
         if (!DeviceRideService._instance)
         DeviceRideService._instance = new DeviceRideService()
@@ -45,7 +48,7 @@ export class DeviceRideService  extends EventEmitter{
         this.initizialized = false;
         this.simulatorEnforced = false
         this.logger = new EventLogger('Ride')
-        this.debug = false;
+        this.debug = false;   
     }
 
     logEvent(event) {
@@ -91,7 +94,7 @@ export class DeviceRideService  extends EventEmitter{
 
 
 
-    protected getAdapterStateInfo(adapterInfo:AdapterInfo) {
+    getAdapterStateInfo(adapterInfo:AdapterInfo):AdapterStateInfo {
 
         const {udid,adapter,capabilities} = adapterInfo
 
@@ -363,7 +366,7 @@ export class DeviceRideService  extends EventEmitter{
     }
 
 
-    protected async waitForPreviousStartToFinish():Promise<boolean> {        
+    async waitForPreviousStartToFinish():Promise<boolean> {        
         const TIMEOUT = 3000;
 
         if (!this.startPromises)
@@ -404,7 +407,8 @@ export class DeviceRideService  extends EventEmitter{
      * @param filter allows to filter the devices that should be started
      * @returns void
      */
-    protected getAdapters(filter:RideServiceCheckFilter):AdapterRideInfo[] {
+    getAdapters(filter:RideServiceCheckFilter):AdapterRideInfo[] {
+
         const {udid,interface: ifName, interfaces} = filter      
 
         const onlySelected = !udid 
@@ -443,7 +447,7 @@ export class DeviceRideService  extends EventEmitter{
     }
 
    
-    protected async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check',props?:RideServiceDeviceProperties ):Promise<boolean> {
+    async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check' | 'pair',props?:RideServiceDeviceProperties ):Promise<boolean> {
         
         const { forceErgMode, startPos, realityFactor, rideMode, route} = props||{};
 
@@ -451,7 +455,7 @@ export class DeviceRideService  extends EventEmitter{
             const startProps = clone(props||{})
             
 
-            if (startType==='check') {
+            if (startType==='check' || startType==='pair') {
                 startProps.timeout = 10000;
                 if (ai.adapter.getSettings().interface==='ble')
                     startProps.timeout = 30000;
@@ -524,11 +528,15 @@ export class DeviceRideService  extends EventEmitter{
                             await ai.adapter.pause().catch( console.log)                        
                         if (ai.adapter.isControllable())
                             this.setSerialPortInUse(ai.adapter as IncyclistDeviceAdapter)
+
+                        if (startType==='pair') {
+                            ai.adapter.on('data',this.deviceDataHandler)                            
+                        }
                     }
                     else {
                         this.emit(`${startType}-error`, this.getAdapterStateInfo(ai))
                         this.logEvent( {message:`${startType} ${sType} request failed`,...logProps})
-                        if (startType==='check') 
+                        if (startType==='check' || startType==='pair') 
                             await ai.adapter.stop().catch( console.log)                        
                     }
                     ai.isStarted = success;
@@ -540,7 +548,7 @@ export class DeviceRideService  extends EventEmitter{
                     this.logEvent( {message:`${startType} ${sType} request failed`,...logProps, reason:err.message })
 
                     this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err)
-                    if (startType==='check') {
+                    if (startType==='check' || startType==='pair') {
                         await ai.adapter.stop().catch( console.log)                        
                     }
 
@@ -555,7 +563,7 @@ export class DeviceRideService  extends EventEmitter{
         const allOK = status.find( s=>s===false)===undefined
         this.emit(`${startType}-result`, allOK)
 
-        if (allOK) {
+        if (allOK && startType==='start') {
             this.startRide(props)
         }
 
@@ -750,7 +758,7 @@ export class DeviceRideService  extends EventEmitter{
             }
         })
 
-        this.emit( 'data', this.data)
+        this.emit( 'data', this.data, adapterInfo.udid)
 
 
     }

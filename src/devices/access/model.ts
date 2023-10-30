@@ -1,4 +1,5 @@
 import { DeviceSettings, IncyclistCapability} from "incyclist-devices"
+import { InterfaceSetting } from "../configuration"
 
 
 export type InterfaceState = 'connected'| 'disconnected' | 'unknown' | 'connecting' | 'disconnecting' | 'unavailable'
@@ -50,6 +51,12 @@ export interface InterfaceAccessProps {
 
 
 export interface InterfaceList {[index: string]: InterfaceInfo}
+
+export interface EnrichedInterfaceSetting extends InterfaceSetting{
+    state: InterfaceState
+    isScanning: boolean;
+}
+
 
 
 export interface ScanFilter {

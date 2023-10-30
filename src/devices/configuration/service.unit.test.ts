@@ -4,6 +4,7 @@ import clone from "../../utils/clone";
 import { DeviceConfigurationService } from "./service"
 import { DeviceConfigurationSettings,
          LegacySettings,LegacyGearSetting } from "./model";
+import UserSettingsMock from "../../settings/user/mock";
 
 
 const SampleSettings: DeviceConfigurationSettings= {                
@@ -1010,6 +1011,27 @@ describe( 'DeviceConfigurationService',()=>{
         })
     })
 
+    describe('waitForInit',()=>{
+        let service:DeviceConfigurationService
+        let userSettings
+        let testData
 
+        beforeEach( ()=>{            
+            userSettings = new UserSettingsMock({})
+
+            service = new DeviceConfigurationService()
+            service.emit = jest.fn()
+            service.initFromLegacy = jest.fn() //spyOn(service,'initFromLegacy')
+
+        })
+
+        afterEach( ()=>{
+            AdapterFactory.reset()
+        })
+
+        test('not initialized',()=>{
+            expect(service.isInitialized()).toBe(false)
+        })
+    })
     
 })
