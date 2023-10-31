@@ -261,7 +261,7 @@ describe('PairingService',()=>{
                 ]
             
             ride.startAdapters=jest.fn( async ()=> { 
-                ride.emit('pair-start',)
+                ride.emit('pair-start',{sType:'bike ',})
                 ride.emit('pair-error','2')
                 return false
             })

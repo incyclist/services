@@ -37,12 +37,6 @@ exports[`PairingService api start no devices in configuration will start scan 1`
         "devices": [],
         "disabled": false,
       },
-      {
-        "capability": "bike",
-        "deviceNames": "",
-        "devices": [],
-        "disabled": false,
-      },
     ],
     "interfaces": [
       {
@@ -112,15 +106,6 @@ exports[`PairingService api start no devices in configuration will start scan 1`
       },
       {
         "capability": "heartrate",
-        "deviceName": undefined,
-        "deviceNames": "",
-        "devices": [],
-        "disabled": false,
-        "interface": undefined,
-        "selected": undefined,
-      },
-      {
-        "capability": "bike",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],

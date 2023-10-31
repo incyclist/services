@@ -151,12 +151,24 @@ export class DeviceConfigurationService  extends EventEmitter{
         
     }
 
+    protected isNewUi() {
+        return (this.userSettings.isInitialized && this.userSettings.get('NEW_UI',false))
+    }
+
     protected verifyCapabilitySettings() {
         const {capabilities} = this.settings
 
-        const isNewUi = this.userSettings.get('NEW_UI',false)
-        if (isNewUi)
+        const isNewUi = this.isNewUi()
+
+        if (isNewUi) {
+            // remove bike capability - it's not used anymore
+            
+            const bikeCapIdx = capabilities.findIndex(c=>c.capability==='bike');
+            if (bikeCapIdx!==-1) {
+                capabilities.splice( bikeCapIdx,1)
+            }
             return;
+        }
 
         for( const capability  of ['bike' , IncyclistCapability.Control]) {
             const info = capabilities.find(c => c.capability===capability)
@@ -206,6 +218,12 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     protected initCapabilties():void {
+        const isNewUi = this.isNewUi()
+
+        const target:Array<ExtendedIncyclistCapability> = [IncyclistCapability.Control,IncyclistCapability.Power, IncyclistCapability.Cadence,IncyclistCapability.Speed, IncyclistCapability.HeartRate ];
+        if (!isNewUi) {
+            target.push('bike' as ExtendedIncyclistCapability)            
+        }
 
         if (!this.settings)
             this.settings = {}
@@ -213,7 +231,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         if (!this.settings.capabilities)
             this.settings.capabilities = [];
 
-        [IncyclistCapability.Control,IncyclistCapability.Power, IncyclistCapability.Cadence,IncyclistCapability.Speed, IncyclistCapability.HeartRate,  'bike' as ExtendedIncyclistCapability ].forEach( capability => {
+        target.forEach( capability => {
             if (!this.settings.capabilities.find( c=> c.capability===capability ))
                 this.settings.capabilities.push({capability,devices:[],selected:undefined,disabled:false})
         })
@@ -244,7 +262,13 @@ export class DeviceConfigurationService  extends EventEmitter{
         const {gearSelection,connections, modeSettings={}} = settings
         this.logEvent({message:'converting settings.json', gearSelection,connections})
 
+        const isNewUi = this.isNewUi()
         
+        const all:Array<ExtendedIncyclistCapability> = [IncyclistCapability.Control,IncyclistCapability.Power, IncyclistCapability.Cadence,IncyclistCapability.Speed, IncyclistCapability.HeartRate ];
+        if (!isNewUi) {
+            all.push('bike' as ExtendedIncyclistCapability)            
+        }
+
         const gears = clone(gearSelection||{});
 
         const {bikes=[], hrms=[]} = gears
@@ -313,14 +337,15 @@ export class DeviceConfigurationService  extends EventEmitter{
             }
 
             // ensure that devices is included in capability device list, also ensures that capabilty exists
-            ['bike',IncyclistCapability.Control, IncyclistCapability.Power,IncyclistCapability.Speed, IncyclistCapability.Cadence].forEach( (cc:ExtendedIncyclistCapability) => {            
+            const target = all.filter(c=> c!==IncyclistCapability.HeartRate)
+            target.forEach( (cc:ExtendedIncyclistCapability) => {            
                 
                 if (cc!==IncyclistCapability.Control || adapter.hasCapability(cc) )
                     this.addToCapability(udid,cc)  
 
                 if (isSelected) {               
                     const cap = cc as ExtendedIncyclistCapability
-                    if (cap==='bike' || adapter.hasCapability(cap)) {
+                    if ( (!isNewUi && cap==='bike') || adapter.hasCapability(cap)) {
                         const selectedDevice = capabilities.find(c => c.capability===cap )
                         
                         selectedDevice.selected = udid
@@ -490,6 +515,8 @@ export class DeviceConfigurationService  extends EventEmitter{
     select(udid:string, capability:ExtendedIncyclistCapability, props?:{noRecursive?:boolean,legacy?:boolean}):void {
         this.logEvent({message:'select device', udid, capability, props})
 
+        const isNewUi = this.isNewUi()
+
         const {noRecursive=false, legacy=false} = props||{};
         const deviceSettings:IncyclistDeviceSettings = this.settings.devices?.find(d=>d.udid===udid)?.settings
         if (!deviceSettings)
@@ -499,10 +526,10 @@ export class DeviceConfigurationService  extends EventEmitter{
             this.logEvent({message:'error: could not find adapter',fn:'select',  udid, capability, adapters: Object.keys(this.adapters)?.join(',')})
             return
         }
-        if (capability==='bike' && !adapter.isControllable())  // verify that this is a Bike
+        if ( (!isNewUi && capability==='bike') && !adapter.isControllable() )  // verify that this is a Bike
             return;
 
-        const isControl = adapter.hasCapability(IncyclistCapability.Control) || (legacy && capability==='bike')
+        const isControl = adapter.hasCapability(IncyclistCapability.Control) || (legacy && !isNewUi && capability==='bike')
 
         // ensure that devices is included in capability device list. 
         // This also ensures that the capability exists
@@ -524,11 +551,12 @@ export class DeviceConfigurationService  extends EventEmitter{
         // if we select a controllable device as hrm or any other non controllable source, make sure that this device is also selected as controllable
         if (isControl) {
             if (capability!=='bike' && capability!==IncyclistCapability.Control) {
-                this.select(udid,'bike',{noRecursive:true, legacy})
+                if (!isNewUi)
+                    this.select(udid,'bike',{noRecursive:true, legacy})
                 this.select(udid,IncyclistCapability.Control,{noRecursive:true, legacy})            
             }
             else {
-                if (capability==='bike' && isControl) {
+                if (!isNewUi && capability==='bike' && isControl) {
                     this.select(udid,IncyclistCapability.Control,{noRecursive:true, legacy})                    
                     this.select(udid,IncyclistCapability.Power,{noRecursive:true, legacy})    
                     if (legacy) {
@@ -560,7 +588,7 @@ export class DeviceConfigurationService  extends EventEmitter{
                 })
             }
         }
-        else if (!isControl && capability==='bike') {
+        else if (!isControl && !isNewUi && capability==='bike') {
             this.unselect(IncyclistCapability.Control)
             this.select(udid, IncyclistCapability.Power,{noRecursive:true, legacy})
         }
@@ -584,6 +612,9 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {   
+        const isNewUi = this.isNewUi()
+
+        console.log('~~~ add', isNewUi)
         
         let udid = this.getUdid(deviceSettings) 
 
@@ -624,7 +655,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             const isPower = adapter.hasCapability(IncyclistCapability.Power)
 
             //legacy mode - as long as new UI is not in place
-            if (legacy) {
+            if (legacy && !isNewUi) {
                 const isBikeCap = c.capability==='bike'
                 const isControlCap = c.capability===IncyclistCapability.Control
                 const isHrmCap = c.capability===IncyclistCapability.HeartRate
@@ -649,7 +680,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
             }
             else {
-                if ( adapter.hasCapability(c.capability) ||  (c.capability==='bike' && (isBike || isPower))) {
+                if ( adapter.hasCapability(c.capability) ||  (!isNewUi && c.capability==='bike' && (isBike || isPower))) {
                     c.devices.push(udid)
     
                     // TODO: Change once we have changed the UI
@@ -683,7 +714,6 @@ export class DeviceConfigurationService  extends EventEmitter{
             // only delete from capability
             const record = capabilities.find( c => c.capability===capability)
 
-            console.log('~~~ record', record)
             if (record) {
                 const deviceIdx = record.devices.findIndex(d=>d===udid)
 
@@ -700,10 +730,8 @@ export class DeviceConfigurationService  extends EventEmitter{
                 }                
                 
                 if (deviceIdx!==-1) {
-                    console.log('~~~ remove device',deviceIdx)
                     record.devices.splice(deviceIdx,1)               
                     if (forceSingle) {
-                        console.log('~~~ emit Update',deviceIdx)
                         this.emitCapabiltyChanged(capability)            
                         this.updateUserSettings()
                     }
@@ -748,6 +776,11 @@ export class DeviceConfigurationService  extends EventEmitter{
 
 
     protected addToCapability( udid:string, capability: ExtendedIncyclistCapability) {
+        const isNewUi = this.isNewUi()
+
+        if (isNewUi&& capability==='bike')
+            return;
+
         if (!this.settings)
             this.settings = {}
         if (!this.settings.capabilities)
@@ -809,7 +842,7 @@ export class DeviceConfigurationService  extends EventEmitter{
     */
     canStartRide():boolean {
 
-        const isNewUi = this.userSettings.get('NEW_UI',false)
+        const isNewUi = this.isNewUi()
 
         
         const {devices, capabilities} = this.settings||{}

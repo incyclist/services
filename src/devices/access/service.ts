@@ -686,7 +686,6 @@ export class DeviceAccessService  extends EventEmitter{
             interfaces = remaining.map(name=>(this.interfaces[name] as InterfaceInfoInternal).interface);
         }
 
-        console.log('~~getINterfacesForScan',filter,interfaces)
         return interfaces
     }
 

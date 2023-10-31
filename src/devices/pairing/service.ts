@@ -523,7 +523,6 @@ export class DevicePairingService  extends EventEmitter{
 
     protected emitStateChange(newState?:PairingState) {
 
-        console.log('~~~STATE CHNAGE', newState)
         const {onStateChanged,onDeviceSelectStateChanged} = this.settings||{}
 
         // we don't want to share adapters with consumer
