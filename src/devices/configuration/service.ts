@@ -893,7 +893,7 @@ export class DeviceConfigurationService  extends EventEmitter{
                 modes = adapter.getSupportedCyclingModes()
                 if (!mode) {
                     modeObj = adapter.getDefaultCyclingMode()
-                    mode = modeObj.getName()
+                    mode = modeObj?.getName()
                 }
                 
             }
