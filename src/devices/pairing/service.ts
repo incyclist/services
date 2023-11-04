@@ -730,44 +730,46 @@ export class DevicePairingService  extends EventEmitter{
 
     protected onPairingStarted() {
 
-        const {adapters=[],capabilities} = this.state
+        const {capabilities} = this.state
+        const toBeStarted = this.checkDevicePairingState();
 
-        const toBeStarted = []
+        
+        toBeStarted.forEach( ai=> {
+            const {udid} = ai;           
+            this.onPairingStatusUpdate(udid,'connecting',false)
+        })
+        if (this.settings.onStateChanged && typeof this.settings.onStateChanged === 'function') {
+            this.settings.onStateChanged({capabilities})
+        }
+    }
+
+    protected checkDevicePairingState() {
+        const {adapters=[],capabilities} = this.state
+        const toBeStarted = [];
 
 
         // check connection state of all selected devices
         capabilities.forEach(c => {
 
-            const udid = c.selected
-            const info = adapters.find( ai=> ai.udid===udid)
+            const udid = c.selected;
+            const info = adapters.find(ai => ai.udid === udid);
             if (!info?.adapter)
                 return;
 
             if (!info.adapter.isStarted()) {
-                if (toBeStarted.find(ai=>ai.udid===udid)===undefined) 
-                    toBeStarted.push(info)
+                if (toBeStarted.find(ai => ai.udid === udid) === undefined)
+                    toBeStarted.push(info);
             }
             else {
                 if (info.adapter.isPaused()) {
-                    info.adapter.resume();                    
+                    info.adapter.resume();
                 }
-                if (c.connectState!=='connected')
-                    this.onPairingStatusUpdate(udid,'connected',false)
+                if (c.connectState !== 'connected')
+                    this.onPairingStatusUpdate(udid, 'connected', false);
             }
 
-        })
-
-        
-        toBeStarted.forEach( ai=> {
-            const {udid} = ai;
-            
-            //if (udid && !ai.adapter.isStarted()) {
-                this.onPairingStatusUpdate(udid,'connecting',false)
-            //}
-        })
-        if (this.settings.onStateChanged && typeof this.settings.onStateChanged === 'function') {
-            this.settings.onStateChanged({capabilities})
-        }
+        });
+        return toBeStarted;
     }
 
     protected onPairingSuccess(info:AdapterStateInfo|string) {
