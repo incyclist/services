@@ -512,12 +512,12 @@ export class DeviceConfigurationService  extends EventEmitter{
      * @event device-added      in case the device was not yet known
     */
 
-    select(udid:string, capability:ExtendedIncyclistCapability, props?:{noRecursive?:boolean,legacy?:boolean}):void {
+    select(udid:string, capability:ExtendedIncyclistCapability, props?:{noRecursive?:boolean,legacy?:boolean,emit?:boolean}):void {
         this.logEvent({message:'select device', udid, capability, props})
 
-        const isNewUi = this.isNewUi()
+        const isNewUi = this.isNewUi()        
 
-        const {noRecursive=false, legacy=false} = props||{};
+        const {noRecursive=false, legacy=false,emit=true} = props||{};
         const deviceSettings:IncyclistDeviceSettings = this.settings.devices?.find(d=>d.udid===udid)?.settings
         if (!deviceSettings)
             return;
@@ -526,20 +526,27 @@ export class DeviceConfigurationService  extends EventEmitter{
             this.logEvent({message:'error: could not find adapter',fn:'select',  udid, capability, adapters: Object.keys(this.adapters)?.join(',')})
             return
         }
-        if ( (!isNewUi && capability==='bike') && !adapter.isControllable() )  // verify that this is a Bike
+
+        if (isNewUi) {
+            if (capability==='bike')
+                return
+
+            this.selectSingleDevice(udid, capability);  
+            if(emit)
+                this.emitCapabiltyChanged(capability)
+
+            this.updateUserSettings()
+            return;
+        }
+
+        if ( (capability==='bike') && !adapter.isControllable() )  // verify that this is a Bike
             return;
 
         const isControl = adapter.hasCapability(IncyclistCapability.Control) || (legacy && !isNewUi && capability==='bike')
 
         // ensure that devices is included in capability device list. 
         // This also ensures that the capability exists
-        this.addToCapability(udid,capability)  
-
-        // mark device udid as selected in capability, remove disabled flag
-        const capSettings = this.settings.capabilities?.find( c=>c.capability===capability)       
-        capSettings.selected = udid
-        if (capSettings.disabled)
-            delete capSettings.disabled  
+        this.selectSingleDevice(udid, capability);  
         this.emitCapabiltyChanged(capability)
 
         if (noRecursive)
@@ -596,7 +603,17 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.updateUserSettings()
     }
 
-    unselect( capability:ExtendedIncyclistCapability):void {
+    private selectSingleDevice(udid: string, capability: ExtendedIncyclistCapability) {
+        this.addToCapability(udid, capability);
+
+        // mark device udid as selected in capability, remove disabled flag
+        const capSettings = this.settings.capabilities?.find(c => c.capability === capability);
+        capSettings.selected = udid;
+        if (capSettings.disabled)
+            delete capSettings.disabled;
+    }
+
+    unselect( capability:ExtendedIncyclistCapability,shouldEmit:boolean=true):void {
         this.logEvent({message:'unselect device', capability})
 
         if (!this.settings || !this.settings.capabilities)
@@ -606,7 +623,8 @@ export class DeviceConfigurationService  extends EventEmitter{
         if (settings) {
             settings.selected= null
             this.updateUserSettings()
-            this.emitCapabiltyChanged(settings.capability)            
+            if(shouldEmit)
+                this.emitCapabiltyChanged(settings.capability)            
 
         }
     }
@@ -614,8 +632,6 @@ export class DeviceConfigurationService  extends EventEmitter{
     add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {   
         const isNewUi = this.isNewUi()
 
-        console.log('~~~ add', isNewUi)
-        
         let udid = this.getUdid(deviceSettings) 
 
         const {legacy=false} = props||{}
@@ -960,11 +976,29 @@ export class DeviceConfigurationService  extends EventEmitter{
     }
 
     /**
-     * provides the list of selected adapters (to be used by the DeviceRideService)
+     * provides the list of adapters (to be used by the {@link DeviceRideService} and {@link DevicePairingService} )
      * 
+     * @param onlySelected if set to true, only Adapters of selected devices will be returned
+     * 
+     * @returns The AdapterInfo List or an empty array
      */
 
-    getAdapters():AdapterInfo[] {
+    getAdapters(onlySelected=true):AdapterInfo[] {
+
+        if (!onlySelected) {
+            const udids = Object.keys(this.adapters)
+            if (!udids||udids.length===0)
+                return  []
+
+            const info = []
+            udids.forEach( udid=> {
+                const adapter = this.adapters[udid]
+                info.push( {udid,adapter,capabilities:adapter.getCapabilities()})
+            })
+            
+            return info;
+        }
+
         const {capabilities,devices} = this.settings||{}
         const adapters: AdapterInfo[] = []
 

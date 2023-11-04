@@ -1,6 +1,7 @@
 import { DeviceData, DeviceSettings, IncyclistCapability } from "incyclist-devices"
 import { EnrichedInterfaceSetting } from "../access"
-import { AdapterRideInfo, RideServiceCheckFilter } from "../ride"
+import { RideServiceCheckFilter } from "../ride"
+import { AdapterInfo } from "../configuration"
 
 
 export interface DevicePairingData {
@@ -51,7 +52,8 @@ export interface PairingState {
     capabilities?: Array<CapabilityData>
     interfaces?: Array<EnrichedInterfaceSetting>
     canStartRide?:boolean    
-    adapters?: Array<AdapterRideInfo>
+    adapters?: Array<AdapterInfo>
+    
 }
 
 export interface DeviceSelectState {
