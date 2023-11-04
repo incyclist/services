@@ -20,7 +20,7 @@ export const mappedCapability = (c:CapabilityInformation):CapabilityData => {
 
     const {devices} = c;
 
-    const mapped = Object.assign({},c) as unknown  as CapabilityData
+    const mapped = {...c} as unknown  as CapabilityData
 
     mapped.deviceNames = devices.map(d=>d.name).join(';')
     mapped.selected = devices.find( d => d.selected)?.udid
@@ -476,7 +476,7 @@ export class DevicePairingService  extends EventEmitter{
 
     protected getCapabilityDevice(capability:IncyclistCapability|CapabilityData,udid?:string):DevicePairingData {
         const c = this.getCapability(capability)
-        if (!c || !c.devices)
+        if (!c?.devices)
             return
 
         if (udid) {
@@ -535,7 +535,7 @@ export class DevicePairingService  extends EventEmitter{
         const {onStateChanged,onDeviceSelectStateChanged} = this.settings||{}
 
         // we don't want to share adapters with consumer
-        const state=Object.assign({},newState)
+        const state={...newState}
         delete state.adapters
 
         if (onStateChanged && typeof onStateChanged ==='function') {
@@ -626,7 +626,7 @@ export class DevicePairingService  extends EventEmitter{
         const prev = this.state.interfaces;
 
         const current = getInterfaceSettings(ifName,prev)
-        if (!current || !current.enabled)
+        if (!current?.enabled)
             return prev;
 
         const changed = ( current.state!==ifDetails.state || current.isScanning!==ifDetails.isScanning)
@@ -644,18 +644,17 @@ export class DevicePairingService  extends EventEmitter{
                     interfacesNew.forEach( i=> this.onInterfaceStateChanged(i.name,i))
                 }
             }
-            else {
-                if (prev) {
-                    const changedIdx = prev.findIndex( i=>i.name===ifName)
-                    
-                    if (changedIdx!==-1) {
-                        prev[changedIdx].isScanning = ifDetails.isScanning
-                        prev[changedIdx].enabled = ifDetails.enabled
-                        prev[changedIdx].state = ifDetails.state
-                    }
-
-                    this.emitStateChange( {interfaces:this.state.interfaces})
+            else if (prev) {
+                const changedIdx = prev.findIndex( i=>i.name===ifName)
+                
+                if (changedIdx!==-1) {
+                    prev[changedIdx].isScanning = ifDetails.isScanning
+                    prev[changedIdx].enabled = ifDetails.enabled
+                    prev[changedIdx].state = ifDetails.state
                 }
+
+                this.emitStateChange( {interfaces:this.state.interfaces})
+                
             }
 
         }
@@ -871,7 +870,7 @@ export class DevicePairingService  extends EventEmitter{
                     c.interface = undefined
                     
                     changed = true;
-                    this.configuration.unselect(c.capability as IncyclistCapability)
+                    this.configuration.unselect(c.capability)
                 }
 
                 if (others) {
@@ -880,7 +879,7 @@ export class DevicePairingService  extends EventEmitter{
                     c.interface = others.interface
 
                     others.selected = true;
-                    this.configuration.select(others.udid,c.capability as IncyclistCapability)
+                    this.configuration.select(others.udid,c.capability)
                 }
 
             }
@@ -918,7 +917,7 @@ export class DevicePairingService  extends EventEmitter{
                     if(prevSelected) {
                         prevSelected.selected = false
                         changed = true;
-                        this.configuration.unselect(c.capability as IncyclistCapability)
+                        this.configuration.unselect(c.capability)
                     }
 
                     c.selected = others.udid
@@ -927,7 +926,7 @@ export class DevicePairingService  extends EventEmitter{
                     c.connectState  =undefined
                     c.value = undefined
                     others.selected = true;
-                    this.configuration.select(others.udid,c.capability as IncyclistCapability)
+                    this.configuration.select(others.udid,c.capability)
 
     
                 }

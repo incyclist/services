@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import {  IncyclistCapability, IncyclistDeviceAdapter } from 'incyclist-devices'
+import {  IncyclistCapability, IncyclistDeviceAdapter, DeviceProperties, IncyclistDevice,DeviceSettings } from 'incyclist-devices'
 import { CapabilityInformation, DeviceConfigurationService, DeviceConfigurationSettings, ExtendedIncyclistCapability, useDeviceConfiguration,} from '../configuration'
 import {DevicePairingService, mappedCapability} from './service'
 import clone from '../../utils/clone'
@@ -8,9 +8,6 @@ import { DeviceRideService, useDeviceRide } from '../ride'
 import UserSettingsMock from '../../settings/user/mock'
 import { CapabilityData, DevicePairingData, PairingInfo, PairingSettings, PairingState } from './model'
 import { UserSettingsService } from '../../settings'
-import { DeviceProperties } from 'incyclist-devices'
-import { IncyclistDevice } from 'incyclist-devices'
-import { DeviceSettings } from 'incyclist-devices'
 
 let ride:DeviceRideService
 let access:DeviceAccessService
@@ -638,7 +635,7 @@ describe('PairingService',()=>{
                 })
     
                 afterEach( ()=>{
-                    TestWrapper.resetMocks
+                    TestWrapper.resetMocks()
                 })
     
                 test('device is selected',async () =>{
@@ -821,7 +818,7 @@ describe('PairingService',()=>{
             })
 
             afterEach( ()=>{
-                TestWrapper.resetMocks
+                TestWrapper.resetMocks()
             })
 
             test('device is selected',() =>{

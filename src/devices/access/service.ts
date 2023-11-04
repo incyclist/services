@@ -503,9 +503,6 @@ export class DeviceAccessService  extends EventEmitter{
                 i.removeAllListeners('device')
                 i.off('data',onDataHandlers[i.getName()])
                 this.interfaces[i.getName()].isScanning = false;
-
-                if (i.getName()==='tcpip')
-                    this.interfaces[i.getName()]
             })
             adapters.forEach( adapter=>adapter.removeAllListeners('data'))
 
