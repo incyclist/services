@@ -98,7 +98,7 @@ export class DevicePairingService  extends EventEmitter{
     protected onPairingStartedHandler = this.onPairingStarted.bind(this)
     protected onPairingSuccessHandler = this.onPairingSuccess.bind(this)
     protected onPairingErrorHandler = this.onPairingError.bind(this)
-    protected onDeviceDataHandler = this.onPairingData.bind(this)
+    protected onDeviceDataHandler = this.onDeviceData.bind(this)
     protected onScanningDataHandler 
     protected onInterfaceConfigChangedHandler  = this.onInterfaceConfigChanged.bind(this)
     protected onConfigurationUpdateHandler = this.onConfigurationUpdate.bind(this)
@@ -800,7 +800,7 @@ export class DevicePairingService  extends EventEmitter{
 
     }
 
-    protected onPairingData(data:DeviceData, udid:string) {
+    protected onDeviceData(data:DeviceData, udid:string) {
         if (!this.pairingInfo)
             return;
 
@@ -861,7 +861,7 @@ export class DevicePairingService  extends EventEmitter{
                 }
             })
             adapter.on('data',( deviceSettings:DeviceSettings, data:DeviceData)=>{
-                this.onPairingData(data,udid)
+                this.onDeviceData(data,udid)
             })
             this.checkCanStart()
         }
@@ -1010,25 +1010,25 @@ export class DevicePairingService  extends EventEmitter{
 
     private async stopScanning() {
         const props = this.pairingInfo?.props || {}
-        if (this.pairingInfo?.promiseScan) {
+        if (this.isScanning()) {
             this.removeScanningCallbacks()
             this.pauseAdapters(this.state.adapters);
             this.logEvent({ message: 'Stop Scanning', props });
             await this.access.stopScan();
-            delete this.pairingInfo.promiseScan
+            delete this.pairingInfo.scan
         }
     }
 
     private async stopPairing() {
 
         const props = this.pairingInfo?.props || {}
-        if (this.pairingInfo?.promiseCheck) {
+        if (this.isPairing()) {
             this.removePairingCallbacks()
             this.pauseAdapters(this.state.adapters);
 
             this.logEvent({ message: 'Stop Pairing', props });
             await this.rideService.cancelStart();
-            delete this.pairingInfo.promiseCheck
+            delete this.pairingInfo.check
         }
     }
 
@@ -1069,20 +1069,20 @@ export class DevicePairingService  extends EventEmitter{
         const target = adapters.filter(ai => !ai.adapter.isStarted());
 
         const selectedAdapters = target.map(ai=>({...ai, isStarted:false}))
-        this.pairingInfo.promiseCheck = this.rideService.startAdapters(selectedAdapters, 'pair');
-
+        const promise = this.rideService.startAdapters(selectedAdapters, 'pair');
+        this.pairingInfo.check={promise}
         this.onPairingStarted();
 
 
-        await this.pairingInfo.promiseCheck;
+        await this.pairingInfo.check.promise;
         if (this.pairingInfo)
-            delete this.pairingInfo.promiseCheck;
+            delete this.pairingInfo.check
 
         this.emit('pairing-done');
         if (this.pairingInfo && !this.checkPairingSuccess()) {
             this.logEvent({ message: 'Pairing done', adapters, props });
             await sleep(this.getPairingRetryDelay());
-            if (this.pairingInfo && !this.pairingInfo.promiseScan)
+            if (this.pairingInfo && !this.pairingInfo.scan)
                 this.run();
         }
     }
@@ -1100,13 +1100,14 @@ export class DevicePairingService  extends EventEmitter{
         this.initScanningCallbacks()
         
         const timeout = props.enforcedScan ? 1000*60*60 /*1h*/ : undefined
-        this.pairingInfo.promiseScan = this.access.scan({excludeDisabled:true},{includeKnown:props.enforcedScan, timeout})
+        const promise = this.access.scan({excludeDisabled:true},{includeKnown:props.enforcedScan, timeout})
+        this.pairingInfo.scan = {promise}
         this.onPairingStarted()
 
         try {
-            await this.pairingInfo.promiseScan
+            await promise
             if (this.pairingInfo)
-                delete this.pairingInfo.promiseCheck;
+                delete this.pairingInfo.check;
             this.checkCanStart()
 
         }
@@ -1120,7 +1121,7 @@ export class DevicePairingService  extends EventEmitter{
         // after timeout, re-start to either trigger pairing or scan again
         // we don't do this for enforced scans, as the don't have timeouts, i.e. are always trigger manually
         if (this.pairingInfo && !props.enforcedScan) {
-            delete this.pairingInfo.promiseScan
+            delete this.pairingInfo.scan
             await sleep(500)
             if (this.pairingInfo)
             this.run()
@@ -1277,11 +1278,11 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     protected isScanning() {
-        return this.pairingInfo?.promiseScan
+        return this.pairingInfo?.scan
     }
 
     protected isPairing() {
-        return this.pairingInfo?.promiseCheck
+        return this.pairingInfo?.check
     }
 
     protected async _stopDeviceSelection(changed:boolean) {

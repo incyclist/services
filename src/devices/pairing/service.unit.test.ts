@@ -180,7 +180,7 @@ class TestWrapper extends DevicePairingService {
 
     simulatePairing() {
         this.setPairingInfo( {
-            promiseCheck: new Promise<boolean>(()=>{}),
+            check: {promise:new Promise<boolean>(()=>{})},
             props:{}
         })
         this.setSettings({onStateChanged})
@@ -189,7 +189,7 @@ class TestWrapper extends DevicePairingService {
 
     simulateScanning() {
         this.setPairingInfo( {
-            promiseScan: new Promise<DeviceSettings[]>(()=>{}),
+            scan: {promise:new Promise<DeviceSettings[]>(()=>{})},
             props:{}
         })
         this.setSettings({onStateChanged,onDeviceSelectStateChanged})
@@ -821,6 +821,7 @@ describe('PairingService',()=>{
 
             afterEach( ()=>{
                 TestWrapper.resetMocks()
+                jest.resetAllMocks()
             })
 
             test('device is selected',() =>{

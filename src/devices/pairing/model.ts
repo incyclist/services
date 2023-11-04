@@ -41,9 +41,12 @@ export interface PairingProps {
 }
 
 export interface PairingInfo {
-    promiseCheck?: Promise<boolean>,
-    promiseStart?: Promise<boolean>,
-    promiseScan?:Promise<DeviceSettings[]>
+    check?: {
+        promise:Promise<boolean>
+    }
+    scan?: {
+        promise: Promise<DeviceSettings[]>
+    }
     props:PairingProps
     data?:Array< {udid:string, data:DeviceData, ts:number}>
 }
