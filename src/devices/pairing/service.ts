@@ -710,9 +710,10 @@ export class DevicePairingService  extends EventEmitter{
 
     protected onPairingStatusUpdate( udid:string, connectState:DevicePairingStatus,notify:boolean=true) {
         const capabilities=this.state.capabilities
-       
+        
         capabilities.forEach (c => {
-            if (c.selected===udid) {
+            
+            if (c.selected===udid) {                
                 c.connectState = connectState
             }
             const device = this.getCapabilityDevice(c)
@@ -730,12 +731,39 @@ export class DevicePairingService  extends EventEmitter{
     protected onPairingStarted() {
 
         const {adapters=[],capabilities} = this.state
-        
-        adapters.forEach( ai=> {
-            const {udid} = ai;
-            if (udid && !ai.adapter.isStarted()) {
-                this.onPairingStatusUpdate(udid,'connecting',false)
+
+        const toBeStarted = []
+
+
+        // check connection state of all selected devices
+        capabilities.forEach(c => {
+
+            const udid = c.selected
+            const info = adapters.find( ai=> ai.udid===udid)
+            if (!info?.adapter)
+                return;
+
+            if (!info.adapter.isStarted()) {
+                if (toBeStarted.find(ai=>ai.udid===udid)===undefined) 
+                    toBeStarted.push(info)
             }
+            else {
+                if (info.adapter.isPaused()) {
+                    info.adapter.resume();                    
+                }
+                if (c.connectState!=='connected')
+                    this.onPairingStatusUpdate(udid,'connected',false)
+            }
+
+        })
+
+        
+        toBeStarted.forEach( ai=> {
+            const {udid} = ai;
+            
+            //if (udid && !ai.adapter.isStarted()) {
+                this.onPairingStatusUpdate(udid,'connecting',false)
+            //}
         })
         if (this.settings.onStateChanged && typeof this.settings.onStateChanged === 'function') {
             this.settings.onStateChanged({capabilities})
@@ -1037,9 +1065,11 @@ export class DevicePairingService  extends EventEmitter{
 
         this.logEvent({ message: 'Start Pairing', adapters, props });
         this.initPairingCallbacks();
+
         const target = adapters.filter(ai => !ai.adapter.isStarted());
-        
-        this.pairingInfo.promiseCheck = this.rideService.startAdapters(target.map(ai=>({...ai, isStarted:false})), 'pair');
+
+        const selectedAdapters = target.map(ai=>({...ai, isStarted:false}))
+        this.pairingInfo.promiseCheck = this.rideService.startAdapters(selectedAdapters, 'pair');
 
         this.onPairingStarted();
 
@@ -1136,13 +1166,14 @@ export class DevicePairingService  extends EventEmitter{
         return target?.adapter
     }
 
-    protected async stopAdaptersWithCapability( capability:IncyclistCapability|CapabilityData) {
+    protected async stopAdaptersWithCapability( capability:IncyclistCapability|CapabilityData,udid?:string) {
 
         const c = this.getCapability(capability)
         const {adapters=[],capabilities} = this.state
 
-        let target = adapters.filter( ai=> ai.adapter.hasCapability(c.capability) && ai.adapter.getInterface()!=='simulator' )
-
+        let target =  udid ? 
+            adapters.filter( ai=> ai.udid!==udid && ai.adapter.hasCapability(c.capability) && ai.adapter.getInterface()!=='simulator' ) :
+            adapters.filter( ai=> ai.adapter.hasCapability(c.capability) && ai.adapter.getInterface()!=='simulator' )
        
         // if one of the device is an Ant-Device, wee need to stop all other Ant-Devices
         // as Ant does not allow parallel scanning and pairing
@@ -1256,6 +1287,8 @@ export class DevicePairingService  extends EventEmitter{
     protected async _stopDeviceSelection(changed:boolean) {
         
         this.deviceSelectState = null
+
+        const wasScanning = this.isScanning()
         const stop = changed || this.isScanning()
 
         if (stop)
@@ -1264,7 +1297,8 @@ export class DevicePairingService  extends EventEmitter{
         this.emitStateChange({capabilities:this.state.capabilities})
         
         if (stop) {
-            await this.stopAdaptersWithCapability(this.settings.capabilityForScan)
+            if (wasScanning)
+                await this.stopAdaptersWithCapability(this.settings.capabilityForScan)
             this.run()
         }
     }

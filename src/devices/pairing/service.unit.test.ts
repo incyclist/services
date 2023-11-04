@@ -371,6 +371,8 @@ describe('PairingService',()=>{
                         capabilties:[IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed, IncyclistCapability.Cadence], 
                         adapter: {  
                             isStarted:jest.fn().mockReturnValue(false),
+                            isPaused:jest.fn().mockReturnValue(false),
+                            isStopped:jest.fn().mockReturnValue(undefined),
                             pause:jest.fn().mockResolvedValue(true)
                         }
                       }])
@@ -871,7 +873,8 @@ describe('PairingService',()=>{
 
             })
             test('data too recent',()=>{
-                svc.setCapabilityData('power',{connectState:'connecting', value:'100', unit:'W'})
+
+                svc.setCapabilityData('power',{connectState:'connected', value:'100', unit:'W'})
                 svc.addToPairingInfo({data:[{udid:'1', data:{power:100},ts:Date.now()-10}]})
                 ride.emit('data',{power:120,cadence:90, speed:21.123},'1')
 
