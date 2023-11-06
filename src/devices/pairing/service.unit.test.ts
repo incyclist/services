@@ -1038,7 +1038,6 @@ describe('PairingService',()=>{
                     const ant = svc.getState().interfaces?.find(i=>i.name==='ant')  as any                    
                     ant.enabled = false;                    
 
-                    console.log('~~~adapters',svc.getState().adapters)
                     configuration.emit('interface-changed','ant',{enabled:true})
                     
                     expect(access.enableInterface).toHaveBeenCalledWith('ant',undefined,expect.anything())
@@ -1135,7 +1134,6 @@ describe('PairingService',()=>{
 
             test('state changed -> disconncted',()=>{
                 access.emit('interface-changed','ant', { name: 'ant', enabled: true, isScanning: false, state: 'disconnected'})
-                console.log( svc.getCapabilityData('cadence') )
                 expect(ant.state).toBe('disconnected')
                 expect(ant.isScanning).toBe(false)
 
@@ -1152,7 +1150,6 @@ describe('PairingService',()=>{
 
             test('state changed -> unavailable',()=>{
                 access.emit('interface-changed','ant', { name: 'ant', enabled: true, isScanning: false, state: 'unavailable'})
-                console.log( svc.getCapabilityData('cadence') )
                 expect(ant.state).toBe('unavailable')
                 expect(ant.isScanning).toBe(false)
 

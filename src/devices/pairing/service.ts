@@ -146,6 +146,7 @@ export class DevicePairingService  extends EventEmitter{
     */
 
     async start( onStateChanged: (newState:PairingState)=>void) {
+
         try {
             if (this.settings.onStateChanged) {
                 this.settings.onStateChanged = onStateChanged
@@ -160,7 +161,9 @@ export class DevicePairingService  extends EventEmitter{
             this.state.capabilities = mappedCapabilities(capabilities)
             this.state.interfaces = this.access.enrichWithAccessState(interfaces)
             this.state.canStartRide = this.configuration.canStartRide()
-    
+            this.state.stopRequested = false
+            this.state.stopped = false
+
             this.state.interfaces.forEach( i=> {
                 if (!this.isInterfaceEnabled(i.name))
                     this.disableAdaptersOnInterface(i.name)
@@ -171,7 +174,7 @@ export class DevicePairingService  extends EventEmitter{
             this.emitStateChange(this.state)
     
             this.initConfigHandlers();  
-            
+           
             this.run()    
     
         }
@@ -208,11 +211,16 @@ export class DevicePairingService  extends EventEmitter{
     */
 
    async stop():Promise<void> {
-
+        this.logEvent({message:'Stop Pairing'})
         try {
             await this._stop();
+
+            this.pauseAdapters(this.state.adapters);
+
             this.state.stopRequested = true;
             this.removeConfigHandlers()
+            this.settings = {}
+            this.state.initialized = false
         }
         catch (err) { // istanbul ignore next
             this.logError(err,'stop')
@@ -565,7 +573,7 @@ export class DevicePairingService  extends EventEmitter{
     protected getExternaState(toEmit:PairingState ): PairingState {
 
         const newState = toEmit || this.state
-        const state = clone(newState) as InternalPairingState
+        const state =  {...newState} as InternalPairingState
 
         // remove internal ino
         delete state.adapters
@@ -581,11 +589,15 @@ export class DevicePairingService  extends EventEmitter{
 
         const {onStateChanged,onDeviceSelectStateChanged} = this.settings||{}
 
+        // don't send any updates if we are stopping
+        if (this.state.stopRequested)
+            return;
+
         // we don't want to share adapters with consumer
         const state= this.getExternaState(newState)
 
         if (onStateChanged && typeof onStateChanged ==='function') {
-            onStateChanged( clone(state) )
+            onStateChanged( {...state}) 
         }
 
         if (onDeviceSelectStateChanged && typeof onDeviceSelectStateChanged==='function')
@@ -668,15 +680,15 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     protected async onInterfaceStateChanged  (ifName,ifDetails, interfacesNew? ) { 
-        
         const prev = this.state.interfaces;
 
         const current = getInterfaceSettings(ifName,prev)
 
-        const changed = ( current.state!==ifDetails.state || current.isScanning!==ifDetails.isScanning || current.enabled || ifDetails.enabled)
+        const changed = ( current.state!==ifDetails.state || current.isScanning!==ifDetails.isScanning || current.enabled!==ifDetails.enabled)
         
-        if (!changed)
+        if (!changed) {
             return;
+        }
 
 
         try {
@@ -693,7 +705,6 @@ export class DevicePairingService  extends EventEmitter{
             else if (prev) {
                 const changedIdx = prev.findIndex( i=>i.name===ifName)
 
-                console.log(ifDetails.state, current.state)
                 if (ifDetails.state==='disconnected' && current.state!=='disconnected') {
                     // set all devices to failed state
                     this.failAdaptersOnInterface(ifName)
@@ -1017,7 +1028,6 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     private async stopPairing() {
-
         const props = this.state.props || {}
         if (this.isPairing()) {
             this.removePairingCallbacks()
@@ -1030,6 +1040,7 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     protected async run(props:PairingProps={}):Promise<void> {
+
         this.emit('run')
         // pairing already ongoing ? stop previous paring
         if (this.isPairing() || this.isScanning()) {
@@ -1049,8 +1060,9 @@ export class DevicePairingService  extends EventEmitter{
         const adapters = this.state.adapters = this.configuration.getAdapters(false)
 
         const goodToGo = await this.rideService.waitForPreviousStartToFinish()
-        if (!goodToGo)  
+        if (!goodToGo)  {
             return;
+        }
 
         const configOKToStart = this.configuration.canStartRide()
 
@@ -1059,6 +1071,7 @@ export class DevicePairingService  extends EventEmitter{
             this.state.stopRequested = false
             return;
         }
+
 
         if (configOKToStart && !this.deviceSelectState && !props.enforcedScan) {
             await this.startPairing(adapters, props);
@@ -1077,7 +1090,9 @@ export class DevicePairingService  extends EventEmitter{
         // unpause /adapt connectState for started adapters
         this.processConnectedDevices(adapters);
 
-        const target = adapters.filter(ai => !ai.adapter.isStarted());
+        const selected = this.state.capabilities.map( c=>c.selected)
+
+        const target = adapters.filter(ai => !ai.adapter.isStarted() && selected.includes(ai.udid));
 
         this.initPairingCallbacks();
         const selectedAdapters = target.map(ai=>({...ai, isStarted:false}))
@@ -1243,8 +1258,6 @@ export class DevicePairingService  extends EventEmitter{
     protected failAdaptersOnInterface(name:string) {
         const target = this.getAdaptersOnInterface(name)
         const {capabilities} = this.state
-
-        console.log('failAdaptersOnInterface',name,target)
 
         target.forEach( ai => {
             const {udid} = ai;
