@@ -2,7 +2,7 @@ import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
 import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState  } from "./model";
 import { EventLogger } from 'gd-eventlog';
-import {  DeviceData,  DeviceSettings,  IncyclistCapability } from "incyclist-devices";
+import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
 import EventEmitter from "events";
@@ -906,25 +906,7 @@ export class DevicePairingService  extends EventEmitter{
         const adapter = this.configuration.getAdapter(udid)
         
         if (adapter) {
-            const capabilites = adapter.getCapabilities()
-
-            capabilites.forEach( c => {
-                const info = this.getCapability(c)
-                let device = this.getCapabilityDevice(c,udid)
-            
-                if (device) {
-                    if (device)
-                        device.connectState = 'connected'                    
-                }
-                else {
-                    device = {udid,connectState:'connected',selected:false,name:adapter.getUniqueName(),interface:adapter.getInterface()}
-                    info.devices.push(device)
-                }
-               
-                if (info.selected===udid) {
-                    info.connectState='connected'                   
-                }
-            })
+            this.markConnected(adapter, udid);
 
             if (this.isScanning()) {
                 if ( this.state.scan.adapters.find( a=>a.udid===udid)===undefined  ) {
@@ -943,6 +925,27 @@ export class DevicePairingService  extends EventEmitter{
         }
         
         this.onPairingSuccess(udid)       
+    }
+
+    private markConnected(adapter: IncyclistDeviceAdapter, udid: string) {
+        const capabilites = adapter.getCapabilities();
+
+        capabilites.forEach(c => {
+            const info = this.getCapability(c);
+            let device = this.getCapabilityDevice(c, udid);
+
+            if (device) {
+                device.connectState = 'connected';
+            }
+            else {
+                device = { udid, connectState: 'connected', selected: false, name: adapter.getUniqueName(), interface: adapter.getInterface() };
+                info.devices.push(device);
+            }
+
+            if (info.selected === udid) {
+                info.connectState = 'connected';
+            }
+        });
     }
 
     protected disconnectInterface(name:string):void {
