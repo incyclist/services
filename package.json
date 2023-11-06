@@ -27,7 +27,7 @@
     "dev": "tsc --watch",
     "docgen": "typedoc --options typedoc.json",
     "docgen1": "typedoc --readme none --excludeProtected --excludePrivate --plugin typedoc-plugin-no-inherit --plugin  typedoc-plugin-markdown src/index.ts",
-    "postversion": "git push && git push --tags"
+    "postversion": "git push --tags"
   },
   "files": [
     "lib/"
