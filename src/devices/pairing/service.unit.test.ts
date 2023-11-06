@@ -2,12 +2,13 @@
 import {  IncyclistCapability, IncyclistDeviceAdapter, DeviceProperties, IncyclistDevice,DeviceSettings } from 'incyclist-devices'
 import { CapabilityInformation, DeviceConfigurationService, DeviceConfigurationSettings, ExtendedIncyclistCapability, useDeviceConfiguration,} from '../configuration'
 import {DevicePairingService, mappedCapability} from './service'
-import clone from '../../utils/clone'
 import { DeviceAccessService, useDeviceAccess } from '../access'
 import { DeviceRideService, useDeviceRide } from '../ride'
 import UserSettingsMock from '../../settings/user/mock'
-import { CapabilityData, DevicePairingData, PairingInfo, PairingSettings, PairingState } from './model'
+import { CapabilityData, DevicePairingData, PairingSettings, PairingState } from './model'
 import { UserSettingsService } from '../../settings'
+import { InterfaceSetting } from 'incyclist-services'
+import { sleep } from '../../utils/sleep'
 
 let ride:DeviceRideService
 let access:DeviceAccessService
@@ -26,7 +27,7 @@ const settings:DeviceConfigurationSettings = {
         { name:'tcpip', enabled:true },
     ],
 }
-type DeviceList =  Array<{ udid:string, selected?:boolean, c?:Array<string>,isStarted?:boolean,profile?:string,interface?:string}>
+type DeviceList =  Array<{ udid:string, selected?:boolean, c?:Array<string>,isStarted?:boolean,profile?:string,interface?:string,interfaceInactive?:boolean}>
 
 class TestWrapper extends DevicePairingService {
 
@@ -35,6 +36,7 @@ class TestWrapper extends DevicePairingService {
         ride = useDeviceRide()
         access = useDeviceAccess()
         if (!forStart) {
+            
             configuration = useDeviceConfiguration()
         
             configuration.add = jest.fn()
@@ -43,14 +45,16 @@ class TestWrapper extends DevicePairingService {
             configuration.unselect=jest.fn()
             configuration.canStartRide=jest.fn()
             configuration.delete=jest.fn()
+            configuration.setInterfaceSettings=jest.fn()
         }
 
         ride.startAdapters=jest.fn()
         ride.getAdapters=jest.fn().mockReturnValue([])
-        ride.cancelStart = jest.fn()
+        ride.cancelStart = jest.fn().mockResolvedValue(true)
 
         access.scan = jest.fn()
         access.enableInterface = jest.fn()
+        access.disableInterface = jest.fn()
         access.stopScan = jest.fn()
         access.enrichWithAccessState = jest.fn( (interfaces)=>{ return interfaces.map(i => ({...i, state:'connected', isScanning:false}))})
 
@@ -70,20 +74,30 @@ class TestWrapper extends DevicePairingService {
 
     }
 
-    setupMockData  (capability:IncyclistCapability|string, devices: DeviceList)   {
+    setupMockData  (capability:IncyclistCapability|string, devices:DeviceList)   {
 
-        const addAdapter = ( udid, c)=> {
+        const addAdapter = ( udid, c, ifName)=> {
+            
+
             try {
             const capabilities = c.map(cap=>cap as IncyclistCapability)
             if (!this.getState().adapters)                    
                 this.getState().adapters=[]
 
+            if (this.getState().adapters?.find(ai=>ai.udid===udid))
+                return;
+
             this.getState().adapters?.push( {udid,capabilities,
                 adapter:{                         
                     getCapabilities:jest.fn().mockReturnValue(capabilities),
+                    hasCapability:jest.fn( (name) => capabilities.find(c =>c===name)),
                     pause:jest.fn().mockResolvedValue(true),
                     start:jest.fn().mockResolvedValue(true),
                     stop:jest.fn().mockResolvedValue(true),
+                    getInterface:jest.fn().mockReturnValue(ifName),
+                    isStarted:jest.fn().mockReturnValue(true),
+                    isPaused:jest.fn().mockReturnValue(false),
+                    isStopped:jest.fn().mockReturnValueOnce(false).mockReturnValue(true)
                 } as unknown as IncyclistDevice<DeviceProperties>})
             }
             catch(err) {
@@ -98,9 +112,9 @@ class TestWrapper extends DevicePairingService {
                 const caps = [capability];
                 if (d?.c && d.c?.length>0)
                     caps.push(...d.c)
-                addAdapter(d.udid, caps) 
+                addAdapter(d.udid, caps, d.interface) 
     
-                settings.devices?.push( {udid:d.udid,settings: {profile: d.profile||"FE", interface: d.interface||"ant"} } as any)
+                settings.devices?.push( {udid:d.udid,settings: {profile: d.profile||"FE", interface: d.interface||"ant", deviceID:d.udid } } as any)
 
                 const setCaps = settings.capabilities || []
                 const setDev = settings.devices || []
@@ -111,7 +125,7 @@ class TestWrapper extends DevicePairingService {
                 const existing = state.find(c=>c.capability===capability) 
                 const idx = state.findIndex(c=>c.capability===capability) 
                 const info = existing || { capability, devices:[] as Array<DevicePairingData>} as CapabilityData                   
-                info.devices.push( {interface:'ant', name:d.udid,selected:d.selected||false,udid:d.udid,connectState:'connecting'} )
+                info.devices.push( {...d,interface:d.interface||'ant', name:d.udid,selected:d.selected||false,udid:d.udid,connectState:'connecting'} )
                 if (d.selected) info.selected = d.udid;
                 if (!existing) 
                     state.push(info)
@@ -136,6 +150,14 @@ class TestWrapper extends DevicePairingService {
                 console.log(err)
             }
         })
+
+        this.state.interfaces =  [
+            { name:'ant', enabled:true, isScanning:false,state:'connected' },
+            { name:'ble', enabled:true, isScanning:false,state:'connected' },
+            { name:'serial', enabled:false, protocol:'Daum Classic', isScanning:false,state:'unknown' },
+            { name:'tcpip', enabled:true, isScanning:false,state:'connected' },
+        ]
+    
     }
 
     mock(fn:string, mockFn?) {
@@ -171,27 +193,32 @@ class TestWrapper extends DevicePairingService {
         this.settings = settings
     }
 
-    setPairingInfo( info:PairingInfo) {
-        this.pairingInfo = info
+    setPairingInfo( info) {
+        this.state = {...this.state, ...info}
     }
     addToPairingInfo( info) {
-        this.pairingInfo = {...this.pairingInfo,...info}
+        this.state = {...this.state,...info}
     }
 
     simulatePairing() {
-        this.setPairingInfo( {
-            check: {promise:new Promise<boolean>(()=>{})},
-            props:{}
-        })
+        this.state.check ={promise:new Promise<boolean>(()=>{})}
+        this.state.scan = undefined;
+        this.state.props= {}
+        
+        
         this.setSettings({onStateChanged})
         this.initPairingCallbacks()
+        this.initConfigHandlers()
+
     }
 
     simulateScanning() {
-        this.setPairingInfo( {
-            scan: {promise:new Promise<DeviceSettings[]>(()=>{})},
-            props:{}
-        })
+        this.state.check = undefined;
+        this.state.scan= {
+                promise:new Promise<DeviceSettings[]>(()=>{}),
+                adapters:[]
+            }
+        this.state.props= {}
         this.setSettings({onStateChanged,onDeviceSelectStateChanged})
         this.initScanningCallbacks()
 
@@ -241,8 +268,12 @@ describe('PairingService',()=>{
 
             })
 
-            afterEach( ()=>{
+            afterEach( async ()=>{
+                svc.stop();
+
                 TestWrapper.resetMocks()
+                jest.resetAllMocks()
+
             })
 
             test('no devices in configuration will start scan',async ()=>{
@@ -486,7 +517,97 @@ describe('PairingService',()=>{
             })
         })
         describe('stop',()=>{})
-        describe('startDeviceSelection',()=>{})
+
+        describe('startDeviceSelection',()=>{
+
+            let _run;
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()               
+
+                svc.initServices()
+                svc.setSettings( {onStateChanged})
+                svc.setupMockData( IncyclistCapability.Control, [ 
+                    {udid:'1', selected:true,interface:'ant'}, 
+                    {udid:'3', selected:true,interface:'ant'}, 
+                    {udid:'2',interface:'ble'} ]) 
+                svc.setupMockData( IncyclistCapability.Power, []) 
+    
+                svc.simulatePairing() // the interface settings are not
+                _run = svc.mock('run',jest.fn())
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+
+            test('capability with devices',async ()=>{                
+                const antAdapter1 = svc.getDeviceAdapter('1')
+                const antAdapter3 = svc.getDeviceAdapter('3')
+
+                svc.getScanDelay = jest.fn().mockReturnValue(200)
+                const promise = svc.startDeviceSelection(IncyclistCapability.Control,jest.fn())
+                
+                await sleep(20) // before scan delay
+                expect(svc.getState().check).toBeDefined()        // still pairing
+                expect(antAdapter1?.stop).not.toHaveBeenCalled()    // devices are not stopped
+
+                await sleep(200) // go past scan delay
+                expect(svc.getState().check).toBeUndefined()
+                
+                // all ant adapters are stopped
+                expect(antAdapter1?.stop).toHaveBeenCalled()
+                expect(antAdapter3?.stop).toHaveBeenCalled()
+
+                // scan is enforced
+                expect(_run).toHaveBeenCalledWith({enforcedScan:true})
+
+                const res = await promise
+                expect(res).toMatchSnapshot()
+
+            })
+            test('capability with no devices',async ()=>{
+                svc.getScanDelay = jest.fn().mockReturnValue(1000)
+                svc.startDeviceSelection(IncyclistCapability.Power,jest.fn())
+                await sleep(20) // before scan delay
+
+                expect(svc.getState().check).toBeUndefined()
+                
+
+                // scan is enforced
+                expect(_run).toHaveBeenCalledWith({enforcedScan:true})
+
+            })
+
+
+            test('stop before scanStartDelay',async ()=>{
+                const antAdapter1 = svc.getDeviceAdapter('1')
+                
+                expect(svc.getState().check).toBeDefined()        // still pairing
+
+                svc.getScanDelay = jest.fn().mockReturnValue(200)
+                const promise = svc.startDeviceSelection(IncyclistCapability.Control,jest.fn())
+                
+                await sleep(20) // before scan delay
+                expect(svc.getState().check).toBeDefined()        // still pairing
+                expect(antAdapter1?.stop).not.toHaveBeenCalled()    // devices are not stopped
+
+                svc.stopDeviceSelection()
+
+                await sleep(200) // go past scan delay
+                expect(svc.getState().check).toBeDefined()        // still pairing
+                expect(antAdapter1?.stop).not.toHaveBeenCalled()    // devices are not stopped
+                expect(_run).not.toHaveBeenCalled()                 // scan is not enfored
+
+                const res = await promise
+                expect(res).toMatchSnapshot()
+
+
+            })
+
+        })
         describe('stopDeviceSelection',()=>{})
 
 
@@ -634,6 +755,7 @@ describe('PairingService',()=>{
                     svc = new TestWrapper()               
                     svc.initServices()
                     svc.simulateScanning()
+                    
                 })
     
                 afterEach( ()=>{
@@ -780,28 +902,545 @@ describe('PairingService',()=>{
 
 
         })
-        describe('changeInterfaceSettings',()=>{})
+        describe('changeInterfaceSettings',()=>{
+            let restart;
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()               
+
+                svc.initServices()
+                svc.setSettings( {onStateChanged})
+                svc.setupMockData( IncyclistCapability.Control, [ 
+                    {udid:'1', selected:true,interface:'ant'}, 
+                    {udid:'2',interface:'ble'} ]) 
+                svc.simulatePairing() // the interface settings are not
+                
+                restart = svc.mock('restart',jest.fn( ()=>Promise.resolve()))
+
+            
+          
+            })
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            test('disable',()=>{
+                const ant: Partial<InterfaceSetting> = {enabled:false}
+                svc.changeInterfaceSettings('ant',ant as InterfaceSetting)
+                const antAdapter = svc.getDeviceAdapter('1')
+
+
+                expect( access.disableInterface).toHaveBeenCalledWith('ant')
+                expect( configuration.setInterfaceSettings).toHaveBeenCalledWith('ant',ant)
+                expect(antAdapter?.stop).toHaveBeenCalled()
+                expect(onStateChanged).toHaveBeenCalledWith(expect.objectContaining({interfaces:expect.anything()}))
+                expect(restart).toHaveBeenCalled()
+            })
+
+            test('enable',()=>{
+                const antIf = svc.getState()?.interfaces?.find(i=>i.name==='ant') || {} as any
+                antIf.enabled = false
+                const ant: Partial<InterfaceSetting> = {enabled:true}
+                svc.changeInterfaceSettings('ant',ant as InterfaceSetting)
+                const antAdapter = svc.getDeviceAdapter('1')
+
+
+                expect( access.enableInterface).toHaveBeenCalledWith('ant')
+                expect( configuration.setInterfaceSettings).toHaveBeenCalledWith('ant',ant)
+                expect(antAdapter?.stop).not.toHaveBeenCalled()
+                expect(onStateChanged).toHaveBeenCalledWith(expect.objectContaining({interfaces:expect.anything()}))
+                expect(restart).toHaveBeenCalled()
+
+            })
+            test('no change',()=>{
+                const ant: Partial<InterfaceSetting> = {enabled:true}
+                svc.changeInterfaceSettings('ant',ant as InterfaceSetting)
+                const antAdapter = svc.getDeviceAdapter('1')
+
+
+                expect( access.enableInterface).not.toHaveBeenCalledWith('ant')
+                expect( access.disableInterface).not.toHaveBeenCalledWith('ant')
+                expect( configuration.setInterfaceSettings).not.toHaveBeenCalledWith('ant',ant)
+                expect(antAdapter?.stop).not.toHaveBeenCalled()
+                expect(onStateChanged).not.toHaveBeenCalledWith(expect.objectContaining({interfaces:expect.anything()}))
+                expect(restart).not.toHaveBeenCalled()
+
+            })
+
+    
+
+        })
     })
 
     describe('events',()=> {
-        // emitted whenever a interface is enabled/disabled
-        describe('configuration:interface-changed',()=>{})
+        // emitted by configuratin service whenever an interface is enabled/disabled
+        describe('configuration:interface-changed',()=>{
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()               
+
+                svc.initServices()
+                svc.setSettings( {onStateChanged})
+                svc.setupMockData( IncyclistCapability.Control, [ 
+                    {udid:'1', selected:true,interface:'ant'}, 
+                    {udid:'2',interface:'ble'} ])
+                svc.setupMockData( IncyclistCapability.Power, [ 
+                    {udid:'1',interface:'ant'}, 
+                    {udid:'2',interface:'ble'} ])
+                svc.setupMockData( IncyclistCapability.Cadence, [ 
+                    {udid:'1',interface:'ant'}, 
+                    {udid:'2',interface:'ble', selected:true} ])
+                svc.setupMockData( IncyclistCapability.Speed, [ 
+                    {udid:'2',interface:'ble', interfaceInactive:true} ])
+            
+                svc.simulatePairing()            
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            describe('disabled',()=>{
+
+                test('selected device is on interface',()=>{
+                    configuration.emit('interface-changed','ant',{enabled:false})
+                    
+                    expect(access.disableInterface).toHaveBeenCalledWith('ant')
+                    expect(configuration.unselect).toHaveBeenCalledWith('control')
+                    expect(configuration.select).toHaveBeenCalledWith('2','control')
+                })
+                test('selected device is not on interface',()=>{
+                    configuration.emit('interface-changed','ble',{enabled:false})
+                    
+                    expect(access.disableInterface).toHaveBeenCalledWith('ble')
+                    expect(configuration.unselect).not.toHaveBeenCalledWith('control')
+                    expect(configuration.select).not.toHaveBeenCalledWith(expect.anything,'control')
+
+                })  
+                
+                test('was already disabled',()=>{
+                    const ant = svc.getState().interfaces?.find(i=>i.name==='ant')  as any                    
+                    ant.enabled = false;
+                    configuration.emit('interface-changed','ant',{enabled:false})
+                    
+                    expect(access.disableInterface).not.toHaveBeenCalledWith('ant')
+                    expect(configuration.unselect).not.toHaveBeenCalledWith('control')
+                    expect(configuration.select).not.toHaveBeenCalled()
+
+                })    
+            })
+
+            describe('enabled',()=>{
+
+                test('no device selected, no device on interface',()=>{
+                    const ant = svc.getState().interfaces?.find(i=>i.name==='ant')  as any                    
+                    ant.enabled = false;                    
+
+                    console.log('~~~adapters',svc.getState().adapters)
+                    configuration.emit('interface-changed','ant',{enabled:true})
+                    
+                    expect(access.enableInterface).toHaveBeenCalledWith('ant',undefined,expect.anything())
+                    expect(configuration.select).not.toHaveBeenCalledWith(expect.anything(),'speed')
+
+                })
+
+                test('no device selected, but device available',()=>{
+                    const ant = svc.getState().interfaces?.find(i=>i.name==='ant')  as any                    
+                    ant.enabled = false;                    
+
+                    configuration.emit('interface-changed','ant',{enabled:true})
+                    
+                    expect(access.enableInterface).toHaveBeenCalledWith('ant',undefined,expect.anything())
+                    expect(configuration.select).toHaveBeenCalledWith(expect.anything(),'power')
+
+                })
+                test('selected device',()=>{
+                    const ant = svc.getState().interfaces?.find(i=>i.name==='ant')  as any                    
+                    ant.enabled = false;                    
+
+                    configuration.emit('interface-changed','ant',{enabled:true})
+                    
+                    expect(access.enableInterface).toHaveBeenCalledWith('ant',undefined,expect.anything())
+                    expect(configuration.select).not.toHaveBeenCalledWith(expect.anything(),'cadence')
+
+                })    
+                test('was already enabled',()=>{
+
+                    configuration.emit('interface-changed','ant',{enabled:true})
+                    
+                    expect(access.enableInterface).not.toHaveBeenCalledWith('ant')
+                    expect(configuration.select).not.toHaveBeenCalled()
+
+                })    
+            })
+
+        })
 
         // emitted whenever the device configuration has changed
-        describe('configuration:capability-changed',()=>{})
+        describe('configuration:capability-changed',()=>{
+
+        })
         
 
-        // emitted whenever a interface is connected/disconnected
+        // emitted by access service whenever an interface is connected/disconnected or enabled/disabled 
         describe('access:interface-changed',()=>{
+            let ant
+            let control
+            let cadence
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()               
+                svc.initServices()
+
+                svc.setSettings( {onStateChanged})
+
+                svc.setupMockData( IncyclistCapability.Control, [ {udid:'1', interface:'ant', selected:true}, {udid:'2', interface:'ant'} ])
+                svc.setupMockData( IncyclistCapability.Power, [ {udid:'1', selected:true}, {udid:'2'} ])
+                svc.setupMockData( IncyclistCapability.Cadence, [ {udid:'1', interface:'ant'},{udid:'2', interface:'ant'}, {udid:'4', selected:true, interface:'ble'} ])
+                svc.setupMockData( IncyclistCapability.Speed, [ {udid:'1', selected:true}, {udid:'2'} ])
+                svc.setupMockData( IncyclistCapability.HeartRate, [ {udid:'3', selected:true} ])
+
+                ant = svc.getState().interfaces?.find(i=>i.name==='ant')
+                svc.simulatePairing()
+
+                control = svc.getCapabilityData('control')
+                cadence = svc.getCapabilityData('cadence')
+
+                control.devices[0].connectState='connecting'
+                control.devices[1].connectState=undefined
+                control.connectState = 'connecting'
+
+                cadence.devices[0].connectState=undefined
+                cadence.devices[1].connectState='connected'
+                cadence.devices[2].connectState='connecting'
+                cadence.connectState = 'connecting'
+                
+
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            test('enabled changed',()=>{
+                access.emit('interface-changed','ant', { name: 'ant', enabled: false, isScanning: false, state: 'connected'})
+                expect(ant.enabled).toBe(false)
+                expect(ant.state).toBe('connected')
+                expect(ant.isScanning).toBe(false)
+                expect(onStateChanged).toHaveBeenCalled()
+            })
+
+            test('state changed -> disconncted',()=>{
+                access.emit('interface-changed','ant', { name: 'ant', enabled: true, isScanning: false, state: 'disconnected'})
+                console.log( svc.getCapabilityData('cadence') )
+                expect(ant.state).toBe('disconnected')
+                expect(ant.isScanning).toBe(false)
+
+                expect(control.devices[0].connectState).toBe('failed')
+                expect(control.devices[1].connectState).toBe('failed')
+                expect(control.connectState).toBe('failed')
+                expect(cadence.devices[0].connectState).toBe('failed')
+                expect(cadence.devices[1].connectState).toBe('failed')
+                expect(cadence.devices[2].connectState).toBe('connecting')
+                expect(cadence.connectState).toBe('connecting')
+
+                expect(onStateChanged).toHaveBeenCalled()
+            })
+
+            test('state changed -> unavailable',()=>{
+                access.emit('interface-changed','ant', { name: 'ant', enabled: true, isScanning: false, state: 'unavailable'})
+                console.log( svc.getCapabilityData('cadence') )
+                expect(ant.state).toBe('unavailable')
+                expect(ant.isScanning).toBe(false)
+
+                expect(control.devices[0].interfaceInactive).toBe(true)
+                expect(control.devices[1].interfaceInactive).toBe(true)
+                expect(configuration.unselect).toHaveBeenCalledWith('control')
+
+                expect(cadence.devices[0].interfaceInactive).toBe(true)
+                expect(cadence.devices[1].interfaceInactive).toBe(true)
+                expect(cadence.devices[2].interfaceInactive).toBeFalsy()
+                expect(cadence.devices[2].connectState).toBe('connecting')
+                expect(configuration.unselect).not.toHaveBeenCalledWith('cadence')
+
+                expect(onStateChanged).toHaveBeenCalled()
+            })
+
+            test('isScanning changed',()=>{
+                access.emit('interface-changed','ant', { name: 'ant', enabled: true, isScanning: true, state: 'connected'})
+                expect(ant.enabled).toBe(true)
+                expect(ant.state).toBe('connected')
+                expect(ant.isScanning).toBe(true)
+                expect(onStateChanged).toHaveBeenCalled()
+            })
+
+            test('no changes',()=>{})
 
         })
 
         // emitted when a new device is detected in a scan
-        describe('access:device',()=>{})
+        describe('access:device',()=>{
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()               
+                svc.initServices()
+
+                svc.setSettings( {onStateChanged})
+
+                svc.setupMockData( IncyclistCapability.Control, [ {udid:'1', selected:true}, {udid:'2'} ])
+                svc.setupMockData( IncyclistCapability.Power, [ {udid:'1', selected:true}, {udid:'2'} ])
+                svc.setupMockData( IncyclistCapability.Cadence, [ {udid:'1'}, {udid:'2', selected:true} ])
+                svc.setupMockData( IncyclistCapability.Speed, [ {udid:'1', selected:true}, {udid:'2'} ])
+                svc.setupMockData( IncyclistCapability.HeartRate, [ {udid:'3', selected:true} ])
+
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+
+            describe('pairing',()=>{
+
+                test('should not make any changes',()=>{
+                    svc.simulatePairing()               
+                    const control = svc.getCapabilityData('control')
+                    control.connectState = 'connecting'
+
+                    access.emit('device',{udid:'10',interface:'ant', deviceID:'10',profile:'FE'} )
+                    expect(configuration.add).not.toHaveBeenCalled()
+                    
+                    expect (control.devices.length).toBe(2)
+
+                    expect(control.connectState).toBe('connecting')
+
+                })
+
+            })
+
+            describe('scanning',()=>{
+                beforeEach( ()=>{
+                    svc.simulateScanning()               
+                })
+
+                test('adding a new device',()=>{
+                    const onData = jest.fn()
+
+                    const control = svc.getCapabilityData('control')
+                    control.connectState = 'paused'
+                    const device1 = control.devices.find(d=>d.udid==='1')||{} as any
+                    const device2 = control.devices.find(d=>d.udid==='2')||{} as any
+                    device1.connectState = 'paused'
+                    device2.connectState = 'paused'
+
+                    configuration.add = jest.fn( (d) =>  {
+                        configuration.getAdapter = jest.fn().mockReturnValue( {
+                            getCapabilities: jest.fn().mockReturnValue( [IncyclistCapability.Control]),
+                            on:onData,
+                            getUniqueName:jest.fn().mockReturnValue(d.name),
+                            getInterface:jest.fn().mockReturnValue(d.interface)
+                        })
+                        return '10'    
+                    })
+                    
+                    access.emit('device',{name:'10',interface:'ant', deviceID:'10',profile:'FE'} )
+
+                    expect(configuration.add).toHaveBeenCalled()
+                    expect(onData).toHaveBeenCalled()
+
+                    expect (control.devices.length).toBe(3)
+                    expect(control.connectState).toBe('paused')
+                    expect(device1.connectState).toBe('paused')
+                    expect(device2.connectState).toBe('paused')
+                    expect(control.devices.find(d=>d.udid==='10')?.connectState).toBe('connected')
+
+                    expect(svc.getState().scan?.adapters?.length).toBe(1)
+
+                })
+
+
+                test('no devices selected - adding a new device',()=>{
+                    const onData = jest.fn()
+
+                    const control = svc.getCapabilityData('control');
+                    control.selected = undefined
+                    control.connectState = 'paused'
+                    const device1 = control.devices.find(d=>d.udid==='1')||{} as any
+                    const device2 = control.devices.find(d=>d.udid==='2')||{} as any
+                    device1.connectState = 'paused'
+                    device2.connectState = 'paused'
+
+                    configuration.add = jest.fn( (d) =>  {
+                        configuration.getAdapter = jest.fn().mockReturnValue( {
+                            getCapabilities: jest.fn().mockReturnValue( [IncyclistCapability.Control]),
+                            on:onData,
+                            getUniqueName:jest.fn().mockReturnValue(d.name),
+                            getInterface:jest.fn().mockReturnValue(d.interface)
+                        })
+                        return '10'    
+                    })
+                    
+                    access.emit('device',{name:'10',interface:'ant', deviceID:'10',profile:'FE'} )
+
+                    expect(configuration.add).toHaveBeenCalled()
+                    expect(onData).toHaveBeenCalled()
+
+                    expect (control.devices.length).toBe(3)
+                    expect(control.connectState).toBe('paused')
+                    expect(control.selected).toBeUndefined()
+
+
+                })
+
+
+                test('exceptional case: cannot add adapter',()=>{
+                    const onData = jest.fn()
+                    configuration.add = jest.fn()
+                    
+                    access.emit('device',{udid:'10',interface:'ant', deviceID:'10',profile:'FE'} )
+
+                    expect(configuration.add).toHaveBeenCalled()
+                    expect(onData).not.toHaveBeenCalled()
+                    
+                    const c = svc.getCapabilityData('control')
+                    expect (c.devices.length).toBe(2)
+
+                })
+
+                test('exceptional case: device already added',()=>{
+                    const onData = jest.fn()
+
+                    const control = svc.getCapabilityData('control')
+                    control.connectState = 'paused'
+                    const device1 = control.devices.find(d=>d.udid==='1')||{} as any
+                    const device2 = control.devices.find(d=>d.udid==='2')||{} as any
+                    device1.connectState = 'paused'
+                    device2.connectState = 'paused'
+
+                    configuration.add = jest.fn( (d) =>  {
+                        configuration.getAdapter = jest.fn().mockReturnValue( {
+                            getCapabilities: jest.fn().mockReturnValue( [IncyclistCapability.Control]),
+                            on:onData,
+                            getUniqueName:jest.fn().mockReturnValue(d.name),
+                            getInterface:jest.fn().mockReturnValue(d.interface)
+                        })
+                        return '1'    
+                    })
+                    
+                    access.emit('device',{name:'XXX',interface:'ant', deviceID:'1',profile:'FE'} )
+
+                    expect(configuration.add).toHaveBeenCalled()
+                    expect(onData).toHaveBeenCalled()
+
+                    expect (control.devices.length).toBe(2)
+                    expect(control.connectState).toBe('connected')
+                    expect(device1.connectState).toBe('connected')
+                    expect(device2.connectState).toBe('paused')
+
+                    expect(svc.getState()?.scan?.adapters?.length).toBe(1)
+                })
+
+            })
+
+        })
 
         // emitted when a device sends data during a scan
-        describe('access:data',()=>{})
+        describe('access:data',()=>{
+
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()               
+                svc.initServices()
+
+                svc.setSettings( {onStateChanged})
+                svc.simulateScanning()               
+
+                svc.setupMockData( IncyclistCapability.Power, [ {udid:'1', selected:true}, {udid:'2'} ])
+                svc.setupMockData( IncyclistCapability.Cadence, [ {udid:'1'}, {udid:'2', selected:true} ])
+                svc.setupMockData( IncyclistCapability.Speed, [ {udid:'1', selected:true}, {udid:'2'} ])
+                svc.setupMockData( IncyclistCapability.HeartRate, [ {udid:'3', selected:true} ])
+
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            test('device is selected',async () =>{
+                svc.setCapabilityData('power',{connectState:'connecting', value:'100', unit:'W'});
+
+                access.emit('data',{power:120,cadence:90, speed:21.123},'1')
+
+                const pwr = svc.getCapabilityData('power')                
+                expect(pwr.value).toBe('120')
+                expect(pwr.unit).toBe('W')
+                expect(pwr.devices.find(d=>d.udid==='1')).toMatchObject({value:'120', unit:'W'})
+
+                expect(onStateChanged).toHaveBeenCalledWith( {capabilities: expect.arrayContaining([pwr])}) 
+            })
+            
+
+            test('device is not selected',() =>{
+                svc.setCapabilityData('power',{connectState:'connecting', value:'100', unit:'W'})
+
+                access.emit('data',{power:120,cadence:90, speed:21.123},'2')
+
+                const pwr = svc.getCapabilityData('power')                
+                expect(pwr.value).toBe('100')
+                expect(pwr.unit).toBe('W')
+                expect(pwr.devices.find(d=>d.udid==='1')).toMatchObject({value:'100', unit:'W'})
+                expect(pwr.devices.find(d=>d.udid==='2')).toMatchObject({value:'120', unit:'W'})
+
+                expect(onStateChanged).toHaveBeenCalledWith( {capabilities: expect.arrayContaining([pwr])}) 
+            })
+
+            test('multiple capabilities',() =>{
+                svc.setCapabilityData('power',{connectState:'connecting', value:'100', unit:'W'})
+
+                access.emit('data',{power:120,cadence:90, speed:21.123},'1')
+
+                const pwr = svc.getCapabilityData('power')                
+                expect(pwr.value).toBe('120')
+                expect(pwr.unit).toBe('W')
+                expect(pwr.devices.find(d=>d.udid==='1')).toMatchObject({value:'120', unit:'W'})
+
+                const spd = svc.getCapabilityData('speed')                
+                expect(spd.value).toBe('21.1')
+                expect(spd.unit).toBe('km/h')
+                expect(spd.devices.find(d=>d.udid==='1')).toMatchObject({value:'21.1', unit:'km/h'})
+
+                expect(onStateChanged).toHaveBeenCalledWith( {capabilities: expect.arrayContaining([pwr,spd])}) 
+            })
+
+            test('no scan, no pairing',()=>{
+
+            })
+            test('data too recent',()=>{
+
+                svc.setCapabilityData('power',{connectState:'connected', value:'100', unit:'W'})
+                svc.addToPairingInfo({data:[{udid:'1', data:{power:100},ts:Date.now()-10}]})
+                access.emit('data',{power:120,cadence:90, speed:21.123},'1')
+
+                const pwr = svc.getCapabilityData('power')                
+                expect(pwr.value).toBe('100')
+                expect(pwr.unit).toBe('W')
+                expect(pwr.devices.find(d=>d.udid==='1')).toMatchObject({value:'100', unit:'W'})
+
+                expect(onStateChanged).not.toHaveBeenCalled() 
+
+            })
+
+
+
+        })
         // emitted when a device sends data during pairing
+
+
         describe('ride:data',()=>{
 
             beforeEach( ()=>{
@@ -854,20 +1493,30 @@ describe('PairingService',()=>{
 
             test('multiple capabilities',() =>{
                 svc.setCapabilityData('power',{connectState:'connecting', value:'100', unit:'W'})
-
+                 
                 ride.emit('data',{power:120,cadence:90, speed:21.123},'1')
 
                 const pwr = svc.getCapabilityData('power')                
+                const spd = svc.getCapabilityData('speed')                
+
                 expect(pwr.value).toBe('120')
                 expect(pwr.unit).toBe('W')
                 expect(pwr.devices.find(d=>d.udid==='1')).toMatchObject({value:'120', unit:'W'})
+                expect(pwr.devices.find(d=>d.udid==='2')?.value).toBeUndefined()
 
-                const spd = svc.getCapabilityData('speed')                
                 expect(spd.value).toBe('21.1')
                 expect(spd.unit).toBe('km/h')
                 expect(spd.devices.find(d=>d.udid==='1')).toMatchObject({value:'21.1', unit:'km/h'})
+                expect(spd.devices.find(d=>d.udid==='2')?.value).toBeUndefined()
 
                 expect(onStateChanged).toHaveBeenCalledWith( {capabilities: expect.arrayContaining([pwr,spd])}) 
+
+                ride.emit('data',{power:130,cadence:91, speed:25},'2')
+                expect(pwr.devices.find(d=>d.udid==='1')?.value).toBe('120')
+                expect(pwr.devices.find(d=>d.udid==='2')?.value).toBe('130')
+                expect(spd.devices.find(d=>d.udid==='1')?.value).toBe('21.1')
+                expect(spd.devices.find(d=>d.udid==='2')?.value).toBe('25.0')
+
             })
 
             test('no scan, no pairing',()=>{
@@ -924,200 +1573,6 @@ describe('PairingService',()=>{
             })
         })
     
-    })
-
-
-    describe('protected',()=>{
-
-        class TestWrapper1 extends DevicePairingService {
-    
-            _get(member:string){
-                return (this as any)[member]
-                
-            }
-            _set(member:string,value) {
-                (this as any)[member] = value
-                //console.log(this)
-            }
-        
-            _call(func:string,...args) {
-                const fn = (this as any)[func].bind(this)
-                
-                try {
-                    return fn(...args)
-                }
-                catch(err) {
-                    console.log(func,'->',fn,err.message)
-                }
-            }
-        }
-        
-        describe('disableInterfaceInCapabilities',()=>{
-            const ctrl = [
-                {udid: "1", interface: "ant", name: "A", selected:true },
-                {udid: "2", interface: "ble", name: 'B',selected:false},
-            ];
-    
-            const pwr = [
-                {udid: "3", interface: "ble", name: 'C',selected:true}
-            ];
-            const hrm = [
-                {udid: "4", interface: "ant", name: 'D',selected:true}
-            ];
-    
-    
-            const capabilities = [
-                { capability:'control',deviceName:'A', deviceNames: 'A,B', disabled: false, selected: "1", interface: 'ant', devices:ctrl, value:1},
-                { capability:'power',deviceName:'C', deviceNames: 'C', disabled: false, selected: "3", interface: 'ble', devices:pwr,value:2,},
-                { capability:'heartrate',deviceName:'D', deviceNames: 'D', disabled: false, selected: "4", interface: 'ant', devices:hrm, value:3}
-            
-            ]
-            let svc:TestWrapper1
-            beforeEach( ()=>{
-                svc = new TestWrapper1()
-                svc._set('isInterfaceEnabled', jest.fn().mockReturnValue(true))            
-                svc._set('state', {capabilities:clone(capabilities)})
-                svc._set('access', { disableInterface:jest.fn()}  )
-                svc._set('configuration',{ select:jest.fn(), unselect:jest.fn()})
-            })
-    
-            test('active device has interface',()=>{
-                const changed = svc._call('disableInterfaceInCapabilities','ant')           
-    
-                //const changed = (svc as any).disableInterfaceInCapabilities('ant')           
-                const res = svc._get('state').capabilities
-                
-    
-                expect(changed).toBe(true)
-                expect( res[0].selected).toBe('2')
-                expect( res[1].selected).toBe('3')
-                expect( res[2]).toMatchObject( {selected:undefined, deviceName:undefined, value:undefined, interface:undefined})
-    
-                expect( res[0].devices[0].selected).toBe(false)
-                expect( res[0].devices[1].selected).toBe(true)
-                expect( res[1].devices[0].selected).toBe(true)
-                expect( res[2].devices[0].selected).toBe(false)
-    
-            })
-    
-            test('no active device has interface',()=>{
-                const changed = svc._call('disableInterfaceInCapabilities','ble')
-                const res = (svc as any).state.capabilities
-                
-                expect(changed).toBe(true)
-                expect( res[0].selected).toBe('1')
-                expect( res[1]).toMatchObject( {selected:undefined, deviceName:undefined, value:undefined, interface:undefined})
-                expect( res[2].selected).toBe('4')
-    
-                expect( res[0].devices[0].selected).toBe(true)
-                expect( res[0].devices[1].selected).toBe(false)
-                expect( res[1].devices[0].selected).toBe(false)
-                expect( res[2].devices[0].selected).toBe(true)
-            })
-    
-            test('interface is disabled',()=>{
-    
-                svc._set('isInterfaceEnabled', jest.fn().mockReturnValue(false))
-                const changed = svc._call('disableInterfaceInCapabilities','ant')
-                const res = (svc as any).state.capabilities
-                
-                expect(changed).toBe(true)
-                expect( res[0]).toMatchObject( {selected:undefined, deviceName:undefined, value:undefined, interface:undefined})
-                expect( res[1].selected).toBe('3')
-                expect( res[2]).toMatchObject( {selected:undefined, deviceName:undefined, value:undefined, interface:undefined})
-    
-                expect( res[0].devices[0].selected).toBe(false)
-                expect( res[0].devices[1].selected).toBe(false)
-                expect( res[1].devices[0].selected).toBe(true)
-                expect( res[2].devices[0].selected).toBe(false)
-            })
-    
-            test('no device impacted',()=>{
-                const changed = svc._call('disableInterfaceInCapabilities','serial')
-                expect(changed).toBe(false)
-            })
-    
-    
-            
-        })
-    
-     
-        describe('enableInterfaceInCapabilities',()=>{
-            const ctrl = [
-                {udid: "1", interface: "ant", name: "A", selected:true },
-                {udid: "2", interface: "ble", name: 'B',selected:false},
-            ];
-    
-            const pwr = [
-                {udid: "3", interface: "ble", name: 'C',selected:false}
-            ];
-            const hrm = [
-                {udid: "4", interface: "ant", name: 'D',selected:true}
-            ];
-            const cad = [
-                {udid: "5", interface: "ant", name: 'E',selected:true, connectState:'failed'},
-                {udid: "6", interface: "ble", name: 'F',selected:false}
-            ];
-            const spd = [
-                {udid: "7", interface: "ant", name: 'G',selected:false},
-                {udid: "8", interface: "ble", name: 'H',selected:false}
-            ];
-    
-    
-            const capabilities = [
-                { capability:'control',deviceName:'A', deviceNames: 'A;B', disabled: false, selected: "1", interface: 'ant', devices:ctrl, value:1},
-                { capability:'power',disabled: false, devices:pwr,value:2,},
-                { capability:'heartrate',deviceName:'D', deviceNames: 'D', disabled: false, selected: "4", interface: 'ant', devices:hrm, value:3},
-                { capability:'cadence',deviceName:'E', deviceNames: 'E;F', disabled: false, selected: "5", interface: 'ant', devices:cad, value:90},
-                { capability:'speed',disabled: false, devices:spd}
-            
-            ]
-            let svc:TestWrapper1;
-            beforeEach( ()=>{
-                svc = new TestWrapper1();
-                svc._set('isInterfaceEnabled', jest.fn().mockReturnValue(true))
-                svc._set('state',{capabilities:clone(capabilities)})
-                svc._set('access', { disableInterface:jest.fn()});
-                svc._set('configuration', { select:jest.fn(), unselect:jest.fn()});         
-            })
-    
-            test('single device not selected',()=>{
-                const changed = svc._call('enableInterfaceInCapabilities','ble')           
-                const res = (svc as any).state.capabilities
-    
-                expect(changed).toBe(true)
-                expect( res[1].selected).toBe('3')
-                expect( res[1].devices[0].selected).toBe(true)
-    
-            })
-    
-            test('multiple devices none selected',()=>{
-                const changed = svc._call('enableInterfaceInCapabilities','ble')           
-                const res = (svc as any).state.capabilities
-    
-                expect(changed).toBe(true)
-                expect( res[4].selected).toBe('8')
-                expect( res[4].devices[1].selected).toBe(true)
-            })
-    
-            test('multiple devices, prev selected in failed state',()=>{
-                const changed = svc._call('enableInterfaceInCapabilities','ble')           
-                const res = (svc as any).state.capabilities
-    
-                expect(changed).toBe(true)
-                expect( res[3]).toMatchObject( {selected:'6', deviceName:'F'})
-                expect( res[3].devices[0].selected).toBe(false)
-                expect( res[3].devices[1].selected).toBe(true)
-            })
-    
-            test('no device impacted',()=>{
-                const changed = svc._call('enableInterfaceInCapabilities','serial')           
-                expect(changed).toBe(false)
-            })
-    
-    
-            
-        })
     })
 
 

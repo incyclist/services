@@ -77,7 +77,7 @@ export class DeviceConfigurationService  extends EventEmitter{
      * 
     */
     async init():Promise<void> {
-
+        
         await this.userSettings.init()
         if (this.isInitialized()) {
             this.emitInitialized()
@@ -665,7 +665,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             
         this.settings.capabilities.forEach( c=> {
             if (c.devices.includes(udid))
-                return;
+                return udid;
 
             const isBike = adapter.hasCapability(IncyclistCapability.Control)
             const isPower = adapter.hasCapability(IncyclistCapability.Power)

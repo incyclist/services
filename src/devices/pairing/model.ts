@@ -1,4 +1,4 @@
-import { DeviceData, DeviceSettings, IncyclistCapability } from "incyclist-devices"
+import { DeviceData, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices"
 import { EnrichedInterfaceSetting } from "../access"
 import { RideServiceCheckFilter } from "../ride"
 import { AdapterInfo } from "../configuration"
@@ -12,6 +12,8 @@ export interface DevicePairingData {
     value?:number,
     unit?:string
     selected:boolean
+    interfaceInactive?: boolean
+
 }
 
 export interface CapabilityData {
@@ -21,7 +23,7 @@ export interface CapabilityData {
     connectState?: DevicePairingStatus,   
     deviceName:string
     deviceNames: string
-    selected:string
+    selected?:string
     disabled:boolean
     interface:string
     devices:Array<DevicePairingData>
@@ -40,24 +42,31 @@ export interface PairingProps {
     enforcedScan?: boolean
 }
 
-export interface PairingInfo {
+export interface PairingState {
+    capabilities?: Array<CapabilityData>
+    interfaces?: Array<EnrichedInterfaceSetting>
+    canStartRide?:boolean    
+    adapters?: Array<AdapterInfo>  
+}
+
+export interface InternalPairingState extends PairingState {
+    initialized: boolean;
+    stopRequested?:boolean
+    stopped?:boolean
+
     check?: {
         promise:Promise<boolean>
     }
     scan?: {
         promise: Promise<DeviceSettings[]>
+        adapters?: Array<{ udid:string,adapter:IncyclistDeviceAdapter, handler}>
     }
-    props:PairingProps
+    props?:PairingProps
     data?:Array< {udid:string, data:DeviceData, ts:number}>
+
 }
 
-export interface PairingState {
-    capabilities?: Array<CapabilityData>
-    interfaces?: Array<EnrichedInterfaceSetting>
-    canStartRide?:boolean    
-    adapters?: Array<AdapterInfo>
-    
-}
+
 
 export interface DeviceSelectState {
     capability:IncyclistCapability
