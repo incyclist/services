@@ -164,6 +164,8 @@ export class DevicePairingService  extends EventEmitter{
             this.state.stopRequested = false
             this.state.stopped = false
 
+            this.logCapabilities()
+
             this.state.interfaces.forEach( i=> {
                 if (!this.isInterfaceEnabled(i.name))
                     this.disableAdaptersOnInterface(i.name)
@@ -555,16 +557,17 @@ export class DevicePairingService  extends EventEmitter{
             this.configuration  = this.configuration|| useDeviceConfiguration();            
 
             if (this.configuration.isInitialized()) {
-                this.logCapabilities(this.state.capabilities)
                 this.state.initialized = true;
                 return done();
             }
-            this.configuration.once('initialized' ,(capabilitiesLoaded:DeviceConfigurationInfo, interfacesLoaded:Array<InterfaceSetting>)=>{
-                this.onConfigLoaded(capabilitiesLoaded,interfacesLoaded)
-                this.logCapabilities(this.state.capabilities)
-                done()
-            })
-            this.configuration.init()
+            else {
+                this.configuration.once('initialized' ,(capabilitiesLoaded:DeviceConfigurationInfo, interfacesLoaded:Array<InterfaceSetting>)=>{
+                    this.onConfigLoaded(capabilitiesLoaded,interfacesLoaded)
+                    done()
+                })
+                this.configuration.init()
+    
+            }
             
             
         })
@@ -740,9 +743,8 @@ export class DevicePairingService  extends EventEmitter{
         return interfaces.find( i=> i.name===name && i.enabled && i.state!=='unavailable')!==undefined
     }
 
-    protected logCapabilities ( capabilities:Array<CapabilityData>) {
-
-        const ci = capabilities||[] 
+    protected logCapabilities ( capabilities?:Array<CapabilityData>) {
+        const ci = capabilities||this.state.capabilities
         ci.forEach( c=> {
             const {devices=[],disabled} = c;
             const deviceNames = devices.map(d=>d.name).join(';')
