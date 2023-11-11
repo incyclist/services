@@ -69,7 +69,6 @@ export class UserSettingsService {
     }
 
     get( key:string, defValue:any ):any {
-
         if (!this.isInitialized)
             throw new Error('Settings are not yet initialized')
 

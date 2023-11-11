@@ -1,12 +1,11 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
 import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState  } from "./model";
-import { EventLogger } from 'gd-eventlog';
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
-import EventEmitter from "events";
 import { sleep } from "incyclist-devices/lib/utils/utils";
+import { IncyclistService } from "../../base/service";
 
 
 const Units = [
@@ -77,7 +76,7 @@ export interface Services{
  * @noInheritDoc
  * 
  */
-export class DevicePairingService  extends EventEmitter{
+export class DevicePairingService  extends IncyclistService{
 
     protected static _instance: DevicePairingService
 
@@ -85,8 +84,6 @@ export class DevicePairingService  extends EventEmitter{
     protected access: DeviceAccessService
     protected rideService: DeviceRideService
 
-    protected logger: EventLogger
-    protected debug;
 
     protected settings: PairingSettings={}
     protected state:InternalPairingState = { initialized:false}
@@ -110,7 +107,8 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     constructor( services?:Services) {
-        super()
+
+        super('Pairing')
 
         // inject external dependencies
         if (services) {
@@ -120,8 +118,6 @@ export class DevicePairingService  extends EventEmitter{
         }
 
         this.state.initialized = false;
-        this.logger = new EventLogger('Pairing')
-        this.debug = false;   
     }
 
    /**
@@ -490,23 +486,6 @@ export class DevicePairingService  extends EventEmitter{
             await this.stopScanning();
     }
 
-    protected logEvent(event) {
-        this.logger.logEvent(event)
-        this.emit('log',event)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = global.window as any
-    
-        if (this.debug || w?.SERVICE_DEBUG || process.env.DEBUG) 
-            console.log('~~~ PAIRING-SVC', event)
-    }
-
-    protected setDebug(enabled:boolean) {
-        this.debug = enabled
-    }
-
-    protected logError(err:Error, fn:string) {
-        this.logger.logEvent({message:'Error', fn, error:err.message, stack:err.stack})
-    }
 
     protected getCapability(capability:IncyclistCapability|CapabilityData):CapabilityData {
         const target = typeof capability==='object' ? capability.capability: capability
