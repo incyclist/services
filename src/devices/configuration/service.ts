@@ -160,23 +160,33 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         const isNewUi = this.isNewUi()
 
+        const bikeCapIdx = capabilities.findIndex(c=>c.capability==='bike');
+
         if (isNewUi) {
             // remove bike capability - it's not used anymore
             
-            const bikeCapIdx = capabilities.findIndex(c=>c.capability==='bike');
             if (bikeCapIdx!==-1) {
                 capabilities.splice( bikeCapIdx,1)
             }
             return;
         }
+        else {
+            if (bikeCapIdx===-1) {
+                const control = capabilities.find(c=>c.capability===IncyclistCapability.Control && c.selected!==undefined);
+                const bike = {...control}
+                bike.capability='bike'
+                capabilities.push(bike)
+            }
+        }
 
+
+        const bikeCap = capabilities.find(c=>c.capability==='bike');
         for( const capability  of ['bike' , IncyclistCapability.Control]) {
             const info = capabilities.find(c => c.capability===capability)
             if (info && info.devices.length>0 && info.selected===undefined)
                 this.select( info.devices[0], capability as ExtendedIncyclistCapability)
         }
 
-        const bikeCap = capabilities.find(c=>c.capability==='bike');
 
         if (bikeCap && bikeCap.selected) {
             const bike = bikeCap.selected
