@@ -1,4 +1,4 @@
-import { RouteInfo } from "../list/types";
+import { RouteInfo } from "../../list/types";
 
 export const getLocalizedData = (data:RouteInfo , language:string='en'):RouteInfo => {
     

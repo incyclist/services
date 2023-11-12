@@ -1,7 +1,7 @@
 import {Page, IRouteListBinding, InternalRouteListState, List, RouteInfo, Route, RouteListEntry, RouteListStartProps, RouteListData } from "./types";
 import IncyclistRoutesApi from "../base/api";
 import { RouteApiDescription } from "../base/api/types";
-import { getLocalizedData } from "../utils/localization";
+import { getLocalizedData } from "../base/utils/localization";
 import { IncyclistService } from "../../base/service";
 
 
@@ -119,12 +119,12 @@ export class RouteListService  extends IncyclistService{
 
     }
 
-    start( pageId:string, props: RouteListStartProps) {
+    openRouteSelection( pageId:string, props: RouteListStartProps) {
         const {language,visibleCards,visibleLists}  = props
         this.logEvent({message:'start', pageId,language,visibleCards,visibleLists })
         const existing = this.getPage(pageId)
         if (existing) {
-            this.stop(pageId)
+            this.closeRouteSelection(pageId)
         }
 
         if (props.visibleCards) {
@@ -141,12 +141,68 @@ export class RouteListService  extends IncyclistService{
     }
     */
 
-    stop(listId:string): void {
+    closeRouteSelection(listId:string): void {
         const idx = this.getPage(listId,true) as number
         if (idx!==-1) {
             this.state.pages.splice(idx,1)
         }        
     }
+
+    
+
+    openStartSettings( routeId:string, onStatusUpdate ) {
+
+        // get segments, title, distance, .... from Route Object
+
+
+        // get previous ride settings ( initially from User Settings, should be moved into RouteRepoDetails)
+        // --> if already in state: get these from state
+
+        // Later: get previous activities of this route (from Activity-Service <to be developed>)
+
+        // add object to state (marked as "in preparation")
+
+
+        // to check: what happens on screen size change 
+
+    } 
+
+
+    cancelStartSettings(routeId) {
+        // mark route as available in state (keeping the settings such as segment,... for next call to openStartSettings )
+        
+    } 
+
+    acceptStartSettings(routeId,props:{startPos?,endPos?,segment?,realityFactor} ) {
+        // mark route as selected
+
+    } 
+
+    startRide(routeId) {
+        // mark route as started in State
+        // save settings in RouteRepo
+
+        // TBD: if/how to process updates so that we can store last position (e.g. once a minute)
+    } 
+
+    
+
+    stopRide(routeId) {
+        // mark route as started in State
+        // save last position
+    } 
+
+    startDownload(routeId, onStatusUpdate) {
+        // also update RouteData (so that status can be rendered in carousel)
+        // queue downloads (max one at a time)
+
+        // onFinished: update RouteData & RouteDetails, store in Repo, update RouteList state -> should trigger re-render of carousel
+    }
+
+    cancelDownload(routeId) {
+
+    }
+
 
     protected emitPageUpdate() {
         
@@ -466,6 +522,18 @@ export class RouteListService  extends IncyclistService{
     protected emitRouteUpdated(route:Route) {
         this.emit('route-update', route.id, route.data)
     }
+
+
+    // TODO:
+
+    /*
+        createPreviewImageFromVideo()    
+        createPreviewImageFromGPX()    
+        getCountryFromGPX()
+
+
+    */
+
 
 
    
