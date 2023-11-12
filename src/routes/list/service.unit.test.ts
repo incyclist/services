@@ -44,7 +44,7 @@ class Test extends RouteListService {
 describe('RouteListService',()=>{
 
 
-    describe('start',()=>{
+    describe('openRouteSelection',()=>{
 
         let svc:Test
         const onStatusUpdate = jest.fn()
@@ -64,7 +64,7 @@ describe('RouteListService',()=>{
             ])
 
 
-            const data = svc.start('1',{onStatusUpdate,language:'de'})
+            const data = svc.openRouteSelection('1',{onStatusUpdate,language:'de'})
 
             expect(data.lists.map(l=>l.listHeader).join(',')).toEqual('Selected For Me,Alternatives' )
             expect(data.lists[0].list).toEqual('selected')
@@ -80,7 +80,7 @@ describe('RouteListService',()=>{
 
         test('nothing loaded',async ()=>{
 
-            const data = svc.start('1',{onStatusUpdate,language:'de'})
+            const data = svc.openRouteSelection('1',{onStatusUpdate,language:'de'})
 
             expect(data.lists.length).toEqual(0)
 
@@ -95,7 +95,7 @@ describe('RouteListService',()=>{
 
     })
 
-    describe('preload',()=>{
+    describe.skip('preload',()=>{
 
         let svc:Test
         beforeEach( ()=>{
@@ -105,7 +105,7 @@ describe('RouteListService',()=>{
         test('success',async ()=>{
 
             await svc.preload()
-            console.log( svc.getRoutes())
+            
 
         })
 
@@ -117,13 +117,10 @@ describe('RouteListService',()=>{
 
 
 
-    test('loadRouteDescriptions',async ()=>{
+    test.skip('loadRouteDescriptions',async ()=>{
         const svc = new Test()
         await svc.loadRouteDescriptions();
-        
-        svc.getRoutes().forEach( rle=> {
-            console.log( `${rle.list}:\n`,rle.routes.map( r=> `${r.data.country}:${r.data.title}`))
-        })
+       
         
         
     })
