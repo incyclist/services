@@ -4,7 +4,7 @@ import { AxiosInstance } from "axios";
 import { DEFAULT_ROUTE_API, NO_CACHE, ROUTE_API } from './consts'
 import { ApiClient } from '../../../api';
 import { useUserSettings } from '../../../settings';
-import { RoutePoint } from '../../list';
+import { RoutePoint } from '../types';
 
 export default class IncyclistRoutesApi { 
 
