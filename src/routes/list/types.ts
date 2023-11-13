@@ -1,6 +1,7 @@
 // External (Public) Interfaces
 
 import { RouteApiDetail } from "../base/api/types";
+import { RoutePoint, RouteSegment } from "../base/types";
 import { RouteState, RouteCategory, RouteProvider  } from "../base/types";
 
 export interface IRouteListBinding {
@@ -14,14 +15,6 @@ export type RouteListStartProps = {
     visibleLists?:number;
 }
 
-export type RoutePoint = {
-    lat: number
-    lng: number
-    routeDistance: number
-    elevation: number
-    slope:number
-}
-
 export type LocalizedText = { [index:string]:string  }
 
 
@@ -31,6 +24,7 @@ export type RouteInfo = {
     title?: string;
     localizedTitle?: LocalizedText
     country?: string;
+    isLoop?:boolean;
     distance?: number;
     elevation?: number;    
     category?: RouteCategory
@@ -42,7 +36,9 @@ export type RouteInfo = {
     videoFormat?: string;   
     videoUrl?:string;
     previewUrl?:string;
-    points?: Array<RoutePoint> 
+    points?: Array<RoutePoint>,
+    segments?:Array<RouteSegment>    
+
 }
 
 export type RouteListDateEntry = {
@@ -59,6 +55,17 @@ export type RouteListData = {
 
 export type RouteListStatusUpdateCallback = (data:RouteListData)=>void
 
+export type RouteStartSettings = {
+    startPos?:number,
+    endPos?:number,
+    segment?: string,
+    realityFactor?: number
+}
+export type RouteSettingsState = {
+    route: RouteInfo
+    settings: RouteStartSettings
+} 
+
 // --------------------------------------
 // Internal (Protected) Interfacs
 // --------------------------------------
@@ -67,6 +74,7 @@ export type RouteListStatusUpdateCallback = (data:RouteListData)=>void
 export type Page = {
     id:string, 
     state: RouteListData
+    settingsState?: RouteSettingsState;
     language:string,
     onStatusUpdate: RouteListStatusUpdateCallback
 }
@@ -81,10 +89,14 @@ export interface InternalRouteListState {
     loading?:LoadingState 
 }
 
+export type RouteStartState = 'idle' | 'preparing'| 'selected' | 'started'
+
 export type Route = {
     id: string;
     data: RouteInfo
     details?: RouteApiDetail
+    startSettings?: RouteStartSettings
+    startState?:RouteStartState
 }
 
 export type RouteListEntry = {

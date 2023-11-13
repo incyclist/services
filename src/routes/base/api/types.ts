@@ -1,5 +1,5 @@
-import { LocalizedText, RoutePoint } from "../../list"
-import { RouteCategory, RouteProvider, RouteType, VideoDescription } from "../types"
+import { LocalizedText } from "../../list"
+import { RouteCategory, RoutePoint, RouteProvider, RouteType, VideoDescription } from "../types"
 
 export type RouteDescriptionQuery = {
     category?: string
@@ -23,8 +23,7 @@ export type RouteApiDescription = {
     provider?: RouteProvider
     video?: VideoDescription   
     type?: RouteType,
-    localizedTitle?:LocalizedText
-    
+    localizedTitle?:LocalizedText,
 }
 
 
@@ -46,4 +45,4 @@ export type RouteApiDetail = {
     provider?: RouteProvider
     video?: VideoDescription   
     localizedTitle?:LocalizedText
-}
+}    

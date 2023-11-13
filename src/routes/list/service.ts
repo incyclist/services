@@ -1,9 +1,12 @@
-import {Page, IRouteListBinding, InternalRouteListState, List, RouteInfo, Route, RouteListEntry, RouteListStartProps, RouteListData } from "./types";
+import {Page, IRouteListBinding, InternalRouteListState, List, RouteInfo, Route, RouteListEntry, RouteListStartProps, RouteListData, RouteStartSettings } from "./types";
 import IncyclistRoutesApi from "../base/api";
-import { RouteApiDescription } from "../base/api/types";
+import { RouteApiDescription, RouteApiDetail } from "../base/api/types";
 import { getLocalizedData } from "../base/utils/localization";
 import { IncyclistService } from "../../base/service";
+import { checkIsLoop, getSegments } from "../base/utils/route";
+import { useUserSettings } from "../../settings";
 
+type filterFn = (route:Route,idx:number,obj:Route[])=>boolean
 
 export class RouteListService  extends IncyclistService{ 
 
@@ -127,6 +130,8 @@ export class RouteListService  extends IncyclistService{
             this.closeRouteSelection(pageId)
         }
 
+        this.stopAllRides()
+
         if (props.visibleCards) {
             this._preload(props.visibleCards,true )
         }
@@ -150,45 +155,120 @@ export class RouteListService  extends IncyclistService{
 
     
 
-    openStartSettings( routeId:string, onStatusUpdate ) {
+    openStartSettings(  r: RouteInfo|string ):RouteStartSettings {
+        const route = this.getRouteFromStartProps(r);
 
-        // get segments, title, distance, .... from Route Object
+        try {
+            if (!route)
+                return {}
+
+            let startSettings = route.startSettings;
+
+            this.stopRide();
+            
+            if (!startSettings){
+                // get previous ride settings ( initially from User Settings, should be moved into RouteRepoDetails)
+                // --> if already in state: get these from state
+                startSettings = this.loadStartSettingsFromUserSettings(route);
+            }
+            route.startState = 'preparing'
+    
+            // Later: get previous activities of this route (from Activity-Service <to be developed>)
+            // to check: what happens on screen size change 
+    
+            return startSettings;
+    
+        }
+        catch(err) {
+            this.logError( err,'openStartSettings',{info:{id:route?.id,title:route?.data?.title}})
+            return {}
+        }
+    }
 
 
-        // get previous ride settings ( initially from User Settings, should be moved into RouteRepoDetails)
-        // --> if already in state: get these from state
 
-        // Later: get previous activities of this route (from Activity-Service <to be developed>)
+    cancelStartSettings(r: RouteInfo|string ) {
 
-        // add object to state (marked as "in preparation")
-
-
-        // to check: what happens on screen size change 
-
-    } 
-
-
-    cancelStartSettings(routeId) {
+        // we don't need to to anything
         // mark route as available in state (keeping the settings such as segment,... for next call to openStartSettings )
+
         
+        const route = this.getRouteFromStartProps(r);
+        try {
+            route.startState = 'idle'
+            return 
+        }
+        catch(err) {
+            this.logError( err,'cancelStartSettings',{info:{id:route?.id,title:route?.data?.title}})
+            return {}
+
+        }
+
     } 
 
-    acceptStartSettings(routeId,props:{startPos?,endPos?,segment?,realityFactor} ) {
+    acceptStartSettings(r: RouteInfo|string, startSettings:RouteStartSettings) {
         // mark route as selected
+        const route = this.getRouteFromStartProps(r);
+        try {
 
+            this.writeStartSettings(route, startSettings)
+            route.startState = 'selected'
+        }
+        catch(err) {
+            this.logError( err,'acceptStartSettings',{info:{id:route?.id,title:route?.data?.title}})
+            return {}
+
+        }
     } 
 
-    startRide(routeId) {
-        // mark route as started in State
-        // save settings in RouteRepo
+    getSelectedRoute ():RouteApiDetail {
+        const route =this.getRoute( v=>v.startState==='selected')
+        return route?.details
+    }
+
+    getStartSettings (routeId?:string):RouteStartSettings {
+
+        const route = routeId ? this.getRoute(routeId) : this.getRoute(v=>v.startState==='selected')
+
+        return route?.startSettings
+
+    }
+
+    
+
+    startRide(r?: RouteInfo|string ) {
+        
+        const route = r? this.getRoute( v=>v.startState==='selected'): this.getRouteFromStartProps(r);
+        try {
+          
+            route.startState = 'started'
+            // TODO: save settings in RouteRepo
+        }
+        catch(err) {
+            this.logError( err,'startRide',{info:{id:route?.id,title:route?.data?.title}})
+            return {}
+
+        }
 
         // TBD: if/how to process updates so that we can store last position (e.g. once a minute)
     } 
 
     
 
-    stopRide(routeId) {
-        // mark route as started in State
+    stopRide(r?: RouteInfo|string ) {
+
+        const route = r? this.getRoute( v=>v.startState==='selected'): this.getRouteFromStartProps(r);
+        try {
+          
+            route.startState = 'idle'
+            // TODO: save settings in RouteRepo
+        }
+        catch(err) {
+            this.logError( err,'stopRide',{info:{id:route?.id,title:route?.data?.title}})
+            return {}
+
+        }
+
         // save last position
     } 
 
@@ -201,6 +281,67 @@ export class RouteListService  extends IncyclistService{
 
     cancelDownload(routeId) {
 
+    }
+
+    protected loadStartSettingsFromUserSettings( route: Route) {
+        let startPos = 0, realityFactor = 100, segment;
+        const {data} = route
+
+        const routeType = data.hasVideo ? 'video' : 'followRoute';
+        // TODO: FreeRide
+        const prevSetting = this.getUserSetting(`routeSelection.${routeType}`, null);
+        if (prevSetting) {
+            startPos = prevSetting.startPos;
+            realityFactor = prevSetting.reality;
+        }
+
+        const prevRouteSetting = this.getUserSetting(`routeSelection.${routeType}.prevSettings.${route.id}`, null);
+        if (prevRouteSetting) {
+            startPos = prevRouteSetting.startPos;
+            realityFactor = prevRouteSetting.reality;
+            segment = prevRouteSetting.segment
+        }
+
+        const prevRoutePosition = this.getUserSetting(`position.${route.id}`, null);
+        if (prevRoutePosition !== null) {
+            startPos = prevRoutePosition;
+        }
+        return { startPos, realityFactor, segment };
+    }
+
+    protected writeStartSettingsToUserSettings(route:Route, startSettings:RouteStartSettings) {
+        const routeId = route.id
+        const userSettings = useUserSettings()
+        const {startPos,realityFactor,segment} = startSettings
+
+        // update Position
+        userSettings.set(`position.${routeId}`,startPos)
+
+        // Type Settings
+        const routeType = route?.data?.hasVideo ? 'video' : 'followRoute'
+        userSettings.set(`routeSelection.${routeType}.startPos`,startPos)
+        userSettings.set(`routeSelection.${routeType}.reality`,realityFactor)
+        userSettings.set(`routeSelection.${routeType}.segment`,segment)
+
+        // Route Settings
+        userSettings.set(`routeSelection.${routeType}.prevSettings.${route.id}`,{startPos, reality:realityFactor,segment})
+
+    }
+    
+    protected writeStartSettings(route:Route, startSettings:RouteStartSettings) {
+        this.writeStartSettingsToUserSettings(route,startSettings)
+    }
+
+    protected getUserSetting(key:string,defValue?) {
+        try {
+            const userSettings = useUserSettings();
+
+            const res = userSettings.get(key,defValue)
+            return res
+        }
+        catch (err) {
+            return defValue
+        }
     }
 
 
@@ -307,7 +448,7 @@ export class RouteListService  extends IncyclistService{
         
         const local = {...route.data}
         const {details} = route
-
+        
         local.country = local.country || details.country
         local.distance = local.distance || details.distance
         local.elevation = local.elevation || details.elevation
@@ -315,6 +456,12 @@ export class RouteListService  extends IncyclistService{
         local.points = details.points
         if (!local.hasGpx && details.points) {
             local.hasGpx = true;          
+        }
+        if (local.isLoop===undefined && details.points)
+            local.isLoop = checkIsLoop(route)
+        if (!local.segments) {
+            local.segments = getSegments(route) || []
+            local.segments = local.segments.filter( s=>s.start>0 && s.end<local.distance)
         }
 
         
@@ -350,8 +497,8 @@ export class RouteListService  extends IncyclistService{
         data.hasVideo = false;
         data.hasGpx = false;
 
-        this.getRouteTitle(data,{descr})
-        this.getRouteCountry(data,{descr})
+        this.updateRouteCountry(data,{descr})
+        this.updateRouteTitle(data,{descr})
         // Todo: previewImg (could be generated from video/streetview)
 
         if (points) data.hasGpx = true;
@@ -393,15 +540,29 @@ export class RouteListService  extends IncyclistService{
         return this.routes.find( rle=> rle.list===list)?.routes
     }
 
-    protected getRoute(routeId:string) {
+    protected getRoute(criteria:string|filterFn ):Route {
+
+        let compareFn = criteria as filterFn
+        if (typeof criteria ==='string')
+            compareFn = v=> v.id===criteria 
+
         const lists = this.routes
         let route = null;
 
         for (let i=0; i<lists.length && !route;i++) {
-            route = lists[0].routes.find( v=> v.id===routeId )
+            route = lists[i].routes.find(compareFn)
         }
         return route;
 
+    }
+
+    protected stopAllRides() {
+        const lists = this.routes
+
+        for (let i=0; i<lists.length;i++) {
+            lists[i].routes.forEach( r => r.startState='idle')
+        }
+        
     }
     
 
@@ -430,7 +591,7 @@ export class RouteListService  extends IncyclistService{
         
     }
 
-    protected getRouteTitle( data: RouteInfo, route:{ descr?:RouteApiDescription}):void{
+    protected updateRouteTitle( data: RouteInfo, route:{ descr?:RouteApiDescription}):void{
         const {descr} = route;
         if (descr && !data.title) {
             data.title = descr.title
@@ -442,7 +603,7 @@ export class RouteListService  extends IncyclistService{
 
     }
 
-    protected getRouteCountry( data: RouteInfo, route:{ descr?:RouteApiDescription}):void {
+    protected updateRouteCountry( data: RouteInfo, route:{ descr?:RouteApiDescription}):void {
         const {descr} = route;
 
         
@@ -535,7 +696,24 @@ export class RouteListService  extends IncyclistService{
     */
 
 
+    private getRouteFromStartProps(r: string | RouteInfo):Route {
+        try {
+            let route;
+            if (typeof r === 'string') {
+                route = this.getRoute(r);
+            }
+            else {
+                const info = r as RouteInfo;
+                route = this.getRoute(info.id);
+            }
+            return route;
+        }
+        catch {
+            return
+        }
+    }
 
+    
    
 }
 

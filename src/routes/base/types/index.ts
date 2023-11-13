@@ -35,3 +35,16 @@ export type VideoDescription = {
     selectableSegments
     infoTexts:RouteInfoText
 };
+export type RoutePoint = {
+    lat: number;
+    lng: number;
+    routeDistance: number;
+    elevation: number;
+    slope: number;
+};
+
+export type RouteSegment = {
+    start:number;    
+    end:number;
+    name:string;
+};
