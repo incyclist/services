@@ -11,9 +11,9 @@ class Api extends IncyclistRoutesApi {
     This is only used for manual testing
 */
 
-describe('RouteListServie',()=>{
+describe('RouteListService',()=>{
 
-    describe('GetRouteDescriptions',()=>{
+    describe.skip('GetRouteDescriptions',()=>{
         test('gpx',async ()=>{
             const rl = new Api()
     
@@ -41,15 +41,15 @@ describe('RouteListServie',()=>{
         test('gpx',async ()=>{
             const rl = new Api()
     
-            const routes = await rl.getRouteDetails( '8dbfa4c8-be36-4068-9ca1-cc9dcbfd42d7')
-            console.log(routes)
+            await rl.getRouteDetails( '8dbfa4c8-be36-4068-9ca1-cc9dcbfd42d7')
+            
         })
     
         test('video',async ()=>{
             const rl = new Api()
     
-            const video = await rl.getRouteDetails( '8dbfa4c8-be36-4068-9ca1-cc9dcbfd42d7')
-            console.log(video)
+            await rl.getRouteDetails( '8dbfa4c8-be36-4068-9ca1-cc9dcbfd42d7')
+            
         })
         
     })

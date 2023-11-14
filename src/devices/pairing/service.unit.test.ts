@@ -59,7 +59,7 @@ class TestWrapper extends DevicePairingService {
         access.enrichWithAccessState = jest.fn( (interfaces)=>{ return interfaces.map(i => ({...i, state:'connected', isScanning:false}))})
 
         // simulate feature toggle
-        settings['NEW_UI']=true
+        
     }
 
     static resetMocks() {
@@ -260,7 +260,9 @@ describe('PairingService',()=>{
             beforeEach( ()=>{
                 userSettings = new UserSettingsMock(settings)
                 TestWrapper.setupMocks({forStart:true})
-                
+                const config = useDeviceConfiguration()
+                config.setFeature('NEW_UI',true)
+
                 svc = new TestWrapper()
                 logEvent  = jest.spyOn(svc as any,'logEvent')
                 logCapabilities = svc.mock('logCapabilities')
@@ -968,7 +970,7 @@ describe('PairingService',()=>{
                 svc.setupMockData( IncyclistCapability.Control, [ 
                     {udid:'1', selected:true,interface:'ant'}, 
                     {udid:'2',interface:'ble'} ]) 
-                svc.simulatePairing() // the interface settings are not
+                                svc.simulatePairing() // the interface settings are not
                 
                 restart = svc.mock('restart',jest.fn( ()=>Promise.resolve()))
 
@@ -988,7 +990,7 @@ describe('PairingService',()=>{
 
                 expect( access.disableInterface).toHaveBeenCalledWith('ant')
                 expect( configuration.setInterfaceSettings).toHaveBeenCalledWith('ant',ant)
-                expect(antAdapter?.stop).toHaveBeenCalled()
+                                expect(antAdapter?.stop).toHaveBeenCalled()
                 expect(onStateChanged).toHaveBeenCalledWith(expect.objectContaining({interfaces:expect.anything()}))
                 expect(restart).toHaveBeenCalled()
             })
@@ -1063,8 +1065,8 @@ describe('PairingService',()=>{
                     configuration.emit('interface-changed','ant',{enabled:false})
                     
                     expect(access.disableInterface).toHaveBeenCalledWith('ant')
-                    expect(configuration.unselect).toHaveBeenCalledWith('control')
-                    expect(configuration.select).toHaveBeenCalledWith('2','control')
+                    expect(configuration.unselect).not.toHaveBeenCalledWith('control')
+                    expect(configuration.select).toHaveBeenCalledWith('2','control',expect.anything())
                 })
                 test('selected device is not on interface',()=>{
                     configuration.emit('interface-changed','ble',{enabled:false})
@@ -1107,7 +1109,7 @@ describe('PairingService',()=>{
                     configuration.emit('interface-changed','ant',{enabled:true})
                     
                     expect(access.enableInterface).toHaveBeenCalledWith('ant',undefined,expect.anything())
-                    expect(configuration.select).toHaveBeenCalledWith(expect.anything(),'power')
+                    expect(configuration.select).toHaveBeenCalledWith(expect.anything(),'power',expect.anything())
 
                 })
                 test('selected device',()=>{
@@ -1117,7 +1119,7 @@ describe('PairingService',()=>{
                     configuration.emit('interface-changed','ant',{enabled:true})
                     
                     expect(access.enableInterface).toHaveBeenCalledWith('ant',undefined,expect.anything())
-                    expect(configuration.select).not.toHaveBeenCalledWith(expect.anything(),'cadence')
+                    expect(configuration.select).not.toHaveBeenCalledWith(expect.anything(),'cadence',expect.anything())
 
                 })    
                 test('was already enabled',()=>{
@@ -1210,13 +1212,13 @@ describe('PairingService',()=>{
 
                 expect(control.devices[0].interfaceInactive).toBe(true)
                 expect(control.devices[1].interfaceInactive).toBe(true)
-                expect(configuration.unselect).toHaveBeenCalledWith('control')
+                expect(configuration.unselect).toHaveBeenCalledWith('control',true)
 
                 expect(cadence.devices[0].interfaceInactive).toBe(true)
                 expect(cadence.devices[1].interfaceInactive).toBe(true)
                 expect(cadence.devices[2].interfaceInactive).toBeFalsy()
                 expect(cadence.devices[2].connectState).toBe('connecting')
-                expect(configuration.unselect).not.toHaveBeenCalledWith('cadence')
+                expect(configuration.unselect).not.toHaveBeenCalledWith('cadence',expect.anything())
 
                 expect(onStateChanged).toHaveBeenCalled()
             })

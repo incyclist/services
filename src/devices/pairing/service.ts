@@ -6,6 +6,7 @@ import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
 import { sleep } from "incyclist-devices/lib/utils/utils";
 import { IncyclistService } from "../../base/service";
+import { EnrichedInterfaceSetting } from "../access";
 
 
 const Units = [
@@ -164,7 +165,7 @@ export class DevicePairingService  extends IncyclistService{
 
             this.state.interfaces.forEach( i=> {
                 if (!this.isInterfaceEnabled(i.name))
-                    this.disableAdaptersOnInterface(i.name)
+                    this.unselectOnInterface(i.name)
                     
             })
     
@@ -377,7 +378,7 @@ export class DevicePairingService  extends IncyclistService{
      * 
      * As the user might want to delete multiple devices, the screen will typically remain open
      * 
-     * This method not stop an ongoing scan. I.e. if the device will be detected again in the scan, it will be re-added
+     * This method does not stop an ongoing scan. I.e. if the device will be detected again in the scan, it will be re-added
      * 
      * @param capability the capability to be managed <br><br> One of ( 'control', 'power', 'heartrate', 'speed', 'cadence')
      * @param udid The unique device ID of the device to be selected
@@ -423,6 +424,31 @@ export class DevicePairingService  extends IncyclistService{
         }
     }
 
+    /**
+     * Should be called when the user wants to unselect all devices for a capability
+     * 
+     * 
+     * @param capability the capability to be managed <br><br> One of ( 'control', 'power', 'heartrate', 'speed', 'cadence')
+     * 
+     * @example 
+     * const service = useDevicePairing()
+     * await service.unselectCapability('control)
+     * 
+     * @throws  
+     * Does not throw errors
+     * 
+    */
+    async unselectDevices(capability:IncyclistCapability):Promise<void> { 
+        try  {
+            this.configuration.unselect(capability,true)
+        }
+        catch(err) { // istanbul ignore next
+            this.logError(err, 'deleteDevice')
+        }
+
+    }
+
+
    /**
      * Should be called when the user has changed the iterface settings ( enabled/disabled and interface)
      * 
@@ -444,7 +470,7 @@ export class DevicePairingService  extends IncyclistService{
    async changeInterfaceSettings (name:string,settings:InterfaceSetting) {
         try {
             
-
+            
             const _interface = this.state.interfaces.find( i=>i.name===name)
             const changed = settings.enabled !== _interface.enabled
 
@@ -460,7 +486,6 @@ export class DevicePairingService  extends IncyclistService{
                 this.stopAdaptersOnInterface(name)
                 this.disconnectInterface(name)
             }
-
             
             this.emitStateChange()
 
@@ -474,7 +499,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
 
-    private async restart() {
+    protected async restart() {
         await this._stop();
         this.run();
     }
@@ -605,11 +630,16 @@ export class DevicePairingService  extends IncyclistService{
             if (settings.enabled && !current.enabled) {
                 const {port,protocol} = settings
                 this.access.enableInterface(ifName,undefined, {port:Number(port),protocol})            
-                this.enableAdaptersOnInterface(ifName)
+
+                this.selectFromInterface(ifName)
             }
             else if (!settings.enabled && current.enabled) {    
                 this.access.disableInterface(ifName)            
-                this.disableAdaptersOnInterface(ifName)
+                this.unselectOnInterface(ifName);
+                this.unselectDisabledInterfaces()
+    
+
+
                 this.stopAdaptersOnInterface(ifName).catch(err=>{
                     this.logError(err,'stopAdaptersOnInterface()')
                 })
@@ -646,6 +676,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onConfigurationUpdate (newCapabilities:DeviceConfigurationInfo) {
+
         try {
             const {capabilities} = this.state||{};
             const keys = Object.keys(newCapabilities)
@@ -701,6 +732,10 @@ export class DevicePairingService  extends IncyclistService{
                 else  if (ifDetails.state==='unavailable' && current.state!=='unavailable') {
                     // set all devices to failed state
                     this.disableAdaptersOnInterface(ifName)
+                    this.unselectOnInterface(ifName)
+                }
+                else if (ifDetails.state!=='unavailable' && current.state==='unavailable') { 
+                    this.enableAdaptersOnInterface(ifName)
                 }
                 
                 if (changedIdx!==-1) {
@@ -1220,29 +1255,6 @@ export class DevicePairingService  extends IncyclistService{
 
     }
 
-    protected disableAdaptersOnInterface(name:string) {
-        const target = this.getAdaptersOnInterface(name)
-        const {capabilities} = this.state
-
-
-        target.forEach( ai => {
-            const {udid} = ai;
-            capabilities.forEach( c=> {
-                const device = this.getCapabilityDevice(c,udid)
-                if (device) {
-                    device.interfaceInactive = true
-                    if (c.selected===udid) {
-                        this.configuration.unselect(c.capability)
-                        const alternative = c.devices.find( d=>!d.interfaceInactive)
-
-                        if (alternative)
-                            this.configuration.select( alternative.udid,c.capability)
-                    }
-                }
-            })
-        })
-    }
-
     protected failAdaptersOnInterface(name:string) {
         const target = this.getAdaptersOnInterface(name)
         const {capabilities} = this.state
@@ -1261,6 +1273,22 @@ export class DevicePairingService  extends IncyclistService{
         })
     }
 
+    protected disableAdaptersOnInterface(name:string) {
+        const target = this.getAdaptersOnInterface(name)
+        const {capabilities} = this.state
+
+
+        target.forEach( ai => {
+            const {udid} = ai;
+            capabilities.forEach( c=> {
+                const device = this.getCapabilityDevice(c,udid)
+                if (device) {
+                    device.interfaceInactive = true
+                }
+            })
+        })
+    }    
+
     protected enableAdaptersOnInterface(name:string) {
         const target = this.getAdaptersOnInterface(name)
         const {capabilities} = this.state
@@ -1268,16 +1296,62 @@ export class DevicePairingService  extends IncyclistService{
         target.forEach( ai => {
             const {udid} = ai;
             capabilities.forEach( c=> {
-                const alternative = c.devices.find( d=>!d.interfaceInactive)
-
                 const device = this.getCapabilityDevice(c,udid)                
                 if(device)
                     delete device.interfaceInactive 
-
-                if (!c.selected && alternative)
-                    this.configuration.select( alternative.udid,c.capability)
             })
         })
+    }
+
+
+
+    protected unselectDisabledInterfaces() {
+        const disabled = this.getDisabledInterfaces()
+        disabled.forEach( i => this.unselectOnInterface(i.name) )    
+    }
+
+    
+    protected unselectOnInterface(name: string) {
+        const impactedCapabilties = this.getCapabilitiesUsingInterface(name);
+        const enabledInterfaces = this.getEnabedInterfaces().filter(i => i.name !== name).map(i => i.name);
+
+        impactedCapabilties.forEach(c => {
+            const available = c.devices.filter(d => d.interface !== name && enabledInterfaces.includes(d.interface));
+
+            if (!available?.length) {
+                this.configuration.unselect(c.capability, true);
+            }
+            else {
+                this.configuration.select(available[0].udid, c.capability, { emit: true });
+            }
+        });
+    }
+
+    protected selectFromInterface(name: string) {
+        const impactedCapabilties = this.state.capabilities.filter( c=> !c.selected)
+        const enabledInterfaces = this.getEnabedInterfaces().filter(i => i.name !== name).map(i => i.name);
+
+        impactedCapabilties.forEach(c => {
+            const available = c.devices.filter(d => d.interface === name || enabledInterfaces.includes(d.interface));
+
+            if (available?.length>0) {
+                this.configuration.select(available[0].udid, c.capability, { emit: true });
+            }
+        });
+    }
+
+
+    protected getCapabilitiesUsingInterface(name: string):CapabilityData[] {
+        return this.state.capabilities.filter(c => {
+            return this.getCapabilityDevice(c)?.interface === name;
+        });
+    }
+
+    protected getEnabedInterfaces():EnrichedInterfaceSetting[] {
+        return this.state.interfaces.filter(i => i.enabled===true)
+    }
+    protected getDisabledInterfaces():EnrichedInterfaceSetting[] {
+        return this.state.interfaces.filter(i => !i.enabled)
     }
 
 
