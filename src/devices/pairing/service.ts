@@ -349,7 +349,7 @@ export class DevicePairingService  extends IncyclistService{
         try {
             if (addAll) {
                 const adapter = this.getDeviceAdapter(udid)
-                const capabilities = adapter.getCapabilities()
+                const capabilities = adapter.getCapabilities().filter( name=>this.getCapability(name) )
 
                 capabilities.forEach( (c,idx) => {
                     const shouldEmit = (idx===capabilities.length-1)
@@ -1359,7 +1359,7 @@ export class DevicePairingService  extends IncyclistService{
     protected selectCapabilityDevice(capability:IncyclistCapability,udid:string, emitUpdate:boolean=true):boolean { 
        
         const c = this.getCapability(capability)
-        if (c.selected===udid)
+        if (!c || c.selected===udid)
             return false;
 
         const device = this.getCapabilityDevice(capability,udid)        

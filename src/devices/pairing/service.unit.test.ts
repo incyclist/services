@@ -746,6 +746,34 @@ describe('PairingService',()=>{
 
             })
 
+            test('select a device with unknown capability(gear) on all capabilities',async ()=>{
+                // device is selected
+                // pairing has not been stopped
+                // scanning has not been stopped
+                // all adapters with same capability have beens stopped
+
+                
+                svc.setupMockData( 'control',    [ {udid:'1', selected:true},{udid:'4', c:[ 'power', 'speed', 'cadence']}] )
+                svc.setupMockData( 'power',      [ {udid:'1'}, {udid:'2',selected:true} ])
+                svc.setupMockData( 'heartrate',  [])
+                svc.setupMockData( 'cadence',    [ {udid:'4'}, {udid:'2',selected:true} ])
+                svc.setupMockData( 'speed',      [ {udid:'4'}, {udid:'2',selected:true} ])
+
+                const adapter = svc.getDeviceAdapter('4') as IncyclistDeviceAdapter
+                const capabilites = adapter?.getCapabilities()
+                capabilites?.push('gear' as IncyclistCapability)
+                adapter.getCapabilities = jest.fn().mockReturnValue(capabilites)
+
+                await svc.selectDevice( IncyclistCapability.Control,'4',true)
+
+                expect(configuration.select).toHaveBeenNthCalledWith(1,'4','control',{emit:false})
+                expect(configuration.select).toHaveBeenNthCalledWith(2,'4','power',{emit:false})
+                expect(configuration.select).toHaveBeenNthCalledWith(3,'4','speed',{emit:false})
+                expect(configuration.select).toHaveBeenNthCalledWith(4,'4','cadence',{emit:true})
+                expect(stopDeviceSelection).toHaveBeenCalled()
+
+            })
+
 
         })
         describe('deleteDevice',()=>{
