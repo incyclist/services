@@ -96,39 +96,41 @@ export class DeviceConfigurationService  extends EventEmitter{
             settings.modeSettings =  this.userSettings.get('preferences.gear',{}) as LegacyModeSettings
             
             try {
-                await this.initFromLegacy(settings)
-                this.verifyCapabilitySettings()
+                await this.initFromLegacy(settings)                
             }
             catch(err) {
+                console.log('~~~ ERROR',err)
                 this.logError(err,'init()')
             }
 
-            this.emitInitialized()                      
-            return;    
         }
-        
-        await this.userSettings.init()
+        else {        
+            await this.userSettings.init()
 
-        this.settings = {
-            devices: this.userSettings.get('devices',[]),
-            capabilities:this.userSettings.get('capabilities',[]),
-            interfaces: this.userSettings.get('interfaces',[])
+            this.settings = {
+                devices: this.userSettings.get('devices',[]),
+                capabilities:this.userSettings.get('capabilities',[]),
+                interfaces: this.userSettings.get('interfaces',[])
+            }
         }
 
         // first time initialization?
         let emptyConfig = false
-        if (!this.settings.capabilities || this.settings.capabilities.length===0) {
+        if (!this.settings)
+            this.settings={}
+
+        if (!this.settings.capabilities || this.settings.capabilities?.length===0) {
             this.initCapabilties()
             emptyConfig = true
         }
-        if (!this.settings.interfaces || this.settings.interfaces.length===0) { 
+        if (!this.settings.interfaces || this.settings.interfaces?.length===0) { 
             this.initInterfaces()
             emptyConfig = true
         }
         if (emptyConfig)
             this.updateUserSettings()
 
-        if (!this.settings.devices)
+        if (!this.settings?.devices)
             this.settings.devices = []
 
         this.settings.devices.forEach( d=> {
@@ -161,6 +163,14 @@ export class DeviceConfigurationService  extends EventEmitter{
         return this.features['NEW_UI']===true
     }
 
+    protected verifyCapabilityExists(capability) {
+        const {capabilities} = this.settings
+        const found = capabilities.find( c=>c.capability===capability)
+        if (!found) {
+            capabilities.push( {capability,devices:[],disabled:false,selected:undefined})
+        }
+    }
+
     protected verifyCapabilitySettings() {
         const {capabilities} = this.settings
 
@@ -170,7 +180,11 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         if (isNewUi) {
             // remove bike capability - it's not used anymore
-            
+            this.verifyCapabilityExists(IncyclistCapability.Control)
+            this.verifyCapabilityExists(IncyclistCapability.Power)
+            this.verifyCapabilityExists(IncyclistCapability.HeartRate)
+            this.verifyCapabilityExists(IncyclistCapability.Speed)
+            this.verifyCapabilityExists(IncyclistCapability.Cadence)
             if (bikeCapIdx!==-1) {
                 capabilities.splice( bikeCapIdx,1)
             }
@@ -290,12 +304,15 @@ export class DeviceConfigurationService  extends EventEmitter{
         const {bikes=[], hrms=[]} = gears
         
         this.settings= {interfaces:[], devices:[], capabilities:[]}
+        this.initCapabilties()
         const {interfaces,devices,capabilities} = this.settings;
+
+        const get = ( (x,def) =>  x===undefined || x===null ? def : x)
 
         interfaces.push( {name:'ant', enabled:connections?.ant?.enabled||true})
         interfaces.push( {name:'ble', enabled:true})
-        interfaces.push( {name:'serial', enabled:connections?.serial?.enabled||true,protocol:connections?.serial?.protocols?.find(p=>p.selected).name })
-        interfaces.push( {name:'tcpip', enabled:connections?.tcpip?.enabled||false,protocol:'Daum Premium', port:51955})
+        interfaces.push( {name:'serial', enabled:get(connections?.serial?.enabled,true),protocol:connections?.serial?.protocols?.find(p=>p.selected).name })
+        interfaces.push( {name:'tcpip', enabled:get(connections?.tcpip?.enabled,false),protocol:'Daum Premium', port:51955})
 
         bikes.forEach( bike=> {
             if (bike.protocol==='Simulator')
@@ -439,6 +456,8 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.removeLegacySettings() 
         
         this.settings = { devices, capabilities, interfaces}
+
+        
         this.updateUserSettings()
     }
 

@@ -173,7 +173,7 @@ export class DevicePairingService  extends IncyclistService{
             this.emitStateChange(this.state)
     
             this.initConfigHandlers();  
-           
+
             this.run()    
     
         }
@@ -966,6 +966,10 @@ export class DevicePairingService  extends IncyclistService{
 
         capabilites.forEach(c => {
             const info = this.getCapability(c);
+            if  (!info) {
+                this.logEvent({message:'warning: capabability not found',c, caps:this.state.capabilities})
+                return
+            }
             let device = this.getCapabilityDevice(c, udid);
 
             if (device) {
@@ -1078,6 +1082,7 @@ export class DevicePairingService  extends IncyclistService{
         await this.waitForInit();
         await this.rideService.lazyInit()
 
+
         this.state.props= props 
 
         const adapters = this.state.adapters = this.configuration.getAdapters(false)
@@ -1095,6 +1100,7 @@ export class DevicePairingService  extends IncyclistService{
             return;
         }
 
+        //await this.waitForInterfacesInitialized()
 
         if (configOKToStart && !this.deviceSelectState && !props.enforcedScan) {
             await this.startPairing(adapters, props);
@@ -1107,6 +1113,15 @@ export class DevicePairingService  extends IncyclistService{
 
     private async startPairing(adapters: AdapterInfo[], props: PairingProps) {
         this.emit('pairing-start');
+
+        const isReady = !this.state.interfaces.find( i=>i.state==='connecting')
+        if (!isReady) {
+            setTimeout(() => {
+                this.run()
+            }, 1000);
+            return;
+        }
+
 
         this.logEvent({ message: 'Start Pairing', adapters, props });
 
@@ -1156,11 +1171,22 @@ export class DevicePairingService  extends IncyclistService{
     private async startScanning(adapters: AdapterInfo[], props: PairingProps) {
         const interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i))||[].map(i=>i.name)
         if (interfaces.length===0) {
-            await sleep(500)
-            this.run()
+            setTimeout(() => {
+                this.run()
+            }, 1000);
+
             return;
         }
         this.emit('scanning-start')
+
+
+        const isReady = !this.state.interfaces.find( i=>i.state==='connecting')
+        if (!isReady) {
+            setTimeout(() => {
+                this.run()
+            }, 1000);
+            return;
+        }
 
         this.logEvent({message:'Start Scanning',props})
         this.initScanningCallbacks()

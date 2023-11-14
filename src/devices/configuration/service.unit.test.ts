@@ -4,8 +4,9 @@ import { AdapterFactory, IncyclistCapability,  SerialPortProvider } from "incycl
 import clone from "../../utils/clone";
 import { DeviceConfigurationService } from "./service"
 import { DeviceConfigurationSettings,
-         LegacySettings,LegacyGearSetting } from "./model";
+         LegacySettings,LegacyGearSetting, LegacyDeviceConnectionSettings } from "./model";
 import UserSettingsMock from "../../settings/user/mock";
+import { LegacySerialPortInfo, LegacySerialSettings } from "incyclist-services";
 
 
 const SampleSettings: DeviceConfigurationSettings= {                
@@ -26,6 +27,24 @@ const SampleSettings: DeviceConfigurationSettings= {
         {name:'ant', enabled:false},
         {name:'serial', enabled:false}
     ]
+}
+const serialLegacy = {
+    enabled: false,
+    protocols: [
+        { name: "Daum Premium", selected: false },
+        { name: "Daum Classic", selected: true },
+        { name: "Kettler Racer", selected: false }
+    ],
+    COM1: { "name": "COM1", "enabled": true }
+} 
+
+const EmptyLegacySettings: LegacySettings = {
+    gearSelection:{},
+    connections:{
+      serial:serialLegacy as unknown as LegacySerialSettings & LegacySerialPortInfo,
+      ant:{"enabled":true,"bike":true,"hrm":true},
+      tcpip:{"enabled":false}}
+  
 }
 
 
@@ -416,6 +435,25 @@ describe( 'DeviceConfigurationService',()=>{
             expect(devices.map(d=>d.settings.name).join(',')).toBe(',,Simulator,Daum8i,HRM-Dual:068786,')
 
         })
+
+        test('empty legacy', ()=>{
+
+            service.setFeature('NEW_UI',true)
+
+            const settings = clone(EmptyLegacySettings)
+            testData = settings
+            service.initFromLegacy(settings)
+            
+            expect(service.settings.devices.length).toBe(0)
+            expect(service.settings.capabilities.length).toBe(5)
+            expect(service.settings.interfaces.length).toBe(4)
+
+            expect(service.settings.interfaces.find(i=>i.name==='serial')).toEqual({enabled:false,name:'serial',protocol:'Daum Classic'})
+            expect(service.settings.gearSelection).toBeUndefined()
+            expect(service.settings.connections).toBeUndefined()
+
+        })
+
 
     })
 
