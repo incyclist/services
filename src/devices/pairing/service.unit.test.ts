@@ -771,7 +771,34 @@ describe('PairingService',()=>{
                 expect(configuration.select).toHaveBeenNthCalledWith(3,'4','speed',{emit:false})
                 expect(configuration.select).toHaveBeenNthCalledWith(4,'4','cadence',{emit:true})
                 expect(stopDeviceSelection).toHaveBeenCalled()
+            })
 
+            test('select a device on all capabilities which is already selected in the last of its capabilities',async ()=>{
+                // device is selected
+                // pairing has not been stopped
+                // scanning has not been stopped
+                // all adapters with same capability have beens stopped
+
+                
+                svc.setupMockData( 'control',    [ {udid:'1', selected:true},{udid:'4', c:[ 'power', 'speed', 'cadence','heartrate']}] )
+                svc.setupMockData( 'power',      [ {udid:'1'}, {udid:'2',selected:true} ])
+                svc.setupMockData( 'heartrate',  [ {udid:'4',selected:true}])
+                svc.setupMockData( 'cadence',    [ {udid:'4'}, {udid:'2',selected:true} ])
+                svc.setupMockData( 'speed',      [ {udid:'4'}, {udid:'2',selected:true} ])
+
+                const adapter = svc.getDeviceAdapter('4') as IncyclistDeviceAdapter
+                const capabilites = adapter?.getCapabilities()
+                capabilites?.push('gear' as IncyclistCapability)
+                adapter.getCapabilities = jest.fn().mockReturnValue(capabilites)
+
+                await svc.selectDevice( IncyclistCapability.Control,'4',true)
+
+                expect(configuration.select).toHaveBeenNthCalledWith(1,'4','control',{emit:false})
+                expect(configuration.select).toHaveBeenNthCalledWith(2,'4','power',{emit:false})
+                expect(configuration.select).toHaveBeenNthCalledWith(3,'4','speed',{emit:false})
+                expect(configuration.select).toHaveBeenNthCalledWith(4,'4','cadence',{emit:true})
+                expect(configuration.select).not.toHaveBeenNthCalledWith(5,'4','heartrate',{emit:false})
+                expect(stopDeviceSelection).toHaveBeenCalled()
             })
 
 

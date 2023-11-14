@@ -349,7 +349,7 @@ export class DevicePairingService  extends IncyclistService{
         try {
             if (addAll) {
                 const adapter = this.getDeviceAdapter(udid)
-                const capabilities = adapter.getCapabilities().filter( name=>this.getCapability(name) )
+                const capabilities = adapter.getCapabilities().filter( name=> this.wouldChangeCapability(name,udid) )
 
                 capabilities.forEach( (c,idx) => {
                     const shouldEmit = (idx===capabilities.length-1)
@@ -492,7 +492,14 @@ export class DevicePairingService  extends IncyclistService{
 
         const {capabilities=[]} = this.state
 
-        return capabilities.find( c=>c.capability===target)
+        return capabilities.find( c=>c.capability===target)       
+    }
+
+    protected wouldChangeCapability(capability:IncyclistCapability|CapabilityData, udid:string) {
+        const c = this.getCapability(capability)
+        if (!c) return false;
+
+        return c.selected!==udid
     }
 
     protected getCapabilityDevice(capability:IncyclistCapability|CapabilityData,udid?:string):DevicePairingData {
@@ -1358,14 +1365,14 @@ export class DevicePairingService  extends IncyclistService{
 
     protected selectCapabilityDevice(capability:IncyclistCapability,udid:string, emitUpdate:boolean=true):boolean { 
        
-        const c = this.getCapability(capability)
-        if (!c || c.selected===udid)
-            return false;
+        if (!this.wouldChangeCapability(capability,udid))
+            return;
 
+        const c = this.getCapability(capability)
         const device = this.getCapabilityDevice(capability,udid)        
         c.value = device?.value
         this.configuration.select(udid,capability,{emit:emitUpdate})
-        
+
         if (emitUpdate)
             this.emitStateChange( {capabilities:this.state.capabilities})
             
