@@ -44,11 +44,13 @@ export class DeviceConfigurationService  extends EventEmitter{
     userSettings:UserSettingsService
     adapters: DeviceAdapterList = {}
     protected logger: EventLogger
+    protected features: {[index:string]:boolean}
 
     constructor() {
         super()
         this.userSettings = useUserSettings();
         this.logger = new EventLogger('DeviceConfig')     
+        this.features = {};
     }
 
     protected logEvent(e) {
@@ -151,8 +153,12 @@ export class DeviceConfigurationService  extends EventEmitter{
         
     }
 
+    public setFeature( name:string, enabled:boolean) {
+        this.features[name] = enabled
+    }
+
     protected isNewUi() {
-        return (this.userSettings.isInitialized && this.userSettings.get('NEW_UI',false))
+        return this.features['NEW_UI']===true
     }
 
     protected verifyCapabilitySettings() {
