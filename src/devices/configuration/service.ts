@@ -189,12 +189,12 @@ export class DeviceConfigurationService  extends EventEmitter{
         const bikeCap = capabilities.find(c=>c.capability==='bike');
         for( const capability  of ['bike' , IncyclistCapability.Control]) {
             const info = capabilities.find(c => c.capability===capability)
-            if (info && info.devices.length>0 && info.selected===undefined)
+            if (info?.devices?.length>0 && info?.selected===undefined)
                 this.select( info.devices[0], capability as ExtendedIncyclistCapability)
         }
 
 
-        if (bikeCap && bikeCap.selected) {
+        if (bikeCap?.selected) {
             const bike = bikeCap.selected
             const power = capabilities.find(c=>c.capability===IncyclistCapability.Power && c.selected!==undefined);
             const control = capabilities.find(c=>c.capability===IncyclistCapability.Control && c.selected!==undefined);
