@@ -1181,9 +1181,11 @@ describe('PairingService',()=>{
                 jest.resetAllMocks()
             })
 
-            test('enabled changed',()=>{
+            test('enabled changed, will be ignored',()=>{
+                // access service is not aware of configuration state
+                // `enabled` in access service has a different meaning
                 access.emit('interface-changed','ant', { name: 'ant', enabled: false, isScanning: false, state: 'connected'})
-                expect(ant.enabled).toBe(false)
+                expect(ant.enabled).toBe(true)
                 expect(ant.state).toBe('connected')
                 expect(ant.isScanning).toBe(false)
                 expect(onStateChanged).toHaveBeenCalled()

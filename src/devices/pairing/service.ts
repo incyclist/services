@@ -154,7 +154,7 @@ export class DevicePairingService  extends IncyclistService{
     
             await this.waitForInit()
             const {capabilities,interfaces} = this.configuration.load()
-    
+
             this.state.capabilities = mappedCapabilities(capabilities)
             this.state.interfaces = this.access.enrichWithAccessState(interfaces)
             this.state.canStartRide = this.configuration.canStartRide()
@@ -170,6 +170,7 @@ export class DevicePairingService  extends IncyclistService{
             })
     
             this.settings.onStateChanged = onStateChanged
+            
             this.emitStateChange(this.state)
     
             this.initConfigHandlers();  
@@ -611,6 +612,7 @@ export class DevicePairingService  extends IncyclistService{
         const state= this.getExternaState(newState)
 
         if (onStateChanged && typeof onStateChanged ==='function') {
+            
             onStateChanged( {...state}) 
         }
 
@@ -740,7 +742,6 @@ export class DevicePairingService  extends IncyclistService{
                 
                 if (changedIdx!==-1) {
                     prev[changedIdx].isScanning = ifDetails.isScanning
-                    prev[changedIdx].enabled = ifDetails.enabled
                     prev[changedIdx].state = ifDetails.state
                 }
 
@@ -1114,13 +1115,15 @@ export class DevicePairingService  extends IncyclistService{
     private async startPairing(adapters: AdapterInfo[], props: PairingProps) {
         this.emit('pairing-start');
 
-        const isReady = !this.state.interfaces.find( i=>i.state==='connecting')
+        
+        const isReady = !this.state.interfaces.find( i=>i.enabled && i.state==='connecting')
         if (!isReady) {
             setTimeout(() => {
                 this.run()
             }, 1000);
             return;
         }
+        
 
 
         this.logEvent({ message: 'Start Pairing', adapters, props });
@@ -1180,7 +1183,8 @@ export class DevicePairingService  extends IncyclistService{
         this.emit('scanning-start')
 
 
-        const isReady = !this.state.interfaces.find( i=>i.state==='connecting')
+        const isReady = !this.state.interfaces.find( i=>i.enabled && i.state==='connecting')
+
         if (!isReady) {
             setTimeout(() => {
                 this.run()
