@@ -621,6 +621,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onInterfaceConfigChanged (ifName:string,settings:InterfaceSetting)  {
+        this.logEvent({message:'Interface Config changed', interface:ifName, settings})
 
         const prev = this.state.interfaces;
         if (!prev)
@@ -649,6 +650,11 @@ export class DevicePairingService  extends IncyclistService{
             else {
                 return;
             }
+
+            current.enabled = settings.enabled
+            current.port = settings.port
+            current.protocol = settings.protocol
+
             this.emitStateChange()
 
         }
@@ -678,6 +684,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onConfigurationUpdate (newCapabilities:DeviceConfigurationInfo) {
+        this.logEvent({message:'Capability Config changed', capabilities:newCapabilities})
 
         try {
             const {capabilities} = this.state||{};

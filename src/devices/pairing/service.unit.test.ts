@@ -263,6 +263,12 @@ describe('PairingService',()=>{
                 const config = useDeviceConfiguration()
                 config.setFeature('NEW_UI',true)
 
+                settings.interfaces= [
+                    { name:'ant', enabled:true },
+                    { name:'ble', enabled:true },
+                    { name:'serial', enabled:false, protocol:'Daum Classic' },
+                    { name:'tcpip', enabled:true },
+                ]
                 svc = new TestWrapper()
                 logEvent  = jest.spyOn(svc as any,'logEvent')
                 logCapabilities = svc.mock('logCapabilities')
@@ -296,6 +302,7 @@ describe('PairingService',()=>{
             test('no devices in configuration; FE device found in scan',async ()=>{
                 settings.devices = []
                 settings.capabilities= []
+                
 
                 const device = {interface:'ant', profile: "FE", deviceID: 1234 }
                 userSettings.settings = {}
@@ -305,12 +312,13 @@ describe('PairingService',()=>{
                     return [device]
                 })
                 const updates: Array<PairingState> = [];
-                let numLogs = 0;
+                
                 // we are expecting 3 status updates, the last one to contain the 
                 await new Promise (done => {
-                    svc.on('log',()=>{ 
-                        ++numLogs
-                        if (numLogs===3) 
+                    svc.on('log',(e)=>{ 
+                        
+                        if (e.message == 'Pairing done')
+                        
                             done(updates)
                     })                   
                     svc.start( (status:PairingState)=>{ 
@@ -328,7 +336,7 @@ describe('PairingService',()=>{
                 
                 expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Start Scanning'}))
                 expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'FE'}}))
-                expect(logEvent).toHaveBeenNthCalledWith( 3,expect.objectContaining( {message:'Start Pairing'}))
+                expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'Start Pairing'}))
                 expect(access.scan).toHaveBeenCalled()
                 expect(ride.startAdapters).toHaveBeenCalled()
                 expect(svc.getState().canStartRide).toBe(true)
@@ -353,12 +361,15 @@ describe('PairingService',()=>{
                 })
 
                 const updates: Array<PairingState> = [];
-                let numLogs = 0;
-                // we are expecting 3 status updates, the last one to contain the 
+                let startCnt = 0;
+                // we are expecting a couple of message until we finally receive a 2nd "Start Scanning"
                 await new Promise (done => {
-                    svc.on('log',()=>{ 
-                        ++numLogs
-                        if (numLogs===3) 
+                    svc.on('log',(e)=>{ 
+                        
+                        if (e.message==='Start Scanning') 
+                            startCnt++;
+
+                        if (startCnt===2)
                             done(updates)
                     })                   
                     svc.start( (status:PairingState)=>{ 
@@ -368,7 +379,7 @@ describe('PairingService',()=>{
 
                 expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Start Scanning'}))
                 expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'HR'}}))
-                expect(logEvent).toHaveBeenNthCalledWith( 3,expect.objectContaining( {message:'Start Scanning'}))
+                
                 expect(access.scan).toHaveBeenCalled()
                 expect(ride.startAdapters).not.toHaveBeenCalled()
                 expect(svc.getState().canStartRide).toBe(false)
@@ -1067,6 +1078,7 @@ describe('PairingService',()=>{
                     expect(access.disableInterface).toHaveBeenCalledWith('ant')
                     expect(configuration.unselect).not.toHaveBeenCalledWith('control')
                     expect(configuration.select).toHaveBeenCalledWith('2','control',expect.anything())
+                    expect(onStateChanged).toHaveBeenCalled()
                 })
                 test('selected device is not on interface',()=>{
                     configuration.emit('interface-changed','ble',{enabled:false})
