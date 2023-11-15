@@ -604,6 +604,8 @@ export class DevicePairingService  extends IncyclistService{
 
         const {onStateChanged,onDeviceSelectStateChanged} = this.settings||{}
 
+        this.checkCanStart()
+
         // don't send any updates if we are stopping
         if (this.state.stopRequested)
             return;
@@ -654,6 +656,8 @@ export class DevicePairingService  extends IncyclistService{
             current.enabled = settings.enabled
             current.port = settings.port
             current.protocol = settings.protocol
+
+            
 
             this.emitStateChange()
 
@@ -1018,8 +1022,10 @@ export class DevicePairingService  extends IncyclistService{
             const prev = this.state.canStartRide
 
             const configReadyToRide = this.configuration.canStartRide() // we either have a power or a conto
-            if (!configReadyToRide)
+            if (!configReadyToRide) {
+                this.state.canStartRide = false;
                 return false;
+            }
             
             const control = this.getCapability(IncyclistCapability.Control)
             const power = this.getCapability(IncyclistCapability.Power)
