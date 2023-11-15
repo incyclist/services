@@ -729,8 +729,11 @@ export class DeviceRideService  extends EventEmitter{
         this.verifySelected(selectedDevices, IncyclistCapability.Power)
 
         // get list of capabilities, where the device sending the data was selected by the user
-        const enabledCapabilities = selectedDevices.filter( sd => sd.selected===adapterInfo.udid).map( c => c.capability)
-        
+        const enabledCapabilities = this.enforceSimulator ? 
+            [IncyclistCapability.Control,IncyclistCapability.Power,IncyclistCapability.Speed,IncyclistCapability.HeartRate,IncyclistCapability.Cadence]
+            :
+            selectedDevices.filter( sd => sd.selected===adapterInfo.udid).map( c => c.capability)
+                    
         this.logEvent({message:'Data Update', device:adapterInfo.adapter.getName(), data, enabledCapabilities})
 
         enabledCapabilities.forEach( capability=> {
