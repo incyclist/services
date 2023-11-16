@@ -49,11 +49,17 @@ export interface PairingState {
     adapters?: Array<AdapterInfo>  
 }
 
+export interface DeleteListEntry  {
+    capability: IncyclistCapability,
+    udid: string
+}
+
 export interface InternalPairingState extends PairingState {
     initialized: boolean;
     stopRequested?:boolean
     stopped?:boolean
     waiting?:boolean
+    deleted: Array<DeleteListEntry>
 
     check?: {
         promise:Promise<boolean>

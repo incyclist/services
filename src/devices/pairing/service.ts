@@ -16,31 +16,6 @@ const Units = [
     { capability:IncyclistCapability.Cadence, unit:'rpm', value:'cadence', decimals:0},
 ]
 
-export const mappedCapability = (c:CapabilityInformation):CapabilityData => {
-
-    const {devices} = c;
-
-    const mapped = {...c} as unknown  as CapabilityData
-
-    mapped.deviceNames = devices.map(d=>d.name).join(';')
-    mapped.selected = devices.find( d => d.selected)?.udid
-    mapped.deviceName = devices.find( d => d.selected)?.name
-    mapped.interface = devices.find( d => d.selected)?.interface
-    mapped.devices = devices as Array<DevicePairingData>
-
-    return mapped
-}
-
-export const mappedCapabilities = (capabilities:DeviceConfigurationInfo):Array<CapabilityData>=> {
-    const caps = []
-    const ci = capabilities ? Object.keys(capabilities) || [] : []
-    ci.forEach( name=> {
-        const c = capabilities[name]
-        caps.push(mappedCapability(c))
-    })        
-    return caps
-}
-
 const getInterfaceSettings = (ifName,v) => {
     if(!v)
         return {}
@@ -87,7 +62,7 @@ export class DevicePairingService  extends IncyclistService{
 
 
     protected settings: PairingSettings={}
-    protected state:InternalPairingState = { initialized:false}
+    protected state:InternalPairingState = { initialized:false, deleted:[]}
     protected deviceSelectState:DeviceSelectState|null = null
     
 
@@ -148,6 +123,7 @@ export class DevicePairingService  extends IncyclistService{
         if (this.state.stopped) {
             // cleanup on 2nd launch
             this.state.stopped = false;
+            this.state.deleted = []
         }
 
 
@@ -165,7 +141,7 @@ export class DevicePairingService  extends IncyclistService{
             const state = {...this.state}
             delete state.adapters
     
-            this.state.capabilities = mappedCapabilities(capabilities)
+            this.state.capabilities = this.mappedCapabilities(capabilities)
             this.state.interfaces = this.access.enrichWithAccessState(interfaces)
             this.state.canStartRide = this.configuration.canStartRide()
             this.state.stopRequested = false
@@ -280,7 +256,7 @@ export class DevicePairingService  extends IncyclistService{
             
             this.settings = Object.assign( this.settings||{}, {onDeviceSelectStateChanged,capabilityForScan:capability})
             const devices = capabilityData?.devices||[]
-            const available = devices.filter( d=> this.isInterfaceEnabled(d.interface))
+            const available = devices.filter( d=> this.isInterfaceEnabled(d.interface)).filter( d=> !this.isOnDeletedList(capability,d.udid))
 
             const startScan = async () => {
                 if( devices.length>0)
@@ -432,6 +408,7 @@ export class DevicePairingService  extends IncyclistService{
             }
             else {
                 this.deleteCapabilityDevice(capability,udid)
+                   
             }        
     
         }
@@ -546,7 +523,7 @@ export class DevicePairingService  extends IncyclistService{
         const c = this.getCapability(capability)
         if (!c) return false;
 
-        return c.selected!==udid
+        return c.selected!==udid && !this.isOnDeletedList(capability,udid)
     }
 
     protected getCapabilityDevice(capability:IncyclistCapability|CapabilityData,udid?:string):DevicePairingData {
@@ -556,7 +533,7 @@ export class DevicePairingService  extends IncyclistService{
             return
 
         if (udid) {
-            return c.devices.find( d=> d.udid===udid)
+            return c.devices.find( d=> d.udid===udid && !this.isOnDeletedList(capability,udid))
         }
         else {
             return c.devices.find( d=> d.selected)
@@ -569,7 +546,7 @@ export class DevicePairingService  extends IncyclistService{
         if (this.state.initialized)
             return
 
-        this.state.capabilities = mappedCapabilities(capabilitiesLoaded)               
+        this.state.capabilities = this.mappedCapabilities(capabilitiesLoaded)               
         this.state.canStartRide = this.configuration.canStartRide()
         this.state.interfaces = this.access.enrichWithAccessState(interfacesLoaded)
         this.state.initialized = true;
@@ -617,6 +594,8 @@ export class DevicePairingService  extends IncyclistService{
         delete state.scan
         delete state.initialized
         delete state.props
+        delete state.deleted
+        delete state.waiting
 
         return state
     }
@@ -723,7 +702,7 @@ export class DevicePairingService  extends IncyclistService{
             keys.forEach( key => {
                 const newCap = newCapabilities[key]
                 const current = capabilities.find( c=>c.capability===key)
-                this.mergeState(current,mappedCapability(newCap))
+                this.mergeState(current,this.mappedCapability(newCap))
             })
 
             this.checkCanStart()
@@ -806,7 +785,7 @@ export class DevicePairingService  extends IncyclistService{
         const ci = capabilities||this.state.capabilities
         ci.forEach( c=> {
             const {devices=[],disabled} = c;
-            const deviceNames = devices.map(d=>d.name).join(';')
+            const deviceNames = devices.filter(d=>!this.isOnDeletedList(c.capability,d.udid)).map(d=>d.name).join(';')
             const selected = devices.find( d => d.selected)?.name
             this.logEvent({message:'capability info', capability:c.capability,  devices: deviceNames,selected,disabled })
         })        
@@ -943,6 +922,10 @@ export class DevicePairingService  extends IncyclistService{
             return;
 
         capabilities.forEach( c=> {
+
+            if (this.isOnDeletedList(c,udid))
+                return;
+
             const unitInfo = Units.find( ui=> ui.capability === c.capability)
             const device =this.getCapabilityDevice(c,udid)
 
@@ -970,6 +953,7 @@ export class DevicePairingService  extends IncyclistService{
         this.logEvent({message:'device detected',device:deviceSettings})
         
         const udid = this.configuration.add(deviceSettings,{legacy:false})
+        
         if(!udid) {
             this.logEvent({message:'device could not be added', reason:'add() failed'})
             return;
@@ -1003,6 +987,10 @@ export class DevicePairingService  extends IncyclistService{
         const capabilites = adapter.getCapabilities();
 
         capabilites.forEach(c => {
+
+            if (this.isOnDeletedList(c,udid))
+                return;
+
             const info = this.getCapability(c);
             if  (!info) {
                 this.logEvent({message:'warning: capabability not found',c, caps:this.state.capabilities})
@@ -1388,7 +1376,9 @@ export class DevicePairingService  extends IncyclistService{
         const enabledInterfaces = this.getEnabedInterfaces().filter(i => i.name !== name).map(i => i.name);
 
         impactedCapabilties.forEach(c => {
-            const available = c.devices.filter(d => d.interface !== name && enabledInterfaces.includes(d.interface));
+            const available = c.devices
+                .filter(d => d.interface !== name && enabledInterfaces.includes(d.interface))
+                .filter(d=>!this.isOnDeletedList(c,d.udid))
 
             if (!available?.length) {
                 this.configuration.unselect(c.capability, true);
@@ -1404,7 +1394,10 @@ export class DevicePairingService  extends IncyclistService{
         const enabledInterfaces = this.getEnabedInterfaces().filter(i => i.name !== name).map(i => i.name);
 
         impactedCapabilties.forEach(c => {
-            const available = c.devices.filter(d => d.interface === name || enabledInterfaces.includes(d.interface));
+            const available = c.devices
+                .filter(d => d.interface === name || enabledInterfaces.includes(d.interface))
+                .filter(d=>!this.isOnDeletedList(c,d.udid))
+
 
             if (available?.length>0) {
                 this.configuration.select(available[0].udid, c.capability, { emit: true });
@@ -1542,6 +1535,7 @@ export class DevicePairingService  extends IncyclistService{
         }
         
         this.configuration.delete(udid,capability,shouldEmit)
+        this.addToDeletedList(capability,udid)
         this.emitStateChange( {capabilities:this.state.capabilities})
     }
 
@@ -1575,6 +1569,55 @@ export class DevicePairingService  extends IncyclistService{
         return (this.state.capabilities || []).map(c => c.selected === udid ? 1 : 0).reduce((a, c) => a + c, 0);
     }
 
+    protected addToDeletedList(capability:IncyclistCapability|CapabilityData,udid:string ) {
+        if (this.isOnDeletedList(capability,udid))
+            return;
+
+        const c = this.getCapability(capability)        
+        this.state.deleted.push( { capability:c.capability,udid })       
+    }
+
+    protected removeFromDeletedList(capability:IncyclistCapability|CapabilityData,udid:string ) {
+        const c = this.getCapability(capability)        
+        const idx = this.state.deleted.findIndex( e=> e.capability===c.capability && e.udid===udid)
+        if (idx===-1)
+            return
+
+        this.state.deleted.splice(idx,1)       
+    }
+
+    protected isOnDeletedList(c:IncyclistCapability|CapabilityData,udid:string ):boolean {
+        const capability = this.getCapability(c)        
+
+        return this.state.deleted.find( e=> e.capability===capability.capability && e.udid===udid)!==undefined
+    }
+
+    mappedCapability (c:CapabilityInformation):CapabilityData {
+
+        const {devices} = c;
+    
+        const mapped = {...c} as unknown  as CapabilityData
+    
+        const available = devices.filter( d=> !this.isOnDeletedList(c.capability as IncyclistCapability,d.udid))
+
+        mapped.deviceNames = available.map(d=>d.name).join(';')
+        mapped.selected = available.find( d => d.selected)?.udid
+        mapped.deviceName = devices.find( d => d.selected)?.name
+        mapped.interface = devices.find( d => d.selected)?.interface
+        mapped.devices = devices as Array<DevicePairingData>
+    
+        return mapped
+    }
+    
+    protected mappedCapabilities (capabilities:DeviceConfigurationInfo):Array<CapabilityData> {
+        const caps = []
+        const ci = capabilities ? Object.keys(capabilities) || [] : []
+        ci.forEach( name=> {
+            const c = capabilities[name]
+            caps.push(this.mappedCapability(c))
+        })        
+        return caps
+    }
 
     
 }
