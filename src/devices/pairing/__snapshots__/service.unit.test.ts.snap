@@ -9,6 +9,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
     "capabilities": [
       {
         "capability": "control",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],
@@ -18,6 +19,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
       },
       {
         "capability": "power",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],
@@ -27,6 +29,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
       },
       {
         "capability": "cadence",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],
@@ -36,6 +39,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
       },
       {
         "capability": "speed",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],
@@ -45,6 +49,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
       },
       {
         "capability": "heartrate",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],
@@ -87,6 +92,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
     "capabilities": [
       {
         "capability": "control",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],
@@ -96,6 +102,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
       },
       {
         "capability": "power",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],
@@ -105,6 +112,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
       },
       {
         "capability": "cadence",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],
@@ -114,6 +122,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
       },
       {
         "capability": "speed",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],
@@ -123,6 +132,7 @@ exports[`PairingService api start no devices in configuration will start scan 1`
       },
       {
         "capability": "heartrate",
+        "connectState": "waiting",
         "deviceName": undefined,
         "deviceNames": "",
         "devices": [],

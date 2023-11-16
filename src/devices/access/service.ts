@@ -134,37 +134,51 @@ export class DeviceAccessService  extends EventEmitter{
      * * service.enableInterface('serial')
      * ```
      */
-    enableInterface( ifaceName:string, binding?, props:InterfaceAccessProps={}):void {
-        const existing = this.interfaces[ifaceName] as InterfaceInfoInternal
+    async enableInterface( ifaceName:string, binding?, props:InterfaceAccessProps={}):Promise<void> {
+        try {
+
+            if (binding)
+                this.initInterface(ifaceName, binding,props)
+
+            const existing = this.interfaces[ifaceName] as InterfaceInfoInternal
         
-        if (!binding && !existing) {           
-            this.logEvent( {message:'Interface has not been initialized with binding',interface:ifaceName})
-            this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
-        }
-       
-        if (!existing) {
-            const properties = clone(this.defaultProps)            
-            merge(properties, props)
-            const info: InterfaceInfoInternal = { name:ifaceName,interface:InterfaceFactory.create(ifaceName,{binding}), enabled:true, isScanning:false, properties,state: 'unknown'}
-            this.interfaces[ifaceName]= info
-            info.interface.setBinding(binding)
-
-            const keys = Object.keys(this.interfaces)
-            const interfaces = keys.map( name=> ({...this.interfaces[name],name}) )
-
-            this.emit('interface-changed', ifaceName,this.interfaces[ifaceName], interfaces)
-        }
-            
-        else  {                       
+            if (!binding && !existing) {           
+                this.logEvent( {message:'Interface has not been initialized with binding',interface:ifaceName})
+                this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
+            }
+           
+                
             if (this.isScanning(ifaceName)) {
                 this.logEvent( {message:'Illegal State, enable Interface cannot be called during an ongoing scan'})
                 return;
             }
-            if (binding)
-                existing.interface.setBinding(binding)
+           
+
+            if ( existing.enabled && ( 
+                 (existing.state==='connected' && existing?.interface?.isConnected()) || existing.state==='connecting' ))  {
+                return;
+            }
+
             existing.enabled = true            
+            const state = existing.interface.isConnected() ? 'connected' : 'disconnected'
+            existing.state = state;
+
             merge(existing.properties||this.defaultProps, props)
-            this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
+
+            this.emit('interface-changed', ifaceName,{...existing})
+
+            if (!existing.interface.isConnected()) {
+                this.emit('interface-changed', ifaceName,{...existing, state:'connecting'})
+                const conected = await this.connect(ifaceName)
+                const state = conected ? 'connected' : 'disconnected'
+                this.emit('interface-changed', ifaceName,{...existing, state})
+
+            }
+    
+    
+        }
+        catch(err) {
+            this.logEvent({message:'Error', fn:'enableInterface',error:err.message,stack:err.stack})
         }
     }
 
@@ -177,24 +191,35 @@ export class DeviceAccessService  extends EventEmitter{
      * 
      * @param ifaceName the name of the interface (one of `ant`, `ble`, `serial`, `tcpip`)
      */
-    disableInterface( ifaceName:string, avalailable=true):void {
-        const existing = this.interfaces[ifaceName]
+    async disableInterface( ifaceName:string, avalailable=true):Promise<void> {
+        const existing = this.interfaces[ifaceName] as InterfaceInfoInternal
         if (!existing) 
             return;
-        
+
         if (this.isScanning(ifaceName)) {
-            const info:InterfaceInfoInternal = this.interfaces[ifaceName] as InterfaceInfoInternal;
-            
-            info.interface.stopScan().then( (stopped)=> {
-                this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
+            try {
+                const info:InterfaceInfoInternal = this.interfaces[ifaceName] as InterfaceInfoInternal;
+                
+                const stopped = await info.interface.stopScan()
+
                 info.isScanning = !stopped
+                this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
                 if (stopped)
                     this.disableInterface(ifaceName)
-            })
-            return;
+                
+            
+            }
+            catch(err) {
+                this.logEvent({message:'Error', fn:'disableInterface',error:err.message, stack:err.stack})
+            }
+            
+            
         }
 
         existing.enabled = false;
+        await this.disconnect(ifaceName)
+        //this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
+        
         if (!avalailable) {
             existing.state = 'unavailable';
             (existing as InterfaceInfoInternal).unavailable = true;
@@ -202,7 +227,6 @@ export class DeviceAccessService  extends EventEmitter{
             return
         }
 
-        this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
     }       
 
    /**
@@ -277,6 +301,29 @@ export class DeviceAccessService  extends EventEmitter{
         })
     }
 
+
+    initInterface(ifaceName:string, binding, props:InterfaceAccessProps={}) {
+        const existing = this.interfaces[ifaceName] as InterfaceInfoInternal
+
+        if (!existing) {
+            const properties = clone(this.defaultProps)            
+            merge(properties, props)
+            const info: InterfaceInfoInternal = { name:ifaceName,interface:InterfaceFactory.create(ifaceName,{binding}), enabled:false, isScanning:false, properties,state: 'unknown'}
+            this.interfaces[ifaceName]= info
+            info.interface.setBinding(binding)
+
+            const keys = Object.keys(this.interfaces)
+            const interfaces = keys.map( name=> ({...this.interfaces[name],name}) )
+
+            this.emit('interface-changed', ifaceName,this.interfaces[ifaceName], interfaces)
+        }
+        else {
+            const info = existing as InterfaceInfoInternal
+            info.interface.setBinding(binding)
+        }
+
+    }
+
     protected getInterface( ifaceName:string):IncyclistInterface {
         const info = this.interfaces[ifaceName] as InterfaceInfoInternal
         return info?.interface
@@ -296,36 +343,48 @@ export class DeviceAccessService  extends EventEmitter{
      * @returns true if the interface could be connected, otherwise false
      */
    async connect( ifaceName?:string):Promise<boolean> {
-
-        if (!ifaceName) {
-            const interfaces = Object.keys(this.interfaces)
-            interfaces.forEach( name=> { if (name) this.connect(name)})
-            return;
-        }
-
-        const impl = this.getInterface(ifaceName) 
-
-        if (!impl) {
-            this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
-            this.interfaces[ifaceName].state = 'unavailable'
-            return false;
-        }
-
-        const prevState = this.interfaces[ifaceName].state
-        if (prevState==='connected')
-            return true;
-
-        this.interfaces[ifaceName].state = 'connecting'
-        this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])    
     
-        const connected = await impl.connect()
+        try {
+            if (!ifaceName) {
+                const interfaces = Object.keys(this.interfaces)
+                interfaces.forEach( name=> { if (name) this.connect(name)})
+                return;
+            }
+    
+            if (this.interfaces[ifaceName]?.enabled===false)
+                return
 
-        const state:InterfaceState = connected ? 'connected': 'disconnected'
-        this.interfaces[ifaceName].state = state
+            const impl = this.getInterface(ifaceName) 
+    
+            if (!impl) {
+                this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
+                this.interfaces[ifaceName].state = 'unavailable'
+                return false;
+            }
+    
+            const prevState = this.interfaces[ifaceName].state
+            if (prevState==='connected')
+                return true;
+    
+            this.interfaces[ifaceName].state = 'connecting'
+            this.emit('interface-changed',ifaceName,{...this.interfaces[ifaceName],state:'connecting'})    
         
-        this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])
+            const connected = await impl.connect()            
+    
+            const state:InterfaceState = connected ? 'connected': 'disconnected'
+            this.interfaces[ifaceName].state = state
+            
+            this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])
+    
+            return connected
+    
+        }
+        catch(err) {
+            this.logEvent({message:'Error', fn:'connect',error:err.message, stack:err.stack})
+            return false
+        }
 
-        return connected
+
     }
 
     private getScanTimeout(propsTimeout, interfaceSettingsTimeout) {
@@ -349,6 +408,8 @@ export class DeviceAccessService  extends EventEmitter{
      * @returns true if the interface could be disconnected, otherwise false
      */
    async disconnect( ifaceName?:string):Promise<boolean> {
+
+    
         if (!ifaceName) {
             const promises = Object.keys(this.interfaces).map( i=> this.disconnect(i))
             const result = await Promise.allSettled(promises)
@@ -363,12 +424,12 @@ export class DeviceAccessService  extends EventEmitter{
 
         const prevState = this.interfaces[ifaceName].state
         this.interfaces[ifaceName].state = 'disconnecting'
-        this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])    
+        this.emit('interface-changed',ifaceName,{...this.interfaces[ifaceName]})    
         const disconnected = await impl.disconnect()
 
         const state:InterfaceState = disconnected ? 'disconnected': prevState
         this.interfaces[ifaceName].state = state
-        this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])
+        this.emit('interface-changed',ifaceName,{...this.interfaces[ifaceName]})
 
         return disconnected
     }

@@ -53,6 +53,7 @@ export interface InternalPairingState extends PairingState {
     initialized: boolean;
     stopRequested?:boolean
     stopped?:boolean
+    waiting?:boolean
 
     check?: {
         promise:Promise<boolean>

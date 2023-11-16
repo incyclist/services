@@ -46,6 +46,7 @@ class TestWrapper extends DevicePairingService {
             configuration.canStartRide=jest.fn()
             configuration.delete=jest.fn()
             configuration.setInterfaceSettings=jest.fn()
+            configuration.init=jest.fn()
         }
 
         ride.startAdapters=jest.fn()
@@ -971,7 +972,6 @@ describe('PairingService',()=>{
 
         })
         describe('changeInterfaceSettings',()=>{
-            let restart;
             beforeEach( ()=>{
                 TestWrapper.setupMocks()
                 svc = new TestWrapper()               
@@ -982,10 +982,8 @@ describe('PairingService',()=>{
                     {udid:'1', selected:true,interface:'ant'}, 
                     {udid:'2',interface:'ble'} ]) 
                                 svc.simulatePairing() // the interface settings are not
-                
-                restart = svc.mock('restart',jest.fn( ()=>Promise.resolve()))
-
-            
+              
+           
           
             })
             afterEach( ()=>{
@@ -996,14 +994,7 @@ describe('PairingService',()=>{
             test('disable',()=>{
                 const ant: Partial<InterfaceSetting> = {enabled:false}
                 svc.changeInterfaceSettings('ant',ant as InterfaceSetting)
-                const antAdapter = svc.getDeviceAdapter('1')
-
-
-                expect( access.disableInterface).toHaveBeenCalledWith('ant')
                 expect( configuration.setInterfaceSettings).toHaveBeenCalledWith('ant',ant)
-                                expect(antAdapter?.stop).toHaveBeenCalled()
-                expect(onStateChanged).toHaveBeenCalledWith(expect.objectContaining({interfaces:expect.anything()}))
-                expect(restart).toHaveBeenCalled()
             })
 
             test('enable',()=>{
@@ -1011,28 +1002,14 @@ describe('PairingService',()=>{
                 antIf.enabled = false
                 const ant: Partial<InterfaceSetting> = {enabled:true}
                 svc.changeInterfaceSettings('ant',ant as InterfaceSetting)
-                const antAdapter = svc.getDeviceAdapter('1')
 
-
-                expect( access.enableInterface).toHaveBeenCalledWith('ant')
                 expect( configuration.setInterfaceSettings).toHaveBeenCalledWith('ant',ant)
-                expect(antAdapter?.stop).not.toHaveBeenCalled()
-                expect(onStateChanged).toHaveBeenCalledWith(expect.objectContaining({interfaces:expect.anything()}))
-                expect(restart).toHaveBeenCalled()
 
             })
             test('no change',()=>{
                 const ant: Partial<InterfaceSetting> = {enabled:true}
                 svc.changeInterfaceSettings('ant',ant as InterfaceSetting)
-                const antAdapter = svc.getDeviceAdapter('1')
-
-
-                expect( access.enableInterface).not.toHaveBeenCalledWith('ant')
-                expect( access.disableInterface).not.toHaveBeenCalledWith('ant')
                 expect( configuration.setInterfaceSettings).not.toHaveBeenCalledWith('ant',ant)
-                expect(antAdapter?.stop).not.toHaveBeenCalled()
-                expect(onStateChanged).not.toHaveBeenCalledWith(expect.objectContaining({interfaces:expect.anything()}))
-                expect(restart).not.toHaveBeenCalled()
 
             })
 

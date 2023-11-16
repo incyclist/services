@@ -144,6 +144,13 @@ export class DevicePairingService  extends IncyclistService{
 
     async start( onStateChanged: (newState:PairingState)=>void) {
 
+
+        if (this.state.stopped) {
+            // cleanup on 2nd launch
+            this.state.stopped = false;
+        }
+
+
         try {
             if (this.settings.onStateChanged) {
                 this.settings.onStateChanged = onStateChanged
@@ -155,6 +162,9 @@ export class DevicePairingService  extends IncyclistService{
             await this.waitForInit()
             const {capabilities,interfaces} = this.configuration.load()
 
+            const state = {...this.state}
+            delete state.adapters
+    
             this.state.capabilities = mappedCapabilities(capabilities)
             this.state.interfaces = this.access.enrichWithAccessState(interfaces)
             this.state.canStartRide = this.configuration.canStartRide()
@@ -221,6 +231,11 @@ export class DevicePairingService  extends IncyclistService{
             this.removeConfigHandlers()
             this.settings = {}
             this.state.initialized = false
+            this.state.waiting = false;
+            this.state.check = null;
+            this.state.scan = null;
+            this.state.stopRequested = false;
+            this.state.stopped = true
         }
         catch (err) { // istanbul ignore next
             this.logError(err,'stop')
@@ -480,18 +495,6 @@ export class DevicePairingService  extends IncyclistService{
 
             this.configuration.setInterfaceSettings(name,settings)
 
-            if (settings.enabled) {
-                this.connectInterface(name)
-            }
-            else {
-                this.stopAdaptersOnInterface(name)
-                this.disconnectInterface(name)
-            }
-            
-            this.emitStateChange()
-
-            // restart pairing or scanning            
-            await this.restart();            
             
         }
         catch (err) { // istanbul ignore next
@@ -501,15 +504,33 @@ export class DevicePairingService  extends IncyclistService{
 
 
     protected async restart() {
+        const wasActive = this.isPairing() || this.isScanning()
+
         await this._stop();
-        this.run();
+
+        if (wasActive) {
+            await this.rideService.stop()
+
+            await sleep(500)
+            this.run();
+        }
+
+        if (this.state.waiting) {
+            this.state.waiting = false;
+            this.run()
+        }
     }
 
     protected async _stop() {
+      
+
         if (this.isPairing())
             await this.stopPairing();
         if (this.isScanning())
             await this.stopScanning();
+
+        this.state.capabilities.forEach(c => c.connectState='waiting')
+        this.state.waiting = true;
     }
 
 
@@ -637,6 +658,8 @@ export class DevicePairingService  extends IncyclistService{
                 this.access.enableInterface(ifName,undefined, {port:Number(port),protocol})            
 
                 this.selectFromInterface(ifName)
+
+    
             }
             else if (!settings.enabled && current.enabled) {    
                 this.access.disableInterface(ifName)            
@@ -660,6 +683,9 @@ export class DevicePairingService  extends IncyclistService{
             
 
             this.emitStateChange()
+
+
+            this.restart();            
 
         }
         catch (err) { // istanbul ignore next
@@ -1081,10 +1107,10 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected async run(props:PairingProps={}):Promise<void> {
-
         this.emit('run')
+
         // pairing already ongoing ? stop previous paring
-        if (this.isPairing() || this.isScanning()) {
+        if (this.isPairing() || this.isScanning() || !this.state.waiting)  {
             await this._stop()
         }
         if (this.state.stopRequested || this.state.stopped) {
@@ -1127,19 +1153,19 @@ export class DevicePairingService  extends IncyclistService{
 
     private async startPairing(adapters: AdapterInfo[], props: PairingProps) {
         this.emit('pairing-start');
-
         
-        const isReady = !this.state.interfaces.find( i=>i.enabled && i.state==='connecting')
+        const isReady = !this.state.interfaces.find( i=>i.enabled && i.state!=='connected' && i.state!=='unavailable' )
         if (!isReady) {
             setTimeout(() => {
-                this.run()
+
+                if ( !this.isPairing() && !this.isScanning())
+                    this.run()
             }, 1000);
             return;
         }
         
 
 
-        this.logEvent({ message: 'Start Pairing', adapters, props });
 
         // unpause /adapt connectState for started adapters
         this.processConnectedDevices(adapters);
@@ -1155,6 +1181,7 @@ export class DevicePairingService  extends IncyclistService{
         this.onPairingStarted();
 
 
+        this.logEvent({ message: 'Start Pairing', adapters, props });
         await this.state.check.promise;
         if (this.state.check)
             delete this.state.check
@@ -1162,6 +1189,7 @@ export class DevicePairingService  extends IncyclistService{
         this.emit('pairing-done');
         if (!this.checkPairingSuccess()) {
             this.logEvent({ message: 'Pairing done', adapters, props });
+            await this.rideService.stop()
             await sleep(this.getPairingRetryDelay());
             if (!this.state.scan)
                 this.run();
@@ -1188,7 +1216,8 @@ export class DevicePairingService  extends IncyclistService{
         const interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i))||[].map(i=>i.name)
         if (interfaces.length===0) {
             setTimeout(() => {
-                this.run()
+                if ( !this.isPairing() && !this.isScanning())
+                    this.run()
             }, 1000);
 
             return;
