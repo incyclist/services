@@ -55,6 +55,8 @@ export interface Services{
 export class DevicePairingService  extends IncyclistService{
 
     protected static _instance: DevicePairingService
+    protected static checkCounter =0
+    protected static scanCounter =0
 
     protected configuration: DeviceConfigurationService
     protected access: DeviceAccessService
@@ -639,7 +641,6 @@ export class DevicePairingService  extends IncyclistService{
         const state= this.getExternaState(newState)
 
         if (onStateChanged && typeof onStateChanged ==='function') {
-            
             onStateChanged( {...state}) 
         }
 
@@ -752,7 +753,6 @@ export class DevicePairingService  extends IncyclistService{
         const changed = ( current.state!==ifDetails.state || current.isScanning!==ifDetails.isScanning || current.enabled!==ifDetails.enabled)
         
         if (!changed) {
-            console.log('~~~ DEUBUG: if change, no change', ifName,ifDetails)
             return;
         }
 
@@ -1167,7 +1167,7 @@ export class DevicePairingService  extends IncyclistService{
 
         //await this.waitForInterfacesInitialized()
 
-        if (configOKToStart && !this.deviceSelectState && !props.enforcedScan) {
+        if (configOKToStart && !this.deviceSelectState && !props.enforcedScan)  {
             await this.startPairing(adapters, props);
 
         }
@@ -1177,6 +1177,12 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     private async startPairing(adapters: AdapterInfo[], props: PairingProps) {
+        if (this.isPairing()) 
+            return;
+
+        const preparing = DevicePairingService.checkCounter++
+        this.state.check={preparing}   // will cause that next call to isPairing() will be true
+        
         this.emit('pairing-start');
         
         const requiredInterfaces = this.getPairingInterfaces()
@@ -1191,8 +1197,10 @@ export class DevicePairingService  extends IncyclistService{
         if (!isReady) {
             setTimeout(() => {
 
-                if ( !this.isPairing() && !this.isScanning())
+                if ( (!this.isPairing()||this.state.check.preparing===preparing) && !this.isScanning()) {
+                    delete this.state.check
                     this.run()
+                }
             }, 1000);
             return;
         }
@@ -1206,8 +1214,13 @@ export class DevicePairingService  extends IncyclistService{
 
         const target = adapters.filter(ai => !ai.adapter.isStarted() && selected.includes(ai.udid));
 
+        if (this.isPairing() && this.state.check.preparing!==preparing) {
+            return;
+        }
+
         this.initPairingCallbacks();
         const selectedAdapters = target.map(ai=>({...ai, isStarted:false}))
+
         const promise = this.rideService.startAdapters(selectedAdapters, 'pair');
         this.state.check={promise}
         this.onPairingStarted();
@@ -1250,21 +1263,37 @@ export class DevicePairingService  extends IncyclistService{
                             .map(i=>i.name)
 
 
+        if (this.isScanning())
+            return;
+
+        const preparing = DevicePairingService.scanCounter++
+        this.state.scan={preparing}   // will cause that next call to isPairing() will be true
+                    
+
         if (interfaces.length===0) {
             if (this.state.scanTo) 
                 return;
 
             this.state.scanTo = setTimeout(() => {
                 delete this.state.scanTo
-                if ( !this.isPairing() && !this.isScanning())
+                if ( !this.isPairing() && (!this.isScanning()  || this.state.scan.preparing===preparing)) {
+                    delete this.state.scan
                     this.run()
+                }
             }, 1000);
 
             return;
         }
+
+
         this.emit('scanning-start')
 
         this.state.tsPrevStart = Date.now();
+
+        // multiple scans can be triggered within a few ms 
+
+        if (this.isScanning() && this.state.scan.preparing!==preparing)
+            return;
 
         this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props})
         this.initScanningCallbacks()

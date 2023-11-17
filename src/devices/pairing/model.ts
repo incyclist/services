@@ -64,10 +64,12 @@ export interface InternalPairingState extends PairingState {
     tsPrevStart?: number;
 
     check?: {
-        promise:Promise<boolean>
+        preparing?:number
+        promise?:Promise<boolean>
     }
     scan?: {
-        promise: Promise<DeviceSettings[]>
+        preparing?:number
+        promise?: Promise<DeviceSettings[]>
         adapters?: Array<{ udid:string,adapter:IncyclistDeviceAdapter, handler}>
     }
     props?:PairingProps
