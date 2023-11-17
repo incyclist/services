@@ -60,6 +60,8 @@ export interface InternalPairingState extends PairingState {
     stopped?:boolean
     waiting?:boolean
     deleted: Array<DeleteListEntry>
+    scanTo?: NodeJS.Timeout
+    tsPrevStart?: number;
 
     check?: {
         promise:Promise<boolean>
