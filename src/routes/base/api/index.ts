@@ -27,7 +27,6 @@ export default class IncyclistRoutesApi {
     protected logError( err:Error, fn:string, logInfo?) {
         const args = logInfo || {}
         this.logger.logEvent( {message:'Error', error:err.message, fn, ...args})
-        console.log(err)
     }
 
     protected getApi():AxiosInstance {
@@ -61,7 +60,17 @@ export default class IncyclistRoutesApi {
         }
     }
 
-    fixMissingRouteDistances(points:Array<RoutePoint>) {
+    static verify(route) {
+        if (route['decoded'] ) {
+            route.points =route['decoded']
+            delete route['decoded']
+
+            IncyclistRoutesApi.fixMissingRouteDistances(route.points)
+        }
+
+    }
+
+    protected static fixMissingRouteDistances(points:Array<RoutePoint>) {
         let routeDistance = 0
         points.forEach( (p)=> {
             if (!p.routeDistance)
@@ -75,12 +84,7 @@ export default class IncyclistRoutesApi {
 
         try {
             const res = await this._get( `/${routeId}` )  
-            if (res.data['decoded'] ) {
-                res.data.points =res.data['decoded']
-                delete res.data['decoded']
-
-                this.fixMissingRouteDistances(res.data.points)
-            }
+            IncyclistRoutesApi.verify(res.data)
             return res.data;           
         }
         catch(err) {

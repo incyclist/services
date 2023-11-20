@@ -1,6 +1,6 @@
 
 export type RouteType = 'gpx' | 'video';
-export type RouteCategory = 'Free' | 'Demo';
+export type RouteCategory = 'Free' | 'Demo' | 'personal';
 export type RouteState = 'prepared' | 'loading' | 'loaded' | 'error';
 
 export type RouteProvider = {

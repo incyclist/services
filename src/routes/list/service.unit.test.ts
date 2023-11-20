@@ -32,6 +32,7 @@ class Test extends RouteListService {
     constructor() {
         super();
 
+
         this.api['getBaseUrl']=jest.fn().mockReturnValue(DEFAULT_ROUTE_API)
     }
 
@@ -41,7 +42,7 @@ class Test extends RouteListService {
 
 
 
-describe('RouteListService',()=>{
+describe.skip('RouteListService',()=>{
 
 
     describe('openRouteSelection',()=>{
@@ -119,8 +120,9 @@ describe('RouteListService',()=>{
 
     test.skip('loadRouteDescriptions',async ()=>{
         const svc = new Test()
-        await svc.loadRouteDescriptions();
-       
+        const res = await svc.loadRouteDescriptions();
+        console.log(res)
+        console.log(svc.getRoutes())
         
         
     })

@@ -26,6 +26,19 @@ export type RouteApiDescription = {
     localizedTitle?:LocalizedText,
 }
 
+export type LegacyRouteGpxRepoDescription = {
+    id: string;   
+    hash?: string; 
+    routeHash?: string; 
+    title: string; //
+    private?: boolean;
+    distance?: number;
+    elevation?: number
+    author?: { id:string} 
+    points?: { id: string}; 
+    __v:number;
+    category?: RouteCategory 
+}
 
 export type RouteApiDetail = {
     id: string;   

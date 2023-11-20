@@ -392,7 +392,8 @@ export class DevicePairingService  extends IncyclistService{
             const c = this.getCapability(capability)
             if (cntSelected===1 && c.selected===udid) {
                 const adapter = this.getDeviceAdapter(udid)
-                adapter.stop();
+                if (adapter)
+                    adapter.stop();
             }
 
             if (deleteAll) {
@@ -401,7 +402,7 @@ export class DevicePairingService  extends IncyclistService{
                 
 
 
-                capabilities.forEach( (c,idx) => {
+                capabilities?.forEach( (c,idx) => {
                     const shouldEmit = (idx===capabilities.length-1)
                     this.deleteCapabilityDevice(c,udid,shouldEmit)
                 })

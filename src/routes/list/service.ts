@@ -1,10 +1,12 @@
-import {Page, IRouteListBinding, InternalRouteListState, List, RouteInfo, Route, RouteListEntry, RouteListStartProps, RouteListData, RouteStartSettings } from "./types";
+import {Page,  InternalRouteListState, List, RouteInfo, Route, RouteListEntry, RouteListStartProps, RouteListData, RouteStartSettings, onRouteStatusUpdateCallback, onCarouselStateChangedCallback } from "./types";
 import IncyclistRoutesApi from "../base/api";
 import { RouteApiDescription, RouteApiDetail } from "../base/api/types";
 import { getLocalizedData } from "../base/utils/localization";
 import { IncyclistService } from "../../base/service";
 import { checkIsLoop, getSegments } from "../base/utils/route";
 import { useUserSettings } from "../../settings";
+import { IJsonRepositoryBinding, JSONObject, JsonRepository } from "../../api";
+import clone from "../../utils/clone";
 
 type filterFn = (route:Route,idx:number,obj:Route[])=>boolean
 
@@ -12,7 +14,7 @@ export class RouteListService  extends IncyclistService{
 
     protected static _instance
 
-    static getInstance(binding?:IRouteListBinding):RouteListService{
+    static getInstance(binding?:IJsonRepositoryBinding):RouteListService{
         if (!RouteListService._instance) 
             RouteListService._instance = new RouteListService(binding)
         
@@ -21,12 +23,12 @@ export class RouteListService  extends IncyclistService{
 
     protected baseDir:string;
     protected state: InternalRouteListState
-    protected binding: IRouteListBinding
     protected routes: Array<RouteListEntry>
-
+    protected videosRepo: JsonRepository
+    protected routesRepo: JsonRepository
     protected api: IncyclistRoutesApi 
 
-    constructor( binding?:IRouteListBinding) {
+    constructor( binding?:IJsonRepositoryBinding) {
         super('RouteList')
 
         this.state = {
@@ -34,7 +36,9 @@ export class RouteListService  extends IncyclistService{
             pages:[]
         }
 
-        this.setBinding(binding)
+        if (binding)
+            JsonRepository.setBinding(binding)
+        
         this.api = IncyclistRoutesApi.getInstance()
         
         this.initRouteLists()
@@ -42,18 +46,33 @@ export class RouteListService  extends IncyclistService{
     }
 
 
-    setBinding( binding:IRouteListBinding ) {
+    setBinding( binding:IJsonRepositoryBinding ) {
         if(!binding)
             return;
 
-        this.binding = binding
+        JsonRepository.setBinding(binding)
         this.state.initialized = true;        
+    }
+
+    protected getVideosRepo():JsonRepository {
+        if (this.videosRepo)
+            return this.videosRepo
+        this.videosRepo = JsonRepository.create('videos')
+        return this.videosRepo
+    }
+    protected getRoutesRepo():JsonRepository {
+        if (this.routesRepo)
+            return this.routesRepo
+        this.routesRepo = JsonRepository.create('routes')
+        return this.routesRepo
     }
 
 
     async preload( carouselSize:number=5 ): Promise<void> {
+
         if (this.state.loading)
-            await this.state.loading.promise
+            return
+            //                      await this.state.loading.promise
 
         const promise = this._preload(carouselSize)
 
@@ -65,23 +84,34 @@ export class RouteListService  extends IncyclistService{
 
     protected async _preload( carouselSize:number=5, detailsOnly=false ): Promise<void> {
         
-        this.logEvent( {message:'preloading routes --'})
-
         if (!detailsOnly) {
             await this.loadRouteDescriptions()
         }
+        this.emitPageUpdate()
         
         const promises = []
+        const promisesApi = []
+
+         
+        const lists = this.getRouteLists().map(li=>li.list)
+        lists.forEach( (list)=>{ 
+            this.preloadList(list,carouselSize,detailsOnly)
+        })
+        
+        /*
         this.routes.forEach( rle=> {
+            
             if (rle.routes?.length>0) {
 
                     
                 this.sort(rle.routes)
+                let cntApi = 0;
+                rle.routes.forEach ( (r)=> {
+                    if (!r.data.isLocal)
+                        return;
+                        cntApi++;
 
-                rle.routes.forEach ( (r,idx)=> {
-
-
-                    if (idx< Math.min(carouselSize,rle.routes.length)) {
+                    if (cntApi<= Math.min(carouselSize,rle.routes.length)) {
                         const loader = this.loadRouteDetais(r)
                         promises.push(loader)
                     }
@@ -92,9 +122,51 @@ export class RouteListService  extends IncyclistService{
 
         await Promise.allSettled( promises)
         this.emitPageUpdate()
+        */
+
         this.logEvent( {message:'preloading routes finished'})
         
     }
+
+    protected async preloadList( list:List, carouselSize:number=5, detailsOnly=false ): Promise<void> {
+       
+        
+        const promises = []
+        const promisesApi = []
+        this.emitPageUpdate()
+
+        
+        
+        this.routes.forEach( rle=> {
+            
+            if (rle.routes?.length>0) {
+
+                    
+                this.sort(rle.routes)
+                let cntApi = 0;
+                rle.routes.forEach ( (r)=> {
+                    if (!r.data.isLocal){
+                        cntApi++;
+                        return;
+                    }
+
+                    if (cntApi<= Math.min(carouselSize,rle.routes.length)) {
+                        const loader = this.loadRouteDetais(r)
+                        promises.push(loader)
+                    }
+                })
+                
+            }
+        })
+
+        await Promise.allSettled( promises)
+        this.emitPageUpdate()
+
+
+        this.logEvent( {message:'preloading routes finished'})
+        
+    }
+
 
     async load( props:{list?:List, loadFrom?:number, loadTo?:number, routeId?:string}) {
 
@@ -124,7 +196,7 @@ export class RouteListService  extends IncyclistService{
 
     openRouteSelection( pageId:string, props: RouteListStartProps) {
         const {language,visibleCards,visibleLists}  = props
-        this.logEvent({message:'start', pageId,language,visibleCards,visibleLists })
+        this.logEvent({message:'openRouteSelection', pageId,language,visibleCards,visibleLists })
         const existing = this.getPage(pageId)
         if (existing) {
             this.closeRouteSelection(pageId)
@@ -132,11 +204,14 @@ export class RouteListService  extends IncyclistService{
 
         this.stopAllRides()
 
+        const page = this.registerPage(pageId,props)
         if (props.visibleCards) {
-            this._preload(props.visibleCards,true )
+            this.preload(props.visibleCards)
+        }
+        else  {
+            this.preload(5)
         }
         
-        const page = this.registerPage(pageId,props)
         return page.state       
     }
 
@@ -146,8 +221,8 @@ export class RouteListService  extends IncyclistService{
     }
     */
 
-    closeRouteSelection(listId:string): void {
-        const idx = this.getPage(listId,true) as number
+    closeRouteSelection(pageId:string): void {
+        const idx = this.getPage(pageId,true) as number
         if (idx!==-1) {
             this.state.pages.splice(idx,1)
         }        
@@ -205,6 +280,83 @@ export class RouteListService  extends IncyclistService{
         }
 
     } 
+
+    setCardUpdateHandler(pageId:string,r: RouteInfo|string,list:List,idx:number, onRouteStateChanged:onRouteStatusUpdateCallback,onCarouselStateChanged:onCarouselStateChangedCallback ) {
+        const route = this.getRouteFromStartProps(r);
+
+        const page = this.getPage(pageId) as Page
+        if(!page)   
+            return;
+
+        
+        
+        page.onRouteUpdate[route.id] ={idx,onRouteStateChanged}
+        page.onCarouselStateChanged[route.id] = {idx,onCarouselStateChanged}
+        
+        
+    }
+
+    onCarouselInitialized(pageId:string, list:List,startIdx:number, visibleSize:number) {
+        
+        const page = this.getPage(pageId) as Page
+        console.log('~~~ DEBUG:onCarouselInitialied',pageId,list,this.getListState(page,list),startIdx,visibleSize)
+        if(!page)   
+            return;
+
+        const listState = this.getListState(page,list)
+        if (listState) {
+            listState.startIdx = startIdx;
+            listState.endIdx = startIdx+visibleSize-1;
+        }
+        
+
+        const routes = this.getRouteList(list)
+        routes.forEach( (route) => {
+            
+            const {idx,onCarouselStateChanged} = page.onCarouselStateChanged[route.id]||{}
+            const visible = listState!==undefined ? idx>=listState.startIdx &&idx<=listState.endIdx : undefined
+
+            if (route.data.title==='Malaga City Tour')
+                console.log('~~~ DEBUG:Initialized -checked detail',visible, idx,listState.startIdx, listState.endIdx, route.data)
+            if (onCarouselStateChanged)
+                onCarouselStateChanged({initialized:true,visible})
+
+
+            if (visible && (route.data.state==='prepared' || route.data.state==='error')) {
+                this.loadRouteDetais(route)
+            }
+        })
+    }
+
+    onCarouselUpdated(pageId:string, list:List,startIdx:number, visibleSize:number) {
+        const page = this.getPage(pageId) as Page
+        console.log('~~~ DEBUG:onCarouselUpdated',pageId,list,this.getListState(page,list),startIdx,visibleSize)
+        if(!page)   
+            return;
+
+        const listState = this.getListState(page,list)
+        if (listState) {
+            listState.startIdx = startIdx;
+            listState.endIdx = startIdx+visibleSize-1;
+        }
+        
+
+        const routes = this.getRouteList(list)
+        routes.forEach( (route) => {
+            
+            const {idx,onCarouselStateChanged} = page.onCarouselStateChanged[route.id]||{}
+
+            const visible = listState!==undefined ? idx>=listState.startIdx &&idx<=listState.endIdx : undefined
+            if (route.data.title==='Malaga City Tour')
+                console.log('~~~ DEBUG:Initialized -checked detail',visible, idx,listState.startIdx, listState.endIdx, route.data)
+            if (onCarouselStateChanged)
+                onCarouselStateChanged({initialized:true,visible})
+
+            if (visible && route.data.state==='prepared' || route.data.state==='error') {
+                this.loadRouteDetais(route)
+            }
+        })
+    }
 
     acceptStartSettings(r: RouteInfo|string, startSettings:RouteStartSettings) {
         // mark route as selected
@@ -348,8 +500,8 @@ export class RouteListService  extends IncyclistService{
     protected emitPageUpdate() {
         
         this.state.pages.forEach( p=> {
-            const state = this.getPageState(p.id)
-            p.onStatusUpdate( state)
+            p.state = this.getPageState(p.id)
+            p.onStatusUpdate( p.state)
         })
     }
 
@@ -363,10 +515,12 @@ export class RouteListService  extends IncyclistService{
 
     protected getPageState(pageId:string, lang?:string) {
         const lists = []
+        
         const state:RouteListData = { pageId,lists}
 
         
         const language = lang || (this.getPage(pageId) as Page)?.language || 'en'
+
         const add = (list:List, listHeader:string) => {
 
 
@@ -390,7 +544,7 @@ export class RouteListService  extends IncyclistService{
         const {onStatusUpdate,language='en'} = props
 
         const state = this.getPageState(pageId,language)
-        const page = { id:pageId,onStatusUpdate,language,state}
+        const page = { id:pageId,onStatusUpdate,onRouteUpdate:{},onCarouselStateChanged:{},language,state}
 
        
         this.state.pages.push(page)
@@ -489,13 +643,14 @@ export class RouteListService  extends IncyclistService{
 
 
 
-    protected convertDescription( descr:RouteApiDescription): RouteInfo {
+    protected convertDescription( descr:RouteApiDescription, isLocal?:boolean): RouteInfo {
         const { id,title,localizedTitle,country,distance,elevation, category,provider, video, points} = descr
         
         const data:RouteInfo = { state:'prepared', id,title,localizedTitle,country,distance,elevation,provider,category}
 
         data.hasVideo = false;
         data.hasGpx = false;
+        data.isLocal = isLocal||false
 
         this.updateRouteCountry(data,{descr})
         this.updateRouteTitle(data,{descr})
@@ -520,11 +675,19 @@ export class RouteListService  extends IncyclistService{
         let list:List
 
         if (description.type==='gpx') {
-            list = description.private ? 'myRoutes' : 'selected'
+            if (description.category==='personal')
+                return 'myRoutes'
+
+            list = description.category ? 'alternatives' : 'selected'
+
+            console.log('~~~ DEBUG', description.title, description.private, list)
             return list
         }
 
         if (description.type==='video') {
+
+            if (description.category===undefined || description.category==='personal')
+                return 'myRoutes'
             if (description.video?.url) {
                 return 'selected'
             }
@@ -538,6 +701,15 @@ export class RouteListService  extends IncyclistService{
     }
     protected getRouteList(list:List):Array<Route> {
         return this.routes.find( rle=> rle.list===list)?.routes
+    }
+
+    protected getRouteLists():Array<{list:List,title:string}> {
+        const lists:Array<{list:List,title:string}> = [
+            { list:'myRoutes',title:'My Routes'},
+            { list:'selected',title:'Selected For Me'},
+            { list:'alternatives',title:'Alternatives'}
+        ]
+        return lists;
     }
 
     protected getRoute(criteria:string|filterFn ):Route {
@@ -564,13 +736,58 @@ export class RouteListService  extends IncyclistService{
         }
         
     }
-    
 
-    protected addDescriptions( descriptions: Array<RouteApiDescription>) {
+    protected addDescriptionsFromRepo( descriptions: Array<RouteApiDescription>,repo?:JsonRepository) {
+
+        const routes = descriptions as Array<RouteApiDescription>
+        if (repo) {       
+            // add type information to route
+            const type = repo.getName()==='videos' ? 'video' : 'gpx'       
+            routes.forEach( r => {
+                r.type=type
+                
+            })
+        }
+       
+        const converted: Array<RouteInfo> = routes            
+            .map(this.convertDescription.bind(this))  
+        
+
+        converted.forEach( (data,idx)=> {
+
+
+            const  list = this.getListFromApiDesciption(descriptions[idx])    
+
+            const existing = this.getRouteDescription(list,data.id)
+            if (existing) {
+                this.mergeDescription(existing,data)
+            }
+            else {
+                data.state = 'prepared'
+                data.isLocal = true;
+                const item:Route = { id:data.id, data}                
+                this.addRouteToList(list,item)
+            }
+
+        })
+       
+    }
+
+
+    protected addDescriptionsFromServer( descriptions: Array<RouteApiDescription>) {
         const converted: Array<RouteInfo> = descriptions.map(this.convertDescription.bind(this))  
         
 
         converted.forEach( (data,idx)=> {
+            console.log('~~~ DEBUG:add route from Server', data.title)
+
+            // is route already in any list?
+            const existing = this.getRoute(data.id)
+            if (existing) {
+                // TODO check if needs to be updated
+                return;
+            }
+
             const  list = this.getListFromApiDesciption(descriptions[idx])    
             if (!list) {
                 this.logEvent( {message:'Error', error:'no list found for route', id:data.id, title:data.title})
@@ -583,8 +800,10 @@ export class RouteListService  extends IncyclistService{
             }
             else {
                 data.state = 'prepared'
+                data.isLocal = false;
                 const item:Route = { id:data.id, data}                
                 this.addRouteToList(list,item)
+                this.emitPageUpdate()
             }
 
         })
@@ -639,51 +858,141 @@ export class RouteListService  extends IncyclistService{
         
     }
 
-    protected async loadRouteDescriptions() {
-        
-        const enrich = (v:RouteApiDescription,type)=> ({type, ...v })
 
-        const promises = [
-            this.api.getRouteDescriptions({type:'gpx'}).then( v=> v.map(e=>enrich(e,'gpx'))) ,
-            this.api.getRouteDescriptions({type:'video'}).then( v=> v.map(e=>enrich(e,'video')))
+
+    protected async loadRouteDescriptionsFromRepo() {
+        
+        console.log('~~~ DEBUG:loadRouteDescriptionsFromRepo')
+        const enrichRepo = (v:JSONObject,type)=> {
+            const data = v as RouteApiDescription
+            return {type, ...data }
+        }
+        
+
+        
+        const videos = (await this.getVideosRepo().read('routes') || []) as Array<RouteApiDescription> 
+        console.log('~~~ DEBUG,videos:',videos)
+
+        //const videosData = videos.map(e=>enrichRepo(e,'video'))
+        this.addDescriptionsFromRepo(videos,this.getVideosRepo())
+
+        const routes = (await this.getRoutesRepo().read('routes') ||[]) as Array<RouteApiDescription>
+        console.log('~~~ DEBUG,routes:',routes)
+        //const routesData = routes.map(e=>enrichRepo(e,'gpx'))
+        this.addDescriptionsFromRepo(routes,this.getVideosRepo())
+        
+    }
+
+    protected async loadRouteDescriptionsFromServer() {
+        console.log('~~~ DEBUG:loadRouteDescriptionsFromServer')
+
+        const enrichApi = (v:RouteApiDescription,type)=> ({type, ...v })
+        const api = [
+            this.api.getRouteDescriptions({type:'gpx'}).then( v=> v.map(e=>enrichApi(e,'gpx'))) ,
+            this.api.getRouteDescriptions({type:'video'}).then( v=> v.map(e=>enrichApi(e,'video')))
         ]
 
-        const res = await Promise.allSettled( promises);
-
+        const res = await Promise.allSettled( api);
+        console.log('~~~ DEBUG:loadRouteDescriptionsFromServer done',(new Date()).toISOString(),res)
+        this.emitPageUpdate()
         res.forEach( p  => {
             
             if (p.status==='fulfilled') {
-                this.addDescriptions( p.value)
+                
+                this.addDescriptionsFromServer( p.value)
             }    
         })
-
         
+    }
+
+
+
+    protected async loadRouteDescriptions() {
+        
+
+        await this.loadRouteDescriptionsFromRepo()
+        console.log('~~~ DEBUG, routes after Repo',this.routes)
+        this.emitPageUpdate()
+        this.loadRouteDescriptionsFromServer().then( ()=>{
+            console.log('~~~ DEBUG, routes after API',this.routes)
+        })
+        
+
         
     }
 
     protected async loadRouteDetais(route:Route) {
+
+        //if (route.data.title==='Arnbach') {
+            console.log('~~~ DEBUG:loadDetails()',clone(route.data))
+        //}
 
         if (route.data.state==='loaded')
             return
 
         try {
             route.data.state = 'loading'
-            route.details = await this.api.getRouteDetails(route.id)
-            
+            this.emitRouteUpdated(route)
+
+            if (route.data.isLocal) {
+                route.details =route.data.hasVideo ? 
+                    await this.videosRepo.read(route.id) as RouteApiDetail
+                    :
+                    await this.routesRepo.read(route.id) as RouteApiDetail
+                
+                IncyclistRoutesApi.verify(route.details)
+            }   
+
+            else {
+                route.details = await this.api.getRouteDetails(route.id)
+            }
+            if (route.data.title==='Arnbach')
+                console.log('~~~ DEBUG: loaded details',route.details)
+
+            if (route.details.id!==route.data.id) {
+                route.data.state = 'error'   
+                delete route.details
+                return;    
+            }
+
+           
             this.mergeWithDetails( route)
-            route.data.state = 'loading'
+            route.data.state = 'loaded'
 
             this.emitRouteUpdated(route)
         }
         catch(e) {
+            console.log('~~~ DEBUG:Error',e)
             route.data.state = 'error'   
+            this.emitRouteUpdated(route)
         }
     }
 
     protected emitRouteUpdated(route:Route) {
         this.emit('route-update', route.id, route.data)
+        
+        this.state.pages.forEach( page=> {
+            try {
+                const {onRouteStateChanged} = page.onRouteUpdate[route.id]||{}
+                const {language} = page
+                if (onRouteStateChanged)  {
+                    const data = getLocalizedData(route.data,language)
+                    onRouteStateChanged(data)
+                }
+            }
+            catch(err) {
+                console.log('~~~ DEBUG:Error',err)
+            }                
+
+        })
     }
 
+    protected getListState( page:Page, list:List) {
+        console.log('~~~ DEBUG.getListState',list,page?.state, this.state)
+        
+        return page?.state.lists.find(pl => pl.list===list)
+
+    }
 
     // TODO:
 

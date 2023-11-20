@@ -29,6 +29,7 @@ export type RouteInfo = {
     elevation?: number;    
     category?: RouteCategory
     provider?: RouteProvider
+    isLocal?:boolean;
     hasGpx?: boolean;
     hasVideo?: boolean;
     isDemo?: boolean;
@@ -45,7 +46,14 @@ export type RouteListDateEntry = {
     list: List,
     listHeader: string,
     routes: Array<RouteInfo>
+    startIdx?:number,
+    endIdx?:number
 }
+
+
+
+export type onRouteStatusUpdateCallback = (route:RouteInfo)=>void
+export type onCarouselStateChangedCallback = (state:{initialized:boolean,visible:boolean})=>void
 
 export type RouteListData = {
     pageId: string,    
@@ -77,6 +85,8 @@ export type Page = {
     settingsState?: RouteSettingsState;
     language:string,
     onStatusUpdate: RouteListStatusUpdateCallback
+    onRouteUpdate: { [index:string]: {idx:number, onRouteStateChanged:onRouteStatusUpdateCallback  }}
+    onCarouselStateChanged: { [index:string]:{idx:number, onCarouselStateChanged:onCarouselStateChangedCallback  }}
 }
 
 export interface LoadingState {
