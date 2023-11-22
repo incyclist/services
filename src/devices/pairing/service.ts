@@ -1136,7 +1136,7 @@ export class DevicePairingService  extends IncyclistService{
         this.emit('run')
 
         // pairing already ongoing ? stop previous paring
-        if (this.isPairing() || this.isScanning() || !this.state.waiting)  {
+        if ((this.isPairing() || this.isScanning()) && !this.state.waiting)  {
             await this._stop()
         }
         if (this.state.stopRequested || this.state.stopped) {
@@ -1295,6 +1295,12 @@ export class DevicePairingService  extends IncyclistService{
 
         if (this.isScanning() && this.state.scan.preparing!==preparing)
             return;
+
+
+        this.logEvent({message:'Stopping Adapters',interfaces:interfaces.join(','),props})
+        const stopPromises = []
+        interfaces.forEach( i=> stopPromises.push(this.stopAdaptersOnInterface(i)))
+        await Promise.allSettled(stopPromises)
 
         this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props})
         this.initScanningCallbacks()
@@ -1514,6 +1520,9 @@ export class DevicePairingService  extends IncyclistService{
     protected async stopAdaptersWithCapability( capability:IncyclistCapability|CapabilityData,udid?:string) {
 
         const c = this.getCapability(capability)
+        if(!c)
+            return;
+        
         const {adapters=[],capabilities} = this.state
         const maxRetries = 3;
 
