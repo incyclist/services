@@ -16,15 +16,15 @@ class Test extends RouteListService {
     }
 
     getRoutes() {
-        return this.routes
+        return this.lists
     }
 
-    addToRouteList( list:List, routes:Array<Route>) {
-        const l = this.routes.find( rle=> rle.list===list)
+    addToRouteList( list:List, routes:Array< Route>) {
+        const l = this.lists.find( rle=> rle.list===list)
         if (l)
             l.routes = routes
         else {
-            this.routes.push( {list,routes})
+            this.lists.push( {list,routes})
         }
         
     }
@@ -57,11 +57,11 @@ describe.skip('RouteListService',()=>{
 
             svc.addToRouteList('myRoutes',[])
             svc.addToRouteList('selected',[ 
-                {id:'1', data:{title:'Video1', state:'prepared'}},
-                {id:'2', data:{title:'Video2', state:'prepared'}}
+                {id:'1', data:{type:'route', title:'Video1', state:'prepared'}},
+                {id:'2', data:{type:'route', title:'Video2', state:'prepared'}}
             ])
             svc.addToRouteList('alternatives',[ 
-                {id:'3', data:{title:'Video3', state:'loaded'}}
+                {id:'3', data:{type:'route', title:'Video3', state:'loaded'}}
             ])
 
 

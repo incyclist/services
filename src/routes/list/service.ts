@@ -1133,6 +1133,7 @@ export class RouteListService  extends IncyclistService{
 
     private decodePoints(r: RouteDBEntry) {
         return
+        /*
         const before = r.points
 
         const pointsStr = zlib.inflateSync(Buffer.from(r.points as string, 'hex')).toString('utf8');
@@ -1150,10 +1151,12 @@ export class RouteListService  extends IncyclistService{
         r.points = points;
 
         console.log('~~~ decoded', r.title,r.points)
+        */
     }
 
     private encodePoints(r:RouteDBEntry) {
         return
+        /*
         const str = JSON.stringify(r.points)
         const deflated = zlib.deflateSync(Buffer.from(str,'utf8')).toString('hex');
         r.points = deflated
@@ -1164,6 +1167,7 @@ export class RouteListService  extends IncyclistService{
             const points  = r.points.map( p=> `${p.elevation}/${p.routeDistance}/${p.lat}/${p.lng}`).join('|')        
 
         }
+        */
 
     }
 

@@ -348,8 +348,9 @@ describe('PairingService',()=>{
 
                 expect(logCapabilities).toHaveBeenCalled()
                 
-                expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Start Scanning'}))
-                expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'FE'}}))
+                expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Stopping Adapters'}))
+                expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'Start Scanning'}))
+                expect(logEvent).toHaveBeenNthCalledWith( 3,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'FE'}}))
                 expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'Start Pairing'}))
                 expect(access.scan).toHaveBeenCalled()
                 expect(ride.startAdapters).toHaveBeenCalled()
@@ -391,8 +392,9 @@ describe('PairingService',()=>{
                     })
                 })
 
-                expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Start Scanning'}))
-                expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'HR'}}))
+                expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Stopping Adapters'}))
+                expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'Start Scanning'}))
+                expect(logEvent).toHaveBeenNthCalledWith( 3,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'HR'}}))
                 
                 expect(access.scan).toHaveBeenCalled()
                 expect(ride.startAdapters).not.toHaveBeenCalled()
