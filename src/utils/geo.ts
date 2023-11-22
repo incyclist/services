@@ -98,10 +98,12 @@ export const getPointAfter = (p1:LatLng,p2:LatLng,offset:number):LatLng => {
 
 export const getLatLng = (position:LatLng|Array<number>):LatLng => {
     
-    if ( Array.isArray(position)) 
+    if ( Array.isArray(position)) {
         return { lat:position[0],lng:position[1] }
+    }
 
-    if ( position.lat!==undefined && position.lng!==undefined) 
+    if ( position.lat!==undefined && position.lng!==undefined)  {
         return position;
+    }
 }
 

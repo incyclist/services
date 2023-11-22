@@ -17,11 +17,16 @@ export type RouteListStartProps = {
 
 export type LocalizedText = { [index:string]:string  }
 
+export type CardType = 'route'|'free-ride'|'import'
 
-export type RouteInfo = {
+export interface CardInfo {
+    type: CardType
     state: RouteState;
-    id?: string;   
     title?: string;
+}
+
+export interface RouteInfo  extends CardInfo{
+    id?: string;   
     localizedTitle?: LocalizedText
     country?: string;
     isLoop?:boolean;
@@ -37,10 +42,25 @@ export type RouteInfo = {
     videoFormat?: string;   
     videoUrl?:string;
     previewUrl?:string;
-    points?: Array<RoutePoint>,
+    points?: Array<RoutePoint>|string,
     segments?:Array<RouteSegment>    
+}
+
+
+export interface RouteDBEntry extends RouteInfo {
+    list: List,
+    settings?: {
+        position?: number,
+        segment?:string,
+        realityFactor?:number
+    
+    }
+    cntStarts?:number,
+    lastStart?: number
 
 }
+
+export type RoutesDB = { [index:string]:RouteDBEntry  }
 
 export type RouteListDateEntry = {
     list: List,
@@ -49,7 +69,6 @@ export type RouteListDateEntry = {
     startIdx?:number,
     endIdx?:number
 }
-
 
 
 export type onRouteStatusUpdateCallback = (route:RouteInfo)=>void
@@ -97,21 +116,27 @@ export interface InternalRouteListState {
     initialized: boolean
     pages: Array<Page>
     loading?:LoadingState 
+    preloadDone: boolean;
 }
 
 export type RouteStartState = 'idle' | 'preparing'| 'selected' | 'started'
 
-export type Route = {
+export type Card<T> = {
     id: string;
-    data: RouteInfo
+    data: T
     details?: RouteApiDetail
     startSettings?: RouteStartSettings
     startState?:RouteStartState
 }
 
-export type RouteListEntry = {
+
+export type CardListEntry<T> = {
     list:List,
-    routes: Array<Route>
+    routes: Array<Card<T>>
 }
+
+export type Route = Card<RouteInfo>
+export type RouteListEntry  = CardListEntry<RouteInfo>
+
 
 export type List = 'myRoutes' | 'alternatives' | 'selected'

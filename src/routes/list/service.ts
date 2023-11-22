@@ -1,12 +1,14 @@
-import {Page,  InternalRouteListState, List, RouteInfo, Route, RouteListEntry, RouteListStartProps, RouteListData, RouteStartSettings, onRouteStatusUpdateCallback, onCarouselStateChangedCallback } from "./types";
+import {Page,  InternalRouteListState, List, RouteInfo, Route, RouteListEntry, RouteListStartProps, RouteListData, RouteStartSettings, onRouteStatusUpdateCallback, onCarouselStateChangedCallback, RoutesDB, RouteDBEntry } from "./types";
 import IncyclistRoutesApi from "../base/api";
 import { RouteApiDescription, RouteApiDetail } from "../base/api/types";
 import { getLocalizedData } from "../base/utils/localization";
 import { IncyclistService } from "../../base/service";
 import { checkIsLoop, getSegments } from "../base/utils/route";
 import { useUserSettings } from "../../settings";
-import { IJsonRepositoryBinding, JSONObject, JsonRepository } from "../../api";
+import { IJsonRepositoryBinding,  JsonRepository } from "../../api";
 import clone from "../../utils/clone";
+import zlib from 'zlib'
+import { FreeRideCard } from "./FreeRideCard";
 
 type filterFn = (route:Route,idx:number,obj:Route[])=>boolean
 
@@ -23,17 +25,20 @@ export class RouteListService  extends IncyclistService{
 
     protected baseDir:string;
     protected state: InternalRouteListState
-    protected routes: Array<RouteListEntry>
+    protected lists: Array<RouteListEntry>
     protected videosRepo: JsonRepository
     protected routesRepo: JsonRepository
     protected api: IncyclistRoutesApi 
+    protected routeDescriptions: RoutesDB
+    
 
     constructor( binding?:IJsonRepositoryBinding) {
         super('RouteList')
 
         this.state = {
             initialized: false,
-            pages:[]
+            pages:[],
+            preloadDone:false
         }
 
         if (binding)
@@ -42,6 +47,7 @@ export class RouteListService  extends IncyclistService{
         this.api = IncyclistRoutesApi.getInstance()
         
         this.initRouteLists()
+        this.routeDescriptions = {}
 
     }
 
@@ -53,6 +59,7 @@ export class RouteListService  extends IncyclistService{
         JsonRepository.setBinding(binding)
         this.state.initialized = true;        
     }
+    
 
     protected getVideosRepo():JsonRepository {
         if (this.videosRepo)
@@ -70,102 +77,18 @@ export class RouteListService  extends IncyclistService{
 
     async preload( carouselSize:number=5 ): Promise<void> {
 
-        if (this.state.loading)
+        if (this.state.loading || this.state.preloadDone)
             return
-            //                      await this.state.loading.promise
 
         const promise = this._preload(carouselSize)
 
         this.state.loading = {promise}
         await promise
+        this.state.preloadDone = true;
         this.state.loading = null
 
     }
 
-    protected async _preload( carouselSize:number=5, detailsOnly=false ): Promise<void> {
-        
-        if (!detailsOnly) {
-            await this.loadRouteDescriptions()
-        }
-        this.emitPageUpdate()
-        
-        const promises = []
-        const promisesApi = []
-
-         
-        const lists = this.getRouteLists().map(li=>li.list)
-        lists.forEach( (list)=>{ 
-            this.preloadList(list,carouselSize,detailsOnly)
-        })
-        
-        /*
-        this.routes.forEach( rle=> {
-            
-            if (rle.routes?.length>0) {
-
-                    
-                this.sort(rle.routes)
-                let cntApi = 0;
-                rle.routes.forEach ( (r)=> {
-                    if (!r.data.isLocal)
-                        return;
-                        cntApi++;
-
-                    if (cntApi<= Math.min(carouselSize,rle.routes.length)) {
-                        const loader = this.loadRouteDetais(r)
-                        promises.push(loader)
-                    }
-                })
-                
-            }
-        })
-
-        await Promise.allSettled( promises)
-        this.emitPageUpdate()
-        */
-
-        this.logEvent( {message:'preloading routes finished'})
-        
-    }
-
-    protected async preloadList( list:List, carouselSize:number=5, detailsOnly=false ): Promise<void> {
-       
-        
-        const promises = []
-        const promisesApi = []
-        this.emitPageUpdate()
-
-        
-        
-        this.routes.forEach( rle=> {
-            
-            if (rle.routes?.length>0) {
-
-                    
-                this.sort(rle.routes)
-                let cntApi = 0;
-                rle.routes.forEach ( (r)=> {
-                    if (!r.data.isLocal){
-                        cntApi++;
-                        return;
-                    }
-
-                    if (cntApi<= Math.min(carouselSize,rle.routes.length)) {
-                        const loader = this.loadRouteDetais(r)
-                        promises.push(loader)
-                    }
-                })
-                
-            }
-        })
-
-        await Promise.allSettled( promises)
-        this.emitPageUpdate()
-
-
-        this.logEvent( {message:'preloading routes finished'})
-        
-    }
 
 
     async load( props:{list?:List, loadFrom?:number, loadTo?:number, routeId?:string}) {
@@ -182,7 +105,7 @@ export class RouteListService  extends IncyclistService{
         if (list) 
             lists.push(list)
         else 
-            lists = this.routes.map( rle=>rle.list)
+            lists = this.lists.map( rle=>rle.list)
 
         
         lists.forEach( l=> {
@@ -197,6 +120,8 @@ export class RouteListService  extends IncyclistService{
     openRouteSelection( pageId:string, props: RouteListStartProps) {
         const {language,visibleCards,visibleLists}  = props
         this.logEvent({message:'openRouteSelection', pageId,language,visibleCards,visibleLists })
+
+
         const existing = this.getPage(pageId)
         if (existing) {
             this.closeRouteSelection(pageId)
@@ -205,27 +130,41 @@ export class RouteListService  extends IncyclistService{
         this.stopAllRides()
 
         const page = this.registerPage(pageId,props)
-        if (props.visibleCards) {
-            this.preload(props.visibleCards)
-        }
-        else  {
-            this.preload(5)
-        }
+
+        if (!this.state.preloadDone)
+            this.preload(props.visibleCards||5)
+        else 
+            this.onResize(pageId)
         
         return page.state       
     }
-
-    /*
-    updateView( pageId:string, list:string, start:number,cntVisible:number ) {
-
-    }
-    */
 
     closeRouteSelection(pageId:string): void {
         const idx = this.getPage(pageId,true) as number
         if (idx!==-1) {
             this.state.pages.splice(idx,1)
         }        
+    }
+
+    onResize(pageId:string) {
+        const page:Page = this.getPage(pageId) as Page
+
+        //page.state.lists.forEach(list => list.)
+        const routeIds = Object.keys( page.onCarouselStateChanged)
+        routeIds.forEach( id=> {
+
+            const route = this.getRoute(id)
+
+            const stateChange = page.onCarouselStateChanged[id]?.onCarouselStateChanged
+            if (stateChange)
+                stateChange({initialized:true,visible:false})
+
+            const update =page.onRouteUpdate[id].onRouteStateChanged
+            if (update)
+                update(route.data)
+        })
+        
+
     }
 
     
@@ -245,6 +184,7 @@ export class RouteListService  extends IncyclistService{
                 // get previous ride settings ( initially from User Settings, should be moved into RouteRepoDetails)
                 // --> if already in state: get these from state
                 startSettings = this.loadStartSettingsFromUserSettings(route);
+            
             }
             route.startState = 'preparing'
     
@@ -283,6 +223,8 @@ export class RouteListService  extends IncyclistService{
 
     setCardUpdateHandler(pageId:string,r: RouteInfo|string,list:List,idx:number, onRouteStateChanged:onRouteStatusUpdateCallback,onCarouselStateChanged:onCarouselStateChangedCallback ) {
         const route = this.getRouteFromStartProps(r);
+        if (!route)
+            return;
 
         const page = this.getPage(pageId) as Page
         if(!page)   
@@ -299,7 +241,6 @@ export class RouteListService  extends IncyclistService{
     onCarouselInitialized(pageId:string, list:List,startIdx:number, visibleSize:number) {
         
         const page = this.getPage(pageId) as Page
-        console.log('~~~ DEBUG:onCarouselInitialied',pageId,list,this.getListState(page,list),startIdx,visibleSize)
         if(!page)   
             return;
 
@@ -316,8 +257,6 @@ export class RouteListService  extends IncyclistService{
             const {idx,onCarouselStateChanged} = page.onCarouselStateChanged[route.id]||{}
             const visible = listState!==undefined ? idx>=listState.startIdx &&idx<=listState.endIdx : undefined
 
-            if (route.data.title==='Malaga City Tour')
-                console.log('~~~ DEBUG:Initialized -checked detail',visible, idx,listState.startIdx, listState.endIdx, route.data)
             if (onCarouselStateChanged)
                 onCarouselStateChanged({initialized:true,visible})
 
@@ -330,7 +269,6 @@ export class RouteListService  extends IncyclistService{
 
     onCarouselUpdated(pageId:string, list:List,startIdx:number, visibleSize:number) {
         const page = this.getPage(pageId) as Page
-        console.log('~~~ DEBUG:onCarouselUpdated',pageId,list,this.getListState(page,list),startIdx,visibleSize)
         if(!page)   
             return;
 
@@ -347,8 +285,6 @@ export class RouteListService  extends IncyclistService{
             const {idx,onCarouselStateChanged} = page.onCarouselStateChanged[route.id]||{}
 
             const visible = listState!==undefined ? idx>=listState.startIdx &&idx<=listState.endIdx : undefined
-            if (route.data.title==='Malaga City Tour')
-                console.log('~~~ DEBUG:Initialized -checked detail',visible, idx,listState.startIdx, listState.endIdx, route.data)
             if (onCarouselStateChanged)
                 onCarouselStateChanged({initialized:true,visible})
 
@@ -435,6 +371,66 @@ export class RouteListService  extends IncyclistService{
 
     }
 
+    
+
+    protected async _preload( carouselSize:number=5, detailsOnly=false ): Promise<void> {
+        
+        if (!detailsOnly) {
+            await this.loadRouteDescriptions()
+        }
+        this.emitPageUpdate()
+        
+
+         
+        const lists = this.getRouteLists().map(li=>li.list)
+        lists.forEach( (list)=>{ 
+            this.preloadList(list,carouselSize)
+        })
+        
+       
+
+        this.logEvent( {message:'preloading routes finished'})
+        
+    }
+
+    protected async preloadList( list:List, carouselSize:number=5 ): Promise<void> {
+       
+       
+        this.emitPageUpdate()
+
+        
+        const promises = []
+        
+        const rle = this.lists.find(l=>l.list===list)
+            if (rle.routes?.length>0) {
+
+                    
+                this.sort(rle.routes)
+                let cntApi = 0;
+                rle.routes.forEach ( (r)=> {
+                    if (!r.data.isLocal){
+                        cntApi++;
+                    }
+
+                    if (r.data.isLocal || cntApi<= Math.min(carouselSize,rle.routes.length)) {
+                        promises.push( this.loadRouteDetais(r))
+                        
+                        
+                    }
+                })
+            
+            }
+        
+
+        console.log( '~~~ DEBUG: during preload',promises.length)        
+        Promise.allSettled(promises).then( (res)=>{
+            console.log( '~~~ DEBUG: after preload',clone(this.state), clone(this.routeDescriptions),res)
+            this.saveRouteDescriptions()
+
+        })
+        
+
+    }
     protected loadStartSettingsFromUserSettings( route: Route) {
         let startPos = 0, realityFactor = 100, segment;
         const {data} = route
@@ -457,6 +453,11 @@ export class RouteListService  extends IncyclistService{
         const prevRoutePosition = this.getUserSetting(`position.${route.id}`, null);
         if (prevRoutePosition !== null) {
             startPos = prevRoutePosition;
+        }
+
+        if (data.videoFormat==='avi') {
+            startPos = 0;
+            segment = undefined
         }
         return { startPos, realityFactor, segment };
     }
@@ -506,10 +507,10 @@ export class RouteListService  extends IncyclistService{
     }
 
     protected initRouteLists() {
-        this.routes = []
-        this.routes.push( {list:"myRoutes", routes:[]})
-        this.routes.push( {list:"selected", routes:[]})
-        this.routes.push( {list:"alternatives", routes:[]})
+        this.lists = []
+        this.lists.push( {list:"myRoutes", routes:[]})
+        this.lists.push( {list:"selected", routes:[]})
+        this.lists.push( {list:"alternatives", routes:[]})
     }
 
 
@@ -525,6 +526,14 @@ export class RouteListService  extends IncyclistService{
 
 
             const data = this.getRouteList(list)
+
+            if (list==='myRoutes' && !data.find( r=> r.data.type==='free-ride')) {
+                
+                const card:FreeRideCard = new FreeRideCard('loaded') as RouteInfo
+                const route:Route = {data:card,id:'free-ride',}
+
+                data.unshift( route)
+            }
             
             if (data?.length>0) {
                 lists.push(this.getRouteListDataEntry(list,data, language,listHeader))           
@@ -535,6 +544,9 @@ export class RouteListService  extends IncyclistService{
         add('myRoutes','My Routes');
         add('selected', 'Selected For Me');
         add('alternatives', 'Alternatives');
+
+
+        console.log('~~~ DEBUG:getPageState',state)
 
         return state
 
@@ -607,7 +619,9 @@ export class RouteListService  extends IncyclistService{
         local.distance = local.distance || details.distance
         local.elevation = local.elevation || details.elevation
         local.localizedTitle = local.localizedTitle || details.localizedTitle
-        local.points = details.points
+        if (!local.points) {
+            local.points = details.points
+        }
         if (!local.hasGpx && details.points) {
             local.hasGpx = true;          
         }
@@ -646,7 +660,7 @@ export class RouteListService  extends IncyclistService{
     protected convertDescription( descr:RouteApiDescription, isLocal?:boolean): RouteInfo {
         const { id,title,localizedTitle,country,distance,elevation, category,provider, video, points} = descr
         
-        const data:RouteInfo = { state:'prepared', id,title,localizedTitle,country,distance,elevation,provider,category}
+        const data:RouteInfo = { type:'route',state:'prepared', id,title,localizedTitle,country,distance,elevation,provider,category}
 
         data.hasVideo = false;
         data.hasGpx = false;
@@ -680,7 +694,6 @@ export class RouteListService  extends IncyclistService{
 
             list = description.category ? 'alternatives' : 'selected'
 
-            console.log('~~~ DEBUG', description.title, description.private, list)
             return list
         }
 
@@ -691,16 +704,16 @@ export class RouteListService  extends IncyclistService{
             if (description.video?.url) {
                 return 'selected'
             }
-            //console.log( description.title,description.video)
         }
         return 'alternatives'
     }
+
 
     protected addRouteToList(list:List,route:Route) {
         this.getRouteList(list)?.push(route)
     }
     protected getRouteList(list:List):Array<Route> {
-        return this.routes.find( rle=> rle.list===list)?.routes
+        return this.lists.find( rle=> rle.list===list)?.routes
     }
 
     protected getRouteLists():Array<{list:List,title:string}> {
@@ -718,7 +731,7 @@ export class RouteListService  extends IncyclistService{
         if (typeof criteria ==='string')
             compareFn = v=> v.id===criteria 
 
-        const lists = this.routes
+        const lists = this.lists
         let route = null;
 
         for (let i=0; i<lists.length && !route;i++) {
@@ -728,8 +741,20 @@ export class RouteListService  extends IncyclistService{
 
     }
 
+    protected getAllRoutes():Array<Route> {
+        const lists = this.lists
+        
+        const routes = []
+
+        for (let i=0; i<lists.length ;i++) {
+            routes.push( ...lists[i].routes)
+        }
+        return routes;
+
+    }
+
     protected stopAllRides() {
-        const lists = this.routes
+        const lists = this.lists
 
         for (let i=0; i<lists.length;i++) {
             lists[i].routes.forEach( r => r.startState='idle')
@@ -737,6 +762,22 @@ export class RouteListService  extends IncyclistService{
         
     }
 
+
+    protected addDescriptionsFromDB( descriptions: RoutesDB) {
+
+        const ids = Object.keys(descriptions)
+        const routes:Array<RouteDBEntry> = ids.map( id=> descriptions[id])
+        this.routeDescriptions = descriptions
+
+        routes.forEach( (data)=> {
+            data.state = "prepared"
+            this.addRouteToList(data.list, {data,id:data.id} )
+
+        })
+       
+    }    
+
+    // Legacy Routes DB
     protected addDescriptionsFromRepo( descriptions: Array<RouteApiDescription>,repo?:JsonRepository) {
 
         const routes = descriptions as Array<RouteApiDescription>
@@ -767,6 +808,7 @@ export class RouteListService  extends IncyclistService{
                 data.isLocal = true;
                 const item:Route = { id:data.id, data}                
                 this.addRouteToList(list,item)
+                this.routeDescriptions[data.id] = {...data,list};
             }
 
         })
@@ -779,7 +821,6 @@ export class RouteListService  extends IncyclistService{
         
 
         converted.forEach( (data,idx)=> {
-            console.log('~~~ DEBUG:add route from Server', data.title)
 
             // is route already in any list?
             const existing = this.getRoute(data.id)
@@ -803,6 +844,7 @@ export class RouteListService  extends IncyclistService{
                 data.isLocal = false;
                 const item:Route = { id:data.id, data}                
                 this.addRouteToList(list,item)
+                this.routeDescriptions[data.id] = {...data,list};
                 this.emitPageUpdate()
             }
 
@@ -861,30 +903,61 @@ export class RouteListService  extends IncyclistService{
 
 
     protected async loadRouteDescriptionsFromRepo() {
-        
-        console.log('~~~ DEBUG:loadRouteDescriptionsFromRepo')
-        const enrichRepo = (v:JSONObject,type)=> {
-            const data = v as RouteApiDescription
-            return {type, ...data }
+
+
+        if (Object.keys(this.routeDescriptions).length>0) {
+            this.emitPageUpdate()
+            return;
         }
+
+        const all = await this.getRoutesRepo().read('settings')  as unknown as RoutesDB
+        if (!all) {
+
+            const videos = (await this.getVideosRepo().read('routes') || []) as Array<RouteApiDescription> 
+            //const videosData = videos.map(e=>enrichRepo(e,'video'))
+            this.addDescriptionsFromRepo(videos,this.getVideosRepo())
+
+            const routes = (await this.getRoutesRepo().read('routes') ||[]) as Array<RouteApiDescription>
+            //const routesData = routes.map(e=>enrichRepo(e,'gpx'))
+            this.addDescriptionsFromRepo(routes,this.getRoutesRepo())
+
+        }
+        else {
+            const ids = Object.keys(all)
+            ids.forEach( id=> {
+                const r = all[id];
+                if (typeof r.points==='string') {
+                    this.decodePoints(r);
+                }
+                if (!Array.isArray(r.points))
+                    delete r.points
+            })
+
+            console.log('~~~ DEBUG:', all)
+            this.addDescriptionsFromDB(all)
+            
+
+        }
+        this.saveRouteDescriptions()
         
 
-        
-        const videos = (await this.getVideosRepo().read('routes') || []) as Array<RouteApiDescription> 
-        console.log('~~~ DEBUG,videos:',videos)
+    }
 
-        //const videosData = videos.map(e=>enrichRepo(e,'video'))
-        this.addDescriptionsFromRepo(videos,this.getVideosRepo())
-
-        const routes = (await this.getRoutesRepo().read('routes') ||[]) as Array<RouteApiDescription>
-        console.log('~~~ DEBUG,routes:',routes)
-        //const routesData = routes.map(e=>enrichRepo(e,'gpx'))
-        this.addDescriptionsFromRepo(routes,this.getVideosRepo())
+    protected async saveRouteDescriptions() {
         
+        const ids = Object.keys(this.routeDescriptions)
+
+        const data = ids.map(id => {
+            const r = this.routeDescriptions[id]
+            if (r.points)
+                this.encodePoints(r)
+            return {...r}
+        })
+
+        await this.getRoutesRepo().write('settings',data)
     }
 
     protected async loadRouteDescriptionsFromServer() {
-        console.log('~~~ DEBUG:loadRouteDescriptionsFromServer')
 
         const enrichApi = (v:RouteApiDescription,type)=> ({type, ...v })
         const api = [
@@ -893,8 +966,7 @@ export class RouteListService  extends IncyclistService{
         ]
 
         const res = await Promise.allSettled( api);
-        console.log('~~~ DEBUG:loadRouteDescriptionsFromServer done',(new Date()).toISOString(),res)
-        this.emitPageUpdate()
+        
         res.forEach( p  => {
             
             if (p.status==='fulfilled') {
@@ -902,20 +974,33 @@ export class RouteListService  extends IncyclistService{
                 this.addDescriptionsFromServer( p.value)
             }    
         })
+
+        
         
     }
 
 
 
     protected async loadRouteDescriptions() {
-        
-
+        console.log('~~~ DEBUG:loadRouteDescriptions',Object.keys(this.routeDescriptions))
         await this.loadRouteDescriptionsFromRepo()
-        console.log('~~~ DEBUG, routes after Repo',this.routes)
         this.emitPageUpdate()
-        this.loadRouteDescriptionsFromServer().then( ()=>{
-            console.log('~~~ DEBUG, routes after API',this.routes)
-        })
+
+        if (this.isDescriptionsLoaded()) {
+            await this.loadRouteDescriptionsFromServer()    
+            this.emitPageUpdate()
+            this.saveRouteDescriptions()
+        }
+        else {
+            
+            this.loadRouteDescriptionsFromServer().then( ()=>{
+                //console.log('~~~ DEBUG, routes after API',this.routes)
+                // TODO: check for route updates on server
+                this.emitPageUpdate()
+            })
+    
+        }
+
         
 
         
@@ -924,30 +1009,36 @@ export class RouteListService  extends IncyclistService{
     protected async loadRouteDetais(route:Route) {
 
         //if (route.data.title==='Arnbach') {
-            console.log('~~~ DEBUG:loadDetails()',clone(route.data))
         //}
 
-        if (route.data.state==='loaded')
+        if (route.data.state==='loaded' || route.data.state==='loading')
             return
 
         try {
             route.data.state = 'loading'
             this.emitRouteUpdated(route)
 
-            if (route.data.isLocal) {
+            try {
                 route.details =route.data.hasVideo ? 
-                    await this.videosRepo.read(route.id) as RouteApiDetail
+                    await this.getVideosRepo().read(route.id) as RouteApiDetail
                     :
-                    await this.routesRepo.read(route.id) as RouteApiDetail
+                    await this.getRoutesRepo().read(route.id) as RouteApiDetail
                 
                 IncyclistRoutesApi.verify(route.details)
-            }   
-
-            else {
-                route.details = await this.api.getRouteDetails(route.id)
             }
-            if (route.data.title==='Arnbach')
-                console.log('~~~ DEBUG: loaded details',route.details)
+            catch (err) {
+                console.log('~~~ DEBUG:error', route.data.title,route.data.isLocal,  err)
+                if (route.data.isLocal)
+                    throw err
+
+            }        
+            
+
+            if(!route.details) {
+                route.details = await this.api.getRouteDetails(route.id)
+                IncyclistRoutesApi.verify(route.details)
+                this.saveRouteDetails(route)
+            }
 
             if (route.details.id!==route.data.id) {
                 route.data.state = 'error'   
@@ -960,12 +1051,29 @@ export class RouteListService  extends IncyclistService{
             route.data.state = 'loaded'
 
             this.emitRouteUpdated(route)
+            const {list} = this.routeDescriptions[route.id]
+            this.routeDescriptions[route.id] = {...route.data,list}
+            return route.data
         }
         catch(e) {
-            console.log('~~~ DEBUG:Error',e)
             route.data.state = 'error'   
             this.emitRouteUpdated(route)
         }
+    }
+
+
+    async saveRouteDetails(route) {
+        try {
+            route.details =route.data.hasVideo ? 
+                await this.videosRepo.write(route.id,route.details)
+                :
+                await this.routesRepo.write(route.id,route.details)                        
+        }
+        catch (err) {
+            if (route.data.isLocal)
+                throw err
+        }        
+
     }
 
     protected emitRouteUpdated(route:Route) {
@@ -988,10 +1096,7 @@ export class RouteListService  extends IncyclistService{
     }
 
     protected getListState( page:Page, list:List) {
-        console.log('~~~ DEBUG.getListState',list,page?.state, this.state)
-        
         return page?.state.lists.find(pl => pl.list===list)
-
     }
 
     // TODO:
@@ -1022,7 +1127,46 @@ export class RouteListService  extends IncyclistService{
         }
     }
 
-    
+    private isDescriptionsLoaded() {
+        return Object.keys(this.routeDescriptions).length===0
+    }
+
+    private decodePoints(r: RouteDBEntry) {
+        return
+        const before = r.points
+
+        const pointsStr = zlib.inflateSync(Buffer.from(r.points as string, 'hex')).toString('utf8');
+        r.points = JSON.parse(pointsStr)
+        console.log('~~~ decoded', r.title,pointsStr,before)
+        return;
+        
+        r.points = JSON.parse(pointsStr)
+        return;
+        const points = pointsStr.split('|')
+            .map(p => {
+                const [elevation, routeDistance, lat, lng] = p.split('/');
+                return { elevation: Number(elevation), routeDistance: Number(routeDistance), lat: Number(lat), lng: Number(lng) };
+            });        
+        r.points = points;
+
+        console.log('~~~ decoded', r.title,r.points)
+    }
+
+    private encodePoints(r:RouteDBEntry) {
+        return
+        const str = JSON.stringify(r.points)
+        const deflated = zlib.deflateSync(Buffer.from(str,'utf8')).toString('hex');
+        r.points = deflated
+
+        if (Array.isArray(r.points)) {
+
+                        
+            const points  = r.points.map( p=> `${p.elevation}/${p.routeDistance}/${p.lat}/${p.lng}`).join('|')        
+
+        }
+
+    }
+
    
 }
 

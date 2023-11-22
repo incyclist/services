@@ -40,7 +40,7 @@ export type RoutePoint = {
     lng: number;
     routeDistance: number;
     elevation: number;
-    slope: number;
+    slope?: number;
 };
 
 export type RouteSegment = {
