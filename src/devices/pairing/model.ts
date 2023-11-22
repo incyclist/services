@@ -82,6 +82,7 @@ export interface InternalPairingState extends PairingState {
 export interface DeviceSelectState {
     capability:IncyclistCapability
     devices:Array<DevicePairingData>
+    isScanning?: boolean
 }
 
 

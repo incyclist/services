@@ -1578,7 +1578,8 @@ export class DevicePairingService  extends IncyclistService{
         
         const devices = capabilityData?.devices||[]
         const available = devices.filter( d=> this.isInterfaceEnabled(d.interface))
-        return {capability, devices:available}
+        const isScanning = this.isScanning()
+        return {capability, devices:available,isScanning}
 
     }
 
