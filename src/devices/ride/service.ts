@@ -446,12 +446,62 @@ export class DeviceRideService  extends EventEmitter{
 
     }
 
+    /**
+     * 
+     * ANT+ seems to cause problems if the same deviceID is used as sensor for multiple capabilties. 
+     * This will cause that multiple channels will be opened with the same DEviceID, causing CHANNEL_COLLISION events 
+     * 
+     * Thus, we need to check if mutliple sensors are used with the same device ID and if so, only start the "most powerful"
+     * 
+     * @param adapters 
+     * 
+     * @returns An array, where every record contains the udid of the "most powerful" adapter and the AdapterInfo of the duplicates
+     */
+
+    protected checkAntSameDeviceID(adapters:AdapterRideInfo[]):Array<{udid:string,info:AdapterInfo}> {
+        const antDevices = adapters.map((ai,idx)=>({...ai,idx}))                      // keep index in adapter list for reference
+                                     .filter(ai=>ai.adapter.getInterface()==='ant')     // we are only looking for ant adapters
+                                     .map(ai=>({idx:ai.idx, deviceID:ai.adapter.getID(), capabilities:ai.capabilities,udid:ai.udid}))
+
+        const antDeviceIds = antDevices.map(di=>di.deviceID)        
+        const duplicateIds = antDeviceIds.filter((item, index) => antDeviceIds.indexOf(item) !== index)
+
+        const score = (capabilities) => {
+            let value = 0;
+            if (capabilities.includes(IncyclistCapability.Control)) value += 100;
+            if (capabilities.includes(IncyclistCapability.Power)) value += 50;
+            value += capabilities.length
+            return value;
+        }
+
+        const duplicateDevices = antDevices.filter( di=> duplicateIds.includes(di.deviceID) ).sort( (a,b) => score(b.capabilities)-score(a.capabilities) )
+            
+
+        const leading = duplicateDevices[0]
+
+        const duplicateAdapters = []
+        duplicateDevices.forEach( (di,i) => {
+            if (i==0)
+                return
+            
+            duplicateAdapters.push( {udid:leading.udid, info:adapters[di.idx]})
+            //adapters[di.idx] = null
+            
+        })
+        return duplicateAdapters
+
+    }
    
     async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check' | 'pair',props?:RideServiceDeviceProperties ):Promise<boolean> {
         
         const { forceErgMode, startPos, realityFactor, rideMode, route} = props||{};
 
+        const duplicates = this.checkAntSameDeviceID(adapters)
+
+
         this.startPromises = adapters?.map( async ai=> {
+            if (duplicates.find(dai=>dai.info.udid===ai.udid))
+                return
             const startProps = clone(props||{})
             
 
@@ -462,7 +512,7 @@ export class DeviceRideService  extends EventEmitter{
             }
 
             if (startType==='start') {
-
+                
                 if (ai.adapter && ai.adapter.isControllable()) {
                     const d = ai.adapter as IncyclistDeviceAdapter
 
@@ -518,11 +568,14 @@ export class DeviceRideService  extends EventEmitter{
                 logProps.cyclingMode = (ai.adapter as IncyclistDeviceAdapter).getCyclingMode()?.getName()
             this.logEvent( {message:`${startType} ${sType} request`,...logProps})
 
-            
+
             return ai.adapter.start(startProps)
                 .then( async (success)=>{
                     if (success) {
                         this.emit(`${startType}-success`, this.getAdapterStateInfo(ai))
+                        if (duplicates.find( dai=> dai.udid === ai.udid)) {
+                            duplicates.forEach( dai=> { this.emit(`${startType}-success`, this.getAdapterStateInfo(dai.info))})
+                        }
                         this.logEvent( {message:`${startType} ${sType} request finished`,...logProps})
                         if (startType==='check') 
                             await ai.adapter.pause().catch( console.log)                        
@@ -530,11 +583,15 @@ export class DeviceRideService  extends EventEmitter{
                             this.setSerialPortInUse(ai.adapter as IncyclistDeviceAdapter)
 
                         if (startType==='pair') {
-                            ai.adapter.on('data',this.deviceDataHandler)                            
+                            ai.adapter.on('data',this.deviceDataHandler)                               
                         }
                     }
                     else {
                         this.emit(`${startType}-error`, this.getAdapterStateInfo(ai))
+                        if (duplicates.find( dai=> dai.udid === ai.udid)) {
+                            duplicates.forEach( dai=> { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info))})
+                        }
+
                         this.logEvent( {message:`${startType} ${sType} request failed`,...logProps})
                         if (startType==='check' || startType==='pair') 
                             await ai.adapter.stop().catch( console.log)                        
@@ -548,6 +605,9 @@ export class DeviceRideService  extends EventEmitter{
                     this.logEvent( {message:`${startType} ${sType} request failed`,...logProps, reason:err.message })
 
                     this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err)
+                    if (duplicates.find( dai=> dai.udid === ai.udid)) {
+                        duplicates.forEach( dai=> { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info))})
+                    }
                     if (startType==='check' || startType==='pair') {
                         await ai.adapter.stop().catch( console.log)                        
                     }
@@ -728,11 +788,45 @@ export class DeviceRideService  extends EventEmitter{
         this.verifySelected(selectedDevices, IncyclistCapability.Cadence)
         this.verifySelected(selectedDevices, IncyclistCapability.Power)
 
+
+        const duplicates = this.checkAntSameDeviceID(adapters)
+        const toBeReplaced = duplicates.filter( dai=> dai.udid===adapterInfo.udid).map( dai=>dai.info.udid) 
+
+
         // get list of capabilities, where the device sending the data was selected by the user
-        const enabledCapabilities = this.enforceSimulator ? 
-            [IncyclistCapability.Control,IncyclistCapability.Power,IncyclistCapability.Speed,IncyclistCapability.HeartRate,IncyclistCapability.Cadence]
-            :
-            selectedDevices.filter( sd => sd.selected===adapterInfo.udid).map( c => c.capability)
+        let enabledCapabilities = []
+
+        if (this.simulatorEnforced) {
+            enabledCapabilities = [IncyclistCapability.Control,IncyclistCapability.Power,IncyclistCapability.Speed,IncyclistCapability.HeartRate,IncyclistCapability.Cadence]
+        }
+        else if ( duplicates.length>0 && duplicates.find( d=>d.udid===adapterInfo.udid )) {
+            
+
+            const selected = clone(selectedDevices)
+            selected.forEach( cd => { 
+                if (toBeReplaced.includes(cd.selected))
+                    cd.selected = adapterInfo.udid
+            } )
+
+            selected.forEach
+
+
+            selected.forEach( sd=> {
+                const duplicate = duplicates.find( dai=> dai.info.udid===sd.selected)
+                if (duplicate)
+                    sd.selected = duplicate.udid
+                
+            })
+            enabledCapabilities = selected.map( c => c.capability)
+
+
+        }
+        else {
+            enabledCapabilities = selectedDevices.filter( sd => sd.selected===adapterInfo.udid).map( c => c.capability)
+
+        }
+        
+            
                     
         this.logEvent({message:'Data Update', device:adapterInfo.adapter.getName(), data, enabledCapabilities})
 
@@ -762,6 +856,13 @@ export class DeviceRideService  extends EventEmitter{
         })
 
         this.emit( 'data', this.data, adapterInfo.udid)
+        if (toBeReplaced) {
+            toBeReplaced.forEach( udid => {
+                this.emit( 'data', this.data, udid)
+            })
+        }
+
+
 
 
     }
