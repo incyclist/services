@@ -1,5 +1,6 @@
 // External (Public) Interfaces
 
+import { LatLng } from "../../utils/geo";
 import { RouteApiDetail } from "../base/api/types";
 import { RoutePoint, RouteSegment } from "../base/types";
 import { RouteState, RouteCategory, RouteProvider  } from "../base/types";
@@ -83,15 +84,23 @@ export type RouteListData = {
 export type RouteListStatusUpdateCallback = (data:RouteListData)=>void
 
 export type RouteStartSettings = {
+    type: CardType,
     startPos?:number,
     endPos?:number,
     segment?: string,
-    realityFactor?: number
+    realityFactor?: number,
+    position?:LatLng,
+    options?
 }
 export type RouteSettingsState = {
     route: RouteInfo
     settings: RouteStartSettings
 } 
+
+export type FreeRideSettings = {
+    position?:LatLng
+    options?
+}
 
 // --------------------------------------
 // Internal (Protected) Interfacs
@@ -116,7 +125,11 @@ export interface InternalRouteListState {
     initialized: boolean
     pages: Array<Page>
     loading?:LoadingState 
-    preloadDone: boolean;
+    preloadDone: boolean
+    selectedType?:  CardType
+    selectedPosition?: LatLng
+    selectedOptions?
+
 }
 
 export type RouteStartState = 'idle' | 'preparing'| 'selected' | 'started'

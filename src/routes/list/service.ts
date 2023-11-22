@@ -1,4 +1,4 @@
-import {Page,  InternalRouteListState, List, RouteInfo, Route, RouteListEntry, RouteListStartProps, RouteListData, RouteStartSettings, onRouteStatusUpdateCallback, onCarouselStateChangedCallback, RoutesDB, RouteDBEntry } from "./types";
+import {Page,  InternalRouteListState, List, RouteInfo, Route, RouteListEntry, RouteListStartProps, RouteListData, RouteStartSettings, onRouteStatusUpdateCallback, onCarouselStateChangedCallback, RoutesDB, RouteDBEntry, FreeRideSettings, CardType } from "./types";
 import IncyclistRoutesApi from "../base/api";
 import { RouteApiDescription, RouteApiDetail } from "../base/api/types";
 import { getLocalizedData } from "../base/utils/localization";
@@ -7,8 +7,9 @@ import { checkIsLoop, getSegments } from "../base/utils/route";
 import { useUserSettings } from "../../settings";
 import { IJsonRepositoryBinding,  JsonRepository } from "../../api";
 import clone from "../../utils/clone";
-import zlib from 'zlib'
 import { FreeRideCard } from "./FreeRideCard";
+import { LatLng } from "../../utils/geo";
+import { geo } from "../../utils";
 
 type filterFn = (route:Route,idx:number,obj:Route[])=>boolean
 
@@ -170,12 +171,14 @@ export class RouteListService  extends IncyclistService{
     
 
     openStartSettings(  r: RouteInfo|string ):RouteStartSettings {
-        const route = this.getRouteFromStartProps(r);
 
+
+        const route = this.getRouteFromStartProps(r);
         try {
             if (!route)
                 return {}
 
+            this.state.selectedType = 'route'
             let startSettings = route.startSettings;
 
             this.stopRide();
@@ -207,7 +210,8 @@ export class RouteListService  extends IncyclistService{
         // we don't need to to anything
         // mark route as available in state (keeping the settings such as segment,... for next call to openStartSettings )
 
-        
+        delete this.state.selectedType
+
         const route = this.getRouteFromStartProps(r);
         try {
             route.startState = 'idle'
@@ -220,6 +224,84 @@ export class RouteListService  extends IncyclistService{
         }
 
     } 
+
+    acceptStartSettings(r: RouteInfo|string, startSettings:RouteStartSettings) {
+        // mark route as selected
+        const route = this.getRouteFromStartProps(r);
+        try {
+
+            this.writeStartSettings(route, startSettings)
+            route.startState = 'selected'
+        }
+        catch(err) {
+            this.logError( err,'acceptStartSettings',{info:{id:route?.id,title:route?.data?.title}})
+            return {}
+
+        }
+    } 
+
+    openFreeRideSettings():FreeRideSettings {
+        this.state.selectedType = 'free-ride'
+
+        try {
+
+            this.stopRide();
+            
+            const settings = this.loadFreeRideSettingsFromUserSettings();
+            
+    
+            // Later: get previous activities of this route (from Activity-Service <to be developed>)
+            // to check: what happens on screen size change 
+    
+            return settings;
+    
+        }
+        catch(err) {
+            this.logError( err,'openFreeRideSettings')
+            return {}
+        }
+    }
+
+
+
+    cancelFreeRideSettings() {
+        delete this.state.selectedType
+        delete this.state.selectedPosition
+        delete this.state.selectedOptions
+
+        // we don't need to to anything
+        // mark route as available in state (keeping the settings such as segment,... for next call to openStartSettings )
+    } 
+
+    changeFreeRideSettings(props:{position:LatLng}) {
+        const {position: pos} = props;
+
+        const position = geo.getLatLng(pos)
+        this.state.selectedPosition = position
+        this.writeFreeRideSettingsToUserSettings( position);
+
+    } 
+
+    acceptFreeRideSettings(options) {
+
+        this.state.selectedOptions = options
+        this.state.selectedType = 'free-ride'
+        // mark route as selected
+    
+        /*
+        try {
+
+            this.writeStartSettings(route, startSettings)
+            route.startState = 'selected'
+        }
+        catch(err) {
+            this.logError( err,'acceptStartSettings',{info:{id:route?.id,title:route?.data?.title}})
+            return {}
+
+        }
+        */
+    } 
+
 
     setCardUpdateHandler(pageId:string,r: RouteInfo|string,list:List,idx:number, onRouteStateChanged:onRouteStatusUpdateCallback,onCarouselStateChanged:onCarouselStateChangedCallback ) {
         const route = this.getRouteFromStartProps(r);
@@ -294,58 +376,63 @@ export class RouteListService  extends IncyclistService{
         })
     }
 
-    acceptStartSettings(r: RouteInfo|string, startSettings:RouteStartSettings) {
-        // mark route as selected
-        const route = this.getRouteFromStartProps(r);
-        try {
-
-            this.writeStartSettings(route, startSettings)
-            route.startState = 'selected'
-        }
-        catch(err) {
-            this.logError( err,'acceptStartSettings',{info:{id:route?.id,title:route?.data?.title}})
-            return {}
-
-        }
-    } 
 
     getSelectedRoute ():RouteApiDetail {
         const route =this.getRoute( v=>v.startState==='selected')
         return route?.details
     }
 
+
     getStartSettings (routeId?:string):RouteStartSettings {
+        console.log('~~ getStartSettings', this.state)
 
-        const route = routeId ? this.getRoute(routeId) : this.getRoute(v=>v.startState==='selected')
+        switch ( this.state.selectedType) {
+            case 'free-ride':
+                return { type:'free-ride', options:this.state.selectedOptions, position: this.state.selectedPosition}
+                break;
+            case 'route': {
+                const route = routeId ? this.getRoute(routeId) : this.getRoute(v=>v.startState==='selected')
+                if (route)
+                    return {type:'route',...route.startSettings}
+                }
+                break
+            default:
+                return;
+        }
 
-        return route?.startSettings
 
     }
 
     
 
     startRide(r?: RouteInfo|string ) {
+
+        if (this.state.selectedType==='route') {
         
-        const route = r? this.getRoute( v=>v.startState==='selected'): this.getRouteFromStartProps(r);
-        try {
-          
-            route.startState = 'started'
-            // TODO: save settings in RouteRepo
-        }
-        catch(err) {
-            this.logError( err,'startRide',{info:{id:route?.id,title:route?.data?.title}})
-            return {}
+            const route = r? this.getRoute( v=>v.startState==='selected'): this.getRouteFromStartProps(r);
+            try {
+            
+                route.startState = 'started'
+                // TODO: save settings in RouteRepo
+            }
+            catch(err) {
+                this.logError( err,'startRide',{info:{id:route?.id,title:route?.data?.title}})
+                return {}
 
+            }
         }
-
         // TBD: if/how to process updates so that we can store last position (e.g. once a minute)
     } 
 
     
 
     stopRide(r?: RouteInfo|string ) {
+        delete this.state.selectedType
 
         const route = r? this.getRoute( v=>v.startState==='selected'): this.getRouteFromStartProps(r);
+        if (!route)
+            return;
+
         try {
           
             route.startState = 'idle'
@@ -353,8 +440,6 @@ export class RouteListService  extends IncyclistService{
         }
         catch(err) {
             this.logError( err,'stopRide',{info:{id:route?.id,title:route?.data?.title}})
-            return {}
-
         }
 
         // save last position
@@ -460,6 +545,26 @@ export class RouteListService  extends IncyclistService{
             segment = undefined
         }
         return { startPos, realityFactor, segment };
+    }
+
+    protected loadFreeRideSettingsFromUserSettings() {
+
+        let position:LatLng
+        const prevSetting = this.getUserSetting(`routeSelection.freeRide`, null);
+        if (prevSetting) {
+            position = prevSetting.position;
+        }
+        else {
+            position = this.getUserSetting(`position`, null);    
+        }
+
+        return { position };
+    }
+
+    protected writeFreeRideSettingsToUserSettings(position:LatLng) { 
+        const userSettings = useUserSettings()
+
+        userSettings.set('routeSelection.freeRide',{position})
     }
 
     protected writeStartSettingsToUserSettings(route:Route, startSettings:RouteStartSettings) {
