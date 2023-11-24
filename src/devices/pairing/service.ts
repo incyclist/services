@@ -661,7 +661,7 @@ export class DevicePairingService  extends IncyclistService{
             
             if (settings.enabled && !current.enabled) {
                 const {port,protocol} = settings
-                this.access.enableInterface(ifName,undefined, {port:Number(port),protocol})            
+                this.access.enableInterface(ifName,undefined, {port:Number(port),protocol,autoConnect:true})            
 
                 this.selectFromInterface(ifName)
 
@@ -1061,7 +1061,7 @@ export class DevicePairingService  extends IncyclistService{
 
     protected connectInterface(name:string):void {
         try {
-            this.access.enableInterface(name)        
+            this.access.enableInterface(name,undefined,{autoConnect:true})        
         }
         catch(err) {
             this.logError(err,'enableInterface')
