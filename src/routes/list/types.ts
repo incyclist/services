@@ -84,7 +84,7 @@ export type RouteListData = {
 export type RouteListStatusUpdateCallback = (data:RouteListData)=>void
 
 export type RouteStartSettings = {
-    type: CardType,
+    type?: CardType,
     startPos?:number,
     endPos?:number,
     segment?: string,

@@ -8,6 +8,7 @@ import { useUserSettings } from "../../settings";
 import { IJsonRepositoryBinding,  JsonRepository } from "../../api";
 import clone from "../../utils/clone";
 import { FreeRideCard } from "./FreeRideCard";
+import { ImportCard } from "./ImportCard";
 import { LatLng } from "../../utils/geo";
 import { geo } from "../../utils";
 
@@ -301,6 +302,30 @@ export class RouteListService  extends IncyclistService{
         }
         */
     } 
+
+
+    import( pageId,files) {
+        console.log('~~~ import ', pageId, files)
+
+        const page = this.getPage(pageId) as Page
+        console.log('~~~ import ', files,page)
+
+        const route:Route= {
+            id:Date.now().toString(),
+            data: {
+                type:'route',
+                id:Date.now().toString(),
+                state:'prepared',
+                title:'Test'
+            }
+
+
+        }
+        this.addRouteToList('myRoutes',route)
+
+        //page.state?.lists[0]?.routes.push(route)
+        this.emitPageUpdate()
+    }
 
 
     setCardUpdateHandler(pageId:string,r: RouteInfo|string,list:List,idx:number, onRouteStateChanged:onRouteStatusUpdateCallback,onCarouselStateChanged:onCarouselStateChangedCallback ) {
@@ -639,6 +664,15 @@ export class RouteListService  extends IncyclistService{
 
                 data.unshift( route)
             }
+
+            if (list==='myRoutes' && !data.find( r=> r.data.type==='import')) {
+                
+                const card:ImportCard = new ImportCard('loaded') as RouteInfo
+                const route:Route = {data:card,id:'import',}
+
+                data.unshift( route)
+            }
+
             
             if (data?.length>0) {
                 lists.push(this.getRouteListDataEntry(list,data, language,listHeader))           
