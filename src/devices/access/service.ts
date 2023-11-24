@@ -167,7 +167,7 @@ export class DeviceAccessService  extends EventEmitter{
 
             this.emit('interface-changed', ifaceName,{...existing})
 
-            if (!existing.interface.isConnected()) {
+            if (!existing.interface.isConnected() && props?.autoConnect) {
                 this.emit('interface-changed', ifaceName,{...existing, state:'connecting'})
                 const conected = await this.connect(ifaceName)
                 const state = conected ? 'connected' : 'disconnected'
@@ -351,6 +351,8 @@ export class DeviceAccessService  extends EventEmitter{
                 return;
             }
     
+            console.log('~~~ DEBUG:connect if',ifaceName,this.interfaces[ifaceName])
+            
             if (this.interfaces[ifaceName]?.enabled===false)
                 return
 
