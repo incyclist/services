@@ -2,8 +2,7 @@
 
 import { LatLng } from "../../utils/geo";
 import { RouteApiDetail } from "../base/api/types";
-import { RoutePoint, RouteSegment } from "../base/types";
-import { RouteState, RouteCategory, RouteProvider  } from "../base/types";
+import { LocalizedText, RoutePoint, RouteSegment, RouteState, RouteCategory, RouteProvider  } from "../base/types";
 
 export interface IRouteListBinding {
     
@@ -15,8 +14,6 @@ export type RouteListStartProps = {
     visibleCards?:number;
     visibleLists?:number;
 }
-
-export type LocalizedText = { [index:string]:string  }
 
 export type CardType = 'route'|'free-ride'|'import'
 

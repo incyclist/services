@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<gpx-import>
+    <name>FR_Col_de_Grimone_Part_2</name>    
+    <id>40f3b90a-3993-41e6-85ba-5e75436a28b1</id>
+    <country>FR</country>
+    <title>Col de Grimone - 2 - Ascent</title>
+    <video-file-path>FR_Col_de_Grimone_Part_2.mp4</video-file-path>
+    <gpx-file-path>FR_Col_de_Grimone_Part_2.gpx</gpx-file-path>
+    <framerate>30.0</framerate>
+    <start-frame>1</start-frame>
+    <next-video>4a20ee89-6332-4e9b-90b2-07d026a44f24</next-video>
+    <end-frame>82149</end-frame>
+	<informations>
+		<information distance="20" de="Col de Grimone - Teil 2 - Anstieg\nL&auml;nge: 8,6 km - Gesamtanstieg: 428 hm\nSchwierigkeitsgrad: Mittel" en="Col de Grimone - Part 2 - Ascent\nLength: 8.6 km - Total ascent: 428 hm\nDifficulty: Moderate" />
+		<information distance="90" de="cycling.vangestel.online\nLizens: CC BY-NC-SA 4.0\n(Creative Commons - Namensnennung - Nicht-kommerziell)" en="cycling.vangestel.online\nLicense: CC BY-NC-SA 4.0\n(Creative Commons Attribution-NonCommercial-ShareAlike)"/>							
+		<information distance="1585" de="7 Km bis bis oben\nKommender Km ca. 4,6% Steigung\n953 Meter über dem Meeresspiegel" en="7 km to the top\nUpcoming km about 4.6% slope\nAltitude: 953 meter above sea level" />
+		<information distance="2585" de="6 Km bis bis oben\nKommender Km ca. 7,9% Steigung\n999 Meter über dem Meeresspiegel" en="6 km to the top\nUpcoming km about 7.9% slope\nAltitude: 999 meter above sea level" />
+		<information distance="3585" de="5 Km bis bis oben\nKommender Km ca. 5,3% Steigung\n1078 Meter über dem Meeresspiegel" en="5 km to the top\nUpcoming km about 5.3% slope\nAltitude: 1078 meter above sea level" />
+		<information distance="4635" de="4 Km bis bis oben\nKommender Km ca. 4,1% Steigung\n1131 Meter über dem Meeresspiegel" en="4 km to the top\nUpcoming km about 4.1% slope\nAltitude: 1131 meter above sea level" />
+		<information distance="5620" de="3 Km bis bis oben\nKommender Km ca. 6,6% Steigung\n1172 Meter über dem Meeresspiegel" en="3 km to the top\nUpcoming km about 6.6% slope\nAltitude: 1172 meter above sea level" />
+		<information distance="6620" de="2 Km bis bis oben\nKommender Km ca. 5,5% Steigung\n1236 Meter über dem Meeresspiegel" en="2 km to the top\nUpcoming km about 5.5% slope\nAltitude: 1236 meter above sea level" />
+		<information distance="7610" de="1 Km bis bis oben\nKommender Km ca. 2,5% Steigung\n1293 Meter über dem Meeresspiegel" en="1 km to the top\nUpcoming km about 2.5% slope\nAltitude: 1293 meter above sea level" />
+		<information distance="8550" de="Col de Grimone\n1318 Meter über dem Meeresspiegel" en="Col de Grimone\nAltitude: 1318 meter above sea level" />
+	</informations>
+</gpx-import>
+

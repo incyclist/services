@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS Track Editor" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gte="http://www.gpstrackeditor.com/xmlschemas/General/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" targetNamespace="http://www.topografix.com/GPX/1/1" elementFormDefault="qualified" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+<metadata>
+	<name>FR_Col_de_Grimone_Part_2.gpx</name>
+</metadata>
+<trk>
+	<name>Col de Grimone - Part 2 - Ascent</name>
+	<trkseg>
+		<trkpt lat="44.692368" lon="5.599578">
+			<ele>893.98</ele>
+			<time>1999-12-31T23:00:00Z</time>
+			<extensions>
+				<gte:gps speed="14.2"/>
+				<gpxtpx:TrackPointExtension>
+					<gpxtpx:hr>109</gpxtpx:hr>
+					<gpxtpx:cad>0</gpxtpx:cad>
+				</gpxtpx:TrackPointExtension>
+			</extensions>
+		</trkpt>
+		<trkpt lat="44.692364" lon="5.599614">
+			<ele>893.94</ele>
+			<time>1999-12-31T23:00:01Z</time>
+			<extensions>
+				<gte:gps speed="14.4"/>
+				<gpxtpx:TrackPointExtension>
+					<gpxtpx:hr>109</gpxtpx:hr>
+					<gpxtpx:cad>0</gpxtpx:cad>
+				</gpxtpx:TrackPointExtension>
+			</extensions>
+		</trkpt>
+	</trkseg>
+</trk>
+</gpx>

@@ -5,12 +5,14 @@ import { getLocalizedData } from "../base/utils/localization";
 import { IncyclistService } from "../../base/service";
 import { checkIsLoop, getSegments } from "../base/utils/route";
 import { useUserSettings } from "../../settings";
-import { IJsonRepositoryBinding,  JsonRepository } from "../../api";
+import { FileInfo, IFileLoader, IJsonRepositoryBinding,  JsonRepository } from "../../api";
 import clone from "../../utils/clone";
 import { FreeRideCard } from "./FreeRideCard";
 import { ImportCard } from "./ImportCard";
 import { LatLng } from "../../utils/geo";
 import { geo } from "../../utils";
+import { useParsers } from "../base/parsers";
+import path, { IPathBinding } from "../../api/path";
 
 type filterFn = (route:Route,idx:number,obj:Route[])=>boolean
 
@@ -18,9 +20,9 @@ export class RouteListService  extends IncyclistService{
 
     protected static _instance
 
-    static getInstance(binding?:IJsonRepositoryBinding):RouteListService{
+    static getInstance():RouteListService{
         if (!RouteListService._instance) 
-            RouteListService._instance = new RouteListService(binding)
+            RouteListService._instance = new RouteListService()
         
         return RouteListService._instance
     }
@@ -32,9 +34,10 @@ export class RouteListService  extends IncyclistService{
     protected routesRepo: JsonRepository
     protected api: IncyclistRoutesApi 
     protected routeDescriptions: RoutesDB
+    protected loader:IFileLoader
     
 
-    constructor( binding?:IJsonRepositoryBinding) {
+    constructor() {
         super('RouteList')
 
         this.state = {
@@ -42,9 +45,6 @@ export class RouteListService  extends IncyclistService{
             pages:[],
             preloadDone:false
         }
-
-        if (binding)
-            JsonRepository.setBinding(binding)
         
         this.api = IncyclistRoutesApi.getInstance()
         
@@ -54,13 +54,25 @@ export class RouteListService  extends IncyclistService{
     }
 
 
-    setBinding( binding:IJsonRepositoryBinding ) {
-        if(!binding)
-            return;
+    initBindings( bindings: {
+                path?:IPathBinding,
+                db:IJsonRepositoryBinding,
+                loader?:IFileLoader}
+             ) {
 
-        JsonRepository.setBinding(binding)
+        console.log('~~~ initBindings',bindings)
+
+        if (bindings.db)
+            JsonRepository.setBinding(bindings.db)
+        if (bindings.path)
+            path.initBinding(bindings.path)
+        if (bindings.loader)
+            this.loader = bindings.loader;
+
         this.state.initialized = true;        
     }
+
+    
     
 
     protected getVideosRepo():JsonRepository {
@@ -173,6 +185,7 @@ export class RouteListService  extends IncyclistService{
 
     openStartSettings(  r: RouteInfo|string ):RouteStartSettings {
 
+        console.log('~~~ open start settings', r)
 
         const route = this.getRouteFromStartProps(r);
         try {
@@ -214,7 +227,13 @@ export class RouteListService  extends IncyclistService{
         delete this.state.selectedType
 
         const route = this.getRouteFromStartProps(r);
+        if (!route)
+            return;
+
+        console.log('~~~ cancel start settings', r)
+
         try {
+
             route.startState = 'idle'
             return 
         }
@@ -227,12 +246,15 @@ export class RouteListService  extends IncyclistService{
     } 
 
     acceptStartSettings(r: RouteInfo|string, startSettings:RouteStartSettings) {
+
         // mark route as selected
         const route = this.getRouteFromStartProps(r);
         try {
 
             this.writeStartSettings(route, startSettings)
             route.startState = 'selected'
+            route.startSettings = {...startSettings}
+            this.state.selectedType='route'
         }
         catch(err) {
             this.logError( err,'acceptStartSettings',{info:{id:route?.id,title:route?.data?.title}})
@@ -304,12 +326,34 @@ export class RouteListService  extends IncyclistService{
     } 
 
 
-    import( pageId,files) {
+    import( pageId,files:Array<FileInfo>) {
         console.log('~~~ import ', pageId, files)
 
         const page = this.getPage(pageId) as Page
         console.log('~~~ import ', files,page)
 
+        const parsers = useParsers() 
+        
+            files.forEach( async (file)=>{
+                try {
+                    const {data,error} = await this.loader.open(file)
+                    if (error) {
+                        //TODO
+                        return;
+                    }
+
+                    console.log('~~~ DATA',data)
+                    const parser = parsers.findMatching( file.ext, data)
+                    const route = parser.import(data)
+                    console.log('~~~ ROUTE',route)
+                }
+                catch(err) {
+                    console.log(err)
+                }
+    
+        })
+
+        
         const route:Route= {
             id:Date.now().toString(),
             data: {
@@ -323,10 +367,35 @@ export class RouteListService  extends IncyclistService{
         }
         this.addRouteToList('myRoutes',route)
 
+        /*
+            let status = []
+            this.files.forEach( async(info)=>{
+                const res = this.fileLoader.processSingle(f)
+                if (res.error) { 
+                    //
+                    status.push( {info,error})
+                }
+                if (res.data)
+                    const {error,route} = importRoute(info,data)
+                    status.push( {info,error})
+                    if (!error) {
+                        this.addRouteToList('myRoutes',route)
+                    }
+
+            })
+        */
+
         //page.state?.lists[0]?.routes.push(route)
         this.emitPageUpdate()
     }
 
+    /*
+    protected importRoute(info,data) {
+
+    }
+    */
+
+    
 
     setCardUpdateHandler(pageId:string,r: RouteInfo|string,list:List,idx:number, onRouteStateChanged:onRouteStatusUpdateCallback,onCarouselStateChanged:onCarouselStateChangedCallback ) {
         const route = this.getRouteFromStartProps(r);
@@ -1052,11 +1121,11 @@ export class RouteListService  extends IncyclistService{
         const all = await this.getRoutesRepo().read('settings')  as unknown as RoutesDB
         if (!all) {
 
-            const videos = (await this.getVideosRepo().read('routes') || []) as Array<RouteApiDescription> 
+            const videos = (await this.getVideosRepo().read('routes') || []) as unknown as Array<RouteApiDescription> 
             //const videosData = videos.map(e=>enrichRepo(e,'video'))
             this.addDescriptionsFromRepo(videos,this.getVideosRepo())
 
-            const routes = (await this.getRoutesRepo().read('routes') ||[]) as Array<RouteApiDescription>
+            const routes = (await this.getRoutesRepo().read('routes') ||[]) as unknown as  Array<RouteApiDescription>
             //const routesData = routes.map(e=>enrichRepo(e,'gpx'))
             this.addDescriptionsFromRepo(routes,this.getRoutesRepo())
 

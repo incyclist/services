@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Track xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <Name>Randa</Name>
+  <Description xsi:nil="true" />
+  <Date>2020-10-27T13:52:45.3810085+01:00</Date>
+  <Action>CYCLO_ROAD</Action>
+  <Difficulty>NOT_SPECIFIED</Difficulty>
+  <Video>https://videos.incyclist.com/DE_Arnbach.mp4</Video>
+  <CountryCode>0</CountryCode>
+  <GID>-1</GID>
+  <UserOwnerGID>-1</UserOwnerGID>
+  <OriginalVideoSize>183939930</OriginalVideoSize>
+  <ErgoTrack>true</ErgoTrack>
+  <Mode>GE</Mode>
+  <VerzeEditoru>0</VerzeEditoru>
+  <Verze>1</Verze>
+  <StreamOnly>false</StreamOnly>
+  <AltitudePoints>
+    <AltitudePoint Distance="0" Lat="39.5264831937402" Lng="2.91481584265106" Alt="287.419067382813" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="23.661733624291646" Lat="39.5264155667574" Lng="2.91507709490297" Alt="289.715713352985" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="55.470605656184361" Lat="39.526297510046" Lng="2.9154144538583" Alt="292.803133697061" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="76.029013926929366" Lat="39.526237506311" Lng="2.91564089264239" Alt="294.798565910856" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="96.14062754589807" Lat="39.5264180830589" Lng="2.91563354355125" Alt="296.750631516237" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="128.43093586990202" Lat="39.5263174895165" Lng="2.91598626816177" Alt="299.89175841533" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="144.7819117893481" Lat="39.5262637011614" Lng="2.91616346844606" Alt="301.482343731878" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="159.65853549666758" Lat="39.5261750003148" Lng="2.91629305920134" Alt="302.929507457472" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="197.66712196896157" Lat="39.5258745814734" Lng="2.9165034191867" Alt="306.626895298017" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="216.71607736198854" Lat="39.52572282023" Lng="2.91660591627423" Alt="308.479933850151" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="232.24000433086047" Lat="39.5256082233967" Lng="2.91670894033747" Alt="309.990065747691" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="260.71655216183791" Lat="39.5255454933811" Lng="2.91703045662483" Alt="312.760198800855" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="276.23518356006423" Lat="39.5255104696248" Lng="2.91720539211104" Alt="314.269815557466" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="299.96674282825131" Lat="39.5253830472213" Lng="2.91742697007122" Alt="316.578367040677" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="312.51790240920673" Lat="39.5253159738766" Lng="2.91754446430137" Alt="317.799314966567" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="325.88088332173373" Lat="39.525234935311" Lng="2.91765927607478" Alt="319.099235003726" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="338.31242150506722" Lat="39.5251421552544" Lng="2.91773985392749" Alt="320.305890120747" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="368.80074977177765" Lat="39.5249004253711" Lng="2.91790677519294" Alt="323.26520993861" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="388.97785671523906" Lat="39.5247385828739" Lng="2.91801257557503" Alt="325.223681125438" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="399.63019459096074" Lat="39.5246651608193" Lng="2.91809213527614" Alt="326.25763990161" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="416.64927624790857" Lat="39.5245880292639" Lng="2.91826326627016" Alt="327.909580447141" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="452.84703042884985" Lat="39.5244863201549" Lng="2.91866367218158" Alt="331.423080117332" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="479.66814620579675" Lat="39.5244119310065" Lng="2.91896076944002" Alt="334.026445535125" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="492.96212062718007" Lat="39.5243623686976" Lng="2.9191016276127" Alt="335.316812183608" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="504.12511058215586" Lat="39.5243069408942" Lng="2.9192099668831" Alt="336.098333045339" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="529.582020574214" Lat="39.5241646176664" Lng="2.91944202286009" Alt="337.880571165615" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="546.69517451203023" Lat="39.5240627880068" Lng="2.91959132853795" Alt="339.07866297313" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="573.54400020145329" Lat="39.5238797521231" Lng="2.91979494847946" Alt="340.958349103271" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="584.77459717760166" Lat="39.5237941351184" Lng="2.9198641305728" Alt="341.744603132161" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="615.80547593973688" Lat="39.5235450132993" Lng="2.92002627361423" Alt="343.917074773565" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="633.11839147867784" Lat="39.5234033374068" Lng="2.92010944415273" Alt="345.129151889611" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="651.43465550757639" Lat="39.5232528206954" Lng="2.9201956076808" Alt="346.411473427595" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="702.10517566490489" Lat="39.5228348558917" Lng="2.92042930166464" Alt="349.48345680172" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="712.155802879592" Lat="39.5227523852026" Lng="2.92047693777538" Alt="350.092792557642" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="730.04511558609192" Lat="39.5226246555732" Lng="2.92060336350051" Alt="351.177361475393" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="741.242294555861" Lat="39.5226274688482" Lng="2.92073371104506" Alt="351.856208811584" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="760.46400866158547" Lat="39.5228000878832" Lng="2.92072818825152" Alt="353.043034092148" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="773.97989191469651" Lat="39.5228960165886" Lng="2.92063170187859" Alt="353.87755862236" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="791.02191082462343" Lat="39.5230136635148" Lng="2.92050470758167" Alt="354.929800829423" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="804.76097973775575" Lat="39.5231297004228" Lng="2.92045019764003" Alt="355.778105732297" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="816.00274217894344" Lat="39.523227263915" Lng="2.92048399445638" Alt="356.472216974921" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="826.72427002920779" Lat="39.5232181604172" Lng="2.92060829581207" Alt="357.134206859329" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="847.91361732968073" Lat="39.5230472846429" Lng="2.92071701957174" Alt="358.442521659795" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="862.6975283224466" Lat="39.5229369854118" Lng="2.92081291387016" Alt="359.35533927925" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="874.70069621230459" Lat="39.5228714277764" Lng="2.92092389541236" Alt="360.096462730581" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="901.65919912101094" Lat="39.5228569583625" Lng="2.92123728520787" Alt="361.760988204336" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="915.765446685728" Lat="39.5228196347399" Lng="2.9213942748514" Alt="362.63196418138" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="934.45077566213115" Lat="39.5226967485921" Lng="2.92154250451722" Alt="363.566650882066" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="950.61001917322835" Lat="39.5225754140456" Lng="2.92164580673976" Alt="364.374976495282" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="973.20121200807012" Lat="39.5223992165969" Lng="2.92177634429372" Alt="365.505044235702" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="997.06847027874642" Lat="39.5222058466644" Lng="2.92189640374235" Alt="366.69894394791" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1011.5827056656497" Lat="39.5220892337298" Lng="2.92197200955612" Alt="367.424982157026" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1035.1484066768239" Lat="39.52189335414" Lng="2.92207608903719" Alt="368.603797223933" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1046.7332827373941" Lat="39.5217978154213" Lng="2.92212958157496" Alt="369.183301582491" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1057.4477859232047" Lat="39.5217097547364" Lng="2.92217994665362" Alt="369.719267721749" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1068.1021163098699" Lat="39.5216253147968" Lng="2.92223835822424" Alt="370.252223867702" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1085.286438971036" Lat="39.5214979427353" Lng="2.9223514196744" Alt="371.111826493483" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1110.6499018340355" Lat="39.5213395352096" Lng="2.92256372273657" Alt="372.380570086456" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="1121.9052040928139" Lat="39.5212721270423" Lng="2.92266141553658" Alt="372.943335199395" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1159.1485585596397" Lat="39.521081588409" Lng="2.9230179204319" Alt="374.805502922736" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1178.5467418053222" Lat="39.520995887975" Lng="2.92321461231852" Alt="375.77541208502" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1196.65065863932" Lat="39.5209086355421" Lng="2.92339252822437" Alt="376.68060792672" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="1209.2646943681418" Lat="39.5208223883237" Lng="2.92348780323985" Alt="377.185367261675" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1228.5160660652443" Lat="39.5206695671909" Lng="2.92359274594617" Alt="377.955724170733" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1243.098466708808" Lat="39.5205655463829" Lng="2.92369596359384" Alt="378.53924898461" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1259.3968195042512" Lat="39.5204735627711" Lng="2.92384362846173" Alt="379.191438806706" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1274.7569361745589" Lat="39.5204084767238" Lng="2.92400135157262" Alt="379.806084463498" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="1285.3112896219386" Lat="39.5203779609816" Lng="2.92411771986267" Alt="380.442908326326" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1297.2067139588946" Lat="39.5203562372362" Lng="2.92425335269719" Alt="381.160649125325" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1307.5660022327618" Lat="39.5203414958206" Lng="2.92437246629198" Alt="381.785703232865" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1317.783615457804" Lat="39.5202835628593" Lng="2.92446475767212" Alt="382.402209014607" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1341.7879302388583" Lat="39.5200685496142" Lng="2.9244435549784" Alt="383.850570635205" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1360.1215083838513" Lat="39.5199067141324" Lng="2.92440395457924" Alt="384.956773882231" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1382.0744836298313" Lat="39.5197151047899" Lng="2.92434347754118" Alt="386.281362694461" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1394.2483789193527" Lat="39.5196119295468" Lng="2.92429647814525" Alt="387.01590574938" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1409.3664299820534" Lat="39.5194870289929" Lng="2.92422735071558" Alt="387.928091959951" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1420.0423647030686" Lat="39.5194166795253" Lng="2.9241428558197" Alt="388.572251739347" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1432.6953296800327" Lat="39.5193325508925" Lng="2.92404377554128" Alt="389.335700687028" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1451.3504568380674" Lat="39.5191652680919" Lng="2.92403080295452" Alt="390.461305414742" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1468.4667293750229" Lat="39.5190289746276" Lng="2.92412306659365" Alt="391.494059419859" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="1489.4916997592509" Lat="39.518941823158" Lng="2.92434027949116" Alt="393.176057050597" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="1502.6129445244956" Lat="39.518881950821" Lng="2.92447189697183" Alt="393.845422980447" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1517.4197298158083" Lat="39.5188562184265" Lng="2.92464106502971" Alt="394.600774914043" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1532.6985811562811" Lat="39.5189675577059" Lng="2.92474510829655" Alt="395.380208780077" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1545.1009372176216" Lat="39.5190788999954" Lng="2.92475022610333" Alt="396.012901390105" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1567.8816353818495" Lat="39.5192715827289" Lng="2.92483958711988" Alt="397.175033754995" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="1597.1980286077439" Lat="39.5195020134445" Lng="2.92500487194978" Alt="398.934017348549" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1614.9262120349767" Lat="39.5196322294816" Lng="2.92512372469171" Alt="399.997708354183" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1633.5117944403964" Lat="39.5197619280824" Lng="2.92526001226845" Alt="401.112843298508" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="1695.2395417081293" Lat="39.5201786674604" Lng="2.92573421284294" Alt="405.05045009804" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1730.7626959745887" Lat="39.5204247859976" Lng="2.92599752363651" Alt="407.316468541477" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1755.3365146802353" Lat="39.5205881108245" Lng="2.92619004671899" Alt="408.884029969017" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1780.1950019451165" Lat="39.5207427251216" Lng="2.92639891924011" Alt="410.469750375364" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1816.3264423142452" Lat="39.5209519332024" Lng="2.92672061518763" Alt="412.774571328205" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1840.5059267988413" Lat="39.5210932622837" Lng="2.9269344374759" Alt="414.316978215383" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1863.7395872945451" Lat="39.5212563159241" Lng="2.92710333315259" Alt="415.799051085289" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1896.1856911331488" Lat="39.5215211124567" Lng="2.92726123762241" Alt="417.868784790929" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1912.1785201402333" Lat="39.5215883176175" Lng="2.92742584788515" Alt="418.888965747297" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="1923.8859029750283" Lat="39.5215009213549" Lng="2.92750168774889" Alt="419.913460682892" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="1962.6060524735481" Lat="39.5212190666853" Lng="2.92723746132487" Alt="423.301800982896" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="2003.7364293994376" Lat="39.5209014711956" Lng="2.92699269664055" Alt="425.032344431467" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2049.2846586915739" Lat="39.5205421036956" Lng="2.92673908669739" Alt="426.948767175114" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2119.1484147502574" Lat="39.5199738314604" Lng="2.92639380015243" Alt="429.888255562438" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2153.995479784196" Lat="39.5196959021795" Lng="2.92620707734026" Alt="431.354431284705" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2174.0181375900379" Lat="39.5195352121529" Lng="2.92610231705605" Alt="432.19687625795" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2187.7177165345311" Lat="39.5194153863502" Lng="2.92606595337295" Alt="432.773280326244" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2198.8481184293346" Lat="39.5193470386585" Lng="2.92616055706043" Alt="433.241587342096" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="2209.3118871135039" Lat="39.5193553042613" Lng="2.92628193680533" Alt="433.629466937958" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2237.3237802323697" Lat="39.5195989618507" Lng="2.926363422396" Alt="434.667834863531" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="2257.8527886580919" Lat="39.5197690309144" Lng="2.92645586736001" Alt="435.406829842138" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2276.6943028700371" Lat="39.5199080880307" Lng="2.92658095401708" Alt="436.085079083563" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2297.0795108163743" Lat="39.5200515417814" Lng="2.92672850467345" Alt="436.818897590419" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2315.02906516198" Lat="39.5201830309437" Lng="2.92684948956771" Alt="437.465038419755" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2410.3878013785115" Lat="39.5208926720789" Lng="2.92747148220903" Alt="440.897723806643" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="2423.312054486822" Lat="39.5209850753101" Lng="2.92756260590126" Alt="441.413113234384" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2448.6920476148903" Lat="39.5211791165171" Lng="2.92771778258468" Alt="442.425208867666" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2479.9538026646887" Lat="39.5214177788869" Lng="2.9279096500685" Alt="443.67185561083" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2504.3758994169211" Lat="39.5216031758048" Lng="2.9280617115073" Alt="444.645752544285" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2524.2571068181433" Lat="39.521751478914" Lng="2.92819071637073" Alt="445.4385692757" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2553.5077244647941" Lat="39.5219646969173" Lng="2.92838979478329" Alt="446.605016494247" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="2568.8925181235008" Lat="39.5220664705961" Lng="2.92851100749312" Alt="447.290712165231" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2589.8537246891756" Lat="39.52219753106" Lng="2.92868627876006" Alt="448.224946898535" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2611.2495746454188" Lat="39.5223266827337" Lng="2.92887080969799" Alt="449.178553558297" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2631.9019459747406" Lat="39.5224447935692" Lng="2.92905628227229" Alt="450.099023597104" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2644.6895109429356" Lat="39.5225137656695" Lng="2.92917537055224" Alt="450.66896155894" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="2675.8641254336153" Lat="39.522686022694" Lng="2.92946161557681" Alt="452.061761624181" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2699.4386576306974" Lat="39.5227994621394" Lng="2.92969344702848" Alt="453.115009932735" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2725.8924442430475" Lat="39.522944691433" Lng="2.92993729474127" Alt="454.296895781895" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2745.8958670996863" Lat="39.5230742026665" Lng="2.93009878172065" Alt="455.190596285172" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2760.2802954072104" Lat="39.5231783689184" Lng="2.9301979079693" Alt="455.833254839656" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2770.5933646498556" Lat="39.5232409793686" Lng="2.93028643243818" Alt="456.294015742354" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2780.8891250771835" Lat="39.523255744828" Lng="2.93040479661836" Alt="456.754003332551" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="2793.2333699173309" Lat="39.5231500917439" Lng="2.93044845413768" Alt="457.330372042956" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2822.1005561287229" Lat="39.5229632" Lng="2.9302154" Alt="458.678218193541" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="2864.81654254279" Lat="39.5226960584888" Lng="2.92985829210108" Alt="460.582056984993" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2896.5506454591919" Lat="39.5224916989296" Lng="2.92960062893947" Alt="461.996436499924" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2919.7624113953243" Lat="39.5223362768075" Lng="2.92942042486009" Alt="463.030977994037" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="2938.9044645968825" Lat="39.5221986904131" Lng="2.92928670977501" Alt="463.815551362741" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2962.4192615661473" Lat="39.5220191652899" Lng="2.92914239876738" Alt="464.779349931176" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="2990.3548883926696" Lat="39.5217932817296" Lng="2.92900066913527" Alt="465.924344598957" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3005.0464167417849" Lat="39.5216727522065" Lng="2.9289309734323" Alt="466.526504762598" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3024.0266405236071" Lat="39.5215048656813" Lng="2.92889240491085" Alt="467.304445245495" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="3046.57510917253" Lat="39.5213027592233" Lng="2.92887491354253" Alt="468.089485685419" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3064.4571911305757" Lat="39.5211432217537" Lng="2.928899242178" Alt="468.712062664179" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3075.5735205445462" Lat="39.5210482610052" Lng="2.92893929139394" Alt="469.09908531611" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3087.443117155166" Lat="39.5209569456913" Lng="2.92901065830436" Alt="469.512333483425" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3102.4867158392617" Lat="39.5209068343388" Lng="2.92917335704308" Alt="470.036086715313" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="3120.1387123241821" Lat="39.5209376469996" Lng="2.92937500295261" Alt="470.649501653792" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3133.7575799297351" Lat="39.5209821771301" Lng="2.92952272084941" Alt="471.122763522021" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3156.764035955287" Lat="39.5211131600111" Lng="2.92972996081819" Alt="471.922248374604" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3170.0848039328639" Lat="39.5212098536724" Lng="2.92982134695449" Alt="472.385151144636" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3185.5895255313958" Lat="39.5213457858001" Lng="2.92986070463025" Alt="472.92394730028" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3206.5290349925581" Lat="39.5214874861511" Lng="2.93002107559432" Alt="473.651604815898" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3220.7135205726522" Lat="39.5215879630425" Lng="2.93012266168726" Alt="474.144522167026" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3245.5540986706387" Lat="39.5217723746168" Lng="2.93028554510149" Alt="475.007743599162" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3259.3463442568891" Lat="39.5218729643477" Lng="2.93037931860214" Alt="475.487030431392" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3291.3499904859445" Lat="39.5221058341282" Lng="2.93059788127414" Alt="476.599171752034" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="3304.344548905201" Lat="39.5222042850311" Lng="2.93067919030521" Alt="477.049626247863" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3317.79343687396" Lat="39.5223134242581" Lng="2.93074635880477" Alt="477.515830012082" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3349.8295993316488" Lat="39.5225916896569" Lng="2.93084152626328" Alt="478.626358969094" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3362.8452821298138" Lat="39.5227043131597" Lng="2.93088224754459" Alt="479.077545738475" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3383.0460889742603" Lat="39.5228697217654" Lng="2.93097900254248" Alt="479.777803797953" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3418.1337250703641" Lat="39.5231474085588" Lng="2.93117233330636" Alt="480.994111649098" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3447.1839292582526" Lat="39.5233799839935" Lng="2.9313257806131" Alt="482.001132792793" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3464.530843230214" Lat="39.5235306200432" Lng="2.93137750314456" Alt="482.60246106693" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3474.7888888877392" Lat="39.5236219379485" Lng="2.9313935171793" Alt="482.958054742049" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="3486.9427741054888" Lat="39.5237300930316" Lng="2.93141286782994" Alt="483.57432312449" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3518.6069463155877" Lat="39.524014536927" Lng="2.93141242709993" Alt="485.179869650532" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3544.6944608273452" Lat="39.5242469250847" Lng="2.93137321631383" Alt="486.502649163588" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3570.0020457769265" Lat="39.5244719219313" Lng="2.93133099275658" Alt="487.785881986752" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3595.8385407571009" Lat="39.5247040129559" Lng="2.93132969501487" Alt="489.095933438129" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3620.7483724507711" Lat="39.5249276572451" Lng="2.93132001778305" Alt="490.358997998121" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3633.3979139844823" Lat="39.525041166586" Lng="2.93131315344155" Alt="491.000398863765" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3654.9573467128057" Lat="39.5252302851799" Lng="2.93125903012269" Alt="492.093579891543" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3671.6289692612695" Lat="39.5253437210331" Lng="2.93113226066044" Alt="492.938922238994" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3686.7837272361994" Lat="39.5253648026609" Lng="2.93095789556664" Alt="493.707351265283" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3707.8692086595497" Lat="39.5253370825505" Lng="2.93071497544574" Alt="494.776500372499" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="3726.1679153962295" Lat="39.5252606322311" Lng="2.93052631724492" Alt="495.719342005595" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3762.730847066789" Lat="39.5250360849852" Lng="2.9302155557754" Alt="497.603248595449" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3782.3224117303716" Lat="39.5249157584366" Lng="2.93004904907377" Alt="498.612704787524" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="3811.0855036438516" Lat="39.5247402595612" Lng="2.92980319842318" Alt="500.890352594343" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3841.7526932694068" Lat="39.5245339608423" Lng="2.9295665002207" Alt="503.3187791836" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3855.5335191103063" Lat="39.5244968647506" Lng="2.92941338406143" Alt="504.410034179688" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="3866.8272407148743" Lat="39.5245967869521" Lng="2.92939062041214" Alt="504.70794173988" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3880.7715551660363" Lat="39.5246817616859" Lng="2.92950993633948" Alt="505.075767053996" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3896.7737009948469" Lat="39.5247790909856" Lng="2.92964708222708" Alt="505.497874167014" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3922.5062878810463" Lat="39.5249628269268" Lng="2.92982893383686" Alt="506.176652380714" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3934.04530418468" Lat="39.5250487" Lng="2.9299042" Alt="506.481030362961" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="3962.9656763161961" Lat="39.5252660489897" Lng="2.93008870180963" Alt="507.7601356667" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="3991.8414056026154" Lat="39.5254831269378" Lng="2.93027279168022" Alt="509.037266483401" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4003.6968446011365" Lat="39.5255637818098" Lng="2.93036295625842" Alt="509.561615023323" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4032.511679557414" Lat="39.5257273" Lng="2.9306231" Alt="510.836052573827" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="4053.594298797841" Lat="39.5258419936698" Lng="2.93081848691921" Alt="511.614717188724" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4078.9548400953477" Lat="39.5259667317009" Lng="2.93106563432387" Alt="512.551382405594" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="4108.6934909324254" Lat="39.5260770437318" Lng="2.93138107135261" Alt="513.649748544903" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4136.1894479722805" Lat="39.5261474079871" Lng="2.93168802741634" Alt="514.665283121301" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4170.4232791063905" Lat="39.5262248373949" Lng="2.9320738792483" Alt="515.929674069718" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4189.9193513934406" Lat="39.5262815413906" Lng="2.93228870548782" Alt="516.649741222963" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="4201.9240005548709" Lat="39.5263435942778" Lng="2.93240304997758" Alt="516.957804735535" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4215.3238956228024" Lat="39.5264207542404" Lng="2.9325228309745" Alt="517.301673072477" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4247.0475639834349" Lat="39.5266960237052" Lng="2.93261844895163" Alt="518.115766393774" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4271.0425149972607" Lat="39.5269114386605" Lng="2.93260854694718" Alt="518.731525238027" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4285.8614335536677" Lat="39.527043103325" Lng="2.93258309141901" Alt="519.111808580056" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4301.5989141044138" Lat="39.5271604827565" Lng="2.93248093985269" Alt="519.515664075731" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4314.5884986692154" Lat="39.5271691736614" Lng="2.93233007784688" Alt="519.849003017508" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4345.8956959871584" Lat="39.5270466114066" Lng="2.93200190645973" Alt="520.652408851768" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4388.2701664425613" Lat="39.5268904564214" Lng="2.9315518335649" Alt="521.739823239004" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4530.45218941456" Lat="39.5264105454768" Lng="2.93001726957914" Alt="525.388500749882" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4544.6319960338151" Lat="39.52637052455" Lng="2.92986049000705" Alt="525.752383190424" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4559.4569233827669" Lat="39.5263666855472" Lng="2.92968790636747" Alt="526.132820730191" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4574.9570162662585" Lat="39.5264199775358" Lng="2.9295211328004" Alt="526.530584379479" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4589.65714555448" Lat="39.5265203358715" Lng="2.9294098610025" Alt="526.907819349272" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4599.7547087359217" Lat="39.5265995649712" Lng="2.92935260074712" Alt="527.166943188733" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4629.2711491642249" Lat="39.5268297572418" Lng="2.92918199648509" Alt="527.924394588993" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4647.1266131905786" Lat="39.5269691663746" Lng="2.92907915186111" Alt="528.382601812926" LockAlt="false" LockDest="false" Key="true" />
+    <AltitudePoint Distance="4660.7311137709712" Lat="39.5270583973477" Lng="2.92897088731334" Alt="528.455447033109" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4684.9089463472856" Lat="39.5271231348671" Lng="2.92870210157076" Alt="528.584907098706" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4701.7332351244822" Lat="39.5271381288922" Lng="2.92850712555487" Alt="528.674992656287" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4746.08489138859" Lat="39.5271889136807" Lng="2.92799480087027" Alt="528.912473344897" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4788.9470413294121" Lat="39.527235878285" Lng="2.92749933713267" Alt="529.141978480458" LockAlt="false" LockDest="false" Key="false" />
+    <AltitudePoint Distance="4806.8250249123257" Lat="39.527261381784" Lng="2.92729376443537" Alt="529.237706040821" LockAlt="false" LockDest="false" Key="true" />
+  </AltitudePoints>
+  <InterestingPoints />
+  <VideoPoints>
+    <VideoPoint Distance="0" Lat="39.5264831937402" Lng="2.91481584265106" VideoTime="0" />
+    <VideoPoint Distance="0" Lat="39.5264831937402" Lng="2.91481584265106" VideoTime="0" />
+    <VideoPoint Distance="0" Lat="39.5264831937402" Lng="2.91481584265106" VideoTime="0" />
+    <VideoPoint Distance="76.000000000620844" Lat="39.526237590993816" Lng="2.9156405730710442" VideoTime="17" />
+    <VideoPoint Distance="96.000000000117581" Lat="39.52641682040214" Lng="2.9156335949387056" VideoTime="21.8" />
+    <VideoPoint Distance="275.99999999999613" Lat="39.525511000406894" Lng="2.9172027409783872" VideoTime="56.599999999999994" />
+    <VideoPoint Distance="741.000000000003" Lat="39.522627407972045" Lng="2.9207308904685112" VideoTime="158.4" />
+    <VideoPoint Distance="1469.9999999993404" Lat="39.519022619004467" Lng="2.9241389070989583" VideoTime="306.2" />
+    <VideoPoint Distance="1910.0000000001596" Lat="39.521579163027262" Lng="2.9274034249121734" VideoTime="393.09999999999997" />
+    <VideoPoint Distance="2419.9999999995566" Lat="39.5209613954476" Lng="2.9275392539418688" VideoTime="475.29999999999995" />
+    <VideoPoint Distance="2780.000000000251" Lat="39.523254469707013" Lng="2.9303945748808253" VideoTime="533.6" />
+    <VideoPoint Distance="3059.9999999999309" Lat="39.521182987201378" Lng="2.9288931781537721" VideoTime="583.69999999999993" />
+    <VideoPoint Distance="3859.9999999995866" Lat="39.5245363823356" Lng="2.9294043814130486" VideoTime="700.6" />
+    <VideoPoint Distance="4806.8250249123257" Lat="39.527261381784" Lng="2.92729376443537" VideoTime="858.08" />
+  </VideoPoints>
+</Track>

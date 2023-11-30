@@ -11,9 +11,10 @@
     "include": [
         "src/**/*.js",
         "src/**/*.ts"
-      ],
+    ],
     "exclude": [
       "src/**/*.spec.*",
+      "__tests__/**/*.ts",
       "src/**/*.test.*",
         "src/**/*.tests.*",
         "./node_modules" 

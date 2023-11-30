@@ -26,14 +26,15 @@ export type VideoDescription = {
     file: string;
     url: string;
     framerate: number;
-    width: number;
-    height: number;
-    segments;
-    informations;
-    mappings: VideoMapping;
+    width?: number;
+    height?: number;
+    segments?;
+    informations?;
+    mappings: Array<VideoMapping>;
     format: string;
-    selectableSegments
+    selectableSegments: Array<RouteSegment>
     infoTexts:RouteInfoText
+    next?:string
 };
 export type RoutePoint = {
     lat: number;
@@ -41,10 +42,55 @@ export type RoutePoint = {
     routeDistance: number;
     elevation: number;
     slope?: number;
+    distance?:number
 };
+
+export interface VideoRoutePoint extends RoutePoint {
+    videoSpeed: number;
+    videoTime: number;
+}
 
 export type RouteSegment = {
     start:number;    
     end:number;
     name:string;
 };
+
+export interface RouteBase  {
+    id?: string;   
+    title?: string;
+}
+
+
+export interface RouteInfo extends RouteBase{
+    localizedTitle?: LocalizedText
+    country?: string;
+    isLoop?:boolean;
+    distance?: number;
+    elevation?: number;    
+    category?: RouteCategory
+    provider?: RouteProvider
+    isLocal?:boolean;
+    hasGpx?: boolean;
+    hasVideo?: boolean;
+    isDemo?: boolean;
+    requiresDownload?: boolean;
+    videoFormat?: string;   
+    videoUrl?:string;
+    previewUrl?:string;
+    points?: Array<RoutePoint>|string,
+    segments?:Array<RouteSegment>    
+}
+export type LocalizedText = { [index: string]: string; };
+
+export interface ParseResult<T extends RouteBase> {
+    data: RouteInfo
+    details: T
+}
+
+export interface Parser<In, Out extends RouteBase> {
+    import(data:In): Promise< ParseResult<Out>>
+    supportsExtension(extension:string):boolean
+    supportsContent(data:In):boolean
+}
+

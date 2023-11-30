@@ -1,0 +1,60 @@
+import ImportKWT from './kwt';
+import ImportBikeLab from './bikelab';
+import ImportGpxImport from './gpx-import';
+import { parseXml } from '../utils/xnl';
+
+
+export function parseSegment(s) {
+    s.start = s.start!==undefined ? parseInt(s.start) : undefined;
+    s.end = s.end!==undefined ? parseInt(s.end) : undefined;
+    return s;
+}
+
+export function parseInfoText(infoText) {
+    if (infoText.distance!==undefined) infoText.distance = parseInt(infoText.distance);                    
+
+    const languageKeys = Object.keys(infoText).filter( k => k.length===2);
+    if (languageKeys && languageKeys.length>0) {
+        infoText.localizedText = {};
+        languageKeys.forEach( k => { 
+            infoText.localizedText[k] = infoText[k] 
+            delete infoText[k]
+        });
+    }
+
+    if (!infoText.text && infoText.localizedText) {                                                
+        const languages = Object.keys(infoText.localizedText);
+        if (languages && languages.length>0) {
+            infoText.text = infoText.localizedText[languages[0]];
+        }
+    }
+    return infoText;
+}
+
+
+export async function ImportXML(str, fileInfo={}) { 
+    
+    let result;
+    try {
+        result = await parseXml(str)
+    }
+    catch (err) {
+        throw ((err && err.message) ? err.message.replace(/\n/g,' ') : err);
+    }
+
+    
+        
+    if(result===undefined) 
+        throw new Error("parsing error");
+    
+    if (result.kwt)
+        return ImportKWT(result.kwt);
+    if (result.Track)
+        return ImportBikeLab(result.Track);
+    if (result['gpx-import'])
+        return ImportGpxImport(result['gpx-import'], fileInfo);
+    
+    throw new Error("no matching importer found")
+
+}
+

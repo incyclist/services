@@ -361,7 +361,7 @@ export class DevicePairingService  extends IncyclistService{
     
         }
         catch (err) { // istanbul ignore next
-            this.logError(err, 'selectDevice')
+            this.logError(err, 'selectDevice',{capability,udid,addAll})
         }
     }
 
@@ -1082,7 +1082,7 @@ export class DevicePairingService  extends IncyclistService{
             const control = this.getCapability(IncyclistCapability.Control)
             const power = this.getCapability(IncyclistCapability.Power)
 
-            const canStartRide =   (control?.connectState!=='failed' || power?.connectState!=='failed')
+            const canStartRide =   (control?.connectState==='connected' || power?.connectState==='connected')
             this.state.canStartRide = canStartRide
 
             if (this.state.canStartRide!==prev) {

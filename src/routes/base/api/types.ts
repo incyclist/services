@@ -1,5 +1,4 @@
-import { LocalizedText } from "../../list"
-import { RouteCategory, RoutePoint, RouteProvider, RouteType, VideoDescription } from "../types"
+import { LocalizedText, RouteBase, RouteCategory, RoutePoint, RouteProvider, RouteType, VideoDescription } from "../types"
 
 export type RouteDescriptionQuery = {
     category?: string
@@ -7,8 +6,7 @@ export type RouteDescriptionQuery = {
     type:RouteType
 }
 
-export type RouteApiDescription = {
-    id: string;   
+export interface RouteApiDescription extends RouteBase {
     routeId?: string; 
     hash?: string;
     routeHash?: string;
@@ -24,6 +22,7 @@ export type RouteApiDescription = {
     video?: VideoDescription   
     type?: RouteType,
     localizedTitle?:LocalizedText,
+    previewUrl?:string
 }
 
 export type LegacyRouteGpxRepoDescription = {
@@ -52,10 +51,17 @@ export type RouteApiDetail = {
     elevation?: number
     points?: Array<RoutePoint> 
     downloadUrl?:string
-    downloadType: string
+    downloadType?: string
     version?:string;
     category?: RouteCategory
     provider?: RouteProvider
     video?: VideoDescription   
     localizedTitle?:LocalizedText
+    previewUrl?:string
+    previewUrlLocal?:string
+    description?:LocalizedText
+    next?:string
+
 }    
+
+

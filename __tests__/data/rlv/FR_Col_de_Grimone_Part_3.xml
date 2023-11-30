@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<gpx-import>
+    <name>FR_Col_de_Grimone_Part_3</name>    
+    <id>4a20ee89-6332-4e9b-90b2-07d026a44f24</id>
+    <country>FR</country>
+    <title>Col de Grimone - 3 - Descent</title>
+    <video-file-path>FR_Col_de_Grimone_Part_3.mp4</video-file-path>
+    <gpx-file-path>FR_Col_de_Grimone_Part_3.gpx</gpx-file-path>
+    <framerate>30.0</framerate>
+    <start-frame>1</start-frame>
+    <end-frame>136910</end-frame>    
+	<informations>
+		<information distance="20" de="Col de Grimone - Teil 3 - Abfahrt\nL&auml;nge: 34,1 km - Gesamtanstieg: 143 hm\nSchwierigkeitsgrad: Mittel" en="Col de Grimone - Part 3 - Descent\nLength: 34.1 km - Total ascent: 143 hm\nDifficulty: Moderate" />
+		<information distance="100" de="cycling.vangestel.online\nLizens: CC BY-NC-SA 4.0\n(Creative Commons - Namensnennung - Nicht-kommerziell)" en="cycling.vangestel.online\nLicense: CC BY-NC-SA 4.0\n(Creative Commons Attribution-NonCommercial-ShareAlike)"/>							
+	</informations>
+</gpx-import>
+

@@ -1,0 +1,164 @@
+import EPMParser, {parseEpp,parseEpm} from './epm';
+import fs from 'fs';
+
+async function loadFile(type,fileName) {
+    return new Promise( (resolve,reject) => {
+        fs.readFile(fileName,type, (err,data) => {
+            if (err) 
+                return reject(err);
+            return resolve(data);
+        });
+    });
+};
+
+describe( 'epm',()=>{
+    describe ('parseEpp', () => {
+
+        test('header',async ()=> {
+            let fileName = './src/__tests__/testdata/rlv/San_Leo.epp';
+        
+            let data = await loadFile('binary',fileName);
+            let route = await parseEpp(data);
+            expect(route.epp.header).toEqual('EW2_EUP ');
+            expect(route.epp.version).toEqual(7);
+            expect(route.epp.name).toEqual('San_Leo');
+            expect(route.epp).toMatchSnapshot()
+    
+        });
+
+        test('bug:strange elevation profile',async ()=> {
+            let fileName = './src/__tests__/testdata/rlv/3-LGiro2.epp';
+        
+            let data = await loadFile('binary',fileName);
+            let route = await parseEpp(data);
+
+            console.log( route.epp.programData.filter(p=>p.distance<1000).map(p=>`${p.distance}:${p.elevation.toFixed(1)}`).join('\n'))
+
+            console.log(route)
+            //expect(route.epp.header).toEqual('EW2_EUP ');
+            //expect(route.epp.version).toEqual(7);
+            //expect(route.epp.name).toEqual('San_Leo');
+            //expect(route.epp).toMatchSnapshot()
+    
+        });
+
+    });
+
+
+
+    
+    describe ('parseEpm', () => {
+    
+        test('header',async ()=> {
+            let fileName = './src/__tests__/testdata/rlv/San_Leo.epm';
+        
+            let data = await loadFile('utf-8',fileName);
+            let route = await parseEpm(data);
+            expect(route.distance).toEqual(12910);
+            expect(route.title).toEqual('San_Leo');
+            expect(route.gpxDisabled).toBeFalsy();
+            
+    
+        });
+    
+        test('no clipmapper ',async ()=> {
+            let fileName = './src/__tests__/testdata/rlv/Tryvann.epm';
+        
+            let data = await loadFile('utf-8',fileName);
+            let route = await parseEpm(data);
+            expect(route.distance).toEqual(5640);
+            expect(route.title).toEqual('Tryvann');
+            expect(route.gpxDisabled).toBeTruthy();
+    
+        });
+    
+        /*
+        test('no clipmapper',async ()=> {
+            let fileName = './__testdata__/rlv/no_vadla.epm';
+        
+            let data = await loadFile('utf-8',fileName);
+            let route = await parseEpm(data);
+            expect(route.distance).toEqual(18970);
+            expect(route.title).toEqual('no_vadla');
+            expect(route.gpxDisabled).toBeTRuthy();
+    
+        });
+    */
+    });
+    
+    describe ('EPMParser', () => {
+    
+        test('import SanLeo',async ()=> {
+            let fileNames = [ './src/__tests__/testdata/rlv/San_Leo.epm','./src/__tests__/testdata/rlv/San_Leo.epp' ]
+            let data = [];
+            data.push(  {format:'epm', data:await loadFile('utf-8',fileNames[0])} );
+            data.push(  {format:'epp', data:await loadFile('binary',fileNames[1])} );
+            let route = await EPMParser.import(data);
+            expect(route.distance).toEqual(12910);
+            expect(route.title).toEqual('San_Leo');
+            expect(route.video).toMatchSnapshot()
+    
+        });
+    
+    
+        test('import Tryvann',async ()=> {
+            let fileNames = [ './src/__tests__/testdata/rlv/Tryvann.epm','./src/__tests__/testdata/rlv/Tryvann.epp' ]
+            let data = [];
+            data.push(  {format:'epm', data:await loadFile('utf-8',fileNames[0])} );
+            data.push(  {format:'epp', data:await loadFile('binary',fileNames[1])} );
+            let route = await EPMParser.import(data);
+            expect(route.title).toEqual('Tryvann');
+            expect(route).toMatchSnapshot()
+    
+        });
+
+        test('SpeedEp Clipmapper',async ()=> {
+            let fileNames = [ './src/__tests__/testdata/rlv/NO_Flakstad.epm','./src/__tests__/testdata/rlv/NO_Flakstad.epp' ]
+            let data = [];
+            data.push(  {format:'epm', data:await loadFile('utf-8',fileNames[0])} );
+            data.push(  {format:'epp', data:await loadFile('binary',fileNames[1])} );
+            let route = await EPMParser.import(data);
+            expect(route.title).toEqual('NO_Flakstad');
+            expect(route).toMatchSnapshot()
+
+
+            const points = data.decoded;
+            console.log(points[1])
+    
+        });
+
+        test('NoGPX should deliver slope',async ()=> {
+            const fileNames = [ './src/__tests__/testdata/rlv/ES_MallorcaDemo.epm','./src/__tests__/testdata/rlv//ES_MallorcaDemo.epp' ]
+            const importSrc = [];
+            importSrc.push(  {format:'epm', data:await loadFile('utf-8',fileNames[0])} );
+            importSrc.push(  {format:'epp', data:await loadFile('binary',fileNames[1])} );
+            const data = await EPMParser.import(importSrc);
+
+            const points = data.decoded;
+            const missingSlope = points.find(p => (p.slope === undefined || p.slope === null || isNaN(p.slope)));
+
+            expect(missingSlope).toBeFalsy();
+    
+        });
+
+        test('bug:strange elevation profile',async ()=> {
+            const fileNames = [ './src/__tests__/testdata/rlv/3-LGiro1.epm','./src/__tests__/testdata/rlv/3-LGiro1.epp' ]
+            const importSrc = [];
+            importSrc.push(  {format:'epm', data:await loadFile('utf-8',fileNames[0])} );
+            importSrc.push(  {format:'epp', data:await loadFile('binary',fileNames[1])} );
+            const data = await EPMParser.import(importSrc);
+
+            const points = data.decoded;
+            
+            expect(points[0].lat).toBeCloseTo(46.602,3)
+            expect(points[0].lng).toBeCloseTo(10.425,3)
+            expect(points[0].routeDistance).toBe(0)
+            expect(points[1].routeDistance).toBeCloseTo(28,0)
+    
+        });
+
+    });
+    
+    
+})
+

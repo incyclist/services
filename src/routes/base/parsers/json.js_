@@ -1,0 +1,97 @@
+
+export const validateRouteFile = (json) => {
+    if (!json.decoded)
+        throw new Error('not an Incyclist route')
+    if (!json.title)
+        throw new Error('title missing')
+    if (!json.distance)
+        throw new Error('distance missing')
+    if (!json.elevation)
+        throw new Error('elevation missing')    
+}
+
+export const checkForActivity = (json) => {
+    if (json.title && json.fileName && json.startTime && json.user && json.status && json.stats && json.logs)
+        return true;
+    return false;
+}
+
+export default class JsonParser {
+
+
+    static importActivity(json) {
+        const {title, totalElevation, distance,logs,lat,lng} = json
+        const decoded = [];
+
+        let totalDistance = distance;
+        let hasStartLocation = true;
+        if (!lat||!lng) {
+            totalDistance -= logs[0].distance
+            hasStartLocation = false;
+        }
+
+        let prevRouteDistance = null;
+
+        logs.forEach( (l,cnt) => {
+            const routeDistance = prevRouteDistance===null ? 
+                ( hasStartLocation ?  l.distance :0 ) : 
+                prevRouteDistance+l.distance
+            const {lat,lon,elevation,distance,slope} = l;
+
+            decoded.push( {lat,lng:lon,routeDistance,slope,elevation, cnt, distance: hasStartLocation|| cnt>0 ? distance: 0})
+            
+            prevRouteDistance = routeDistance
+        })
+
+        const route = {
+            title,
+            elevation: totalElevation,
+            distance:totalDistance,
+            decoded
+        }
+        return route;
+
+    }
+
+    static import( str ) {
+        return new Promise( (resolve,reject) => {
+            try {
+                let json = JSON.parse(str);
+
+
+                const isActivity = checkForActivity(json)
+                if (isActivity) 
+                    reject('activities cannot be imported')
+                    //return resolve(JsonParser.importActivity(json))
+                
+                validateRouteFile(json)
+
+                let points = json.decoded;
+                if (points) {
+                    let d = 0;
+                    if (points[0].routeDistance===undefined) {
+                        points[0].routeDistance=0;
+                    }
+
+                    for (var i=1; i<points.length;i++ ) {
+                        if (points[i].routeDistance===undefined) {
+                            d+=points[i].distance;
+                            points[i].routeDistance=d;
+                        }
+                        if (points[i].elevation_org!==undefined)
+                            points[i].elevation_org = points[i].elevation;
+                        if (points[i].slope_org!==undefined)
+                            points[i].slope_org = points[i].slope;
+                    }
+                }
+                return resolve(json);
+            }
+            catch (e) {
+                if (e instanceof Error)
+                    return reject (e.message)
+                reject (e);
+            }
+        } )
+    }
+
+}

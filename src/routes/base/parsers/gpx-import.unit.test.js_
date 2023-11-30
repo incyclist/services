@@ -1,0 +1,74 @@
+import importFn, { GPXImportParser } from './gpx-import';
+import fs from 'fs';
+import Route from "../route/route";
+import { parseXml } from './utils';
+
+async function loadFile(type,fileName) {
+    return new Promise( (resolve,reject) => {
+        fs.readFile(fileName,type, (err,data) => {
+            if (err) 
+                return reject(err);
+            return resolve(data);
+        });
+    });
+};
+
+describe( 'gpx-import',()=>{
+    describe ('Import', () => {
+
+        beforeAll(()=>{ 
+            const parser = GPXImportParser.getInstance();
+            parser.getGPXFileUrl = jest.fn();
+            parser.getGPXFileContent = jest.fn( ()=> loadFile('utf-8','./src/__tests__/testdata/rlv/Triathlon_Woerrstadt_Loop.gpx') );
+        })
+
+        afterAll( ()=>{
+            GPXImportParser.instance = null;
+        })
+
+
+        test('Triathlon_Woerrstadt_Loop',async ()=> {
+            let fileName = './src/__tests__/testdata/rlv/Triathlon_Woerrstadt_Loop.xml';
+        
+            const xml = await loadFile('utf-8',fileName);
+            const data = await parseXml(xml);
+            let routeData = await importFn(data['gpx-import']);
+            expect(routeData.country).toBe('DE')
+
+            const route = new Route( {data:routeData})
+            route.validate()
+
+            let points = route.getPoints();
+            let csv = points.map( (p,idx)=> `${idx},${p.routeDistance},${p.elevation},${p.lat},${p.lng},${p.slope}`).join('\n');
+            
+
+            //expect(csv).toMatchSnapshot();
+            // TODO: add tests
+
+            console.log(points.slice(0,100).map(p=> `${parseInt(p.routeDistance)}:${p.videoTime}:${p.videoSpeed}`).join('\n'));
+            
+    
+        });
+
+
+        test('next video tag',async ()=> {
+            const fileName = './src/__tests__/testdata/rlv/FR_Col_de_Grimone_Part_2.xml';
+        
+            const xml = await loadFile('utf-8',fileName);
+            const data = await parseXml(xml);
+            let routeData = await importFn(data['gpx-import']);
+
+            const route = new Route( {data:routeData})
+            expect(route.get().video.next).toBe('4a20ee89-6332-4e9b-90b2-07d026a44f24')
+            expect(route.get().routeId).toBe('40f3b90a-3993-41e6-85ba-5e75436a28b1')
+
+
+
+            // TODO: add tests
+    
+        });
+
+
+
+    });
+})

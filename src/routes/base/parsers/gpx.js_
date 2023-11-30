@@ -1,0 +1,126 @@
+import gpxParse from 'gpx-parse/lib/gpx-parse';
+import {updateSlopeProfile} from '../../../../../ergo-react/src/models/route/route'
+import {geo} from 'incyclist-services';
+
+import Route from '../../../../../ergo-react/src/models/route/route';
+
+const MIN_DISTANCE = 1;
+
+export default class GXPParser {
+    static import( str,props={} ) {
+        return new Promise( (resolve,reject) => {
+            gpxParse.parseGpx( str, function(error, result) {
+                if (error) {
+                    return reject(error);
+                }
+                return resolve(result);
+            } )
+        })
+        .then( result => ImportGPXFromJson(result,props) )
+        .then( route => props.original ? route : updateSlopeProfile(route) ) ;
+    }
+    
+
+}
+
+function ImportGPXFromJson ( gpx,props={} ) {
+    return new Promise( (resolve,reject) => {
+        var route = {};
+
+        if (gpx===undefined)
+            return resolve(route);
+
+        route.title = ( gpx.metadata ? gpx.metadata.title : undefined);
+        route.distance = 0.0;
+        route.decoded = [];
+        route.elevation = 0;
+        route.author = gpx.author;
+        route.private = ( gpx.private===undefined ? true : gpx.private );
+        
+        var prevElevation = null;
+        var prevLatLon = null;
+        var startTime = null;
+        
+        var x=0;
+        
+        if ( gpx!==undefined && gpx!=null && gpx.tracks!=null ) {
+            if (gpx.tracks.length===0) {
+                return reject('No Track found');
+            }
+            for ( var i in  gpx.tracks ) {
+                if (route.title===undefined && gpx.tracks[i].name!==undefined) {
+                    route.title = gpx.tracks[i].name;
+                }
+                var segments = gpx.tracks[i].segments;
+                for (var j in segments) {
+                    var segment  = segments[j];
+                    for (var k in segment) {
+                        try {
+                            var trackElement = {};
+                            trackElement.lat = segment[k].lat;
+                            trackElement.lng = segment[k].lon;
+                            trackElement.elevation = segment[k].elevation;
+
+                            if (props.original) {
+                                trackElement.time = startTime===null ? 0: (Date.parse(segment[k].time)-startTime)/1000;
+                                if ( startTime===null)
+                                    startTime = Date.parse(segment[k].time);
+                            }
+
+                            if (prevElevation!=null) {
+                                var e =(trackElement.elevation-prevElevation);
+                                if ( e>0) {
+                                    route.elevation += e;
+                                }
+                            }	
+                            
+                            if (prevLatLon!=null) {
+                                var s = Math.abs(geo.calculateDistance( prevLatLon.lat, prevLatLon.lon, segment[k].lat, segment[k].lon));
+                                
+                                route.distance+=s;
+                                trackElement.distance = s;
+                                trackElement.routeDistance =  route.distance;
+                                if (s<MIN_DISTANCE) {
+                                    trackElement.ignore=true;
+                                }
+                            }
+                            else {
+                                trackElement.distance = 0;
+                                trackElement.routeDistance = 0;
+                            }
+                            
+                            if ( !trackElement.ignore) {
+                                prevElevation = trackElement.elevation;
+                                prevLatLon = { lat:segment[k].lat, lon:segment[k].lon };
+                                
+                                route.decoded.push(trackElement);					
+                                if ( x>0) {
+                                    route.decoded[x-1].slope = (route.decoded[x].elevation-route.decoded[x-1].elevation)/route.decoded[x].distance*100;
+                                }
+                                x++;	
+
+                            }
+                        }
+                        catch (err) {
+                            return reject(err);
+                        }
+                    }
+                }
+            }
+        }
+
+
+        const r = new Route( {data:route})
+        if ( props.autosmooth ) 
+            r.performSmoothing();
+
+        r.validate();
+
+        if ( props.original)
+            return resolve(r)
+
+        return resolve(r.get());
+
+    })
+
+}

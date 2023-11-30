@@ -25,3 +25,33 @@ export abstract class AbstractJsonRepositoryBinding implements IJsonRepositoryBi
     abstract release(name:string):Promise<boolean>
 }
 
+export interface FileLoaderError {
+    message: string
+    key: string
+}
+
+export interface FileLoaderResult {
+    error?:FileLoaderError,
+    data?,
+    epmEpp?
+}
+
+
+export interface FileInfo {
+    type:'url'|'file'
+    url:string,
+    name:string,
+    dir:string,
+    ext:string,
+    delimiter: string
+}
+
+export interface IFileLoader {
+    open(file:FileInfo):Promise<FileLoaderResult>
+}
+
+
+
+
+/*
+*/

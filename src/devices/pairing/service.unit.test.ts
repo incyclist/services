@@ -354,7 +354,7 @@ describe('PairingService',()=>{
                 expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'Start Pairing'}))
                 expect(access.scan).toHaveBeenCalled()
                 expect(ride.startAdapters).toHaveBeenCalled()
-                expect(svc.getState().canStartRide).toBe(true)
+                expect(svc.getState().canStartRide).toBe(false)
                 expect(svc.getState().capabilities?.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject({deviceName:'Ant+FE 1234'})
                 expect(svc.getState().capabilities?.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject({deviceName:'Ant+FE 1234'})
                 expect(svc.getState().capabilities?.find(c=>c.capability===IncyclistCapability.Speed)).toMatchObject({deviceName:'Ant+FE 1234'})
@@ -460,7 +460,7 @@ describe('PairingService',()=>{
                 expect(access.scan).not.toHaveBeenCalled()
                 expect(ride.startAdapters).toHaveBeenCalled()
 
-                expect(svc.getState().canStartRide).toBe(true)
+                expect(svc.getState().canStartRide).toBe(false)
                 expect(svc.getState().capabilities?.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject({deviceName:'Ant+FE 1234', connectState:'connecting'})
                 expect(svc.getState().capabilities?.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject({deviceName:'Ant+FE 1234', connectState:'connecting'})
                 expect(svc.getState().capabilities?.find(c=>c.capability===IncyclistCapability.Speed)).toMatchObject({deviceName:'Ant+FE 1234', connectState:'connecting'})
