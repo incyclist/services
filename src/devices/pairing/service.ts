@@ -121,7 +121,6 @@ export class DevicePairingService  extends IncyclistService{
 
     async start( onStateChanged: (newState:PairingState)=>void) {
 
-
         if (this.state.stopped) {
             // cleanup on 2nd launch
             this.state.stopped = false;
@@ -137,19 +136,7 @@ export class DevicePairingService  extends IncyclistService{
             }
                 
     
-            await this.waitForInit()
-            const {capabilities,interfaces} = this.configuration.load()
-
-            const state = {...this.state}
-            delete state.adapters
-    
-            this.state.capabilities = this.mappedCapabilities(capabilities)
-            this.state.interfaces = this.access.enrichWithAccessState(interfaces)
-            this.state.canStartRide = this.configuration.canStartRide()
-            this.state.stopRequested = false
-            this.state.stopped = false
-
-            this.logCapabilities()
+            await this.loadConfiguration();
 
             this.state.interfaces.forEach( i=> {
                 if (!this.isInterfaceEnabled(i.name))
@@ -169,6 +156,22 @@ export class DevicePairingService  extends IncyclistService{
         catch (err) { // istanbul ignore next
             this.logError(err,'start')
         }
+    }
+
+    protected async loadConfiguration() {
+        await this.waitForInit();
+        const { capabilities, interfaces } = this.configuration.load();
+
+        const state = { ...this.state };
+        delete state.adapters;
+
+        this.state.capabilities = this.mappedCapabilities(capabilities);
+        this.state.interfaces = this.access.enrichWithAccessState(interfaces);
+        this.state.canStartRide = this.configuration.canStartRide();
+        this.state.stopRequested = false;
+        this.state.stopped = false;
+
+        this.logCapabilities();
     }
 
     protected initConfigHandlers() {
@@ -482,6 +485,16 @@ export class DevicePairingService  extends IncyclistService{
         }
     }
 
+    protected async restartPair() {
+        if (!this.isPairing())
+            return
+
+        if (this.state.check?.to) 
+            clearTimeout(this.state.check?.to)
+        delete this.state.check;
+
+        this.run()
+    }
 
     protected async restart() {
 
@@ -746,7 +759,6 @@ export class DevicePairingService  extends IncyclistService{
 
     protected async onInterfaceStateChanged  (ifName,ifDetails, interfacesNew? ) { 
 
-        
         const prev = this.state.interfaces;
 
         const current = getInterfaceSettings(ifName,prev)
@@ -762,6 +774,7 @@ export class DevicePairingService  extends IncyclistService{
         try {
            
             let restartScan = false
+            let restartPair = false;
 
             if (interfacesNew) {
                 const getData = (i) => ( {name:i.name, enabled:i.enabled,state:i.state} )
@@ -778,6 +791,23 @@ export class DevicePairingService  extends IncyclistService{
                 if (ifDetails.state==='disconnected' && current.state!=='disconnected') {
                     // set all devices to failed state
                     this.failAdaptersOnInterface(ifName)
+                    if (this.isPairing()) {
+
+                        
+                        const pairing = this.getPairingInterfaces()
+                        if (pairing.includes( ifName)) {
+                            try {
+                                current.state = 'disconnected'
+                                this.emitStateChange( {interfaces:this.state.interfaces})
+                                await sleep(1000)
+                                this.access.connect(ifName)
+                            }
+                            catch(err) {
+                                this.logError(err,'reconnect')
+                            }
+                        }
+                        
+                    }
                 }
                 else  if (ifDetails.state==='unavailable' && current.state!=='unavailable') {
                     // set all devices to failed state
@@ -790,6 +820,9 @@ export class DevicePairingService  extends IncyclistService{
                 else if (ifDetails.state==='connected' && current.state!=='connected' && !this.isPairing()) {
                     restartScan = true;
                 } 
+                else if (ifDetails.state==='connected' && current.state!=='connected' && this.isPairingWaiting() ) {
+                    restartPair = true;
+                } 
                 
                 if (changedIdx!==-1) {
                     prev[changedIdx].isScanning = ifDetails.isScanning
@@ -798,7 +831,9 @@ export class DevicePairingService  extends IncyclistService{
 
                 if (restartScan)
                     this.restart()
-
+                if (restartPair) {
+                    this.restartPair();
+                }
 
                 this.emitStateChange( {interfaces:this.state.interfaces})
                 
@@ -1133,6 +1168,8 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected async run(props:PairingProps={}):Promise<void> {
+
+        
         this.emit('run')
 
         // pairing already ongoing ? stop previous paring
@@ -1144,7 +1181,7 @@ export class DevicePairingService  extends IncyclistService{
             this.state.stopRequested = false
             return;
         }
-            
+        
         await this.waitForInit();
         await this.rideService.lazyInit()
 
@@ -1159,6 +1196,7 @@ export class DevicePairingService  extends IncyclistService{
         }
 
         const configOKToStart = this.configuration.canStartRide()
+
 
         if (this.state.stopRequested || this.state.stopped) {
             this.state.stopped = true;
@@ -1186,23 +1224,26 @@ export class DevicePairingService  extends IncyclistService{
         
         this.emit('pairing-start');
         
-        const requiredInterfaces = this.getPairingInterfaces()
+        const { isReady, busyRequired } = this.isReadyToPair();
 
 
-        
-        const busyRequired = this.state.interfaces            
-            .filter( i=> requiredInterfaces.includes(i.name))
-            .find( i=> i.enabled && i.state!=='connected' && i.state!=='unavailable'  )
-        
-        const isReady = busyRequired===undefined
         if (!isReady) {
-            setTimeout(() => {
+            this.logEvent({ message: 'Pairing: waiting for interfaces', interfaces:busyRequired?.name });
 
-                if ( (!this.isPairing()||this.state.check.preparing===preparing) && !this.isScanning()) {
-                    delete this.state.check
-                    this.run()
+            this.state.check.to = setTimeout(() => {
+
+                if ( (!this.isPairing() || this.state.check.preparing===preparing) && !this.isScanning()) {
+                    
+
+                    const { isReady } = this.isReadyToPair();
+                    if (isReady) {
+                        delete this.state.check                    
+                        //this.run()
+                    }
+                    
                 }
             }, 1000);
+
             return;
         }
         
@@ -1240,6 +1281,20 @@ export class DevicePairingService  extends IncyclistService{
             if (!this.state.scan)
                 this.run();
         }
+    }
+
+    private isReadyToPair() {
+        const requiredInterfaces = this.getPairingInterfaces();
+
+
+
+        const busyRequired = this.state.interfaces
+            .filter(i => requiredInterfaces.includes(i.name))
+            .find(i => i.enabled && i.state !== 'connected' && i.state !== 'unavailable');
+
+        const isReady = busyRequired === undefined;
+
+        return { isReady, busyRequired };
     }
 
     private processConnectedDevices(adapters: AdapterInfo[]) {
@@ -1639,6 +1694,10 @@ export class DevicePairingService  extends IncyclistService{
 
     protected isPairing() {
         return this.state.check!==undefined && this.state?.check!==null
+    }
+
+    protected isPairingWaiting() {
+        return this.isPairing() && this.state.check.to
     }
 
     protected async _stopDeviceSelection(changed:boolean) {

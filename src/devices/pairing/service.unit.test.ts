@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {  IncyclistCapability, IncyclistDeviceAdapter, DeviceProperties, IncyclistDevice,DeviceSettings } from 'incyclist-devices'
-import { CapabilityInformation, DeviceConfigurationService, DeviceConfigurationSettings, ExtendedIncyclistCapability, useDeviceConfiguration,} from '../configuration'
+import { CapabilityInformation, DeviceConfigurationService, DeviceConfigurationSettings, ExtendedIncyclistCapability, InterfaceSetting, useDeviceConfiguration,} from '../configuration'
 import {DevicePairingService} from './service'
 import { DeviceAccessService, useDeviceAccess } from '../access'
 import { DeviceRideService, useDeviceRide } from '../ride'
 import UserSettingsMock from '../../settings/user/mock'
 import { CapabilityData, DevicePairingData, PairingSettings, PairingState } from './model'
 import { UserSettingsService } from '../../settings'
-import { InterfaceSetting } from 'incyclist-services'
 import { sleep } from '../../utils/sleep'
 
 let ride:DeviceRideService
@@ -40,6 +39,7 @@ class TestWrapper extends DevicePairingService {
             configuration = useDeviceConfiguration()
         
             configuration.add = jest.fn()
+            configuration.canStartRide = jest.fn()
             configuration.getAdapter = jest.fn()  // (udid)=>IncyclistDeviceAdapter
             configuration.select=jest.fn()// ()=>{console.log('select')})
             configuration.unselect=jest.fn()
@@ -52,12 +52,14 @@ class TestWrapper extends DevicePairingService {
         ride.startAdapters=jest.fn()
         ride.getAdapters=jest.fn().mockReturnValue([])
         ride.cancelStart = jest.fn().mockResolvedValue(true)
+        ride.lazyInit = jest.fn().mockResolvedValue(true)
 
         access.scan = jest.fn()
         access.enableInterface = jest.fn()
         access.disableInterface = jest.fn()
         access.stopScan = jest.fn()
         access.enrichWithAccessState = jest.fn( (interfaces)=>{ return interfaces.map(i => ({...i, state:'connected', isScanning:false}))})
+
 
         // simulate feature toggle
         
@@ -75,6 +77,9 @@ class TestWrapper extends DevicePairingService {
 
     }
 
+    setCanStartRide(enabled) {
+        configuration.canStartRide= jest.fn().mockReturnValue(enabled)
+    }
 
 
     setupMockData  (capability:IncyclistCapability|string, devices:DeviceList  )   {
@@ -131,7 +136,10 @@ class TestWrapper extends DevicePairingService {
                 const idx = state.findIndex(c=>c.capability===capability) 
                 const info = existing || { capability, devices:[] as Array<DevicePairingData>} as CapabilityData                   
                 info.devices.push( {...d,interface:d.interface||'ant', name:d.udid,selected:d.selected||false,udid:d.udid,connectState:'connecting'} )
-                if (d.selected) info.selected = d.udid;
+                if (d.selected) {
+                    info.selected = d.udid;
+                    info.interface = d.interface as string
+                }
                 if (d.deleted) this.state.deleted.push( {capability: capability as IncyclistCapability,udid:d.udid})
                 if (!existing) 
                     state.push(info)
@@ -163,6 +171,9 @@ class TestWrapper extends DevicePairingService {
             { name:'serial', enabled:false, protocol:'Daum Classic', isScanning:false,state:'unknown' },
             { name:'tcpip', enabled:true, isScanning:false,state:'connected' },
         ]
+
+        this.loadConfiguration = jest.fn()
+        this.waitForInit = jest.fn().mockResolvedValue(true)
 
       
     
@@ -218,6 +229,13 @@ class TestWrapper extends DevicePairingService {
         this.initPairingCallbacks()
         this.initConfigHandlers()
 
+    }
+
+    isPairing() {
+        return super.isPairing()
+    }
+    isScanning() {
+        return super.isScanning()
     }
 
     simulateScanning() {
@@ -1662,6 +1680,78 @@ describe('PairingService',()=>{
 
         describe('ride:pairing-success',()=>{})
         describe('ride:pairing-error',()=>{})
+
+
+        describe('flow: interface gets connected after pairing was started',()=>{
+            let ant
+            let control
+            let cadence
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()               
+                svc.initServices()
+                svc.getPairingRetryDelay= jest.fn().mockReturnValue(30000)
+
+
+                svc.setupMockData( IncyclistCapability.Control, [ {udid:'1', interface:'ant', selected:true}, {udid:'2', interface:'ant'} ])
+                svc.setupMockData( IncyclistCapability.Power, [ {udid:'1', interface:'ant',selected:true}, {udid:'2'} ])
+                svc.setupMockData( IncyclistCapability.Cadence, [ {udid:'1', interface:'ant'},{udid:'2', interface:'ant'}, {udid:'4', selected:true, interface:'ble'} ])
+                svc.setupMockData( IncyclistCapability.Speed, [ {udid:'1', interface:'ant', selected:true}])
+                svc.setupMockData( IncyclistCapability.HeartRate, [ {udid:'3', interface:'ant',selected:true} ])
+                svc.setCanStartRide(true)
+
+                ant = svc.getState().interfaces?.find(i=>i.name==='ant')
+                ant.state = 'connecting'
+                svc.getState().initialized = true;
+
+                control = svc.getCapabilityData('control')
+                cadence = svc.getCapabilityData('cadence')
+
+                control.devices[0].connectState='connecting'
+                control.devices[1].connectState=undefined
+                control.connectState = 'connecting'
+
+                cadence.devices[0].connectState=undefined
+                cadence.devices[1].connectState='connected'
+                cadence.devices[2].connectState='connecting'
+                cadence.connectState = 'connecting'
+
+                ride.startAdapters= jest.fn( async()=> { await sleep(1000); return false;} )
+                
+
+            })
+
+            afterEach( async ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+                await svc.stop()
+            })
+
+
+            test('isScanning changed',async ()=>{
+                
+                svc.start( onStateChanged)
+                await sleep (500)
+                
+                expect(svc.getState().check?.preparing).toBeDefined()
+                expect(svc.getState().check?.promise).toBe(undefined)
+
+                access.emit('interface-changed','ant', { name: 'ant', enabled: true, isScanning: true, state: 'connected'})
+                expect(ant.enabled).toBe(true)
+                expect(ant.state).toBe('connected')
+
+                svc.start( onStateChanged)
+                await sleep (100)
+
+                expect(svc.isPairing()).toBe(true)
+                expect(svc.getState().check?.preparing).toBeUndefined()
+                expect(svc.getState().check?.promise).toBeDefined()
+                
+            })
+
+            test('no changes',()=>{})
+
+        })        
 
     })
 

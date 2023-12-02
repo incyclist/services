@@ -66,6 +66,7 @@ export interface InternalPairingState extends PairingState {
     check?: {
         preparing?:number
         promise?:Promise<boolean>
+        to?: NodeJS.Timeout
     }
     scan?: {
         preparing?:number
