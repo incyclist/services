@@ -8,7 +8,10 @@ import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
 import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { setInterval } from "timers";
 
+
+const NO_DATA_THRESHOLD = 5000
 
 /**
  * Provides method to consume a devcie
@@ -34,8 +37,6 @@ export class DeviceRideService  extends EventEmitter{
     protected debug;
 
     protected deviceDataHandler = this.onData.bind(this)
-
-
 
     static getInstance():DeviceRideService{
         if (!DeviceRideService._instance)
@@ -585,6 +586,9 @@ export class DeviceRideService  extends EventEmitter{
                         if (startType==='pair') {
                             ai.adapter.on('data',this.deviceDataHandler)                               
                         }
+                        else if (startType==='start') {
+                            this.startHealthCheck(ai)
+                        }
                     }
                     else {
                         this.emit(`${startType}-error`, this.getAdapterStateInfo(ai))
@@ -633,6 +637,51 @@ export class DeviceRideService  extends EventEmitter{
         
     }
 
+    startHealthCheck(ai: AdapterRideInfo) {
+        const check = ()=> {
+            const tsNow = Date.now()
+
+            const isPaused = ai.adapter.isPaused()
+
+            // paused or no data received yet => no need to check
+            if (isPaused || !ai.tsLastData) {
+                ai.tsLastData = tsNow
+                return;
+            }
+
+            const isHealthy = (tsNow-ai.tsLastData)<NO_DATA_THRESHOLD
+
+            if (ai.isHealthy && !isHealthy) {                
+                ai.isHealthy = false;
+                this.logEvent({message:'device unhealthy', device:ai.adapter.getUniqueName(), udid:ai.udid })
+                const {enabledCapabilities} = this.getEnabledCapabilities(ai)
+
+                this.emit('unhealthy',ai.udid, enabledCapabilities)                
+
+            }
+            else if (!ai.isHealthy && isHealthy) {               
+                const {enabledCapabilities} = this.getEnabledCapabilities(ai)
+                ai.isHealthy = true;
+                this.logEvent({message:'device healthy', device:ai.adapter.getUniqueName(), udid:ai.udid })                
+                this.emit('healthy',ai.udid, enabledCapabilities)                
+            }
+            
+
+        }
+
+        ai.ivToCheck = setInterval( check, 1000)
+        ai.isHealthy = true
+    }
+
+    stopHealthCheck(ai: AdapterRideInfo) {
+        if (ai.ivToCheck) {
+            clearInterval(ai.ivToCheck)
+            delete ai.ivToCheck
+            delete ai.isHealthy
+        }
+        
+    }
+
     async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
         await this.lazyInit();
         const adapters = this.getAdapterList()
@@ -642,8 +691,7 @@ export class DeviceRideService  extends EventEmitter{
         const goodToGo = await this.waitForPreviousStartToFinish()
         if (!goodToGo) 
             return;
-
-
+        
         return this.startAdapters( adapters,'start',props)
     }
 
@@ -715,6 +763,7 @@ export class DeviceRideService  extends EventEmitter{
 
         const promises = adapters?.filter( ai=> udid ? ai.udid===udid : true)        
         .map(ai => {
+            this.stopHealthCheck(ai)
             ai.adapter.off('data',this.deviceDataHandler)
             return ai.adapter.stop()
 
@@ -765,6 +814,7 @@ export class DeviceRideService  extends EventEmitter{
 
     }
 
+
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
 
         
@@ -774,6 +824,9 @@ export class DeviceRideService  extends EventEmitter{
         const adapterInfo = adapters?.find( ai=>ai.adapter.isEqual(deviceSettings))
         if (!adapterInfo)
             return;
+
+        // register data update for health check
+        adapterInfo.tsLastData = Date.now()
 
         // refresh capabilities from device (might have changed since original scan)
         adapters?.forEach( ai => ai.capabilities = ai.adapter.getCapabilities())
@@ -789,44 +842,8 @@ export class DeviceRideService  extends EventEmitter{
         this.verifySelected(selectedDevices, IncyclistCapability.Power)
 
 
-        const duplicates = this.checkAntSameDeviceID(adapters)
-        const toBeReplaced = duplicates.filter( dai=> dai.udid===adapterInfo.udid).map( dai=>dai.info.udid) 
-
-
         // get list of capabilities, where the device sending the data was selected by the user
-        let enabledCapabilities = []
-
-        if (this.simulatorEnforced) {
-            enabledCapabilities = [IncyclistCapability.Control,IncyclistCapability.Power,IncyclistCapability.Speed,IncyclistCapability.HeartRate,IncyclistCapability.Cadence]
-        }
-        else if ( duplicates.length>0 && duplicates.find( d=>d.udid===adapterInfo.udid )) {
-            
-
-            const selected = clone(selectedDevices)
-            selected.forEach( cd => { 
-                if (toBeReplaced.includes(cd.selected))
-                    cd.selected = adapterInfo.udid
-            } )
-
-            selected.forEach
-
-
-            selected.forEach( sd=> {
-                const duplicate = duplicates.find( dai=> dai.info.udid===sd.selected)
-                if (duplicate)
-                    sd.selected = duplicate.udid
-                
-            })
-            enabledCapabilities = selected.map( c => c.capability)
-
-
-        }
-        else {
-            enabledCapabilities = selectedDevices.filter( sd => sd.selected===adapterInfo.udid).map( c => c.capability)
-
-        }
-        
-            
+        const { enabledCapabilities, toBeReplaced } = this.getEnabledCapabilities(adapterInfo);
                     
         this.logEvent({message:'Data Update', device:adapterInfo.adapter.getName(), data, enabledCapabilities})
 
@@ -865,6 +882,50 @@ export class DeviceRideService  extends EventEmitter{
 
 
 
+    }
+
+    private getEnabledCapabilities(adapterInfo: AdapterRideInfo ) {
+
+        const adapters = this.getAdapterList();
+        const selectedDevices = this.configurationService.getSelectedDevices()
+
+        let enabledCapabilities = [];
+
+        const duplicates = this.checkAntSameDeviceID(adapters);
+        const toBeReplaced = duplicates.filter(dai => dai.udid === adapterInfo.udid).map(dai => dai.info.udid);
+
+
+
+        if (this.simulatorEnforced) {
+            enabledCapabilities = [IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed, IncyclistCapability.HeartRate, IncyclistCapability.Cadence];
+        }
+        else if (duplicates.length > 0 && duplicates.find(d => d.udid === adapterInfo.udid)) {
+
+
+            const selected = clone(selectedDevices);
+            selected.forEach(cd => {
+                if (toBeReplaced.includes(cd.selected))
+                    cd.selected = adapterInfo.udid;
+            });
+
+            selected.forEach;
+
+
+            selected.forEach(sd => {
+                const duplicate = duplicates.find(dai => dai.info.udid === sd.selected);
+                if (duplicate)
+                    sd.selected = duplicate.udid;
+
+            });
+            enabledCapabilities = selected.map(c => c.capability);
+
+
+        }
+        else {
+            enabledCapabilities = selectedDevices.filter(sd => sd.selected === adapterInfo.udid).map(c => c.capability);
+
+        }
+        return { enabledCapabilities, toBeReplaced };
     }
 
     sendUpdate( request:UpdateRequest):void {

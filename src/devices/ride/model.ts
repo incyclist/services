@@ -3,6 +3,9 @@ import { AdapterInfo, ExtendedIncyclistCapability } from "../configuration";
 
 export interface AdapterRideInfo extends AdapterInfo {
     isStarted: boolean
+    tsLastData?: number
+    isHealthy?: boolean
+    ivToCheck?: NodeJS.Timeout
 
 }
 
