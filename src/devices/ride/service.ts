@@ -7,11 +7,12 @@ import clone from "../../utils/clone";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
-import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { setInterval } from "timers";
 
 
-const NO_DATA_THRESHOLD = 5000
+const NO_DATA_THRESHOLD = 10000
+const UNHEALTHY_THRESHOLD = 60000
 
 /**
  * Provides method to consume a devcie
@@ -649,23 +650,35 @@ export class DeviceRideService  extends EventEmitter{
                 return;
             }
 
-            const isHealthy = (tsNow-ai.tsLastData)<NO_DATA_THRESHOLD
+            const prevStatus = ai.dataStatus
+            const isAmber = (tsNow-ai.tsLastData)<NO_DATA_THRESHOLD
+            const isRed = (tsNow-ai.tsLastData)<UNHEALTHY_THRESHOLD
 
-            if (ai.isHealthy && !isHealthy) {                
+            ai.dataStatus = 'green'
+            if (isAmber)
+                ai.dataStatus = 'amber'
+            if (isRed)
+                ai.dataStatus = 'red'
+
+
+            if (ai.isHealthy && !isAmber) {                
                 ai.isHealthy = false;
                 this.logEvent({message:'device unhealthy', device:ai.adapter.getUniqueName(), udid:ai.udid })
                 const {enabledCapabilities} = this.getEnabledCapabilities(ai)
 
-                this.emit('unhealthy',ai.udid, enabledCapabilities)                
+                this.emit('unhealthy',ai.udid, ai.dataStatus, enabledCapabilities)                
 
             }
-            else if (!ai.isHealthy && isHealthy) {               
+            else if (!ai.isHealthy && isAmber) {               
                 const {enabledCapabilities} = this.getEnabledCapabilities(ai)
                 ai.isHealthy = true;
                 this.logEvent({message:'device healthy', device:ai.adapter.getUniqueName(), udid:ai.udid })                
-                this.emit('healthy',ai.udid, enabledCapabilities)                
+                this.emit('healthy',ai.udid, ai.dataStatus,enabledCapabilities)                
             }
             
+            if (isAmber && prevStatus==='green') {
+                this.prepareReconnect(ai)
+            }
 
         }
 
@@ -680,6 +693,81 @@ export class DeviceRideService  extends EventEmitter{
             delete ai.isHealthy
         }
         
+    }
+
+    async prepareReconnect(ai:AdapterRideInfo) {
+        if (ai.isRestarting)
+            return;
+
+        
+        await sleep( UNHEALTHY_THRESHOLD-NO_DATA_THRESHOLD-5000)
+
+        if (ai.isHealthy || ai.isRestarting)
+            return;
+
+        const ifName = ai.adapter.getInterface()
+        
+        const adapters = this.getAdapterList().filter( ai=> ai.adapter.getInterface()===ifName)
+
+        ai.isRestarting = true;
+        // are all adapters on the same interface down?
+        if (!adapters.find(ai=>ai.isHealthy)) {
+            // restart Interface and adapaters
+            this.logger.logEvent({message:'restart interface', interface:ifName})
+
+            const i = InterfaceFactory.create(ifName)
+            try {
+
+                const promisesStop = []
+                adapters.map( ai=> { 
+                    ai.isRestarting = true;
+                    ai.adapter.off('data',this.deviceDataHandler)  
+                    promisesStop.push(ai.adapter.stop()) 
+                })
+
+
+                if (promisesStop.length>0) {
+                    await Promise.allSettled(promisesStop)
+                }
+
+                await i.disconnect()
+                await sleep(1000)
+                await i.connect
+
+                const promisesStart = []
+                adapters.map( ai=> { promisesStart.push(ai.adapter.start()) })
+                if (promisesStart.length>0) {
+                    await Promise.allSettled(promisesStart)
+                }
+
+            }
+            catch(err) {
+                this.logger.logEvent( {message:'restart interface failed', interface:ifName, reason:err.message})
+            }
+
+            adapters.map( ai=> { 
+                ai.adapter.on('data',this.deviceDataHandler)  
+                ai.isRestarting = false;
+            })
+
+        }
+        else {
+            
+            this.logger.logEvent({message:'restart adapter', device:ai.udid})
+            ai.adapter.off('data',this.deviceDataHandler)  
+            const adapter = ai.adapter
+            try {
+                await adapter.restart()                
+            }
+            catch(err) {
+                this.logger.logEvent({message:'restart adapter failed', device:ai.udid, reason:err.message})                    
+            }
+            ai.adapter.on('data',this.deviceDataHandler)  
+            
+        }
+        ai.isRestarting = false;
+        
+
     }
 
     async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
@@ -779,6 +867,7 @@ export class DeviceRideService  extends EventEmitter{
         const adapters = this.getAdapterList();
 
         adapters?.forEach(ai=> {
+            ai.tsLastData = Date.now()
             ai.adapter.pause()
             ai.adapter.off('data',this.deviceDataHandler)
         })
@@ -788,6 +877,7 @@ export class DeviceRideService  extends EventEmitter{
         const adapters = this.getAdapterList();
 
         adapters?.forEach(ai=> {
+            ai.tsLastData = Date.now()
             ai.adapter.resume()
             ai.adapter.on('data',this.deviceDataHandler)
         })
@@ -826,7 +916,7 @@ export class DeviceRideService  extends EventEmitter{
             return;
 
         // register data update for health check
-        adapterInfo.tsLastData = Date.now()
+        adapterInfo.tsLastData = data.timestamp||Date.now()
 
         // refresh capabilities from device (might have changed since original scan)
         adapters?.forEach( ai => ai.capabilities = ai.adapter.getCapabilities())
