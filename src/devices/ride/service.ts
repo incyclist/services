@@ -461,41 +461,49 @@ export class DeviceRideService  extends EventEmitter{
      */
 
     protected checkAntSameDeviceID(adapters:AdapterRideInfo[]):Array<{udid:string,info:AdapterInfo}> {
-        const antDevices = adapters.map((ai,idx)=>({...ai,idx}))                      // keep index in adapter list for reference
-                                     .filter(ai=>ai.adapter.getInterface()==='ant')     // we are only looking for ant adapters
-                                     .map(ai=>({idx:ai.idx, deviceID:ai.adapter.getID(), capabilities:ai.capabilities,udid:ai.udid}))
 
-        const antDeviceIds = antDevices.map(di=>di.deviceID)        
-        const duplicateIds = antDeviceIds.filter((item, index) => antDeviceIds.indexOf(item) !== index)
+        try {
 
-        const score = (capabilities) => {
-            let value = 0;
-            if (capabilities.includes(IncyclistCapability.Control)) value += 100;
-            if (capabilities.includes(IncyclistCapability.Power)) value += 50;
-            value += capabilities.length
-            return value;
+            const antDevices = adapters.map((ai,idx)=>({...ai,idx}))                      // keep index in adapter list for reference
+                                        .filter(ai=>ai.adapter.getInterface()==='ant')     // we are only looking for ant adapters
+                                        .map(ai=>({idx:ai.idx, deviceID:ai.adapter.getID(), capabilities:ai.capabilities,udid:ai.udid}))
+
+            const antDeviceIds = antDevices.map(di=>di.deviceID)        
+            const duplicateIds = antDeviceIds.filter((item, index) => antDeviceIds.indexOf(item) !== index)
+
+            const score = (capabilities) => {
+                let value = 0;
+                if (capabilities.includes(IncyclistCapability.Control)) value += 100;
+                if (capabilities.includes(IncyclistCapability.Power)) value += 50;
+                value += capabilities.length
+                return value;
+            }
+
+            const duplicateDevices = antDevices.filter( di=> duplicateIds.includes(di.deviceID) ).sort( (a,b) => score(b.capabilities)-score(a.capabilities) )
+                
+
+            const leading = duplicateDevices[0]
+
+            const duplicateAdapters = []
+            duplicateDevices.forEach( (di,i) => {
+                if (i==0)
+                    return
+                
+                duplicateAdapters.push( {udid:leading.udid, info:adapters[di.idx]})
+                //adapters[di.idx] = null
+                
+            })
+            return duplicateAdapters
         }
-
-        const duplicateDevices = antDevices.filter( di=> duplicateIds.includes(di.deviceID) ).sort( (a,b) => score(b.capabilities)-score(a.capabilities) )
-            
-
-        const leading = duplicateDevices[0]
-
-        const duplicateAdapters = []
-        duplicateDevices.forEach( (di,i) => {
-            if (i==0)
-                return
-            
-            duplicateAdapters.push( {udid:leading.udid, info:adapters[di.idx]})
-            //adapters[di.idx] = null
-            
-        })
-        return duplicateAdapters
+        catch(err) {
+            return []
+        }
 
     }
    
     async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check' | 'pair',props?:RideServiceDeviceProperties ):Promise<boolean> {
         
+
         const { forceErgMode, startPos, realityFactor, rideMode, route} = props||{};
 
         const duplicates = this.checkAntSameDeviceID(adapters)
@@ -505,7 +513,33 @@ export class DeviceRideService  extends EventEmitter{
             if (duplicates.find(dai=>dai.info.udid===ai.udid))
                 return
             const startProps = clone(props||{})
-            
+
+            let mode,settings,bike;
+
+            if (ai.adapter?.isControllable()) {
+                bike = ai.adapter as IncyclistDeviceAdapter
+                const modeInfo = this.configurationService.getModeSettings(ai.udid)
+                mode = modeInfo.mode
+                settings = modeInfo.settings
+
+                if (!this.simulatorEnforced && forceErgMode) {
+                    const modes = bike.getSupportedCyclingModes().filter( C => C.supportsERGMode())
+                    if (modes.length>0)  {
+                        mode = new modes[0](bike)
+                        const modeInfo = this.configurationService.getModeSettings(ai.udid,mode)
+                        settings = modeInfo.settings
+                    }
+                }
+
+                if (!mode)
+                    mode = bike.getDefaultCyclingMode();
+
+
+                bike.setCyclingMode(mode,settings)
+
+                console.log('~~~ mode',mode,'settings',settings)
+            }
+
 
             if (startType==='check' || startType==='pair') {
                 startProps.timeout = 10000;
@@ -515,38 +549,11 @@ export class DeviceRideService  extends EventEmitter{
 
             if (startType==='start') {
                 
-                if (ai.adapter && ai.adapter.isControllable()) {
-                    const d = ai.adapter as IncyclistDeviceAdapter
-
-                    let mode,settings;
-
-                    if (!this.simulatorEnforced) {
-
-                        if (forceErgMode) {
-                            const modes = d.getSupportedCyclingModes().filter( C => C.supportsERGMode())
-                            if (modes.length>0)  {
-                                mode = new modes[0](d)                            
-                                const modeInfo = this.configurationService.getModeSettings(ai.udid,mode)
-                                settings = modeInfo.settings
-                            }
-                        }                    
-                        if (!mode) {
-                            const modeInfo = this.configurationService.getModeSettings(ai.udid)
-                            mode = modeInfo.mode
-                            settings = modeInfo.settings
-                        }
-        
-                    }
-
-                    if (!mode)
-                        mode = d.getDefaultCyclingMode();
-
-
-                    d.setCyclingMode(mode,settings)
+                if (ai.adapter?.isControllable()) {
 
                     // Special Case Daum8i "Daum Classic" mode:
                     // we need to upload the route data (in Epp format) as part of the start commands
-                    if (d.getCyclingMode().getModeProperty('eppSupport')) {
+                    if (bike.getCyclingMode().getModeProperty('eppSupport')) {
                         startProps.route = this.prepareEppRoute({route,startPos,realityFactor,rideMode})
                         startProps.onStatusUpdate = (completed:number, total:number) => {                         
                             this.emit('start-update',this.getAdapterStateInfo(ai), completed,total)                    
@@ -566,8 +573,11 @@ export class DeviceRideService  extends EventEmitter{
             logProps[sType] = ai.adapter.getUniqueName()
             logProps.cability = ai.adapter.getCapabilities().join('/')
             logProps.interface = getLegacyInterface(ai.adapter) 
-            if (sType==='bike')
-                logProps.cyclingMode = (ai.adapter as IncyclistDeviceAdapter).getCyclingMode()?.getName()
+            if (sType==='bike'){
+                const bike = ai.adapter as IncyclistDeviceAdapter
+                logProps.cyclingMode = bike.getCyclingMode()?.getName()
+                logProps.bikeType = bike.getCyclingMode().getSetting('bikeType') 
+            }
             this.logEvent( {message:`${startType} ${sType} request`,...logProps})
 
 
@@ -639,20 +649,26 @@ export class DeviceRideService  extends EventEmitter{
     }
 
     startHealthCheck(ai: AdapterRideInfo) {
+
         const check = ()=> {
+            if (!ai.ivToCheck) // I have no clue why this is needed, but removing it would cause the check() function to be executed after the interval has been cleared
+                return;
+            
             const tsNow = Date.now()
 
             const isPaused = ai.adapter.isPaused()
+            const prevStatus = ai.dataStatus
 
             // paused or no data received yet => no need to check
             if (isPaused || !ai.tsLastData) {
                 ai.tsLastData = tsNow
+                ai.dataStatus = 'green'
                 return;
             }
 
-            const prevStatus = ai.dataStatus
-            const isAmber = (tsNow-ai.tsLastData)<NO_DATA_THRESHOLD
-            const isRed = (tsNow-ai.tsLastData)<UNHEALTHY_THRESHOLD
+            const isAmber = (tsNow-ai.tsLastData)>NO_DATA_THRESHOLD
+            const isRed = (tsNow-ai.tsLastData)>UNHEALTHY_THRESHOLD
+
 
             ai.dataStatus = 'green'
             if (isAmber)
@@ -661,28 +677,31 @@ export class DeviceRideService  extends EventEmitter{
                 ai.dataStatus = 'red'
 
 
-            if (ai.isHealthy && !isAmber) {                
+            if (ai.isHealthy && (isAmber || isRed)) {                
                 ai.isHealthy = false;
-                this.logEvent({message:'device unhealthy', device:ai.adapter.getUniqueName(), udid:ai.udid })
-                const {enabledCapabilities} = this.getEnabledCapabilities(ai)
+                this.logEvent({message:'device unhealthy', device:ai.adapter.getUniqueName(), udid:ai.udid, noDataSince: (tsNow-ai.tsLastData), tsLastData:ai.tsLastData  })
 
-                this.emit('unhealthy',ai.udid, ai.dataStatus, enabledCapabilities)                
+
+                this.prepareReconnect(ai)
 
             }
-            else if (!ai.isHealthy && isAmber) {               
-                const {enabledCapabilities} = this.getEnabledCapabilities(ai)
+            else if (!ai.isHealthy && !isAmber && !isRed) {               
                 ai.isHealthy = true;
                 this.logEvent({message:'device healthy', device:ai.adapter.getUniqueName(), udid:ai.udid })                
-                this.emit('healthy',ai.udid, ai.dataStatus,enabledCapabilities)                
+            }
+
+            if (ai.dataStatus!==prevStatus) {
+                const {enabledCapabilities} = this.getEnabledCapabilities(ai)
+                this.emit('health',ai.udid, ai.dataStatus, enabledCapabilities)                
             }
             
-            if (isAmber && prevStatus==='green') {
-                this.prepareReconnect(ai)
-            }
-
         }
 
-        ai.ivToCheck = setInterval( check, 1000)
+        if (ai.ivToCheck) {
+            this.stopHealthCheck(ai)
+        }
+
+        ai.ivToCheck = setInterval( ()=>{check()}, 1000)
         ai.isHealthy = true
     }
 
@@ -695,79 +714,169 @@ export class DeviceRideService  extends EventEmitter{
         
     }
 
-    async prepareReconnect(ai:AdapterRideInfo) {
-        if (ai.isRestarting)
+    async prepareReconnect(unhealthy:AdapterRideInfo) {
+        if (unhealthy.isRestarting)
             return;
 
-        
         await sleep( UNHEALTHY_THRESHOLD-NO_DATA_THRESHOLD-5000)
 
-        if (ai.isHealthy || ai.isRestarting)
+        if (unhealthy.isHealthy || unhealthy.isRestarting)
             return;
-
-        const ifName = ai.adapter.getInterface()
-        
-        const adapters = this.getAdapterList().filter( ai=> ai.adapter.getInterface()===ifName)
-
-        ai.isRestarting = true;
+      
         // are all adapters on the same interface down?
+        const ifName = unhealthy.adapter.getInterface()
+        const adapters = this.getAdapterList().filter( ai=> ai.adapter.getInterface()===ifName)
         if (!adapters.find(ai=>ai.isHealthy)) {
-            // restart Interface and adapaters
-            this.logger.logEvent({message:'restart interface', interface:ifName})
-
-            const i = InterfaceFactory.create(ifName)
-            try {
-
-                const promisesStop = []
-                adapters.map( ai=> { 
-                    ai.isRestarting = true;
-                    ai.adapter.off('data',this.deviceDataHandler)  
-                    promisesStop.push(ai.adapter.stop()) 
-                })
-
-
-                if (promisesStop.length>0) {
-                    await Promise.allSettled(promisesStop)
-                }
-
-                await i.disconnect()
-                await sleep(1000)
-                await i.connect
-
-                const promisesStart = []
-                adapters.map( ai=> { promisesStart.push(ai.adapter.start()) })
-                if (promisesStart.length>0) {
-                    await Promise.allSettled(promisesStart)
-                }
-
-            }
-            catch(err) {
-                this.logger.logEvent( {message:'restart interface failed', interface:ifName, reason:err.message})
-            }
-
-            adapters.map( ai=> { 
-                ai.adapter.on('data',this.deviceDataHandler)  
-                ai.isRestarting = false;
-            })
+            await this.reconnectInterface(ifName, adapters);
 
         }
         else {
-            
-            this.logger.logEvent({message:'restart adapter', device:ai.udid})
-            ai.adapter.off('data',this.deviceDataHandler)  
-            const adapter = ai.adapter
-            try {
-                await adapter.restart()                
-            }
-            catch(err) {
-                this.logger.logEvent({message:'restart adapter failed', device:ai.udid, reason:err.message})                    
-            }
-            ai.adapter.on('data',this.deviceDataHandler)  
+            await this.reconnectSingle(unhealthy);  
             
         }
-        ai.isRestarting = false;
-        
+        unhealthy.isRestarting = false;       
+    }
 
+    private async reconnectInterface(ifName: string, adapters: AdapterRideInfo[]) {
+
+        // simulator does not need to be restarted
+        if (ifName==='simulator')
+            return;
+
+        // restart Interface and adapaters
+        this.logger.logEvent({ message: 'restart interface', interface: ifName });
+
+        let stopRequested = false;
+        this.once('stop-ride',()=>{ stopRequested= true;})
+
+
+
+        try {
+            
+            const i = InterfaceFactory.create(ifName);
+            
+            const promisesStop = [];
+            adapters.map(ai => {
+                promisesStop.push( this.stopAfterRestart(ai));
+
+                
+            });
+
+
+            if (promisesStop.length > 0) {
+                await Promise.race( [sleep(66000),Promise.allSettled(promisesStop)]);
+            }
+
+
+            if (!stopRequested) {
+                await i.disconnect();
+                await sleep(1000);
+                await i.connect();
+            }
+
+            if (!stopRequested) {
+
+                const promisesStart = [];
+                adapters.map(ai => { promisesStart.push(ai.adapter.start()); });
+
+                if (promisesStart.length > 0) {
+                    // to avoid channel collisions, start ant adapters in sequence
+                    if (ifName==='ant') {
+                        for (let i=0;i<promisesStart.length;i++) {
+                            try {
+                                await promisesStart[i]
+                            }
+                            catch {
+                                // ignore failures
+                            }
+                        }
+
+                    }
+                    else {
+                        await Promise.allSettled(promisesStart);
+                    }
+                }
+            }
+
+        }
+        catch (err) {
+            this.logger.logEvent({ message: 'restart interface failed', interface: ifName, reason: err.message });
+        }
+
+        adapters.map(ai => {
+            if (ai.adapter.isStarted()) {
+                ai.tsLastData = Date.now()
+            }
+            else {
+                ai.isRestarting = false;
+                this.prepareReconnect(ai);
+            }
+            ai.adapter.on('data', this.deviceDataHandler);
+            ai.isRestarting = false;
+        });
+    }
+
+    protected async stopAfterRestart(unhealthy: AdapterRideInfo) {
+        this.emit('stop-adapter',unhealthy.udid)
+        if (unhealthy.isRestarting) {
+            
+            await  new Promise<void>( done=> {
+
+                const to = setTimeout( done, 65000)
+
+                this.once('stop-adapter-confirmed',(udid)=>{ 
+                    if(udid===unhealthy.udid) {
+                        clearTimeout(to)
+                        done()
+                    }
+                })
+        
+            })
+        }
+        unhealthy.isRestarting = true;
+        unhealthy.adapter.off('data', this.deviceDataHandler);            
+
+        await unhealthy.adapter.stop()
+    }
+
+    private async reconnectSingle(unhealthy: AdapterRideInfo) {
+        unhealthy.isRestarting = true;
+
+        let stopRequested = false;
+        this.once('stop-ride',()=>{ stopRequested= true;})
+        this.once('stop-adapter',(udid)=>{ 
+            if(udid===unhealthy.udid) 
+                stopRequested= true;
+        })
+
+        let success = false;
+        do {
+            this.logger.logEvent({ message: 'restart adapter', device: unhealthy.udid });
+            unhealthy.adapter.off('data', this.deviceDataHandler);
+            const adapter = unhealthy.adapter;
+            try {
+                const started = await adapter.restart();
+                if (started) {
+                    unhealthy.tsLastData = Date.now()
+                    success = true;
+                }
+            }
+            catch (err) {
+                this.logger.logEvent({ message: 'restart adapter failed', device: unhealthy.udid, reason: err.message });
+                this.prepareReconnect(unhealthy);
+            }
+            unhealthy.adapter.on('data', this.deviceDataHandler);
+
+            if (!success) {
+
+                // retry in a minute                
+                for (let i=0;i<60 && !stopRequested;i++)
+                    await sleep(1000)
+            }
+        }
+        while (!stopRequested && !success)
+
+        this.emit('stop-adapter-confirmed', unhealthy.udid)
     }
 
     async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
@@ -802,16 +911,29 @@ export class DeviceRideService  extends EventEmitter{
     }
 
     async cancelStart():Promise<boolean> {
+
+        if (!this.startPromises)
+            return;
+
+        this.logEvent({message:'cancel start'})
+
         const adapters = this.getAdapterList()
 
+        const promises:Array<Promise<boolean>> = []
         adapters?.forEach(ai=> {
             const d = ai.adapter
             d.off('data',this.deviceDataHandler)
-            if (!ai.isStarted)
-                d.stop()
+            if (!d.isStarted()){
+                this.logEvent({message:'cancel start of device',udid:ai.udid})
+                promises.push(d.stop())
+            }
+            else {
+                d.pause()
+            }
             
         })
 
+        await Promise.allSettled(promises)
         this.startPromises = null;
         
         return true;
@@ -821,7 +943,6 @@ export class DeviceRideService  extends EventEmitter{
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     startRide(_props) {
         const adapters = this.getAdapterList()
-
         adapters?.forEach(ai=> {
             
 
@@ -832,7 +953,7 @@ export class DeviceRideService  extends EventEmitter{
 
             */
 
-            ai.adapter.removeAllListeners('data')
+            ai.adapter.off('data',this.deviceDataHandler)
             ai.adapter.on('data',this.deviceDataHandler)
         })
     }
@@ -870,6 +991,7 @@ export class DeviceRideService  extends EventEmitter{
             ai.tsLastData = Date.now()
             ai.adapter.pause()
             ai.adapter.off('data',this.deviceDataHandler)
+            this.stopHealthCheck(ai)
         })
     }
 
@@ -880,6 +1002,7 @@ export class DeviceRideService  extends EventEmitter{
             ai.tsLastData = Date.now()
             ai.adapter.resume()
             ai.adapter.on('data',this.deviceDataHandler)
+            this.startHealthCheck(ai)
         })
     }
 
