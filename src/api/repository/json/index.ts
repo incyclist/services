@@ -1,10 +1,10 @@
 import {EventLogger} from "gd-eventlog"
-import { IJsonRepositoryBinding, JSONObject, JsonAccess } from "../types"
+import { JSONObject, JsonAccess } from "../types"
+import { getBindings } from "../../bindings"
 
 export class JsonRepository {
 
     protected static _instances: { [x: string]: JsonRepository } = {}
-    protected static _defaultBinding: IJsonRepositoryBinding
 
     static create(repoName:string):JsonRepository {
         if (JsonRepository._instances[repoName])
@@ -13,21 +13,17 @@ export class JsonRepository {
         return JsonRepository._instances[repoName]
     }
 
-    static setBinding(binding:IJsonRepositoryBinding) {
-        JsonRepository._defaultBinding = binding
-    }
 
-    protected binding: IJsonRepositoryBinding
     protected name: string;
     protected db: string
     protected logger: EventLogger
     protected access: JsonAccess
 
-    constructor(repoName:string, binding?:IJsonRepositoryBinding) {
+    constructor(repoName:string) {
         this.name  = repoName;
-        this.binding = binding || JsonRepository._defaultBinding
         this.logger = new EventLogger(`Repo-${this.name}`)
     }
+
 
 
     getName():string {
@@ -72,16 +68,16 @@ export class JsonRepository {
         if (this.access)
             return true
 
-        if (!this.binding) throw new Error('no binding specified')
-
+        
+        const db = getBindings().db
         try {
-            const existing = await this.binding.get(this.name)
+            const existing = await db.get(this.name)
             if (existing) {
                 this.access = existing
                 return true;
             }
     
-            const access =  await this.binding.create(this.name)
+            const access =  await db.create(this.name)
             if (!access)
                 return false;
 
@@ -96,9 +92,9 @@ export class JsonRepository {
     }
 
     protected async close():Promise<boolean> {        
-        if (!this.binding) throw new Error('no binding specified')
-
-        this.binding.release(this.name)
+        const db = getBindings().db
+ 
+        db.release(this.name)
         this.access = null;
         return true
     }

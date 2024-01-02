@@ -39,11 +39,13 @@ export interface FileLoaderResult {
 
 export interface FileInfo {
     type:'url'|'file'
-    url:string,
-    name:string,
-    dir:string,
-    ext:string,
-    delimiter: string
+    url?:string,
+    name:string,        // just the name of the file
+    filename?:string,   // full path
+    dir:string,         // directory
+    ext:string,         // extensoin
+    delimiter: string,
+    encoding?
 }
 
 export interface IFileLoader {

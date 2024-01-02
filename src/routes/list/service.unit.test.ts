@@ -1,129 +1,80 @@
-import { ApiClient } from '../../api';
-import { DEFAULT_ROUTE_API } from '../base/api/consts';
-import {RouteListService} from './service'
-import { List, Route } from './types';
+import { RoutesDbLoader } from "./loaders/db";
+import repoData from '../../../__tests__/data/db/db.json'
+import { RouteInfoDBEntry } from "./loaders/types";
+import { RouteListService } from "./service";
+import { getBindings } from "../../api";
+import path from "path";
+import os from "os"
+import { IAppInfo } from "../../api/appInfo";
+import fs from 'fs/promises'
+import { IFileSystem } from "../../api/fs";
 
-ApiClient.getInstance().init({version:'0.6',uuid:'test',appVersion:'1.0', apiKey:'123'})
+describe('RouteListService',()=>{
 
-class Test extends RouteListService {
-
-    async loadRouteDescriptions() {
-        return await super.loadRouteDescriptions()
-    }
-
-    logError(err:Error,fn:string,args) {
-        console.log('ERROR fn', fn, err,...args)
-    }
-
-    getRoutes() {
-        return this.lists
-    }
-
-    addToRouteList( list:List, routes:Array< Route>) {
-        const l = this.lists.find( rle=> rle.list===list)
-        if (l)
-            l.routes = routes
-        else {
-            this.lists.push( {list,routes})
+    class MockeableService extends RouteListService {
+        public async loadRoutesFromApi(): Promise<void> {
+            return await super.loadRoutesFromApi()
         }
-        
-    }
-
-    constructor() {
-        super();
-
-
-        this.api['getBaseUrl']=jest.fn().mockReturnValue(DEFAULT_ROUTE_API)
     }
 
 
-}
+    describe('preload',()=>{
+
+        let db
+        let service:MockeableService
 
 
 
+        beforeEach(()=>{ 
+            const data = repoData as unknown as Array<RouteInfoDBEntry>
+            db = new RoutesDbLoader()
+            
+            db.loadDetails = jest.fn()
+            db.loadDescriptions = jest.fn().mockResolvedValue(data)
+            db.write = jest.fn()
+            db.isCompleted = jest.fn().mockReturnValue(true)
+            
+            service = new MockeableService()            
+            service.loadRoutesFromApi = jest.fn().mockResolvedValue([])
 
-describe.skip('RouteListService',()=>{
+            const filesystem = fs as unknown as IFileSystem;
+            getBindings().path = path;
+            getBindings().fs = filesystem
+            getBindings().video = {
+                isScreenshotSuported:jest.fn().mockReturnValue(true),
+                isConvertSuported:jest.fn().mockReturnValue(true),
+                screenshot:jest.fn().mockResolvedValue('screenshot'),
+                convert:jest.fn()
 
-
-    describe('openRouteSelection',()=>{
-
-        let svc:Test
-        const onStatusUpdate = jest.fn()
-        beforeEach( ()=>{
-            svc = new Test()    
+            }
+            filesystem.checkDir = jest.fn()
+    
+            getBindings().appInfo = {
+                getAppDir:jest.fn().mockReturnValue(os.tmpdir())
+            } as unknown as IAppInfo
         })
 
-        test('selected and alternatives',async ()=>{
-
-            svc.addToRouteList('myRoutes',[])
-            svc.addToRouteList('selected',[ 
-                {id:'1', data:{type:'route', title:'Video1', state:'prepared'}},
-                {id:'2', data:{type:'route', title:'Video2', state:'prepared'}}
-            ])
-            svc.addToRouteList('alternatives',[ 
-                {id:'3', data:{type:'route', title:'Video3', state:'loaded'}}
-            ])
-
-
-            const data = svc.openRouteSelection('1',{onStatusUpdate,language:'de'})
-
-            expect(data.lists.map(l=>l.listHeader).join(',')).toEqual('Selected For Me,Alternatives' )
-            expect(data.lists[0].list).toEqual('selected')
-            expect(data.lists[0].routes).toEqual( [{title:'Video1', state:'prepared'}, {title:'Video2', state:'prepared'}])
-            expect(data.lists[1].list).toEqual('alternatives')
-            expect(data.lists[1].routes).toEqual( [{title:'Video3', state:'loaded'}])
-            expect(data.pageId).toBe('1')
-
-
-
-
+        afterEach( ()=>{
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (service as any).reset()
+            db.reset()
         })
 
-        test('nothing loaded',async ()=>{
+        test('1',async ()=>{
 
-            const data = svc.openRouteSelection('1',{onStatusUpdate,language:'de'})
+            const sort = (a,b) => a.id<b.id ? -1 : 1
+            const observer = await service.preload()
+            await observer.wait()
 
-            expect(data.lists.length).toEqual(0)
+            const routes = service.search()
+            expect(routes.length).toBe(34)
 
-
-
-
-        })
-
-
-
-
-
-    })
-
-    describe.skip('preload',()=>{
-
-        let svc:Test
-        beforeEach( ()=>{
-            svc = new Test()    
-        })
-
-        test('success',async ()=>{
-
-            await svc.preload()
+            routes.forEach( r => {delete r.observer})
+            expect(routes.sort(sort)).toMatchObject(repoData.sort(sort))
             
 
         })
 
 
-
-
-
-    })
-
-
-
-    test.skip('loadRouteDescriptions',async ()=>{
-        const svc = new Test()
-        const res = await svc.loadRouteDescriptions();
-        console.log(res)
-        console.log(svc.getRoutes())
-        
-        
     })
 })

@@ -1,19 +1,29 @@
 import { EventLogger } from 'gd-eventlog';
-import { XmlJSON, toXml } from '../utils/xml';
+import { XmlJSON, parseXml, toXml } from '../utils/xml';
 import { RouteApiDetail } from '../api/types';
 import { ParseResult, Parser, RouteInfo, RoutePoint } from '../types';
-import { JSONObject } from '../../../api';
-import { checkIsLoop, updateSlopes } from '../utils/route';
+import { FileInfo, JSONObject, getBindings } from '../../../api';
+import { checkIsLoop, getRouteHash, getTotalElevation,getTotalDistance, updateSlopes, validateRoute } from '../utils/route';
 import { Position, Altitude } from './types';
+import { getReferencedFileInfo, parseInformations } from './utils';
 
 let _logger;
 
-export abstract class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
+export type  XmlParserContext = {
+   fileInfo: FileInfo,
+   data: JSONObject,
+   route?: RouteApiDetail
+}
 
 
-    async import(xml: XmlJSON): Promise<ParseResult<RouteApiDetail>> {       
+export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
+
+
+    async import(file: FileInfo, data?: XmlJSON): Promise<ParseResult<RouteApiDetail>> {       
+        const xml = await this.getData(file,data)
         xml.expectScheme( this.getSupportedSheme())        
-        return this.parse(xml)        
+        
+        return await this.parse(file,xml)        
     }
 
     getSupportedSheme():string {
@@ -28,242 +38,341 @@ export abstract class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
     }
     supportsContent(xmljson: XmlJSON): boolean {
         const json = xmljson.json 
-        return json.kwt!==undefined && json.kwt!==null
+        const scheme = this.getSupportedSheme()
+        return json[scheme]!==undefined && json[scheme]!==null
     }
 
-    protected parse( xmljson:XmlJSON ):ParseResult<RouteApiDetail> {
-   
-        const data = xmljson.json 
-    
-        const  route:RouteApiDetail = {
-            title: data.name,
-            localizedTitle: data.title || data.name,
-            country: data.country,
-            id: data.id,
-            category: 'personal',
-            previewUrl: data.previewURL,
+    async getData(file:FileInfo, data?:XmlJSON):Promise<XmlJSON> {
+        if (data)
+            return data
+
+        const loader = getBindings().loader
+        const res = await loader.open(file)
+        if (res.error) {
+            throw new Error('Could not open file')
+        }
+        const xml = await parseXml(res.data)
+        return xml
+
+    }
+
+    protected getCountryPrefix(title?:string):string|undefined {
+        if (!title)
+            return
+
+        if (title.match(/^[A-z]{2}[-_]{1}.*/g)) {            
+            return title.substring(0,2)
+        }
+    }
+
+    protected async loadDescription(context:XmlParserContext) {
+        const data = context.data 
+
+        let name = data['name']
+        let country = data['country']
+
+        const countryPrefix = this.getCountryPrefix(name)
+        if (countryPrefix) {
+            name = name.substring(3)
+            country = country || countryPrefix
+        }
+
+
+        context.route= {
+            title: name,
+            localizedTitle: data['title'] || name,
+            country: country,
+            id: data['id'],
+            previewUrl: data['previewURL'],
             distance:0,
             elevation:0,
             points:[],
-            description: data.description1
+            description: data['description1']
         };
 
-    
-        const positions = data.positions   
-    
-        if (positions?.length>0 ) {
-            loadElevationFromPositions(data, route);
+        if (typeof context.route.localizedTitle==='string' ) {
+            const lt = context.route.localizedTitle;
+            context.route.localizedTitle= { en: lt}
         }
-        else {
-            loadElevationFromAltitudes(data, route);
-        }
-        parseVideo(data,route)
+    }
+
+
+    protected async parse(file: FileInfo, xmljson:XmlJSON ):Promise<ParseResult<RouteApiDetail>> {
+   
+        const data = xmljson.json 
+    
+        const context:XmlParserContext = { fileInfo:file, data}
+
+        await this.loadDescription(context)    
+        await this.loadPoints(context);
+        this.validate(context)
+        await this.parseVideo(context)
     
         const res = {
-            data: buildInfo(route),
-            details: route
+            data: await this.buildInfo(context),
+            details: context.route
         }
     
         return res
     
     }
+
+    validate(context:XmlParserContext) {
+        const {route} = context
+        validateRoute(route)
+        route.distance = getTotalDistance(route)
+        route.elevation = getTotalElevation(route)
+        if (!route.points || route.points.length===0)
+            route.gpxDisabled = true;
+
+    }
+
+    protected async loadPoints(context: XmlParserContext) {
+        const {data} = context
+        const positions = data['positions'];
+
+        if (positions?.length > 0) {
+            await this.loadElevationFromPositions(context);
+        }
+        else {
+            await this.loadElevationFromAltitudes(context);
+        }
+
+    }
+
+    protected async buildInfo ( context:XmlParserContext):Promise<RouteInfo> {
+        const {fileInfo,route} = context
+
+        if (!route.id)
+            route.id = getRouteHash(route)
+        route.routeHash = getRouteHash(route)
+
+        const info:RouteInfo ={
+            id:route.id,
+            title: route.title,
+            localizedTitle: route.localizedTitle,
+            category:route.category,
+            country:route.country,
+            distance:route.distance,
+            elevation:route.elevation,
+            points: route.points,
+            segments: route.video?.selectableSegments,
+            requiresDownload: false,
+            hasGpx: route.points?.length>0,
+            hasVideo: true,
+            isDemo: false,
+            isLocal: true,
+            isLoop: checkIsLoop(route.points),
+            videoFormat: route.video.format,
+            videoUrl: getVideoUrl(fileInfo,route),
+            previewUrl: getPreviewUrl(fileInfo,route),
+            routeHash:route.routeHash
     
-
-
-}
-
-
-const buildInfo = ( route:RouteApiDetail):RouteInfo => {
-    const info:RouteInfo ={
-        id:route.id,
-        title: route.title,
-        localizedTitle: route.localizedTitle,
-        category:route.category,
-        country:route.country,
-        distance:route.distance,
-        elevation:route.elevation,
-        points: route.points,
-        segments: route.video?.selectableSegments,
-        requiresDownload: false,
-        hasGpx: route.points?.length>0,
-        hasVideo: true,
-        isDemo: false,
-        isLocal: true,
-        isLoop: checkIsLoop(route.points),
-        videoFormat: route.video.format,
-        videoUrl: getVideoUrl(route),
-        previewUrl: getPreviewUrl(route)
-
-    }
-    return info
-}
-
-
-const getVideoUrl = (route: RouteApiDetail):string => {
-    return 'url'
-}
-
-const getPreviewUrl = (route: RouteApiDetail):string => {
-    return 'url'
-}
-
-
-const parseVideo = (json:JSONObject, route: RouteApiDetail)=> {
-    route.video = {
-        file: json['video-file-path'],
-        url:undefined,
-        framerate: parseFloat(json['framerate']),                
-        next: json['next-video'] ,
-        mappings: [],
-        format: undefined,
-        selectableSegments:json['segments'],
-        infoTexts: json['informations'],        
+        }
+        return info
     }
 
-    console.log(route.video)
-    const fileParts = route.video.file.split('.');
 
-    const extension = fileParts[fileParts.length-1];            
-    route.video.format = extension.toLowerCase()
 
-    const mappings = json['mappings']
 
-    if ( mappings ) {
+    protected async parseVideo (context:XmlParserContext) {
+        const {data,route,fileInfo} = context
+
+        const filePath = data['video-file-path'] as string
+
         
-        let prev;
-        let prevTime =0;
-       
+        let file,url
+        if (filePath.startsWith('http:')|| filePath.startsWith('file:') || filePath.startsWith('video:')) {
+            url = filePath            
+        }
+        else {
+            file = filePath
+        }
 
-        const startFrame = parseInt(json['start-frame']||0 )
-        const endFrame = json['end-frame'] ? parseInt(json['end-frame']) : undefined;
-        
-        try {
+        route.video = {
+            file,
+            url,
+            framerate: parseFloat(data['framerate']),                
+            next: data['next-video'] ,
+            mappings: [],
+            format: undefined,
+            selectableSegments:data['segments'],
+        }
+        route.infoTexts = parseInformations(data['informations'])
 
-            const getDistance = (mapping,prevMapping,idx?) => {
-                const prevDist = prevMapping.distance || 0;
-                const prevFrame = prevMapping.frame || startFrame;
-                if (mapping.distance!==undefined)
-                    return mapping.distance;
-                if (prev.dpf!==undefined && mapping.frame!==undefined)
-                    return  prev.dpf*(mapping.frame-prevFrame)+prevDist
-                throw new Error(`mapping #${idx||'total'}: one of [distance], [dpf or frame] is missing: <mapping ${toXml(mapping) }/>`)
-            }
+        const videoUrl = getVideoUrl(fileInfo,route)
+        if (videoUrl) {
+            route.video.file = undefined;
+            route.video.url = videoUrl
+        }
+    
+        const fileParts = filePath.split('.');    
+        const extension = fileParts[fileParts.length-1];            
+        route.video.format = extension.toLowerCase()
 
-
-            mappings.forEach ( (mapping,idx) => {
-                if (idx!==0) {
-               
-                    mapping.distance = (mapping.distance!==undefined && mapping.distance!==null) ? parseInt(mapping.distance) : undefined;
-                    mapping.dpf = (mapping.dpf!==undefined && mapping.dpf!==null) ? parseFloat(mapping.dpf) : undefined;
-                    mapping.frame = (mapping.frame!==undefined && mapping.frame!==null) ? parseInt(mapping.frame) : undefined
-
-
-                    const distance = getDistance(mapping,prev,idx)
-                    //if (idx===1) console.log(distance,prev,mapping)
-                    route.distance = mapping.distance = distance;
-
-                    const frames = mapping.frame-(prev.frame||startFrame);
-                    const videoSpeed = (prev.distance===undefined && mapping.dpf!==undefined) ? 3.6*mapping.dpf* route.video.framerate : 3.6 * (distance-prev.distance) / frames * route.video.framerate
-                    const time = prevTime + frames/route.video.framerate ;
-                    
-                    route.video.mappings.push ( { videoSpeed,time:prevTime, ...prev})
-                    //if (idx<10) console.log(frames,prev, { videoSpeed,time,endFrame:mapping.frame, ...prev})
-                    prev = mapping;
-                    prevTime = time;
-                    
-
-                    if ( idx===mappings.length-1) {
-                        route.video.mappings.push ( { videoSpeed, time,...mapping})
+    
+        const mappings = data['mappings']
+    
+        if ( mappings ) {
+            
+            let prev;
+            let prevTime =0;
+           
+    
+            const startFrame = parseInt(data['start-frame']||0 )
+            const endFrame = data['end-frame'] ? parseInt(data['end-frame']) : undefined;
+            
+            try {
+    
+                const getDistance = (mapping,prevMapping,idx?) => {
+                    const prevDist = prevMapping.distance || 0;
+                    const prevFrame = prevMapping.frame || startFrame;
+                    if (mapping.distance!==undefined)
+                        return mapping.distance;
+                    if (prev.dpf!==undefined && mapping.frame!==undefined)
+                        return  prev.dpf*(mapping.frame-prevFrame)+prevDist
+                    throw new Error(`mapping #${idx||'total'}: one of [distance], [dpf or frame] is missing: <mapping ${toXml(mapping) }/>`)
+                }
+    
+    
+                mappings.forEach ( (mapping,idx) => {
+                    if (idx!==0) {
+                   
+                        mapping.distance = (mapping.distance!==undefined && mapping.distance!==null) ? parseInt(mapping.distance) : undefined;
+                        mapping.dpf = (mapping.dpf!==undefined && mapping.dpf!==null) ? parseFloat(mapping.dpf) : undefined;
+                        mapping.frame = (mapping.frame!==undefined && mapping.frame!==null) ? parseInt(mapping.frame) : undefined
+    
+    
+                        const distance = getDistance(mapping,prev,idx)
+                        //if (idx===1) console.log(distance,prev,mapping)
+                        route.distance = mapping.distance = distance;
+    
+                        const frames = mapping.frame-(prev.frame||startFrame);
+                        const videoSpeed = (prev.distance===undefined && mapping.dpf!==undefined) ? 3.6*mapping.dpf* route.video.framerate : 3.6 * (distance-prev.distance) / frames * route.video.framerate
+                        const time = prevTime + frames/route.video.framerate ;
+                        
+                        route.video.mappings.push ( { videoSpeed,time:prevTime, ...prev})
+                        //if (idx<10) console.log(frames,prev, { videoSpeed,time,endFrame:mapping.frame, ...prev})
+                        prev = mapping;
+                        prevTime = time;
+                        
+    
+                        if ( idx===mappings.length-1) {
+                            route.video.mappings.push ( { videoSpeed, time,...mapping})
+                        }
+    
                     }
-
+                    else {
+                        mapping.distance = (mapping.distance!==undefined && mapping.distance!==null) ? parseInt(mapping.distance) : undefined;
+                        mapping.dpf = (mapping.dpf!==undefined && mapping.dpf!==null) ? parseFloat(mapping.dpf) : undefined;
+                        mapping.frame = (mapping.frame!==undefined && mapping.frame!==null) ? parseInt(mapping.frame) : undefined
+    
+    
+                        prev = mapping
+                        prevTime = 0;
+    
+                    }
+                })
+    
+                if ( endFrame && prev.dpf!==undefined) {
+                    const mapping  = {frame:endFrame, dpf:prev.dpf};
+                    
+                    route.distance = getDistance(mapping,prev);
+    
                 }
-                else {
-                    mapping.distance = (mapping.distance!==undefined && mapping.distance!==null) ? parseInt(mapping.distance) : undefined;
-                    mapping.dpf = (mapping.dpf!==undefined && mapping.dpf!==null) ? parseFloat(mapping.dpf) : undefined;
-                    mapping.frame = (mapping.frame!==undefined && mapping.frame!==null) ? parseInt(mapping.frame) : undefined
-
-
-                    prev = mapping
-                    prevTime = 0;
-
-                }
-            })
-
-            if ( endFrame && prev.dpf!==undefined) {
-                const mapping  = {frame:endFrame, dpf:prev.dpf};
-                
-                route.distance = getDistance(mapping,prev);
-
+    
             }
-
+            catch(err) {
+                if (!_logger) _logger = new EventLogger('XmlParser');
+                _logger.logEvent({message:'xml details',error:err.message, mappings});
+                 throw new Error( 'Could not parse XML File' );
+            }
+             
         }
-        catch(err) {
-            if (!_logger) _logger = new EventLogger('XmlParser');
-            _logger.logEvent({message:'xml details',error:err.message, mappings});
-             throw new Error( 'Could not parse XML File' );
-        }
-         
+    
     }
-
-}
-
-
-
-const loadElevationFromAltitudes = (json:JSONObject, route: RouteInfo) => {
     
-    const altitudes =  json['altitudes']
-    if (!altitudes)
-        return;
-
     
-    route.points = altitudes.map(a => ({
-        routeDistance: Number(a.distance),
-        elevation: Number(a.height),
-    }));
-
-    const points = route.points as Array<RoutePoint>
-    if (points?.length>0) {
-        route.distance = points[points.length-1].routeDistance
-    }
-    updateSlopes(points)
     
-}
-
-
-const loadElevationFromPositions = (json: JSONObject, route: RouteInfo) => {
-    const altitudes =  json['altitudes']
-    const positions =  json['positions']
-
-    if (!positions)
-        return;
-
-
-    let prevAltitude = undefined;
-    let prevDistance = 0;
-    route.elevation = 0;
-    const points = []
-
-    positions.forEach( (pos,i) => {
-        const altitude = getAltitude(altitudes,positions,i,prevAltitude);
-        const elevationGain = altitude-prevAltitude
-
-        const pi  = createPoint(pos, altitude, prevDistance);
+    
+    async loadElevationFromAltitudes (context:XmlParserContext , tagName='altitudes')  {
+        const {data,route} = context
+        const altitudes =  data[tagName]
+        if (!altitudes)
+            return;
+    
         
-        points.push(pi.point);
+        route.points = altitudes.map(a => ({
+            routeDistance: Number(a.distance),
+            elevation: Number(a.height),
+        }));
+    
+        const points = route.points as Array<RoutePoint>
+        if (points?.length>0) {
+            route.distance = points[points.length-1].routeDistance
+        }
+        updateSlopes(points)
+        
+    }
+    
+    
+    async loadElevationFromPositions (context:XmlParserContext, tags?: {altitudes?: string,positions?:string})  {
+        const {data,route} = context
+        
+        const altitudes =  data[tags?.altitudes || 'altitudes']
+        const positions =  data[tags?.positions || 'positions']
+    
+        if (!positions)
+            return;
+    
+    
+        let prevAltitude = undefined;
+        let prevDistance = 0;
+        route.elevation = 0;
+        const points = []
+    
+        positions.forEach( (pos,i) => {
+            const altitude = getAltitude(altitudes,positions,i,prevAltitude);
+            const elevationGain = altitude-prevAltitude
+    
+            const pi  = createPoint(pos, altitude, prevDistance);
+            
+            points.push(pi.point);
+    
+            route.distance = pi.point.routeDistance;
+            if (elevationGain>0)
+                route.elevation+=elevationGain
+    
+            prevDistance = pi.prevDistance
+            prevAltitude = altitude;
+        })
+        route.points = points;
+        route.distance = prevDistance
+    
+        updateSlopes(route.points)
+      
+    }    
+    
 
-        route.distance = pi.point.routeDistance;
-        if (elevationGain>0)
-            route.elevation+=elevationGain
 
-        prevDistance = pi.prevDistance
-        prevAltitude = altitude;
-    })
-    route.points = points;
-    route.distance = prevDistance
-
-    updateSlopes(route.points)
-  
 }
+
+
+
+
+
+const getVideoUrl = (info:FileInfo,route: RouteApiDetail):string => {
+    const {file,url} = route?.video||{}
+    return getReferencedFileInfo(info,{file,url},'video')
+    
+}
+
+const getPreviewUrl = (info:FileInfo,route: RouteApiDetail):string => {
+    const url = route?.previewUrl 
+    const file = route?.previewUrlLocal
+    return getReferencedFileInfo(info,{file,url},'file')
+}
+
 
 function createPoint(pos: Position, altitude: number, prevDistance: number) {
     const point = {

@@ -11,7 +11,7 @@ export class IncyclistService extends EventEmitter {
         this.debug = false;   
     }
 
-    protected logEvent(event) {
+    logEvent(event) {
         this.logger.logEvent(event)
         this.emit('log',event)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,12 +21,12 @@ export class IncyclistService extends EventEmitter {
             console.log(`~~~ ${this.logger.getName().toUpperCase()}-SVC`, event)
     }
 
-    protected setDebug(enabled:boolean) {
+    setDebug(enabled:boolean) {
         this.debug = enabled
     }
 
 
-    protected logError(err:Error, fn:string, args?) {
+    logError(err:Error, fn:string, args?) {
         const logInfo = args || {}
 
         this.logger.logEvent({message:'Error', fn, ...logInfo, error:err.message, stack:err.stack})

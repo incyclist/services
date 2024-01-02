@@ -1,4 +1,4 @@
-import { LocalizedText, RouteBase, RouteCategory, RoutePoint, RouteProvider, RouteType, VideoDescription } from "../types"
+import { DaumEpp, LocalizedText, RouteBase, RouteCategory, RouteInfoText, RoutePoint, RouteProvider, RouteType, VideoDescription } from "../types"
 
 export type RouteDescriptionQuery = {
     category?: string
@@ -52,15 +52,19 @@ export type RouteApiDetail = {
     points?: Array<RoutePoint> 
     downloadUrl?:string
     downloadType?: string
+    gpxDisabled?: boolean
     version?:string;
     category?: RouteCategory
     provider?: RouteProvider
     video?: VideoDescription   
+    epp?:DaumEpp
+    infoTexts?:Array<RouteInfoText>
     localizedTitle?:LocalizedText
     previewUrl?:string
     previewUrlLocal?:string
     description?:LocalizedText
     next?:string
+    
 
 }    
 

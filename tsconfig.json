@@ -2,7 +2,8 @@
 	"compilerOptions": {
 		"target": "ES2015",
     "esModuleInterop": true,
-    "allowJs": true,
+    "resolveJsonModule": true,
+    "allowJs": false,
 		"module": "commonjs",
         "declaration": true,
         "outDir": "lib",
@@ -10,8 +11,9 @@
     },
     "include": [
         "src/**/*.js",
-        "src/**/*.ts"
-    ],
+        "src/**/*.ts", 
+        "src/routes/base/parsers/gpx.unit.test ts"    
+, "src/routes/base/parsers/bikelab.unit.test ts"      ],
     "exclude": [
       "src/**/*.spec.*",
       "__tests__/**/*.ts",

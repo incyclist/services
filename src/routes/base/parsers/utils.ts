@@ -1,57 +1,81 @@
-import { FileInfo, path } from "../../../api";
-import { RoutePoint, VideoRoutePoint } from "../types";
+import { FileInfo, JSONObject, path } from "../../../api";
+import { LocalizedText, RouteInfoText } from "../types";
 
-export const addVideoSpeed = (points:Array<RoutePoint>,video):Array<VideoRoutePoint> => {
-    let prevSpeed ;
-    let prevTime ;
-    let videoIdx = 0;
+export class BinaryReader {
+    protected pos:number
+    protected buffer:Buffer
 
-    return points.map ( (point,idx) => {
+    constructor (data) {
+        this.pos =0;
+        
+        this.buffer = Buffer.from(data)
+    }
 
-        const p:VideoRoutePoint = {...point, videoSpeed:undefined, videoTime:undefined}
 
-        if (idx===0) {
-            p.videoSpeed = video.mappings[0].videoSpeed;
-            p.videoTime = video.mappings[0].time;
-            prevSpeed = p.videoSpeed;
-            prevTime = p.videoTime;
-        }
-        else {
-            if (p.routeDistance<=video.mappings[videoIdx]) {
-                p.videoSpeed = prevSpeed;
-                p.videoTime = prevTime;
-            }
-
-            while (videoIdx<video.mappings.length && p.routeDistance>video.mappings[videoIdx].distance) 
-                videoIdx++;
-            
-            if (videoIdx<video.mappings.length) {
-                
-                p.videoSpeed = video.mappings[videoIdx].videoSpeed;
-                const v = p.videoSpeed/3.6;
-
-                p.videoTime = video.mappings[videoIdx].time - (video.mappings[videoIdx].distance-p.routeDistance)/v;
-                prevSpeed = p.videoSpeed;
-                prevTime = p.videoTime; 
-            }
+    get length() {
+        return this.buffer.length
+    }
     
-        }
-        return p;
+    setPosition(pos) {
+        this.pos = pos;
+    }
 
-    })
+    ReadUint32() {
+        const val = this.buffer.readUInt32LE(this.pos)
+        this.pos +=4
+        return val;
+    }
+    
+    ReadUint64() {
+        const high = this.ReadUint32()
+        const low = this.ReadUint32()
+
+        return (high << 32) +low;
+    }
+
+    ReadUint16() {
+        const val = this.buffer.readUInt16LE(this.pos)
+        this.pos +=2
+        return val;
+    }
+
+    ReadFloat() {
+        const val = this.buffer.readFloatLE(this.pos)
+        this.pos +=4
+        return val;
+    }
+
+    ReadInt32() {
+        return this.ReadUint32();
+    }
+
+    ReadString(cnt:number) {
+        const part = Buffer.from(this.buffer.subarray(this.pos,this.pos+cnt))
+        this.pos+=cnt
+
+        const str=part.toString('ascii')
+        const end = str.indexOf( '\x00' )
+        if (end!==-1)
+            return str.substring(0,end)
+        return str
+    }
+
+    skip(cnt) {
+        this.pos+=cnt;
+    }
+
 }
 
-
-export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, url?:string}, scheme:string='file')=> {
+export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, url?:string}, scheme:string='file'):string=> {
     if (info.type!=='url')
-        return;
+        return info.url;
 
     const target:{ file?:string, url?:string} = {}
 
     let fileName = referenced.file;
 
     if (referenced.url) {
-        return {url:referenced.url}
+        return referenced.url
     }
 
     
@@ -61,7 +85,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
         const regex = /(\\|\/)/g;
 
         if (fileName.startsWith('http://') || fileName.startsWith('https://')) { 
-            return {url: fileName};            
+            return fileName 
         }
 
         else if (fileName.search(regex)===-1) {
@@ -69,7 +93,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
             if (  inputUrl.startsWith('incyclist:') || inputUrl.startsWith('file:')) {
                 const parts = inputUrl.split('://');
                 const targetPath = parts[1].replace(info.name,fileName)
-                return{url: `${scheme}://${targetPath}`}
+                return  `${scheme}://${targetPath}`
             }
 
         }
@@ -82,9 +106,29 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
                 target.url = `${scheme}:///${fileName}`;
             }
             else {
-                referenced.url = `${scheme}:///${fileName}`;                                            
+                target.url = `${scheme}:///${fileName}`;                                            
             }
+            return target.url
         }
+
     }
+
+}
+
+export const parseInformations =( informations?:Array<JSONObject>):Array<RouteInfoText> =>{
+    if (!informations)
+        return;
+
+    return informations.map( i=> {
+        
+        const distance = Number(i['distance'])
+        delete i['distance']
+
+        const localizedText = i as LocalizedText
+        const keys = Object.keys(i)
+        const text = i[ keys[0]] as string
+        return {distance,localizedText,text}
+
+    })
 
 }

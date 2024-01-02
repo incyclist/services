@@ -7,9 +7,11 @@ import {IUserSettingsBinding } from './bindings';
 
 
 
+
 export class UserSettingsService {
 
     static _instance:UserSettingsService;
+    static _defaultBinding: IUserSettingsBinding
 
     settings: any
     binding: IUserSettingsBinding
@@ -17,6 +19,8 @@ export class UserSettingsService {
     isInitialized: boolean
     isDirty: boolean
     savePromise: Promise<boolean> | null
+    instanceId: number;
+    initPromise: Promise<boolean>
     
 
     static getInstance() {
@@ -32,24 +36,38 @@ export class UserSettingsService {
         this.isInitialized = false;
         this.isDirty = false
         this.savePromise = null;
-
+        this.instanceId = Date.now()
+        this.initPromise = undefined
         this.setBinding(binding)
     }
 
+
     setBinding(binding: IUserSettingsBinding) {
         this.binding = binding;        
+        UserSettingsService.setDefaultBinding(binding)
+    }
+
+    static setDefaultBinding(binding: IUserSettingsBinding){
+        UserSettingsService._defaultBinding = binding
     }
 
 
     async init():Promise<boolean> {
+            
 
         if (this.isInitialized)
             return true;
-        if (!this.binding)
+
+        if (this.initPromise)
+            return await this.initPromise;
+
+        const binding = this.binding||UserSettingsService._defaultBinding;
+        if (!binding)
             return false;
 
         try {            
-            this.settings = await this.binding.getAll()
+            this.initPromise = binding.getAll()
+            this.settings = await this.initPromise
             this.logger.logEvent({message:'settings loaded'})
             this.isInitialized = true;
             return true;
@@ -206,5 +224,6 @@ export const useUserSettings = ()=>UserSettingsService.getInstance()
 export const initUserSettings = (binding: IUserSettingsBinding)=> {
     const us = UserSettingsService.getInstance()
     us.setBinding(binding)
+    us.init()
     return us
 }

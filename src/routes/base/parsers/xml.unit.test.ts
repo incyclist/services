@@ -1,4 +1,5 @@
 import { loadFile } from '../../../../__tests__/utils/loadFile'
+import { FileInfo } from '../../../api'
 import { parseXml } from '../utils/xml'
 import {KWTParser} from './kwt'
 import { XMLParser } from './xml'
@@ -15,9 +16,11 @@ describe('XMLParsers',()=>{
         })
 
         test.skip('valid file',async ()=>{
-            const xml = await loadFile('utf-8','./__tests__/data/rlv/DE_Schweighofen.xml') as string
+            const file = './__tests__/data/rlv/DE_Schweighofen.xml'
+            const xml = await loadFile('utf-8',file) as string
             const xmlJson = await parseXml(xml)
-            const {data,details} = await parser.import(xmlJson)
+            const fileInfo:FileInfo = {type:'file', name:file, ext:'xml',dir:'./__tests__/data/rlv',url:undefined, delimiter:'/'}
+            const {data,details} = await parser.import(fileInfo, xmlJson)
             expect(details.title).toBe('DE_Schweighofen')
 
             expect(data.title).toBe('Schweighofen')
@@ -28,10 +31,12 @@ describe('XMLParsers',()=>{
 
 
         test('invalid file',async ()=>{
-            const xml = await loadFile('utf-8','./__tests__/data/rlv/AU_Cape_Naturaliste.xml') as string
+            const file = './__tests__/data/rlv/AU_Cape_Naturaliste.xml'
+            const xml = await loadFile('utf-8',file) as string
+            const fileInfo:FileInfo = {type:'file', name:file, ext:'xml',dir:'./__tests__/data/rlv',url:undefined, delimiter:'/'}
             const xmlJson = await parseXml(xml)
 
-            await expect( async ()=> {await parser.import(xmlJson)}).rejects.toThrow('cannot parse <Track>')
+            await expect( async ()=> {await parser.import(fileInfo,xmlJson)}).rejects.toThrow('cannot parse <Track>')
 
             
        })

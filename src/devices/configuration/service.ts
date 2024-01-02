@@ -676,13 +676,15 @@ export class DeviceConfigurationService  extends EventEmitter{
 
 
         let adapter;
-        if (deviceAlreadyExists) {
+        if (deviceAlreadyExists && this.adapters[udid])  {
             adapter = this.adapters[udid]
         }
         else {
             adapter = AdapterFactory.create(deviceSettings)
-            if (!adapter)
+            if (!adapter) {
+                this.logEvent({message:'could not create adapter'})
                 return;
+            }
     
             udid = this.settings.devices?.find( d=> adapter.isEqual(d.settings))?.udid
             if (!udid) {

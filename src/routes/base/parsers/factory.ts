@@ -23,10 +23,25 @@ export class ParserFactory {
         this.parsers.push(parser)
     }
 
-    findMatching( extension:string, data:unknown ) {
+    suppertsExtension( extension:string) {
         const matching = this.parsers
             .filter( p=>p.supportsExtension(extension))
-            .filter( p=>p.supportsContent(data))
+
+        if (!matching?.length) 
+            throw new Error(`invalid file format ${extension}` )
+
+        return matching
+    }
+
+
+    findMatching( extension:string, data?:unknown ) {
+        const matching = this.parsers
+            .filter( p=>p.supportsExtension(extension))
+            .filter( p=> {
+                if (!data)
+                    return true;
+                return p.supportsContent(data)
+            })
 
         if (!matching?.length) 
             throw new Error(`invalid file format ${extension}` )
@@ -41,5 +56,5 @@ export class ParserFactory {
     setInitialized(done:boolean) {
         this.initialized=done
     }
-
+ 
 }

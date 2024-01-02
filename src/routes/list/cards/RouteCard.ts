@@ -1,0 +1,348 @@
+import { getBindings } from "../../../api";
+import { Card, CardList } from "../../../base/cardlist";
+import { Observer } from "../../../base/types/observer";
+import { useUserSettings } from "../../../settings";
+import { sleep } from "../../../utils/sleep";
+import { RouteApiDetail } from "../../base/api/types";
+import { Route } from "../../base/model/route";
+import { RouteInfo  } from "../../base/types";
+import { BaseCard, RouteCardType } from "./cards";
+import { getRouteList, useRouteList } from "../service";
+import { RouteStartSettings } from "../types";
+import { RoutesDbLoader } from "../loaders/db";
+import { valid } from "../../../utils/valid";
+
+
+export interface SummaryCardDisplayProps extends RouteInfo{
+    loaded:boolean
+    ready:boolean
+    state:string
+    visible:boolean
+    canDelete:boolean
+    observer:Observer
+    initialized:boolean;
+}
+
+export interface DetailCardDisplayProps  {
+    
+}
+
+export interface StartSettings {
+    segment?:string
+    startPos:number,
+    endPos?:number,
+    realityFactor:number,
+    downloadProgress?:number,
+    convertProgress?:number
+}
+
+export type RouteSettings = StartSettings & RouteStartSettings
+
+
+
+class ConvertObserver extends Observer {  
+
+    protected conversion:Observer
+    constructor() {
+        super()
+    }
+
+    setConversion(conversion:Observer) {
+        this.conversion = conversion
+    }
+
+    stop() {
+        if (this.conversion)
+            this.conversion.stop()
+    }
+
+}
+
+export class RouteCard extends BaseCard implements Card<Route> {
+
+    protected downloadObserver: Observer;
+    protected convertObserver: ConvertObserver;
+    protected route: Route
+    protected list:CardList<Route> 
+    protected deleteable:boolean
+    protected startSettings:RouteSettings
+    protected cardObserver = new Observer()
+    protected ready:boolean
+
+    constructor(route:Route, props?:{list?: CardList<Route>} ) {
+        super()
+        const {list} = props||{};
+
+        this.route = route
+        this.list = list
+        this.deleteable = false;
+
+        const descr = this.getRouteDescription()
+
+        this.ready = !descr.hasVideo || (descr.hasVideo && descr.previewUrl!==undefined)
+        this.initialized = false;
+
+    }
+
+    getRepo() {
+        return new RoutesDbLoader()
+    }
+
+    verify() {
+        if (this.previewMissing())
+            this.createPreview()
+    }
+
+    previewMissing() {
+        const descr = this.getRouteDescription()
+        return descr.hasVideo && !valid(descr.previewUrl)
+    }
+
+    setInitialized(init:boolean) {
+        const prev=this.initialized
+        this.initialized= init
+        if (init && !prev)
+            this.emitUpdate()
+    }
+
+    setVisible(visible: boolean): void {
+        const prev = this.visible
+        this.visible = visible
+        if (visible!==prev)
+            this.emitUpdate()
+    }
+
+    reset() {
+        super.reset()
+        this.cardObserver.reset()
+    }
+
+    getData(): Route { return this.route}
+    setData(data: Route) { 
+        const old = this.route
+        this.route = data
+        if (this.ready && this.getRouteDescription().previewUrl===undefined ) {
+            this.getRouteDescription().previewUrl = old.description.previewUrl
+        }
+
+    }
+
+    getRouteDescription(): RouteInfo { return this.route?.description}
+    getRouteData(): RouteApiDetail {return this.route?.details}
+    
+    getCardType(): RouteCardType {
+        return 'Route';
+    }
+
+    getDisplayProperties(): SummaryCardDisplayProps {
+        let {points} = this.route.description
+        if (points && !Array.isArray(points)) {
+            console.log( '~~~~ POINT incorrect format',this.route.description.id, this.route.description.title, points )
+            points = undefined
+        }
+        return {...this.route.description, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,canDelete:this.canDelete(),observer:this.cardObserver, points}
+
+    }
+    getId(): string {
+        return this.route.description.id
+    }
+
+    enableDelete(enabled=true) {
+        this.deleteable = enabled
+    }
+
+    canDelete() {
+        return this.deleteable
+    }
+
+
+    openSettings():RouteSettings {
+        // read vaues from User Settings
+        const defaultSettings = {startPos:0, realityFactor:100}        
+        const key = this.buildSettingsKey();
+        this.startSettings = useUserSettings().get(key,defaultSettings )
+
+        return this.startSettings
+    }
+
+    changeSettings(props:RouteSettings) {
+        this.startSettings = props
+
+        // update User Settings
+        const userSettings = useUserSettings()
+        const key = this.buildSettingsKey();
+        userSettings.set(key,props,true)
+    }
+
+    async save():Promise<void> {
+        this.getRepo().save(this.route)        
+    }
+
+
+    delete() {
+
+        if (this.list) {
+            this.list.remove(this)
+            getRouteList().emitLists('updated')
+        }
+
+        const key = this.buildSettingsKey()
+        useUserSettings().set(key,null)
+
+        // TODO: 
+        //   if isLocal: remove from disk
+        //   else mark as deleted in other lists or disallow deletion
+        // if (this.route.description.isLocal) {
+        // 
+        //}
+    }
+
+    start() {
+        const service = getRouteList()
+
+        service.select( this.route)
+        service.setStartSettings({type:this.getCardType(), ...this.startSettings})
+
+        this.route.description.tsLastStart = Date.now()
+    }
+
+    cancel() {
+
+    }
+
+    addWorkout() {
+
+    }
+
+    getCurrentDownload():Observer {
+        return this.downloadObserver;
+    }
+
+    download(): Observer {
+        if (!this.downloadObserver) {
+            
+            // TODO
+
+            
+    
+        }
+        return this.downloadObserver;
+
+
+    }
+
+    getCurrentConversion():Observer {
+        return this.convertObserver;
+    }
+
+    convert(): Observer {
+        if (this.convertObserver)
+            return this.convertObserver;
+
+        
+        const video = getBindings().video
+        const route = this.getRouteDescription()
+        this.convertObserver = new ConvertObserver()
+
+        video.convert(route.videoUrl)
+            .then( observer=> { this.monitorConversion(route, observer);})
+            .catch( err => { this.handleConversionError(err)})
+        return this.convertObserver
+    }
+
+    stopConversion() {
+        if (!this.convertObserver)
+            return
+        this.convertObserver.stop()        
+        this.convertObserver.emit('done');
+        setTimeout( ()=>{ this.convertObserver=undefined}, 200)
+    }
+
+    protected monitorConversion(route: RouteInfo, observer: Observer) {
+        this.convertObserver.setConversion(observer)
+        getRouteList().logEvent({ message: 'video conversion started', url: route.videoUrl });
+
+        observer.on('conversion.progress', (progress) => {
+            getRouteList().logEvent({ message: 'video conversion progress', progress });
+            this.convertObserver.emit('progress', progress.percent);
+        });
+
+        observer.on('conversion.done', (url: string) => {
+            getRouteList().logEvent({ message: 'video conversion completed', url });
+            this.finishConversion({ url });
+            this.convertObserver.emit('done');
+        });
+        observer.on('conversion.error', (error: Error) => {
+            getRouteList().logEvent({ message: 'video conversion error', error: error.message });
+            this.convertObserver.emit('error', error);
+            this.finishConversion({ error });
+        });
+    }
+
+    protected handleConversionError(err:Error) {
+        
+        process.nextTick( ()=> {
+            this.convertObserver.emit('error', err);
+            this.finishConversion({ error:err });
+        })
+
+        
+    }
+
+    protected async finishConversion( result:{error?:Error,url?:string } ) {
+        const {url} = result
+
+        if (url) {
+            const description = this.getRouteDescription()
+            const details = this.getRouteData()
+
+            if (url.startsWith('file:'))
+                url.replace('file:','video:')
+
+            description.videoUrl = url;
+            description.videoFormat = 'mp4'
+
+            details.video.file = undefined
+            details.video.url = url;
+            details.video.format = 'mp4'
+
+            await this.save();
+        }
+        await sleep(200)
+        this.convertObserver== undefined
+
+
+    }
+
+    protected emitUpdate() {
+        if (this.cardObserver)
+            this.cardObserver.emit('update', this.getDisplayProperties())
+    }
+
+    updateRoute(route:Route) {
+        this.route = route
+        this.save()
+        this.emitUpdate()
+    }
+
+    protected buildSettingsKey() {
+        const type = this.route.description.hasVideo ? 'video' : 'followRoute';
+        const id = this.route.description.id;
+        const key = `routeSelection.${type}.prevSetting.${id}`;
+        return key;
+    }
+
+    protected async createPreview() {    
+        
+        const descr = this.getRouteDescription()
+        await useRouteList().createPreview( descr )
+        this.ready = true;
+        this.updateRoute(this.route)
+        
+    }
+
+    
+
+
+
+}

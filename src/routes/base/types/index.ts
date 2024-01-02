@@ -1,6 +1,7 @@
+import { FileInfo } from "../../../api";
 
 export type RouteType = 'gpx' | 'video';
-export type RouteCategory = 'Free' | 'Demo' | 'personal';
+export type RouteCategory = 'Imported' | 'Free' | 'Demo' | 'personal';
 export type RouteState = 'prepared' | 'loading' | 'loaded' | 'error';
 
 export type RouteProvider = {
@@ -18,7 +19,7 @@ export type VideoMapping = {
 
 export type RouteInfoText = {
     distance: number
-    localizedText
+    localizedText:LocalizedText
     text: string 
 }
 
@@ -33,9 +34,35 @@ export type VideoDescription = {
     mappings: Array<VideoMapping>;
     format: string;
     selectableSegments: Array<RouteSegment>
-    infoTexts:RouteInfoText
     next?:string
 };
+
+export type DaumEppProgramEntry = {
+    elevation:number,
+    x: number,
+    distance:number
+}
+
+export type DaumEpp = {
+    header:string
+    version:number
+    time:number
+    name:string,
+    description: string
+    programType: number
+    min:number,
+    max:number,
+    cnt:number,
+    sampleRate:number,
+    validFor:number  // //BITs: 1: bike, 2: lyps, 4: run
+    elevationStart: number,
+    powerLimit: number
+    hrmLimit: number,
+    speedLimit:number
+    programData: Array<DaumEppProgramEntry>
+}
+
+
 export type RoutePoint = {
     lat: number;
     lng: number;
@@ -43,6 +70,8 @@ export type RoutePoint = {
     elevation: number;
     slope?: number;
     distance?:number
+    videoSpeed?:number,
+    videoTime?:number
 };
 
 export interface VideoRoutePoint extends RoutePoint {
@@ -62,7 +91,7 @@ export interface RouteBase  {
 }
 
 
-export interface RouteInfo extends RouteBase{
+export interface    RouteInfo extends RouteBase{
     localizedTitle?: LocalizedText
     country?: string;
     isLoop?:boolean;
@@ -70,6 +99,7 @@ export interface RouteInfo extends RouteBase{
     elevation?: number;    
     category?: RouteCategory
     provider?: RouteProvider
+    routeHash?:string,
     isLocal?:boolean;
     hasGpx?: boolean;
     hasVideo?: boolean;
@@ -77,9 +107,13 @@ export interface RouteInfo extends RouteBase{
     requiresDownload?: boolean;
     videoFormat?: string;   
     videoUrl?:string;
+    downloadUrl?:string,
     previewUrl?:string;
-    points?: Array<RoutePoint>|string,
-    segments?:Array<RouteSegment>    
+    points?: Array<RoutePoint>,
+    segments?:Array<RouteSegment>,
+    tsImported?: number,
+    tsLastStart?: number,
+ 
 }
 export type LocalizedText = { [index: string]: string; };
 
@@ -89,8 +123,9 @@ export interface ParseResult<T extends RouteBase> {
 }
 
 export interface Parser<In, Out extends RouteBase> {
-    import(data:In): Promise< ParseResult<Out>>
+    import(file: FileInfo, data?:In): Promise< ParseResult<Out>>
     supportsExtension(extension:string):boolean
     supportsContent(data:In):boolean
+    getData(info:FileInfo,data?:In):Promise<In>
 }
 

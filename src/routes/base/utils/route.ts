@@ -1,7 +1,9 @@
 import { geo } from "../../../utils";
 import { calculateDistance } from "../../../utils/geo";
-import { Route } from "../../list";
+import { RouteApiDetail } from "../api/types";
+import { Route } from "../model/route";
 import { RoutePoint, RouteSegment } from "../types";
+import md5 from 'md5'
 
 const MAX_LAPMODE_DISTANCE = 50;    // maximume distance between start and stop position
 
@@ -13,8 +15,8 @@ export const checkIsLoop = (_route:Route|Array<RoutePoint>):boolean =>  {
     if (!_route)
         return false;
 
-    if (Array.isArray(route)) {
-        points = route as Array<RoutePoint>
+    if (Array.isArray(_route)) {
+        points = _route as Array<RoutePoint>
     }
     else {
         route = (_route as Route)
@@ -28,7 +30,7 @@ export const checkIsLoop = (_route:Route|Array<RoutePoint>):boolean =>  {
 
 
 
-    if ( points?.length) {
+    if ( !points?.length) {
         return false;
     }
 
@@ -90,8 +92,9 @@ export const updateSlopes = (points: Array<RoutePoint>):void => {
 
 // TODO: RepoDetaisl might already have selectableSegments member
 export const getSegments = (route:Route):Array<RouteSegment> => {
-    const {data,details}    = route
+    const {description: data,details}    = route
 
+    
     if (data?.segments) {
         return data.segments
     }
@@ -118,4 +121,59 @@ export const getSegments = (route:Route):Array<RouteSegment> => {
         return segments;
     }
 }
+
+
+export const validateRoute = (route:RouteApiDetail):void =>{
+    if (!route?.points?.length)
+        return;
+
+    updateSlopes(route.points);
+}
+
+export const getTotalElevation = (route:RouteApiDetail):number =>{
+    if (!route?.points?.length)
+        return 0;
+
+    let elevation = 0;
+    let prev = undefined
+    route.points.forEach( (p,idx)=>{
+
+        if (idx>0) {
+            const e = p.elevation - prev.elevation
+            if (e>0)
+                elevation+=e
+        }
+        prev = p;
+    })
+    return elevation
+}
+
+export const getTotalDistance = (route:RouteApiDetail):number =>{
+    if (!route?.points?.length)
+        return 0;
+
+    return route.points[ route.points.length-1].routeDistance
+}
+
+export const getRouteHash = (route:RouteApiDetail):string => {
+    let json;
+    if (!route?.points) {
+
+        if ( route.epp && route.epp.programData ) {
+            // generate unique hash from epp
+            const programData = route.epp.programData;
+            json = { decoded:programData.map( p => ({d:p.distance, e:p.elevation})) }                        
+        }        
+        return undefined
+    }
+    else {
+        json = { decoded:route.points.map( p => ({lat:p.lat, lng: p.lng})) }            
+    }
+
+    const routeHash = md5(JSON.stringify(json));
+    return routeHash;
+}
+
+
+
 

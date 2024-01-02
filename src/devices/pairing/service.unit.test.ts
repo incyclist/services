@@ -322,7 +322,7 @@ describe('PairingService',()=>{
 
                 const updates: Array<PairingState> = [];
                 const res = await new Promise (done => {
-                    svc.start( (status:PairingState)=>{ updates.push(status);if (updates.length==2) done(updates)  })
+                    svc.start( (status:PairingState)=>{ updates.push(status);if (updates.length==3) done(updates)  })
                 })
 
                 expect(res).toMatchSnapshot()        
@@ -348,9 +348,7 @@ describe('PairingService',()=>{
                 // we are expecting 3 status updates, the last one to contain the 
                 await new Promise (done => {
                     svc.on('log',(e)=>{ 
-                        
-                        if (e.message == 'Pairing done')
-                        
+                        if (e.message == 'Pairing completed')
                             done(updates)
                     })                   
                     svc.start( (status:PairingState)=>{ 
@@ -358,21 +356,16 @@ describe('PairingService',()=>{
                     })
                 })
 
-                //console.log( (svc as any).logCapabilities)
-
-                
-                //expect(res).toMatchSnapshot()        
-                //console.log(JSON.stringify(res,undefined,2))
 
                 expect(logCapabilities).toHaveBeenCalled()
                 
                 expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Stopping Adapters'}))
                 expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'Start Scanning'}))
                 expect(logEvent).toHaveBeenNthCalledWith( 3,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'FE'}}))
-                expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'Start Pairing'}))
+                expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'Pairing completed'}))
                 expect(access.scan).toHaveBeenCalled()
-                expect(ride.startAdapters).toHaveBeenCalled()
-                expect(svc.getState().canStartRide).toBe(false)
+                
+                expect(svc.getState().canStartRide).toBe(true)
                 expect(svc.getState().capabilities?.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject({deviceName:'Ant+FE 1234'})
                 expect(svc.getState().capabilities?.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject({deviceName:'Ant+FE 1234'})
                 expect(svc.getState().capabilities?.find(c=>c.capability===IncyclistCapability.Speed)).toMatchObject({deviceName:'Ant+FE 1234'})
@@ -1715,6 +1708,9 @@ describe('PairingService',()=>{
                 cadence.devices[1].connectState='connected'
                 cadence.devices[2].connectState='connecting'
                 cadence.connectState = 'connecting'
+
+                svc.getState().adapters?.filter( a=>a.adapter.getInterface()==='ant')
+                    .forEach( ai => {ai.adapter.isStarted = jest.fn().mockReturnValue(false)})
 
                 ride.startAdapters= jest.fn( async()=> { await sleep(1000); return false;} )
                 

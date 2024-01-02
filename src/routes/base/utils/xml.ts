@@ -45,8 +45,12 @@ export class XmlJSON {
 
     expectScheme(scheme:string) {
         this.detectScheme()
-        if (scheme !== this.scheme) 
-            throw new Error(`cannot parse <${this.scheme}>`)
+        if (scheme !== this.scheme) {
+            if (!this._json[scheme])
+                throw new Error(`cannot parse <${this.scheme}>`)
+
+            this.scheme = scheme;
+        }
     }
 
     getSchemeData():JSONObject {
@@ -74,11 +78,11 @@ export class XmlJSON {
     }
 
     map(key,item) {
-        if (typeof(item)==='object' && item.$) {
-            return this.map(key,item.$)
-        }
         if (typeof(item)==='object') {
+
+
             const keys = Object.keys(item)
+
             if (keys.length===1 && keys[0]==='0') {
                 return this.map( key,item[keys[0]] ) 
             }
@@ -87,7 +91,12 @@ export class XmlJSON {
             }
             else {
                 const obj = {}
-                keys.forEach( key=> {obj[key]=this.map(key,item[key])})
+                keys.forEach( key=> {
+                    if (key==='$') 
+                        Object.assign(obj, this.map(key,item.$))
+                    else 
+                        obj[key]=this.map(key,item[key])
+                })
                 return obj
             }
             

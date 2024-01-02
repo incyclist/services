@@ -350,8 +350,7 @@ export class DeviceAccessService  extends EventEmitter{
                 interfaces.forEach( name=> { if (name) this.connect(name)})
                 return;
             }
-    
-            console.log('~~~ DEBUG:connect if',ifaceName,this.interfaces[ifaceName])
+   
             
             if (this.interfaces[ifaceName]?.enabled===false)
                 return
@@ -371,8 +370,9 @@ export class DeviceAccessService  extends EventEmitter{
             this.interfaces[ifaceName].state = 'connecting'
             this.emit('interface-changed',ifaceName,{...this.interfaces[ifaceName],state:'connecting'})    
         
+            await impl.disconnect()
             const connected = await impl.connect()            
-    
+
             const state:InterfaceState = connected ? 'connected': 'disconnected'
             this.interfaces[ifaceName].state = state
             
