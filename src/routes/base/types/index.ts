@@ -64,6 +64,8 @@ export type DaumEpp = {
 
 
 export type RoutePoint = {
+    cnt?: number,
+    heading?: number,
     lat: number;
     lng: number;
     routeDistance: number;
@@ -113,7 +115,10 @@ export interface    RouteInfo extends RouteBase{
     segments?:Array<RouteSegment>,
     tsImported?: number,
     tsLastStart?: number,
- 
+    next?:string,
+    legacyId?:string,
+    isDownloaded?:boolean  
+    isDeleted?:boolean   
 }
 export type LocalizedText = { [index: string]: string; };
 

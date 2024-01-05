@@ -49,6 +49,7 @@ export class IncyclistXMLParser extends XMLParser{
 
         route.video.mappings =  points.map( (p,idx) => {
             const time = p.time
+            
             let videoSpeed;
             if (idx!==points.length-1) {
                     videoSpeed = (points[idx+1].routeDistance-p.routeDistance)/(points[idx+1].time-p.time)*3.6;                

@@ -1,5 +1,5 @@
 import { LatLng } from "../../utils/geo"
-import { RouteCardType } from "./cards/cards"
+import { RouteCardType } from "./cards/types";
 
 export interface RouteStartSettings {
     type: RouteCardType,
@@ -29,4 +29,24 @@ export interface FreeRideStartSettings  {
     position:LatLng,
     option:FreeRideOption
     type: RouteCardType,
+}
+
+export interface MinMax {
+    min?: number,
+    max?: number
+}
+
+export interface SearchFilter {
+    title?: string,
+    distance? : MinMax,
+    elevation?: MinMax,
+    country?: string,
+    contentType?:string,
+    routeType?:string
+}
+
+export interface SearchFilterOptions {
+    countries: Array<string>
+    contentTypes: Array<string>
+    routeTypes: Array<string>
 }

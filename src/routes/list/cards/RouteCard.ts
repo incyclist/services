@@ -1,16 +1,18 @@
 import { getBindings } from "../../../api";
 import { Card, CardList } from "../../../base/cardlist";
-import { Observer } from "../../../base/types/observer";
+import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { useUserSettings } from "../../../settings";
 import { sleep } from "../../../utils/sleep";
 import { RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo  } from "../../base/types";
-import { BaseCard, RouteCardType } from "./cards";
+import { BaseCard } from "./base";
+import { AppStatus, RouteCardType } from "./types";
 import { getRouteList, useRouteList } from "../service";
 import { RouteStartSettings } from "../types";
 import { RoutesDbLoader } from "../loaders/db";
 import { valid } from "../../../utils/valid";
+import { waitNextTick } from "../../../utils";
 
 
 export interface SummaryCardDisplayProps extends RouteInfo{
@@ -21,6 +23,7 @@ export interface SummaryCardDisplayProps extends RouteInfo{
     canDelete:boolean
     observer:Observer
     initialized:boolean;
+    loading?:boolean
 }
 
 export interface DetailCardDisplayProps  {
@@ -67,6 +70,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected deleteable:boolean
     protected startSettings:RouteSettings
     protected cardObserver = new Observer()
+    protected deleteObserver: PromiseObserver<boolean>
     protected ready:boolean
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
@@ -82,6 +86,19 @@ export class RouteCard extends BaseCard implements Card<Route> {
         this.ready = !descr.hasVideo || (descr.hasVideo && descr.previewUrl!==undefined)
         this.initialized = false;
 
+    }
+
+    canStart(status:AppStatus) {
+        const {isOnline} = status
+        const route = this.route.description
+
+        if (!route.hasVideo || !route.isLocal || route.videoUrl.startsWith('http')) 
+            return isOnline
+
+        if (route.requiresDownload )
+            return route.isLocal && isOnline 
+
+        return true;
     }
 
     getRepo() {
@@ -137,10 +154,11 @@ export class RouteCard extends BaseCard implements Card<Route> {
     getDisplayProperties(): SummaryCardDisplayProps {
         let {points} = this.route.description
         if (points && !Array.isArray(points)) {
-            console.log( '~~~~ POINT incorrect format',this.route.description.id, this.route.description.title, points )
             points = undefined
         }
-        return {...this.route.description, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,canDelete:this.canDelete(),observer:this.cardObserver, points}
+
+        const loading = this.deleteObserver!==undefined
+        return {...this.route.description, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,canDelete:this.canDelete(),observer:this.cardObserver, points, loading}
 
     }
     getId(): string {
@@ -178,24 +196,75 @@ export class RouteCard extends BaseCard implements Card<Route> {
         this.getRepo().save(this.route)        
     }
 
+    delete():PromiseObserver<boolean> {
+        // already deleting
+        if (this.deleteObserver)
+            return this.deleteObserver
 
-    delete() {
+        this.deleteObserver = new PromiseObserver< boolean> ( this._delete() )
+        return this.deleteObserver
+    }
 
-        if (this.list) {
-            this.list.remove(this)
-            getRouteList().emitLists('updated')
+    protected async _delete():Promise<boolean> {
+
+        // let the caller of delete() consume an intialize the observer first
+        await waitNextTick()
+        let deleted:boolean = false
+
+        try {
+
+            this.deleteObserver.emit('started')
+            this.emitUpdate()
+
+            if ( this.list.getId()==='myRoutes') {
+                const route:RouteInfo = this.getRouteDescription()
+
+                if (route.isDownloaded) {
+                    await this.resetDownload()
+                }
+                else if (!route.isLocal) {
+                    await this.markDeleted()    
+                }
+                else {
+                    await this.deleteRoute()
+                } 
+                    
+
+            }
+            else {
+                await this.markDeleted()
+            }
+
+            
+            // remove from list in UI
+            this.deleteFromUIList();
+    
+            // delete route related user settings
+            this.deleteRouteUserSettings();
+
+
+            getRouteList().emitLists('updated');
+            deleted =true;   
+        }
+        catch(err) {
+            deleted =  false
+        }
+        finally {
+            this.deleteObserver.emit('done',deleted)
+            waitNextTick().then( ()=> { 
+                delete this.deleteObserver
+                this.emitUpdate()
+            })
+
         }
 
-        const key = this.buildSettingsKey()
-        useUserSettings().set(key,null)
+        
 
-        // TODO: 
-        //   if isLocal: remove from disk
-        //   else mark as deleted in other lists or disallow deletion
-        // if (this.route.description.isLocal) {
-        // 
-        //}
+        return deleted
+
     }
+
+
 
     start() {
         const service = getRouteList()
@@ -339,6 +408,36 @@ export class RouteCard extends BaseCard implements Card<Route> {
         this.ready = true;
         this.updateRoute(this.route)
         
+    }
+
+    protected deleteRouteUserSettings() {
+        const key = this.buildSettingsKey();
+        useUserSettings().set(key, null);
+    }
+
+    protected deleteFromUIList() {
+        if (this.list) {
+            this.list.remove(this);
+        }
+    }
+
+    protected async markDeleted():Promise<void> {
+        const descr = this.getRouteDescription()
+        descr.isDeleted = true
+
+        await this.save();
+    }
+
+    protected async resetDownload():Promise<void> {
+        const descr = this.getRouteDescription()
+        descr.isDownloaded = true
+
+        await this.save();
+
+    }
+
+    protected async deleteRoute():Promise<void> {
+        await this.getRepo().delete(this.route)        
     }
 
     

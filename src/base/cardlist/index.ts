@@ -1,3 +1,4 @@
+import { PromiseObserver } from "../types/observer"
 
 
 export interface Card<T>{
@@ -9,6 +10,7 @@ export interface Card<T>{
     getDisplayProperties()
     setInitialized(val:boolean):void
     reset():void
+    delete():PromiseObserver<boolean>
 
     isVisible():boolean
     setVisible(visible:boolean)

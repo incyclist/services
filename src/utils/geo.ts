@@ -1,5 +1,5 @@
 import { RoutePoint } from '../routes/base/types';
-import {rad,abs}  from './math'
+import {rad,abs, degrees}  from './math'
 
 
 const rEarth = 6378.100;
@@ -107,3 +107,41 @@ export const getLatLng = (position:LatLng|Array<number>):LatLng => {
     }
 }
 
+
+
+/**
+ * Returns the (initial) bearing between two points identified by lat1,lon1 and lat2,lon2
+ * 
+ * @param   {number} lat1 - Latitude of starting point
+ * @param   {number} lon1 - longitude of starting point
+ * @param   {number} lat2 - latitude of destination point
+ * @param   {number} lon2 - longitude of destination point
+ * @returns {number} Initial bearing in degrees from north.
+ *
+ * @example
+ *     var b1 = calculateHeaderFromPoints(52.205, 0.119,48.857, 2.351 ); // 156.2°
+ */
+
+export const calculateHeaderFromPoints = (p1:LatLng, p2:LatLng):number => {
+
+	// tanθ = sinΔλ⋅cosφ2 / cosφ1⋅sinφ2 − sinφ1⋅cosφ2⋅cosΔλ
+	// see mathforum.org/library/drmath/view/55417.html for derivation
+    try {
+        if (!p1?.lat || !p1?.lng || !p2?.lat || !p2?.lng)
+        return;
+
+        const φ1 = rad(p1.lat);
+        const φ2 = rad(p2.lat);    
+        const Δλ = rad(p2.lng-p1.lng)
+
+        const y  = Math.sin(Δλ) * Math.cos(φ2);
+        const x  = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+        const θ  = Math.atan2(y, x);
+
+        return ( degrees(θ)+360) % 360;
+
+    }
+    catch {
+        return;
+    }
+}

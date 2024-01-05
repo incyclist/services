@@ -1,11 +1,13 @@
 import { Card } from "../../../base/cardlist";
+import { PromiseObserver } from "../../../base/types/observer";
 import { useUserSettings } from "../../../settings";
 import { geo } from "../../../utils";
 import { LatLng } from "../../../utils/geo";
 import { Route } from "../../base/model/route";
 import { getRouteList } from "../service";
 import { FreeRideOption, FreeRideStartSettings } from "../types";
-import { BaseCard, RouteCardType } from "./cards";
+import { BaseCard } from "./base";
+import { AppStatus, RouteCardType } from "./types";
 
 
 
@@ -22,6 +24,16 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
 
     protected position: LatLng;
     protected options: [];
+
+    delete():PromiseObserver<boolean> {
+        // not possible to delete FreeRide Card
+        return PromiseObserver.alwaysReturning(false)
+    }
+
+    canStart(status:AppStatus) {
+        const {isOnline} = status
+        return isOnline
+    }
 
     setVisible(): void {
         this.visible = true // always visible

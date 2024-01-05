@@ -67,8 +67,13 @@ export class BinaryReader {
 }
 
 export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, url?:string}, scheme:string='file'):string=> {
-    if (info.type!=='url')
-        return info.url;
+    if (info.type!=='url') {
+        if (referenced.file) {
+            const fileName = info.filename.replace(info.name,referenced.file)
+            return `file:///${fileName}`;
+        }
+        return referenced.url;
+    }
 
     const target:{ file?:string, url?:string} = {}
 

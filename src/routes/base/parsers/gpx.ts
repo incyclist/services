@@ -1,4 +1,5 @@
 import { geo } from "../../../utils"
+import { valid } from "../../../utils/valid";
 import { RouteInfo, RoutePoint } from "../types"
 import { checkIsLoop, getRouteHash } from "../utils/route"
 import { XMLParser, XmlParserContext } from "./xml"
@@ -65,6 +66,7 @@ export class GPXParser extends XMLParser {
         const segments = Array.isArray(track.trkseg) ? track.trkseg : [track.trkseg]
         let prev;
         let startTime=null
+        
 
         segments.forEach( segment => {
             let points = []
@@ -75,7 +77,7 @@ export class GPXParser extends XMLParser {
                 points = keys.map( key=>segment?.trkpt[key])
             }
 
-            points.forEach( gpxPt=> {
+            points.forEach( (gpxPt)=> {
                 const point:EnhancedRoutePoint = {
                     lat:Number(gpxPt.lat),
                     lng:Number(gpxPt.lon),
@@ -99,6 +101,8 @@ export class GPXParser extends XMLParser {
                     }
                 }
 
+
+                point.cnt = context.route.points.length
                 context.route.points.push(point)
                 prev = point
             })
@@ -127,9 +131,35 @@ export class GPXParser extends XMLParser {
         return false;
     }
 
+
+
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected async parseVideo (context:XmlParserContext) {
         // no video in GPX fies, i.e. nothing to do
+    }
+
+    protected async addHeadings(points:Array<RoutePoint>,isLoop:boolean) {
+
+        let prevHeading:number;
+
+        points.forEach( (p,idx) => {
+            if (valid(p.heading)) {
+                prevHeading = p.heading
+                return;
+            }
+
+            let pNext;
+            if (idx===points.length-1) {
+                pNext = isLoop ? points[0] : undefined;
+            }
+            else {
+                pNext = points[idx+1]
+            }
+            const heading = geo.calculateHeaderFromPoints(p,pNext)
+            p.heading = heading!==undefined  ? heading : prevHeading
+            prevHeading = p.heading
+        })
     }
     
     protected async buildInfo ( context:XmlParserContext):Promise<RouteInfo> {
@@ -139,6 +169,7 @@ export class GPXParser extends XMLParser {
         if (!route.id)
             route.id = route.routeHash
         
+        const isLoop = checkIsLoop(route.points);
 
         const info:RouteInfo ={
             id:route.id,
@@ -153,9 +184,11 @@ export class GPXParser extends XMLParser {
             hasVideo: false,
             isDemo: false,
             isLocal: true,
-            isLoop: checkIsLoop(route.points),
+            isLoop,
             previewUrl: undefined    
         }
+
+        this.addHeadings(route.points,isLoop)
         return info
     }
 

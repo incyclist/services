@@ -44,7 +44,7 @@ describe('BikeLabParser',()=>{
             expect(data.distance).toBeCloseTo(4800,-2)
             expect(data.elevation).toBeCloseTo(242,0)
             expect(data.hasVideo).toBe(true)
-            expect(data.previewUrl).toBeUndefined()
+            expect(data.previewUrl).toBeNull()
             expect(data.videoFormat).toBe('mp4')
             //expect(data.videoUrl).toBe('file:///./__tests__/data/rlv/Triathlon_Woerrstadt_Loop.mp4')
             expect(data.isLocal).toBe(true)

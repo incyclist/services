@@ -84,6 +84,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             country: country,
             id: data['id'],
             previewUrl: data['previewURL'],
+            previewUrlLocal: data['preview'],
             distance:0,
             elevation:0,
             points:[],
@@ -199,6 +200,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             selectableSegments:data['segments'],
         }
         route.infoTexts = parseInformations(data['informations'])
+        route.next = route.video.next
 
         const videoUrl = getVideoUrl(fileInfo,route)
         if (videoUrl) {
@@ -336,7 +338,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             const elevationGain = altitude-prevAltitude
     
             const pi  = createPoint(pos, altitude, prevDistance);
-            
+            pi.point.cnt = i
             points.push(pi.point);
     
             route.distance = pi.point.routeDistance;
@@ -375,7 +377,7 @@ const getPreviewUrl = (info:FileInfo,route: RouteApiDetail):string => {
 
 
 function createPoint(pos: Position, altitude: number, prevDistance: number) {
-    const point = {
+    const point:RoutePoint = {
         lat: Number(pos.lat),
         lng: Number(pos.lon),
         routeDistance: Number(pos.distance),

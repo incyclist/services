@@ -7,7 +7,7 @@ export type RouteDescriptionQuery = {
 }
 
 export interface RouteApiDescription extends RouteBase {
-    routeId?: string; 
+    routeId?: string;   
     hash?: string;
     routeHash?: string;
     title: string;

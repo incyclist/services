@@ -32,11 +32,17 @@ export class Countries extends IncyclistService {
         return iso.map( i=>this.getCountryFromIso(i,locale))
     }
 
-    getIsoFromCountry(iso:string, locale?:string):string {
+    getIsoFromCountry(country:string, locale?:string):string {
         const list = this.getList(locale)
 
-        const info = list.countries[iso.toUpperCase()]
-        return Array.isArray(info) ? info[0] : info
+        const isos = Object.keys(list.countries)
+        const iso = isos.find( i=> {
+            const c = list.countries[i]
+            if (Array.isArray(c))
+                return c.includes(country)
+            return c===country
+        } )
+        return iso
     }
 
     getIsosFromCountries(countries:Array<string>, locale?:string):Array<string> {
@@ -73,7 +79,6 @@ export class Countries extends IncyclistService {
     
 
     }
-
-
-
 }
+
+export const getCountries = ()=> new Countries()

@@ -36,9 +36,9 @@ export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
 
 
     protected buildRouteInfo(descr:RouteDBApiDescription):RouteInfo {
-        const { id,title,localizedTitle,country,distance,elevation, category,provider, video, points,type} = descr
+        const { id,legacyId,title,localizedTitle,country,distance,elevation, category,provider, video, points,type,routeHash} = descr
         
-        const data:RouteInfo = { id,title,localizedTitle,country,distance,elevation,provider,category}
+        const data:RouteInfo = { id,legacyId,title,localizedTitle,country,distance,elevation,provider,category,routeHash}
 
         data.hasVideo = false;
         data.hasGpx = type==='gpx'
@@ -72,6 +72,15 @@ export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
         return true        
     }
 
+    protected checkLegacy(descr:RouteDBApiDescription ):RouteDBApiDescription {
+        if (descr.routeId) {
+            descr.legacyId = descr.id
+            descr.id = descr.routeId
+            delete descr.routeId
+        }
+        return descr
+    }
+
     protected async loadDescriptions():Promise<Array<RouteDBApiDescription>> {
 
         const add = (data:JSONObject, type:'video'|'gpx') => {
@@ -96,9 +105,11 @@ export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
         const res = await Promise.allSettled( [videos,routes]) 
         res.forEach( p => {
             if (p.status==='fulfilled' && p.value) {                   
-                descriptions.push( ...p.value)                
+                const data = p.value.map( d=>this.checkLegacy(d))
+                descriptions.push( ...data)
             }
         })
+       
         return descriptions;
     }
 

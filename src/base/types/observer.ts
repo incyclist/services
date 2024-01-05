@@ -54,22 +54,38 @@ export class Observer   implements IObserver  {
 export class PromiseObserver<T> extends Observer {
     promise: Promise<T>
 
+    static alwaysReturning<T> ( res?:T) {
+        const fn = async (): Promise<T> => { return res}
+        const promise = new PromiseObserver<T>( fn() )
+        promise.start()
+        return promise
+    }
+
     constructor(promise: Promise<T>) {
         super()
         this.promise = promise
     }
 
-    async start():Promise<T> {
-        this.emitter.emit('started')
-        this.promise
-            .then( (res:T) => {
-                this.emitter.emit('done',res)
-                return res
-            })
-            .catch(err => this.emitter('error',err))
+    start():Promise<T> {
+        return new Promise( (resolve,reject) => {
+            this.emitter.emit('started')
 
-        return this.promise
+            this.promise
+                .then( (res:T) => {
+                    this.emitter.emit('done',res)
+                    resolve(res)
+                })
+                .catch(err => {
+                    this.emitter('error',err)
+                    reject(err)
+                })
+    
+        })
+
     }
+
+
+
 
     async wait():Promise<T> {
         try {

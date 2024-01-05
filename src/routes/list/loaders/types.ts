@@ -3,14 +3,15 @@ import { valid } from "../../../utils/valid";
 import { RouteApiDescription, RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
-import { checkIsLoop } from "../../base/utils/route";
+import { checkIsLoop, getRouteHash } from "../../base/utils/route";
 
 export interface RouteInfoDBEntry extends RouteInfo {
     pointsEncoded?:string
 }
 
 export interface RouteDBApiDescription extends RouteApiDescription {
-    type: 'video'|'gpx'
+    type: 'video'|'gpx',
+    legacyId?:string
 }
 
 interface MinimalDescription {
@@ -38,6 +39,21 @@ export abstract class Loader<T extends MinimalDescription> {
         }
 
         return true;
+    }
+
+    protected verifyRouteHash(route:Route) {
+        const {description,details} = route
+
+        if (description.points && !description.routeHash) {
+            if (details?.routeHash) {
+                description.routeHash = details.routeHash
+                return;
+            }
+
+            const data:RouteApiDetail = details || { id:description.id,title:description.title,points:description.points}
+            description.routeHash = getRouteHash( data) 
+        }
+
     }
 
     protected async verifyCountry(route:Route) {
@@ -134,11 +150,17 @@ export abstract class Loader<T extends MinimalDescription> {
                 route.description.videoFormat = details.video.format
             }
             if (!valid(route.description.previewUrl)) {
-                route.description.previewUrl = details.previewUrl
+                route.description.previewUrl = details.previewUrl                
             }
+           
             route.description.hasGpx = details.points.find( p=> p.lat && p.lng)!==undefined
+            route.description.next = details.video?.next
+            
 
         }
+
+        if (!valid(route.description.routeHash))
+            route.description.routeHash = details.routeHash
 
         route.description.isLoop = checkIsLoop(route.description.points)
 
@@ -146,4 +168,9 @@ export abstract class Loader<T extends MinimalDescription> {
 
 
 }
+
+export type LoadDetailsTargets = Array<{
+    route: Route;
+    added: boolean;
+}>;
 

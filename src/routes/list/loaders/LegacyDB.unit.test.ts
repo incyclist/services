@@ -30,15 +30,19 @@ describe('LegacyDBLoader',()=>{
     
             videosRepo.read = jest.fn().mockResolvedValue(videosData)
             routesRepo.read = jest.fn().mockResolvedValue(routesData)
-    
+
+            const routeIdCnt = videosData.filter( r=>r.routeId!==undefined)?.length
 
             await new Promise(done=>{
                 loader.load()
                     .on('route.added', route=>{routes.push(route)})
                     .on('done',done)}
                 )
-            
+
+            const legacyIdCnt = routes.filter( r=>r.description.legacyId!==undefined)?.length
+            expect(legacyIdCnt).toBe(routeIdCnt)
             expect(routes.length).toBe(34)
+
             expect(routes.map(r=>r.description)).toMatchSnapshot()
         })
 

@@ -2,6 +2,8 @@ import routesData from '../../../../__tests__/data/db/routes.json';
 import videosData from '../../../../__tests__/data/db/videos.json';
 import sydney from '../../../../__tests__/data/routes/sydney.json'
 import holzweiler from '../../../../__tests__/data/rlv/holzweiler.json'
+import valdrome from '../../../../__tests__/data/rlv/valdrome.json'
+
 import repoData from '../../../../__tests__/data/db/db.json'
 import { JSONObject, JsonRepository } from '../../../api';
 import { Countries } from '../../../i18n/countries';
@@ -9,19 +11,21 @@ import { Route } from "../../base/model/route";
 import { RoutesDbLoader } from './db';
 import { RouteInfo } from '../../base/types';
 
-async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, type:'video'|'gpx' = 'gpx') {
+async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, type:'video'|'gpx' = 'gpx', legacy:boolean=false) {
     const videosRepo = JsonRepository.create('videos');
     const routesRepo = JsonRepository.create('routes');
     const countries = new Countries();
     countries.getIsoFromLatLng = jest.fn().mockResolvedValue('AU');
 
     videosRepo.read = jest.fn(async (file) => {
-        if (file === 'videos') {
+        if (file === 'routes') {
             const route = type==='video' ? videosData.find(r => r.id === id) : undefined;
             return [route] as unknown as JSONObject;
         }
-        if (file === id)
+        if (file === id && !legacy)
             return holzweiler as JSONObject;
+        if (file === id && legacy)
+            return valdrome as unknown as JSONObject
 
         return null as unknown as JSONObject;
 
@@ -29,6 +33,8 @@ async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, type:'v
 
     routesRepo.read = jest.fn(async (file) => {
         if (file === 'db') {
+            if (legacy) return null as unknown as JSONObject;
+
             const route = repoData.find(r => r.id === id);
             return [route] as unknown as JSONObject;
         }
@@ -119,6 +125,8 @@ describe('LegacyDBLoader',()=>{
             
         })
 
+
+
         test('GPX File from DB',async ()=>{
             const routes:Array<Route> = []
 
@@ -163,6 +171,33 @@ describe('LegacyDBLoader',()=>{
             
             expect(routes[0].description).toMatchObject(before)            
         })
+
+        test('Video File from Legacy',async ()=>{
+            const routes:Array<Route> = []
+
+            
+            const id = 'a07c62c0-61a0-4f81-b55f-e743b9245006'
+            const before = {...repoData.find( d=>d.id===id)} as RouteInfo
+            delete before.previewUrl
+
+            await dbTest(loader, routes,id,'video',true);            
+            expect(routes.length).toBe(1)
+            
+            const descr = routes[0].description
+            expect(descr.points).toBeDefined()
+            expect(descr.legacyId).toBeDefined()
+
+
+
+            if (!before.points)
+                delete descr.points
+            descr['routeId'] = descr.id
+            descr.id = descr.legacyId
+            delete descr.legacyId
+            
+            expect(routes[0].description).toMatchObject({...before,isLoop:true,next:'3aefb91a-be3e-42c1-b7cb-47bc80bebce5'})            
+        })
+
 
         test('Downloadable Video File from DB',async ()=>{
             const routes:Array<Route> = []

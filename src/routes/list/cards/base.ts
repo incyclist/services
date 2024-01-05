@@ -1,10 +1,10 @@
 import { Card   } from "../../../base/cardlist";
-import { ImportFilter } from "../../../base/cardlist/types";
+import { PromiseObserver } from "../../../base/types/observer";
 import { useUserSettings } from "../../../settings";
 import { Route } from "../../base/model/route";
 
 export class BaseCard implements Card<Route> {
-   
+  
 
     protected visible=true;
     protected initialized
@@ -19,6 +19,9 @@ export class BaseCard implements Card<Route> {
     }
     
 
+    delete(): PromiseObserver<boolean> {
+        throw new Error("Method not implemented.");
+    }
 
     getId(): string {
         throw new Error("Method not implemented.");
@@ -72,58 +75,6 @@ export class BaseCard implements Card<Route> {
         catch (err) {
             return defValue
         }
-    }
-
-}
-
-export type RouteCardType = 'Import' | 'Route' | 'Free-Ride'
-
-
-const DEFAULT_TITLE = 'Import Route'
-const DEFAULT_FILTERS = [
-    { name: 'Routes', extensions: ['gpx','epm','xml'] },
-    { name: 'Tracks', extensions: ['gpx'] },
-    { name: 'RLV: ErgoPlanet', extensions: ['epm'] }, 
-    { name: 'RLV: Incyclist, KWT, Rouvy,Virtualtrainer ', extensions: ['xml'] }, 
-]       
-
-export interface RouteImportProps {
-    title: string,
-    filters: Array<ImportFilter>
-    visible:boolean
-}
-
-export class RouteImportCard extends BaseCard implements Card<Route> {
-
-    setVisible(): void {
-        this.visible = true // always visible
-    }
-
-    setData() {
-        //ignore
-    }
-    getData() {
-        return undefined
-    }
-    getCardType():RouteCardType {
-        return 'Import'
-    }
-    getId():RouteCardType {
-        return 'Import'
-    }
-
-    getFilters(): Array<ImportFilter> {
-        return DEFAULT_FILTERS
-    }
-
-    getTitle(): string{
-        return DEFAULT_TITLE;
-    }
-
-    getDisplayProperties(): RouteImportProps {
-        const title = this.getTitle()
-        const filters = this.getFilters()
-        return {title,filters,visible:true}
     }
 
 }

@@ -63,6 +63,11 @@ export class JsonRepository {
  
     }
 
+    async delete(objectName:string):Promise<boolean> {
+        return await this.access.delete(objectName)
+    }
+
+
     protected async open():Promise<boolean> {
 
         if (this.access)
@@ -98,6 +103,7 @@ export class JsonRepository {
         this.access = null;
         return true
     }
+
    
 
 

@@ -1,10 +1,11 @@
 import { Observer, PromiseObserver } from "../../../base/types/observer";
 import IncyclistRoutesApi from "../../base/api";
-import { RouteApiDescription } from "../../base/api/types";
+import { RouteApiDescription, RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
 import { RoutesDbLoader } from "./db";
 import { Loader } from "./types";
+import { LoadDetailsTargets } from "./types";
 
 const valid = (v) => (v!==undefined && v!==null)
 
@@ -37,24 +38,48 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
             // join lists
             const items: Array<{route:Route, added:boolean}> = []
-            res.forEach( p  => { 
-                if (p.status==='fulfilled') {  
-                    p.value.forEach( descr=> {
-                        const description = this.buildRouteInfo(descr)
 
-                        // TODO: check if route is already in list (loaded from file)
-                        // If so: only update if it has changed on server 
-                        // Also: don't load details for these routes                        
+            // for loop as we have asyncs here
+            for ( let i=0; i<res.length;i++) {
+                const p = res[i]
+
+                if (p.status==='fulfilled') {  
+                    for (let j=0;j<p.value.length;j++) {
+                        const descr = p.value[j]
+
+                    
+                        let description;
+
+                        const existing = this.getDescriptionFromDB(descr.routeId||descr.id)
+                        if (existing) {
+                            const details = await this.getDetailsFromDB(existing.id)
+                            if (details) {
+                                console.log('~~~ details were loaded from DB', existing.id, descr.title)
+                                continue;
+                            }
+                            console.log('~~~ failed loading details from DB', existing.id, descr.title)
+                            description = existing
+                            
+                        }
+                        else {
+                            console.log('~~~ route was not yet exisiting', descr.id, descr.title)
+                            description = this.buildRouteInfo(descr)
+                        }
+                        
+                        
                         const route = new Route( description)
 
                         const isComplete = this.isCompleted(route)
-                        if (isComplete)
+                        
+                        if (isComplete) {
+                            this.verifyRouteHash(route)
                             this.emitRouteAdded(route)
+                        }
                         items.push({route,added:isComplete})
 
-                    })
+                    }
                 }
-            })
+            }
 
             await this.loadDetails(items)
             
@@ -69,9 +94,21 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         delete this.loadObserver
     }
 
-    async save(route:Route):Promise<void> {
+    protected getDescriptionFromDB(id:string) {
         const db = new RoutesDbLoader()
-        await db.save(route)
+        return db.getDescription(id)
+
+    }
+    protected async getDetailsFromDB(id:string):Promise<RouteApiDetail> {
+
+        const db = new RoutesDbLoader()        
+        return await db.getDetails(id)
+
+    }
+
+    async save(route:Route,enforcedWriteDetails:boolean=false):Promise<void> {
+        const db = new RoutesDbLoader()
+        await db.save(route,enforcedWriteDetails)
     }
 
 
@@ -91,47 +128,83 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         return descr?.hasVideo && !descr?.previewUrl
     }
 
-    async loadDetails( items:Array<{route:Route, added:boolean}>) {
-        
-        const promises = items.map ( i => this.getDetails(i.route) )
+    protected async loadDetailsFromRepo( items:LoadDetailsTargets):Promise<LoadDetailsTargets>{
+
+        // all missing should be loaded from server
+        const promises = items.map ( i => this.getDetailsFromDB (i.route.description.id).then( details => { this.addDetails(i.route,details)}) )
 
         const res = await Promise.allSettled(promises) 
 
-        const success = []
-        const failed = []
-        res.forEach ( (pr,idx) => {
-            if (pr.status==='fulfilled') success.push( items[idx])
-            else failed.push(items[idx])
-        })
+        const {failed} = this.processLoadDetailsResult(res, items, false);
+        return failed
+        
+    }
 
-        success.forEach( item => {
+
+    async loadDetails( items:LoadDetailsTargets) {
+
+
+        // first try to load details from repo
+        const failed = await this.loadDetailsFromRepo(items)
+
+
+        // all missing should be loaded from server
+        const promises = failed.map ( i => this.getDetails(i.route) )
+
+        const res = await Promise.allSettled(promises) 
+
+        this.processLoadDetailsResult(res, items, true);
+
+    }
+
+    private processLoadDetailsResult(res: PromiseSettledResult<void>[],items: LoadDetailsTargets, save?:boolean):{success:LoadDetailsTargets,  failed: LoadDetailsTargets} {
+        const success:LoadDetailsTargets = []
+        const failed: LoadDetailsTargets = []
+
+        res.forEach((pr, idx) => {
+            if (pr.status === 'fulfilled') success.push(items[idx]);
+            else failed.push(items[idx]);
+        });
+
+        success.forEach(item => {
             if (item.added)
-                this.emitRouteUpdate(item.route)    
-            else 
-                this.emitRouteAdded(item.route)
+                this.emitRouteUpdate(item.route);
 
-            
-            this.verifyCountry(item.route)
-        })
+            else
+                this.emitRouteAdded(item.route);
 
+
+            this.verifyCountry(item.route);
+            this.verifyRouteHash(item.route)
+
+            if (save)
+                this.save(item.route, true);
+
+        });
+
+        return {success,failed}
     }
 
     protected async getDetails(route:Route):Promise<void> {
 
-        const details = await this.api.getRouteDetails(route.description.id)
+        const details = await this.api.getRouteDetails(route.description.legacyId||route.description.id)
         this.addDetails(route,details)
 
             
     }
 
     protected buildRouteInfo( descr:RouteApiDescription, isLocal?:boolean): RouteInfo {
-        const { id,title,localizedTitle,country,distance,elevation, category,provider, video, points,previewUrl} = descr
+        console.log('~~~ buildRouteInfo', descr)
+        const { id,routeId,title,localizedTitle,country,distance,elevation, category,provider, video, points,previewUrl,routeHash} = descr
         
-        const data:RouteInfo = { id,title,localizedTitle,country,distance,elevation,provider,category,previewUrl}
+        const data:RouteInfo = { title,localizedTitle,country,distance,elevation,provider,category,previewUrl,routeHash}
 
         data.hasVideo = false;
         data.hasGpx = false;
         data.isLocal = isLocal||false
+        data.id = routeId || id
+        data.legacyId = routeId? id: undefined
+
 
         this.updateRouteCountry(data,{descr})
         this.updateRouteTitle(data,{descr})
