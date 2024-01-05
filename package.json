@@ -1,6 +1,6 @@
 {
   "name": "incyclist-services",
-  "version": "1.1.75",
+  "version": "1.1.76",
   "peerDependencies": {
     "gd-eventlog": "^0.1.26"
   },
@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "axios": "^1.6.1",
-    "incyclist-devices": "^2.1.37",
+    "incyclist-devices": "file:../devices",
     "md5": "^2.3.0",
     "promise.any": "^2.0.6",
     "uuid": "^9.0.0",
