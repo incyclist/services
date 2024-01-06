@@ -17,6 +17,7 @@ import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
 import { RouteListObserver } from "./RouteListObserver";
+import IncyclistRoutesApi from "../base/api";
 
 
 @Singleton
@@ -474,6 +475,8 @@ export class RouteListService extends IncyclistService {
 
     protected addRoute(route:Route):void {
         const list = this.selectList(route)
+        console.log('~~~ addCard ', route.description.title,route.description.id, list.getId())
+
         const card = new RouteCard(route,{list})
         card.verify()
         list.add( card)
@@ -495,9 +498,9 @@ export class RouteListService extends IncyclistService {
 
     protected async addFromApi(route:Route):Promise<void> {
 
-        
+        console.log('~~~ addCard from API', route.description.title)
         const existing = this.findCard(route)
-        if (existing)        
+        if (existing) 
             return;
         this.addRoute(route)
     }
@@ -569,6 +572,18 @@ export class RouteListService extends IncyclistService {
 
 
     async createPreview( descr:RouteInfo) {
+
+        try {
+            const routesApi = IncyclistRoutesApi.getInstance() 
+            const previewUrl = await routesApi.getRoutePreview(descr.id)
+            if (previewUrl) {
+                descr.previewUrl = previewUrl
+                return;
+            }
+        }
+        catch {
+            // ignrore - we will try to create it with ffmpeg
+        }
         
         // As we would be overloading ffmpeg by creating multiple screenshots
         // at the same time, we are queueing the requests        

@@ -93,6 +93,18 @@ export default class IncyclistRoutesApi {
         }
     }
 
+    async getRoutePreview( routeId: string): Promise<string> {
+
+        try {
+            const res = await this._get( `/${routeId}/preview` )              
+            return res.data?.url;           
+        }
+        catch(err) {
+            this.logError(err,'getRoutePreview', {routeId})
+            return undefined
+        }
+    }
+
     async reload() {
         try {
             this._get( `/reload` )                   
