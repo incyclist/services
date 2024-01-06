@@ -169,12 +169,22 @@ describe('RouteListService',()=>{
             service = prepareMock(null,{mockLoad:true})
         })
 
-        test('typical list',()=>{
+        test('country filter',()=>{
             const {routes} = service.search({country:'Australia'})
             expect(routes.length).toBe(2)
-            expect(routes.map(r=>r.title)).toEqual( ['Sydney Opera House and Botanic Garden', 'Captain  Cook Highway'])
-            
+            expect(routes.map(r=>r.title)).toEqual( ['Sydney Opera House and Botanic Garden', 'Captain  Cook Highway'])    
+        })
 
+        test('title filter',()=>{
+            const {routes} = service.search({title:'Sydney'})
+            expect(routes.length).toBe(1)
+            expect(routes.map(r=>r.title)).toEqual( ['Sydney Opera House and Botanic Garden' ])    
+        })
+
+        test('title filter should be case insensitive',()=>{
+            const {routes} = service.search({title:'sydney'})
+            expect(routes.length).toBe(1)
+            expect(routes.map(r=>r.title)).toEqual( ['Sydney Opera House and Botanic Garden' ])    
         })
 
     })

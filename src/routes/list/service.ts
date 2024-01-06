@@ -154,8 +154,10 @@ export class RouteListService extends IncyclistService {
             let routes:Array<SummaryCardDisplayProps> =   this.getAllCards().map( c=> c.getDisplayProperties())
     
     
-            if (filters?.title && filters.title.length)
-                routes = routes.filter( r => r.title.includes(filters.title))
+            if (filters?.title && filters.title.length) {
+                
+                routes = routes.filter( r => r.title?.toUpperCase().includes(filters.title.toUpperCase()))
+            }
     
             if (filters?.distance?.min)
                 routes = routes.filter( r => r.distance>=filters?.distance?.min)
