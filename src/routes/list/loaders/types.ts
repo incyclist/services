@@ -1,4 +1,5 @@
 import { Observer } from "../../../base/types/observer";
+import { waitNextTick } from "../../../utils";
 import { valid } from "../../../utils/valid";
 import { RouteApiDescription, RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
@@ -130,6 +131,11 @@ export abstract class Loader<T extends MinimalDescription> {
     protected emitDone() {
         if (this.loadObserver)
             this.loadObserver.emit('done')
+        
+        waitNextTick().then(()=>{
+            this.loadObserver.reset()
+            delete this.loadObserver
+        })
     }
 
     protected addDetails(route:Route, details:RouteApiDetail) {

@@ -10,12 +10,30 @@ import { Countries } from '../../../i18n/countries';
 import { Route } from "../../base/model/route";
 import { RoutesDbLoader } from './db';
 import { RouteInfo } from '../../base/types';
+import { RoutesLegacyDbLoader } from './LegacyDB';
 
-async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, type:'video'|'gpx' = 'gpx', legacy:boolean=false) {
-    const videosRepo = JsonRepository.create('videos');
-    const routesRepo = JsonRepository.create('routes');
+class MockRepository extends JsonRepository {
+    static create(repoName:string):JsonRepository {
+        return super.create(repoName)
+    }
+    static reset() {
+        JsonRepository._instances = {}
+        
+    }
+}
+
+
+async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, t:'video'|'gpx' = 'gpx', legacy:boolean=false) {
+    const videosRepo = MockRepository.create('videos');
+    const routesRepo = MockRepository.create('routes');
+
+
     const countries = new Countries();
     countries.getIsoFromLatLng = jest.fn().mockResolvedValue('AU');
+    const type = t||'gpx'
+
+    videosRepo['id'] = `${type}-${id}`
+    routesRepo['id'] = `${type}-${id}`
 
     videosRepo.read = jest.fn(async (file) => {
         if (file === 'routes') {
@@ -53,13 +71,25 @@ async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, type:'v
     routesRepo.write = jest.fn();
 
 
+    
     await new Promise(done => {
         loader.load()
             .on('route.added', route => { routes.push(route); })
             .on('route.updated', done)
-            .on('done', () => { setTimeout(done, 1000); });
+            .on('done', () => {                 
+                setTimeout(done, 100); 
+            });           
     });
+
+    console.log('done - observer:',loader['loadObserver'])
+    videosRepo.read = jest.fn()
+    routesRepo.read = jest.fn()
+
 }
+
+
+
+
 
 
 describe('LegacyDBLoader',()=>{
@@ -67,54 +97,27 @@ describe('LegacyDBLoader',()=>{
 
   
         let loader:RoutesDbLoader;
+        let loaderObj 
+        let legacy;
         beforeEach( ()=>{
-            loader = new RoutesDbLoader()                    
+            loader = loaderObj = new RoutesDbLoader()                    
+            legacy = new RoutesLegacyDbLoader()
             
         })
 
         afterEach( ()=>{
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (loader as any).reset()
+            // cleanup Singletons
+            loaderObj.reset()            
+            legacy.reset()
+            MockRepository.reset()
         })
 
         test('GPX File from Legacy',async ()=>{
-            const routes:Array<Route> = []
-
-            const videosRepo = JsonRepository.create('videos')
-            const routesRepo = JsonRepository.create('routes')
-            const countries = new Countries()
-            countries.getIsoFromLatLng = jest.fn().mockResolvedValue('AU')
-    
-            videosRepo.read = jest.fn( async file=> {
-                if (file==='videos')
-                    return [] as JSONObject
-                return null as unknown as JSONObject
-
-            })
-
-            routesRepo.read = jest.fn( async file =>{
-                if (file==='db')
-                    return null as unknown as JSONObject
-                if (file==='routes') {
-                    const route = routesData.find( r=>r.id==='5c7a6ae31b1bef04c5854cb3') 
-                    return [route] as unknown as JSONObject
-                }
-                if (file==='5c7a6ae31b1bef04c5854cb3')
-                    return sydney
-
-                return null as unknown as JSONObject
-            })
-
-            routesRepo.write = jest.fn()
-    
-
-            await new Promise(done=>{
-                loader.load()
-                    .on('route.added', route=>{routes.push(route)})
-                    .on('route.updated', done)
-                    .on('done',()=>{setTimeout(done,1000)})
-            })
             
+            
+            const routes:Array<Route> = []
+            await dbTest(loader, routes,'5c7a6ae31b1bef04c5854cb3','gpx',true);            
+
             expect(routes.length).toBe(1)
             
             const descr = routes[0].description
@@ -138,7 +141,10 @@ describe('LegacyDBLoader',()=>{
             expect(descr.isLoop).toBe(true)
             expect(descr.isLocal).toBe(false)
             expect(routes[0]).toMatchSnapshot()
-            
+
+            loaderObj = {...loader}
+            expect(loaderObj['loadObserver'] ).toBeUndefined()
+
         })
 
         test('Local GPX File from DB',async ()=>{

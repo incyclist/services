@@ -14,7 +14,7 @@ export abstract class DBLoader<T> extends Loader<T> {
     protected abstract loadDescriptions(): Promise<Array<T>>;
     protected abstract buildRouteDBInfo(descr: RouteInfo): T;
 
-    load(): Observer {
+    load(): Observer {       
         if (this.loadObserver)
             return this.loadObserver;
 

@@ -13,7 +13,6 @@ export class JsonRepository {
         return JsonRepository._instances[repoName]
     }
 
-
     protected name: string;
     protected db: string
     protected logger: EventLogger
@@ -24,7 +23,7 @@ export class JsonRepository {
         this.logger = new EventLogger(`Repo-${this.name}`)
     }
 
-
+    
 
     getName():string {
         return this.name
