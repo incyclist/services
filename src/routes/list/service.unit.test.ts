@@ -172,7 +172,7 @@ describe('RouteListService',()=>{
         test('country filter',()=>{
             const {routes} = service.search({country:'Australia'})
             expect(routes.length).toBe(2)
-            expect(routes.map(r=>r.title)).toEqual( ['Sydney Opera House and Botanic Garden', 'Captain  Cook Highway'])    
+            expect(routes.map(r=>r.title)).toEqual( ['Captain  Cook Highway','Sydney Opera House and Botanic Garden'])    
         })
 
         test('title filter',()=>{

@@ -72,7 +72,7 @@ export class RouteListService extends IncyclistService {
     
 
     open():{observer:RouteListObserver,lists:Array<CardList<Route>>} {
-        try {
+                try {
             this.logEvent( {message:'open route list'})
 
             const hasLists = this.getLists()?.length>0
@@ -193,6 +193,7 @@ export class RouteListService extends IncyclistService {
                 routes = routes.filter( r => ( loop && r.isLoop) || (p2p && !r.isLoop ) )
             }
 
+            routes = routes.sort( (a,b) => a.title>b.title? 1 : -1)
             return {routes,filters,observer:this.observer}
     
         }
