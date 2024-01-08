@@ -536,8 +536,6 @@ export class DeviceRideService  extends EventEmitter{
 
 
                 bike.setCyclingMode(mode,settings)
-
-                console.log('~~~ mode',mode,'settings',settings)
             }
 
 

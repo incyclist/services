@@ -54,15 +54,12 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
                         if (existing) {
                             const details = await this.getDetailsFromDB(existing.id)
                             if (details) {
-                                console.log('~~~ details were loaded from DB', existing.id, descr.title)
                                 continue;
                             }
-                            console.log('~~~ failed loading details from DB', existing.id, descr.title)
                             description = existing
                             
                         }
                         else {
-                            console.log('~~~ route was not yet exisiting', descr.id, descr.title)
                             description = this.buildRouteInfo(descr)
                         }
                         
@@ -194,7 +191,6 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     }
 
     protected buildRouteInfo( descr:RouteApiDescription, isLocal?:boolean): RouteInfo {
-        console.log('~~~ buildRouteInfo', descr)
         const { id,routeId,title,localizedTitle,country,distance,elevation, category,provider, video, points,previewUrl,routeHash} = descr
         
         const data:RouteInfo = { title,localizedTitle,country,distance,elevation,provider,category,previewUrl,routeHash}

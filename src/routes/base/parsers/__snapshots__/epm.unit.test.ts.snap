@@ -16,6 +16,7 @@ exports[`IncyclistParser GPX import valid file 1`] = `
     "localizedTitle": {
       "en": "San_Leo",
     },
+    "originalName": "San_Leo",
     "points": [
       {
         "distance": 0,
@@ -17412,6 +17413,7 @@ exports[`IncyclistParser GPX import valid file 1`] = `
       "en": "San_Leo",
     },
     "next": undefined,
+    "originalName": "San_Leo",
     "points": [
       {
         "distance": 0,

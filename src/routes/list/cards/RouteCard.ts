@@ -290,8 +290,11 @@ export class RouteCard extends BaseCard implements Card<Route> {
     download(): Observer {
         if (!this.downloadObserver) {
             
-            // TODO
-
+            /*
+            const video = getBindings().video
+            const route = this.getRouteDescription()
+            this.downloadObserver = new PromiseObserver( )
+            */
             
     
         }
@@ -313,7 +316,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const route = this.getRouteDescription()
         this.convertObserver = new ConvertObserver()
 
-        video.convert(route.videoUrl)
+        video.convert(route.videoUrl,{enforceSlow:true})
             .then( observer=> { this.monitorConversion(route, observer);})
             .catch( err => { this.handleConversionError(err)})
         return this.convertObserver

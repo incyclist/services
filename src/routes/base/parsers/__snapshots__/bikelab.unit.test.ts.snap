@@ -16,6 +16,7 @@ exports[`BikeLabParser import valid file 1`] = `
     "localizedTitle": {
       "en": "Randa",
     },
+    "originalName": undefined,
     "points": [
       {
         "elevation": 287.419067382813,

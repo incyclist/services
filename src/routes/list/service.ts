@@ -71,7 +71,7 @@ export class RouteListService extends IncyclistService {
     getScreenProps() { return this.screenProps}
     
 
-    open():RouteListObserver {
+    open():{observer:RouteListObserver,lists:Array<CardList<Route>>} {
         try {
             this.logEvent( {message:'open route list'})
 
@@ -88,7 +88,8 @@ export class RouteListService extends IncyclistService {
                     this.emitLists('loaded')
                 })
             }
-            this.getLists()?.forEach( list=> {
+
+            this.getLists(false)?.forEach( list=> {
                 list.getCards()?.forEach( (card,idx) => {
                     card.setInitialized(false)
                     if (idx>0)
@@ -120,7 +121,7 @@ export class RouteListService extends IncyclistService {
         catch (err) {
             this.logError(err,'open')
         }
-        return this.observer
+        return {observer: this.observer, lists:this.getLists() }
     }
 
 
@@ -142,7 +143,7 @@ export class RouteListService extends IncyclistService {
 
     }
  
-    search( filters?:SearchFilter ) {
+    search( requestedFilters?:SearchFilter ) {
         if (!this.initialized)
             this.preload();
 
@@ -150,7 +151,10 @@ export class RouteListService extends IncyclistService {
             this.observer = new RouteListObserver(this)
 
         try {
-            this.filters = filters||{}
+            if (requestedFilters)
+                this.filters = requestedFilters
+            const filters = requestedFilters || this.filters
+
 
             let routes:Array<SummaryCardDisplayProps> =   this.getAllCards().map( c=> c.getDisplayProperties())
     
@@ -235,12 +239,16 @@ export class RouteListService extends IncyclistService {
 
     }
 
-    onCarouselInitialized(list:CardList<Route> /*,item,itemsInSlide*/) {
+    onCarouselInitialized(list:CardList<Route>, item,itemsInSlide) {
         try {
-            list.getCards().forEach( card => {
+            list.getCards().forEach( (card,idx) => {
                 card.setInitialized(true)
-                card.setVisible(true)
+                if (idx<item+itemsInSlide+2) {
+
+                    card.setVisible(true)
+                }
             })
+            setTimeout( ()=>{ this.onCarouselUpdated(list,item,itemsInSlide)}, 1000)
         }
         catch(err) {
             this.logError(err,'onCarouselInitialized')
@@ -248,8 +256,20 @@ export class RouteListService extends IncyclistService {
         
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     onCarouselUpdated(list,item,itemsInSlide) {
-        console.log('~~~ UPDATED',list,item,itemsInSlide)
+        try {
+            list.getCards().forEach( (card,idx) => {
+                if (idx>=item && idx<item+itemsInSlide+10 && !card.isVisible()) {
+
+                    card.setVisible(true)
+                }
+            })
+        }
+        catch(err) {
+            this.logError(err,'onCarouselInitialized')
+        }
+
     }
 
 
@@ -464,7 +484,6 @@ export class RouteListService extends IncyclistService {
             return countries.sort( sortFn)
         }
         catch (err) {
-            console.log('~~~ ERROR',err)
             this.logError(err,'getFilterCountries')
             return []
         }
@@ -475,7 +494,6 @@ export class RouteListService extends IncyclistService {
 
     protected addRoute(route:Route):void {
         const list = this.selectList(route)
-        console.log('~~~ addCard ', route.description.title,route.description.id, list.getId())
 
         const card = new RouteCard(route,{list})
         card.verify()
@@ -498,7 +516,6 @@ export class RouteListService extends IncyclistService {
 
     protected async addFromApi(route:Route):Promise<void> {
 
-        console.log('~~~ addCard from API', route.description.title)
         const existing = this.findCard(route)
         if (existing) 
             return;
@@ -575,13 +592,20 @@ export class RouteListService extends IncyclistService {
 
         try {
             const routesApi = IncyclistRoutesApi.getInstance() 
-            const previewUrl = await routesApi.getRoutePreview(descr.id)
+            const res = await Promise.allSettled([
+                routesApi.getRoutePreview(descr.id),
+                routesApi.getRoutePreview(descr.originalName||descr.title)
+            ])
+
+            const previewUrl = (res[0].status==='fulfilled' ? res[0].value:undefined) || 
+                               (res[1].status==='fulfilled' ? res[1].value:undefined)
             if (previewUrl) {
                 descr.previewUrl = previewUrl
                 return;
             }
         }
-        catch {
+        catch (err){
+            console.log('~~~ ERR',err)
             // ignrore - we will try to create it with ffmpeg
         }
         
@@ -668,19 +692,34 @@ export class RouteListService extends IncyclistService {
     protected findCard(target:Route|string):{ card:RouteCard, list:CardList<Route>} {
         
         let id:string;
+        let legacyId;
         if (typeof target==='string') {
             id = target
         }
         else {
             const route = target as Route
             id = route.description.id
+            legacyId = route.description.legacyId
         }
 
 
-        let card =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===id) as RouteCard
+        let card =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===id || c.getData()?.description?.legacyId===id ) as RouteCard
         if (card)
             return {card,list:this.myRoutes}
-        
+
+        if (legacyId) {
+            const legacyCard =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===legacyId ) as RouteCard
+            if (legacyCard) {
+                this.myRoutes.remove(legacyCard)
+                const idx = this.routes.findIndex( r => r.description.id===legacyId)
+                if (idx!==-1) {
+                    this.routes.splice(idx,1)
+                }
+                return
+            }
+        }
+    
+            
         card = this.selectedRoutes.getCards().find(c=>c.getData()?.description?.id===id)  as RouteCard
         if (card)
             return {card,list:this.selectedRoutes}

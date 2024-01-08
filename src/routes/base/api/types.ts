@@ -41,6 +41,7 @@ export type LegacyRouteGpxRepoDescription = {
 
 export type RouteApiDetail = {
     id: string;   
+    originalName?:string;
     routeId?: string; 
     hash?: string;
     routeHash?: string;

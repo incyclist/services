@@ -118,7 +118,8 @@ export interface    RouteInfo extends RouteBase{
     next?:string,
     legacyId?:string,
     isDownloaded?:boolean  
-    isDeleted?:boolean   
+    isDeleted?:boolean  
+    originalName?:string 
 }
 export type LocalizedText = { [index: string]: string; };
 

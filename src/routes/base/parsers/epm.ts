@@ -96,9 +96,7 @@ export class EPMParser extends XMLParser{
         json.cnt =  reader.ReadUint32();
         
         if (json.cnt!==num) {
-            console.log('~~~ READER LENGTH', reader.length, 'EXPECTED:', json.cnt*12+388)
             //throw new Error('Invalid program event count ('+json.cnt+' != '+num+')');
-            
         }
         
         json.sampleRate =  reader.ReadUint32();

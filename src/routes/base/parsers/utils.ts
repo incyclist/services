@@ -121,7 +121,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
 }
 
 export const parseInformations =( informations?:Array<JSONObject>):Array<RouteInfoText> =>{
-    if (!informations)
+    if (!informations || !Array.isArray(informations))
         return;
 
     return informations.map( i=> {

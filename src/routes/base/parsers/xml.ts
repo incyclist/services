@@ -69,6 +69,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         const data = context.data 
 
         let name = data['name']
+        const originalName = `${name}`
         let country = data['country']
 
         const countryPrefix = this.getCountryPrefix(name)
@@ -80,6 +81,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
         context.route= {
             title: name,
+            originalName,
             localizedTitle: data['title'] || name,
             country: country,
             id: data['id'],
@@ -150,6 +152,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
         const info:RouteInfo ={
             id:route.id,
+            originalName: route.originalName,
             title: route.title,
             localizedTitle: route.localizedTitle,
             category:route.category,
