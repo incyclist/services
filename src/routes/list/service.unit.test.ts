@@ -130,7 +130,12 @@ describe('RouteListService',()=>{
             const {routes} = service.search()
             expect(routes.length).toBe(34)
 
-            routes.forEach( r => {delete r.observer})
+            // remove observer before we check the result against expectation
+            routes.forEach( r => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const d = r as any
+                delete d.observer
+            })
             expect(routes.sort(sort)).toMatchObject(repoData.sort(sort))
             
 

@@ -157,7 +157,7 @@ export class RouteListService extends IncyclistService {
 
 
             let routes:Array<SummaryCardDisplayProps> =   this.getAllCards().map( c=> c.getDisplayProperties())
-    
+            routes = routes.filter( r => !r.isDeleted)
     
             if (filters?.title && filters.title.length) {
                 
@@ -449,6 +449,15 @@ export class RouteListService extends IncyclistService {
         return res?.card
     }
 
+    // card has already removed itself from the list and needs to be re-added (most likely on MyRoutes)
+    addCardAgain(card:RouteCard) {        
+        const route = card.getData()        
+        const list = this.selectList(route)
+        list.add( card)
+        card.enableDelete(true)
+        this.emitLists('updated')                
+    }
+
 
     protected getFilterContentTypes():Array<string> {
         return ['GPX','Video']
@@ -494,6 +503,10 @@ export class RouteListService extends IncyclistService {
 
 
     protected addRoute(route:Route):void {
+
+        if (route.description.isDeleted)
+            return;
+        
         const list = this.selectList(route)
 
         const card = new RouteCard(route,{list})
@@ -571,7 +584,7 @@ export class RouteListService extends IncyclistService {
             return description.category ? this.alternatives : this.selectedRoutes
         }
         else {
-            if (description.isLocal)
+            if (description.isLocal || description.isDownloaded)
                 return this.myRoutes
             if (description.isDemo)
                 return this.alternatives
@@ -619,7 +632,7 @@ export class RouteListService extends IncyclistService {
         })
     }
 
-    protected async doCreateScreenShot( descr:RouteInfo):Promise<string> {
+    protected async doCreatePreview( descr:RouteInfo):Promise<string> {
 
         let props 
         const videoUrl = descr.videoUrl || descr.downloadUrl
@@ -676,7 +689,7 @@ export class RouteListService extends IncyclistService {
 
                 const {descr,done} = this.createPreviewQueue.shift()
                 
-                const res = await this.doCreateScreenShot(descr)      
+                const res = await this.doCreatePreview(descr)      
                 done(res)    
             }
             process.nextTick( ()=>{ delete this.previewProcessing})

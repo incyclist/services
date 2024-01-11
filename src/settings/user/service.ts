@@ -4,6 +4,7 @@ import clone from '../../utils/clone';
 import { merge } from '../../utils/merge';
 import { valid } from '../../utils/valid';
 import {IUserSettingsBinding } from './bindings';
+import { Observer } from '../../base/types/observer';
 
 
 
@@ -21,6 +22,7 @@ export class UserSettingsService {
     savePromise: Promise<boolean> | null
     instanceId: number;
     initPromise: Promise<boolean>
+    observers: Array<{id:string,key:string, observer:Observer}> = []
     
 
     static getInstance() {
@@ -125,6 +127,11 @@ export class UserSettingsService {
             throw new Error('key must be specified')
         }
 
+        const observers = this.observers.filter(oi=>oi.key===key)
+        if (observers?.length) {
+            observers.forEach( o=> o.observer.emit('changed',value))
+        }
+
         const keys = key.split('.');
         if (keys.length<2) {
             if (value===null)
@@ -160,6 +167,19 @@ export class UserSettingsService {
             }
         
         }
+    }
+
+    requestNotifyOnChange(requesterId:string,key:string):Observer {
+        const observer = new Observer()
+        this.observers.push({id:requesterId, key, observer})
+        return observer
+    }
+
+    stopNotifyOnChange(requesterId:string):void {
+        const observerIdx = this.observers.findIndex(oi=>oi.id===requesterId)
+        
+        if (observerIdx!==-1)
+            this.observers.splice(observerIdx,1)
     }
 
     async update(data:any):Promise<boolean> {

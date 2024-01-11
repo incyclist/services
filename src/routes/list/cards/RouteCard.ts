@@ -13,6 +13,8 @@ import { RouteStartSettings } from "../types";
 import { RoutesDbLoader } from "../loaders/db";
 import { valid } from "../../../utils/valid";
 import { waitNextTick } from "../../../utils";
+import { DownloadObserver } from "../../download/types";
+import { RouteDownloadService } from "../../download/service";
 
 
 export interface SummaryCardDisplayProps extends RouteInfo{
@@ -63,7 +65,7 @@ class ConvertObserver extends Observer {
 
 export class RouteCard extends BaseCard implements Card<Route> {
 
-    protected downloadObserver: Observer;
+    protected downloadObserver: DownloadObserver;
     protected convertObserver: ConvertObserver;
     protected route: Route
     protected list:CardList<Route> 
@@ -221,6 +223,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
                 if (route.isDownloaded) {
                     await this.resetDownload()
+                    this.deleteFromUIList()
+                    this.enableDelete(false)
+                    getRouteList().addCardAgain(this)
+                    // TODO: Do we also need to remove the file?
+                   
+                    return true
                 }
                 else if (!route.isLocal) {
                     await this.markDeleted()    
@@ -288,19 +296,42 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     download(): Observer {
-        if (!this.downloadObserver) {
-            
-            /*
-            const video = getBindings().video
-            const route = this.getRouteDescription()
-            this.downloadObserver = new PromiseObserver( )
-            */
-            
-    
+        console.log('donwload')
+        if (!this.downloadObserver) {           
+            const dl = new RouteDownloadService()
+            this.downloadObserver = dl.download(this.route)
+            this.downloadObserver
+                .on('done', this.onDownloadCompleted.bind(this))
+                .on('error', this.onDownloadError.bind(this))
         }
         return this.downloadObserver;
+    }
 
+    stopDownload() {
+        this.getCurrentDownload().stop()
+        waitNextTick().then( ()=>{ delete this.downloadObserver})
+    }
 
+    async onDownloadCompleted( url:string) {
+        this.route.description.videoUrl = url;
+        this.route.description.isDownloaded = true;
+        this.route.description.tsImported = Date.now()
+
+        this.route.details.video.file = undefined
+        this.route.details.video.url = url;
+        
+        this.updateRoute( this.route)
+        waitNextTick().then( ()=>{ delete this.downloadObserver})
+
+        if (this.list.getId()!=='myRoutes') {
+            this.list.remove(this)
+            this.list = undefined
+            getRouteList().addCardAgain(this)
+        }
+    }
+
+    onDownloadError() {        
+        waitNextTick().then( ()=>{ delete this.downloadObserver})
     }
 
     getCurrentConversion():Observer {
@@ -429,13 +460,15 @@ export class RouteCard extends BaseCard implements Card<Route> {
         descr.isDeleted = true
 
         await this.save();
+        this.emitUpdate()
     }
 
     protected async resetDownload():Promise<void> {
         const descr = this.getRouteDescription()
-        descr.isDownloaded = true
+        descr.isDownloaded = false
 
         await this.save();
+        this.emitUpdate()
 
     }
 

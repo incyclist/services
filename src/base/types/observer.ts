@@ -1,4 +1,5 @@
 import EventEmitter from "events"
+import { waitNextTick } from "../../utils"
 
 export interface IObserver{
     on(event:string, callback):IObserver
@@ -66,7 +67,9 @@ export class PromiseObserver<T> extends Observer {
         this.promise = promise
     }
 
-    start():Promise<T> {
+    async start():Promise<T> {
+        await waitNextTick();
+        
         return new Promise( (resolve,reject) => {
             this.emitter.emit('started')
 
