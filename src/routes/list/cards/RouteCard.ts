@@ -281,6 +281,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         service.setStartSettings({type:this.getCardType(), ...this.startSettings})
 
         this.route.description.tsLastStart = Date.now()
+        this.updateRoute(this.route)
     }
 
     cancel() {
@@ -294,9 +295,21 @@ export class RouteCard extends BaseCard implements Card<Route> {
     getCurrentDownload():Observer {
         return this.downloadObserver;
     }
+    getVideoDir():string {
+        const settings = useUserSettings()
+
+        const videoDir = settings.get('videos.directory',null)
+        if (videoDir)
+            return videoDir
+    }
+    setVideoDir(dir:string):void {
+        const settings = useUserSettings()
+        settings.set('videos.directory',dir)
+    }
 
     download(): Observer {
-        console.log('donwload')
+        getRouteList().logEvent({message:'download started', route:this.route?.description?.title})
+
         if (!this.downloadObserver) {           
             const dl = new RouteDownloadService()
             this.downloadObserver = dl.download(this.route)
@@ -308,11 +321,15 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     stopDownload() {
-        this.getCurrentDownload().stop()
+        getRouteList().logEvent({message:'download stopped', route:this.route?.description?.title})
+        this.getCurrentDownload()?.stop()
+        
         waitNextTick().then( ()=>{ delete this.downloadObserver})
     }
 
     async onDownloadCompleted( url:string) {
+        getRouteList().logEvent({message:'download completed', route:this.route?.description?.title})
+
         this.route.description.videoUrl = url;
         this.route.description.isDownloaded = true;
         this.route.description.tsImported = Date.now()
@@ -330,7 +347,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
     }
 
-    onDownloadError() {        
+    onDownloadError(err:Error) {        
+        getRouteList().logEvent({message:'download error', error:err.message, route:this.route?.description?.title})
+
         waitNextTick().then( ()=>{ delete this.downloadObserver})
     }
 
@@ -350,6 +369,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
         video.convert(route.videoUrl,{enforceSlow:true})
             .then( observer=> { this.monitorConversion(route, observer);})
             .catch( err => { this.handleConversionError(err)})
+
+        process.nextTick( ()=>{this.convertObserver.emit('started') })
         return this.convertObserver
     }
 
@@ -367,7 +388,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         observer.on('conversion.progress', (progress) => {
             getRouteList().logEvent({ message: 'video conversion progress', progress });
-            this.convertObserver.emit('progress', progress.percent);
+            this.convertObserver.emit('progress', progress.percent || progress.completed);
         });
 
         observer.on('conversion.done', (url: string) => {
@@ -412,7 +433,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             await this.save();
         }
         await sleep(200)
-        this.convertObserver== undefined
+        delete this.convertObserver
 
 
     }

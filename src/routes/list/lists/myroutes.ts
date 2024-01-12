@@ -1,16 +1,35 @@
 import { Card, CardList } from "../../../base/cardlist";
 import { Route } from "../../base/model/route";
+import { RouteInfo } from "../../base/types";
 import { RouteCardType } from "../cards/types";
+
+const score = (r:RouteInfo):number =>{
+    let val = 0;
+    const tsAction = (Date.now()-Math.max(r.tsImported||0,r.tsLastStart||0))/1000/3600/24      // days since last action
+
+    if (r.hasVideo || (1-tsAction)>0) val+=1
+    if (!isNaN(tsAction) && tsAction>=0 && tsAction<365 ) {
+        if ((7-tsAction)>0 )
+            val+=1
+        val += Math.log10(365-tsAction)
+    }
+
+    if( val>1)
+    console.log('~~~ info',r.title, tsAction, val)
+    return val;
+
+}
 
 
 const sortFn = (a:Card<Route>,b:Card<Route>):number=> {
     const routeA = a.getData().description
     const routeB = b.getData().description
 
-    if (routeA.next === routeB.id) return -1
-    if (routeB.next === routeA.id) return 1
-
-    return Math.max(routeB.tsImported||0,routeB.tsLastStart||0)-Math.max(routeA.tsImported||0, routeA.tsLastStart||0)
+    const scores = score(routeB)-score(routeA)
+    if (scores!==0)
+        return scores
+    return routeB.title>routeA.title ? -1 : 1
+        
 
 }
 

@@ -55,7 +55,7 @@ export class RouteDownloadService extends IncyclistService {
    }
 
     protected waitForVideoDir(observer:DownloadObserver) {
-
+        
         const settings = useUserSettings()
 
         const videoDir = settings.get('videos.directory',null)
@@ -67,7 +67,9 @@ export class RouteDownloadService extends IncyclistService {
             observer?.emit('videoDir.unknown')
 
             return new Promise( done=> {
+                
                 settingsObserver.on('changed', (dir) => {
+                    observer?.emit('videoDir.ok')
                     settings.stopNotifyOnChange(reqId)
                     done(dir)                
                 })
