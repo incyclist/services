@@ -350,7 +350,7 @@ export class DevicePairingService  extends IncyclistService{
     
         try {
             if (addAll) {
-                const adapter = this.getDeviceAdapter(udid)
+                const adapter = this.getDeviceAdapter(udid) 
                 const capabilities = adapter.getCapabilities().filter( name=> this.wouldChangeCapability(name,udid) )
 
                 capabilities.forEach( (c,idx) => {
@@ -1628,7 +1628,15 @@ export class DevicePairingService  extends IncyclistService{
     protected getDeviceAdapter(udid:string) {
         const {adapters=[]} = this.state
         const target = adapters.find( ai=> ai.udid===udid )
-        return target?.adapter
+        if (target?.adapter)
+            return target?.adapter
+
+        if (this.configuration.getAdapter(udid)) {
+            this.logEvent({message:'adapter list out of sync',missing:udid})
+            // Pairing Service and Device Config are out of sync, reload adapaters
+            this.state.adapters = this.configuration.getAdapters(false)            
+            return this.configuration.getAdapter(udid)
+        }
     }
 
     protected async stopAdaptersWithCapability( capability:IncyclistCapability|CapabilityData,udid?:string) {
