@@ -518,9 +518,11 @@ export class DeviceRideService  extends EventEmitter{
 
             if (ai.adapter?.isControllable()) {
                 bike = ai.adapter as IncyclistDeviceAdapter
+
                 const modeInfo = this.configurationService.getModeSettings(ai.udid)
-                mode = modeInfo.mode
-                settings = modeInfo.settings
+                mode = modeInfo?.mode
+                settings = modeInfo?.settings||{}
+
 
                 if (!this.simulatorEnforced && forceErgMode) {
                     const modes = bike.getSupportedCyclingModes().filter( C => C.supportsERGMode())

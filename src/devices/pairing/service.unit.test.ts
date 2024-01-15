@@ -175,6 +175,7 @@ class TestWrapper extends DevicePairingService {
         this.loadConfiguration = jest.fn()
         this.waitForInit = jest.fn().mockResolvedValue(true)
 
+
       
     
     }
@@ -447,7 +448,7 @@ describe('PairingService',()=>{
                             pause:jest.fn().mockResolvedValue(true)
                         }
                       }])
-
+                svc.getState().adapters = ride.getAdapters({})
                 
 
                 const updates: Array<PairingState> = [];
@@ -519,6 +520,7 @@ describe('PairingService',()=>{
                   }
                 ])
 
+                
             
 
             const updates: Array<PairingState> = [];
