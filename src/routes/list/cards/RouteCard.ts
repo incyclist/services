@@ -176,11 +176,33 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
 
+
     openSettings():RouteSettings {
         // read vaues from User Settings
-        const defaultSettings = {startPos:0, realityFactor:100}        
+        this.startSettings = {startPos:0, realityFactor:100, type:this.getCardType()} 
+        let migrate = false;
+
+        const legacy = this.buildSettingsKey(true);
+        const legacySettings = useUserSettings().get(legacy,null )
+        if (legacySettings) {
+            this.startSettings = legacySettings
+            migrate = true;
+        }
+
+
         const key = this.buildSettingsKey();
-        this.startSettings = useUserSettings().get(key,defaultSettings )
+        const startSettings = useUserSettings().get(key,null )
+        if (startSettings) {
+            this.startSettings = startSettings
+        }
+
+        
+        if (migrate) {
+            // TODO: uncomment next line, once feature toggle NEW_ROUTES_UI has been removed
+            //useUserSettings().set(legacy,null)
+            useUserSettings().set(key,this.startSettings)
+
+        }
 
         return this.startSettings
     }
@@ -449,9 +471,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
         this.emitUpdate()
     }
 
-    protected buildSettingsKey() {
+    protected buildSettingsKey(legacy=false) {
         const type = this.route.description.hasVideo ? 'video' : 'followRoute';
-        const id = this.route.description.id;
+        const id = legacy ? this.route.description.legacyId : this.route.description.id;
         const key = `routeSelection.${type}.prevSetting.${id}`;
         return key;
     }
