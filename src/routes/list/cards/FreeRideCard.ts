@@ -3,6 +3,7 @@ import { PromiseObserver } from "../../../base/types/observer";
 import { useUserSettings } from "../../../settings";
 import { geo } from "../../../utils";
 import { LatLng } from "../../../utils/geo";
+import { valid } from "../../../utils/valid";
 import { Route } from "../../base/model/route";
 import { getRouteList } from "../service";
 import { FreeRideOption, FreeRideStartSettings } from "../types";
@@ -118,6 +119,9 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
         else {
             this.position = this.getUserSetting(`position`, null);
         }
+
+        if (!valid(this.position.lat) || !valid(this.position.lng))
+        this.position= undefined
     }
 
     protected saveSettings() {
