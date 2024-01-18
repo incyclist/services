@@ -1,3 +1,4 @@
+import { EventLogger } from "gd-eventlog";
 import { Card } from "../../../base/cardlist";
 import { PromiseObserver } from "../../../base/types/observer";
 import { useUserSettings } from "../../../settings";
@@ -25,6 +26,12 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
 
     protected position: LatLng;
     protected options: [];
+    protected logger: EventLogger
+
+    constructor() {
+        super()
+        this.logger = new EventLogger('FreeRideCard')
+    }
 
     delete():PromiseObserver<boolean> {
         // not possible to delete FreeRide Card
@@ -52,7 +59,12 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
     }
 
     getDisplayProperties(): FreeRideDisplayProps {
-        return {...this.position,visible:true}
+        try {
+            return {...this.position,visible:true}
+        }
+        catch(err) {
+            this.logError(err, 'getDisplayProperties')
+        }
     }
 
     getPosition(): LatLng {
@@ -78,33 +90,51 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
     }
 
     openSettings(): FreeRideSettings {
-        getRouteList().unselect();
+        try {
+            getRouteList().unselect();
 
-        if (!this.position)
-            this.loadSettings();
+            if (!this.position)
+                this.loadSettings();
 
-        const position: LatLng = this.position;
-        return { position };
+            const position: LatLng = this.position;
+            return { position };
+        }
+        catch(err) {
+            this.logError(err, 'openSettings')
+            return {}
+        }
 
     }
 
     changeSettings(props: FreeRideSettings) {
-        const { position: pos } = props;
+        try {
+            const { position: pos } = props;
 
-        this.position = geo.getLatLng(pos);
-        this.saveSettings();
+            this.position = geo.getLatLng(pos);
+            this.saveSettings();
+        }
+        catch(err) {
+            this.logError(err, 'changeSettings')
+        }
+
     }
 
     accept(option: FreeRideOption) {
-        // delete all distances from option
-        option.path = option.path.map(p => ({ lat: p.lat, lng: p.lng, ways: p.ways, tag: p.tag }));
+        try {
+            // delete all distances from option
+            option.path = option.path.map(p => ({ lat: p.lat, lng: p.lng, ways: p.ways, tag: p.tag }));
 
-        const settings: FreeRideStartSettings = {
-            type: this.getCardType(),
-            position: this.position,
-            option
-        };
-        getRouteList().setStartSettings(settings);
+            const settings: FreeRideStartSettings = {
+                type: this.getCardType(),
+                position: this.position,
+                option
+            };
+            getRouteList().setStartSettings(settings);
+
+        }
+        catch(err) {
+            this.logError(err, 'accept')
+        }
 
     }
 
@@ -120,8 +150,8 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
             this.position = this.getUserSetting(`position`, null);
         }
 
-        if (!valid(this.position.lat) || !valid(this.position.lng))
-        this.position= undefined
+        if (!valid(this.position?.lat) || !valid(this.position?.lng))
+            this.position= undefined
     }
 
     protected saveSettings() {
@@ -131,6 +161,10 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
         const userSettings = useUserSettings();
         userSettings.set('routeSelection.freeRide', { position: this.position });
 
+    }
+
+    protected logError(err:Error,fn:string) {
+        this.logger.logEvent({message:'error', error:err.message, fn, stack:err.stack})
     }
 
 
