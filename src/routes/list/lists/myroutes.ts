@@ -1,6 +1,7 @@
 import { Card, CardList } from "../../../base/cardlist";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
+import { RouteCard } from "../cards/RouteCard";
 import { RouteCardType } from "../cards/types";
 
 const score = (r:RouteInfo):number =>{
@@ -15,20 +16,19 @@ const score = (r:RouteInfo):number =>{
     }
 
     if( val>1)
-    console.log('~~~ info',r.title, tsAction, val)
     return val;
 
 }
 
 
-const sortFn = (a:Card<Route>,b:Card<Route>):number=> {
-    const routeA = a.getData().description
-    const routeB = b.getData().description
+const sortFn = (a:RouteCard,b:RouteCard):number=> {
+    const routeA = a.getRouteDescription()
+    const routeB = b.getRouteDescription()
 
     const scores = score(routeB)-score(routeA)
     if (scores!==0)
         return scores
-    return routeB.title>routeA.title ? -1 : 1
+    return b.getTitle()>a.getTitle() ? -1 : 1
         
 
 }
@@ -41,14 +41,10 @@ export class MyRoutes extends CardList<Route> {
 
     sort(): Array<Card<Route>> {
 
-        const importCard = this.cards.find( c=> (c.getCardType() as RouteCardType)==='Import')
-        const freeRideCard = this.cards.find( c=> (c.getCardType() as RouteCardType)==='Free-Ride')
-
+        const fixed = this.cards.filter( c=> (c.getCardType() as RouteCardType)!=='Route')
         const cards = this.cards.filter( c=> (c.getCardType() as RouteCardType)==='Route')
 
-
-
-        const sorted = [ importCard,freeRideCard,...cards.sort( sortFn ) ]
+        const sorted = [ ...fixed,...cards.sort( sortFn ) ]
         return sorted.map(c=>c as Card<Route>);
     }
 
@@ -62,6 +58,22 @@ export class MyRoutes extends CardList<Route> {
             route.description.tsImported = Date.now()
 
         super.add(card)        
+    }
+
+    addImport(card:Card<Route>) {
+        const idx = this.cards.findIndex(c=> (c.getCardType() as RouteCardType)==='Route')
+        if (idx===-1)
+            this.cards.push(card)
+        else 
+            this.cards.splice( idx,0,card)
+    }
+
+    remove( card:Card<Route>) {
+        this.cards = this.cards.filter ( c=> (c.getId()!==card.getId() ))
+    }
+
+    removeActiveImports() {
+        this.cards = this.cards.filter( c=> (c.getCardType() as RouteCardType)!=='ActiveImport')
     }
 
     

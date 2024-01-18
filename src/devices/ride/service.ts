@@ -701,6 +701,9 @@ export class DeviceRideService  extends EventEmitter{
             this.stopHealthCheck(ai)
         }
 
+        if (ai.adapter.getInterface()==='simulator')
+            return;
+
         ai.ivToCheck = setInterval( ()=>{check()}, 1000)
         ai.isHealthy = true
     }

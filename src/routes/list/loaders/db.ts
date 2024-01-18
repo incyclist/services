@@ -171,11 +171,12 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         try {
             const id = description.legacyId || description.id
             details = await repo.read(id) as RouteApiDetail
+            description.originalName = details.title
         }
         catch(err) {
             console.log(err)
         }
-
+    
         if (!details) {
             return;
         }

@@ -18,6 +18,9 @@ import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
 import { RouteListObserver } from "./RouteListObserver";
 import IncyclistRoutesApi from "../base/api";
+import { ActiveImportCard } from "./cards/ActiveImportCard";
+import { SelectedRoutes } from "./lists/selected";
+import { AlternativeRoutes } from "./lists/alternatives";
 
 
 @Singleton
@@ -46,8 +49,8 @@ export class RouteListService extends IncyclistService {
         super('RouteList')
 
         this.myRoutes = new MyRoutes('myRoutes','My Routes')
-        this.selectedRoutes = new CardList<Route>('selected','Selected For Me')
-        this.alternatives = new CardList<Route>('alternaties','Alternatives')
+        this.selectedRoutes = new SelectedRoutes('selected','Selected For Me')
+        this.alternatives = new AlternativeRoutes('alternaties','Alternatives')
         this.initialized = false;
         this.language = 'en'
         
@@ -72,7 +75,7 @@ export class RouteListService extends IncyclistService {
     
 
     open():{observer:RouteListObserver,lists:Array<CardList<Route>>} {
-                try {
+        try {
             this.logEvent( {message:'open route list'})
 
             const hasLists = this.getLists()?.length>0
@@ -88,6 +91,8 @@ export class RouteListService extends IncyclistService {
                     this.emitLists('loaded')
                 })
             }
+
+            this.myRoutes.removeActiveImports()
 
             this.getLists(false)?.forEach( list=> {
                 list.getCards()?.forEach( (card,idx) => {
@@ -368,12 +373,30 @@ export class RouteListService extends IncyclistService {
         this.selectedRoute = route
     }
 
-    import( info:FileInfo|Array<FileInfo>):void {
+    import( info:FileInfo|Array<FileInfo>, retry?:ActiveImportCard):void {
         try {
             const files = Array.isArray(info) ? info : [info]
 
-            files.forEach( async (file)=>{
+            const importCards: Array<ActiveImportCard> = []
+
+            if (!retry) {
+                files.forEach( (file)=>{
+                    const card = this.addImportCard(file)
+                    importCards.push(card)
+                    this.emitLists('updated')
+                })
+            }
+            else {
+                importCards.push(retry)
+            }
+
+
+            files.forEach( async (file,idx)=>{
+                const importCard = importCards[idx]
+                
+            
                 try {
+
                     const {data,details} = await RouteParser.parse(file)              
     
                     const route = new Route(data,details as RouteApiDetail)
@@ -407,6 +430,7 @@ export class RouteListService extends IncyclistService {
                         this.myRoutes.add( card, true )
                         this.routes.push(route)
                     }
+                    this.myRoutes.remove(importCard)
                     card.enableDelete(true)              
                     this.emitLists('updated')     
     
@@ -415,10 +439,7 @@ export class RouteListService extends IncyclistService {
                    
                 }
                 catch(err) {
-    
-                    // TODO handle parsing errors
-                    // idea: either show error card(s) or show error dialog
-                    console.log('ERROR PARSNG ', err)
+                    importCard.setError(err)
                 }
         
             })
@@ -433,8 +454,9 @@ export class RouteListService extends IncyclistService {
     emitLists( event:'loaded'|'updated') {
         try {
             const lists = this.getLists()
+            const hash = lists.map( l=> l.getCards().map(c=>c.getId()).join(',')).join(':')
             if (this.observer)
-                this.observer.emit(event,lists)
+                this.observer.emit(event,lists,hash)
     
         }
         catch(err) {
@@ -454,10 +476,18 @@ export class RouteListService extends IncyclistService {
         const route = card.getData()        
         const list = this.selectList(route)
         list.add( card)
-        card.enableDelete(true)
+        card.enableDelete(list.getId()==='myRoutes')
+        card.setList(list)
         this.emitLists('updated')                
     }
 
+    protected addImportCard(file:FileInfo):ActiveImportCard {
+        const card = new ActiveImportCard(file)
+        this.myRoutes.addImport(card)
+        this.emitLists('updated')                
+        return card
+
+    }
 
     protected getFilterContentTypes():Array<string> {
         return ['GPX','Video']
@@ -586,7 +616,7 @@ export class RouteListService extends IncyclistService {
         else {
             if (description.isLocal || description.isDownloaded)
                 return this.myRoutes
-            if (description.isDemo)
+            if (description.isDemo || (description.requiresDownload && !description.isDownloaded))
                 return this.alternatives
 
             if (category===undefined || category==='personal' || category==='imported')
@@ -617,12 +647,12 @@ export class RouteListService extends IncyclistService {
                 descr.previewUrl = previewUrl
                 return;
             }
+
         }
         catch (err){
             console.log('~~~ ERR',err)
             // ignrore - we will try to create it with ffmpeg
         }
-        
         // As we would be overloading ffmpeg by creating multiple screenshots
         // at the same time, we are queueing the requests        
         return new Promise( done => {

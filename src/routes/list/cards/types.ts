@@ -1,7 +1,8 @@
 import { ImportFilter } from "../../../base/cardlist/types";
+import { Observer } from "../../../base/types/observer";
 
 
-export type RouteCardType = 'Import' | 'Route' | 'Free-Ride';
+export type RouteCardType = 'Import' | 'Route' | 'Free-Ride' | 'ActiveImport';
 
 
 export const DEFAULT_TITLE = 'Import Route';
@@ -16,6 +17,13 @@ export interface RouteImportProps {
     title: string;
     filters: Array<ImportFilter>;
     visible: boolean;
+}
+
+export interface ActiveImportProps {
+    name: string;
+    error?: Error
+    visible: boolean;
+    observer: Observer
 }
 
 export interface AppStatus {

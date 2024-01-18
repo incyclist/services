@@ -15,6 +15,8 @@ import { valid } from "../../../utils/valid";
 import { waitNextTick } from "../../../utils";
 import { DownloadObserver } from "../../download/types";
 import { RouteDownloadService } from "../../download/service";
+import { getLocalizedData } from "../../base/utils/localization";
+import { EventLogger } from "gd-eventlog";
 
 
 export interface SummaryCardDisplayProps extends RouteInfo{
@@ -74,6 +76,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected cardObserver = new Observer()
     protected deleteObserver: PromiseObserver<boolean>
     protected ready:boolean
+    protected logger:EventLogger
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
         super()
@@ -87,87 +90,154 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         this.ready = !descr.hasVideo || (descr.hasVideo && descr.previewUrl!==undefined)
         this.initialized = false;
+        this.logger = new EventLogger('RouteCard')
 
     }
 
     canStart(status:AppStatus) {
-        const {isOnline} = status
-        const route = this.route.description
+        try {
+            const {isOnline} = status
+            const route = this.route.description
 
-        if (!route.hasVideo || !route.isLocal || route.videoUrl.startsWith('http')) 
-            return isOnline
+            if (!route.hasVideo || !route.isLocal || route.videoUrl.startsWith('http')) 
+                return isOnline
 
-        if (route.requiresDownload )
-            return route.isLocal && isOnline 
+            if (route.requiresDownload )
+                return route.isLocal && isOnline 
 
-        return true;
+            return true;
+        }
+        catch(err) {
+            this.logError(err, 'canStart')
+            return false
+        }
     }
 
     getRepo() {
         return new RoutesDbLoader()
     }
+    setList(list:CardList<Route>) {
+        this.list = list
+    }
 
     verify() {
-        if (this.previewMissing())
-            this.createPreview()
+        try {
+            if (this.previewMissing())
+                this.createPreview()
+        }
+        catch(err) {
+            this.logError(err,'verify')
+        }
     }
 
     previewMissing() {
-        const descr = this.getRouteDescription()
-        return descr.hasVideo && !valid(descr.previewUrl)
+        try {
+            const descr = this.getRouteDescription()
+            return descr.hasVideo && !valid(descr.previewUrl)
+        }
+        catch(err) {
+            this.logError(err,'previewMissing')
+        }
     }
 
     setInitialized(init:boolean) {
-        const prev=this.initialized
-        this.initialized= init
-        if (init && !prev)
-            this.emitUpdate()
+        try {
+            const prev=this.initialized
+            this.initialized= init
+            if (init && !prev)
+                this.emitUpdate()
+        }
+        catch(err) {
+            this.logError(err,'setInitialized')
+        }
+    
     }
 
     setVisible(visible: boolean): void {
-        const prev = this.visible
-        this.visible = visible
-        if (visible!==prev)
-            this.emitUpdate()
+        try {
+            const prev = this.visible
+            this.visible = visible
+            if (visible!==prev)
+                this.emitUpdate()
+        }
+        catch(err) {
+            this.logError(err,'setVisible')
+        }
+    
     }
 
     reset() {
-        super.reset()
-        this.cardObserver.reset()
+        try {
+            super.reset()
+            this.cardObserver.reset()
+        }
+        catch(err) {
+            this.logError(err,'reset')
+        }
+
     }
 
     getData(): Route { return this.route}
     setData(data: Route) { 
-        const old = this.route
-        this.route = data
-        if (this.ready && this.getRouteDescription().previewUrl===undefined ) {
-            this.getRouteDescription().previewUrl = old.description.previewUrl
+        try {
+            const old = this.route
+            this.route = data
+            if (this.ready && this.getRouteDescription().previewUrl===undefined ) {
+                this.getRouteDescription().previewUrl = old.description.previewUrl
+            }
+        }
+        catch(err) {
+            this.logError(err,'setData')
         }
 
     }
 
-    getRouteDescription(): RouteInfo { return this.route?.description}
+    getRouteDescription(): RouteInfo { 
+        return this.route?.description||{}        
+    }
+
     getRouteData(): RouteApiDetail {return this.route?.details}
-    
+
     getCardType(): RouteCardType {
         return 'Route';
     }
 
-    getDisplayProperties(): SummaryCardDisplayProps {
-        let {points} = this.route.description
-        if (points && !Array.isArray(points)) {
-            points = undefined
+    getTitle() {
+        try {
+            const descr = this.getRouteDescription()|| {}
+            return getLocalizedData(descr)?.title
+        }
+        catch(err) {
+            this.logError(err,'getTitle')
         }
 
-        const loading = this.deleteObserver!==undefined
-        return {...this.route.description, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,canDelete:this.canDelete(),observer:this.cardObserver, points, loading}
-
     }
+
+    getDisplayProperties(): SummaryCardDisplayProps {
+        try {
+            const descr = this.getRouteDescription()
+
+            let {points} = descr
+            if (points && !Array.isArray(points)) {
+                points = undefined
+            }
+
+            const loading = this.deleteObserver!==undefined
+            return {...descr, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,
+                    canDelete:this.canDelete(), points, loading, title:this.getTitle(),
+                    observer:this.cardObserver}
+        }
+        catch(err) {
+            this.logError(err,'getDisplayProperties')
+        }
+        
+    }
+
     getId(): string {
-        return this.route.description.id
+        return this.route?.description?.id
     }
 
-    enableDelete(enabled=true) {
+    enableDelete(enabled:boolean=true) {
         this.deleteable = enabled
     }
 
@@ -178,55 +248,79 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
 
     openSettings():RouteSettings {
-        // read vaues from User Settings
         this.startSettings = {startPos:0, realityFactor:100, type:this.getCardType()} 
-        let migrate = false;
 
-        const legacy = this.buildSettingsKey(true);
-        const legacySettings = useUserSettings().get(legacy,null )
-        if (legacySettings) {
-            this.startSettings = legacySettings
-            migrate = true;
+        try {
+            // read vaues from User Settings
+            let migrate = false;
+
+            const legacy = this.buildSettingsKey(true);
+            const legacySettings = useUserSettings().get(legacy,null )
+            if (legacySettings) {
+                this.startSettings = legacySettings
+                migrate = true;
+            }
+
+
+            const key = this.buildSettingsKey();
+            const startSettings = useUserSettings().get(key,null )
+            if (startSettings) {
+                this.startSettings = startSettings
+            }
+
+            
+            if (migrate) {
+                // TODO: uncomment next line, once feature toggle NEW_ROUTES_UI has been removed
+                //useUserSettings().set(legacy,null)
+                useUserSettings().set(key,this.startSettings)
+
+            }
         }
-
-
-        const key = this.buildSettingsKey();
-        const startSettings = useUserSettings().get(key,null )
-        if (startSettings) {
-            this.startSettings = startSettings
-        }
-
-        
-        if (migrate) {
-            // TODO: uncomment next line, once feature toggle NEW_ROUTES_UI has been removed
-            //useUserSettings().set(legacy,null)
-            useUserSettings().set(key,this.startSettings)
-
+        catch(err) {
+            this.logError(err,'openSettings')
         }
 
         return this.startSettings
     }
 
     changeSettings(props:RouteSettings) {
-        this.startSettings = props
+        try {
+            this.startSettings = props
 
-        // update User Settings
-        const userSettings = useUserSettings()
-        const key = this.buildSettingsKey();
-        userSettings.set(key,props,true)
+            // update User Settings
+            const userSettings = useUserSettings()
+            const key = this.buildSettingsKey();
+            userSettings.set(key,props,true)
+        }
+        catch(err) {
+            this.logError(err,'changeSettings')
+        }
+            
     }
 
     async save():Promise<void> {
-        this.getRepo().save(this.route)        
+        try {
+            return await this.getRepo().save(this.route)        
+        }
+        catch(err) {
+            this.logError(err,'save')
+        }
+        
     }
 
     delete():PromiseObserver<boolean> {
-        // already deleting
-        if (this.deleteObserver)
-            return this.deleteObserver
+        try {
+            // already deleting
+            if (this.deleteObserver)
+                return this.deleteObserver
 
-        this.deleteObserver = new PromiseObserver< boolean> ( this._delete() )
-        return this.deleteObserver
+            this.deleteObserver = new PromiseObserver< boolean> ( this._delete() )
+            return this.deleteObserver
+        }
+        catch(err) {
+            this.logError(err,'delete')
+        }
+
     }
 
     protected async _delete():Promise<boolean> {
@@ -241,10 +335,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.emitUpdate()
 
             if ( this.list.getId()==='myRoutes') {
+
                 const route:RouteInfo = this.getRouteDescription()
 
                 if (route.isDownloaded) {
                     await this.resetDownload()
+                    
                     this.deleteFromUIList()
                     this.enableDelete(false)
                     getRouteList().addCardAgain(this)
@@ -297,82 +393,126 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
 
     start() {
-        const service = getRouteList()
+        try {
+            const service = getRouteList()
 
-        service.select( this.route)
-        service.setStartSettings({type:this.getCardType(), ...this.startSettings})
+            service.select( this.route)
+            service.setStartSettings({type:this.getCardType(), ...this.startSettings})
 
-        this.route.description.tsLastStart = Date.now()
-        this.updateRoute(this.route)
+            this.route.description.tsLastStart = Date.now()
+            this.updateRoute(this.route)
+        }
+        catch(err) {
+            this.logError(err,'start')
+        }
     }
 
     cancel() {
-
+        // nothing todo - UI needs to close the window
     }
 
     addWorkout() {
-
+        // TODO
     }
 
     getCurrentDownload():Observer {
         return this.downloadObserver;
     }
     getVideoDir():string {
-        const settings = useUserSettings()
+        try {
+            const settings = useUserSettings()
 
-        const videoDir = settings.get('videos.directory',null)
-        if (videoDir)
-            return videoDir
+            const videoDir = settings.get('videos.directory',null)
+            if (videoDir)
+                return videoDir
+        }
+        catch(err) {
+            this.logError(err,'getVideoDir')
+        }
+    
     }
     setVideoDir(dir:string):void {
-        const settings = useUserSettings()
-        settings.set('videos.directory',dir)
+        try {
+            const settings = useUserSettings()
+            settings.set('videos.directory',dir)
+        }
+        catch(err) {
+            this.logError(err,'setVideoDir')
+        }
+
     }
 
     download(): Observer {
-        getRouteList().logEvent({message:'download started', route:this.route?.description?.title})
+        try {        
+            getRouteList().logEvent({message:'download started', route:this.route?.description?.title})
 
-        if (!this.downloadObserver) {           
-            const dl = new RouteDownloadService()
-            this.downloadObserver = dl.download(this.route)
-            this.downloadObserver
-                .on('done', this.onDownloadCompleted.bind(this))
-                .on('error', this.onDownloadError.bind(this))
+            if (!this.downloadObserver) {           
+                const dl = new RouteDownloadService()
+                this.downloadObserver = dl.download(this.route)
+                this.downloadObserver
+                    .on('done', this.onDownloadCompleted.bind(this))
+                    .on('error', this.onDownloadError.bind(this))
+            }
+        }
+        catch(err) {
+            this.logError(err,'download')
         }
         return this.downloadObserver;
     }
 
     stopDownload() {
-        getRouteList().logEvent({message:'download stopped', route:this.route?.description?.title})
-        this.getCurrentDownload()?.stop()
+        try {
+            getRouteList().logEvent({message:'download stopped', route:this.route?.description?.title})
+            this.getCurrentDownload()?.stop()
+            
+            waitNextTick().then( ()=>{ delete this.downloadObserver})
+        }
+        catch(err) {
+            this.logError(err,'stopDownload')
+        }
         
-        waitNextTick().then( ()=>{ delete this.downloadObserver})
     }
 
-    async onDownloadCompleted( url:string) {
-        getRouteList().logEvent({message:'download completed', route:this.route?.description?.title})
+    protected async onDownloadCompleted( url:string) {
+        try {
+            getRouteList().logEvent({message:'download completed', route:this.route?.description?.title})
 
-        this.route.description.videoUrl = url;
-        this.route.description.isDownloaded = true;
-        this.route.description.tsImported = Date.now()
+            // save original video URL, in case we delete at a later point in time
+            if (!this.route.description.downloadUrl) {
+                this.route.description.downloadUrl = this.route.description.videoUrl
+            }
+            this.route.description.videoUrl = url;
+            this.route.description.isDownloaded = true;
+            this.route.description.tsImported = Date.now()
 
-        this.route.details.video.file = undefined
-        this.route.details.video.url = url;
-        
-        this.updateRoute( this.route)
-        waitNextTick().then( ()=>{ delete this.downloadObserver})
 
-        if (this.list.getId()!=='myRoutes') {
-            this.list.remove(this)
-            this.list = undefined
-            getRouteList().addCardAgain(this)
+            this.route.details.video.file = undefined
+            this.route.details.video.url = url;
+            
+            this.updateRoute( this.route)
+            waitNextTick().then( ()=>{ delete this.downloadObserver})
+
+            if (this.list.getId()!=='myRoutes') {
+                this.list.remove(this)
+                this.list = undefined
+                getRouteList().addCardAgain(this)
+            }
+        }
+        catch(err) {
+            this.logError(err,'onDownloadComplete')
         }
     }
 
-    onDownloadError(err:Error) {        
-        getRouteList().logEvent({message:'download error', error:err.message, route:this.route?.description?.title})
+    protected onDownloadError(err:Error) {        
+        try {
+            getRouteList().logEvent({message:'download error', error:err.message, route:this.route?.description?.title})
 
-        waitNextTick().then( ()=>{ delete this.downloadObserver})
+            waitNextTick().then( ()=>{ delete this.downloadObserver})
+        }
+        catch(err) {
+            this.logError(err,'onDownloadError')
+        }
+
     }
 
     getCurrentConversion():Observer {
@@ -380,28 +520,40 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     convert(): Observer {
-        if (this.convertObserver)
-            return this.convertObserver;
+        try {
+            if (this.convertObserver)
+                return this.convertObserver;
 
-        
-        const video = getBindings().video
-        const route = this.getRouteDescription()
-        this.convertObserver = new ConvertObserver()
+            
+            const video = getBindings().video
+            const route = this.getRouteDescription()
+            this.convertObserver = new ConvertObserver()
 
-        video.convert(route.videoUrl,{enforceSlow:true})
-            .then( observer=> { this.monitorConversion(route, observer);})
-            .catch( err => { this.handleConversionError(err)})
+            video.convert(route.videoUrl,{enforceSlow:true})
+                .then( observer=> { this.monitorConversion(route, observer);})
+                .catch( err => { this.handleConversionError(err)})
 
-        process.nextTick( ()=>{this.convertObserver.emit('started') })
+            process.nextTick( ()=>{this.convertObserver.emit('started') })
+        }
+        catch(err) {
+            this.logError(err,'convert')
+        }
+
         return this.convertObserver
     }
 
     stopConversion() {
-        if (!this.convertObserver)
-            return
-        this.convertObserver.stop()        
-        this.convertObserver.emit('done');
-        setTimeout( ()=>{ this.convertObserver=undefined}, 200)
+        try {
+            if (!this.convertObserver)
+                return
+            this.convertObserver.stop()        
+            this.convertObserver.emit('done');
+            setTimeout( ()=>{ this.convertObserver=undefined}, 200)
+        }
+        catch(err) {
+            this.logError(err,'stopConversion')
+        }
+
     }
 
     protected monitorConversion(route: RouteInfo, observer: Observer) {
@@ -466,9 +618,15 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     updateRoute(route:Route) {
-        this.route = route
-        this.save()
-        this.emitUpdate()
+        try {
+            this.route = route
+            this.save()
+            this.emitUpdate()
+        }
+        catch(err) {
+            this.logError(err,'updateRoute')
+        }
+
     }
 
     protected buildSettingsKey(legacy=false) {
@@ -509,6 +667,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected async resetDownload():Promise<void> {
         const descr = this.getRouteDescription()
         descr.isDownloaded = false
+        descr.videoUrl = descr.downloadUrl;        
+        descr.tsImported = null
+        this.route.details.video.file = undefined
+        this.route.details.video.url = descr.downloadUrl
+
+
+        if (this.downloadObserver) {
+            this.downloadObserver.stop()
+            process.nextTick( ()=>{delete this.downloadObserver})
+        }
 
         await this.save();
         this.emitUpdate()
@@ -519,6 +687,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
         await this.getRepo().delete(this.route)        
     }
 
+    protected logError( err:Error, fn:string) {
+        this.logger.logEvent({message:'error', error:err.message, fn, stack:err.stack})
+    }
     
 
 

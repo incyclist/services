@@ -36,9 +36,9 @@ export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
 
 
     protected buildRouteInfo(descr:RouteDBApiDescription):RouteInfo {
-        const { id,legacyId,title,localizedTitle,country,distance,elevation, category,provider, video, points,type,routeHash} = descr
+        const { id,legacyId,title,localizedTitle,country,distance,elevation, category,provider, video, points,type,routeHash, originalName} = descr
         
-        const data:RouteInfo = { id,legacyId,title,localizedTitle,country,distance,elevation,provider,category,routeHash}
+        const data:RouteInfo = { id,legacyId,title,localizedTitle,country,distance,elevation,provider,category,routeHash,originalName}
 
         data.hasVideo = false;
         data.hasGpx = type==='gpx'
@@ -106,6 +106,7 @@ export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
         res.forEach( p => {
             if (p.status==='fulfilled' && p.value) {                   
                 const data = p.value.map( d=>this.checkLegacy(d))
+                
                 descriptions.push( ...data)
             }
         })

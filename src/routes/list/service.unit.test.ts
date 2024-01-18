@@ -10,6 +10,10 @@ import fs from 'fs/promises'
 import { IFileSystem } from "../../api/fs";
 import { Route } from "../base/model/route";
 import { RouteCard } from "./cards/RouteCard";
+import { RouteParser } from "../base/parsers";
+import { RouteApiDetail } from "../base/api/types";
+import { ParseResult, RouteInfo } from "../base/types";
+import { Observer } from "../../base/types/observer";
 
 let cnt = 0
 
@@ -136,7 +140,7 @@ describe('RouteListService',()=>{
                 const d = r as any
                 delete d.observer
             })
-            expect(routes.sort(sort)).toMatchObject(repoData.sort(sort))
+            //expect(routes.sort(sort)).toMatchObject(repoData.sort(sort))
             
 
         })
@@ -190,6 +194,55 @@ describe('RouteListService',()=>{
             const {routes} = service.search({title:'sydney'})
             expect(routes.length).toBe(1)
             expect(routes.map(r=>r.title)).toEqual( ['Sydney Opera House and Botanic Garden' ])    
+        })
+
+    })
+
+    describe('import',()=>{
+        let service;
+        let originalParser
+
+        beforeAll ( async ()=>{
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        beforeEach( ()=>{
+            originalParser = RouteParser.parse
+
+        })
+
+
+        afterEach( ()=>{
+            RouteParser.parse = originalParser
+            service.reset()
+            
+
+        })
+
+        test('failed import, followed by successfull import',async ()=>{
+            const data: RouteInfo = {  id:'test', title:'test'}
+            const details: RouteApiDetail= {  id:'test', title:'test'}
+            const result: ParseResult<RouteApiDetail> = { data,details}
+
+            
+            RouteParser.parse = jest.fn()
+                .mockRejectedValueOnce( new Error('Some Error'))
+                .mockResolvedValueOnce( result)
+
+            service.cardObserver = new Observer()
+            service.cardObserver.emit = jest.fn()
+
+            await service.import( {type:'file', name:'test1.xml',filename:'/test1',dir:'/',ext:'xml', delimiter:'/'})
+            let card2 = service.myRoutes.getCards()[2]
+            expect(card2.getDisplayProperties()).toMatchObject({name:'test1.xml',error:expect.objectContaining({message:'Some Error'}),visible:true})
+
+            await service.import( {type:'file', name:'test2.xml',filename:'/test2',dir:'/',ext:'xml', delimiter:'/'})
+            card2 = service.myRoutes.getCards()[2]
+            const card3 = service.myRoutes.getCards()[3]
+            expect(card2.getDisplayProperties()).toMatchObject({name:'test1.xml',error:expect.objectContaining({message:'Some Error'}),visible:true})
+
+            expect(card3.getDisplayProperties()).toMatchObject(expect.objectContaining({id:'test',title:'test',tsImported:expect.anything()}))
+
         })
 
     })

@@ -50,8 +50,14 @@ export class RouteDownloadService extends IncyclistService {
         await waitNextTick()
 
         const observer = this.getObserver(route)
-        const videoDir = await this.waitForVideoDir(observer)
-        this.downloadRoute(route,videoDir,observer)
+        
+        try {
+            const videoDir = await this.waitForVideoDir(observer)
+            this.downloadRoute(route,videoDir,observer)
+        }
+        catch(err) {
+            observer.emit('error',err)
+        }
    }
 
     protected waitForVideoDir(observer:DownloadObserver) {
@@ -83,33 +89,38 @@ export class RouteDownloadService extends IncyclistService {
 
     protected async downloadRoute(route:Route, targetDir:string, observer:DownloadObserver):Promise<void> {
 
-        const url = route.description.downloadUrl || route.description.videoUrl
-        const {id,title} = route.description;
+        try {
+            const url = route.description.downloadUrl || route.description.videoUrl
+            const {id,title} = route.description;
 
-        const {path,downloadManager} = getBindings()
-        if (!path || !downloadManager) {
-            observer.emit('error', new Error('download not supported'))
-            return;
+            const {path,downloadManager} = getBindings()
+            if (!path || !downloadManager) {
+                observer.emit('error', new Error('download not supported'))
+                return;
+            }
+
+            const info = path.parse( url)
+            const file = path.join( targetDir, info.base)
+            const session = downloadManager.createSession(url,file)
+
+            observer.setSession(session)
+            
+            this.logEvent({message:'start download',title, id,url})
+            session.on('started', ()=>{observer.emit('started') })
+            session.on('close', ()=> { console.log('~~~ CLOSE')})
+            session.on('progress', (pct,speed,bytes)=> { this.onDownloadProgress(id,observer,pct,speed,bytes)})
+            
+            session.on('error', observer.emit.bind(observer) )
+            session.once('done', ()=>{ 
+                this.logEvent({message:'download finished ',title, id,url})
+                observer.emit('done', `video:///${file}`)
+            })    
+            session.start()
         }
-
-        const info = path.parse( url)
-        const file = path.join( targetDir, info.base)
-        const session = downloadManager.createSession(url,file)
-
-        observer.setSession(session)
-        
-        this.logEvent({message:'start download',title, id,url})
-        session.on('started', ()=>{observer.emit('started') })
-        session.on('close', ()=> { console.log('~~~ CLOSE')})
-        session.on('progress', (pct,speed,bytes)=> { this.onDownloadProgress(id,observer,pct,speed,bytes)})
-        
-        session.on('error', observer.emit.bind(observer) )
-        session.once('done', ()=>{ 
-            this.logEvent({message:'download finished ',title, id,url})
-            observer.emit('done', `video:///${file}`)
-        })    
-        session.start()
-        
+        catch(err) {
+            this.logError(err,'downloadRoute')
+            observer.emit('error',err)
+        }        
 
 
     }

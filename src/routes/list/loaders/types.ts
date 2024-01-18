@@ -12,7 +12,8 @@ export interface RouteInfoDBEntry extends RouteInfo {
 
 export interface RouteDBApiDescription extends RouteApiDescription {
     type: 'video'|'gpx',
-    legacyId?:string
+    legacyId?:string,
+    originalName?:string
 }
 
 interface MinimalDescription {
