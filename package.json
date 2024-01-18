@@ -1,6 +1,6 @@
 {
   "name": "incyclist-services",
-  "version": "1.1.83",
+  "version": "1.1.84",
   "peerDependencies": {
     "gd-eventlog": "^0.1.26"
   },
