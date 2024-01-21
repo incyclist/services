@@ -9,7 +9,8 @@ import { Route } from "../../base/model/route";
 import { getRouteList } from "../service";
 import { FreeRideOption, FreeRideStartSettings } from "../types";
 import { BaseCard } from "./base";
-import { AppStatus, RouteCardType } from "./types";
+import { RouteCardType } from "./types";
+import { AppStatus } from "../../base/types";
 
 
 

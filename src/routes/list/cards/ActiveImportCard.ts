@@ -5,7 +5,8 @@ import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { Route } from "../../base/model/route";
 import { useRouteList } from "../service";
 import { BaseCard } from "./base";
-import { AppStatus, RouteCardType, DEFAULT_FILTERS, DEFAULT_TITLE, ActiveImportProps } from "./types";
+import { RouteCardType, DEFAULT_FILTERS, DEFAULT_TITLE, ActiveImportProps } from "./types";
+import { AppStatus } from "../../base/types";
 
 
 export class ActiveImportCard extends BaseCard implements Card<Route> {

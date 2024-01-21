@@ -3,7 +3,8 @@ import { ImportFilter } from "../../../base/cardlist/types";
 import { PromiseObserver } from "../../../base/types/observer";
 import { Route } from "../../base/model/route";
 import { BaseCard } from "./base";
-import { AppStatus, RouteCardType, DEFAULT_FILTERS, DEFAULT_TITLE, RouteImportProps } from "./types";
+import { RouteCardType, DEFAULT_FILTERS, DEFAULT_TITLE, RouteImportProps } from "./types";
+import { AppStatus } from "../../base/types";
 
 
 export class RouteImportCard extends BaseCard implements Card<Route> {

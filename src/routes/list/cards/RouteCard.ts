@@ -5,9 +5,10 @@ import { useUserSettings } from "../../../settings";
 import { sleep } from "../../../utils/sleep";
 import { RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
-import { RouteInfo  } from "../../base/types";
+import { RouteInfo, RoutePoint  } from "../../base/types";
 import { BaseCard } from "./base";
-import { AppStatus, RouteCardType } from "./types";
+import { RouteCardType } from "./types";
+import { AppStatus } from "../../base/types";
 import { getRouteList, useRouteList } from "../service";
 import { RouteStartSettings } from "../types";
 import { RoutesDbLoader } from "../loaders/db";
@@ -17,6 +18,7 @@ import { DownloadObserver } from "../../download/types";
 import { RouteDownloadService } from "../../download/service";
 import { getLocalizedData } from "../../base/utils/localization";
 import { EventLogger } from "gd-eventlog";
+import { getPosition } from "../../base/utils/route";
 
 
 export interface SummaryCardDisplayProps extends RouteInfo{
@@ -40,11 +42,18 @@ export interface StartSettings {
     endPos?:number,
     realityFactor:number,
     downloadProgress?:number,
-    convertProgress?:number
+    convertProgress?:number,
+    loopOverwrite?: boolean,
+    nextOverwrite?:boolean
 }
 
 export type RouteSettings = StartSettings & RouteStartSettings
 
+export type RouteCardProps = {
+    settings:RouteSettings,
+    showLoopOverwrite:boolean,
+    showNextOverwrite:boolean
+}
 
 
 class ConvertObserver extends Observer {  
@@ -233,6 +242,22 @@ export class RouteCard extends BaseCard implements Card<Route> {
         
     }
 
+    getMarkers(settings?:RouteSettings):Array<RoutePoint> {
+        const markers = []
+        try {
+            const startSettings = settings || this.getSettings()
+            const startDistance = startSettings.startPos||0
+            const startPos = getPosition(this.route, {distance:startDistance,nearest:true})
+            markers.push(startPos)
+        }
+        catch(err) {
+            this.logError(err,'getMarkers')            
+        }
+        return markers
+
+
+    }
+
     getId(): string {
         return this.route?.description?.id
     }
@@ -247,50 +272,40 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
 
 
-    openSettings():RouteSettings {
-        this.startSettings = {startPos:0, realityFactor:100, type:this.getCardType()} 
+    openSettings():RouteCardProps {
+
+        const settings =this.getSettings();
+        let showLoopOverwrite, showNextOverwrite
 
         try {
-            // read vaues from User Settings
-            let migrate = false;
+            showLoopOverwrite = this.route?.description?.isLoop
+            showNextOverwrite = valid(this.route?.description?.next) 
 
-            const legacy = this.buildSettingsKey(true);
-            const legacySettings = useUserSettings().get(legacy,null )
-            if (legacySettings) {
-                this.startSettings = legacySettings
-                migrate = true;
-            }
-
-
-            const key = this.buildSettingsKey();
-            const startSettings = useUserSettings().get(key,null )
-            if (startSettings) {
-                this.startSettings = startSettings
-            }
-
-            
-            if (migrate) {
-                // TODO: uncomment next line, once feature toggle NEW_ROUTES_UI has been removed
-                //useUserSettings().set(legacy,null)
-                useUserSettings().set(key,this.startSettings)
-
+            if (showNextOverwrite) {
+                const card = getRouteList().getCard(this.route?.description?.next)
+                const route = card?.getData()
+                if (!route || (route.description.requiresDownload && !route.description.isDownloaded)) {
+                    showNextOverwrite = false
+                }
+                console.log('~~~ NEXT',route)
             }
         }
         catch(err) {
             this.logError(err,'openSettings')
         }
+        return {settings,showLoopOverwrite,showNextOverwrite}
 
-        return this.startSettings
     }
 
     changeSettings(props:RouteSettings) {
         try {
-            this.startSettings = props
+            this.startSettings = {...props}
 
             // update User Settings
             const userSettings = useUserSettings()
             const key = this.buildSettingsKey();
             userSettings.set(key,props,true)
+
         }
         catch(err) {
             this.logError(err,'changeSettings')
@@ -395,6 +410,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
     start() {
         try {
             const service = getRouteList()
+
+            console.log('~~~ start', this.startSettings)
 
             service.select( this.route)
             service.setStartSettings({type:this.getCardType(), ...this.startSettings})
@@ -691,6 +708,41 @@ export class RouteCard extends BaseCard implements Card<Route> {
         this.logger.logEvent({message:'error', error:err.message, fn, stack:err.stack})
     }
     
+    protected getSettings() {
+        this.startSettings = { startPos: 0, realityFactor: 100, type: this.getCardType() };
+
+        try {
+            // read vaues from User Settings
+            let migrate = false;
+
+            const legacy = this.buildSettingsKey(true);
+            const legacySettings = useUserSettings().get(legacy, null);
+            if (legacySettings) {
+                this.startSettings = legacySettings;
+                migrate = true;
+            }
+
+
+            const key = this.buildSettingsKey();
+            const startSettings = useUserSettings().get(key, null);
+            if (startSettings) {
+                this.startSettings = startSettings;
+            }
+
+
+            if (migrate) {
+                // TODO: uncomment next line, once feature toggle NEW_ROUTES_UI has been removed
+                //useUserSettings().set(legacy,null)
+                useUserSettings().set(key, this.startSettings);
+
+            }
+        }
+        catch (err) {
+            this.logError(err, 'getSettings');
+        }
+        return this.startSettings
+    }
+
 
 
 

@@ -333,10 +333,14 @@ export class RouteListService extends IncyclistService {
     }
 
 
-    async getRouteDetails(id:string):Promise<RouteApiDetail> {
+    async getRouteDetails(id:string, expectLocal=false):Promise<RouteApiDetail> {
         try {
             const route = this.routes.find( r => r.description.id===id)
             if (route) {
+
+                if (expectLocal && route.description.requiresDownload && !route.description.isDownloaded)
+                    return;
+
                 if (route.details)
                     return route.details
                 

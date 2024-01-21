@@ -26,6 +26,3 @@ export interface ActiveImportProps {
     observer: Observer
 }
 
-export interface AppStatus {
-    isOnline?: boolean;
-}

@@ -134,4 +134,7 @@ export interface Parser<In, Out extends RouteBase> {
     supportsContent(data:In):boolean
     getData(info:FileInfo,data?:In):Promise<In>
 }
+export interface AppStatus {
+    isOnline?: boolean;
+}
 
