@@ -385,6 +385,9 @@ export class RouteListService extends IncyclistService {
 
             if (!retry) {
                 files.forEach( (file)=>{
+                    if (!file)
+                        return;
+
                     const card = this.addImportCard(file)
                     importCards.push(card)
                     this.emitLists('updated')
@@ -396,6 +399,8 @@ export class RouteListService extends IncyclistService {
 
 
             files.forEach( async (file,idx)=>{
+                if (!file)
+                    return;
                 const importCard = importCards[idx]
                 
             
@@ -426,6 +431,7 @@ export class RouteListService extends IncyclistService {
                         }
                     }
                     else {
+                        route.description.tsImported = Date.now()
                         card = new RouteCard(route,{list:this.myRoutes})
                         card.verify()
                         card.save()
@@ -446,6 +452,7 @@ export class RouteListService extends IncyclistService {
                     importCard.setError(err)
                 }
         
+                
             })
     
 

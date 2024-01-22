@@ -120,7 +120,9 @@ export interface    RouteInfo extends RouteBase{
     isDownloaded?:boolean  
     isDeleted?:boolean  
     originalName?:string 
+    version?:number,    
 }
+
 export type LocalizedText = { [index: string]: string; };
 
 export interface ParseResult<T extends RouteBase> {

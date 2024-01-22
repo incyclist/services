@@ -15,7 +15,7 @@ const score = (r:RouteInfo):number =>{
         val += Math.log10(365-tsAction)
     }
 
-    if( val>1)
+    
     return val;
 
 }

@@ -51,7 +51,13 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
                         let description;
 
                         const existing = this.getDescriptionFromDB(descr.routeId||descr.id)
-                        if (existing) {
+                        const {isDeleted=false} = descr
+
+                        if (existing 
+                              && ((existing.version||0)>=(descr.version||0)) 
+                              && (!isDeleted || (isDeleted && existing.isDownloaded))
+                            ) {
+
                             const details = await this.getDetailsFromDB(existing.id)
                             if (details) {
                                 continue;
@@ -62,7 +68,12 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
                         else {
                             description = this.buildRouteInfo(descr)
                         }
-                        
+
+                        if (!description) {
+                            continue
+                        }
+
+
                         
                         const route = new Route( description)
 
@@ -72,7 +83,13 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
                             this.verifyRouteHash(route)
                             this.emitRouteAdded(route)
                         }
-                        items.push({route,added:isComplete})
+
+                        if (!existing) {
+                            items.push({route,added:isComplete})
+                        }
+                        else {
+                            this.save(route,true)
+                        }
 
                     }
                 }
@@ -191,9 +208,9 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     }
 
     protected buildRouteInfo( descr:RouteApiDescription, isLocal?:boolean): RouteInfo {
-        const { id,routeId,title,localizedTitle,country,distance,elevation, category,provider, video, points,previewUrl,routeHash} = descr
+        const { id,routeId,title,localizedTitle,country,distance,elevation, category,provider, video, points,previewUrl,routeHash,version,isDeleted} = descr
         
-        const data:RouteInfo = { title,localizedTitle,country,distance,elevation,provider,category,previewUrl,routeHash}
+        const data:RouteInfo = { title,localizedTitle,country,distance,elevation,provider,category,previewUrl,routeHash,version,isDeleted}
 
         data.hasVideo = false;
         data.hasGpx = false;

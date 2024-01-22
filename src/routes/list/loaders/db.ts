@@ -100,7 +100,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
                 await this.routesRepo.write('db',this.routeDescriptions.map(this.buildRouteDBInfo.bind(this)) as JSONObject)
             }
             catch(err) {
-                console.log(err)
+                this.logger.logEvent({message:'could not safe repo',error:err.message })
             }
         }
        
@@ -155,12 +155,31 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
         const descriptions = await this.getRoutesRepo().read('db') 
         if (descriptions) {
-            return descriptions as unknown as Array<RouteInfoDBEntry>
+        
+            const routes = descriptions as unknown as Array<RouteInfoDBEntry>
+            const cleaned = this.removeDuplicates(routes)
+            return cleaned
         }
 
         const legacy = await this.loadFromLegacy()
         return legacy
     }
+
+    protected removeDuplicates(routes: Array<RouteInfoDBEntry>) {
+        const ids = routes.map( r=> r.legacyId || r.id)
+        const uniqueIds = ids.filter( (d,pos)=> ids.indexOf(d)===pos)
+
+        const cleaned=[]
+        uniqueIds.forEach( id=> {
+            const routeWithLegacy = routes.find( r=> r.legacyId===id)
+            
+            const route = routeWithLegacy || routes.find( r=> r.id===id)
+            if (route)
+                cleaned.push(route)
+        })
+        return cleaned
+    }
+
 
     protected async loadDetailRecord(target:Route|RouteInfo):Promise<RouteApiDetail> {
         
@@ -174,7 +193,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             description.originalName = details.title
         }
         catch(err) {
-            console.log(err)
+            this.logger.logEvent({message:'could not load route details', id:description?.legacyId || description?.id, reason:err.message, stack:err.stack})
         }
     
         if (!details) {

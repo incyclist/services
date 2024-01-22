@@ -1,3 +1,4 @@
+import { EventLogger } from "gd-eventlog";
 import { JsonRepository } from "../../../api";
 import { Observer } from "../../../base/types/observer";
 import { Route } from "../../base/model/route";
@@ -10,9 +11,17 @@ export abstract class DBLoader<T> extends Loader<T> {
     protected routeDescriptions: Array<T>;
     protected videosRepo: JsonRepository;
     protected routesRepo: JsonRepository;
+    protected logger: EventLogger
 
     protected abstract loadDescriptions(): Promise<Array<T>>;
     protected abstract buildRouteDBInfo(descr: RouteInfo): T;
+
+    constructor() {
+        super()
+
+        this.logger = new EventLogger('RoutesDB')
+    }
+    
 
     load(): Observer {       
         if (this.loadObserver)

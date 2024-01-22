@@ -16,13 +16,15 @@ export interface RouteApiDescription extends RouteBase {
     distance?: number;
     elevation?: number
     points?: { id: string};
-    version?:string;
+    version?:number;
     category?: RouteCategory
     provider?: RouteProvider
     video?: VideoDescription   
     type?: RouteType,
     localizedTitle?:LocalizedText,
-    previewUrl?:string
+    previewUrl?:string,
+    isDeleted?:boolean
+    
 }
 
 export type LegacyRouteGpxRepoDescription = {
