@@ -95,16 +95,16 @@ export class UserSettingsService {
         const settings = this.settings
         const keys = key.split('.');
         if (keys.length<2)
-            return settings[key] || defValue
+            return valid(settings[key]) ? settings[key] : defValue
         
-        const retVal = (value) => valid(value) ? clone(value) : value;
+        const retVal = (value,defValue?) => valid(value) ? clone(value) : defValue;
     
         let child = {}
         for (let index=0;index<keys.length;index++) {
             const k = keys[index];
     
             if (index===keys.length-1)
-                return  retVal(child[k] || defValue);
+                return  retVal(child[k],defValue);
             else { 
                 child = index===0? settings[k] : child[k]
                 if ( child===undefined) {
