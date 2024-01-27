@@ -153,11 +153,13 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             route.id = getRouteHash(route)
         route.routeHash = getRouteHash(route)
 
+        const localizedTitle = typeof(route.localizedTitle)==='string' ? {en:route.localizedTitle} : route.localizedTitle 
+
         const info:RouteInfo ={
             id:route.id,
             originalName: route.originalName,
             title: route.title,
-            localizedTitle: route.localizedTitle,
+            localizedTitle,
             category:route.category,
             country:route.country,
             distance:route.distance,

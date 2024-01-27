@@ -226,6 +226,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
         try {
             const descr = this.getRouteDescription()
 
+            // bugfix: some legacy routes had localizedTitle as String
+            if ( typeof(descr.localizedTitle)==='string') {
+                descr.localizedTitle = { en:descr.localizedTitle}
+                this.save()
+            }
+
             let {points} = descr
             if (points && !Array.isArray(points)) {
                 points = undefined

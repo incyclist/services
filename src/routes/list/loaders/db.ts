@@ -223,6 +223,10 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             delete details.decoded
         }        
 
+        if (details.localizedTitle && typeof(details.localizedTitle)==='string') {
+            details.localizedTitle = { en:details.localizedTitle}
+        }
+        
         validateDistance(details.points)
         updateSlopes(details.points)
 

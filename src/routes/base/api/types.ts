@@ -64,7 +64,7 @@ export type RouteApiDetail = {
     video?: VideoDescription   
     epp?:DaumEpp
     infoTexts?:Array<RouteInfoText>
-    localizedTitle?:LocalizedText
+    localizedTitle?:LocalizedText|string
     previewUrl?:string
     previewUrlLocal?:string
     description?:LocalizedText

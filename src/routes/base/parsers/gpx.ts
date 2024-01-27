@@ -170,11 +170,12 @@ export class GPXParser extends XMLParser {
             route.id = route.routeHash
         
         const isLoop = checkIsLoop(route.points);
+        const localizedTitle = typeof(route.localizedTitle)==='string' ? {en:route.localizedTitle} : route.localizedTitle 
 
         const info:RouteInfo ={
             id:route.id,
             title: route.title,
-            localizedTitle: route.localizedTitle,
+            localizedTitle,
             country:route.country,
             distance:route.distance,
             elevation:route.elevation,
