@@ -39,7 +39,7 @@
   },
   "dependencies": {
     "axios": "^1.6.1",
-    "incyclist-devices": "^2.1.39",
+    "incyclist-devices": "^2.1.40",
     "md5": "^2.3.0",
     "promise.any": "^2.0.6",
     "uuid": "^9.0.0",
