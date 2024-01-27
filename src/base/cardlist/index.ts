@@ -3,7 +3,6 @@ import { PromiseObserver } from "../types/observer"
 
 export interface Card<T>{
     getId():string
-    getState()
     getData():T
     setData(data:T)
     getCardType()
