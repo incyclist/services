@@ -18,7 +18,7 @@ import { DownloadObserver } from "../../download/types";
 import { RouteDownloadService } from "../../download/service";
 import { getLocalizedData } from "../../base/utils/localization";
 import { EventLogger } from "gd-eventlog";
-import { getPosition } from "../../base/utils/route";
+import { getPosition} from "../../base/utils/route";
 
 
 export interface SummaryCardDisplayProps extends RouteInfo{
@@ -201,7 +201,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
-    getRouteDescription(): RouteInfo { 
+    getRouteDescription(): RouteInfo {         
         return this.route?.description||{}        
     }
 
@@ -287,7 +287,6 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 if (!route || (route.description.requiresDownload && !route.description.isDownloaded)) {
                     showNextOverwrite = false
                 }
-                console.log('~~~ NEXT',route)
             }
         }
         catch(err) {
@@ -410,8 +409,6 @@ export class RouteCard extends BaseCard implements Card<Route> {
     start() {
         try {
             const service = getRouteList()
-
-            console.log('~~~ start', this.startSettings)
 
             service.select( this.route)
             service.setStartSettings({type:this.getCardType(), ...this.startSettings})
@@ -742,8 +739,5 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
         return this.startSettings
     }
-
-
-
 
 }

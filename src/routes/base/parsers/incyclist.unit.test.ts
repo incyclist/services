@@ -1,6 +1,8 @@
 import { loadFile } from '../../../../__tests__/utils/loadFile'
 import { FileInfo, getBindings } from '../../../api'
 import { IncyclistXMLParser } from './incyclist'
+import path from 'path'
+import { IFileSystem } from '../../../api/fs'
 
 describe('IncyclistParser',()=>{
     let parser:IncyclistXMLParser
@@ -23,18 +25,23 @@ describe('IncyclistParser',()=>{
 
 
         describe('import',()=>{
+            let fs;
+
             beforeEach( ()=>{
                 parser = new IncyclistXMLParser()
-                
+                getBindings().path = path;
+                fs = getBindings().fs = { existsSync:jest.fn().mockReturnValue(true)} as unknown as IFileSystem
+    
             })
     
     
-    
+
             test('valid file',async ()=>{
                 const file = './__tests__/data/rlv/Triathlon_Woerrstadt_Loop.xml'
   
                 
                 getBindings().loader = { open: load}
+            
                 const fileInfo:FileInfo = {type:'file', filename:file, name:'Triathlon_Woerrstadt_Loop.xml', ext:'xml',dir:'./__tests__/data/routes',url:undefined, delimiter:'/'}
                 const {data,details} = await parser.import(fileInfo)
                     
@@ -71,6 +78,32 @@ describe('IncyclistParser',()=>{
                 expect(data.elevation).toBeCloseTo(459,0)
                 expect(data.hasVideo).toBe(true)
                 expect(data.previewUrl).toBe(`file:///${dir}/FR_Source_Drome_Part_1.png`)
+                expect(data.videoFormat).toBe('mp4')
+                expect(data.isLocal).toBe(true)
+                expect(data.id).toBe('e60beaa7-1238-41c9-adbb-6be022de73ca')
+                expect(details.routeHash).toBe('3d94fa436f9d90bb28c1a8ad08bb9bf8')
+                expect(data.routeHash).toBe('3d94fa436f9d90bb28c1a8ad08bb9bf8')
+
+                expect(details.video?.mappings.length).toBe(4182)
+
+            })
+
+            test('file with non-existing preview',async ()=>{
+                const name = 'FR_Source_Drome_Part_1.xml'
+                const dir = './__tests__/data/rlv'
+                const filename = `${dir}/${name}`
+                
+                getBindings().loader = { open: load}
+                fs.existsSync = jest.fn().mockReturnValue(false)
+                const fileInfo:FileInfo = {type:'file', filename, name, ext:'xml',dir,url:undefined, delimiter:'/'}
+                const {data,details} = await parser.import(fileInfo)
+                    
+                expect(data.title).toBe('Source Drôme 1 - Col de Prémol')
+                expect(data.country).toBe('FR')
+                expect(data.distance).toBeCloseTo(22100,-2)
+                expect(data.elevation).toBeCloseTo(459,0)
+                expect(data.hasVideo).toBe(true)
+                expect(data.previewUrl).toBeUndefined()
                 expect(data.videoFormat).toBe('mp4')
                 expect(data.isLocal).toBe(true)
                 expect(data.id).toBe('e60beaa7-1238-41c9-adbb-6be022de73ca')

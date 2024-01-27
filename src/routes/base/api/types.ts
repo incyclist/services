@@ -1,4 +1,4 @@
-import { DaumEpp, LocalizedText, RouteBase, RouteCategory, RouteInfoText, RoutePoint, RouteProvider, RouteType, VideoDescription } from "../types"
+import { DaumEpp, LocalizedText, RouteBase, RouteCategory, RouteInfoText, RoutePoint, RouteProvider, RouteSegment, RouteType, VideoDescription } from "../types"
 
 export type RouteDescriptionQuery = {
     category?: string
@@ -24,6 +24,8 @@ export interface RouteApiDescription extends RouteBase {
     localizedTitle?:LocalizedText,
     previewUrl?:string,
     isDeleted?:boolean
+    selectableSegments?: Array<RouteSegment>
+
     
 }
 
@@ -68,7 +70,8 @@ export type RouteApiDetail = {
     description?:LocalizedText
     next?:string
     
-
+    // deprecated
+    selectableSegments?: Array<RouteSegment> 
 }    
 
 

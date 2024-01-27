@@ -100,7 +100,6 @@ export default class IncyclistRoutesApi {
             return res.data?.url;           
         }
         catch(err) {
-            this.logger.logEvent({message:'preview not found',routeId})
             return undefined
         }
     }

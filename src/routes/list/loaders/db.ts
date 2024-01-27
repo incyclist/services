@@ -8,6 +8,7 @@ import { RouteInfoDBEntry } from "./types"
 import { DBLoader } from "./DBLoader"
 import { RouteApiDetail } from "../../base/api/types"
 import { waitNextTick } from "../../../utils"
+import { getTotalElevation, updateSlopes, validateDistance } from "../../base/utils/route"
 
 @Singleton
 export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
@@ -191,9 +192,25 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             const id = description.legacyId || description.id
             details = await repo.read(id) as RouteApiDetail
             description.originalName = details.title
+
+            if (description.hasVideo) {                
+                description.segments = details.video?.selectableSegments|| details?.selectableSegments 
+            }
+
         }
         catch(err) {
-            this.logger.logEvent({message:'could not load route details', id:description?.legacyId || description?.id, reason:err.message, stack:err.stack})
+            this.logger.logEvent({message:'could not load route details', id:description?.legacyId || description?.id, title:description?.title, reason:err.message, stack:err.stack})
+
+            if (description.id && description.legacyId !== description.id) {
+                try {                    
+                    details = await repo.read(description.id) as RouteApiDetail
+                    description.originalName = details.title
+                }
+                catch(err) {
+                    this.logger.logEvent({message:'could not load route details', id:description?.legacyId || description?.id, title:description?.title, reason:err.message, stack:err.stack})
+                }
+            }        
+
         }
     
         if (!details) {
@@ -205,6 +222,13 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             details.points = details.decoded
             delete details.decoded
         }        
+
+        validateDistance(details.points)
+        updateSlopes(details.points)
+
+        if (!description.elevation) {
+            description.elevation = getTotalElevation(details)
+        }
         return details
     }
     

@@ -136,16 +136,12 @@ export class RouteListService extends IncyclistService {
             this.logEvent( {message:'close route list'})
             this.observer?.emit('stopped')
             this.observer.reset()
-            //delete this.observer;
-    
-            this.resetCards()
-    
+   
+            this.resetCards()   
         }
         catch(err) {
             this.logError(err, 'close')
         }
-
-
     }
  
     search( requestedFilters?:SearchFilter ) {
@@ -345,6 +341,13 @@ export class RouteListService extends IncyclistService {
                     return route.details
                 
                 route.details = await this.db.getDetails(id)
+
+                // fix: legacy items might have selectableSegments in root instead of in video
+                if (!route.details.video.selectableSegments && route.details.selectableSegments) {
+                    route.details.video.selectableSegments = route.details.selectableSegments
+                    delete route.details.selectableSegments                                        
+                }
+
                 return route.details
             }
     
@@ -409,37 +412,24 @@ export class RouteListService extends IncyclistService {
                     const {data,details} = await RouteParser.parse(file)              
     
                     const route = new Route(data,details as RouteApiDetail)
+                    route.description.tsImported = Date.now()
                     
                     const existing = this.findCard(route)
-                    let card:RouteCard
     
-                    if (existing ) {
-    
-                        if (existing.list.getId()===this.myRoutes.getId()) {
-                            card = existing.card as RouteCard
-                            card.updateRoute(route)    
-                            route.description.tsImported = Date.now()
-                        }
-                        else {
-                            existing.list.remove( existing.card)
-                            card = new RouteCard(route,{list:this.myRoutes})
-                            card.verify()
-                            card.save()
-                            card.enableDelete()
-                            
-                            this.myRoutes.add( card, true )
-                        }
+                    if (existing ) {   
+                        existing.list.remove( existing.card)
                     }
-                    else {
-                        route.description.tsImported = Date.now()
-                        card = new RouteCard(route,{list:this.myRoutes})
-                        card.verify()
-                        card.save()
-                        card.enableDelete()
-    
-                        this.myRoutes.add( card, true )
+                    else  {
                         this.routes.push(route)
                     }
+                        
+                    const card = new RouteCard(route,{list:this.myRoutes})
+                    card.verify()
+                    card.save()
+                    card.enableDelete()
+                    
+                    this.myRoutes.add( card, true )
+
                     this.myRoutes.remove(importCard)
                     card.enableDelete(true)              
                     this.emitLists('updated')     
@@ -660,11 +650,14 @@ export class RouteListService extends IncyclistService {
                 return;
             }
 
+            this.logEvent({message:'preview not found',title:descr.originalName||descr.title, id: descr.id})
+
+
         }
         catch (err){
-            console.log('~~~ ERR',err)
-            // ignrore - we will try to create it with ffmpeg
+            this.logError(err,'createPreview')            
         }
+        
         // As we would be overloading ffmpeg by creating multiple screenshots
         // at the same time, we are queueing the requests        
         return new Promise( done => {

@@ -78,6 +78,9 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             country = country || countryPrefix
         }
 
+        let previewUrl = data['previewURL']
+        if (previewUrl?.startsWith('https://www.reallifevideo.de/rlv.php')) 
+            previewUrl=undefined
 
         context.route= {
             title: name,
@@ -85,7 +88,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             localizedTitle: data['title'] || name,
             country: country,
             id: data['id'],
-            previewUrl: data['previewURL'],
+            previewUrl,
             previewUrlLocal: data['preview'],
             distance:0,
             elevation:0,
@@ -374,7 +377,16 @@ const getVideoUrl = (info:FileInfo,route: RouteApiDetail):string => {
 
 const getPreviewUrl = (info:FileInfo,route: RouteApiDetail):string => {
     const url = route?.previewUrl 
-    const file = route?.previewUrlLocal
+    let file = route?.previewUrlLocal
+
+    if (file) {
+        const path= getBindings().path
+        const fs = getBindings().fs
+        const filename = file.startsWith(info.ext) || file.match(/[A-Za-z]:.*/) ? file : path.join(info.dir,file)
+        if (!fs.existsSync(filename))
+            file=undefined
+
+    }
     return getReferencedFileInfo(info,{file,url},'file')
 }
 

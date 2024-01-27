@@ -43,7 +43,7 @@ export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
         data.hasVideo = false;
         data.hasGpx = type==='gpx'
         data.isLocal = this.getIsLocal(descr)
-        
+
 
         this.updateRouteCountry(data,{descr})
         this.updateRouteTitle(data,{descr})

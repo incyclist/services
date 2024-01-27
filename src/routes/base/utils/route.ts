@@ -128,8 +128,27 @@ export const validateRoute = (route:RouteApiDetail):void =>{
     if (!route?.points?.length)
         return;
 
+    validateDistance(route.points)
     updateSlopes(route.points);
+
 }
+
+export const validateDistance = (points:Array<RoutePoint>) => {
+    let prev = undefined
+    points.forEach( (p,idx) => {
+        if (!p.routeDistance) {
+            if (idx==0) {
+                p.routeDistance=0;
+            }
+            else {
+                p.routeDistance = (prev?.distance||0)+(prev?.routeDistance||0)
+            }
+        }
+        prev = p;
+    })
+
+}
+
 
 export const getTotalElevation = (route:RouteApiDetail):number =>{
     if (!route?.points?.length)

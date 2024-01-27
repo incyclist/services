@@ -4,7 +4,7 @@ export const getLocalizedData = (data:RouteInfo , language:string='en'):RouteInf
     
     const updated = {...data}
 
-    if (language && data.localizedTitle ) {
+    if (language && data.localizedTitle && Array.isArray(data.localizedTitle) ) {
         updated.title = data.localizedTitle[language]
         delete updated.localizedTitle
     }

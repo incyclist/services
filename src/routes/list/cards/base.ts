@@ -26,9 +26,6 @@ export class BaseCard implements Card<Route> {
     getId(): string {
         throw new Error("Method not implemented.");
     }
-    getState() {
-        throw new Error("Method not implemented.");
-    }
     getData(): Route {
         throw new Error("Method not implemented.");
     }
