@@ -3576,7 +3576,7 @@ exports[`BikeLabParser import valid file 1`] = `
     "routeHash": "d3fe29ae2af56ea604f5ad28dfb29702",
     "title": "Randa",
     "video": {
-      "file": "https://videos.incyclist.com/DE_Arnbach.mp4",
+      "file": undefined,
       "format": "mp4",
       "framerate": undefined,
       "mappings": [
@@ -3652,7 +3652,7 @@ exports[`BikeLabParser import valid file 1`] = `
       ],
       "next": undefined,
       "selectableSegments": undefined,
-      "url": undefined,
+      "url": "file:///./__tests__/data/rlv/Randa.xml",
     },
   },
 }

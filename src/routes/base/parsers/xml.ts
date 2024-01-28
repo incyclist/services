@@ -173,7 +173,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             isLocal: true,
             isLoop: checkIsLoop(route.points),
             videoFormat: route.video.format,
-            videoUrl: getVideoUrl(fileInfo,route),
+            videoUrl: this.getVideoUrl(fileInfo,route),
             previewUrl: getPreviewUrl(fileInfo,route),
             routeHash:route.routeHash
     
@@ -182,7 +182,11 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
     }
 
 
-
+    protected getVideoUrl = (info:FileInfo,route: RouteApiDetail):string => {
+        const {file,url} = route?.video||{}
+        return getReferencedFileInfo(info,{file,url},'video')
+        
+    }
 
     protected async parseVideo (context:XmlParserContext) {
         const {data,route,fileInfo} = context
@@ -210,7 +214,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         route.infoTexts = parseInformations(data['informations'])
         route.next = route.video.next
 
-        const videoUrl = getVideoUrl(fileInfo,route)
+        const videoUrl = this.getVideoUrl(fileInfo,route)
         if (videoUrl) {
             route.video.file = undefined;
             route.video.url = videoUrl
@@ -371,11 +375,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
 
 
-const getVideoUrl = (info:FileInfo,route: RouteApiDetail):string => {
-    const {file,url} = route?.video||{}
-    return getReferencedFileInfo(info,{file,url},'video')
-    
-}
+
 
 const getPreviewUrl = (info:FileInfo,route: RouteApiDetail):string => {
     const url = route?.previewUrl 

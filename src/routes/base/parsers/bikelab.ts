@@ -97,7 +97,7 @@ export class BikeLabParser extends XMLParser{
     }
 
     protected async parseVideo(context: XmlParserContext): Promise<void> {
-        const {data,route} = context
+        const {data,route,fileInfo} = context
 
 
         route.video = {
@@ -128,6 +128,14 @@ export class BikeLabParser extends XMLParser{
             prev = mapping;
             return mapping;
         });
+
+
+        const videoUrl = this.getVideoUrl(fileInfo,route)
+        if (videoUrl) {
+            route.video.file = undefined;
+            route.video.url = videoUrl
+        }
+
 
         // add video speed data
         addVideoSpeed(route.points,route.video.mappings);
