@@ -330,6 +330,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     delete():PromiseObserver<boolean> {
         try {
+
+            const service = getRouteList()
+            service.unselectCard(this)
+
             // already deleting
             if (this.deleteObserver)
                 return this.deleteObserver
@@ -428,7 +432,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     cancel() {
-        // nothing todo - UI needs to close the window
+        const service = getRouteList()
+        service.unselect()
+
     }
 
     addWorkout() {

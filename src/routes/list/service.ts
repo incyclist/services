@@ -1,5 +1,5 @@
 import { FileInfo, getBindings} from "../../api";
-import { CardList } from "../../base/cardlist";
+import { Card, CardList } from "../../base/cardlist";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { PromiseObserver } from "../../base/types/observer";
@@ -378,6 +378,15 @@ export class RouteListService extends IncyclistService {
 
     select(route:Route) {
         this.selectedRoute = route
+    }
+
+    selectCard(card:Card<Route>) {
+        this.selectedRoute = card.getData()
+        
+    }
+    unselectCard(card:Card<Route>) {
+        if ( this.selectedRoute === card.getData())
+            this.selectedRoute = undefined
     }
 
     import( info:FileInfo|Array<FileInfo>, retry?:ActiveImportCard):void {
