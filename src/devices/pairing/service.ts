@@ -349,8 +349,11 @@ export class DevicePairingService  extends IncyclistService{
         let changed:boolean = false;
     
         try {
+            const adapter = this.getDeviceAdapter(udid) 
+            if (!adapter)
+                return;
+            
             if (addAll) {
-                const adapter = this.getDeviceAdapter(udid) 
                 const capabilities = adapter.getCapabilities().filter( name=> this.wouldChangeCapability(name,udid) )
 
                 capabilities.forEach( (c,idx) => {
@@ -1682,6 +1685,9 @@ export class DevicePairingService  extends IncyclistService{
 
 
     protected pauseAdapters(adapters: AdapterInfo[],enforced=false) {
+        if (!adapters)
+            return;
+
         const capabilities = this.state.capabilities;
 
         capabilities.forEach(c => {
