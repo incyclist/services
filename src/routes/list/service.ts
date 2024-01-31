@@ -269,7 +269,7 @@ export class RouteListService extends IncyclistService {
             })
         }
         catch(err) {
-            this.logError(err,'onCarouselInitialized')
+            this.logError(err,'onCarouselUpdated')
         }
 
     }

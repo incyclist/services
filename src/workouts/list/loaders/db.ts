@@ -1,9 +1,10 @@
 import { JSONObject, JsonRepository } from "../../../api"
 import { Singleton } from "../../../base/types"
-import {  PromiseObserver } from "../../../base/types/observer"
+import {  Observer, PromiseObserver } from "../../../base/types/observer"
 import { Loader } from "./loader"
 import { Plan, Workout } from "../../base/model/Workout"
 import { EventLogger } from "gd-eventlog"
+import { waitNextTick } from "../../../utils"
 
 @Singleton
 export class WorkoutsDbLoader extends Loader{
@@ -21,8 +22,49 @@ export class WorkoutsDbLoader extends Loader{
         super()
         this.workouts = []     
         this.isDirty = true;
-        this.logger = new EventLogger('WorkoutsDB')
+        this.logger = new EventLogger('WorkoutsDB')        
     }
+
+    load(): Observer {       
+        if (this.loadObserver)
+            return this.loadObserver;
+
+        this.loadObserver = new Observer();
+        this._load();
+        return this.loadObserver;
+
+    }
+
+    stopLoad() {
+        delete this.loadObserver;
+    }
+
+
+
+    protected getRepo() {
+        if (!this.repo)
+            this.repo  =JsonRepository.create('workouts')
+        return this.repo
+    }
+
+    protected async _load() {
+
+        const workouts = await this.getRepo().read('db') 
+        if (workouts) {
+
+            const items = workouts as unknown as Array<Workout|Plan>
+            items.forEach( item=> {
+                const workout = new Workout(item)
+                this.workouts.push(workout )
+                this.emitAdded(workout)
+            })
+            
+        }
+
+        this.emitDone()
+      
+    }
+
 
     async save(workout:Workout|Plan):Promise<void> {
         const stringify = (json) => { try {JSON.stringify(json)} catch {/* */}}
@@ -92,6 +134,27 @@ export class WorkoutsDbLoader extends Loader{
         }
 
     }
+
+    protected emitUpdated(workout: Workout|Plan) {
+        if (this.loadObserver)
+            this.loadObserver.emit('workout.updated',workout)
+    }
+    protected emitAdded(workout: Workout|Plan) {
+        if (this.loadObserver)
+            this.loadObserver.emit('workout.added',workout)
+    }
+
+
+    protected emitDone() {
+        if (this.loadObserver)
+            this.loadObserver.emit('done')
+        
+        waitNextTick().then(()=>{
+            this.loadObserver.reset()
+            delete this.loadObserver
+        })
+    }
+
 
 
 }

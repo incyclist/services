@@ -1,6 +1,6 @@
 import Step from './Step'
 import Segment from './Segment'
-import { DataType, PlanDefinition, ScheduledWorkout, SegmentDefinition, StepDefinition, WorkoutDefinition } from './types';
+import { Category, DataType, PlanDefinition, ScheduledWorkout, SegmentDefinition, StepDefinition, WorkoutDefinition } from './types';
 import { valid } from '../../../utils/valid';
 import md5 from 'md5'
 
@@ -9,6 +9,7 @@ export class Workout extends Segment implements WorkoutDefinition {
     _hash:string
     name:string;
     description: string
+    category?:Category
 
     constructor( opts:WorkoutDefinition) {        
         super(opts,true);
@@ -18,6 +19,23 @@ export class Workout extends Segment implements WorkoutDefinition {
         this.id = opts.id|| this.hash
         this.description= opts.description || undefined;        
         this.repeat = 1;
+        this.type = 'workout'
+        this.category = opts.category
+
+        this.steps = []
+        this.start = this.end = this.duration =0
+
+        opts.steps?.forEach( s=> {
+            try {
+                if (s.type==='step')
+                    this.addStep(s)
+                if (s.type==='segment' && (s as Segment).steps )
+                    this.addSegment(s)
+            }
+            catch{
+                // ignore
+            }
+        })
         
         
        
@@ -45,7 +63,7 @@ export class Workout extends Segment implements WorkoutDefinition {
             else {
                 const s = new Step(step);
                 this.push(s);
-            }
+            }            
         }
     }
 

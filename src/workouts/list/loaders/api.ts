@@ -1,6 +1,7 @@
 import { Observer } from "../../../base/types/observer";
 import { waitNextTick } from "../../../utils";
 import { IncyclistWorkoutsApi} from "../../base/api";
+import { PlanDefinition } from "../../base/model";
 import { Workout,Plan } from "../../base/model/Workout";
 import { WorkoutsDbLoader } from "./db";
 import { Loader } from "./loader";
@@ -31,7 +32,7 @@ export class WorkoutsApiLoader extends Loader {
                 let data = record;
 
                 if (record.type==='workout') data = new Workout(record)
-                if (record.type==='plan') data = new Plan(record)
+                if (record.type==='plan') data = new Plan(record as PlanDefinition)
 
                 const id = data.id
                 const fromDB = this.getFromDB(id)

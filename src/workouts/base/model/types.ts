@@ -43,7 +43,7 @@ export interface SegmentDefinition extends StepDefinition {
 
 export interface Category {
     name: string,
-    index: number
+    index?: number
 }
 
 export interface WorkoutDefinition extends SegmentDefinition {

@@ -14,6 +14,9 @@ export interface Card<T>{
     isVisible():boolean
     setVisible(visible:boolean)
     equals( card:Card<T>):boolean 
+
+    select():void
+    unselect():void
 }
 
 
@@ -62,6 +65,8 @@ export class CardList<T>  {
     }
 
     remove(card: Card<T>) {
+        console.log('~~~ remove',this.cards)
+
         const idx = this.cards.findIndex( c=> c.equals(card) )
         if (idx!==-1) {
                 if ( this.selected && card.equals(this.selected)) {
@@ -69,6 +74,9 @@ export class CardList<T>  {
                 }
             this.cards.splice(idx,1)
         }
+
+        console.log('~~~ remove done',this.cards)
+
     }
 
 }

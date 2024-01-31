@@ -758,6 +758,14 @@ describe('PairingService',()=>{
                     {udid:'1', selected:true},
                     {udid:'2'}
                 ])
+                svc.getDeviceAdapter = jest.fn( udid=> {
+
+                    if (udid==='1' || udid==='2' || udid==='3') return  {  
+                        isStarted:jest.fn().mockReturnValue(false),
+                        pause:jest.fn().mockResolvedValue(true)
+                    } as unknown as IncyclistDeviceAdapter
+                  
+                })
 
                 await svc.selectDevice( IncyclistCapability.Power,'3')
 

@@ -56,7 +56,7 @@ describe('ZwoParser',()=>{
 
         class P extends ZwoParser {
             parse(data) {
-                const w = new Workout({name:''})
+                const w = new Workout({type:'workout',name:''})
                 return super.parse(data,w)
             }
         }

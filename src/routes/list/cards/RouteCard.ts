@@ -19,6 +19,7 @@ import { RouteDownloadService } from "../../download/service";
 import { getLocalizedData } from "../../base/utils/localization";
 import { EventLogger } from "gd-eventlog";
 import { getPosition} from "../../base/utils/route";
+import { getWorkoutList } from "../../../workouts";
 
 
 export interface SummaryCardDisplayProps extends RouteInfo{
@@ -52,7 +53,8 @@ export type RouteSettings = StartSettings & RouteStartSettings
 export type RouteCardProps = {
     settings:RouteSettings,
     showLoopOverwrite:boolean,
-    showNextOverwrite:boolean
+    showNextOverwrite:boolean,
+    hasWorkout?:boolean
 }
 
 
@@ -281,11 +283,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
     openSettings():RouteCardProps {
 
         const settings =this.getSettings();
-        let showLoopOverwrite, showNextOverwrite
+        const workouts = getWorkoutList()
+
+        let showLoopOverwrite, showNextOverwrite;
+        let hasWorkout=true
 
         try {
             showLoopOverwrite = this.route?.description?.isLoop
             showNextOverwrite = valid(this.route?.description?.next) 
+
+            hasWorkout = valid(workouts.getSelected())
 
             if (showNextOverwrite) {
                 const card = getRouteList().getCard(this.route?.description?.next)
@@ -298,7 +305,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         catch(err) {
             this.logError(err,'openSettings')
         }
-        return {settings,showLoopOverwrite,showNextOverwrite}
+        return {settings,showLoopOverwrite,showNextOverwrite,hasWorkout}
 
     }
 
@@ -431,6 +438,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
     }
 
+
     cancel() {
         const service = getRouteList()
         service.unselect()
@@ -438,7 +446,18 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     addWorkout() {
-        // TODO
+        try {
+            const service = getRouteList()
+
+            service.select( this.route)
+            service.setStartSettings({type:this.getCardType(), ...this.startSettings})
+
+            this.route.description.tsLastStart = Date.now()
+            this.updateRoute(this.route)
+        }
+        catch(err) {
+            this.logError(err,'addWorkout')
+        }
     }
 
     getCurrentDownload():Observer {

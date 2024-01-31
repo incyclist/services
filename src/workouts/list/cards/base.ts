@@ -59,6 +59,9 @@ export class BaseCard implements Card<Workout> {
     }
 
     onMounted(){}
+    select() {}
+    unselect() {}
+
 
 }
 

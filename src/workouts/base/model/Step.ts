@@ -1,6 +1,6 @@
 import clone from "../../../utils/clone"
 import { valid } from "../../../utils/valid"
-import { CurrentStep, Limit, PowerLimit, StepDefinition } from "./types"
+import { CurrentStep, DataType, Limit, PowerLimit, StepDefinition } from "./types"
 
 export const STEP_TYPE = {
     STEP : 'step',
@@ -15,7 +15,7 @@ export const POWER_TYPE = {
 
 
 export default class Step implements StepDefinition {
-    public type: 'step' | 'segment'
+    public type: DataType
     public start?:number
     public end?:number
     public duration: number
@@ -29,10 +29,10 @@ export default class Step implements StepDefinition {
 
     constructor( opts?, ignoreValidate?:boolean) {
 
-        const {start,end,duration, power,cadence,hrm, text, work, steady, cooldown} = opts||{}
+        const {type,start,end,duration, power,cadence,hrm, text, work, steady, cooldown} = opts||{}
         const numVal = (s) => typeof(s)==='string' ? Number(s) : s
 
-        this.type = 'step';
+        this.type = type ||'step';
         this.start = (valid(start)) ? numVal(start) : undefined;
         this.end = (valid(end)) ? numVal(end) : undefined;
         this.duration = (valid(duration)) ? numVal(duration) :0;

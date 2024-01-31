@@ -74,6 +74,10 @@ export class BaseCard implements Card<Route> {
         }
     }
 
+    select() {}
+    unselect() {}
+
+
 }
 
 

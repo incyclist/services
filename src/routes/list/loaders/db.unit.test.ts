@@ -81,7 +81,6 @@ async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, t:'vide
             });           
     });
 
-    console.log('done - observer:',loader['loadObserver'])
     videosRepo.read = jest.fn()
     routesRepo.read = jest.fn()
 

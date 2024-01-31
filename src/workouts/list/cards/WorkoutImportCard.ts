@@ -49,4 +49,6 @@ export class WorkoutImportCard extends BaseCard implements Card<Workout> {
         return { title, filters, visible: true };
     }
 
+
+
 }

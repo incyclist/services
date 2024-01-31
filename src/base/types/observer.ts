@@ -79,7 +79,7 @@ export class PromiseObserver<T> extends Observer {
                     resolve(res)
                 })
                 .catch(err => {
-                    this.emitter('error',err)
+                    this.emitter.emit('error',err)
                     reject(err)
                 })
     
