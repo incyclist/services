@@ -89,8 +89,9 @@ export class RouteDownloadService extends IncyclistService {
 
     protected async downloadRoute(route:Route, targetDir:string, observer:DownloadObserver):Promise<void> {
 
+        let url;
         try {
-            const url = route.description.downloadUrl || route.description.videoUrl
+            url = route?.description?.downloadUrl || route?.description?.videoUrl
             const {id,title} = route.description;
 
             const {path,downloadManager} = getBindings()
@@ -118,7 +119,7 @@ export class RouteDownloadService extends IncyclistService {
             session.start()
         }
         catch(err) {
-            this.logError(err,'downloadRoute')
+            this.logError(err,'downloadRoute',url)
             observer.emit('error',err)
         }        
 
