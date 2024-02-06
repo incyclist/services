@@ -8,7 +8,7 @@ import { WorkoutsDbLoader } from "../loaders/db";
 import { useUserSettings } from "../../../settings";
 import { getWorkoutList, useWorkoutList } from '../service'
 import { waitNextTick } from "../../../utils";
-import Segment from "../../base/model/Segment";
+import { Segment} from "../../base/model/Segment";
 import { valid } from "../../../utils/valid";
 
 export class WorkoutCard extends BaseCard implements Card<Workout> {

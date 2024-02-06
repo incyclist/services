@@ -1,8 +1,8 @@
 import { valid } from '../../../utils/valid';
-import Step from './Step'
+import { Step } from './Step'
 import { CurrentStep, SegmentDefinition, StepDefinition } from './types';
 
-export default class Segment extends Step implements SegmentDefinition {
+export class Segment extends Step implements SegmentDefinition {
 
     steps: Array<Step>
     repeat: number

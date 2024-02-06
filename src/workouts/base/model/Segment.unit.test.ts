@@ -1,5 +1,5 @@
-import Step, {STEP_TYPE} from './Step'
-import Segment from  './Segment'
+import {Step, STEP_TYPE} from './Step'
+import {Segment} from  './Segment'
 
 
 describe ( 'Segment' ,() => {

@@ -106,6 +106,45 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         return {observer: this.observer, lists:this.getLists() }
     }
 
+    openSettings(): {observer:ListObserver<WP>,workouts:CardList<Workout> } {
+
+        let workouts:CardList<Workout>
+        try {
+            this.logEvent( {message:'open workout settings'})
+            const emitStartEvent = async()=> {
+                process.nextTick( ()=>{    
+                    this.observer?.emit('started')
+                })
+                
+            }
+
+            if (!this.observer) {
+                this.observer = new ListObserver<WP>(this)
+                emitStartEvent()
+            }    
+
+            if (!this.initialized && !this.preloadObserver) {
+                this.preload()
+            }
+
+            /*
+            const items = this.items??[]
+            workouts = items
+                .filter(i=>i.type==='workout')
+                .sort( (a,b) => a.name>b.name ? 1: -1)
+                */
+
+            workouts = this.createSettingsList() as CardList<Workout>
+        }
+        catch(err) {
+            this.logError(err,'openSettings')
+        }
+
+        console.log('~~~ returning',{observer:this.observer, workouts})
+        return {observer:this.observer, workouts}
+
+    }
+
     close(): void {
         
     }
@@ -251,6 +290,25 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         }
     }
 
+    async importSingle( info:FileInfo):Promise<Workout> {
+            
+        const workout = await WorkoutParser.parse(info)              
+        const existing = this.findCard(workout)
+
+        if (existing ) {   
+            existing.list.remove( existing.card)
+        }
+        else  {
+            this.items.push(workout)
+        }
+            
+        const card = new WorkoutCard(workout,{list:this.myWorkouts as CardList<Workout>})
+        card.save()
+        card.enableDelete(true)
+        
+        this.myWorkouts.add( card )
+        return workout
+    }
     addList(name:string):CardList<WP> {
         const cnt = this.lists.length;
         const list = new CardList<WP>( `${cnt}:${name}`, name)
@@ -400,6 +458,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
 
+    
     protected addItem(item:WP):void {       
         const list = this.selectList(item)
 
@@ -519,6 +578,21 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     protected updateStartSettings() {
         const userSettings = useUserSettings()        
         userSettings.set('preferences.useErgMode',this.startSettings?.useErgMode)
+    }
+
+    createSettingsList(): CardList<WP> {
+        const list = new CardList<Workout>('settings', 'Workouts')
+        list.add(new WorkoutImportCard())
+        const sorted = this.items
+            .sort( (a,b)=> a.name>b.name ? 1: -1)
+        sorted.forEach( i=> {
+            if (i.type==='workout') {
+                const card = new WorkoutCard( i as Workout,{list})
+                list.add(card)
+            }
+        })
+
+        return list;
     }
 
 

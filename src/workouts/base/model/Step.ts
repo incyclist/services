@@ -14,7 +14,7 @@ export const POWER_TYPE = {
 
 
 
-export default class Step implements StepDefinition {
+export class Step implements StepDefinition {
     public type: DataType
     public start?:number
     public end?:number
@@ -161,37 +161,37 @@ export default class Step implements StepDefinition {
             return ({});
         const type = isPower ? limit.type : undefined
 
-        const rv = (limits) => this.getRemainder( isPower ? { ...limits, type} : limits, includeStepInfo)
+        const sl = (limits) => this.getRemainder( isPower ? { ...limits, type} : limits, includeStepInfo)
 
         const part = (ts-this.start) / this.duration;
 
 
         if ( limit!==undefined ) {
             if ( limit.max===undefined && limit.min===undefined) {
-                return rv({})
+                return sl({})
             }
 
             let min,max;
             if ( this.cooldown) {
                 if ( limit.max===undefined && limit.min!==undefined) {
-                    return rv({min:limit.min})
+                    return sl({min:limit.min})
                 } 
                 max = limit.min!==undefined ? limit.max-part*(limit.max-limit.min) : limit.max-part*(limit.max)
                 min = isPower ? max : limit.min
             }
             else {
                 if ( limit.max===undefined && limit.min!==undefined) {
-                    return rv({min:limit.min})
+                    return sl({min:limit.min})
                 } 
                 if ( limit.min===undefined && limit.max!==undefined) {
-                    return rv({max:limit.max})
+                    return sl({max:limit.max})
                 } 
                 max = min = limit.max!==undefined ? part*(limit.max-limit.min)+limit.min : limit.max
                 min = isPower ? max : limit.min
             }
             limit = {min,max}
         }
-        return rv(limit);
+        return sl(limit);
     }
 
 }

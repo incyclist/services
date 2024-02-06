@@ -1,5 +1,5 @@
-import Step from './Step'
-import Segment from './Segment'
+import {Step} from './Step'
+import {Segment} from './Segment'
 import { Category, DataType, PlanDefinition, ScheduledWorkout, SegmentDefinition, StepDefinition, WorkoutDefinition } from './types';
 import { valid } from '../../../utils/valid';
 import md5 from 'md5'
