@@ -1,4 +1,4 @@
-import Step,{ POWER_TYPE} from  './Step'
+import {Step, POWER_TYPE} from  './Step'
 
 
 describe ( 'Step' ,() => {
