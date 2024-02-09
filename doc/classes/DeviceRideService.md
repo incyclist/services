@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / DeviceRideService
+[incyclist-services - v1.1.95](../README.md) / DeviceRideService
 
 # Class: DeviceRideService
 
@@ -32,6 +32,9 @@ Provides method to consume a devcie
 - [getAdapters](DeviceRideService.md#getadapters)
 - [setSerialPortInUse](DeviceRideService.md#setserialportinuse)
 - [startAdapters](DeviceRideService.md#startadapters)
+- [startHealthCheck](DeviceRideService.md#starthealthcheck)
+- [stopHealthCheck](DeviceRideService.md#stophealthcheck)
+- [prepareReconnect](DeviceRideService.md#preparereconnect)
 - [start](DeviceRideService.md#start)
 - [startRetry](DeviceRideService.md#startretry)
 - [cancelStart](DeviceRideService.md#cancelstart)
@@ -51,7 +54,11 @@ Provides method to consume a devcie
 
 ### constructor
 
-• **new DeviceRideService**()
+• **new DeviceRideService**(): [`DeviceRideService`](DeviceRideService.md)
+
+#### Returns
+
+[`DeviceRideService`](DeviceRideService.md)
 
 #### Overrides
 
@@ -93,11 +100,11 @@ ___
 
 ### lazyInit
 
-▸ **lazyInit**(): `Promise`<`void`\>
+▸ **lazyInit**(): `Promise`\<`void`\>
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 ___
 
@@ -135,17 +142,17 @@ ___
 
 ### waitForPreviousStartToFinish
 
-▸ **waitForPreviousStartToFinish**(): `Promise`<`boolean`\>
+▸ **waitForPreviousStartToFinish**(): `Promise`\<`boolean`\>
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
 ### startCheck
 
-▸ **startCheck**(`filter`): `Promise`<`void`\>
+▸ **startCheck**(`filter`): `Promise`\<`void`\>
 
 Performs a check if a given device or a group of devices can be started
 The check can be filltered by various criteria: interface(s), capability, udid
@@ -159,7 +166,7 @@ If multiple filter criteria are specified, the will be combined with an AND oper
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 void
 
@@ -204,7 +211,7 @@ ___
 
 ### startAdapters
 
-▸ **startAdapters**(`adapters`, `startType`, `props?`): `Promise`<`boolean`\>
+▸ **startAdapters**(`adapters`, `startType`, `props?`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -216,13 +223,61 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
+
+___
+
+### startHealthCheck
+
+▸ **startHealthCheck**(`ai`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ai` | [`AdapterRideInfo`](../interfaces/AdapterRideInfo.md) |
+
+#### Returns
+
+`void`
+
+___
+
+### stopHealthCheck
+
+▸ **stopHealthCheck**(`ai`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ai` | [`AdapterRideInfo`](../interfaces/AdapterRideInfo.md) |
+
+#### Returns
+
+`void`
+
+___
+
+### prepareReconnect
+
+▸ **prepareReconnect**(`unhealthy`): `Promise`\<`void`\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `unhealthy` | [`AdapterRideInfo`](../interfaces/AdapterRideInfo.md) |
+
+#### Returns
+
+`Promise`\<`void`\>
 
 ___
 
 ### start
 
-▸ **start**(`props`): `Promise`<`boolean`\>
+▸ **start**(`props`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -232,13 +287,13 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
 ### startRetry
 
-▸ **startRetry**(`props`): `Promise`<`boolean`\>
+▸ **startRetry**(`props`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -248,17 +303,17 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
 ### cancelStart
 
-▸ **cancelStart**(): `Promise`<`boolean`\>
+▸ **cancelStart**(): `Promise`\<`boolean`\>
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
@@ -280,7 +335,7 @@ ___
 
 ### stop
 
-▸ **stop**(`udid?`): `Promise`<`boolean`\>
+▸ **stop**(`udid?`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -290,7 +345,7 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
@@ -365,7 +420,7 @@ ___
 
 ### onCyclingModeChanged
 
-▸ **onCyclingModeChanged**(`udid`, `mode`, `settings`): `Promise`<`void`\>
+▸ **onCyclingModeChanged**(`udid`, `mode`, `settings`): `Promise`\<`void`\>
 
 #### Parameters
 
@@ -377,7 +432,7 @@ ___
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 ___
 
@@ -415,7 +470,7 @@ ___
 
 ### getInstance
 
-▸ `Static` **getInstance**(): [`DeviceRideService`](DeviceRideService.md)
+▸ **getInstance**(): [`DeviceRideService`](DeviceRideService.md)
 
 #### Returns
 

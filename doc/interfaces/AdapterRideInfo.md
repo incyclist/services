@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / AdapterRideInfo
+[incyclist-services - v1.1.95](../README.md) / AdapterRideInfo
 
 # Interface: AdapterRideInfo
 
@@ -16,6 +16,11 @@
 - [adapter](AdapterRideInfo.md#adapter)
 - [capabilities](AdapterRideInfo.md#capabilities)
 - [isStarted](AdapterRideInfo.md#isstarted)
+- [tsLastData](AdapterRideInfo.md#tslastdata)
+- [isHealthy](AdapterRideInfo.md#ishealthy)
+- [isRestarting](AdapterRideInfo.md#isrestarting)
+- [dataStatus](AdapterRideInfo.md#datastatus)
+- [ivToCheck](AdapterRideInfo.md#ivtocheck)
 
 ## Properties
 
@@ -52,3 +57,33 @@ ___
 ### isStarted
 
 • **isStarted**: `boolean`
+
+___
+
+### tsLastData
+
+• `Optional` **tsLastData**: `number`
+
+___
+
+### isHealthy
+
+• `Optional` **isHealthy**: `boolean`
+
+___
+
+### isRestarting
+
+• `Optional` **isRestarting**: `boolean`
+
+___
+
+### dataStatus
+
+• `Optional` **dataStatus**: [`HealthStatus`](../README.md#healthstatus)
+
+___
+
+### ivToCheck
+
+• `Optional` **ivToCheck**: `Timeout`

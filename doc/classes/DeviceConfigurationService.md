@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / DeviceConfigurationService
+[incyclist-services - v1.1.95](../README.md) / DeviceConfigurationService
 
 # Class: DeviceConfigurationService
 
@@ -29,6 +29,7 @@ Manages the user configuration of devices and interfaces
 ### Methods
 
 - [init](DeviceConfigurationService.md#init)
+- [setFeature](DeviceConfigurationService.md#setfeature)
 - [isInitialized](DeviceConfigurationService.md#isinitialized)
 - [initFromLegacy](DeviceConfigurationService.md#initfromlegacy)
 - [load](DeviceConfigurationService.md#load)
@@ -66,7 +67,11 @@ Manages the user configuration of devices and interfaces
 
 ### constructor
 
-• **new DeviceConfigurationService**()
+• **new DeviceConfigurationService**(): [`DeviceConfigurationService`](DeviceConfigurationService.md)
+
+#### Returns
+
+[`DeviceConfigurationService`](DeviceConfigurationService.md)
 
 #### Overrides
 
@@ -94,7 +99,7 @@ ___
 
 ### init
 
-▸ **init**(): `Promise`<`void`\>
+▸ **init**(): `Promise`\<`void`\>
 
 Initializes the Device Settings
 
@@ -104,11 +109,28 @@ The init method will check if the settings format is
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 **`Emits`**
 
 __initialized__ Emitted once the configuration is fully initialized
+
+___
+
+### setFeature
+
+▸ **setFeature**(`name`, `enabled`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `name` | `string` |
+| `enabled` | `boolean` |
+
+#### Returns
+
+`void`
 
 ___
 
@@ -176,13 +198,14 @@ ___
 
 ### unselect
 
-▸ **unselect**(`capability`): `void`
+▸ **unselect**(`capability`, `shouldEmit?`): `void`
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `capability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) |
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `capability` | [`ExtendedIncyclistCapability`](../README.md#extendedincyclistcapability) | `undefined` |
+| `shouldEmit` | `boolean` | `true` |
 
 #### Returns
 
@@ -369,13 +392,21 @@ ___
 
 ### getAdapters
 
-▸ **getAdapters**(): [`AdapterInfo`](../interfaces/AdapterInfo.md)[]
+▸ **getAdapters**(`onlySelected?`): [`AdapterInfo`](../interfaces/AdapterInfo.md)[]
 
-provides the list of selected adapters (to be used by the DeviceRideService)
+provides the list of adapters (to be used by the [DeviceRideService](DeviceRideService.md) and [DevicePairingService](DevicePairingService.md) )
+
+#### Parameters
+
+| Name | Type | Default value | Description |
+| :------ | :------ | :------ | :------ |
+| `onlySelected` | `boolean` | `true` | if set to true, only Adapters of selected devices will be returned |
 
 #### Returns
 
 [`AdapterInfo`](../interfaces/AdapterInfo.md)[]
+
+The AdapterInfo List or an empty array
 
 ___
 
@@ -409,7 +440,7 @@ ___
 
 ### getSelectedDevices
 
-▸ **getSelectedDevices**(`capability?`): { `capability`: `IncyclistCapability` ; `selected?`: `string`  }[]
+▸ **getSelectedDevices**(`capability?`): \{ `capability`: `IncyclistCapability` ; `selected?`: `string`  }[]
 
 #### Parameters
 
@@ -419,7 +450,7 @@ ___
 
 #### Returns
 
-{ `capability`: `IncyclistCapability` ; `selected?`: `string`  }[]
+\{ `capability`: `IncyclistCapability` ; `selected?`: `string`  }[]
 
 ___
 
@@ -538,7 +569,7 @@ ___
 
 ### getInstance
 
-▸ `Static` **getInstance**(): [`DeviceConfigurationService`](DeviceConfigurationService.md)
+▸ **getInstance**(): [`DeviceConfigurationService`](DeviceConfigurationService.md)
 
 #### Returns
 
@@ -561,6 +592,7 @@ Marks a device as selected for a given capability
 | `props?` | `Object` | - |
 | `props.noRecursive?` | `boolean` | - |
 | `props.legacy?` | `boolean` | - |
+| `props.emit?` | `boolean` | - |
 
 #### Returns
 

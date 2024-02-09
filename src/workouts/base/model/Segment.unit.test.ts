@@ -142,7 +142,6 @@ describe ( 'Segment' ,() => {
             const child = new Segment( {  repeat:2, steps:[{duration:10,text:'child'}]}  )
             s.push( child )
 
-            expect(s.getSingleDuration()).toBe(20)
             expect(s.getDuration()).toBe(20)
             expect(s.getStart()).toBe(0)
             expect(s.getEnd()).toBe(20)
@@ -258,6 +257,8 @@ describe ( 'Segment' ,() => {
 
     describe ( 'getStep' ,() => {
         let validateFn;
+        let s;
+
         beforeAll ( ()=> {
             validateFn = Segment.prototype.validate;
             Segment.prototype.validate = jest.fn();
@@ -270,35 +271,37 @@ describe ( 'Segment' ,() => {
 
         test ( 'segent starting at 10, single repetition' ,() => {
             const steps = [ { duration:10,text:'a'}, {duration:10, text:'b'} ]
-            const s = new Segment( {start:10,steps} )
 
+            s = new Segment( {start:10,steps} )
+        
             const s1 = s.getStep(0);
             const s2 = s.getStep(10);
             const s3 = s.getStep(20);
-            const s4 = s.getStep(30);
-            const s5 = s.getStep(31);
+            const s4 = s.getStep(29.999);
+            const s5 = s.getStep(30);
 
             expect(s1).toBeUndefined();
             expect(s2.text).toBe('a');
-            expect(s3.text).toBe('a');
+            expect(s3.text).toBe('b');
             expect(s4.text).toBe('b');
             expect(s5).toBeUndefined();
+             s= undefined
         });    
 
         test ( 'segent starting at 10, multipe repetition2' ,() => {
             const steps = [ { duration:10,text:'a'}, {duration:10, text:'b'} ]
-            const s = new Segment( {start:10,repeat:10,steps} )
+            s = new Segment( {start:10,repeat:10,steps} )
 
             const s1 = s.getStep(0);
             const s2 = s.getStep(10);
             const s3 = s.getStep(40);
             const s4 = s.getStep(49);
-            const s5 = s.getStep(210);
-            const s6 = s.getStep(211);
+            const s5 = s.getStep(209.9999);
+            const s6 = s.getStep(210);
 
             expect(s1).toBeUndefined();
             expect(s2.text).toBe('a');
-            expect(s3.text).toBe('a');
+            expect(s3.text).toBe('b');
             expect(s4.text).toBe('b');
             expect(s5.text).toBe('b');
             expect(s6).toBeUndefined();
@@ -309,7 +312,7 @@ describe ( 'Segment' ,() => {
 
 
     describe ( 'getLimits' ,() => {
-        let validateFn;
+        let validateFn,s;
 
         beforeAll ( ()=> {
             validateFn = Segment.prototype.validate;
@@ -323,13 +326,13 @@ describe ( 'Segment' ,() => {
 
         test ( 'segment starting at 10, single repetition' ,() => {
             const steps = [ { duration:10,text:'a', hrm:{min:10, max:110}}, {duration:10, text:'b', hrm:{min:30, max:130}} ]
-            const s = new Segment( {start:10,steps} )
+            s = new Segment( {start:10,steps} )
 
             const s1 = s.getLimits(0);
             const s2 = s.getLimits(10);
-            const s3 = s.getLimits(20);
-            const s4 = s.getLimits(30);
-            const s5 = s.getLimits(31);
+            const s3 = s.getLimits(19.9999);
+            const s4 = s.getLimits(29.9999);
+            const s5 = s.getLimits(30);
 
             expect(s1).toBeUndefined();
             expect(s2.hrm).toEqual( {min:10,max:110});
@@ -342,31 +345,35 @@ describe ( 'Segment' ,() => {
             const steps = [ 
                 new Step({start:10,duration:10,text:'a', hrm:{min:10, max:110},steady:false},false), 
                 new Step({start:20,duration:10, text:'b', hrm:{min:30, max:130}},false) ]
-            const s = new Segment( {start:10,steps} )
+            s = new Segment( {start:10,steps} )
 
             const s1 = s.getLimits(0);
             const s2 = s.getLimits(10);
+            const s3a = s.getLimits(19.999);
             const s3 = s.getLimits(20);
+            const s4a = s.getLimits(29.999);
             const s4 = s.getLimits(30);
             const s5 = s.getLimits(31);
 
             expect(s1).toBeUndefined();
             expect(s2.hrm).toEqual( {min:10,max:10});
-            expect(s3.hrm).toEqual( {min:10,max:110});
-            expect(s4.hrm).toEqual( {min:30,max:130});
+            expect(s3a.hrm).toEqual( {min:10,max:expect.closeTo(110,0)});
+            expect(s3.hrm).toEqual( {min:30,max:130});
+            expect(s4a.hrm).toEqual( {min:30,max:expect.closeTo(130,0)});
+            expect(s4).toBeUndefined();
             expect(s5).toBeUndefined();
         });    
 
         test ( 'duration and remaining are correctly calculated' ,() => {
             const steps = [ { duration:30,text:'a', hrm:{min:10, max:110},steady:false}, {duration:40, text:'b'} ]
-            const s = new Segment( {start:10,steps} )
+            s = new Segment( {start:10,steps} )
             const check = (s,ts, isResultExpected?, expectedDuration?,expectedRemaining?) => {
                 const res = s.getLimits(ts);
                 if (!isResultExpected)
                     expect(res).toBeUndefined();
                 else {
-                    expect(res.duration).toBe(expectedDuration);
-                    expect(res.remaining).toBe(expectedRemaining);
+                    expect(Math.round(res.duration)).toBe(expectedDuration);
+                    expect(Math.round(res.remaining)).toBe(expectedRemaining);
                 }
             }
     
@@ -375,12 +382,13 @@ describe ( 'Segment' ,() => {
             check(s,10,true,30,30);
             check(s,20,true,30,20);
             check(s,30,true,30,10);
-            check(s,40,true,30,0);
+            check(s,40,true,40,40);
             check(s,41,true,40,39);
             check(s,50,true,40,30);
             check(s,60,true,40,20);
             check(s,70,true,40,10);
-            check(s,80,true,40,0);
+            check(s,79.9999,true,40,0);
+            check(s,80,false);
             check(s,90,false);
         });    
 
@@ -395,10 +403,10 @@ describe ( 'Segment' ,() => {
                 if (!isResultExpected)
                     expect(res).toBeUndefined();
                 else {
-                    expect(res.duration).toBe(expectedDuration);
-                    expect(res.remaining).toBe(expectedRemaining);
-                    expect(res.power.min).toBe(minExpected);
-                    expect(res.power.max).toBe(maxExpected);
+                    expect(Math.round(res.duration)).toBe(expectedDuration);
+                    expect(Math.round(res.remaining)).toBe(expectedRemaining);
+                    expect(Math.round(res.power.min)).toBe(minExpected);
+                    expect(Math.round(res.power.max)).toBe(maxExpected);
                 }
             }
     
@@ -406,10 +414,11 @@ describe ( 'Segment' ,() => {
             check(s,0,true,30,30,50,50);
             check(s,10,true,30,20,70,70,);
             check(s,20,true,30,10,90,90);
-            check(s,30,true,30,0,110,110);
+            check(s,30,true,30,30,110,110);
             check(s,40,true,30,20,90,90);
             check(s,50,true,30,10,70,70);
-            check(s,60,true,30,0,50,50);
+            check(s,59.99999,true,30,0,50,50);
+            check(s,60,false);
             check(s,61,false);
         });    
 

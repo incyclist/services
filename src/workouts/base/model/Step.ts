@@ -13,17 +13,40 @@ export const POWER_TYPE = {
 }
 
 
+/** 
+ * @public 
+ * @noInheritDoc
+
+ * This represents a single step within a workout
+ * */
 
 export class Step implements StepDefinition {
+    /** @public identifies the type of the Object (any of 'step', 'segment', 'workout', 'plan'*/
     public type: DataType
+
+    /** @public starting time (in sec since start of workout) of the current step/segment/workout*/
     public start?:number
+
+    /** @public end time (in sec since start of workout) of the current step/segment/workout*/
     public end?:number
+
+    /** @public duration of the current step/segment/workout*/
     public duration: number
+
+    /** @public the limits (max,min) set for power */    
     public power?: PowerLimit
+    /** @public the limits (max,min) set for cadence*/    
     public cadence?: Limit
+    /** @public the limits (max,min) set for power*/    
     public hrm?: Limit
-    public text: string
+
+    /** @public An optional text to be displayed for this step/segment*/    
+    public text?: string
+
+    /** @public identifies if the current step represents a work(true) or rest period (false) */    
     public work: boolean
+
+    /** @public boolean to identify if the current step represents a work or rest period */    
     public steady: boolean
     public cooldown: boolean
 
@@ -48,77 +71,37 @@ export class Step implements StepDefinition {
             this.validate();
     }
 
-    validate() {
+    /** validates the values set for this seto/segment/workout
+     * 
+     * This will check that
+     * - Start/End time and duration are correctly set
+     * - Limits (if set) do contain at least a min or a max value and don't contradict  (e.g. min>max)
+     * 
+     * @throws Error Error object containing the cause of the validation failure
+    */
+    validate():void {
         this.validateTiming();
         this.validatePower();
         this.validateCadence();
         this.validateHrm();
     }
 
+    /** @return number  duration (in sec) of the current step/segment/workout*/
     getDuration():number { return this.duration}
+
+    /** @return number  starting time (in sec since start of workout) of the current step/segment/workout*/
     getStart():number { return this.start}
+    /** @return number  end time (in sec since start of workout) of the current step/segment/workout*/
     getEnd():number { return this.end}
 
-    validateTiming():boolean {
-        if ( this.start===undefined && this.end===undefined ) {
-            throw new Error(`Invalid Step description, start or end needs to be provided `)
-        }
-        else if ( this.start!==undefined && this.end===undefined) {
-            this.end = this.start+ this.duration
-            return true;
-        }
-        else if ( this.start===undefined && this.end!==undefined) {
-            this.start = this.end - this.duration
-            return true;
-        }
 
-        else if ( this.start!==undefined && this.end!==undefined && this.duration===0) {
-            this.duration = this.end - this.start
-            if ( this.duration<0) throw new Error(`Invalid Step description, duration:${this.duration} `)
-            return true;
-        }
-        else {
-            const delta  = Math.abs(this.duration - ( this.end-this.start))
-            if ( delta>0) throw new Error(`Invalid step description, duration does not match start and end `)
-            return true;
-        }
-    }
-
-    validateLimit( p:Limit, name:string):boolean {
-        if ( valid(p)) {
-            if (p.min===undefined && p.max===undefined)
-                throw new Error(`Invalid Step description, ${name}: no values specified`)
-
-            if (p.min!==undefined && p.max!==undefined && p.min>p.max )
-                throw new Error(`Invalid Step description, min ${name} > max ${name}`)
-            if (p.min!==undefined && p.min<0)
-                throw new Error(`Invalid Step description, min ${name} <0`)
-            if (p.max!==undefined && p.max<0)
-                throw new Error(`Invalid Step description, max ${name} <0`)
-
-        }
-        return true;
-    }
-
-    validatePower():boolean {
-        if ( valid(this.power)) {
-            const p = this.power;
-            if (p.type===undefined) 
-                p.type= 'watt';
-
-            return this.validateLimit(p, 'power')
-        }
-        return true;
-    }
-
-    validateCadence() {
-        return this.validateLimit(this.cadence, 'cadence')
-    }
-    validateHrm() {
-        return this.validateLimit(this.hrm, 'hrm')
-    }
-
-    getLimits( ts:number,includeStepInfo:boolean=false) {
+    /** returns the limits for a given timestamp within the training
+     * 
+     *
+     * 
+     * @throws Error Error object containing the cause of the validation failure
+    */
+    getLimits( ts:number,includeStepInfo:boolean=false):CurrentStep {
         
         const rv = (limits) => this.getRemainder(limits, includeStepInfo)
 
@@ -148,7 +131,68 @@ export class Step implements StepDefinition {
 
     }
 
-    getRemainder ( limits:CurrentStep, includeStepInfo:boolean=false):CurrentStep  {
+    /**  @ignore */
+    public validateTiming():boolean {
+        if ( this.start===undefined && this.end===undefined ) {
+            throw new Error(`Invalid Step description, start or end needs to be provided `)
+        }
+        else if ( this.start!==undefined && this.end===undefined) {
+            this.end = this.start+ this.duration
+            return true;
+        }
+        else if ( this.start===undefined && this.end!==undefined) {
+            this.start = this.end - this.duration
+            return true;
+        }
+
+        else if ( this.start!==undefined && this.end!==undefined && this.duration===0) {
+            this.duration = this.end - this.start
+            if ( this.duration<0) throw new Error(`Invalid Step description, duration:${this.duration} `)
+            return true;
+        }
+        else {
+            const delta  = Math.abs(this.duration - ( this.end-this.start))
+            if ( delta>0) throw new Error(`Invalid step description, duration does not match start and end `)
+            return true;
+        }
+    }
+
+    protected validateLimit( p:Limit, name:string):boolean {
+        if ( valid(p)) {
+            if (p.min===undefined && p.max===undefined)
+                throw new Error(`Invalid Step description, ${name}: no values specified`)
+
+            if (p.min!==undefined && p.max!==undefined && p.min>p.max )
+                throw new Error(`Invalid Step description, min ${name} > max ${name}`)
+            if (p.min!==undefined && p.min<0)
+                throw new Error(`Invalid Step description, min ${name} <0`)
+            if (p.max!==undefined && p.max<0)
+                throw new Error(`Invalid Step description, max ${name} <0`)
+
+        }
+        return true;
+    }
+
+    protected validatePower():boolean {
+        if ( valid(this.power)) {
+            const p = this.power;
+            if (p.type===undefined) 
+                p.type= 'watt';
+
+            return this.validateLimit(p, 'power')
+        }
+        return true;
+    }
+
+    protected validateCadence() {
+        return this.validateLimit(this.cadence, 'cadence')
+    }
+    protected validateHrm() {
+        return this.validateLimit(this.hrm, 'hrm')
+    }
+
+
+    protected getRemainder ( limits:CurrentStep, includeStepInfo:boolean=false):CurrentStep  {
         if (limits===undefined) return;
         if ( includeStepInfo)
             limits.step = this;
@@ -156,7 +200,7 @@ export class Step implements StepDefinition {
     }
 
 
-    calc  (ts,limit,includeStepInfo:boolean, isPower=false)  {
+    protected calc  (ts,limit,includeStepInfo:boolean, isPower=false)  {
         if (!limit)
             return ({});
         const type = isPower ? limit.type : undefined

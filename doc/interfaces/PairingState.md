@@ -1,6 +1,12 @@
-[incyclist-services - v1.0.36](../README.md) / PairingState
+[incyclist-services - v1.1.95](../README.md) / PairingState
 
 # Interface: PairingState
+
+## Hierarchy
+
+- **`PairingState`**
+
+  ↳ [`InternalPairingState`](InternalPairingState.md)
 
 ## Table of contents
 
@@ -33,4 +39,4 @@ ___
 
 ### adapters
 
-• `Optional` **adapters**: [`AdapterRideInfo`](AdapterRideInfo.md)[]
+• `Optional` **adapters**: [`AdapterInfo`](AdapterInfo.md)[]

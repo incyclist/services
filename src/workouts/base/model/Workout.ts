@@ -4,12 +4,19 @@ import { Category, DataType, PlanDefinition, ScheduledWorkout, SegmentDefinition
 import { valid } from '../../../utils/valid';
 import md5 from 'md5'
 
+/** 
+ * @public 
+
+ * This represents a workout
+ * */
+
 export class Workout extends Segment implements WorkoutDefinition {
-    id:string
+
+    public id:string
     _hash:string
-    name:string;
-    description: string
-    category?:Category
+    public name:string;
+    public description: string
+    public category?:Category
 
     constructor( opts:WorkoutDefinition) {        
         super(opts,true);
@@ -49,6 +56,12 @@ export class Workout extends Segment implements WorkoutDefinition {
 
         this._hash = md5( JSON.stringify({name,description,steps,repeat }))
         return this._hash
+    }
+
+    getSegment(time:number):Segment {
+        const s = this.steps.find( s=> s.getStart()<=time && s.getEnd()>time)
+        if (s.type==='segment')
+            return s as Segment;
     }
 
     addStep( step:StepDefinition) {        

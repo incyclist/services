@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / DevicePairingService
+[incyclist-services - v1.1.95](../README.md) / DevicePairingService
 
 # Class: DevicePairingService
 
@@ -21,7 +21,7 @@ This service depends on
 
 ## Hierarchy
 
-- `EventEmitter`
+- `IncyclistService`
 
   ↳ **`DevicePairingService`**
 
@@ -38,15 +38,17 @@ This service depends on
 - [startDeviceSelection](DevicePairingService.md#startdeviceselection)
 - [stopDeviceSelection](DevicePairingService.md#stopdeviceselection)
 - [selectDevice](DevicePairingService.md#selectdevice)
-- [delectDevice](DevicePairingService.md#delectdevice)
+- [deleteDevice](DevicePairingService.md#deletedevice)
+- [unselectDevices](DevicePairingService.md#unselectdevices)
 - [changeInterfaceSettings](DevicePairingService.md#changeinterfacesettings)
+- [mappedCapability](DevicePairingService.md#mappedcapability)
 - [getInstance](DevicePairingService.md#getinstance)
 
 ## Constructors
 
 ### constructor
 
-• **new DevicePairingService**(`services?`)
+• **new DevicePairingService**(`services?`): [`DevicePairingService`](DevicePairingService.md)
 
 #### Parameters
 
@@ -54,15 +56,19 @@ This service depends on
 | :------ | :------ |
 | `services?` | [`Services`](../interfaces/Services.md) |
 
+#### Returns
+
+[`DevicePairingService`](DevicePairingService.md)
+
 #### Overrides
 
-EventEmitter.constructor
+IncyclistService.constructor
 
 ## Methods
 
 ### start
 
-▸ **start**(`onStateChanged`): `Promise`<`void`\>
+▸ **start**(`onStateChanged`): `Promise`\<`void`\>
 
 Starts the pairing process
 
@@ -78,7 +84,7 @@ or it will trigger a full scan. The full scan will timeout every 30s and will be
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 **`Example`**
 
@@ -97,7 +103,7 @@ ___
 
 ### stop
 
-▸ **stop**(): `Promise`<`void`\>
+▸ **stop**(): `Promise`\<`void`\>
 
 Stops the pairing process
 
@@ -107,7 +113,7 @@ Also: The method will pause the devices, so that communication can be properly r
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 **`Example`**
 
@@ -170,7 +176,7 @@ ___
 
 ### stopDeviceSelection
 
-▸ **stopDeviceSelection**(): `Promise`<`void`\>
+▸ **stopDeviceSelection**(): `Promise`\<`void`\>
 
 Stops the device selection process
 
@@ -180,7 +186,7 @@ This method will also automatically restart the pairing process
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 **`Example`**
 
@@ -197,7 +203,7 @@ ___
 
 ### selectDevice
 
-▸ **selectDevice**(`capability`, `udid`, `addAll?`): `Promise`<`void`\>
+▸ **selectDevice**(`capability`, `udid`, `addAll?`): `Promise`\<`void`\>
 
 Should be called when the user has selcted a device. This device will then become the active(selected) device for this capability.
 Typically the UI will close the Device selectio screen. Therefore, this method will also internally call [stopDeviceSelection](DevicePairingService.md#stopdeviceselection)
@@ -214,7 +220,7 @@ This method will also automatically restart the pairing process
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 **`Example`**
 
@@ -229,9 +235,9 @@ Does not throw errors
 
 ___
 
-### delectDevice
+### deleteDevice
 
-▸ **delectDevice**(`capability`, `udid`, `deleteAll?`): `Promise`<`void`\>
+▸ **deleteDevice**(`capability`, `udid`, `deleteAll?`): `Promise`\<`void`\>
 
 Should be called when the user want to delete a device. This device will then be removed from this capability
 
@@ -239,7 +245,7 @@ In case the debice was previously selected, the next device (by order in list) w
 
 As the user might want to delete multiple devices, the screen will typically remain open
 
-This method not stop an ongoing scan. I.e. if the device will be detected again in the scan, it will be re-added
+This method does not stop an ongoing scan. I.e. if the device will be detected again in the scan, it will be re-added
 
 #### Parameters
 
@@ -251,7 +257,7 @@ This method not stop an ongoing scan. I.e. if the device will be detected again 
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 **`Example`**
 
@@ -266,9 +272,38 @@ Does not throw errors
 
 ___
 
+### unselectDevices
+
+▸ **unselectDevices**(`capability`): `Promise`\<`void`\>
+
+Should be called when the user wants to unselect all devices for a capability
+
+#### Parameters
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `capability` | `IncyclistCapability` | the capability to be managed <br><br> One of ( 'control', 'power', 'heartrate', 'speed', 'cadence') |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+**`Example`**
+
+```ts
+const service = useDevicePairing()
+await service.unselectCapability('control)
+```
+
+**`Throws`**
+
+Does not throw errors
+
+___
+
 ### changeInterfaceSettings
 
-▸ **changeInterfaceSettings**(`name`, `settings`): `Promise`<`void`\>
+▸ **changeInterfaceSettings**(`name`, `settings`): `Promise`\<`void`\>
 
 Should be called when the user has changed the iterface settings ( enabled/disabled and interface)
 
@@ -285,7 +320,7 @@ If the enable state has changed it will then
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 **`Example`**
 
@@ -300,9 +335,25 @@ Does not throw errors
 
 ___
 
+### mappedCapability
+
+▸ **mappedCapability**(`c`): [`CapabilityData`](../interfaces/CapabilityData.md)
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `c` | [`CapabilityInformation`](../interfaces/CapabilityInformation.md) |
+
+#### Returns
+
+[`CapabilityData`](../interfaces/CapabilityData.md)
+
+___
+
 ### getInstance
 
-▸ `Static` **getInstance**(): [`DevicePairingService`](DevicePairingService.md)
+▸ **getInstance**(): [`DevicePairingService`](DevicePairingService.md)
 
 #### Returns
 

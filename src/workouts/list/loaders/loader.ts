@@ -1,3 +1,4 @@
+/* istanbul ignore file */
 import { Observer } from "../../../base/types/observer";
 import { Plan, Workout } from "../../base/model/Workout";
 

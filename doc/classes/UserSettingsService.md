@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / UserSettingsService
+[incyclist-services - v1.1.95](../README.md) / UserSettingsService
 
 # Class: UserSettingsService
 
@@ -16,7 +16,11 @@
 - [isInitialized](UserSettingsService.md#isinitialized)
 - [isDirty](UserSettingsService.md#isdirty)
 - [savePromise](UserSettingsService.md#savepromise)
+- [instanceId](UserSettingsService.md#instanceid)
+- [initPromise](UserSettingsService.md#initpromise)
+- [observers](UserSettingsService.md#observers)
 - [\_instance](UserSettingsService.md#_instance)
+- [\_defaultBinding](UserSettingsService.md#_defaultbinding)
 
 ### Methods
 
@@ -25,23 +29,30 @@
 - [getAll](UserSettingsService.md#getall)
 - [get](UserSettingsService.md#get)
 - [set](UserSettingsService.md#set)
+- [requestNotifyOnChange](UserSettingsService.md#requestnotifyonchange)
+- [stopNotifyOnChange](UserSettingsService.md#stopnotifyonchange)
 - [update](UserSettingsService.md#update)
 - [updateSettings](UserSettingsService.md#updatesettings)
 - [save](UserSettingsService.md#save)
 - [onAppClose](UserSettingsService.md#onappclose)
 - [getInstance](UserSettingsService.md#getinstance)
+- [setDefaultBinding](UserSettingsService.md#setdefaultbinding)
 
 ## Constructors
 
 ### constructor
 
-• **new UserSettingsService**(`binding?`)
+• **new UserSettingsService**(`binding?`): [`UserSettingsService`](UserSettingsService.md)
 
 #### Parameters
 
 | Name | Type |
 | :------ | :------ |
 | `binding?` | [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md) |
+
+#### Returns
+
+[`UserSettingsService`](UserSettingsService.md)
 
 ## Properties
 
@@ -77,13 +88,37 @@ ___
 
 ### savePromise
 
-• **savePromise**: `Promise`<`boolean`\>
+• **savePromise**: `Promise`\<`boolean`\>
+
+___
+
+### instanceId
+
+• **instanceId**: `number`
+
+___
+
+### initPromise
+
+• **initPromise**: `Promise`\<`boolean`\>
+
+___
+
+### observers
+
+• **observers**: \{ `id`: `string` ; `key`: `string` ; `observer`: `Observer`  }[] = `[]`
 
 ___
 
 ### \_instance
 
 ▪ `Static` **\_instance**: [`UserSettingsService`](UserSettingsService.md)
+
+___
+
+### \_defaultBinding
+
+▪ `Static` **\_defaultBinding**: [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md)
 
 ## Methods
 
@@ -105,11 +140,11 @@ ___
 
 ### init
 
-▸ **init**(): `Promise`<`boolean`\>
+▸ **init**(): `Promise`\<`boolean`\>
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
@@ -158,9 +193,42 @@ ___
 
 ___
 
+### requestNotifyOnChange
+
+▸ **requestNotifyOnChange**(`requesterId`, `key`): `Observer`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `requesterId` | `string` |
+| `key` | `string` |
+
+#### Returns
+
+`Observer`
+
+___
+
+### stopNotifyOnChange
+
+▸ **stopNotifyOnChange**(`requesterId`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `requesterId` | `string` |
+
+#### Returns
+
+`void`
+
+___
+
 ### update
 
-▸ **update**(`data`): `Promise`<`boolean`\>
+▸ **update**(`data`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -170,13 +238,13 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
 ### updateSettings
 
-▸ **updateSettings**(`data`): `Promise`<`boolean`\>
+▸ **updateSettings**(`data`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -186,34 +254,50 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
 ### save
 
-▸ **save**(): `Promise`<`void`\>
+▸ **save**(): `Promise`\<`void`\>
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 ___
 
 ### onAppClose
 
-▸ **onAppClose**(): `Promise`<`void`\>
+▸ **onAppClose**(): `Promise`\<`void`\>
 
 #### Returns
 
-`Promise`<`void`\>
+`Promise`\<`void`\>
 
 ___
 
 ### getInstance
 
-▸ `Static` **getInstance**(): [`UserSettingsService`](UserSettingsService.md)
+▸ **getInstance**(): [`UserSettingsService`](UserSettingsService.md)
 
 #### Returns
 
 [`UserSettingsService`](UserSettingsService.md)
+
+___
+
+### setDefaultBinding
+
+▸ **setDefaultBinding**(`binding`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `binding` | [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md) |
+
+#### Returns
+
+`void`

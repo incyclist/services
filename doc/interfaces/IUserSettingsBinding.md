@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / IUserSettingsBinding
+[incyclist-services - v1.1.95](../README.md) / IUserSettingsBinding
 
 # Interface: IUserSettingsBinding
 
@@ -19,17 +19,17 @@
 
 ### getAll
 
-▸ **getAll**(): `Promise`<`any`\>
+▸ **getAll**(): `Promise`\<`any`\>
 
 #### Returns
 
-`Promise`<`any`\>
+`Promise`\<`any`\>
 
 ___
 
 ### set
 
-▸ **set**(`key`, `value`): `Promise`<`boolean`\>
+▸ **set**(`key`, `value`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -40,13 +40,13 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
 ### save
 
-▸ **save**(`settings`, `final?`): `Promise`<`boolean`\>
+▸ **save**(`settings`, `final?`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -57,7 +57,7 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 

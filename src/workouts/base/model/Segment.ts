@@ -2,9 +2,12 @@ import { valid } from '../../../utils/valid';
 import { Step } from './Step'
 import { CurrentStep, SegmentDefinition, StepDefinition } from './types';
 
+/** @public */
 export class Segment extends Step implements SegmentDefinition {
 
+    /** @public the individual steps of this segment */
     steps: Array<Step>
+    /** @public number of repetitions */
     repeat: number
 
     constructor( opts:SegmentDefinition=null, ignoreValidate?:boolean) {
@@ -65,6 +68,7 @@ export class Segment extends Step implements SegmentDefinition {
         this.validateTiming();
     }
 
+    /** @ignore */
     validateTiming() {
         let prev;
 
@@ -79,7 +83,46 @@ export class Segment extends Step implements SegmentDefinition {
         return true;
     }
 
-    prepareNext(json:StepDefinition|SegmentDefinition) {
+    getDuration() {
+        return this.getSingleDuration() * this.repeat;
+    }
+
+    getStart() {
+        if ( this.start!==undefined)
+            return this.start;
+        else {
+            if ( this.steps.length>0 )
+                return this.steps[0].start
+            else 
+                return undefined;
+        }
+    }
+
+    getEnd() {
+        return this.getStart()+this.getDuration();
+    }
+
+    getLimits(ts,includeStepInfo=false):CurrentStep {
+        const step = this.getStep(ts);
+        if ( step===undefined) 
+            return undefined;
+        
+        const segTime = ts-this.getStart();
+        const stepDuration = this.getSingleDuration();
+
+        let part = (segTime % stepDuration);
+        if (part===stepDuration)
+            part=0;
+
+        part +=this.getStart()
+        if ( part===this.getStart() && segTime>0 && segTime<stepDuration)
+            part+=stepDuration;
+        
+        
+        return step.getLimits(part,includeStepInfo);
+    }
+
+    protected prepareNext(json:StepDefinition|SegmentDefinition) {
         /* istanbul ignore next */
         if ( json===undefined)
             return;
@@ -93,6 +136,8 @@ export class Segment extends Step implements SegmentDefinition {
         }
     }
 
+    // push methos is in principle protected, but in order to support testing it was declared public
+    /** @ignore */
     push(s) {
         if ( s===undefined)
             return;
@@ -111,58 +156,28 @@ export class Segment extends Step implements SegmentDefinition {
         
     }
 
-    getDuration() {
-        return this.getSingleDuration() * this.repeat;
-    }
 
-    getSingleDuration() {
+    protected getSingleDuration() {
         if (this.steps.length===0) return 0;
         return this.steps.map(s=>s.duration).reduce( (a,b) => a+b );
     }
 
-    getStart() {
-        if ( this.start!==undefined)
-            return this.start;
-        else {
-            if ( this.steps.length>0 )
-                return this.steps[0].start
-            else 
-                return undefined;
-        }
-    }
 
-    getEnd() {
-        return this.getStart()+this.getDuration();
-    }
-
-    getStep(ts:number):Step {
-        if  (ts>=this.getStart() && ts<=this.getEnd()) {
+    protected getStep(ts:number):Step {
+        if  (ts>=this.getStart() && ts<this.getEnd()) {
             const segTime = ts-this.getStart();
             let part = (segTime % this.getSingleDuration());
+            if (part===this.getSingleDuration())
+                part=0;
             part +=this.getStart()
-            if ( part===this.getStart() && segTime>0)
+            if ( part===this.getStart() && segTime>0 && segTime<this.getSingleDuration())
                 part+=this.getSingleDuration();
             const found = this.steps.find( s => {
-                return (part>=s.start && part<=s.end) 
+                return (part>=s.start && part<s.end) 
             })
             return found;
         }
         
-    }
-
-    getLimits(ts,includeStepInfo=false):CurrentStep {
-        const step = this.getStep(ts);
-        if ( step===undefined) 
-            return undefined;
-        
-        const segTime = ts-this.getStart();
-        let part = (segTime % this.getSingleDuration());
-        part +=this.getStart()
-        if ( part===this.getStart() && segTime>0)
-            part+=this.getSingleDuration();
-        
-        
-        return step.getLimits(part,includeStepInfo);
     }
 
 }

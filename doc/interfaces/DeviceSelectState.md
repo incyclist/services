@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / DeviceSelectState
+[incyclist-services - v1.1.95](../README.md) / DeviceSelectState
 
 # Interface: DeviceSelectState
 
@@ -8,6 +8,7 @@
 
 - [capability](DeviceSelectState.md#capability)
 - [devices](DeviceSelectState.md#devices)
+- [isScanning](DeviceSelectState.md#isscanning)
 
 ## Properties
 
@@ -20,3 +21,9 @@ ___
 ### devices
 
 • **devices**: [`DevicePairingData`](DevicePairingData.md)[]
+
+___
+
+### isScanning
+
+• `Optional` **isScanning**: `boolean`

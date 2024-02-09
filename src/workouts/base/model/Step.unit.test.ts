@@ -138,10 +138,9 @@ describe ( 'Step' ,() => {
         
     });    
 
-
     describe ( 'validate Power' ,() => {
 
-        let validateFn
+        let validateFn,s
 
         beforeAll( ()=> {
             validateFn = Step.prototype.validate
@@ -154,7 +153,7 @@ describe ( 'Step' ,() => {
 
         function run  (json)  {
             const step = { power:json }
-            const s = new Step(step)
+            s = new Step(step)
             try {
                 const res = s.validatePower();
                 if (res) return s;
@@ -222,7 +221,7 @@ describe ( 'Step' ,() => {
 
     describe ( 'validate Min Max' ,() => {
 
-        let validateFn
+        let validateFn,s
 
         beforeAll( ()=> {
             validateFn = Step.prototype.validate
@@ -235,7 +234,7 @@ describe ( 'Step' ,() => {
 
         function run  (json,name)  {
             
-            const s = new Step({})
+            s = new Step({})
             try {
                 s.validateLimit(json,name);
                 return undefined;
