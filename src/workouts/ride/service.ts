@@ -302,7 +302,7 @@ export class WorkoutRide extends IncyclistService{
      */
     forward():void {
         try {
-            const ts = this.getTime()
+            const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts);
             
@@ -326,8 +326,9 @@ export class WorkoutRide extends IncyclistService{
      * 
      */
     backward():void {
+
         try {
-            const ts = this.getTime()
+            const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts);
 
@@ -450,12 +451,14 @@ export class WorkoutRide extends IncyclistService{
             const title = this.getStepTitle(this.trainingTime)
 
             
-            return {
+            const props = {
                 workout:this.workout, title, 
                 ftp:this.settings.ftp, 
                 current:this.currentLimits,
                 start,stop
             }
+
+            return props
 
         }        
         catch(err)  { 
@@ -546,6 +549,7 @@ export class WorkoutRide extends IncyclistService{
 
             this.setCurrentLimits(time)
 
+
             if (Math.round(time)!==prevTime)
                 this.emit('update', this.getDashboardDisplayProperties())
         }
@@ -577,7 +581,7 @@ export class WorkoutRide extends IncyclistService{
         const request:ActiveWorkoutLimit = {time:0, duration:0, remaining:0} 
         
         if ( limits!==undefined) {
-            request.time = time;
+            request.time = Math.round(time);
             request.minPower = this.getPowerVal(limits.power,'min')
             request.maxPower = this.getPowerVal(limits.power,'max')
             request.minCadence = limits?.cadence?.min ? Math.round(limits.cadence.min) : undefined;
@@ -662,20 +666,6 @@ export class WorkoutRide extends IncyclistService{
 
         return Math.round(val+this.manualPowerOffset);
 
-    }
-
-    protected getTime() {
-        
-        if ( this.state==='initialized' || this.state==='idle')
-            return 0;
-        
-        let ts = (this.tsCurrent-this.tsStart-(this.offset||0)) / 1000 + this.manualTimeOffset
-        if (ts<0) {
-            this.manualTimeOffset-=ts;
-            ts = 0;
-        }
-
-        return ts;
     }
 
     protected getFtpFromUserSettings() {

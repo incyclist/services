@@ -489,7 +489,7 @@ describe('WorkoutRide',()=>{
         })
 
         test('error',()=>{ 
-            s.getTime = jest.fn( ()=>{ throw new Error()})
+            s.workout.getLimits = jest.fn( ()=>{ throw new Error()})
             s.logError = jest.fn()
 
             service.forward()
@@ -505,6 +505,7 @@ describe('WorkoutRide',()=>{
             {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
             {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'} 
         ] })
+
 
         let s,service:WorkoutRide
         let  emit;
@@ -524,33 +525,35 @@ describe('WorkoutRide',()=>{
             jest.resetAllMocks()
         })
 
-        test('beginning of step, should move to previous step',()=>{
-            const time = 181
+        const setTime = (time:number) => {            
             s.tsCurrent = Date.now()
-            s.tsStart = Date.now()-time*1000
-            s.trainingTime = time;
+            s.tsStart = Date.now() - time * 1000
+            s.trainingTime = time
+        }
+
+        test('beginning of step, should move to previous step',()=>{
+            setTime(181)
             s.settings.ftp = 100
 
             service.backward()
 
             expect(s.manualTimeOffset).toBe(-61)
             expect( emit).toHaveBeenCalledWith('request-update',expect.objectContaining({duration:60,minPower:50,maxPower:50 }))
-            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({title:'Test Workout: Test Segment(1/10) - Test Relax',current:expect.objectContaining({duration:60,minPower:50,maxPower:50 })}))
+            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({title:'Test Workout: Test Segment(1/10) - Test Relax',current:expect.objectContaining({time:120,duration:60,minPower:50,maxPower:50 })}))
+
         })
 
         test('after 15s of step, should move to current step',()=>{
-            const time = 195
-            s.tsCurrent = Date.now()
-            s.tsStart = Date.now()-time*1000
-            s.trainingTime = time;
+            setTime(195)
             s.settings.ftp = 100
 
             service.backward()
 
             expect(s.manualTimeOffset).toBe(-15)
             expect( emit).toHaveBeenCalledWith('request-update',expect.objectContaining({duration:120,minPower:100,maxPower:100 }))
-            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({title:'Test Workout: Test Segment(2/10) - Test Work',current:expect.objectContaining({duration:120,minPower:100,maxPower:100 })}))
+            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({title:'Test Workout: Test Segment(2/10) - Test Work',current:expect.objectContaining({time:180,duration:120,minPower:100,maxPower:100 })}))
         })
+
 
         test('at beginning of first step',()=>{
             const time = 5
@@ -569,12 +572,35 @@ describe('WorkoutRide',()=>{
         })
 
         test('error',()=>{ 
-            s.getTime = jest.fn( ()=>{ throw new Error()})
+            s.workout.getLimits = jest.fn( ()=>{ throw new Error()})
             s.logError = jest.fn()
 
             service.backward()
             expect(s.logError).toHaveBeenCalled()
         })
+
+        test('bugfix: incorect time after backwrd',async ()=>{
+            s.settings.ftp = 100
+            const workout = new Workout({type:'workout',name:'Test Workout'})
+            workout.addStep( {type:'step', steady:false, work:false, duration:300, power:{min:45,max:55,type:'pct of FTP'}, text:'Warmup'})
+            workout.addSegment( {type:'segment', repeat:9, steps: [ 
+                {type:'step', steady:true, work:true, duration:120, power:{min:75,max:75,type:'pct of FTP'},text:'FatMax'} ,
+                {type:'step', steady:false, work:true, duration:600, power:{min:55,max:70,type:'pct of FTP'},text:'LIT'} ,
+                {type:'step', steady:true, work:false, duration:15, power:{min:55,max:55,type:'pct of FTP'},text:'Pause'} ,
+            ] })
+            s.workout = workout
+            s.manualTimeOffset = 300;
+            s.offset = 3787
+            s.trainingTime = 317.713
+            s.tsCurrent = Date.now()
+            s.tsStart = s.tsCurrent-3787-17713
+            
+            service.backward()
+
+            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining(
+                {title:'Test Workout: FatMax(1/9)',current:expect.objectContaining({time:expect.closeTo(300,0)})}))
+        })
+
 
     })
 
