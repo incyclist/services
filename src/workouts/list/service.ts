@@ -328,7 +328,6 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
             // TODO Add additional Lists (Plans, e.g.)
             const lists = this.lists.filter( l=>l.getCards().length>0)
-            console.log('~~~ LISTS:',lists)
             return lists
 
         }

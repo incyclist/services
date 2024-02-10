@@ -1169,6 +1169,35 @@ export class DeviceRideService  extends EventEmitter{
             return adapter.getCyclingMode()
     }
 
+    async resetCyclingMode(sendInit:boolean=false) {
+        try {
+            const adapters = this.getAdapterList();
+
+            const adapterInfo = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control)) 
+            if (!adapterInfo?.adapter)
+                return
+
+            const {udid,adapter} = adapterInfo
+            const modeInfo = this.configurationService.getModeSettings(udid)
+            const mode = modeInfo?.mode
+            const settings = modeInfo.settings
+            
+            // We can't switch back to DaumClassic mode on Daum Premium, we would have to sent the whole route mid ride
+            if (adapter.getCyclingMode().getModeProperty('eppSupport'))
+                return;
+
+
+            const device = adapter as IncyclistDeviceAdapter
+            device.setCyclingMode(mode,settings)
+            if (sendInit)
+                await device.sendInitCommands()
+        }
+        catch(err) {
+            this.logEvent({message:'error', error:err.message,fn:'resetCyclingMode'})
+        }
+
+    }
+
     async onCyclingModeChanged(udid:string,mode:string, settings):Promise<void> {
         // TODO: 
         // if udid is currently being used, update adapter settings
