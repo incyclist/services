@@ -243,7 +243,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
 
         const secVal = duration %60
         const minVal = (duration-secVal)/60 %60        
-        const h = (duration-secVal-minVal*60)/60 %60        
+        const h = Math.floor((duration-secVal-minVal*60)/3600)
 
         const sec = secVal<10 ? `0${secVal}` : secVal
         const min = minVal<10 ? `0${minVal}` : minVal
