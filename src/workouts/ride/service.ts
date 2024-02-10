@@ -163,7 +163,7 @@ export class WorkoutRide extends IncyclistService{
      */
     start(paused:boolean=false):Workout {
         try {
-            if (this.state!=='initialized') {
+            if (this.state!=='initialized' || !this.workout) {
                 return
             }
             this.state = 'active'
@@ -524,6 +524,8 @@ export class WorkoutRide extends IncyclistService{
     }
 
     protected update(startIfInitialized=false) {
+        if (!this.workout)
+            return;
 
         try {
             const prevTime = Math.round(this.currentLimits?.time??0)
