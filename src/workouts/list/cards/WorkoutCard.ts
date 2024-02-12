@@ -178,6 +178,16 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
     }
 
     /**
+     * returns the title of the card 
+     * 
+     * @returns the name of the workout
+     */
+    getTitle(): string {
+        return this.workout.name
+    }
+    
+
+    /**
      * updates the content of the card
      * 
      * The card content will be changed and the updated workout will be saved in the the local database

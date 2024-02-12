@@ -66,7 +66,7 @@ describe('ActiveImportCard',()=>{
         card.retry()
         
         expect(c.cardObserver.emit).toHaveBeenCalledWith('update',expect.objectContaining({error:null}))
-        expect(c.getWorkoutList().import).toHaveBeenCalledWith(info,card)
+        expect(c.getWorkoutList().import).toHaveBeenCalledWith(info,{card})
 
     })
 

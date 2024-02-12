@@ -11,15 +11,22 @@ export const DEFAULT_FILTERS = [
 ];
 
 export interface WorkoutImportProps {
+    /** name of the card */
     title: string;
+    /** list if options in the file selection dialog for the import */
     filters: Array<ImportFilter>;
+    /** identifies if the card is visible(true) or hidden(false) */
     visible: boolean;
 }
 
 export interface ActiveImportProps {
+    /** name of the file that is/was imported */
     name: string;
+    /** resulting Error of the import */
     error?: Error
+    /** identifies if the card is visible(true) or hidden(false) */
     visible: boolean;
+    /** observer Object that will be used to informa abotu relevant updates*/
     observer: Observer
 }
 

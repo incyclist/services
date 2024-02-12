@@ -13,6 +13,7 @@ describe('WorkoutCard',()=>{
         const card = new WorkoutCard(workout)
 
         expect(card.getId()).toBe('123')
+        expect(card.getTitle()).toBe('test')
         expect(card.getData()).toBe(workout)
         expect(card.getCardType()).toBe('Workout')
         expect(card.isVisible()).toBe(true)

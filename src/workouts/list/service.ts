@@ -3,7 +3,7 @@ import { Card, CardList } from "../../base/cardlist";
 import { IncyclistService } from "../../base/service";
 import { IListService, ListObserver, Singleton } from "../../base/types";
 import { PromiseObserver } from "../../base/types/observer";
-import { getRouteList } from "../../routes";
+import { useRouteList } from "../../routes";
 import { useUserSettings } from "../../settings";
 import { valid } from "../../utils/valid";
 import { Plan, Workout } from "../base/model/Workout";
@@ -14,6 +14,7 @@ import { WorkoutImportCard } from './cards/WorkoutImportCard'
 import { WorkoutSettings } from "./cards/types";
 import { WorkoutsDbLoader } from "./loaders/db";
 import { WP } from "./types";
+
 
 @Singleton
 export class WorkoutListService extends IncyclistService  implements IListService<Workout|Plan> { 
@@ -33,11 +34,14 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
     constructor () {
         super('WorkoutList')    
+
         this.initialized = false;
         this.myWorkouts = new CardList<WP>('myWorkouts','My Workouts')
         this.lists = [this.myWorkouts]
         this.db = new WorkoutsDbLoader()
         this.items = []
+
+        this.language = 'en'
 
         this.myWorkouts.add( new WorkoutImportCard() )
 
@@ -49,43 +53,23 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     getSelected():Workout { return this.selectedWorkout }
     setScreenProps(props) {this.screenProps = props }
     getScreenProps() { return this.screenProps}
-
-    getStartSettings():WorkoutSettings { 
-        if (!this.startSettings) {
-            this.initStartSettings()
-        }
-        return this.startSettings
-    }
-    setStartSettings(settings:WorkoutSettings) {
-        this.startSettings =settings
-        this.updateStartSettings()
-    }
-    
+   
 
     open():{observer:ListObserver<WP>,lists:Array<CardList<WP>> } {
+
+        let lists = null;
         try {
             this.logEvent( {message:'open workout list'})
             
-            const hasLists = this.getLists()?.length>0
-            const emitStartEvent = async()=> {
-                process.nextTick( ()=>{    
-                    this.observer?.emit('started')
-                })
-                
-            }
-            const emitLoadedEvent = async()=> {
-                process.nextTick( ()=>{
-                    this.emitLists('loaded')
-                })
-            }
+            lists = this.getLists()
+            const hasLists = lists?.length>0
 
             //this.myWorkouts.removeActiveImports()
             this.resetLists()
 
-            // selection already ongoing, return existing observer
             if (!this.observer) {
                 this.observer = new ListObserver<WP>(this)
-                emitStartEvent()
+                this.emitStartEvent()
             }    
 
             // if preload has not been started yet, load data
@@ -94,7 +78,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             }
             
             if (this.initialized && !hasLists)
-                emitLoadedEvent()
+                this.emitLoadedEvent()
             else 
                 this.emitLists('updated')
 
@@ -103,7 +87,12 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         catch(err) {
             this.logError(err,'open')
         }
-        return {observer: this.observer, lists:this.getLists() }
+        return {observer: this.observer, lists }
+    }
+
+    // istanbul ignore next
+    close(): void {
+        // nothing to do        
     }
 
     openSettings(): {observer:ListObserver<WP>,workouts:CardList<Workout> } {
@@ -145,9 +134,17 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
     }
 
-    close(): void {
-        
+    getStartSettings():WorkoutSettings { 
+        if (!this.startSettings) {
+            this.initStartSettings()
+        }
+        return this.startSettings
     }
+    setStartSettings(settings:WorkoutSettings) {
+        this.startSettings =settings
+        this.updateStartSettings()
+    }
+
 
     onResize() {
         try {
@@ -226,58 +223,31 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
 
-    import( info:FileInfo|Array<FileInfo>, retry?:ActiveImportCard):void {
+    import( info:FileInfo|Array<FileInfo>, props:{ card?:ActiveImportCard, showImportCards?:boolean}):void {
+        
         try {
+            const {card,showImportCards=true} = props??{}
             const files = Array.isArray(info) ? info : [info]
 
-            const importCards: Array<ActiveImportCard> = []
-
-            if (!retry) {
-                files.forEach( (file)=>{
-                    if (!file)
-                        return;
-
-                    const card = this.addImportCard(file)
-                    importCards.push(card)
-                    this.emitLists('updated')
-                })
-            }
-            else {
-                importCards.push(retry)
-            }
-
+            const importCards: Array<ActiveImportCard> = showImportCards ? this.addImportCards(card, files) : []
 
             files.forEach( async (file,idx)=>{
                 if (!file)
                     return;
-                const importCard = importCards[idx]
-                
-            
+
+
+                const importCard = showImportCards ? importCards[idx] : null
                 try {
-
-                    const workout = await WorkoutParser.parse(file)              
-                    const existing = this.findCard(workout)
-    
-                    if (existing ) {   
-                        existing.list.remove( existing.card)
-                    }
-                    else  {
-                        this.items.push(workout)
-                    }
-                        
-                    const card = new WorkoutCard(workout,{list:this.myWorkouts as CardList<Workout>})
-                    card.save()
-                    card.enableDelete()
-                    
-                    this.myWorkouts.add( card )
-
+                    await this._import(file)                                
                     this.myWorkouts.remove(importCard)
-                    card.enableDelete(true)              
                     this.emitLists('updated')     
                    
                 }
                 catch(err) {
-                    importCard.setError(err)
+                    if (importCard)
+                        importCard.setError(err)
+                    else 
+                        throw err
                 }
         
                 
@@ -286,29 +256,14 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
         }
         catch(err) {
+            if (props?.showImportCards===false)
+                throw err
+
             this.logError(err,'import',info)
         }
     }
 
-    async importSingle( info:FileInfo):Promise<Workout> {
-            
-        const workout = await WorkoutParser.parse(info)              
-        const existing = this.findCard(workout)
 
-        if (existing ) {   
-            existing.list.remove( existing.card)
-        }
-        else  {
-            this.items.push(workout)
-        }
-            
-        const card = new WorkoutCard(workout,{list:this.myWorkouts as CardList<Workout>})
-        card.save()
-        card.enableDelete(true)
-        
-        this.myWorkouts.add( card )
-        return workout
-    }
     addList(name:string):CardList<WP> {
         const cnt = this.lists.length;
         const list = new CardList<WP>( `${cnt}:${name}`, name)
@@ -340,6 +295,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
     
     emitLists( event:'loaded'|'updated') {
+
         try {
             const lists = this.getLists()
             
@@ -406,10 +362,24 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
     canDisplayStart(): boolean {
-        const routes = getRouteList()
+        const routes = this.getRouteList()
         return valid(routes.getSelected())
     }
 
+    protected createSettingsList(): CardList<WP> {
+        const list = new CardList<Workout>('settings', 'Workouts')
+        list.add(new WorkoutImportCard())
+        const sorted = this.items
+            .sort( (a,b)=> a.name>b.name ? 1: -1)
+        sorted.forEach( i=> {
+            if (i.type==='workout') {
+                const card = new WorkoutCard( i as Workout,{list})
+                list.add(card)
+            }
+        })
+
+        return list;
+    }
 
 
     protected resetLists() {
@@ -566,8 +536,49 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
     }
 
+    protected async _import( info:FileInfo):Promise<WorkoutCard> {
+            
+        const workout = await WorkoutParser.parse(info)              
+        const existing = this.findCard(workout)
+
+        if (existing ) {   
+            existing.list.remove( existing.card)
+        }
+        else  {
+            this.items.push(workout)
+        }
+            
+        const card = new WorkoutCard(workout,{list:this.myWorkouts as CardList<Workout>})
+        card.save()
+        card.enableDelete(true)
+        
+        this.myWorkouts.add( card )
+        return card
+    }
+
+
+
+    protected addImportCards(retry: ActiveImportCard, files: FileInfo[]) {
+        const importCards: Array<ActiveImportCard> = [];
+
+        if (!retry) {
+            files.forEach((file) => {
+                if (!file)
+                    return;
+
+                const card = this.addImportCard(file);
+                importCards.push(card);
+                this.emitLists('updated');
+            });
+        }
+        else {
+            importCards.push(retry);
+        }
+        return importCards;
+    }
+
     protected initStartSettings() {
-        const userSettings = useUserSettings()
+        const userSettings = this.getUserSettings()
         
         const useErgMode = userSettings.get('preferences.useErgMode',true)       
         const ftp = userSettings.get('user',undefined)?.ftp
@@ -575,24 +586,30 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
     protected updateStartSettings() {
-        const userSettings = useUserSettings()        
+        const userSettings = this.getUserSettings()        
         userSettings.set('preferences.useErgMode',this.startSettings?.useErgMode)
     }
 
-    createSettingsList(): CardList<WP> {
-        const list = new CardList<Workout>('settings', 'Workouts')
-        list.add(new WorkoutImportCard())
-        const sorted = this.items
-            .sort( (a,b)=> a.name>b.name ? 1: -1)
-        sorted.forEach( i=> {
-            if (i.type==='workout') {
-                const card = new WorkoutCard( i as Workout,{list})
-                list.add(card)
-            }
-        })
-
-        return list;
+    protected getUserSettings()  {
+        return useUserSettings() 
     }
+    protected getRouteList()  {
+        return useRouteList()
+    }
+
+    protected emitStartEvent()  {
+        process.nextTick( ()=>{    
+            this.observer?.emit('started')
+        })
+        
+    }
+    protected emitLoadedEvent()  {
+        process.nextTick( ()=>{
+            this.emitLists('loaded')
+        })
+    }
+
+
 
 
    
