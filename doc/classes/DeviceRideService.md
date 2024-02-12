@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.95](../README.md) / DeviceRideService
+[incyclist-services - v1.1.97](../README.md) / DeviceRideService
 
 # Class: DeviceRideService
 
@@ -45,6 +45,7 @@ Provides method to consume a devcie
 - [onData](DeviceRideService.md#ondata)
 - [sendUpdate](DeviceRideService.md#sendupdate)
 - [getCyclingMode](DeviceRideService.md#getcyclingmode)
+- [resetCyclingMode](DeviceRideService.md#resetcyclingmode)
 - [onCyclingModeChanged](DeviceRideService.md#oncyclingmodechanged)
 - [onDeviceDeleted](DeviceRideService.md#ondevicedeleted)
 - [enforceSimulator](DeviceRideService.md#enforcesimulator)
@@ -415,6 +416,22 @@ ___
 #### Returns
 
 `CyclingMode`
+
+___
+
+### resetCyclingMode
+
+▸ **resetCyclingMode**(`sendInit?`): `Promise`\<`void`\>
+
+#### Parameters
+
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `sendInit` | `boolean` | `false` |
+
+#### Returns
+
+`Promise`\<`void`\>
 
 ___
 

@@ -39,9 +39,6 @@ describe('WorkoutsApiLoader',()=>{
             })
 
             await load()
-
-            console.log(workouts.map(w=>({id:w.id, hash:w.hash})))
-            
             
         },6000)
     })

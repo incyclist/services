@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.95](../README.md) / ActiveWorkoutLimit
+[incyclist-services - v1.1.97](../README.md) / ActiveWorkoutLimit
 
 # Interface: ActiveWorkoutLimit
 

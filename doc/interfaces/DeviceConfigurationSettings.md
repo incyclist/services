@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.95](../README.md) / DeviceConfigurationSettings
+[incyclist-services - v1.1.97](../README.md) / DeviceConfigurationSettings
 
 # Interface: DeviceConfigurationSettings
 

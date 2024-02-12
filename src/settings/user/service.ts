@@ -236,6 +236,10 @@ export class UserSettingsService {
         this.binding.save(this.settings, true)
     }
 
+    protected reset():void {
+        delete UserSettingsService._instance
+    }
+
 
 }
 

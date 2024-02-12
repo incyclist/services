@@ -1,6 +1,6 @@
 incyclist-services
 
-# incyclist-services - v1.1.95
+# incyclist-services - v1.1.97
 
 ## Table of contents
 
@@ -30,6 +30,8 @@ incyclist-services
 - [Step](classes/Step.md)
 - [Workout](classes/Workout.md)
 - [Plan](classes/Plan.md)
+- [WorkoutCard](classes/WorkoutCard.md)
+- [WorkoutImportCard](classes/WorkoutImportCard.md)
 - [WorkoutListService](classes/WorkoutListService.md)
 - [WorkoutRide](classes/WorkoutRide.md)
 
@@ -91,6 +93,11 @@ incyclist-services
 - [WorkoutDefinition](interfaces/WorkoutDefinition.md)
 - [ScheduledWorkout](interfaces/ScheduledWorkout.md)
 - [PlanDefinition](interfaces/PlanDefinition.md)
+- [WorkoutImportProps](interfaces/WorkoutImportProps.md)
+- [ActiveImportProps](interfaces/ActiveImportProps.md)
+- [WorkoutSettings](interfaces/WorkoutSettings.md)
+- [WorkoutSettingsDisplayProps](interfaces/WorkoutSettingsDisplayProps.md)
+- [WorkoutCardDisplayProperties](interfaces/WorkoutCardDisplayProperties.md)
 - [WorkoutRequest](interfaces/WorkoutRequest.md)
 - [ActiveWorkoutLimit](interfaces/ActiveWorkoutLimit.md)
 - [WorkoutDisplayProperties](interfaces/WorkoutDisplayProperties.md)
@@ -115,12 +122,15 @@ incyclist-services
 - [Limit](README.md#limit)
 - [PowerLimitType](README.md#powerlimittype)
 - [DataType](README.md#datatype)
+- [WorkoutCardType](README.md#workoutcardtype)
 
 ### Variables
 
 - [OVERPASS\_URL\_DEFAULT](README.md#overpass_url_default)
 - [STEP\_TYPE](README.md#step_type)
 - [POWER\_TYPE](README.md#power_type)
+- [DEFAULT\_TITLE](README.md#default_title)
+- [DEFAULT\_FILTERS](README.md#default_filters)
 
 ### Functions
 
@@ -317,6 +327,12 @@ ___
 
 Ƭ **DataType**: ``"step"`` \| ``"segment"`` \| ``"workout"`` \| ``"plan"``
 
+___
+
+### WorkoutCardType
+
+Ƭ **WorkoutCardType**: ``"WorkoutImport"`` \| ``"Workout"`` \| ``"ActiveWorkoutImport"``
+
 ## Variables
 
 ### OVERPASS\_URL\_DEFAULT
@@ -348,6 +364,18 @@ ___
 | :------ | :------ |
 | `WATT` | `string` |
 | `PCT` | `string` |
+
+___
+
+### DEFAULT\_TITLE
+
+• `Const` **DEFAULT\_TITLE**: ``"Import Workout"``
+
+___
+
+### DEFAULT\_FILTERS
+
+• `Const` **DEFAULT\_FILTERS**: \{ `name`: `string` = 'Workouts'; `extensions`: `string`[]  }[]
 
 ## Functions
 

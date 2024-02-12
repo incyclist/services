@@ -3,13 +3,20 @@ import { Card, CardList } from "../../../base/cardlist";
 import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { Workout } from "../../base/model/Workout";
 import { BaseCard } from "./base";
-import { WorkoutCardType, WorkoutSettings } from "./types";
+import { WorkoutCardDisplayProperties, WorkoutCardType, WorkoutSettings, WorkoutSettingsDisplayProps } from "./types";
 import { WorkoutsDbLoader } from "../loaders/db";
 import { useUserSettings } from "../../../settings";
 import { getWorkoutList, useWorkoutList } from '../service'
 import { waitNextTick } from "../../../utils";
 import { Segment} from "../../base/model/Segment";
 import { valid } from "../../../utils/valid";
+
+/**
+ * [WorkoutCard](WorkoutCard.md) objects are used to represent a single workout in the workout list
+ * 
+ * @public
+ * @noInheritDoc
+ */
 
 export class WorkoutCard extends BaseCard implements Card<Workout> {
 
@@ -20,19 +27,32 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
     protected cardObserver = new Observer()
     protected deleteObserver
 
+    /**
+     * Creates a new WorkoutCard object
+     * 
+     * @param workout The workout to be represented by this card
+     * @param props.list The list that cntains the card 
+     */
     constructor(workout:Workout, props?:{list?: CardList<Workout>} ) {
         super()
         const {list} = props||{};
 
         this.workout = workout
         this.list = list
-        this.deleteable = false;
+        this.deleteable = true;
 
         this.initialized = false;
         this.logger = new EventLogger('WorkoutCard')
     }
 
-    openSettings() {
+    /**
+     * should be called by the UI, when the Workout Settings (Details Dialog will be shown)
+     * 
+     * This class will manage the state and will return the information that is required
+     * to render the Dialog
+     * 
+     */
+    openSettings():WorkoutSettingsDisplayProps {
 
         let settings,canStart,duration,ftpRequired,categories=[],category
 
@@ -48,7 +68,9 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
                     (s.type=='step' && s.power?.type==='pct of FTP'))
                 )))
 
-            settings = service.getStartSettings()
+            settings = service.getStartSettings()??{}
+            
+
             categories = (service.getLists()??[]).map(l=>l.getTitle())
             category = this.list.getTitle()
             
@@ -60,7 +82,14 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
     }
 
 
-    select(settings?:WorkoutSettings) {
+    /**
+     * marks the workout as selected
+     * 
+     * This workout should then be used during the next ride
+     * 
+     * @emits update  Update is fired, so that card view can refresh ( to update select state)
+     */
+    select(settings?:WorkoutSettings):void {
         const service = getWorkoutList()
         
         service.selectCard(this)
@@ -70,25 +99,41 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         this.emitUpdate()
     }
 
+    /**
+     * marks the workout as _not_ selected
+     * 
+     * @emits update  Update is fired, so that card view can refresh ( to update select state)
+     */
     unselect() {
         const service = getWorkoutList()
         service.unselect()
         this.emitUpdate()
     }
 
-    move(targetListName:string) {
+    /**
+     * moves the workout into a different list
+     * 
+     * this change will also be represented in the _category_ member and the workout will be updated in the local database
+     * 
+     * @param targetListName name of the list the card should be added to
+     */
+    move(targetListName:string):void {
         if (!targetListName?.length)
             return;
 
         const service = getWorkoutList()
         const newList = service.moveCard(this,this.list,targetListName)
-        if (newList)
+        if (newList) {
             this.list = newList as CardList<Workout>
-
+        }
         this.workout.category = {name:targetListName,index:newList?.length}
+
         this.save()
     }
 
+    /**
+     * saves the workout into the local database
+     */
     async save():Promise<void> {
         try {
             return await this.getRepo().save(this.workout)        
@@ -99,10 +144,11 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         
     }
 
-    setList(list:CardList<Workout>) {
-        this.list = list
-    }
-
+    /**
+     * deletes the workout from display and database
+     * 
+     * In case the workout was currently selected, it will unselect it before deleting
+     */
     delete(): PromiseObserver<boolean> {
         try {
 
@@ -121,56 +167,30 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         }
     }
 
-    protected async _delete():Promise<boolean> {
 
-        // let the caller of delete() consume an intialize the observer first
-        await waitNextTick()
-        let deleted:boolean = false
-
-        try {
-
-            this.deleteObserver.emit('started')
-            this.emitUpdate()
-
-            if ( this.list.getId()==='myWorkouts') {
-                await this.getRepo().delete(this.workout) 
-            }
-            else {
-                //TODO
-            }
-
-            
-            // remove from list in UI
-            this.deleteFromUIList();
-    
-
-
-            getWorkoutList().emitLists('updated');
-            deleted =true;   
-        }
-        catch(err) {
-            deleted =  false
-        }
-        finally {
-            this.deleteObserver.emit('done',deleted)
-            waitNextTick().then( ()=> { 
-                delete this.deleteObserver
-                this.emitUpdate()
-            })
-
-        }
-
-        
-
-        return deleted
-
-    }    
-
+    /**
+     * returns a unique ID of the workout
+     * 
+     * @returns unique ID
+     */
     getId(): string {
         return this.workout.id
     }
 
+    /**
+     * updates the content of the card
+     * 
+     * The card content will be changed and the updated workout will be saved in the the local database
+     * 
+     * @param workout The update workout
+     * 
+     * @emits update event to trigger re-rendering of card view
+     */
     update(workout:Workout) {
+        // istanbul ignore next
+        if (!valid(workout))
+            return
+
         try {
             this.workout = workout
             this.save()
@@ -182,24 +202,30 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
     }
 
 
+    /**
+     * returns the workout that is represented by this card
+     * 
+     * @returns The workout represented by this card
+     */
     getData(): Workout {
         return this.workout
     }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    setData(data: Workout) {
-        try {
-            this.workout = data
-        }
-        catch(err) {
-            this.logError(err,'setData')
-        }
 
-    }
-
+    /**
+     * returns type of this card
+     * 
+     * @returns always will be 'Workout'
+     */
     getCardType():WorkoutCardType {
         return "Workout"
     }
-    getDisplayProperties() {
+
+
+    /**
+     * returns the information required to render a card in the Workout list
+     * 
+     */
+    getDisplayProperties():WorkoutCardDisplayProperties {
         const userSettings = useUserSettings()
         const user = userSettings.get('user',{})
 
@@ -210,14 +236,37 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
                 observer: this.cardObserver}
     }
 
-    enableDelete(enabled:boolean=true) {
+    /**
+     * enables/disables deletion of the workout
+     * 
+     * @param [enabled=true] true if deletion shoudl be enabled, false otherwise
+     */
+    // istanbul ignore next
+    enableDelete(enabled:boolean=true):void {
         this.deleteable = enabled
     }
 
-    canDelete() {
+    /**
+     * returns if workout can be deleted
+     * 
+     * @returns if workout can be deleted
+     */
+    canDelete():boolean {
         return this.deleteable
     }
 
+    /**
+     * marks the card to be visible/hidden
+     * 
+     * __note__ In the carousel display, whenever the complete carousel needs to be re-rendered, 
+     * all cards will be initially be hidden (so that the renderer can complete faster - especially on large lists)
+     * Once the initial rendering is done, the cards will be made visible, 
+     * which however will not require a full page/carousel render, but will only update the div containing the card
+     * 
+     * @param visible  card should be visible(true) or hidden(false)
+     * 
+     * @emits update event to trigger re-render [[WorkoutCardDisplayProperties]] as argument
+     */
     setVisible(visible: boolean): void {
         try {
             const prev = this.visible
@@ -230,6 +279,40 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         }
     
     }
+
+    protected async _delete():Promise<boolean> {
+
+        // let the caller of delete() consume an intialize the observer first
+        await waitNextTick()
+        let deleted:boolean = false
+
+        try {
+
+            this.deleteObserver.emit('started')
+            await this.getRepo().delete(this.workout) 
+
+            // remove from list in UI
+            this.deleteFromUIList();
+            getWorkoutList().emitLists('updated');
+            
+            deleted =true;   
+        }
+        catch(err) {
+            deleted =  false
+        }
+        finally {
+            this.deleteObserver.emit('done',deleted)
+            waitNextTick().then( ()=> { 
+                delete this.deleteObserver
+            })
+
+        }
+
+        
+
+        return deleted
+
+    }    
 
 
     protected calculateDuration():string {
@@ -264,6 +347,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         this.logger.logEvent({message:'error', error:err.message, fn, stack:err.stack})
     }
 
+    // istanbul ignore next
     protected getRepo() {
         return new WorkoutsDbLoader()
     }
@@ -278,6 +362,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         const selectedWorkout = service.getSelected()
         if (selectedWorkout?.id===this.workout.id)
             return true;
+        return false
     }
 
 

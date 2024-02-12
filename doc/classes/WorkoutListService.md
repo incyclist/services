@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.95](../README.md) / WorkoutListService
+[incyclist-services - v1.1.97](../README.md) / WorkoutListService
 
 # Class: WorkoutListService
 
@@ -979,11 +979,11 @@ ___
 
 ### getStartSettings
 
-▸ **getStartSettings**(): `WorkoutSettings`
+▸ **getStartSettings**(): [`WorkoutSettings`](../interfaces/WorkoutSettings.md)
 
 #### Returns
 
-`WorkoutSettings`
+[`WorkoutSettings`](../interfaces/WorkoutSettings.md)
 
 ___
 
@@ -995,7 +995,7 @@ ___
 
 | Name | Type |
 | :------ | :------ |
-| `settings` | `WorkoutSettings` |
+| `settings` | [`WorkoutSettings`](../interfaces/WorkoutSettings.md) |
 
 #### Returns
 

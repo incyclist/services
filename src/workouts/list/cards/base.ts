@@ -1,3 +1,5 @@
+/* istanbul ignore file */
+
 import { Card   } from "../../../base/cardlist";
 import { PromiseObserver } from "../../../base/types/observer";
 import { Workout } from "../../base/model/Workout";

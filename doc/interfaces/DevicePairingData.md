@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.95](../README.md) / DevicePairingData
+[incyclist-services - v1.1.97](../README.md) / DevicePairingData
 
 # Interface: DevicePairingData
 
