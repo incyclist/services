@@ -477,33 +477,42 @@ export class DeviceConfigurationService  extends EventEmitter{
 
 
     protected getDeviceConfigurationInfo():DeviceConfigurationInfo {
-        const {capabilities=[],devices=[]} = this.settings;
-        const {adapters} = this
-
-        const info:CapabilityInformation[] = capabilities.map( c=> {
-            const ci:CapabilityInformation = {
-                capability: c.capability,
-                disabled: c.disabled||false,
-                devices: c.devices.filter( udid => devices.find( d=> d.udid===udid)).map( udid=>  {
-                    const adapter = adapters[udid]                                   
-                    const device = devices.find( d=> d.udid===udid)
-                    const mode = device.mode
-                    const modeSetting = device.modes ? device.modes[mode] : undefined
-                    const interfaceName = device.settings.interface as string
-                    const name = device?.displayName||adapter?.getUniqueName()||adapter?.getName()
-                    return { udid, name,interface:interfaceName, selected:udid===c.selected, mode, modeSetting}
-                })
-            }
-            return ci;
-        })
-        
-
         const configuration:DeviceConfigurationInfo = {}
 
-        info.forEach( ci =>{
-            const c:string = ci.capability.toString()
-            configuration[c] = ci
-        })
+        try {
+            const {capabilities=[],devices=[]} = this.settings;
+            const {adapters} = this
+    
+            const info:CapabilityInformation[] = capabilities.map( c=> {
+    
+                const ci:CapabilityInformation = {
+    
+                    capability: c.capability,
+                    disabled: c.disabled||false,
+                    devices: (c.devices??[]).filter( udid => devices.find( d=> d.udid===udid)).map( udid=>  {
+                        const adapter = adapters[udid]                                   
+                        const device = devices.find( d=> d.udid===udid)
+                        const mode = device.mode
+                        const modeSetting = device.modes ? device.modes[mode] : undefined
+                        const interfaceName = device.settings.interface as string
+                        const name = device?.displayName||adapter?.getUniqueName()||adapter?.getName()
+                        return { udid, name,interface:interfaceName, selected:udid===c.selected, mode, modeSetting}
+                    })
+                }
+                return ci;
+            })
+            
+    
+    
+            info.forEach( ci =>{
+                const c:string = ci.capability.toString()
+                configuration[c] = ci
+            })
+    
+        }
+        catch(err) {
+            this.logError(err,'getDeviceConfigurationInfo')
+        }
 
         return configuration;
     }
