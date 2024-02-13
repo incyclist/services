@@ -237,7 +237,12 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
      */
     getDisplayProperties():WorkoutCardDisplayProperties {
         const userSettings = useUserSettings()
-        const user = userSettings.get('user',{})
+        let user
+        try {
+            user = userSettings.get('user',{})
+        } catch {
+            user = {}
+        }
 
         const duration = this.calculateDuration()
 

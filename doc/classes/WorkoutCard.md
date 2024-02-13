@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.97](../README.md) / WorkoutCard
+[incyclist-services - v1.1.98](../README.md) / WorkoutCard
 
 # Class: WorkoutCard
 
@@ -29,6 +29,7 @@
 - [save](WorkoutCard.md#save)
 - [delete](WorkoutCard.md#delete)
 - [getId](WorkoutCard.md#getid)
+- [getTitle](WorkoutCard.md#gettitle)
 - [update](WorkoutCard.md#update)
 - [getData](WorkoutCard.md#getdata)
 - [getCardType](WorkoutCard.md#getcardtype)
@@ -207,6 +208,20 @@ Card.getId
 #### Overrides
 
 BaseCard.getId
+
+___
+
+### getTitle
+
+▸ **getTitle**(): `string`
+
+returns the title of the card
+
+#### Returns
+
+`string`
+
+the name of the workout
 
 ___
 

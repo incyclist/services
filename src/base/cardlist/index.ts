@@ -1,3 +1,4 @@
+import { getWorkoutList } from "../../workouts"
 import { PromiseObserver } from "../types/observer"
 
 
@@ -22,7 +23,6 @@ export interface Card<T>{
 
 export class CardList<T>  {
     
-    protected selected: Card<T>
     protected hovered: Card<T>
     protected cards: Array<Card<T>>
 
@@ -46,13 +46,6 @@ export class CardList<T>  {
         return this.cards
     }
 
-    getSelected():T {
-        return this.selected.getData()
-    }
-    select(card:Card<T>):void {
-        this.selected = card
-    }
-
     getHovered():Card<T> {
         return this.hovered
     }
@@ -65,18 +58,10 @@ export class CardList<T>  {
     }
 
     remove(card: Card<T>) {
-        console.log('~~~ remove',this.cards)
-
         const idx = this.cards.findIndex( c=> c.equals(card) )
         if (idx!==-1) {
-                if ( this.selected && card.equals(this.selected)) {
-                    this.selected = undefined
-                }
             this.cards.splice(idx,1)
         }
-
-        console.log('~~~ remove done',this.cards)
-
     }
 
 }

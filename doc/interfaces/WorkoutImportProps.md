@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.97](../README.md) / WorkoutImportProps
+[incyclist-services - v1.1.98](../README.md) / WorkoutImportProps
 
 # Interface: WorkoutImportProps
 
@@ -16,14 +16,20 @@
 
 • **title**: `string`
 
+name of the card
+
 ___
 
 ### filters
 
 • **filters**: `ImportFilter`[]
 
+list if options in the file selection dialog for the import
+
 ___
 
 ### visible
 
 • **visible**: `boolean`
+
+identifies if the card is visible(true) or hidden(false)

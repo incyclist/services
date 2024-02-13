@@ -7,7 +7,7 @@ export interface IListService<T> {
 
 }
 
-export type ListEvent = 'started' | 'stopped' | 'loaded' | 'updated' | 'selected';
+export type ListEvent = 'started' | 'stopped' | 'loaded' | 'updated' | 'selected' | 'loading';
 
 export class ListObserver<T> extends Observer {
 

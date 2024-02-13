@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.97](../README.md) / PairingData
+[incyclist-services - v1.1.98](../README.md) / PairingData
 
 # Interface: PairingData
 

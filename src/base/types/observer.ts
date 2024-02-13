@@ -68,9 +68,10 @@ export class PromiseObserver<T> extends Observer {
     }
 
     async start():Promise<T> {
-        await waitNextTick();
         
-        return new Promise( (resolve,reject) => {
+        // eslint-disable-next-line no-async-promise-executor
+        return new Promise( async (resolve,reject) => {
+            await waitNextTick();
             this.emitter.emit('started')
 
             this.promise
@@ -79,7 +80,6 @@ export class PromiseObserver<T> extends Observer {
                     resolve(res)
                 })
                 .catch(err => {
-                    this.emitter.emit('error',err)
                     reject(err)
                 })
     

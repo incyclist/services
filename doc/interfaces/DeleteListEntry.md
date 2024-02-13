@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.97](../README.md) / DeleteListEntry
+[incyclist-services - v1.1.98](../README.md) / DeleteListEntry
 
 # Interface: DeleteListEntry
 

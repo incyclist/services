@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.97](../README.md) / ActiveImportProps
+[incyclist-services - v1.1.98](../README.md) / ActiveImportProps
 
 # Interface: ActiveImportProps
 
@@ -17,11 +17,15 @@
 
 • **name**: `string`
 
+name of the file that is/was imported
+
 ___
 
 ### error
 
 • `Optional` **error**: `Error`
+
+resulting Error of the import
 
 ___
 
@@ -29,8 +33,12 @@ ___
 
 • **visible**: `boolean`
 
+identifies if the card is visible(true) or hidden(false)
+
 ___
 
 ### observer
 
 • **observer**: `Observer`
+
+observer Object that will be used to informa abotu relevant updates

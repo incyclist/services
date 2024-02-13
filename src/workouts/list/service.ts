@@ -5,6 +5,7 @@ import { IListService, ListObserver, Singleton } from "../../base/types";
 import { PromiseObserver } from "../../base/types/observer";
 import { useRouteList } from "../../routes";
 import { useUserSettings } from "../../settings";
+import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
 import { Plan, Workout } from "../base/model/Workout";
 import { WorkoutParser } from "../base/parsers";
@@ -13,9 +14,27 @@ import { WorkoutCard } from "./cards/WorkoutCard";
 import { WorkoutImportCard } from './cards/WorkoutImportCard'
 import { WorkoutSettings } from "./cards/types";
 import { WorkoutsDbLoader } from "./loaders/db";
-import { WP } from "./types";
+import { WP,WorkoutSettingsDisplayProps } from "./types";
 
-
+/**
+ * [WorkoutListService](WorkoutListService.md) is the service managing the business flows of the Workout List page and the Workout Area in the settings dialog
+ * 
+ * The service will take care of the following functionality
+ * - provide the content for lists to be displayed on the page
+ * - provide the content to be displyed in the Workout Setings dialog (i.e. dialog shown before staring a workout)
+ * - manage selection/unselection and keep track of state
+ * - provide capability to import workouts
+ * - sync data with local databse
+ * 
+ * 
+ * This service depends on
+ *  - UserSettings Service  (to store and retrieve the default Workout settings in the user preferecce)
+ *  - RouteList Service     (to check if a route has been selected)
+ * 
+ * @public
+ * @noInheritDoc
+ * 
+ */
 @Singleton
 export class WorkoutListService extends IncyclistService  implements IListService<Workout|Plan> { 
 
@@ -29,7 +48,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     protected screenProps;    
     protected language:string
     protected selectedWorkout:Workout
-    protected startSettings:WorkoutSettings
+    protected ftp:number
 
 
     constructor () {
@@ -38,22 +57,77 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         this.initialized = false;
         this.myWorkouts = new CardList<WP>('myWorkouts','My Workouts')
         this.lists = [this.myWorkouts]
-        this.db = new WorkoutsDbLoader()
         this.items = []
 
         this.language = 'en'
 
         this.myWorkouts.add( new WorkoutImportCard() )
 
+
+        this.registerUserChangeHandler();
     }
 
     // Getters && Setters
-    setLanguage(language:string) {this.language = language}
-    getLanguage():string {return this.language}
     getSelected():Workout { return this.selectedWorkout }
     setScreenProps(props) {this.screenProps = props }
     getScreenProps() { return this.screenProps}
    
+    /**
+     * This method should be called by the Workout Page UI to receive the content to be displayed on the page
+     * 
+     * @returns observer: an Observer object that will be used to inform the UI about relevant changes, so that it can re-render
+     * @returns lists: the content of the lists to be displayed
+     * 
+     * @emits started   observer just has been created
+     * @emits loading   list is being loaded
+     * @emits loaded    loading has been completed, provides lists as parameter
+     * @emits updated   lists have been updated, provides lists as first parameter, provides a hash as 2nd paramter (allows UI to only refresh if hash has changed)
+     * 
+     * ``` typescript
+     * // .... React Imports 
+     * import {useWorkoutList} from 'incyclist-services';
+     * 
+     * const page = ()=> {
+     *    const service = useWorkoutList()
+     *    const [state,setState] = useState({})
+     *    
+     *    useRef( ()=>{
+     *       if (state.initialized)
+     *          return;
+     * 
+     *       const {observer,lists} = service.open()
+     *       if (observer) {
+     *          observer
+     *              .on('started',()=>{ 
+     *                  setState( current=> ({...current,lists,loading:false}))
+     *               })
+     *              .on('updated',(update)=>{
+     *                  setState( current=> ({...current,lists:update,loading:false}))
+     *               })
+     *              .on('loading',()=>{
+     *                  setState( current=> ({...current,loading:true}))
+     *               })
+     *              .on('loaded',(update)=>{
+     *                  setState( current=> ({...current,lists:update,loading:false}))
+     *               })
+     *       }
+     *       setState( {observer,lists,initialized:true})
+     *    })
+     *    
+     *    if (!state?.lists?.length)
+     *         retrurn <EmptyPage/>
+     * 
+     *    return ( 
+     *       { !state?.lists.map( l=> 
+     *              .... 
+     *       }
+     *    )
+     * }
+     * 
+     * ```
+     * 
+     * 
+     */
 
     open():{observer:ListObserver<WP>,lists:Array<CardList<WP>> } {
 
@@ -62,7 +136,6 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             this.logEvent( {message:'open workout list'})
             
             lists = this.getLists()
-            const hasLists = lists?.length>0
 
             //this.myWorkouts.removeActiveImports()
             this.resetLists()
@@ -73,16 +146,16 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             }    
 
             // if preload has not been started yet, load data
-            if (!this.initialized && !this.preloadObserver) {
-                this.preload()
+            if (!this.initialized) {
+
+                if (!this.preloadObserver)
+                    this.preload()
+                return  {observer: this.observer, lists:null }
             }
             
-            if (this.initialized && !hasLists)
-                this.emitLoadedEvent()
-            else 
+            waitNextTick().then ( ()=> {
                 this.emitLists('updated')
-
-            
+            })            
         }
         catch(err) {
             this.logError(err,'open')
@@ -90,62 +163,113 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         return {observer: this.observer, lists }
     }
 
+    /**
+     * This method should be called by the Workout Page UI when it closes the page
+     *
+     * all necessary cleanup activities will be done
+     *  
+     */
     // istanbul ignore next
     close(): void {
         // nothing to do        
     }
 
-    openSettings(): {observer:ListObserver<WP>,workouts:CardList<Workout> } {
+    /**
+     * This method provides content and implements business logic for the Workout section in the Settings dialog
+     * 
+     * 
+     * @returns observer: an Observer object that will be used to inform the UI about relevant changes, so that it can re-render
+     * @returns workouts: the workouts to be displayed
+     * @returns selected: the workout that was selected ( or currently is in use)
+     * @returns settings: the settings to be used/currently being used for the workout
+     * 
+     * @emits started   observer just has been created
+     * @emits loading   list is being loaded
+     * @emits loaded    loading has been completed, provides lists as parameter
+     *
+     */
+    openSettings(): WorkoutSettingsDisplayProps {
 
         let workouts:CardList<Workout>
+        let settings:WorkoutSettings
+        let selected: Workout
         try {
             this.logEvent( {message:'open workout settings'})
-            const emitStartEvent = async()=> {
-                process.nextTick( ()=>{    
-                    this.observer?.emit('started')
-                })
-                
-            }
 
             if (!this.observer) {
                 this.observer = new ListObserver<WP>(this)
-                emitStartEvent()
+                this.emitStartEvent()
             }    
 
-            if (!this.initialized && !this.preloadObserver) {
-                this.preload()
+            if (!this.initialized) {
+
+                if (!this.preloadObserver)
+                    this.preload()
+                return  {observer: this.observer, workouts:null }
             }
 
-            /*
-            const items = this.items??[]
-            workouts = items
-                .filter(i=>i.type==='workout')
-                .sort( (a,b) => a.name>b.name ? 1: -1)
-                */
-
             workouts = this.createSettingsList() as CardList<Workout>
+            selected = this.getSelected()
+            settings = this.getStartSettings()
+
         }
         catch(err) {
             this.logError(err,'openSettings')
         }
 
-        console.log('~~~ returning',{observer:this.observer, workouts})
-        return {observer:this.observer, workouts}
+        return {observer:this.observer, workouts,selected,settings}
 
     }
 
-    getStartSettings():WorkoutSettings { 
-        if (!this.startSettings) {
-            this.initStartSettings()
+    /**
+     * returns the Settings ( FTP and forced ERGMode on/off) for the workout
+     * 
+     * @returns {WorkoutSettings} the settings that will be applied once a workout will be started/resumed
+     */
+    getStartSettings():WorkoutSettings {
+        let ftp:number=this.ftp??200
+        let useErgMode:boolean=true
+
+        try {
+            const userSettings = this.getUserSettings()
+        
+            useErgMode = userSettings.get('preferences.useErgMode',true)       
+            const user= userSettings.get('user',undefined)
+            ftp = this.ftp ?? user?.ftp ??  200
         }
-        return this.startSettings
+        catch(err) {
+            this.logError(err,'getStartSettings')
+        }
+        return {ftp,useErgMode}
     }
-    setStartSettings(settings:WorkoutSettings) {
-        this.startSettings =settings
-        this.updateStartSettings()
+
+    /**
+     * changes the Settings ( FTP and forced ERGMode on/off) for the workout
+     * 
+     * The FTP will overrule the FTP from the user settings, 
+     * unless the FTP is changed in the user settings. In that case, the new value from the user settings will be taken
+     * 
+     * @param settings  new settings to be applied
+     */
+    setStartSettings(settings:WorkoutSettings):void {
+        try {
+            const userSettings = this.getUserSettings()        
+            userSettings.set('preferences.useErgMode',settings?.useErgMode)
+            this.ftp = settings?.ftp
+        }
+        catch(err) {
+            this.logError(err,'setStartSettings')   
+        }
     }
 
 
+    /**
+     * handles the UI resize event
+     * 
+     * should be called everytime the UI needs to resize
+     * As a resize triggers a re-render of the carousels, this will make the cards invisible (to speed up rendering)
+     * 
+     */
     onResize() {
         try {
             this.resetCards()
@@ -156,16 +280,30 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
     }
 
-    onCarouselInitialized(list:CardList<WP>, item,itemsInSlide) {
+    /**
+     * is called by the carousel, when initial rendering of a carousel has been done
+     * 
+     * this will change all cards "within the fold" to visible, which will trigger re-rendering of these cards (not the whole carousel)
+     * also the next 2 cards will be made visible, so that immediate scrolling will not deliver empty divs
+     * 
+     * after 1s all other cards will be made visible
+     * 
+     */
+    onCarouselInitialized(list:CardList<WP>, item,itemsInSlide):void {
+        // istanbul ignore next
+        if (list===undefined || list===null)
+            return;
+
         try {
-            list.getCards().forEach( (card,idx) => {
+            const cards = list.getCards()??[]
+            cards.forEach( (card,idx) => {
                 card.setInitialized(true)
                 if (idx<item+itemsInSlide+2) {
 
                     card.setVisible(true)
                 }
             })
-            setTimeout( ()=>{ this.onCarouselUpdated(list,item,itemsInSlide)}, 1000)
+            setTimeout( ()=>{ this.onCarouselUpdated(list,item,itemsInSlide)}, this.getInitTimeout())
         }
         catch(err) {
             this.logError(err,'onCarouselInitialized')
@@ -173,10 +311,17 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         
     }
 
+    /**
+     * is called by the carousel, when carousel has been updated
+     * 
+     * all cards will be made visible
+     * 
+     */
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     onCarouselUpdated(list,item,itemsInSlide) {
         try {
-            list.getCards().forEach( (card,idx) => {
+            const cards = list.getCards()??[]
+            cards.forEach( (card,idx) => {
                 if (idx>=item && idx<item+itemsInSlide+10 && !card.isVisible()) {
 
                     card.setVisible(true)
@@ -191,10 +336,23 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
 
 
+    /**
+     * triggers the loading of the workouts from repo/api
+     * 
+     * this method will be called internally when [[open]] or [[openSettings]] will be called
+     * 
+     * However, it should also be called by the UI as soon as possible to reduce loading time for the user
+     * 
+     * @returns observer to signal events that mith require re-render
+     * @emits loading   list is being loaded
+     * @emits loaded    loading has been completed, provides lists as parameter
+     */
 
     preload():PromiseObserver<void> {
         try {
             this.logEvent( {message:'preload workout list'})
+            this.emitLoadingEvent()
+
             if (!this.preloadObserver) {
                 const promise = this.loadWorkouts()
                 this.preloadObserver = new PromiseObserver<void>( promise )
@@ -211,6 +369,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                     })
                     .catch( (err)=> {
                         this.logError(err,'preload')
+                        process.nextTick( ()=>{delete this.preloadObserver})
                     })
             }
     
@@ -223,7 +382,23 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
 
-    import( info:FileInfo|Array<FileInfo>, props:{ card?:ActiveImportCard, showImportCards?:boolean}):void {
+    /**
+     * perform an import of one or multiple workout file(s) from disk or URL
+     * 
+     * This method will not only perform the actual import, but also has implemented business logic to give the user feedback 
+     * - Adding an [[ActiveImportCard]] while import is in progress
+     * - Adding a card for the imported workout(s) 
+     * - Removing the [[ActiveImportCard]] in case the import was successfull
+     * - Updating the [[ActiveImportCard]] with error information in case the import has failed
+     * 
+     * @param info  provides information on the source of the file(s) to be imported
+     * @param props.card  In case of a retry, contains the [[ActiveImportCard]] that shows the previous import
+     * @param props.showImportCards  flag that indicates if [[ActiveImportCard]] should be shown ( default=true)
+     * 
+     * @emits updated   list has been updated
+     */
+
+    async import( info:FileInfo|Array<FileInfo>, props:{ card?:ActiveImportCard, showImportCards?:boolean}):Promise<void> {
         
         try {
             const {card,showImportCards=true} = props??{}
@@ -231,7 +406,8 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
             const importCards: Array<ActiveImportCard> = showImportCards ? this.addImportCards(card, files) : []
 
-            files.forEach( async (file,idx)=>{
+            const doImport = async (file,idx) => {
+                // istanbul ignore next
                 if (!file)
                     return;
 
@@ -249,9 +425,22 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                     else 
                         throw err
                 }
-        
-                
+
+            }
+
+            const promises = []
+            files.forEach( async (file,idx)=>{
+                promises.push( doImport(file,idx))                
             })
+
+            const res = await Promise.allSettled(promises)
+            
+            const rejected = res.filter( pr => pr.status==='rejected') as Array<PromiseRejectedResult>
+            if (rejected) {
+                throw (rejected[0].reason)
+                
+            }
+
     
 
         }
@@ -339,7 +528,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
     moveCard( card:Card<WP>, source:CardList<WP>, target:string|CardList<WP>):CardList<WP> {
         try {
-            source.remove(card)
+         
             let targetList:CardList<WP>
             if (typeof target==='string') {
                 targetList = this.lists.find( l=>l.getTitle()===target)
@@ -349,7 +538,17 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             else {
                 targetList = target as CardList<WP>
             }
+
+            //const isSelected = (this.selectedWorkout?.id === card.getId())
+
+            source.remove(card)
             targetList.add(card)
+
+            /*
+            if (isSelected) {
+                this.selectCard(card)
+            }
+            */
             
             this.emitLists('updated')                
             return targetList
@@ -393,8 +592,11 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
     protected resetCards() {
-        this.getLists().forEach( list=> {
-            list.getCards().forEach( (card) => {
+        const lists = this.getLists(false)??[]
+
+        lists.forEach( list=> {
+            const cards = list.getCards()??[]
+            cards.forEach( (card) => {
                 card.reset()
             })
         })
@@ -404,10 +606,8 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     protected async loadWorkouts():Promise<void> {
 
         return new Promise<void> ( (done,reject) => {
-
-            
             try {
-                const observer = this.db.load()
+                const observer = this.getRepo().load()
                 const add = this.addItem.bind(this)
                 const update = this.updateItem.bind(this)
 
@@ -418,17 +618,12 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             }
             catch(err) {
                 reject(err)
-                console.log('~~~ ERROR',err)
             }
-    
-    
         })
 
     }
-
-
     
-    protected addItem(item:WP):void {       
+    protected addItem(item:WP):Card<WP> {       
         const list = this.selectList(item)
 
         let card;
@@ -440,11 +635,12 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         }
 
         list.add( card)
-        //if ( list.getId()==='myWorkouts')
-            card.enableDelete(true)    
+        
+        card.enableDelete(true)    
         this.items.push(item)
         
         this.emitLists('updated')                
+        return card;
     }
 
     protected async updateItem(item:WP):Promise<void> { 
@@ -538,7 +734,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
     protected async _import( info:FileInfo):Promise<WorkoutCard> {
             
-        const workout = await WorkoutParser.parse(info)              
+        const workout = await this.parse(info)              
         const existing = this.findCard(workout)
 
         if (existing ) {   
@@ -554,6 +750,11 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         
         this.myWorkouts.add( card )
         return card
+    }
+
+    protected async parse(info:FileInfo):Promise<Workout>{
+        return await WorkoutParser.parse(info)
+
     }
 
 
@@ -577,25 +778,24 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         return importCards;
     }
 
-    protected initStartSettings() {
-        const userSettings = this.getUserSettings()
+    protected registerUserChangeHandler() {
+        const userSettings = this.getUserSettings();
+        if (userSettings) {
+            const observer = userSettings.requestNotifyOnChange('workouts', 'user');
+            observer?.on('changed', (update)=>{
+                this.onUserUpdate(update)                
+            } );
+        }
+    }
+
+    protected onUserUpdate( update) {
         
-        const useErgMode = userSettings.get('preferences.useErgMode',true)       
-        const ftp = userSettings.get('user',undefined)?.ftp
-        this.startSettings = {ftp,useErgMode}
+        if (this.ftp!==update?.ftp && valid(update?.ftp))                                
+            this.ftp =update.ftp;
+        
     }
 
-    protected updateStartSettings() {
-        const userSettings = this.getUserSettings()        
-        userSettings.set('preferences.useErgMode',this.startSettings?.useErgMode)
-    }
 
-    protected getUserSettings()  {
-        return useUserSettings() 
-    }
-    protected getRouteList()  {
-        return useRouteList()
-    }
 
     protected emitStartEvent()  {
         process.nextTick( ()=>{    
@@ -603,10 +803,38 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         })
         
     }
+    protected emitLoadingEvent()  {
+        process.nextTick( ()=>{    
+            this.observer?.emit('loading')
+        })
+        
+    }
+
     protected emitLoadedEvent()  {
         process.nextTick( ()=>{
             this.emitLists('loaded')
         })
+    }
+
+    // istanbul ignore next
+    protected getUserSettings()  {
+        return useUserSettings() 
+    }
+    // istanbul ignore next
+    protected getRouteList()  {
+        return useRouteList()
+    }
+
+    // istanbul ignore next
+    protected getInitTimeout():number {
+        return 1000;
+    }
+
+    // istanbul ignore next
+    protected getRepo() {
+        if (!this.db)
+            this.db = new WorkoutsDbLoader()
+        return this.db
     }
 
 

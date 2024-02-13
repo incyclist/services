@@ -148,6 +148,7 @@ export class ActiveImportCard extends BaseCard implements Card<WP> {
         this.cardObserver.emit('update',this.getDisplayProperties())
     }
 
+    // istanbul ignore next
     protected getWorkoutList() {
         return useWorkoutList()
     }
