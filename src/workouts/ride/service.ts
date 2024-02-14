@@ -4,7 +4,7 @@ import { Observer } from "../../base/types/observer";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
-import { PowerLimit, Workout } from "../base/model";
+import { PowerLimit,  StepDefinition, Workout } from "../base/model";
 import { WorkoutListService, getWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
 import { ActiveWorkoutLimit, WorkoutDisplayProperties } from "./types";
@@ -24,6 +24,7 @@ const WORKOUT_ZOOM = 1200;
  * 
  * - 'initialized' - The workout has been initialized and is ready to be used in a ride
  * - 'update' - There was an update, which requires the dashboard to be updated
+ * - 'step-changed' - There was a new step selected, which requires the dashboard to be updated
  * - 'request-update' - There was an update, which requires to send updated requests to the SmartTrainer 
  *  
  * - 'started' - The workout has been started
@@ -90,6 +91,7 @@ export class WorkoutRide extends IncyclistService{
     protected trainingTime:number
     protected currentLimits:ActiveWorkoutLimit
     protected updateInterval:NodeJS.Timeout
+    protected currentStep: StepDefinition
 
     constructor () {
         super('WorkoutRide')   
@@ -378,7 +380,6 @@ export class WorkoutRide extends IncyclistService{
      * 
      */
     powerUp(delta:number):void {
-        
         try {
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp * (1+delta/100)
@@ -449,13 +450,15 @@ export class WorkoutRide extends IncyclistService{
 
             const {start,stop} = this.getZoomParameters(this.trainingTime);
             const title = this.getStepTitle(this.trainingTime)
-
+            const canShowBackward = Math.round((this.trainingTime??0))>0
             
             const props = {
                 workout:this.workout, title, 
                 ftp:this.settings.ftp, 
                 current:this.currentLimits,
-                start,stop
+                start,stop,
+                canShowBackward,
+                canShowForward:true
             }
 
             return props
@@ -547,11 +550,18 @@ export class WorkoutRide extends IncyclistService{
                 return;
             }
 
+            const prevStep = this.currentStep
             this.setCurrentLimits(time)
 
 
-            if (Math.round(time)!==prevTime)
+            if (this.currentStep!==prevStep) {
+                this.emit('step-changed', this.getDashboardDisplayProperties())
+            }
+
+            else if (Math.round(time)!==prevTime) {
                 this.emit('update', this.getDashboardDisplayProperties())
+            }
+    
         }
         catch(err) {
             this.logError(err,'update')
@@ -573,11 +583,11 @@ export class WorkoutRide extends IncyclistService{
             this.trainingTime = trainingTime
 
         const time = this.trainingTime
-        const wo = this.workout;
         const ftp  = this.settings.ftp;
-        const limits = wo.getLimits(time);
+        const wo = this.workout;
+        const limits = wo.getLimits(time,true);
 
-        
+        this.currentStep = limits.step
         const request:ActiveWorkoutLimit = {time:0, duration:0, remaining:0} 
         
         if ( limits!==undefined) {
@@ -703,7 +713,6 @@ export class WorkoutRide extends IncyclistService{
             this.updateInterval = undefined;
         }
     }
-
 
 }
 
