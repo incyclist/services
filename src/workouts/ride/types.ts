@@ -22,5 +22,6 @@ export interface WorkoutDisplayProperties {
     current?:ActiveWorkoutLimit,
     start?:number,
     stop?:number
-
+    canShowBackward?: boolean,
+    canShowForward?: boolean
 }
