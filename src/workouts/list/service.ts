@@ -434,13 +434,13 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             })
 
             const res = await Promise.allSettled(promises)
-            
-            const rejected = res.filter( pr => pr.status==='rejected') as Array<PromiseRejectedResult>
-            if (rejected) {
-                throw (rejected[0].reason)
-                
-            }
 
+            if (!showImportCards) {            
+                const rejected = res.filter( pr => pr.status==='rejected') as Array<PromiseRejectedResult>
+                if (rejected?.length>0) {
+                    throw (rejected[0].reason)                    
+                }
+            }
     
 
         }
