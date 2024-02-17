@@ -122,21 +122,23 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
             return;
 
         const service = getWorkoutList()
+
         const newList = service.moveCard(this,this.list,targetListName)
         if (newList) {
             this.list = newList as CardList<Workout>
         }
-        this.workout.category = {name:targetListName,index:newList?.length}
+        
 
-        this.save()
+        this.workout.category = {name:targetListName,index:newList?.length}
+        this.save(true)
     }
 
     /**
      * saves the workout into the local database
      */
-    async save():Promise<void> {
+    async save(enforce:boolean=false):Promise<void> {
         try {
-            return await this.getRepo().save(this.workout)        
+            return await this.getRepo().save(this.workout,enforce)        
         }
         catch(err) {
             this.logError(err,'save')

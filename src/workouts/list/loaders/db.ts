@@ -75,7 +75,7 @@ export class WorkoutsDbLoader extends Loader{
      * Saves a workout that has been added or updated
      * 
      */
-    async save(workout:Workout|Plan):Promise<void> {
+    async save(workout:Workout|Plan,enforceWrite:boolean=false):Promise<void> {
         // istanbul ignore next
         if (!valid(workout))
             return;
@@ -99,10 +99,10 @@ export class WorkoutsDbLoader extends Loader{
         else { 
             prev = stringify({...this.workouts[idx]})
             this.workouts[idx] = workout
-            changed = stringify({...this.workouts[idx]})!==prev
+            changed = stringify({...workout})!==prev
         }
-    
-        if (changed) {
+
+        if (changed || enforceWrite) {
             this.isDirty = true;
             this.write()
         }
