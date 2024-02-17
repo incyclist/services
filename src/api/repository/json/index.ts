@@ -56,7 +56,6 @@ export class JsonRepository {
             return data
         }
         catch(err) {
-            //console.log('~~~ DEBUG: ERROR',err)
             // TODO
         }
  
@@ -95,6 +94,31 @@ export class JsonRepository {
 
     }
 
+    async list( exclude?:string|Array<string>):Promise<Array<string>> {
+
+        try {
+            
+            let names = await this.access.list()
+            if (!names)
+                return null
+
+            names = names.filter(name=>name.toLowerCase().endsWith('.json'))
+            names = names.map( name=> name.substring(0,name.length-5))
+
+            if (exclude) {
+                const excludes = (typeof(exclude)==='string') ? [exclude] : exclude
+                names= names.filter( name => !excludes.includes(name))
+            }
+            return names
+
+        }
+        catch {
+            return null;
+        }
+
+    }
+
+
     protected async close():Promise<boolean> {        
         const db = getBindings().db
  
@@ -103,7 +127,6 @@ export class JsonRepository {
         return true
     }
 
-   
 
 
 

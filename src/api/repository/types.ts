@@ -9,11 +9,11 @@ export type JsonAccess = {
     read(resourceName:string):Promise<JSONObject>
     write(resourceName:string,data:JSONObject):Promise<boolean>
     delete(resourceName:string):Promise<boolean>
+    list():Promise<Array<string>>
+
 }
 
 export interface IJsonRepositoryBinding {
-
-    
     create(name:string):Promise<JsonAccess|null>
     get(name:string):Promise<JsonAccess|null>
     release(name:string):Promise<boolean>
