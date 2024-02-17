@@ -4,7 +4,7 @@ import { valid } from "../../../utils/valid";
 import { RouteApiDetail } from "../api/types";
 import { Route } from "../model/route";
 import { RoutePoint, RouteSegment } from "../types";
-import md5 from 'md5'
+import crypto from 'crypto'
 
 const MAX_LAPMODE_DISTANCE = 50;    // maximume distance between start and stop position
 
@@ -190,7 +190,7 @@ export const getRouteHash = (route:RouteApiDetail):string => {
         json = { decoded:route.points.map( p => ({lat:p.lat, lng: p.lng})) }            
     }
 
-    const routeHash = md5(JSON.stringify(json));
+    const routeHash = crypto.createHash('md5').update(JSON.stringify(json)).digest('hex');
     return routeHash;
 }
 

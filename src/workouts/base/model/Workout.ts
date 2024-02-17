@@ -2,7 +2,7 @@ import {Step} from './Step'
 import {Segment} from './Segment'
 import { Category, DataType, PlanDefinition, ScheduledWorkout, SegmentDefinition, StepDefinition, WorkoutDefinition } from './types';
 import { valid } from '../../../utils/valid';
-import md5 from 'md5'
+import crypto from 'crypto'
 
 /** 
  * @public 
@@ -54,7 +54,7 @@ export class Workout extends Segment implements WorkoutDefinition {
 
         const {name,description,steps,repeat } = this
 
-        this._hash = md5( JSON.stringify({name,description,steps,repeat }))
+        this._hash = crypto.createHash('md5').update(JSON.stringify({name,description,steps,repeat })).digest('hex');     
         return this._hash
     }
 
@@ -123,7 +123,9 @@ export class Plan implements PlanDefinition {
 
         const {name,description,workouts } = this
 
-        this._hash = md5( JSON.stringify({name,description,workouts }))
+        const data = JSON.stringify({name,description,workouts })
+        this._hash = crypto.createHash('md5').update(data).digest('hex');     
+
         return this._hash
     }
 
