@@ -89,7 +89,8 @@ const prepareMock = ( database, props) => {
     const access:JsonAccess = {
         read:jest.fn(),
         write:jest.fn().mockResolvedValue(true),
-        delete:jest.fn().mockResolvedValue(true)
+        delete:jest.fn().mockResolvedValue(true),
+        list:jest.fn().mockResolvedValue(null)
     }
     getBindings().db = {
         create:jest.fn().mockResolvedValue(access),

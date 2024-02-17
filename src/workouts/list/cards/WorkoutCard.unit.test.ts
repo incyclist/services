@@ -297,16 +297,26 @@ describe('WorkoutCard',()=>{
             })
 
             await card.save()
-            expect(c.getRepo().save).toHaveBeenCalledWith(workout)
+            expect(c.getRepo().save).toHaveBeenCalledWith(workout,false)
             expect(c.logError).not.toHaveBeenCalled()
         })
+        test('enforce write to db',async ()=>{
+            c.getRepo = jest.fn().mockReturnValue({
+                save: jest.fn( async () => {return})
+            })
+
+            await card.save(true)
+            expect(c.getRepo().save).toHaveBeenCalledWith(workout,true)
+            expect(c.logError).not.toHaveBeenCalled()
+        })
+
         test('error',async ()=>{
             c.getRepo = jest.fn().mockReturnValue({
                 save: jest.fn().mockRejectedValue(new Error())
             })
             
             await card.save()
-            expect(c.getRepo().save).toHaveBeenCalledWith(workout)
+            expect(c.getRepo().save).toHaveBeenCalledWith(workout,false)
             expect(c.logError).toHaveBeenCalled()
             
 
