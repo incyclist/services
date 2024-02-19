@@ -146,78 +146,6 @@ describe( 'DeviceConfigurationService',()=>{
 
         })
 
-        test('no device selected in bike capability',async ()=>{
-            const settings = {                
-                devices: [
-                    {udid:'1',settings:{interface:'serial',name:'Daum 8080',port:'COM4', protocol:'Daum Classic'}},
-                ],
-                capabilities: [
-                    {capability:'bike',devices:['1']},
-                    {capability:IncyclistCapability.Control,devices:['1']},
-                    {capability:IncyclistCapability.Power,devices:['1']},
-                    {capability:IncyclistCapability.HeartRate,devices:['1']}
-            
-                ],
-                interfaces: [
-                    {name:'ble', enabled:false},
-                    {name:'ant', enabled:false},
-                    {name:'tcpip', enabled:false},
-                    {name:'serial', enabled:true}
-                ]
-            }
-
-            testData = settings
-
-            await service.init()
-            const bike = service.settings.capabilities.find(c=>c.capability==='bike');
-            const hrm = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate);
-
-            expect(bike.selected).toBe('1')
-            expect(hrm.selected).toBe('1')
-
-        })
-
-        test('device only selected in bike capability',async ()=>{
-            const settings = {                
-                devices: [
-                    {udid:'1',settings:{interface:'serial',name:'Daum 8080',port:'COM4', protocol:'Daum Classic'}},
-                    {udid:'2',settings:{interface:'ble',address:'124',protocol:'hr'}},
-                    {udid:'3',settings:{interface:'ble',address:'124',protocol:'cp'}},
-                ],
-                capabilities: [
-                    {capability:'bike',selected:'1',devices:['1']},
-                    {capability:IncyclistCapability.Control,devices:['1']},
-                    {capability:IncyclistCapability.Power,devices:['3']},
-                    {capability:IncyclistCapability.HeartRate,devices:['1','2'], selected:'2'}
-            
-                ],
-                interfaces: [
-                    {name:'ble', enabled:false},
-                    {name:'ant', enabled:false},
-                    {name:'tcpip', enabled:false},
-                    {name:'serial', enabled:true}
-                ]
-            }
-
-            testData = settings
-
-            await service.init()
-            const bike = service.settings.capabilities.find(c=>c.capability==='bike');
-            const hrm = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate);
-            const power = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.Power);
-            const control = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.Control);
-            const speed = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.Speed);
-            const cadence = service.settings.capabilities.find(c=>c.capability===IncyclistCapability.Cadence);
-
-            expect(bike.selected).toBe('1')
-            expect(hrm.selected).toBe('2')
-            expect(power.selected).toBe('1')
-            expect(power.devices).toEqual(['3','1'])
-            expect(control.selected).toBe('1')
-            expect(speed.selected).toBe('1')
-            expect(cadence.selected).toBe('1')
-        })
-
 
         test('new and legacy',async ()=>{
 
@@ -313,19 +241,17 @@ describe( 'DeviceConfigurationService',()=>{
             const emptyAdapters = keys.find( k=> service.adapters[k]===undefined)
             expect (emptyAdapters).toBeUndefined();
 
-            expect(capabilities.length).toBe(6) // Bike, Control, Heartrate, Power, Cadence, Speed
+            expect(capabilities.length).toBe(5) // Control, Heartrate, Power, Cadence, Speed
 
             const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
             const AntHrm3250  = devices.find(d=>d.settings.profile==='HR' && d.settings.deviceID==='3250')
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
-            expect(getCap('bike').devices.length).toBe(4)
             expect(getCap(IncyclistCapability.Control).devices.length).toBe(3)  // PWR does not have Control
             expect(getCap(IncyclistCapability.Speed).devices.length).toBe(4)
             expect(getCap(IncyclistCapability.Cadence).devices.length).toBe(4)
             expect(getCap(IncyclistCapability.Power).devices.length).toBe(4)
             expect(getCap(IncyclistCapability.HeartRate).devices.length).toBe(3)
 
-            expect(getCap('bike')?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Control)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Power)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.HeartRate)?.selected).toBe(AntHrm3250.udid)            
@@ -340,7 +266,6 @@ describe( 'DeviceConfigurationService',()=>{
             const {devices,capabilities} = service.settings
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
             expect(devices.length).toBe(8)
-            expect(getCap('bike').devices.length).toBe(6)
             expect(getCap(IncyclistCapability.HeartRate).devices.length).toBe(3)
 
         })
@@ -370,13 +295,12 @@ describe( 'DeviceConfigurationService',()=>{
             expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
 
             expect(interfaces.length).toBe(4)
-            expect(capabilities.length).toBe(6) // Bike, Control, Heartrate, Power, Cadence, Speed
+            expect(capabilities.length).toBe(5) //  Control, Heartrate, Power, Cadence, Speed
 
             const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
             const AntHr3250 = devices.find(d=>d.settings.profile==='HR' && d.settings.deviceID==='3250')
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
 
-            expect(getCap('bike')?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Control)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Power)?.selected).toBe(AntFe2606.udid)
             expect(getCap(IncyclistCapability.Cadence)?.selected).toBe(AntFe2606.udid)
@@ -400,12 +324,11 @@ describe( 'DeviceConfigurationService',()=>{
 
             expect(devices.length).toBe(6)
             expect(interfaces.length).toBe(4)
-            expect(capabilities.length).toBe(6) // Bike, Control, Heartrate, Power, Cadence, Speed
+            expect(capabilities.length).toBe(5) //  Control, Heartrate, Power, Cadence, Speed
 
             const daum = devices.find( d=>d.settings.name==='Daum8i')
             
-            const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
-            expect(getCap('bike')?.selected).toBe(daum.udid)
+            const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)            
             expect(getCap(IncyclistCapability.Control)?.selected).toBe(daum.udid)
             expect(getCap(IncyclistCapability.Cadence)?.selected).toBe(daum.udid)
             expect(getCap(IncyclistCapability.Power)?.selected).toBe(daum.udid)
@@ -436,9 +359,6 @@ describe( 'DeviceConfigurationService',()=>{
         })
 
         test('empty legacy', ()=>{
-
-            service.setFeature('NEW_UI',true)
-
             const settings = clone(EmptyLegacySettings)
             testData = settings
             service.initFromLegacy(settings)
@@ -488,7 +408,6 @@ describe( 'DeviceConfigurationService',()=>{
             expect(settings.devices).toBeDefined()
             expect(settings.capabilities).toBeDefined()
             const udid = settings.devices[0].udid
-            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Speed)).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Cadence)).toMatchObject( {selected:udid})
@@ -509,7 +428,6 @@ describe( 'DeviceConfigurationService',()=>{
             expect(settings.devices).toBeDefined()
             expect(settings.capabilities).toBeDefined()
             const udid = settings.devices[0].udid
-            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Speed)).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Cadence)).toMatchObject( {selected:udid})
@@ -546,7 +464,6 @@ describe( 'DeviceConfigurationService',()=>{
             expect(settings.capabilities.length).toBe(6) 
             const udid = settings.devices[1].udid
 
-            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:udid})
 
             // hearrate sensor was not overwritten
@@ -667,7 +584,6 @@ describe( 'DeviceConfigurationService',()=>{
             const udid = settings.devices[2].udid
 
             expect(settings.capabilities.length).toBe(6)  
-            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:undefined})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:undefined})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:undefined})
@@ -766,87 +682,6 @@ describe( 'DeviceConfigurationService',()=>{
         })
 
 
-        test('selecting power when bike is currently selected',()=>{
-            service.settings = {
-                devices:[
-                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'fe'}},
-                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
-                    {udid:'3',settings:{interface:'ble',address:'125',protocol:'cp'}},
-                ], 
-                capabilities:[
-                    {capability:IncyclistCapability.Power, selected:'1',devices:['1','2','3']},
-                    {capability:IncyclistCapability.Control, selected:'1', devices:['1','2']},
-                    {capability:'bike', selected:'1',devices:['1','2','3']}
-                ]
-            }
-            service.adapters = {
-                "1" : {
-                    hasCapability: jest.fn().mockReturnValue(true),
-                    isControllable: jest.fn().mockReturnValue(true)
-                },
-                "2" : {
-                    hasCapability: jest.fn().mockReturnValue(true),
-                    isControllable: jest.fn().mockReturnValue(true)
-                },
-                "3" : {
-                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.Power),
-                    isControllable: jest.fn().mockReturnValue(true)
-                }
-
-            }
-
-            service.select('3','bike')
-
-            const settings = service.settings
-            expect(settings.devices.length).toBe(3)
-
-            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'3'})
-            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:null})
-            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:'3'})
-        })
-
-
-        test('selecting any Smart Trainer in capability bike, when Power is currently selected',()=>{
-            service.settings = {
-                devices:[
-                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'fe'}},
-                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
-                    {udid:'3',settings:{interface:'ble',address:'125',protocol:'cp'}},
-                ], 
-                capabilities:[
-                    {capability:IncyclistCapability.Power, selected:'3',devices:['1','2','3']},
-                    {capability:IncyclistCapability.Control, devices:['1','2']},
-                    {capability:'bike', selected:'3',devices:['1','2','3']}
-                ]
-            }
-            service.adapters = {
-                "1" : {
-                    test:1,
-                    hasCapability: jest.fn().mockReturnValue(true),
-                    isControllable: jest.fn().mockReturnValue(true)
-                },
-                "2" : {
-                    test:2,
-                    hasCapability: jest.fn().mockReturnValue(true),
-                    isControllable: jest.fn().mockReturnValue(true)
-                },
-                "3" : {
-                    test:3,
-                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.Power),
-                    isControllable: jest.fn().mockReturnValue(true)
-                }
-
-            }
-
-            service.select('2','bike')
-
-            const settings = service.settings
-            expect(settings.devices.length).toBe(3)
-
-            expect(settings.capabilities.find(c=>c.capability==='bike')).toMatchObject( {selected:'2'})
-            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:'2'})
-            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:'2'})
-        })
 
 
 
