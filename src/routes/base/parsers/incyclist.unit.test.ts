@@ -21,7 +21,7 @@ describe('IncyclistParser',()=>{
 
     }
 
-    describe('GPX',()=>{
+    describe('Incyclist-XML',()=>{
 
 
         describe('import',()=>{
@@ -114,6 +114,20 @@ describe('IncyclistParser',()=>{
 
             })
 
+            test('bug: file delivering no points',async ()=>{
+                const name = 'DE_Rimberg-Kronenberg.xml'
+                const dir = './__tests__/data/rlv'
+                const filename = `${dir}/${name}`
+                
+                getBindings().loader = { open: load}
+                fs.existsSync = jest.fn().mockReturnValue(false)
+                const fileInfo:FileInfo = {type:'file', filename, name, ext:'xml',dir,url:undefined, delimiter:'/'}
+                const {data} = await parser.import(fileInfo)
+
+                expect(data.points?.length).not.toBe(0)
+                    
+
+            })
 
 
     

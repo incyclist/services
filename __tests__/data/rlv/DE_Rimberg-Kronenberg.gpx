@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS Track Editor" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gte="http://www.gpstrackeditor.com/xmlschemas/General/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" targetNamespace="http://www.topografix.com/GPX/1/1" elementFormDefault="qualified" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+<metadata>
+	<name>DE_Rimberg-Kronenberg-smoothed.gpx</name>
+</metadata>
+<trk>
+	<name>Incyclist Roundtrip</name>
+	<trkseg>
+		<trkpt lat="50.862148" lon="8.637983">
+			<ele>219.60</ele>
+			<time>2000-01-01T09:00:00Z</time>
+		</trkpt>
+		<trkpt lat="50.843745" lon="8.661923">
+			<ele>252.59</ele>
+			<time>2000-01-01T09:10:51Z</time>
+		</trkpt>
+		<trkpt lat="50.843759" lon="8.661890">
+			<ele>252.26</ele>
+			<time>2000-01-01T09:10:52Z</time>
+		</trkpt>
+		<extensions>
+			<gte:name>#1</gte:name>
+			<gte:color>#fbaf00</gte:color>
+		</extensions>
+	</trkseg>
+	<trkseg>
+		<trkpt lat="50.843887" lon="8.661178">
+			<ele>247.52</ele>
+			<time>2000-01-01T09:10:53Z</time>
+		</trkpt>
+
+		<trkpt lat="50.862151" lon="8.637977">
+			<ele>219.60</ele>
+			<time>2000-01-01T09:54:04Z</time>
+		</trkpt>
+		<extensions>
+			<gte:name>#1</gte:name>
+			<gte:color>#ffb0ff</gte:color>
+		</extensions>
+	</trkseg>
+</trk>
+</gpx>
