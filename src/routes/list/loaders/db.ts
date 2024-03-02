@@ -8,7 +8,7 @@ import { RouteInfoDBEntry } from "./types"
 import { DBLoader } from "./DBLoader"
 import { RouteApiDetail } from "../../base/api/types"
 import { waitNextTick } from "../../../utils"
-import { getTotalElevation, updateSlopes, validateDistance } from "../../base/utils/route"
+import { addDetails, getTotalElevation, updateSlopes, validateDistance } from "../../base/utils/route"
 
 @Singleton
 export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
@@ -239,7 +239,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
     protected async loadDetails(route:Route, alreadyAdded?:boolean): Promise<void> {
         const details = await this.loadDetailRecord(route)
-        this.addDetails(route,details)
+        addDetails(route,details)
         this.verifyRouteHash(route)
         
         if (alreadyAdded)

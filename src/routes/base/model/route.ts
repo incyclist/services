@@ -19,7 +19,7 @@ export class Route {
     }
 
     get points():Array<RoutePoint> {
-        const points = this._description?.points 
+        const points = this._details?.points ?? this._description?.points 
 
         if (typeof points==='string') {
             // TODO: decode

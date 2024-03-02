@@ -1,0 +1,1 @@
+export type ActivityState = 'ininitalized' | 'active' | 'paused' | 'completed' | 'idle'

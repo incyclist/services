@@ -70,6 +70,7 @@ export type RoutePoint = {
     lng: number;
     routeDistance: number;
     elevation: number;
+    elevationGain?:number
     slope?: number;
     distance?:number
     videoSpeed?:number,

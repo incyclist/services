@@ -1,4 +1,3 @@
-import { getWorkoutList } from "../../workouts"
 import { PromiseObserver } from "../types/observer"
 
 

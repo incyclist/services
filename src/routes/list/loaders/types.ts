@@ -4,7 +4,7 @@ import { valid } from "../../../utils/valid";
 import { RouteApiDescription, RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
-import { checkIsLoop, getRouteHash } from "../../base/utils/route";
+import { getRouteHash } from "../../base/utils/route";
 
 export interface RouteInfoDBEntry extends RouteInfo {
     pointsEncoded?:string
@@ -139,39 +139,6 @@ export abstract class Loader<T extends MinimalDescription> {
         })
     }
 
-    protected addDetails(route:Route, details:RouteApiDetail) {
-        route.details = details
-        route.description.points = details.points
-        
-        if (route.description.hasVideo) {
-            route.description.requiresDownload = valid(details.downloadUrl)
-            route.description.downloadUrl = details.downloadUrl
-            if (!valid(route.description.videoUrl)) {
-                route.description.videoUrl = details.video.url 
-            }
-            if (!valid(route.description.videoUrl)) {
-                route.description.videoUrl = valid(details.video.file) ? 'video:///'+details.video.file : undefined
-            }
-
-            if (!valid(route.description.videoFormat)) {
-                route.description.videoFormat = details.video.format
-            }
-            if (!valid(route.description.previewUrl)) {
-                route.description.previewUrl = details.previewUrl                
-            }
-           
-            route.description.hasGpx = details.points.find( p=> p.lat && p.lng)!==undefined
-            route.description.next = details.video?.next
-            
-
-        }
-
-        if (!valid(route.description.routeHash))
-            route.description.routeHash = details.routeHash
-
-        route.description.isLoop = checkIsLoop(route.description.points)
-
-    }
 
 
 }

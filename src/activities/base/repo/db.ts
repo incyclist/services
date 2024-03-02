@@ -3,10 +3,11 @@ import { JSONObject, JsonRepository } from "../../../api";
 import { Singleton } from "../../../base/types";
 import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { waitNextTick } from "../../../utils";
-import { ActivityDB, ActivityDetails, ActivityInfo, ActivitySummary, UploadInfo  } from "../model";
+import { ActivityDB, ActivityDetails, ActivityInfo, UploadInfo  } from "../model";
 import { ActivitySearchCriteria } from "./types";
+import { buildSummary } from "../utils";
 
-const DB_VERSION = '1'
+export const DB_VERSION = '1'
 
 /**
  * This class is used to load Activities from the local database
@@ -21,7 +22,7 @@ const DB_VERSION = '1'
  * 
  */
 @Singleton
-export class ActivitiesDbLoader {
+export class ActivitiesRepository {
     protected repo: JsonRepository
     protected loadObserver:Observer
     protected saveObserver:PromiseObserver<void>
@@ -140,6 +141,15 @@ export class ActivitiesDbLoader {
     }
 
     /**
+     * gets all Activities from repo
+     * 
+     * @returns the ActivityInfo of all the activities 
+     */
+    getAll() {
+        return  this.activities??[]
+    }
+    
+    /**
      * gets the Activity from repo
      * 
      * It returns the [[ActivityInfo]] object of this activity.
@@ -231,7 +241,7 @@ export class ActivitiesDbLoader {
                 const dbData = {
                     version: DB_VERSION,
                     isComplete,
-                    activties: this.activities.map( ai=>ai.summary)
+                    activities: this.activities.map( ai=>ai.summary)
                 }
                 await this.getRepo().write('db',dbData as JSONObject)
             }
@@ -304,23 +314,23 @@ export class ActivitiesDbLoader {
 
         // we got some data
         if (dbData) {
-            const {activities, isComplete} = dbData
+            const {activities=[]} = dbData
 
             this.activities = activities.map( summary => ({summary}))
             this.emitAdded(this.activities)
-
-            this.isDBComplete = isComplete
-
-            if (!isComplete) {
-                const cnt = activities.length
-                const update = await this.scanForActivitiesAndMerge(activities)
-
-                // check if activities were added, if so: update DB
-                if (cnt!==update.length) {
-                    await this.write(true)
-                }
-                return
+            
+            const cnt = activities.length
+            const names = await this.scanForNewActivities()
+            if (names) {
+                await this.bulkAddActivities(names)
+            }        
+            
+            // check if activities were added, if so: update DB
+            if (cnt!==this.activities.length) {
+                await this.write(true)
             }
+            return
+           
         }
 
         // no data yet, we need to create a new DB by scanning the directory
@@ -335,15 +345,13 @@ export class ActivitiesDbLoader {
      */
 
     protected async buildFromLegacy():Promise<void> {
-
-        const activities = await this.scanForActivities()
         
 
-        if (activities!==null) {
-            this.activities = activities.map( summary => ({summary}))
-        }
-        
-        
+        this.activities = []
+        const names = await this.scanForNewActivities()
+        if (names) {
+            await this.bulkAddActivities(names)
+        }        
         await this.write(true)
       
     }
@@ -354,7 +362,7 @@ export class ActivitiesDbLoader {
      * @returns Array with the names of the activities
      */
     protected async listActivities():Promise<Array<string>> {
-        return this.getRepo().list()
+        return this.getRepo().list(['db'])
 
     }
 
@@ -380,95 +388,69 @@ export class ActivitiesDbLoader {
         }
     }
 
+    protected async bulkAddActivities( names: Array<string>):Promise<void> {
+        
+        const promises:Array<Promise<{name:string,details:ActivityDetails}>> = []
+        names.forEach( name => promises.push(
+            this.loadDetailsByName(name).then( (details)=>({name,details}))
+        ))
+
+        const result = await Promise.allSettled(promises)
+        
+
+        result.forEach( result=> {
+            if (result.status==="rejected")
+                return;
+            else  {
+                try {
+                    const details = result.value?.details 
+                    const name = result.value?.name
+                
+                    const summary = buildSummary(details,name)
+                    this.activities.push( {summary})
+                    this.emitAdded({summary})
+                }
+                catch(err) {
+                    this.logError(err,'bulkAddActivities.loop')
+                }
+            }
+        })
+        
+        return 
+    }
+
+
     protected async writeDetails(activity:ActivityInfo):Promise<void> {
         const name = activity.summary.name
-        this.getRepo().write( name,activity.details as JSONObject)
+        this.getRepo().write( name,activity.details as unknown as JSONObject)
     }
-
-    protected buildSummary(activity:ActivityDetails,name:string):ActivitySummary {
-        const {id, title,route,screenshots,startTime: startTimeUTC,time: rideTime,distance,startPos,realityFactor=100,links,laps} = activity
-
-        const routeId = route?.id
-        const shots = screenshots??[]
-        const preview = shots.find( s=>s.isHighlight)??shots[0]
-        const previewImage = preview?.fileName
-
-        let startTime:number
-        if (startTimeUTC)
-            startTime = (new Date(startTimeUTC)).getTime()
-
-        const uploadStatus=[]
-        if (links?.strava) {
-            uploadStatus.push( {service:'strava',status: 'success'})
-        }
-
-        return {
-            id,title,name, routeId, previewImage,startTime,rideTime,distance,startPos,realityFactor,uploadStatus,laps
-        }
-    }
-
 
     /**
-     * provides a list of activities 
+     * provides a list of activities that are not yet stored in the repo
      * 
      * @returns r
      */
-    protected async scanForActivities():Promise<Array<ActivitySummary>|null> {
+    protected async scanForNewActivities():Promise<Array<string>|null> {
         try {
 
-            this.isDBComplete = this.isDBComplete??false
 
-            const names = await this.listActivities()
+            let names = await this.listActivities()
             if (!names)
                 return null;
             
-
-            const promises:Array<Promise<{name:string,details:ActivityDetails}>> = []
-            names.forEach( name => promises.push(
-                this.loadDetailsByName(name).then( (details)=>({name,details}))
-            ))
-
-            const result = await Promise.allSettled(promises)
-            const activities:Array<ActivitySummary> = []
-
-            let isComplete = true
-            result.forEach( result=> {
-                if (result.status==="rejected")
-                    isComplete = false
-                else  {
-                    const details = result.value?.details 
-                    const name = result.value.name
-                    const summary = this.buildSummary(details,name)
-                    activities.push( summary)
-                }
-            })
-
-            this.isDBComplete = this.isDBComplete??isComplete
-            return activities
-
+            const known = this.activities?.map( ai=> ai.summary.name)
+            names = names.filter( name=> !known.includes(name))
+            return names;
         }
         catch(err) {
             return null;
         }
-
-
     }
 
-    protected async scanForActivitiesAndMerge(activities:Array<ActivitySummary>):Promise<Array<ActivitySummary>> {
-        const total = await this.scanForActivities()
-        if (total===null)
-            return activities
 
-        total.forEach( activity => {
-            if ( !activities.map(a=>a.id).includes(activity.id) )
-                activities.push(activity)
-        })
-
-        return activities
-    }
 
     protected async _load() {
-        await this.loadSummaries();      
+        await this.loadSummaries(); 
         this.emitDone()       
     }
 

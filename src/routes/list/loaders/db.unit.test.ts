@@ -74,7 +74,9 @@ async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, t:'vide
     
     await new Promise(done => {
         loader.load()
-            .on('route.added', route => { routes.push(route); })
+            .on('route.added', route => { 
+                routes.push(route); 
+            })
             .on('route.updated', done)
             .on('done', () => {                 
                 setTimeout(done, 100); 

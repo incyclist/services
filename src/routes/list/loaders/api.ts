@@ -3,6 +3,7 @@ import IncyclistRoutesApi from "../../base/api";
 import { RouteApiDescription, RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
+import { addDetails } from "../../base/utils/route";
 import { RoutesDbLoader } from "./db";
 import { Loader } from "./types";
 import { LoadDetailsTargets } from "./types";
@@ -145,7 +146,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     protected async loadDetailsFromRepo( items:LoadDetailsTargets):Promise<LoadDetailsTargets>{
 
         // all missing should be loaded from server
-        const promises = items.map ( i => this.getDetailsFromDB (i.route.description.id).then( details => { this.addDetails(i.route,details)}) )
+        const promises = items.map ( i => this.getDetailsFromDB (i.route.description.id).then( details => { addDetails(i.route,details)}) )
 
         const res = await Promise.allSettled(promises) 
 
@@ -202,7 +203,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     protected async getDetails(route:Route):Promise<void> {
 
         const details = await this.api.getRouteDetails(route.description.legacyId||route.description.id)
-        this.addDetails(route,details)
+        addDetails(route,details)
 
             
     }

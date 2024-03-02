@@ -12,26 +12,31 @@ export type ActivityRoute = {
     name: string
 }
 
+
 export type ActivityStatsRecord = {
     min: number,
     max: number,
     avg: number,
     cntVal: number,
     sum: number,
-    minAllowed: number
+    minAllowed?: number
+    weighted?:number
+
 }
 
 export type ActivityLogRecord = {
     time: number,
     timeDelta: number,
     speed: number,
-    slope: number,
+    slope?: number,
     cadence: number,
-    heartrate: number,
-    distance: number,
+    heartrate?: number,
+    distance?: number,
     power: number,
     lat?: number,
-    lon?: number,    
+    // @deprecated
+    lon?: number,  
+    lng?: number,  
     elevation?:number
 }
 
@@ -42,6 +47,7 @@ export type ActivityStats = {
     speed: ActivityStatsRecord,
     slope?: ActivityStatsRecord,
     power: ActivityStatsRecord,
+    powerCurve?: Record<string,number>
 }
 
 export type StravaAppLink = {
@@ -115,7 +121,9 @@ export type LapSummary  ={
     rideTime: number
 }
 
-export type ActivityDetails = {
+export type ActivityRouteType = 'Free-Ride'|'GPX'|'Video'
+
+export interface ActivityDetails  {
     type?: ActivityType
     version?: string;
 
@@ -146,29 +154,50 @@ export type ActivityDetails = {
     /** distance [in m] ridden in this activity*/
     distance: number
 
+    /** starting position [in m] of this activity*/
     startPos: number,
-    startpos: number
-    endpos: number
 
+    /** @deprecated */
+    startpos?: number
+    /** @deprecated */
+    endpos?: number
 
-    /** elevation gain in this activity */
+    /** total elevation gain of this activity */
     totalElevation: number
 
-    stats: ActivityStats
-
+    /** all log records */
     logs: Array<ActivityLogRecord>
 
-    screenshots: Array<ScreenShotInfo>
-    fileName?: string;
-    tcxFileName?: string;
-    fitFileName?: string;
-    links?: ActivityAppLinks
+    /** Statistcs ( max,min,avg) for power, speed,cadence and hrm */
+    stats?: ActivityStats
+
+    /** reference to screenshots made during the ride */
+    screenshots?: Array<ScreenShotInfo>
 
     // v1
-    realityFactor: number;
-    laps?: Array<LapSummary>
-    
+    /** selected route type ( Free-Ride vs. Route)  */
+    routeType?: ActivityRouteType;
 
+    /** selected reality factor  */
+    realityFactor: number;
+
+    /** information about all laps taken in a loop route   */
+    laps?: Array<LapSummary>
+
+    /** information about all workout steps taken in a workout activity   */
+    workoutSteps?: Array<LapSummary>
+
+    /** filename (without full path) */
+    name?:string
+    /** full file name (incl. path) of the activity */
+    fileName?: string;
+    /** full file name (incl. path) of the TCX representation of this activity */
+    tcxFileName?: string;
+    /** full file name (incl. path) of the FIT representation of this activity */
+    fitFileName?: string;
+
+    /** information about synchronizations to connected apps */
+    links?: ActivityAppLinks
 }
 
 export type ActivityInfo = {

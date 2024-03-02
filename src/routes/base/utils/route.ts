@@ -123,6 +123,41 @@ export const getSegments = (route:Route):Array<RouteSegment> => {
     }
 }
 
+export const addDetails =(route:Route, details:RouteApiDetail):void => {
+    const points = details.points
+    route.details = details
+    route.description.points = details.points
+    route.description.distance = details.distance ?? points[points.length-1].routeDistance
+    
+    if (route.description.hasVideo) {
+        route.description.requiresDownload = valid(details.downloadUrl)
+        route.description.downloadUrl = details.downloadUrl
+        if (!valid(route.description.videoUrl)) {
+            route.description.videoUrl = details.video.url 
+        }
+        if (!valid(route.description.videoUrl)) {
+            route.description.videoUrl = valid(details.video.file) ? 'video:///'+details.video.file : undefined
+        }
+
+        if (!valid(route.description.videoFormat)) {
+            route.description.videoFormat = details.video.format
+        }
+        if (!valid(route.description.previewUrl)) {
+            route.description.previewUrl = details.previewUrl                
+        }
+       
+        route.description.hasGpx = details.points.find( p=> p.lat && p.lng)!==undefined
+        route.description.next = details.video?.next
+        
+
+    }
+
+    if (!valid(route.description.routeHash))
+        route.description.routeHash = details.routeHash
+
+    route.description.isLoop = checkIsLoop(route.description.points)
+
+}
 
 export const validateRoute = (route:RouteApiDetail):void =>{
     if (!route?.points?.length)
@@ -130,23 +165,39 @@ export const validateRoute = (route:RouteApiDetail):void =>{
 
     validateDistance(route.points)
     updateSlopes(route.points);
-
+    updateElevationGain(route.points)
 }
 
 export const validateDistance = (points:Array<RoutePoint>) => {
     let prev = undefined
+
     points.forEach( (p,idx) => {
-        if (!p.routeDistance) {
+        if (p.cnt===undefined)
+            p.cnt=idx
+
+        if (p.routeDistance===undefined || p.routeDistance===null) {
             if (idx==0) {
                 p.routeDistance=0;
             }
             else {
-                p.routeDistance = (prev?.distance||0)+(prev?.routeDistance||0)
+                if (p.distance===undefined) {
+                    p.distance = calculateDistance( prev.lat, prev.lng, p.lat, p.lng)
+                    p.routeDistance = (prev.routeDistance||0) + p.distance
+                }
+                else {                
+                    p.routeDistance = (p.distance)+(prev?.routeDistance||0)
+                }
             }
         }
+        else if (p.routeDistance!==undefined && p.routeDistance!==null && (p.distance===undefined || p.distance===null) ) {
+            if (idx==0)
+                p.distance =0
+            else 
+                p.distance = p.routeDistance-prev.routeDistance
+        }
+
         prev = p;
     })
-
 }
 
 
@@ -154,18 +205,56 @@ export const getTotalElevation = (route:RouteApiDetail):number =>{
     if (!route?.points?.length)
         return 0;
 
-    let elevation = 0;
+    const lastPoint = route.points[route.points.length-1]
+    if (lastPoint.elevationGain===undefined)
+        updateElevationGain(route.points)
+    
+    return lastPoint.elevationGain;
+}
+
+export const getElevationGainAt = (route:Route, routeDistance:number):number => {
+    let distance = routeDistance
+    let elevationGain = 0;
+    
+
+    const isLoop = checkIsLoop(route)
+    if (isLoop&& routeDistance>route.description.distance) {
+        distance = routeDistance % route.description.distance
+        const lapsCompleted = Math.floor(routeDistance / route.description.distance)
+        elevationGain += getTotalElevation(route.details)*lapsCompleted
+    }
+
+
+    let point = getPointAtDistance(route,distance,true)
+    if (point.elevationGain===undefined) {
+        updateElevationGain(route.points)
+        point = getPointAtDistance(route,distance,true)
+    }
+    elevationGain+= point.elevationGain
+    
+    return elevationGain
+}
+
+
+export const updateElevationGain = (points:Array<RoutePoint>):void =>{
+    if (!points?.length)
+        return;
+
+    let elevationGain = 0;
     let prev = undefined
-    route.points.forEach( (p,idx)=>{
+    points.forEach( (p,idx)=>{
 
         if (idx>0) {
-            const e = p.elevation - prev.elevation
-            if (e>0)
-                elevation+=e
+            const gain = p.elevation - prev.elevation
+            if (gain>0)
+                elevationGain+=gain
+            p.elevationGain = elevationGain
+        }
+        else {
+            p.elevationGain = 0
         }
         prev = p;
-    })
-    return elevation
+    })    
 }
 
 export const getTotalDistance = (route:RouteApiDetail):number =>{
@@ -259,29 +348,10 @@ export const getNextPosition = ( route:Route, props:GetNextPositionProps ) => {
         p = points[cnt];
         if ( p.routeDistance>=targetRouteInLap) {
             point = {...p};
-
             if (pPrev!==undefined ){
-                let pDest;
-                if ( pPrev.cnt===point.cnt) {
-                    pDest = geo.getPointBetween( props.prev,p, distance);   
-                }
-                else {
-                    const distanceToPrev = targetRouteInLap-pPrev.routeDistance;
-                    pDest = geo.getPointBetween( pPrev,p, distanceToPrev);    
-                    point.cnt = pPrev.cnt
-                }
-                point.lat = pDest.lat;
-                point.lng = pDest.lng;
-                point.routeDistance = targetRouteInLap;
-                point.distance  = point.routeDistance-pPrev.routeDistance
-
-                if ( route.description.isLoop) {
-                    point.lap = lap;
-                }
+                updatePoint(pPrev, point, props, p, distance, targetRouteInLap, route, lap);
             }
-             
             return point; 
-
         }   
         pPrev = p;
     }
@@ -317,6 +387,16 @@ export const getPosition = (route:Route,  props:GetPositionProps) => {
  
 }
 
+
+/**
+ * returns a copy of the point at a specifc index in the points array
+ * 
+ * 
+ * @param route The route Object
+ * @param idx   index 
+ * 
+ * @returns a copy of the RoutePoint at the given index
+ */
 const getPointAtIndex = (route:Route,idx:number):RoutePoint => {
     const points = route.points
     if (idx>=points.length || idx<0)
@@ -327,6 +407,14 @@ const getPointAtIndex = (route:Route,idx:number):RoutePoint => {
     return point;
 }
 
+/**
+ * returns a copy of the point at a specifc routeDistance
+ * 
+ * @param route the route object
+ * @param routeDistance the distance we would like to have the point 
+ * @param nearest  if set to true, it will deliver the point nearest to the routeDistance, otherwise it will only return a point if the point's routeDistance matches exactly the requested one 
+ * @returns a copy of the RoutePoint at the given position
+ */
 const getPointAtDistance = (route:Route,routeDistance:number, nearest:boolean=true):RoutePoint => {
     const points = route.points
     if (!points)
@@ -394,4 +482,25 @@ const getPointAtLatLng = (route:Route, latlng:LatLng, nearest:boolean=true):Rout
 
 
 
+
+function updatePoint(pPrev: LapPoint, point: LapPoint, props: GetNextPositionProps, p: LapPoint, distance: number, targetRouteInLap: number, route: Route, lap: number) {
+    let pDest;
+    if (pPrev.cnt === point.cnt) {
+        pDest = geo.getPointBetween(props.prev, p, distance);
+    }
+    else {
+        const distanceToPrev = targetRouteInLap - pPrev.routeDistance;
+        pDest = geo.getPointBetween(pPrev, p, distanceToPrev);
+        point.cnt = pPrev.cnt;
+    }
+    point.lat = pDest.lat;
+    point.lng = pDest.lng;
+    point.routeDistance = targetRouteInLap;
+    point.distance = point.routeDistance - pPrev.routeDistance;
+    point.elevation = point.distance * pPrev.slope / 100;
+
+    if (route.description.isLoop) {
+        point.lap = lap;
+    }
+}
 
