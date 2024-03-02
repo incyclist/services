@@ -1059,7 +1059,7 @@ export class DeviceRideService  extends EventEmitter{
 
 
         // get list of capabilities, where the device sending the data was selected by the user
-        const { enabledCapabilities, toBeReplaced } = this.getEnabledCapabilities(adapterInfo);
+        const { enabledCapabilities, toBeReplaced } = this.getEnabledCapabilities(adapterInfo,selectedDevices);
                     
         this.logEvent({message:'Data Update', device:adapterInfo.adapter.getName(), data, enabledCapabilities})
 
@@ -1100,10 +1100,10 @@ export class DeviceRideService  extends EventEmitter{
 
     }
 
-    private getEnabledCapabilities(adapterInfo: AdapterRideInfo ) {
+    private getEnabledCapabilities(adapterInfo: AdapterRideInfo, selected?:Array<{capability:IncyclistCapability,selected?:string }> ) {
 
         const adapters = this.getAdapterList();
-        const selectedDevices = this.configurationService.getSelectedDevices()
+        const selectedDevices = selected ?? this.configurationService.getSelectedDevices()
 
         let enabledCapabilities = [];
 
