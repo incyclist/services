@@ -23,7 +23,10 @@ export class JsonRepository {
         this.logger = new EventLogger(`Repo-${this.name}`)
     }
 
-    
+    getPath():string {
+        const db = getBindings().db
+        return db.getPath(this.name)
+    }
 
     getName():string {
         return this.name

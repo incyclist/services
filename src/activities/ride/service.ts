@@ -6,7 +6,7 @@ import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityDetails, ActivityLogRecord, ActivityRoute, ActivityRouteType, DB_VERSION, ScreenShotInfo, buildSummary } from "../base";
+import { ActivitiesRepository, ActivityDetails, ActivityLogRecord, ActivityRoute, ActivityRouteType, DB_VERSION, FitExportActivity, FitLogEntry, ScreenShotInfo, buildSummary } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
@@ -131,7 +131,7 @@ export class ActivityRideService extends IncyclistService {
         
     }
 
-    init(): Observer { 
+    init(id?:string): Observer { 
         let isClean = true
 
         if (this.observer) {
@@ -160,7 +160,7 @@ export class ActivityRideService extends IncyclistService {
             
         }
 
-        this.activity = this.createActivity()
+        this.activity = this.createActivity(id)
         this.durationCalculator = new ActivityDuration(this.activity)
 
         this.getDeviceRide().on('data',this.deviceDataHandler)
@@ -248,7 +248,6 @@ export class ActivityRideService extends IncyclistService {
 
     getDashboardDisplayProperties() {
 
-        console.log('~~~ getDashboardDisplayProperties', this.state, this.activity)
         try {
             const distance = (this.activity?.distance??0)/1000;
             const speed = (this.current.deviceData.speed??0);
@@ -326,8 +325,39 @@ export class ActivityRideService extends IncyclistService {
 
     }
 
+    getActivity():ActivityDetails {
+        return this.activity
+    }
+
+    protected mapLogToFit(log:ActivityLogRecord): FitLogEntry {
+        const {time,speed, slope, cadence, heartrate, distance, power, lat, lng,elevation} = log
+
+        return {time,speed, slope, cadence, heartrate, distance, power, lat, lon:lng,elevation}
+
+    }
+
+    getFitActivity(): FitExportActivity {
+        const {id,title, time,timeTotal,timePause,distance } = this.activity
+        const status = 'active'
+
+        const startTime = new Date(this.activity.startTime).toISOString()
+        const logs = this.activity.logs.map(this.mapLogToFit.bind(this) )
+        const screenshots = [] // TODO
+        const laps = [] // TODO
+        const user = {
+            id: this.getUserSettings().get('uuid',undefined),
+            weight: this.activity.user.weight
+        }
+        const stopTime= new Date(this.tsStart+timeTotal*1000).toISOString()
+
+        return {id,title,status,logs,laps,startTime, stopTime, time, timeTotal, timePause, distance, user, screenshots}
+
+
+    }
+
     /** user requested save: will save the activity and convert into TCX and FIT */
     save() {
+        return this._save()
 
     }
 
@@ -408,7 +438,6 @@ export class ActivityRideService extends IncyclistService {
 
 
     protected onDeviceHealthUpdate(udid:string,status:HealthStatus, capabilities:Array<ExtendedIncyclistCapability>) {
-        console.log('~~~ ACTIVITY HEALTH DATA', udid,status,capabilities)
         capabilities.forEach(capability => {
             this.current.dataState[capability.toLowerCase()] = status
         })
@@ -486,7 +515,7 @@ export class ActivityRideService extends IncyclistService {
         return log;
     }
 
-    protected createActivity():ActivityDetails {
+    protected createActivity(requestedId?:string):ActivityDetails {
 
         const user = this.getUserSettings().get('user',{})
         const {weight,ftp} = user
@@ -536,9 +565,10 @@ export class ActivityRideService extends IncyclistService {
                 break;
         }
         const title = 'Incyclist Ride'
-        const id = generateUUID()
+        const id = requestedId ?? generateUUID()
         const date = formatDateTime (new Date (), "%Y%m%d%H%M%S", false)
         const name = `${title}-${date}`
+        const fileName = this.getRepo().getFilename(name)
         const route:ActivityRoute = {name:routeName, hash:routeHash}
         if (routeId)
             route.id = routeId
@@ -562,7 +592,8 @@ export class ActivityRideService extends IncyclistService {
             distance:0,
             totalElevation:0,
             logs:[],
-            startPos,realityFactor
+            startPos,realityFactor,
+            fileName
         }
 
         return activity

@@ -1,5 +1,5 @@
 import { EventLogger } from "gd-eventlog";
-import { JSONObject, JsonRepository } from "../../../api";
+import { JSONObject, JsonRepository, getBindings } from "../../../api";
 import { Singleton } from "../../../base/types";
 import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { waitNextTick } from "../../../utils";
@@ -93,6 +93,14 @@ export class ActivitiesRepository {
                 this.writeDetails(activity)
             }    
         }
+
+    }
+
+    getFilename(activityName:string):string {
+        const baseDir = this.getRepo().getPath()
+        const path = getBindings().path
+        return path.join(baseDir,`${activityName}.json`)
+
 
     }
 

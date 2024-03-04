@@ -123,6 +123,56 @@ export type LapSummary  ={
 
 export type ActivityRouteType = 'Free-Ride'|'GPX'|'Video'
 
+export type FitLogEntry = {
+    time?: number
+    lat?: number
+    lon?:number
+    speed?: number
+    slope?: number
+    cadence?: number
+    heartrate?: number
+    distance?: number
+    power?: number
+    elevation?: number
+
+}
+export type FitLapEntry = {
+    lapNo: number;
+    startTime: string
+    stopTime: string
+    totalDistance: number
+    lapDistance: number
+    totalTime: number
+    lapTime: number
+
+}
+export type FitUser = {
+    id: string
+    weight: number
+}
+
+export type FitScreenshots = {
+    fileName:string
+    position: FitLogEntry
+}
+
+export type FitExportActivity = {
+    id: string;
+    title: string;
+    status: string;
+    logs: Array<FitLogEntry>
+    laps: Array<FitLapEntry>
+    startTime: string
+    stopTime: string
+    time: number
+    timeTotal:number
+    distance: number
+    timePause: number
+    href?: string
+    user: FitUser
+    screenshots: Array<FitScreenshots>
+}
+
 export interface ActivityDetails  {
     type?: ActivityType
     version?: string;

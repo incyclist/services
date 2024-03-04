@@ -1,7 +1,7 @@
 import { geo } from "../../../utils";
 import { LatLng, calculateDistance } from "../../../utils/geo";
 import { valid } from "../../../utils/valid";
-import { RouteApiDescription, RouteApiDetail } from "../api/types";
+import { RouteApiDetail } from "../api/types";
 import { Route } from "../model/route";
 import { RouteInfo, RoutePoint, RouteSegment } from "../types";
 import crypto from 'crypto'
@@ -234,8 +234,6 @@ export const getElevationGainAt = (route:Route, routeDistance:number):number => 
         point = getPointAtDistance(route,distance,true)
     }
     elevationGain+= point.elevationGain
-
-    console.log('~~~ getElevationGainAt', routeDistance, elevationGain, isLoop, totalDistance,point,route)
     
     return elevationGain
 }

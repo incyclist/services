@@ -95,7 +95,8 @@ const prepareMock = ( database, props) => {
     getBindings().db = {
         create:jest.fn().mockResolvedValue(access),
         get:jest.fn().mockResolvedValue(access),
-        release:jest.fn().mockResolvedValue(true)            
+        release:jest.fn().mockResolvedValue(true) ,
+        getPath:jest.fn().mockResolvedValue('/tmp/test.json')   
         
     }
 

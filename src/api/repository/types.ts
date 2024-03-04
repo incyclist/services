@@ -17,12 +17,14 @@ export interface IJsonRepositoryBinding {
     create(name:string):Promise<JsonAccess|null>
     get(name:string):Promise<JsonAccess|null>
     release(name:string):Promise<boolean>
+    getPath(name:string):string
 
 }
 export abstract class AbstractJsonRepositoryBinding implements IJsonRepositoryBinding {
     abstract create(name:string):Promise<JsonAccess|null>
     abstract get(name:string):Promise<JsonAccess|null>
     abstract release(name:string):Promise<boolean>
+    abstract getPath(name:string):string
 }
 
 export interface FileLoaderError {
