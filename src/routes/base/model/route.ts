@@ -40,6 +40,14 @@ export class Route {
         this._details = details
     }
 
+    get distance():number {
+        const points = this._details?.points ?? this._description?.points ?? []
+        if (!points?.length)
+            return null
+        return points[points.length-1].routeDistance
+            
+    }
+
     protected getCountiesApi() {
         return new Countries()
     }

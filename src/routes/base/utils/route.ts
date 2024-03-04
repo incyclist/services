@@ -1,9 +1,9 @@
 import { geo } from "../../../utils";
 import { LatLng, calculateDistance } from "../../../utils/geo";
 import { valid } from "../../../utils/valid";
-import { RouteApiDetail } from "../api/types";
+import { RouteApiDescription, RouteApiDetail } from "../api/types";
 import { Route } from "../model/route";
-import { RoutePoint, RouteSegment } from "../types";
+import { RouteInfo, RoutePoint, RouteSegment } from "../types";
 import crypto from 'crypto'
 
 const MAX_LAPMODE_DISTANCE = 50;    // maximume distance between start and stop position
@@ -213,14 +213,17 @@ export const getTotalElevation = (route:RouteApiDetail):number =>{
 }
 
 export const getElevationGainAt = (route:Route, routeDistance:number):number => {
+
+
     let distance = routeDistance
     let elevationGain = 0;
-    
+    const lastPoint = route.points[route.points.length-1]
 
     const isLoop = checkIsLoop(route)
-    if (isLoop&& routeDistance>route.description.distance) {
-        distance = routeDistance % route.description.distance
-        const lapsCompleted = Math.floor(routeDistance / route.description.distance)
+    const totalDistance = lastPoint.routeDistance
+    if (isLoop&& routeDistance>totalDistance) {
+        distance = routeDistance % totalDistance
+        const lapsCompleted = Math.floor(routeDistance / totalDistance)
         elevationGain += getTotalElevation(route.details)*lapsCompleted
     }
 
@@ -231,6 +234,8 @@ export const getElevationGainAt = (route:Route, routeDistance:number):number => 
         point = getPointAtDistance(route,distance,true)
     }
     elevationGain+= point.elevationGain
+
+    console.log('~~~ getElevationGainAt', routeDistance, elevationGain, isLoop, totalDistance,point,route)
     
     return elevationGain
 }
@@ -504,3 +509,41 @@ function updatePoint(pPrev: LapPoint, point: LapPoint, props: GetNextPositionPro
     }
 }
 
+
+const buildRouteInfo = (descr:RouteApiDetail):RouteInfo => {
+    const { points,id,title,country,distance,elevation, category,provider, video,routeHash} = descr
+    
+    const data:RouteInfo = { id,title,country,distance,elevation,provider,category,routeHash}
+
+    data.hasVideo = false;
+    data.isLocal = true
+
+    data.hasGpx = points && points.find( p=> p.lat!==undefined) !== undefined
+
+    if (category?.toLowerCase()==='demo') 
+        data.isDemo = true;
+
+    if (video) {
+        data.hasVideo = true;
+        if (video.format) data.videoFormat = video.format
+        if (video.url && !data.videoUrl) data.videoUrl = video.url            
+    }
+
+    return data;
+}
+
+interface LegacyRouteApiDetail extends RouteApiDetail {
+    decoded? : Array<RoutePoint>
+}
+
+export const createFromJson = (data:LegacyRouteApiDetail) => {
+    if (data.decoded) {
+        data.points = data.decoded
+        delete data.decoded
+    }
+    
+    const routeInfo = buildRouteInfo(data)
+    const route = new Route(routeInfo,data)
+
+    return route;
+}
