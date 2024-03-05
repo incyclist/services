@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / DeviceInformation
+[incyclist-services - v1.2.2](../README.md) / DeviceInformation
 
 # Interface: DeviceInformation
 

@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / AbstractJsonRepositoryBinding
+[incyclist-services - v1.2.2](../README.md) / AbstractJsonRepositoryBinding
 
 # Class: AbstractJsonRepositoryBinding
 
@@ -17,6 +17,7 @@
 - [create](AbstractJsonRepositoryBinding.md#create)
 - [get](AbstractJsonRepositoryBinding.md#get)
 - [release](AbstractJsonRepositoryBinding.md#release)
+- [getPath](AbstractJsonRepositoryBinding.md#getpath)
 
 ## Constructors
 
@@ -87,3 +88,23 @@ ___
 #### Implementation of
 
 [IJsonRepositoryBinding](../interfaces/IJsonRepositoryBinding.md).[release](../interfaces/IJsonRepositoryBinding.md#release)
+
+___
+
+### getPath
+
+▸ **getPath**(`name`): `string`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `name` | `string` |
+
+#### Returns
+
+`string`
+
+#### Implementation of
+
+[IJsonRepositoryBinding](../interfaces/IJsonRepositoryBinding.md).[getPath](../interfaces/IJsonRepositoryBinding.md#getpath)

@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / WorkoutCard
+[incyclist-services - v1.2.2](../README.md) / WorkoutCard
 
 # Class: WorkoutCard
 
@@ -157,9 +157,15 @@ ___
 
 ### save
 
-▸ **save**(): `Promise`\<`void`\>
+▸ **save**(`enforce?`): `Promise`\<`void`\>
 
 saves the workout into the local database
+
+#### Parameters
+
+| Name | Type | Default value |
+| :------ | :------ | :------ |
+| `enforce` | `boolean` | `false` |
 
 #### Returns
 

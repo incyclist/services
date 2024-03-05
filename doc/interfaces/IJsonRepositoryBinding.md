@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / IJsonRepositoryBinding
+[incyclist-services - v1.2.2](../README.md) / IJsonRepositoryBinding
 
 # Interface: IJsonRepositoryBinding
 
@@ -13,6 +13,7 @@
 - [create](IJsonRepositoryBinding.md#create)
 - [get](IJsonRepositoryBinding.md#get)
 - [release](IJsonRepositoryBinding.md#release)
+- [getPath](IJsonRepositoryBinding.md#getpath)
 
 ## Methods
 
@@ -61,3 +62,19 @@ ___
 #### Returns
 
 `Promise`\<`boolean`\>
+
+___
+
+### getPath
+
+▸ **getPath**(`name`): `string`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `name` | `string` |
+
+#### Returns
+
+`string`

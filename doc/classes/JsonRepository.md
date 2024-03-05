@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / JsonRepository
+[incyclist-services - v1.2.2](../README.md) / JsonRepository
 
 # Class: JsonRepository
 
@@ -10,10 +10,12 @@
 
 ### Methods
 
+- [getPath](JsonRepository.md#getpath)
 - [getName](JsonRepository.md#getname)
 - [write](JsonRepository.md#write)
 - [read](JsonRepository.md#read)
 - [delete](JsonRepository.md#delete)
+- [list](JsonRepository.md#list)
 - [create](JsonRepository.md#create)
 
 ## Constructors
@@ -33,6 +35,16 @@
 [`JsonRepository`](JsonRepository.md)
 
 ## Methods
+
+### getPath
+
+▸ **getPath**(): `string`
+
+#### Returns
+
+`string`
+
+___
 
 ### getName
 
@@ -90,6 +102,22 @@ ___
 #### Returns
 
 `Promise`\<`boolean`\>
+
+___
+
+### list
+
+▸ **list**(`exclude?`): `Promise`\<`string`[]\>
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `exclude?` | `string` \| `string`[] |
+
+#### Returns
+
+`Promise`\<`string`[]\>
 
 ___
 

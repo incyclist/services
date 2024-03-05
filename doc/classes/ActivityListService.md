@@ -1,74 +1,70 @@
-[incyclist-services - v1.2.2](../README.md) / CoachesService
+[incyclist-services - v1.2.2](../README.md) / ActivityListService
 
-# Class: CoachesService
+# Class: ActivityListService
+
+This service is used by the Front-End to manage and query the current and past activities
+The service implements the business logic to display the content for 
+- the list of activities ( incl. Search functionaly)
+- an individual activity ( show details when finished)
 
 ## Hierarchy
 
 - `IncyclistService`
 
-  ↳ **`CoachesService`**
+  ↳ **`ActivityListService`**
 
 ## Table of contents
 
 ### Constructors
 
-- [constructor](CoachesService.md#constructor)
+- [constructor](ActivityListService.md#constructor)
 
 ### Properties
 
-- [errorMonitor](CoachesService.md#errormonitor)
-- [captureRejectionSymbol](CoachesService.md#capturerejectionsymbol)
-- [captureRejections](CoachesService.md#capturerejections)
-- [defaultMaxListeners](CoachesService.md#defaultmaxlisteners)
+- [errorMonitor](ActivityListService.md#errormonitor)
+- [captureRejectionSymbol](ActivityListService.md#capturerejectionsymbol)
+- [captureRejections](ActivityListService.md#capturerejections)
+- [defaultMaxListeners](ActivityListService.md#defaultmaxlisteners)
 
 ### Methods
 
-- [[captureRejectionSymbol]](CoachesService.md#[capturerejectionsymbol])
-- [addListener](CoachesService.md#addlistener)
-- [on](CoachesService.md#on)
-- [once](CoachesService.md#once)
-- [removeListener](CoachesService.md#removelistener)
-- [off](CoachesService.md#off)
-- [removeAllListeners](CoachesService.md#removealllisteners)
-- [setMaxListeners](CoachesService.md#setmaxlisteners)
-- [getMaxListeners](CoachesService.md#getmaxlisteners)
-- [listeners](CoachesService.md#listeners)
-- [rawListeners](CoachesService.md#rawlisteners)
-- [emit](CoachesService.md#emit)
-- [listenerCount](CoachesService.md#listenercount)
-- [prependListener](CoachesService.md#prependlistener)
-- [prependOnceListener](CoachesService.md#prependoncelistener)
-- [eventNames](CoachesService.md#eventnames)
-- [logEvent](CoachesService.md#logevent)
-- [setDebug](CoachesService.md#setdebug)
-- [logError](CoachesService.md#logerror)
-- [getCoaches](CoachesService.md#getcoaches)
-- [openCoachEdit](CoachesService.md#opencoachedit)
-- [saveCoach](CoachesService.md#savecoach)
-- [deleteCoach](CoachesService.md#deletecoach)
-- [startRide](CoachesService.md#startride)
-- [stopRide](CoachesService.md#stopride)
-- [pauseRide](CoachesService.md#pauseride)
-- [resumeRide](CoachesService.md#resumeride)
-- [updateRiderPosition](CoachesService.md#updateriderposition)
-- [getCoachesRideInfo](CoachesService.md#getcoachesrideinfo)
-- [once](CoachesService.md#once-1)
-- [on](CoachesService.md#on-1)
-- [listenerCount](CoachesService.md#listenercount-1)
-- [getEventListeners](CoachesService.md#geteventlisteners)
-- [getMaxListeners](CoachesService.md#getmaxlisteners-1)
-- [setMaxListeners](CoachesService.md#setmaxlisteners-1)
-- [addAbortListener](CoachesService.md#addabortlistener)
+- [[captureRejectionSymbol]](ActivityListService.md#[capturerejectionsymbol])
+- [addListener](ActivityListService.md#addlistener)
+- [on](ActivityListService.md#on)
+- [once](ActivityListService.md#once)
+- [removeListener](ActivityListService.md#removelistener)
+- [off](ActivityListService.md#off)
+- [removeAllListeners](ActivityListService.md#removealllisteners)
+- [setMaxListeners](ActivityListService.md#setmaxlisteners)
+- [getMaxListeners](ActivityListService.md#getmaxlisteners)
+- [listeners](ActivityListService.md#listeners)
+- [rawListeners](ActivityListService.md#rawlisteners)
+- [emit](ActivityListService.md#emit)
+- [listenerCount](ActivityListService.md#listenercount)
+- [prependListener](ActivityListService.md#prependlistener)
+- [prependOnceListener](ActivityListService.md#prependoncelistener)
+- [eventNames](ActivityListService.md#eventnames)
+- [preload](ActivityListService.md#preload)
+- [logEvent](ActivityListService.md#logevent)
+- [setDebug](ActivityListService.md#setdebug)
+- [logError](ActivityListService.md#logerror)
+- [once](ActivityListService.md#once-1)
+- [on](ActivityListService.md#on-1)
+- [listenerCount](ActivityListService.md#listenercount-1)
+- [getEventListeners](ActivityListService.md#geteventlisteners)
+- [getMaxListeners](ActivityListService.md#getmaxlisteners-1)
+- [setMaxListeners](ActivityListService.md#setmaxlisteners-1)
+- [addAbortListener](ActivityListService.md#addabortlistener)
 
 ## Constructors
 
 ### constructor
 
-• **new CoachesService**(): [`CoachesService`](CoachesService.md)
+• **new ActivityListService**(): [`ActivityListService`](ActivityListService.md)
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 #### Overrides
 
@@ -203,7 +199,7 @@ ___
 
 ### addListener
 
-▸ **addListener**(`eventName`, `listener`): [`CoachesService`](CoachesService.md)
+▸ **addListener**(`eventName`, `listener`): [`ActivityListService`](ActivityListService.md)
 
 Alias for `emitter.on(eventName, listener)`.
 
@@ -216,7 +212,7 @@ Alias for `emitter.on(eventName, listener)`.
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 **`Since`**
 
@@ -230,7 +226,7 @@ ___
 
 ### on
 
-▸ **on**(`eventName`, `listener`): [`CoachesService`](CoachesService.md)
+▸ **on**(`eventName`, `listener`): [`ActivityListService`](ActivityListService.md)
 
 Adds the `listener` function to the end of the listeners array for the
 event named `eventName`. No checks are made to see if the `listener` has
@@ -268,7 +264,7 @@ myEE.emit('foo');
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 **`Since`**
 
@@ -282,7 +278,7 @@ ___
 
 ### once
 
-▸ **once**(`eventName`, `listener`): [`CoachesService`](CoachesService.md)
+▸ **once**(`eventName`, `listener`): [`ActivityListService`](ActivityListService.md)
 
 Adds a **one-time**`listener` function for the event named `eventName`. The
 next time `eventName` is triggered, this listener is removed and then invoked.
@@ -318,7 +314,7 @@ myEE.emit('foo');
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 **`Since`**
 
@@ -332,7 +328,7 @@ ___
 
 ### removeListener
 
-▸ **removeListener**(`eventName`, `listener`): [`CoachesService`](CoachesService.md)
+▸ **removeListener**(`eventName`, `listener`): [`ActivityListService`](ActivityListService.md)
 
 Removes the specified `listener` from the listener array for the event named`eventName`.
 
@@ -423,7 +419,7 @@ Returns a reference to the `EventEmitter`, so that calls can be chained.
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 **`Since`**
 
@@ -437,7 +433,7 @@ ___
 
 ### off
 
-▸ **off**(`eventName`, `listener`): [`CoachesService`](CoachesService.md)
+▸ **off**(`eventName`, `listener`): [`ActivityListService`](ActivityListService.md)
 
 Alias for `emitter.removeListener()`.
 
@@ -450,7 +446,7 @@ Alias for `emitter.removeListener()`.
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 **`Since`**
 
@@ -464,7 +460,7 @@ ___
 
 ### removeAllListeners
 
-▸ **removeAllListeners**(`event?`): [`CoachesService`](CoachesService.md)
+▸ **removeAllListeners**(`event?`): [`ActivityListService`](ActivityListService.md)
 
 Removes all listeners, or those of the specified `eventName`.
 
@@ -482,7 +478,7 @@ Returns a reference to the `EventEmitter`, so that calls can be chained.
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 **`Since`**
 
@@ -496,7 +492,7 @@ ___
 
 ### setMaxListeners
 
-▸ **setMaxListeners**(`n`): [`CoachesService`](CoachesService.md)
+▸ **setMaxListeners**(`n`): [`ActivityListService`](ActivityListService.md)
 
 By default `EventEmitter`s will print a warning if more than `10` listeners are
 added for a particular event. This is a useful default that helps finding
@@ -513,7 +509,7 @@ Returns a reference to the `EventEmitter`, so that calls can be chained.
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 **`Since`**
 
@@ -530,7 +526,7 @@ ___
 ▸ **getMaxListeners**(): `number`
 
 Returns the current max listener value for the `EventEmitter` which is either
-set by `emitter.setMaxListeners(n)` or defaults to [defaultMaxListeners](CoachesService.md#defaultmaxlisteners).
+set by `emitter.setMaxListeners(n)` or defaults to [defaultMaxListeners](ActivityListService.md#defaultmaxlisteners).
 
 #### Returns
 
@@ -726,7 +722,7 @@ ___
 
 ### prependListener
 
-▸ **prependListener**(`eventName`, `listener`): [`CoachesService`](CoachesService.md)
+▸ **prependListener**(`eventName`, `listener`): [`ActivityListService`](ActivityListService.md)
 
 Adds the `listener` function to the _beginning_ of the listeners array for the
 event named `eventName`. No checks are made to see if the `listener` has
@@ -750,7 +746,7 @@ Returns a reference to the `EventEmitter`, so that calls can be chained.
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 **`Since`**
 
@@ -764,7 +760,7 @@ ___
 
 ### prependOnceListener
 
-▸ **prependOnceListener**(`eventName`, `listener`): [`CoachesService`](CoachesService.md)
+▸ **prependOnceListener**(`eventName`, `listener`): [`ActivityListService`](ActivityListService.md)
 
 Adds a **one-time**`listener` function for the event named `eventName` to the _beginning_ of the listeners array. The next time `eventName` is triggered, this
 listener is removed, and then invoked.
@@ -786,7 +782,7 @@ Returns a reference to the `EventEmitter`, so that calls can be chained.
 
 #### Returns
 
-[`CoachesService`](CoachesService.md)
+[`ActivityListService`](ActivityListService.md)
 
 **`Since`**
 
@@ -830,6 +826,33 @@ v6.0.0
 #### Inherited from
 
 IncyclistService.eventNames
+
+___
+
+### preload
+
+▸ **preload**(): `PromiseObserver`\<`void`\>
+
+triggers the loading of the activities from local repo
+
+This method should be called by the UI as soon as possible to reduce loading time for the user
+
+#### Returns
+
+`PromiseObserver`\<`void`\>
+
+observer that indicates an ongoing preload
+
+Besides the events signalled by the returned Observer, the following events are signalled
+on the service observer:
+
+**`Emits`**
+
+loading   list is being loaded
+
+**`Emits`**
+
+loaded    loading has been completed, provides lists as parameter
 
 ___
 
@@ -892,130 +915,6 @@ ___
 #### Inherited from
 
 IncyclistService.logError
-
-___
-
-### getCoaches
-
-▸ **getCoaches**(): [`Coach`](Coach.md)[]
-
-#### Returns
-
-[`Coach`](Coach.md)[]
-
-___
-
-### openCoachEdit
-
-▸ **openCoachEdit**(`coach?`): [`Coach`](Coach.md)
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `coach?` | [`Coach`](Coach.md) |
-
-#### Returns
-
-[`Coach`](Coach.md)
-
-___
-
-### saveCoach
-
-▸ **saveCoach**(`coach`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `coach` | [`Coach`](Coach.md) |
-
-#### Returns
-
-`void`
-
-___
-
-### deleteCoach
-
-▸ **deleteCoach**(`coach`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `coach` | [`Coach`](Coach.md) |
-
-#### Returns
-
-`void`
-
-___
-
-### startRide
-
-▸ **startRide**(): `Promise`\<`Observer`\>
-
-#### Returns
-
-`Promise`\<`Observer`\>
-
-___
-
-### stopRide
-
-▸ **stopRide**(): `Promise`\<`void`\>
-
-#### Returns
-
-`Promise`\<`void`\>
-
-___
-
-### pauseRide
-
-▸ **pauseRide**(): `void`
-
-#### Returns
-
-`void`
-
-___
-
-### resumeRide
-
-▸ **resumeRide**(): `void`
-
-#### Returns
-
-`void`
-
-___
-
-### updateRiderPosition
-
-▸ **updateRiderPosition**(`routeDistance`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `routeDistance` | `number` |
-
-#### Returns
-
-`void`
-
-___
-
-### getCoachesRideInfo
-
-▸ **getCoachesRideInfo**(): [`CoachStatus`](../README.md#coachstatus)[]
-
-#### Returns
-
-[`CoachStatus`](../README.md#coachstatus)[]
 
 ___
 

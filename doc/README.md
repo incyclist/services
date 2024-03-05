@@ -1,6 +1,6 @@
 incyclist-services
 
-# incyclist-services - v1.1.98
+# incyclist-services - v1.2.2
 
 ## Table of contents
 
@@ -11,6 +11,14 @@ incyclist-services
 
 ### Classes
 
+- [IncyclistFitConvertApi](classes/IncyclistFitConvertApi.md)
+- [ActivityConverter](classes/ActivityConverter.md)
+- [ActivityConverterFactory](classes/ActivityConverterFactory.md)
+- [RemoteFitConverter](classes/RemoteFitConverter.md)
+- [TcxConverter](classes/TcxConverter.md)
+- [ActivitiesRepository](classes/ActivitiesRepository.md)
+- [ActivityListService](classes/ActivityListService.md)
+- [ActivityRideService](classes/ActivityRideService.md)
 - [IncyclistBindings](classes/IncyclistBindings.md)
 - [OverpassApi](classes/OverpassApi.md)
 - [path](classes/path.md)
@@ -37,6 +45,8 @@ incyclist-services
 
 ### Interfaces
 
+- [ActivityDetails](interfaces/ActivityDetails.md)
+- [ActivitySearchCriteria](interfaces/ActivitySearchCriteria.md)
 - [IPathBinding](interfaces/IPathBinding.md)
 - [IJsonRepositoryBinding](interfaces/IJsonRepositoryBinding.md)
 - [FileLoaderError](interfaces/FileLoaderError.md)
@@ -104,6 +114,27 @@ incyclist-services
 
 ### Type Aliases
 
+- [ActivityUser](README.md#activityuser)
+- [ActivityRoute](README.md#activityroute)
+- [ActivityStatsRecord](README.md#activitystatsrecord)
+- [ActivityStats](README.md#activitystats)
+- [StravaAppLink](README.md#stravaapplink)
+- [ActivityAppLinks](README.md#activityapplinks)
+- [ScreenShotInfo](README.md#screenshotinfo)
+- [ActivityType](README.md#activitytype)
+- [UploadStatus](README.md#uploadstatus)
+- [UploadInfo](README.md#uploadinfo)
+- [ActivityDB](README.md#activitydb)
+- [ActivitySummary](README.md#activitysummary)
+- [LapSummary](README.md#lapsummary)
+- [ActivityRouteType](README.md#activityroutetype)
+- [FitLogEntry](README.md#fitlogentry)
+- [FitLapEntry](README.md#fitlapentry)
+- [FitUser](README.md#fituser)
+- [FitScreenshots](README.md#fitscreenshots)
+- [FitExportActivity](README.md#fitexportactivity)
+- [ActivityLogRecord](README.md#activitylogrecord)
+- [ActivityInfo](README.md#activityinfo)
 - [JSONObject](README.md#jsonobject)
 - [JsonAccess](README.md#jsonaccess)
 - [AppChannel](README.md#appchannel)
@@ -126,6 +157,7 @@ incyclist-services
 
 ### Variables
 
+- [DB\_VERSION](README.md#db_version)
 - [OVERPASS\_URL\_DEFAULT](README.md#overpass_url_default)
 - [STEP\_TYPE](README.md#step_type)
 - [POWER\_TYPE](README.md#power_type)
@@ -134,6 +166,10 @@ incyclist-services
 
 ### Functions
 
+- [buildSummary](README.md#buildsummary)
+- [useActivityList](README.md#useactivitylist)
+- [getActivityList](README.md#getactivitylist)
+- [useActivityRide](README.md#useactivityride)
 - [getBindings](README.md#getbindings)
 - [useOverpassApi](README.md#useoverpassapi)
 - [getCoachesService](README.md#getcoachesservice)
@@ -145,6 +181,11 @@ incyclist-services
 - [getRouteList](README.md#getroutelist)
 - [useUserSettings](README.md#useusersettings)
 - [initUserSettings](README.md#initusersettings)
+- [formatDateTime](README.md#formatdatetime)
+- [formatTime](README.md#formattime)
+- [formatNumber](README.md#formatnumber)
+- [pad](README.md#pad)
+- [trimTrailingChars](README.md#trimtrailingchars)
 - [getLegacyInterface](README.md#getlegacyinterface)
 - [waitNextTick](README.md#waitnexttick)
 - [useWorkoutList](README.md#useworkoutlist)
@@ -153,6 +194,321 @@ incyclist-services
 - [getWorkoutRide](README.md#getworkoutride)
 
 ## Type Aliases
+
+### ActivityUser
+
+Ƭ **ActivityUser**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `uuid?` | `string` |
+| `weight` | `number` |
+| `ftp?` | `number` |
+
+___
+
+### ActivityRoute
+
+Ƭ **ActivityRoute**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `id?` | `string` |
+| `hash` | `string` |
+| `name` | `string` |
+
+___
+
+### ActivityStatsRecord
+
+Ƭ **ActivityStatsRecord**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `min` | `number` |
+| `max` | `number` |
+| `avg` | `number` |
+| `cntVal` | `number` |
+| `sum` | `number` |
+| `minAllowed?` | `number` |
+| `weighted?` | `number` |
+
+___
+
+### ActivityStats
+
+Ƭ **ActivityStats**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `hrm?` | [`ActivityStatsRecord`](README.md#activitystatsrecord) |
+| `cadence?` | [`ActivityStatsRecord`](README.md#activitystatsrecord) |
+| `speed` | [`ActivityStatsRecord`](README.md#activitystatsrecord) |
+| `slope?` | [`ActivityStatsRecord`](README.md#activitystatsrecord) |
+| `power` | [`ActivityStatsRecord`](README.md#activitystatsrecord) |
+| `powerCurve?` | `Record`\<`string`, `number`\> |
+
+___
+
+### StravaAppLink
+
+Ƭ **StravaAppLink**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `upload_id` | `number` |
+| `activity_id` | `number` |
+
+___
+
+### ActivityAppLinks
+
+Ƭ **ActivityAppLinks**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `strava?` | [`StravaAppLink`](README.md#stravaapplink) |
+
+___
+
+### ScreenShotInfo
+
+Ƭ **ScreenShotInfo**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `fileName` | `string` |
+| `position` | `RoutePoint` |
+| `isHighlight?` | `boolean` |
+
+___
+
+### ActivityType
+
+Ƭ **ActivityType**: ``"IncyclistActivity"``
+
+___
+
+### UploadStatus
+
+Ƭ **UploadStatus**: ``"success"`` \| ``"failure"``
+
+___
+
+### UploadInfo
+
+Ƭ **UploadInfo**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `service` | `string` |
+| `status` | [`UploadStatus`](README.md#uploadstatus) |
+
+___
+
+### ActivityDB
+
+Ƭ **ActivityDB**: `Object`
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `version` | `string` | a version string, so that code in the future can adapt to legacy database versions |
+| `activities` | [`ActivitySummary`](README.md#activitysummary)[] | the list of activities |
+| `isComplete` | `boolean` | identifies of a full directory scan has been completed when creating this DB |
+
+___
+
+### ActivitySummary
+
+Ƭ **ActivitySummary**: `Object`
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `id` | `string` | unique ID |
+| `title` | `string` | Title as displayed |
+| `name` | `string` | filename (without full path) |
+| `routeId` | `string` | unique id of route (or "free ride") |
+| `previewImage?` | `string` | - |
+| `startTime` | `number` | - |
+| `rideTime` | `number` | - |
+| `distance` | `number` | - |
+| `startPos` | `number` | - |
+| `realityFactor` | `number` | - |
+| `uploadStatus` | [`UploadInfo`](README.md#uploadinfo)[] | - |
+| `isCompleted?` | `boolean` | - |
+| `isSaved?` | `boolean` | - |
+| `saveRideTime?` | `number` | - |
+| `laps?` | [`LapSummary`](README.md#lapsummary)[] | - |
+
+___
+
+### LapSummary
+
+Ƭ **LapSummary**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `num` | `number` |
+| `startPos` | `number` |
+| `distance` | `number` |
+| `startTime` | `number` |
+| `rideTime` | `number` |
+
+___
+
+### ActivityRouteType
+
+Ƭ **ActivityRouteType**: ``"Free-Ride"`` \| ``"GPX"`` \| ``"Video"``
+
+___
+
+### FitLogEntry
+
+Ƭ **FitLogEntry**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `time?` | `number` |
+| `lat?` | `number` |
+| `lon?` | `number` |
+| `speed?` | `number` |
+| `slope?` | `number` |
+| `cadence?` | `number` |
+| `heartrate?` | `number` |
+| `distance?` | `number` |
+| `power?` | `number` |
+| `elevation?` | `number` |
+
+___
+
+### FitLapEntry
+
+Ƭ **FitLapEntry**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `lapNo` | `number` |
+| `startTime` | `string` |
+| `stopTime` | `string` |
+| `totalDistance` | `number` |
+| `lapDistance` | `number` |
+| `totalTime` | `number` |
+| `lapTime` | `number` |
+
+___
+
+### FitUser
+
+Ƭ **FitUser**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `id` | `string` |
+| `weight` | `number` |
+
+___
+
+### FitScreenshots
+
+Ƭ **FitScreenshots**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `fileName` | `string` |
+| `position` | [`FitLogEntry`](README.md#fitlogentry) |
+
+___
+
+### FitExportActivity
+
+Ƭ **FitExportActivity**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `id` | `string` |
+| `title` | `string` |
+| `status` | `string` |
+| `logs` | [`FitLogEntry`](README.md#fitlogentry)[] |
+| `laps` | [`FitLapEntry`](README.md#fitlapentry)[] |
+| `startTime` | `string` |
+| `stopTime?` | `string` |
+| `time` | `number` |
+| `timeTotal` | `number` |
+| `distance` | `number` |
+| `timePause` | `number` |
+| `href?` | `string` |
+| `user` | [`FitUser`](README.md#fituser) |
+| `screenshots` | [`FitScreenshots`](README.md#fitscreenshots)[] |
+
+___
+
+### ActivityLogRecord
+
+Ƭ **ActivityLogRecord**: `Object`
+
+#### Type declaration
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `time` | `number` | time (in s) since start |
+| `timeDelta` | `number` | time (in s) since prev. log |
+| `speed` | `number` | current speed (in km/h) |
+| `slope?` | `number` | current slope (in %) |
+| `cadence` | `number` | current cadence (in rpm) |
+| `heartrate?` | `number` | current heartrate (in bpm) |
+| `distance?` | `number` | current distance (in m) since start |
+| `power` | `number` | current power (in W) |
+| `lat?` | `number` | current latitude |
+| `lng?` | `number` | current longitude |
+| `elevation?` | `number` | current elevation (in m) |
+| `lon?` | `number` | - |
+
+___
+
+### ActivityInfo
+
+Ƭ **ActivityInfo**: `Object`
+
+#### Type declaration
+
+| Name | Type |
+| :------ | :------ |
+| `summary` | [`ActivitySummary`](README.md#activitysummary) |
+| `details?` | [`ActivityDetails`](interfaces/ActivityDetails.md) |
+
+___
 
 ### JSONObject
 
@@ -171,6 +527,7 @@ ___
 | `read` | (`resourceName`: `string`) => `Promise`\<[`JSONObject`](README.md#jsonobject)\> |
 | `write` | (`resourceName`: `string`, `data`: [`JSONObject`](README.md#jsonobject)) => `Promise`\<`boolean`\> |
 | `delete` | (`resourceName`: `string`) => `Promise`\<`boolean`\> |
+| `list` | () => `Promise`\<`string`[]\> |
 
 ___
 
@@ -335,6 +692,12 @@ ___
 
 ## Variables
 
+### DB\_VERSION
+
+• `Const` **DB\_VERSION**: ``"1"``
+
+___
+
 ### OVERPASS\_URL\_DEFAULT
 
 • `Const` **OVERPASS\_URL\_DEFAULT**: `string`
@@ -378,6 +741,53 @@ ___
 • `Const` **DEFAULT\_FILTERS**: \{ `name`: `string` = 'Workouts'; `extensions`: `string`[]  }[]
 
 ## Functions
+
+### buildSummary
+
+▸ **buildSummary**(`activity`, `proposedName?`): [`ActivitySummary`](README.md#activitysummary)
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `activity` | [`ActivityDetails`](interfaces/ActivityDetails.md) |
+| `proposedName?` | `string` |
+
+#### Returns
+
+[`ActivitySummary`](README.md#activitysummary)
+
+___
+
+### useActivityList
+
+▸ **useActivityList**(): [`ActivityListService`](classes/ActivityListService.md)
+
+#### Returns
+
+[`ActivityListService`](classes/ActivityListService.md)
+
+___
+
+### getActivityList
+
+▸ **getActivityList**(): [`ActivityListService`](classes/ActivityListService.md)
+
+#### Returns
+
+[`ActivityListService`](classes/ActivityListService.md)
+
+___
+
+### useActivityRide
+
+▸ **useActivityRide**(): [`ActivityRideService`](classes/ActivityRideService.md)
+
+#### Returns
+
+[`ActivityRideService`](classes/ActivityRideService.md)
+
+___
 
 ### getBindings
 
@@ -492,6 +902,113 @@ ___
 #### Returns
 
 [`UserSettingsService`](classes/UserSettingsService.md)
+
+___
+
+### formatDateTime
+
+▸ **formatDateTime**(`date`, `fstr?`, `utc?`): `string`
+
+Formats a Date object into a string using the specified format string.
+
+#### Parameters
+
+| Name | Type | Default value | Description |
+| :------ | :------ | :------ | :------ |
+| `date` | `Date` | `undefined` | The Date object to format. |
+| `fstr?` | `string` | `'%Y%m%d%H%M%S'` | The format string. Defaults to '%Y%m%d%H%M%S'. %Y represents year, %m represents month, %d represents day of month, %H is hour, %M is minute, %S is seconds |
+| `utc?` | `boolean` | `false` | Indicates whether to use UTC methods for date extraction. Defaults to false. |
+
+#### Returns
+
+`string`
+
+The formatted date string or undefined if the input date is invalid.
+
+___
+
+### formatTime
+
+▸ **formatTime**(`seconds`, `cutMissing`): `string`
+
+Formats a time duration given in seconds into a string in the format "HH:MM:SS" or "MM:SS".
+
+#### Parameters
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `seconds` | `number` | The time duration in seconds. |
+| `cutMissing` | `boolean` | Indicates whether to cut missing leading hours. |
+
+#### Returns
+
+`string`
+
+The formatted time string or undefined if seconds is undefined or null.
+
+___
+
+### formatNumber
+
+▸ **formatNumber**(`value`, `maxDigits`, `maxLength?`): `string`
+
+Formats a number into a string with a specified maximum number of digits and maximum length.
+
+#### Parameters
+
+| Name | Type | Default value | Description |
+| :------ | :------ | :------ | :------ |
+| `value` | `number` | `undefined` | The number to format. |
+| `maxDigits` | `number` | `undefined` | The maximum number of digits to include after the decimal point. |
+| `maxLength?` | `number` | `-1` | The maximum length of the resulting string. Defaults to -1 (no maximum length). |
+
+#### Returns
+
+`string`
+
+The formatted number string.
+
+___
+
+### pad
+
+▸ **pad**(`value`, `size?`): `string`
+
+Pads a number with leading zeros to ensure it has a minimum specified size.
+
+#### Parameters
+
+| Name | Type | Default value | Description |
+| :------ | :------ | :------ | :------ |
+| `value` | `number` | `undefined` | The number to pad. |
+| `size?` | `number` | `2` | The minimum size of the padded number. Defaults to 2. |
+
+#### Returns
+
+`string`
+
+The padded number as a string.
+
+___
+
+### trimTrailingChars
+
+▸ **trimTrailingChars**(`s`, `charToTrim?`): `string`
+
+Removes characters from the end of a string that are trailing an expected final character.
+
+#### Parameters
+
+| Name | Type | Description |
+| :------ | :------ | :------ |
+| `s` | `string` | The input string. |
+| `charToTrim?` | `string` | The expected final character. If not provided, the last character of the input string will be used. |
+
+#### Returns
+
+`string`
+
+The input string with trailing characters removed.
 
 ___
 

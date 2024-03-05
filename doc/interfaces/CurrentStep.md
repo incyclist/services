@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / CurrentStep
+[incyclist-services - v1.2.2](../README.md) / CurrentStep
 
 # Interface: CurrentStep
 

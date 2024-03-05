@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / WorkoutCardDisplayProperties
+[incyclist-services - v1.2.2](../README.md) / WorkoutCardDisplayProperties
 
 # Interface: WorkoutCardDisplayProperties
 

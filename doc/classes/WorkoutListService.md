@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / WorkoutListService
+[incyclist-services - v1.2.2](../README.md) / WorkoutListService
 
 # Class: WorkoutListService
 
@@ -33,8 +33,6 @@ This service depends on
 
 ### Methods
 
-- [setLanguage](WorkoutListService.md#setlanguage)
-- [getLanguage](WorkoutListService.md#getlanguage)
 - [getSelected](WorkoutListService.md#getselected)
 - [setScreenProps](WorkoutListService.md#setscreenprops)
 - [getScreenProps](WorkoutListService.md#getscreenprops)
@@ -73,32 +71,6 @@ This service depends on
 IncyclistService.constructor
 
 ## Methods
-
-### setLanguage
-
-▸ **setLanguage**(`language`): `void`
-
-#### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `language` | `string` |
-
-#### Returns
-
-`void`
-
-___
-
-### getLanguage
-
-▸ **getLanguage**(): `string`
-
-#### Returns
-
-`string`
-
-___
 
 ### getSelected
 
@@ -391,7 +363,7 @@ ___
 
 ### import
 
-▸ **import**(`info`, `props`): `void`
+▸ **import**(`info`, `props`): `Promise`\<`void`\>
 
 perform an import of one or multiple workout file(s) from disk or URL
 
@@ -412,7 +384,7 @@ This method will not only perform the actual import, but also has implemented bu
 
 #### Returns
 
-`void`
+`Promise`\<`void`\>
 
 **`Emits`**
 

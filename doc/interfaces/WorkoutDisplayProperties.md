@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / WorkoutDisplayProperties
+[incyclist-services - v1.2.2](../README.md) / WorkoutDisplayProperties
 
 # Interface: WorkoutDisplayProperties
 
@@ -12,6 +12,8 @@
 - [current](WorkoutDisplayProperties.md#current)
 - [start](WorkoutDisplayProperties.md#start)
 - [stop](WorkoutDisplayProperties.md#stop)
+- [canShowBackward](WorkoutDisplayProperties.md#canshowbackward)
+- [canShowForward](WorkoutDisplayProperties.md#canshowforward)
 
 ## Properties
 
@@ -48,3 +50,15 @@ ___
 ### stop
 
 • `Optional` **stop**: `number`
+
+___
+
+### canShowBackward
+
+• `Optional` **canShowBackward**: `boolean`
+
+___
+
+### canShowForward
+
+• `Optional` **canShowForward**: `boolean`

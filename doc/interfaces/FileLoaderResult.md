@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / FileLoaderResult
+[incyclist-services - v1.2.2](../README.md) / FileLoaderResult
 
 # Interface: FileLoaderResult
 

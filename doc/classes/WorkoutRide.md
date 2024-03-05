@@ -1,4 +1,4 @@
-[incyclist-services - v1.1.98](../README.md) / WorkoutRide
+[incyclist-services - v1.2.2](../README.md) / WorkoutRide
 
 # Class: WorkoutRide
 
@@ -13,6 +13,7 @@ It will then notify potantial consumers about relevant events:
 
 - 'initialized' - The workout has been initialized and is ready to be used in a ride
 - 'update' - There was an update, which requires the dashboard to be updated
+- 'step-changed' - There was a new step selected, which requires the dashboard to be updated
 - 'request-update' - There was an update, which requires to send updated requests to the SmartTrainer 
  
 - 'started' - The workout has been started
