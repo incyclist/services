@@ -3,7 +3,7 @@ module.exports = {
     transform: {
       '^.+\\.tsx?$': 'ts-jest',
     },
-    testRegex: '(/__tests__/.*|(\\.|/)(test|spec))\\.(ts|js)?$',
+    testRegex: '^.+(\\.)?(test|spec)\\.(ts|js)?$',
     moduleFileExtensions: ['ts', 'js', 'json', 'node'],
     collectCoverageFrom: [
       "src/**/*.{js,ts}",
@@ -13,6 +13,8 @@ module.exports = {
       "!src/**/types.ts",
       "!src/**/mock.ts",
       "!src/Device.ts",
+      "!src/**/*.e2e.{test,tests}.{js,ts}",
+      "!src/**/*.integ.{test,tests}.{js,ts}",
       "!src/**/*.unit.{test,tests}.{js,ts}",
       "!src/**/*.test.util.{js,ts}"
     ]

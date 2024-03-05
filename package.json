@@ -23,7 +23,9 @@
     "lint": "eslint . --ext .ts",
     "buildx": "npm run lint && tsc",
     "build": "tsc",
-    "test": "npx jest --coverage",
+    "test": "npx jest",
+    "test:e2e": "npx jest --coverage -c jest.e2e-config.js  --coverageDirectory coverage.e2e",
+    "test:unit": "npx jest --coverage -c jest.unit-config.js  ",
     "dev": "tsc --watch",
     "docgen": "typedoc --options typedoc.json",
     "docgen1": "typedoc --readme none --excludeProtected --excludePrivate --plugin typedoc-plugin-no-inherit --plugin  typedoc-plugin-markdown src/index.ts",
@@ -39,8 +41,9 @@
   },
   "dependencies": {
     "axios": "^1.6.1",
-    "incyclist-devices": "^2.2.1",
+    "incyclist-devices": "file:../devices",
     "promise.any": "^2.0.6",
+    "tcx-builder": "^1.1.1",
     "uuid": "^9.0.0",
     "xml2js": "^0.6.2"
   }
