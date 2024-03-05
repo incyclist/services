@@ -129,7 +129,6 @@ describe('RouteListService',()=>{
 
         test('1',async ()=>{
 
-            const sort = (a,b) => a.id<b.id ? -1 : 1
             const observer = service.preload()
             await observer.wait()
 
