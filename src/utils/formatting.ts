@@ -99,5 +99,22 @@ export const pad = (value:number,size:number=2) => {
     }
 	return s;
 }
+/**
+ * Removes characters from the end of a string that are trailing an expected final character.
+ * @param {string} s - The input string.
+ * @param {string} [charToTrim=s.charAt(s.length-1)] - The expected final character. If not provided, the last character of the input string will be used.
+ * @returns {string} The input string with trailing characters removed.
+ */
+export const trimTrailingChars = (s:string, charToTrim:string) => {
+    let c = charToTrim;
+    if ( charToTrim===undefined) {
+        c = s.charAt(s.length-1)
+    }
+    const regExp = new RegExp(c + "+$");
+    const result = s.replace(regExp, "");
+  
+    return result;
+}
+
 
 

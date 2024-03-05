@@ -6,7 +6,7 @@ import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityDetails, ActivityLogRecord, ActivityRoute, ActivityRouteType, DB_VERSION, FitExportActivity, FitLogEntry, ScreenShotInfo, buildSummary } from "../base";
+import { ActivitiesRepository, ActivityDetails, ActivityLogRecord, ActivityRoute, ActivityRouteType, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
@@ -329,31 +329,6 @@ export class ActivityRideService extends IncyclistService {
         return this.activity
     }
 
-    protected mapLogToFit(log:ActivityLogRecord): FitLogEntry {
-        const {time,speed, slope, cadence, heartrate, distance, power, lat, lng,elevation} = log
-
-        return {time,speed, slope, cadence, heartrate, distance, power, lat, lon:lng,elevation}
-
-    }
-
-    getFitActivity(): FitExportActivity {
-        const {id,title, time,timeTotal,timePause,distance } = this.activity
-        const status = 'active'
-
-        const startTime = new Date(this.activity.startTime).toISOString()
-        const logs = this.activity.logs.map(this.mapLogToFit.bind(this) )
-        const screenshots = [] // TODO
-        const laps = [] // TODO
-        const user = {
-            id: this.getUserSettings().get('uuid',undefined),
-            weight: this.activity.user.weight
-        }
-        const stopTime= new Date(this.tsStart+timeTotal*1000).toISOString()
-
-        return {id,title,status,logs,laps,startTime, stopTime, time, timeTotal, timePause, distance, user, screenshots}
-
-
-    }
 
     /** user requested save: will save the activity and convert into TCX and FIT */
     save() {
@@ -492,7 +467,7 @@ export class ActivityRideService extends IncyclistService {
         const timeDelta = prev? time-prev.time : time
         const deviceData = this.current?.deviceData
 
-        const distance = (this.current.routeDistance??0)- (this.prevLogRouteDistane??this.activity.startPos)
+        const distance = (this.current.routeDistance??this.activity.startPos??0)-(this.activity.startPos??0)
         this.prevLogRouteDistane = this.current.routeDistance
 
         const log:ActivityLogRecord = {

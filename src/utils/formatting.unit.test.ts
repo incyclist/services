@@ -1,4 +1,4 @@
-import { formatDateTime, formatNumber, formatTime, pad } from "./formatting"
+import { formatDateTime, formatNumber, formatTime, pad, trimTrailingChars } from "./formatting"
 
 
 describe('formatting',()=>{
@@ -96,6 +96,21 @@ describe('formatting',()=>{
             res = pad(100)
             expect(res).toBe('100')
 
+        })
+
+    })
+
+    describe('trimTrailingChars',()=>{
+        test('url with parameters',()=>{
+            expect( trimTrailingChars('http://test/?a=1','/')).toBe('http://test/?a=1')
+            expect( trimTrailingChars('http://test/1/?a=1','/')).toBe('http://test/1/?a=1')
+        })
+        test('url without parameters',()=>{
+
+            expect( trimTrailingChars('http://test/','/')).toBe('http://test')
+            expect( trimTrailingChars('http://test/1/','/')).toBe('http://test/1')
+            expect( trimTrailingChars('http://test/1','/')).toBe('http://test/1')
+            expect( trimTrailingChars('http://test//','/')).toBe('http://test')
         })
 
     })

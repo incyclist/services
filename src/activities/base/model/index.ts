@@ -3,7 +3,7 @@ import { RoutePoint } from "../../../routes/base/types"
 export type ActivityUser = {
     uuid?:string
     weight: number,
-    ftp: number
+    ftp?: number
 }
 
 export type ActivityRoute = {
@@ -24,21 +24,6 @@ export type ActivityStatsRecord = {
 
 }
 
-export type ActivityLogRecord = {
-    time: number,
-    timeDelta: number,
-    speed: number,
-    slope?: number,
-    cadence: number,
-    heartrate?: number,
-    distance?: number,
-    power: number,
-    lat?: number,
-    // @deprecated
-    lon?: number,  
-    lng?: number,  
-    elevation?:number
-}
 
 
 export type ActivityStats = {
@@ -97,7 +82,9 @@ export type ActivitySummary = {
     /** filename (without full path) */
     name:string
 
+    /** unique id of route (or "free ride") */
     routeId: string;
+
     previewImage?: string
     startTime: number
     rideTime: number
@@ -163,7 +150,7 @@ export type FitExportActivity = {
     logs: Array<FitLogEntry>
     laps: Array<FitLapEntry>
     startTime: string
-    stopTime: string
+    stopTime?: string
     time: number
     timeTotal:number
     distance: number
@@ -174,14 +161,17 @@ export type FitExportActivity = {
 }
 
 export interface ActivityDetails  {
-    type?: ActivityType
+    /** file type - always has to be "IncyclistActivity" */    
+    type?: ActivityType     
+
+    /** file version - at the moment always "1" */    
     version?: string;
 
     /** name of the activity */
-    title: string;
+    title: string;          
 
     /** unique ID of the activity */
-    id: string;
+    id: string; 
 
     /** user information */
     user: ActivityUser;
@@ -249,6 +239,45 @@ export interface ActivityDetails  {
     /** information about synchronizations to connected apps */
     links?: ActivityAppLinks
 }
+
+export type ActivityLogRecord = {
+    /** time (in s) since start */
+    time: number,       
+
+    /** time (in s) since prev. log */
+    timeDelta: number,  
+    
+    /** current speed (in km/h)  */
+    speed: number,      
+    
+    /** current slope (in %)  */
+    slope?: number,     
+
+    /** current cadence (in rpm)  */
+    cadence: number,    
+    
+    /** current heartrate (in bpm)  */
+    heartrate?: number, 
+
+    /** current distance (in m) since start  */
+    distance?: number,  
+    
+    /** current power (in W)  */
+    power: number,      
+    
+    /** current latitude  */
+    lat?: number,       
+    
+    /** current longitude  */
+    lng?: number,       
+    
+    /** current elevation (in m)  */
+    elevation?:number   
+
+    // @deprecated
+    lon?: number,  
+}
+
 
 export type ActivityInfo = {
     summary: ActivitySummary,
