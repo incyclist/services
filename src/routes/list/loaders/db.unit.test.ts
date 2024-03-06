@@ -5,12 +5,13 @@ import holzweiler from '../../../../__tests__/data/rlv/holzweiler.json'
 import valdrome from '../../../../__tests__/data/rlv/valdrome.json'
 
 import repoData from '../../../../__tests__/data/db/db.json'
-import { JSONObject, JsonRepository } from '../../../api';
+import {  JsonRepository } from '../../../api';
 import { Countries } from '../../../i18n/countries';
 import { Route } from "../../base/model/route";
 import { RoutesDbLoader } from './db';
 import { RouteInfo } from '../../base/types';
 import { RoutesLegacyDbLoader } from './LegacyDB';
+import { JSONObject } from '../../../utils/xml';
 
 class MockRepository extends JsonRepository {
     static create(repoName:string):JsonRepository {

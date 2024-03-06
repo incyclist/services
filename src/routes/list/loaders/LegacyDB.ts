@@ -1,10 +1,10 @@
-import { JSONObject } from "../../../api"
 import { Singleton } from "../../../base/types"
 import { Observer, PromiseObserver } from "../../../base/types/observer"
 import { valid } from "../../../utils/valid"
 import { RouteInfo } from "../../base/types"
 import { RouteDBApiDescription } from "./types"
 import { DBLoader } from "./DBLoader"
+import { JSONObject } from "../../../utils/xml"
 
 @Singleton
 export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{

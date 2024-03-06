@@ -1,12 +1,12 @@
 import { loadFile } from '../../../../__tests__/utils/loadFile'
 import { FileInfo, getBindings } from '../../../api'
-import { parseXml } from '../utils/xml'
 import {KWTParser} from './kwt'
 import { XMLParser } from './xml'
 
 import path from 'path'
 import fs from 'fs'
 import { IFileSystem } from '../../../api/fs'
+import { parseXml } from '../../../utils'
 
 describe('XMLParsers',()=>{
     let parser:XMLParser

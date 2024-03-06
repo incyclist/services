@@ -6,7 +6,7 @@ import { TcxConverter } from "./tcx";
 // lazy initialisation of converters
 
 export class ActivityConverter {
-    static factory: ActivityConverterFactory
+    static factory?: ActivityConverterFactory
    
         
     static async convert (activity:ActivityDetails,format:string) : Promise<unknown> {

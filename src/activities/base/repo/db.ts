@@ -1,11 +1,12 @@
 import { EventLogger } from "gd-eventlog";
-import { JSONObject, JsonRepository, getBindings } from "../../../api";
+import { JsonRepository, getBindings } from "../../../api";
 import { Singleton } from "../../../base/types";
 import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { waitNextTick } from "../../../utils";
 import { ActivityDB, ActivityDetails, ActivityInfo, UploadInfo  } from "../model";
 import { ActivitySearchCriteria } from "./types";
 import { buildSummary } from "../utils";
+import { JSONObject } from "../../../utils/xml";
 
 export const DB_VERSION = '1'
 

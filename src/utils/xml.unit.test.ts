@@ -1,4 +1,4 @@
-import { loadFile } from '../../../../__tests__/utils/loadFile';
+import { loadFile } from '../../__tests__/utils/loadFile';
 import {parseXml} from './xml'
 
 describe ('XmlJSON',()=>{

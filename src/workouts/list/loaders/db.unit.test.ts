@@ -4,13 +4,14 @@
 import repoData from '../../../../__tests__/data/workouts/db.json'
 
 
-import { JSONObject, JsonRepository } from '../../../api';
+import { JsonRepository } from '../../../api';
 import { WorkoutsDbLoader } from './db';
 import { Workout, WorkoutDefinition } from '../../base/model';
 import { Observer } from '../../../base/types/observer';
 import { waitNextTick } from '../../../utils';
 import clone from '../../../utils/clone';
 import { sleep } from 'incyclist-devices/lib/utils/utils';
+import { JSONObject } from '../../../utils/xml';
 
 class MockRepository extends JsonRepository {
     static create(repoName:string):JsonRepository {

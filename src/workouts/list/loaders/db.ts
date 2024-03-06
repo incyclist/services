@@ -1,4 +1,4 @@
-import { JSONObject, JsonRepository } from "../../../api"
+import { JsonRepository } from "../../../api"
 import { Singleton } from "../../../base/types"
 import {  Observer, PromiseObserver } from "../../../base/types/observer"
 import { Loader } from "./loader"
@@ -6,6 +6,7 @@ import { Plan, Workout } from "../../base/model/Workout"
 import { EventLogger } from "gd-eventlog"
 import { waitNextTick } from "../../../utils"
 import { valid } from "../../../utils/valid"
+import { JSONObject } from "../../../utils/xml"
 
 /**
  * This class is used to load Workouts from the local database

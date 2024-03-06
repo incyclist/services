@@ -1,9 +1,9 @@
 import previewsData from '/mnt/c/temp/Incyclist/previews.json'
 import fs from 'fs/promises'
-import { parseXml } from '../routes/base/utils/xml'
 import { KWTParser } from '../routes/base/parsers'
 import { FileInfo } from '../api'
 import path from 'path'
+import { parseXml } from './xml'
 
 const XML_DIR = '/mnt/nas/data/videos/reallifevideo.de/XML'
 //const PREVIEW_DIR = '/mnt/nas/data/videos/reallifevideo.de/Previews'

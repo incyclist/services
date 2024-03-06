@@ -4,7 +4,7 @@ import { FileInfo, getBindings } from '../../../api';
 import { Workout } from '../model/Workout';
 import xml2js from 'xml2js';
 import { Limit, PowerLimit, SegmentDefinition, StepDefinition } from '../model/types';
-import { parseXml } from '../../../routes/base/utils/xml';
+import { parseXml } from '../../../utils/xml';
 
 const parser = new xml2js.Parser({explicitChildren :true,preserveChildrenOrder :true,mergeAttrs :false} );
 

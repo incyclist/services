@@ -1,6 +1,7 @@
-import { FileInfo, JSONObject, getBindings } from '../../../api';
+import { FileInfo, getBindings } from '../../../api';
 import { RouteApiDetail } from '../api/types';
 import { DaumEpp, RouteInfo} from '../types';
+import { JSONObject } from '../../../utils/xml';
 import { BinaryReader } from './utils';
 import { XMLParser, XmlParserContext } from './xml';
 

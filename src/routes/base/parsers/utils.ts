@@ -1,5 +1,6 @@
-import { FileInfo, JSONObject, path } from "../../../api";
+import { FileInfo,  path } from "../../../api";
 import { LocalizedText, RouteInfoText } from "../types";
+import { JSONObject } from "../../../utils/xml";
 
 export class BinaryReader {
     protected pos:number

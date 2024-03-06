@@ -1,7 +1,7 @@
 import { FileInfo, getBindings } from "../../../api";
 import { RouteApiDetail } from "../api/types";
 import { ParseResult, Parser } from "../types";
-import { XmlJSON, parseXml } from "../utils/xml";
+import { XmlJSON, parseXml } from "../../../utils/xml";
 import { XMLParser } from "./xml";
 
 export class MultipleXMLParser implements Parser<XmlJSON,RouteApiDetail> {

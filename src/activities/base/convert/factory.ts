@@ -28,6 +28,7 @@ export class ActivityConverterFactory  {
      * @param {IActivityConverter} converter - The converter to add.
     */
     add(format:string, converter: IActivityConverter) {
+        // istanbul ignore next
         if (!format || !converter)
             return;
 

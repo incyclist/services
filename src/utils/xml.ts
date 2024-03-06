@@ -1,6 +1,10 @@
 import {parseString} from 'xml2js';
-import { JSONObject } from '../../../api';
 
+export type JSONObject = string |
+    number |
+    boolean |
+    { [x: string]: JSONObject; } |
+    Array<JSONObject>;
 
 export const toXml = (obj:JSONObject):string =>{
     const keys = Object.keys(obj);
@@ -118,3 +122,4 @@ export class XmlJSON {
     }
 
 }
+

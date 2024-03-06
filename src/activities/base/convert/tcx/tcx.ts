@@ -101,6 +101,7 @@ export class TcxConverter implements IActivityConverter{
         })
     }
 
+    // istanbul ignore next
     protected getRideService() {
         return useActivityRide()
     }

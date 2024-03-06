@@ -1,5 +1,6 @@
 import {EventLogger} from "gd-eventlog"
-import { JSONObject, JsonAccess } from "../types"
+import { JsonAccess } from "../types"
+import { JSONObject } from "../../../utils/xml"
 import { getBindings } from "../../bindings"
 
 export class JsonRepository {

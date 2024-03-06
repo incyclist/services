@@ -1,6 +1,6 @@
 import { loadFile } from '../../../../__tests__/utils/loadFile'
 import { FileInfo, getBindings } from '../../../api'
-import { parseXml } from '../utils/xml'
+import { parseXml } from '../../../utils'
 import { GPXParser } from './gpx'
 
 

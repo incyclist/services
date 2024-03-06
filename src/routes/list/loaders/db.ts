@@ -1,4 +1,4 @@
-import { JSONObject, JsonRepository } from "../../../api"
+import { JsonRepository } from "../../../api"
 import { Singleton } from "../../../base/types"
 import { Observer, PromiseObserver } from "../../../base/types/observer"
 import { Route } from "../../base/model/route"
@@ -9,6 +9,7 @@ import { DBLoader } from "./DBLoader"
 import { RouteApiDetail } from "../../base/api/types"
 import { waitNextTick } from "../../../utils"
 import { addDetails, getTotalElevation, updateSlopes, validateDistance } from "../../base/utils/route"
+import { JSONObject } from "../../../utils/xml"
 
 @Singleton
 export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{

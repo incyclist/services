@@ -1,9 +1,4 @@
-export type JSONObject =
-    | string
-    | number
-    | boolean
-    | { [x: string]: JSONObject }
-    | Array<JSONObject>;
+import { JSONObject } from "../../utils/xml";
 
 export type JsonAccess = {
     read(resourceName:string):Promise<JSONObject>

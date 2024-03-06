@@ -1,8 +1,8 @@
 import { EventLogger } from 'gd-eventlog';
-import { XmlJSON, parseXml, toXml } from '../utils/xml';
+import { JSONObject, XmlJSON, parseXml, toXml } from '../../../utils/xml';
 import { RouteApiDetail } from '../api/types';
 import { ParseResult, Parser, RouteInfo, RoutePoint } from '../types';
-import { FileInfo, JSONObject, getBindings } from '../../../api';
+import { FileInfo, getBindings } from '../../../api';
 import { checkIsLoop, getRouteHash, getTotalElevation,getTotalDistance, updateSlopes, validateRoute } from '../utils/route';
 import { Position, Altitude } from './types';
 import { getReferencedFileInfo, parseInformations } from './utils';

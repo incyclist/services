@@ -6,7 +6,7 @@ import { Route } from "../model/route";
 import { getElevationGainAt, getTotalElevation, validateRoute } from "./route";
 import fs from 'fs'
 import { KWTParser } from "../parsers/kwt";
-import { parseXml } from "./xml";
+import { parseXml } from "../../../utils";
 
 describe( 'Route Utils',()=>{
 
