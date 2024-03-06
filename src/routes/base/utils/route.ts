@@ -222,6 +222,7 @@ export const getElevationGainAt = (route:Route, routeDistance:number):number => 
     const isLoop = checkIsLoop(route)
     const totalDistance = lastPoint.routeDistance
     if (isLoop&& routeDistance>totalDistance) {
+        
         distance = routeDistance % totalDistance
         const lapsCompleted = Math.floor(routeDistance / totalDistance)
         elevationGain += getTotalElevation(route.details)*lapsCompleted
@@ -331,7 +332,7 @@ export const getNextPosition = ( route:Route, props:GetNextPositionProps ) => {
     let cnt = props.prev?.cnt || 0
     
     let targetRouteInLap;
-    if( route.description.isLoop ) {
+    if( checkIsLoop(route) ) {
         
         targetRouteInLap = targetRouteDistance % route.description.distance
         const prevTargetRouteinLap =  props.prev.routeDistance
@@ -500,7 +501,7 @@ function updatePoint(pPrev: LapPoint, point: LapPoint, props: GetNextPositionPro
     point.lng = pDest.lng;
     point.routeDistance = targetRouteInLap;
     point.distance = point.routeDistance - pPrev.routeDistance;
-    point.elevation = point.distance * pPrev.slope / 100;
+    point.elevation = pPrev.elevation + point.distance * pPrev.slope / 100;
 
     if (route.description.isLoop) {
         point.lap = lap;
@@ -542,6 +543,7 @@ export const createFromJson = (data:LegacyRouteApiDetail) => {
     
     const routeInfo = buildRouteInfo(data)
     const route = new Route(routeInfo,data)
+    validateRoute(route.details)
 
     return route;
 }

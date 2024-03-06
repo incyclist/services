@@ -193,7 +193,10 @@ export class ActivityRideService extends IncyclistService {
     }
 
     stop() {
+        
         this.stopWorker()
+        if (!this.observer)
+            return;
 
         useDeviceRide().off('data',this.deviceDataHandler)
         this.state = 'completed'
@@ -204,11 +207,15 @@ export class ActivityRideService extends IncyclistService {
 
         this.tsPauseStart = undefined
         delete this.tsStart
+        
 
         waitNextTick().then( ()=> {delete this.observer})
     }
 
     private updateActivityTime() {
+        if (!this.activity)
+            return;
+
         this.activity.timeTotal = (Date.now() - this.tsStart)/1000;
         this.activity.time = this.activity.timeTotal - (this.activity.timePause ?? 0);
     }
@@ -667,12 +674,13 @@ export class ActivityRideService extends IncyclistService {
         if (time!==prev) {
             const distance = this.current.routeDistance-(this.prevEmit?.routeDistance??0)
             const data = {
+                time: this.activity.time,
                 speed: this.current.deviceData.speed,
                 routeDistance: this.current.routeDistance,
                 distance
             }
             this.emit('data', data)
-
+            this.prevEmit = data;
             const logRecord = this.createLogRecord()
 
 
@@ -794,18 +802,22 @@ export class ActivityRideService extends IncyclistService {
 
 
     // accessors to other services
-    // functions are created to simplify moacking of these servcies
-
+    // functions are created to simplify mocking of these (singleton) services
+    
+    // istanbul ignore next
     protected getUserSettings() {
         return useUserSettings()
     }
 
+    // istanbul ignore next
     protected getRouteList() {
         return useRouteList()
     }
+    // istanbul ignore next
     protected getDeviceRide() {
         return useDeviceRide()
     }
+    // istanbul ignore next
     protected getDeviceConfiguration() {
         return useDeviceConfiguration()
     }

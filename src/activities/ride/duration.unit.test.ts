@@ -1,5 +1,5 @@
 import { Route } from '../../routes/base/model/route'
-import { createFromJson, validateRoute } from '../../routes/base/utils/route'
+import { createFromJson } from '../../routes/base/utils/route'
 import { ActivityDetails } from '../base'
 import {ActivityDuration} from './duration'
 import sydney from '../../../__tests__/data/routes/sydney.json'
@@ -15,7 +15,6 @@ describe ('ActivityDuration',()=>{
             beforeEach( ()=> {
                 
                 route  = createFromJson(sydney as unknown as RouteApiDetail)
-                validateRoute(route.details)
                 const user = { weight:75, ftp:200}
                 const startTime = new Date().toISOString()
                 const activity:ActivityDetails = {
