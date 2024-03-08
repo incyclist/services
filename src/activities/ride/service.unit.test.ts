@@ -236,4 +236,34 @@ describe('ActivityRideService',()=>{
 
         
     })
+
+    describe('getDashboardDisplayProperties',()=>{
+        let service:ActivityRideService
+        const ride   = new EventEmitter()
+
+
+        beforeEach( ()=>{
+            service = new ActivityRideService()
+            jest .useFakeTimers().setSystemTime(new Date('2020-01-01'));
+            
+        })
+
+        afterEach( ()=>{
+            service.stop()
+            resetSingleton(service)
+            jest.useRealTimers()
+        })
+
+        test('directly after init, before activity is started',()=>{
+            const route  = createFromJson(sydney as unknown as RouteApiDetail)
+
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'},ride})
+            service.init()
+
+            const props = service.getDashboardDisplayProperties()
+            
+            expect(props).toMatchSnapshot()
+        })
+
+    })
 })

@@ -2,6 +2,10 @@
 logs
 *.log
 
+# Environment files
+.env
+
+
 # VERSION file
 VERSION
 
@@ -40,3 +44,4 @@ typings
 .settings
 .vscode
 nohup.out
+

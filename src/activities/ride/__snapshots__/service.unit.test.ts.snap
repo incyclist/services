@@ -1,0 +1,100 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`ActivityRideService getDashboardDisplayProperties directly after init, before activity is started 1`] = `
+[
+  {
+    "data": [
+      {
+        "value": "00:00",
+      },
+      {
+        "value": undefined,
+      },
+    ],
+    "title": "Time",
+  },
+  {
+    "data": [
+      {
+        "unit": "km",
+        "value": "0.00",
+      },
+      {
+        "value": "-3.80",
+      },
+    ],
+    "title": "Distance",
+  },
+  {
+    "data": [
+      {
+        "unit": "km/h",
+        "value": "0.0",
+      },
+      {
+        "label": "max",
+        "value": "",
+      },
+    ],
+    "dataState": undefined,
+    "title": "Speed",
+  },
+  {
+    "data": [
+      {
+        "unit": "W",
+        "value": "0",
+      },
+      {
+        "label": "max",
+        "value": "",
+      },
+    ],
+    "dataState": undefined,
+    "title": "Power",
+  },
+  {
+    "data": [
+      {
+        "info": "",
+        "unit": "%",
+        "value": "0.7",
+      },
+      {
+        "label": "elev gain",
+        "unit": "m",
+        "value": "0",
+      },
+    ],
+    "title": "Slope",
+  },
+  {
+    "data": [
+      {
+        "unit": "bpm",
+        "value": "",
+      },
+      {
+        "label": "max",
+        "value": "",
+      },
+    ],
+    "dataState": undefined,
+    "title": "Heartrate",
+  },
+  {
+    "data": [
+      {
+        "unit": "rpm",
+        "value": "0",
+      },
+      {
+        "label": "max",
+        "value": "",
+      },
+    ],
+    "dataState": undefined,
+    "title": "Cadence",
+  },
+]
+`;
