@@ -11,9 +11,9 @@ class Api extends IncyclistRoutesApi {
     This is only used for manual testing
 */
 
-describe.skip('RouteListService',()=>{
+describe('RouteListService',()=>{
 
-    describe.skip('GetRouteDescriptions',()=>{
+    describe('GetRouteDescriptions',()=>{
         test('gpx',async ()=>{
             const rl = new Api()
     
