@@ -6,6 +6,7 @@ import { IFileSystem } from '../fs'
 import { IPathBinding } from '../path'
 import { IFileLoader, IJsonRepositoryBinding } from '../repository'
 import { IVideoProcessor } from '../video'
+import { ISecretBinding } from './secret'
 
 @Singleton
 export class IncyclistBindings {
@@ -17,6 +18,7 @@ export class IncyclistBindings {
     public fs?: IFileSystem
     public downloadManager?: IDownloadManager
     public form?:IFormPostBinding;
+    public secret?:ISecretBinding
 
 
 }

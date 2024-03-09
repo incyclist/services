@@ -1,9 +1,9 @@
 import { AxiosInstance } from "axios";
 import { FitExportActivity } from "../model";
 import { useUserSettings } from "../../../settings";
-import { ApiClient } from "../../../api";
 import { DEFAULT_FIT_API, FITCONVERT_API } from "./consts";
 import { trimTrailingChars } from "../../../utils";
+import { IncyclistRestApiClient } from "../../../api";
 
 export class IncyclistFitConvertApi { 
 
@@ -35,7 +35,7 @@ export class IncyclistFitConvertApi {
     // istanbul ignore next
     protected getApi():AxiosInstance {
         if (!this.api) {
-            this.api = ApiClient.getClient()
+            this.api = IncyclistRestApiClient.getClient()
             return this.api
         }
         return this.api

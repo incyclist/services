@@ -1,12 +1,26 @@
 import { IncyclistFitConvertApi } from "./fitconvert"
 import { FitExportActivity } from "../model"
 import fitData from '../../../../__tests__/data/activities/fittest.json'
+import { getBindings } from "../../../api"
 
 const testData:FitExportActivity = fitData 
 
 describe('FITConvert Api E2E',()=>{
 
     describe( 'convertToFit',()=>{
+
+        beforeEach( ()=>{
+            getBindings().appInfo = {
+                getAppVersion: ()=>'0.1',
+                getChannel: ()=>'desktop',
+                getOS: ()=> ({ platform:'linux',arch:'x86', release:'1' }),
+                getAppDir: ()=>'/tmp',
+                getSourceDir: ()=>'/tmp',
+                getTempDir: ()=>'/tmp',
+                getUIVersion: ()=>'0.8',
+                isApp:()=>true
+            }
+        })
 
         test('positive',async ()=>{
             const api = new IncyclistFitConvertApi() 

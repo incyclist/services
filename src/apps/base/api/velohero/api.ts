@@ -1,5 +1,5 @@
 import { AxiosInstance } from 'axios';
-import { ApiClient, getBindings } from '../../../../api';
+import { RestApiClient, getBindings } from '../../../../api';
 import { useUserSettings } from '../../../../settings';
 import { valid } from '../../../../utils/valid';
 import { VeloHeroAccountType, VeloHeroLoginReponse, VeloHeroUploadProps } from './types';
@@ -204,7 +204,7 @@ export default class VeloHeroApi  {
     // istanbul ignore next
     protected getApi():AxiosInstance {
         if (!this.api) {
-            this.api = ApiClient.getClient()
+            this.api = RestApiClient.getClient()
             return this.api
         }
         return this.api

@@ -1,5 +1,4 @@
-
-export type AppChannel = 'desktop' | 'mobile' | 'web' | 'tv' | 'backend'
+import { AppChannel } from "../appInfo"
 
 export type ApiClientInitProps = {
     uuid: string, 
@@ -7,5 +6,5 @@ export type ApiClientInitProps = {
     version:string,
     appVersion:string
     requestLog?:boolean,
-    channel?: AppChannel   
+    channel?: AppChannel
 }

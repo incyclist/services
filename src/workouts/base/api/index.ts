@@ -1,6 +1,6 @@
 import {EventLogger} from 'gd-eventlog'
 import { AxiosInstance } from "axios";
-import { ApiClient } from '../../../api';
+import { IncyclistRestApiClient, RestApiClient } from '../../../api';
 import { useUserSettings } from '../../../settings';
 import { Singleton } from '../../../base/types';
 import { DEFAULT_WORKOUT_API, WORKOUT_API } from './consts';
@@ -23,7 +23,7 @@ export class IncyclistWorkoutsApi {
 
     protected getApi():AxiosInstance {
         if (!this.api) {
-            this.api = ApiClient.getClient()
+            this.api = IncyclistRestApiClient.getClient()
             return this.api
         }
         return this.api
