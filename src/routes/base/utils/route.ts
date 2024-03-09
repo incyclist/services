@@ -159,13 +159,15 @@ export const addDetails =(route:Route, details:RouteApiDetail):void => {
 
 }
 
-export const validateRoute = (route:RouteApiDetail):void =>{
+export const validateRoute = (route:Route|RouteApiDetail):void =>{
     if (!route?.points?.length)
         return;
 
     validateDistance(route.points)
     updateSlopes(route.points);
     updateElevationGain(route.points)
+
+    route.distance = route.points[ route.points.length-1].routeDistance
 }
 
 export const validateDistance = (points:Array<RoutePoint>) => {
@@ -543,7 +545,7 @@ export const createFromJson = (data:LegacyRouteApiDetail) => {
     
     const routeInfo = buildRouteInfo(data)
     const route = new Route(routeInfo,data)
-    validateRoute(route.details)
+    validateRoute(route)
 
     return route;
 }

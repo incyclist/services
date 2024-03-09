@@ -42,7 +42,7 @@ describe( 'Route Utils',()=>{
         })
         
         test('validated',()=>{
-            validateRoute(route.details)
+            validateRoute(route)
             const elevation = getTotalElevation(route.details)
             expect(elevation).toBeCloseTo(202,0)
 

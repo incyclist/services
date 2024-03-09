@@ -48,6 +48,11 @@ export class Route {
             
     }
 
+    set distance(distance:number) {
+        this._description.distance = distance
+        this._details.distance =distance
+    }
+
     protected getCountiesApi() {
         return new Countries()
     }

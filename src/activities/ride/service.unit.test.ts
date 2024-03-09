@@ -1,5 +1,6 @@
 import { ActivityRideService } from "./service"
 import sydney from '../../../__tests__/data/routes/sydney.json'
+import sydney1 from '../../../__tests__/data/routes/sydney1.json'
 import { createFromJson} from "../../routes/base/utils/route"
 import { RouteApiDetail } from "../../routes/base/api/types"
 import { EventEmitter } from "stream"
@@ -211,7 +212,7 @@ describe('ActivityRideService',()=>{
 
 
         test('GPX from start close to end of route',()=>{
-            const route  = createFromJson(sydney as unknown as RouteApiDetail)
+            const route  = createFromJson(sydney1 as unknown as RouteApiDetail)
 
             mockServices(service,{route,startSettings:{startPos:3700,realityFactor:100,type:'Route'},ride})
             const onData = jest.fn()
@@ -230,7 +231,10 @@ describe('ActivityRideService',()=>{
             expect(activity.startPos).toBe(3700)
 
             expect(activity.totalElevation).toBeCloseTo(6,0)       // total elevation (29) - elevation gain at 3700m (29) + elevation gain at ~900m (6)
-            expect(activity.logs[activity.logs.length-1]).toMatchObject({time:100, distance:1000})
+            expect(activity.logs[activity.logs.length-1]).toMatchObject({time:100, distance:1000,lat:expect.anything(),lng:expect.anything()})
+
+            console.log(activity.logs)
+
         })
 
 

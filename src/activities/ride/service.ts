@@ -378,7 +378,7 @@ export class ActivityRideService extends IncyclistService {
         }
 
         this.current.route.details.points = points
-        validateRoute(this.current.route.details)
+        validateRoute(this.current.route)
 
         this.current.route.details.distance = points[points.length-1].routeDistance
         addDetails(this.current.route,this.current.route.details)
@@ -534,7 +534,7 @@ export class ActivityRideService extends IncyclistService {
                 break;
             case 'Route':
                 {
-                    validateRoute(selectedRoute.details)
+                    validateRoute(selectedRoute)
                     const s = (startSettings as RouteSettings)
                     startPos = s.startPos
                     realityFactor = s.realityFactor
@@ -604,9 +604,10 @@ export class ActivityRideService extends IncyclistService {
             
             if (distance!==0) {
                 // update position and elevation gain
-                const position = getNextPosition(this.current.route,{distance,prev:this.current.position} )
-
-                this.current.position = position
+                const prev = this.current.position
+                const position = getNextPosition(this.current.route,{distance,prev:this.current.position} ) ??
+                                 getNextPosition(this.current.route,{routeDistance:this.current.routeDistance} )
+                this.current.position = position??prev
 
                 if (this.activity.realityFactor>0) {
                     const gain = getElevationGainAt(this.current.route, this.current.routeDistance)
@@ -662,16 +663,13 @@ export class ActivityRideService extends IncyclistService {
 
 
     protected update() {
-        if (this.state!=='active')
-            return;
-
         
         const prev = Math.floor(this.activity.time)
         this.updateActivityState()
         const time = Math.floor(this.activity.time)
 
 
-        if (time!==prev) {
+        if (time!==prev && this.state==='active') {
             const distance = this.current.routeDistance-(this.prevEmit?.routeDistance??0)
             const data = {
                 time: this.activity.time,
@@ -711,12 +709,12 @@ export class ActivityRideService extends IncyclistService {
             title,
             points
         }
-        validateRoute(details)
 
         const info:RouteInfo = {id ,title,hasGpx:true}
         
         const route = new Route( info)
         addDetails(route,details)
+        validateRoute(route)
 
 
         return route
