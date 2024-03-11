@@ -390,39 +390,58 @@ export class ActivityRideService extends IncyclistService {
 
 
     protected onDeviceData(data:DeviceData) {
-        this.current.tsDeviceData = Date.now()
 
-        const update:DeviceData = {...data}
-        if (data.distance<0 || data.speed===0) {
-            update.distance = 0;
-            update.speed=0
-        }
-       
-        this.current.deviceData = { ...this.current.deviceData, ...update}
-        
-        if (this.state!=='active') {
+        // not initialized yet
+        if (!this.current)
+            return 
 
-            if (this.state==='paused' && data.speed>0 && this.current.isAutoResume) {
-                this.resume('system')
+        try {
+            this.current.tsDeviceData = Date.now()
+
+            const update:DeviceData = {...data}
+            if (data.distance<0 || data.speed===0) {
+                update.distance = 0;
+                update.speed=0
+            }
+           
+            this.current.deviceData = { ...this.current.deviceData, ...update}
+            
+            if (this.state!=='active') {
+    
+                if (this.state==='paused' && data.speed>0 && this.current.isAutoResume) {
+                    this.resume('system')
+                    return;
+                }
+                if (this.state==='ininitalized' && data.speed>0) {
+                    this.start()
+                    return;
+                }
+    
+                this.current.deviceData.speed = 0
                 return;
             }
-            if (this.state==='ininitalized' && data.speed>0) {
-                this.start()
-                return;
-            }
-
-            this.current.deviceData.speed = 0
-            return;
+    
         }
-
-        //this.updateActivityState(data, update);
+        catch(err) {
+            this.logError(err,'onDeviceData')
+        }        
     }
 
 
     protected onDeviceHealthUpdate(udid:string,status:HealthStatus, capabilities:Array<ExtendedIncyclistCapability>) {
-        capabilities.forEach(capability => {
-            this.current.dataState[capability.toLowerCase()] = status
-        })
+        // not initialized yet
+        if (!this.current)
+            return 
+
+        try {
+            capabilities.forEach(capability => {
+                this.current.dataState[capability.toLowerCase()] = status
+            })
+    
+        }
+        catch(err) {
+            this.logError(err,'onDeviceHealthUpdate')
+        }
     }
 
 
@@ -663,38 +682,44 @@ export class ActivityRideService extends IncyclistService {
 
 
     protected update() {
-        
-        const prev = Math.floor(this.activity.time)
-        this.updateActivityState()
-        const time = Math.floor(this.activity.time)
 
-
-        if (time!==prev && this.state==='active') {
-            const distance = this.current.routeDistance-(this.prevEmit?.routeDistance??0)
-            const data = {
-                time: this.activity.time,
-                speed: this.current.deviceData.speed,
-                routeDistance: this.current.routeDistance,
-                distance
-            }
-            this.emit('data', data)
-            this.prevEmit = data;
-            const logRecord = this.createLogRecord()
-
-
-            if (logRecord){
-                this.activity.logs.push(logRecord)
-                this.statsCalculator.add(logRecord)
-            }
-            
-            
-            this.activity.distance  = this.current.routeDistance-this.activity.startPos
-            this.activity.totalElevation =  this.current.elevationGain
-            
-            
-            this.logActivityUpdateMessage()
-            this.updateRepo()
+        try {
+            const prev = Math.floor(this.activity.time)
+            this.updateActivityState()
+            const time = Math.floor(this.activity.time)
     
+    
+            if (time!==prev && this.state==='active') {
+                const distance = this.current.routeDistance-(this.prevEmit?.routeDistance??0)
+                const data = {
+                    time: this.activity.time,
+                    speed: this.current.deviceData.speed,
+                    routeDistance: this.current.routeDistance,
+                    distance
+                }
+                this.emit('data', data)
+                this.prevEmit = data;
+                const logRecord = this.createLogRecord()
+    
+    
+                if (logRecord){
+                    this.activity.logs.push(logRecord)
+                    this.statsCalculator.add(logRecord)
+                }
+                
+                
+                this.activity.distance  = this.current.routeDistance-this.activity.startPos
+                this.activity.totalElevation =  this.current.elevationGain
+                
+                
+                this.logActivityUpdateMessage()
+                this.updateRepo()
+        
+            }
+    
+        }
+        catch(err) {
+            this.logError(err,'update')
         }
 
     }
