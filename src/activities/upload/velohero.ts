@@ -4,8 +4,8 @@ import { useUserSettings } from "../../settings";
 import { ActivityDetails } from "../base";
 import crypto from 'crypto'
 import { VeloHeroAuth } from "./types";
-import VeloHeroApi from "../../apps/base/api/velohero/api";
 import { valid } from "../../utils/valid";
+import { VeloHeroApi } from "../../apps/base/api";
 
 
 
@@ -16,6 +16,7 @@ export class VeloHeroUpload extends IncyclistService {
     protected username
     protected password
     protected api: VeloHeroApi
+    protected _isConnecting
 
     constructor() {
         super('VeloHeroUpload')
@@ -54,6 +55,10 @@ export class VeloHeroUpload extends IncyclistService {
             this.logger.logEvent({message:'error', error:err.message, fn:'init',stack:err.stack})
             this.isInitialized = false;
         }
+
+        this.on('login-start',()=>{this._isConnecting = true})
+        this.on('login-success',()=>{this._isConnecting = false})
+        this.on('login-failure',()=>{this._isConnecting = false})
     
         return this.isInitialized
     }
@@ -62,7 +67,12 @@ export class VeloHeroUpload extends IncyclistService {
         return (valid(this.username) && valid(this.password))
     }
 
+    isConnecting() {
+        return this._isConnecting;
+    }
+
     async login(username:string,password:string):Promise<boolean> {
+
         this.logger.logEvent({message:'VeloHero Login'})
 
         this.emit('login-start')
@@ -85,7 +95,7 @@ export class VeloHeroUpload extends IncyclistService {
         catch(err) {
             this.logger.logEvent({message:'VeloHero Login failed',error: err.message})
             this.emit('login-failure')
-            return false
+            throw err
         }
 
 

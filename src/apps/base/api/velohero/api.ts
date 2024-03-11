@@ -1,9 +1,6 @@
-import { AxiosInstance } from 'axios';
-import { RestApiClient, getBindings } from '../../../../api';
-import { useUserSettings } from '../../../../settings';
 import { valid } from '../../../../utils/valid';
 import { VeloHeroAccountType, VeloHeroLoginReponse, VeloHeroUploadProps } from './types';
-import { Form } from '../../../../api/form';
+import { AppApiBase } from '../base';
 
 const BASE_URL = 'https://app.velohero.com'
 
@@ -44,9 +41,8 @@ const BASE_URL = 'https://app.velohero.com'
  * @class
  * @public
  */
-export default class VeloHeroApi  {
+export class VeloHeroApi  extends AppApiBase{
 
-    protected api: AxiosInstance
     protected username: string
     protected password: string
     protected loginResponse:VeloHeroLoginReponse
@@ -86,6 +82,9 @@ export default class VeloHeroApi  {
             
         }
         catch(err) {
+            if (err.message==='invalid credentials')
+               throw err
+            
             let error = `Internal error: ${err.message}`
             if (err.response) {
                 const {response} = err;
@@ -139,23 +138,15 @@ export default class VeloHeroApi  {
             pass: password,
             view: 'json'
         };
+    
+        const form =await this.createForm('/upload/file',uploadInfo)
 
-        
-        
-        try {
-            const form =await this.createForm('/upload/file',uploadInfo)
-
-            const response = await this.postForm(form)
-            if (response.data && !response.error) {
-                return true;
-            }
-            else {
-                throw new Error( response.error?.response?.data?.error|| response.error.message||response.error||`HTTP error ${response.status}`)
-            }
+        const response = await this.postForm(form)
+        if (response.data && !response.error) {
+            return true;
         }
-        catch(err) {
-            console.log(err)
-            throw err
+        else {
+            throw new Error( response.error?.response?.data?.error|| response.error.message||response.error||`HTTP error ${response.status}`)
         }
 
     }
@@ -163,63 +154,12 @@ export default class VeloHeroApi  {
 
     protected getBaseUrl() {
         try {
-            return useUserSettings().get('VELOHERO_API',BASE_URL)
+            return this.getUserSettings().get('VELOHERO_API',BASE_URL)
         }
         catch {
             return BASE_URL
         }
     }
-
-
-    protected async get(url:string, config?:object) {
-
-        const props = config??{}
-        
-        const request = {
-            method:'get',
-            url: this.getBaseUrl()+url,
-            validateStatus: (status) => {
-                return (status >= 200 && status < 300) || status===403;
-            },
-            ...props            
-        }
-        return await this.getApi().request(request )  
-    }
-
- 
-    protected async postForm (form:Form) {
-        const fp = this.getFormBinding()        
-
-        return await fp.post( form);
-    
-    }
-
-    protected async createForm(url:string,uploadInfo:object):Promise<Form> {
-        const fp = this.getFormBinding()        
-        const form =  await fp.createForm({uri:this.getBaseUrl()+url},uploadInfo);
-        return form
-    }
-    
-
-    // istanbul ignore next
-    protected getApi():AxiosInstance {
-        if (!this.api) {
-            this.api = RestApiClient.getClient()
-            return this.api
-        }
-        return this.api
-    }
-
-    // istanbul ignore next
-    protected getUserSettings() {
-        return useUserSettings()
-    }
-
-    // istanbul ignore next
-    protected getFormBinding() {
-        return getBindings()?.form
-    }
-
 
 
 }
