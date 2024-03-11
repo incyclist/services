@@ -330,7 +330,7 @@ export const getNextPosition = ( route:Route, props:GetNextPositionProps ) => {
     let pPrev=props.prev || { ...points[0],lap:1};        
     let point,p;
 
-    let lap = valid(pPrev.lap)? pPrev.lap : 1
+    let lap = valid(pPrev?.lap)? pPrev.lap : 1
     let cnt = props.prev?.cnt || 0
     
     let targetRouteInLap;
