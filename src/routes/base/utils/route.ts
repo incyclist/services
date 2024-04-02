@@ -304,8 +304,8 @@ export interface GetNextPositionProps {
 }
 
 const getLapTotalDistance = ( route:Route, point:LapPoint):number =>{
-    const lap = valid(point.lap) ? point.lap : 1
-    return (lap-1)*route.description.distance + point.routeDistance
+    const lap = valid(point?.lap) ? point.lap : 1
+    return (lap-1)*route.description.distance + point?.routeDistance??0
 }
 
 
@@ -322,12 +322,12 @@ export const getNextPosition = ( route:Route, props:GetNextPositionProps ) => {
         return;
     }
         
-    
-    const distance = props.distance !== undefined ? props.distance: props.routeDistance-getLapTotalDistance(route,props.prev);
-    const targetRouteDistance = props.routeDistance!==undefined ? props.routeDistance : getLapTotalDistance(route,props.prev)+distance;
-
-
     let pPrev=props.prev || { ...points[0],lap:1};        
+    
+    const distance = props.distance !== undefined ? props.distance: props.routeDistance-getLapTotalDistance(route,pPrev);
+    const targetRouteDistance = props.routeDistance!==undefined ? props.routeDistance : getLapTotalDistance(route,pPrev)+distance;
+
+
     let point,p;
 
     let lap = valid(pPrev?.lap)? pPrev.lap : 1
@@ -337,7 +337,7 @@ export const getNextPosition = ( route:Route, props:GetNextPositionProps ) => {
     if( checkIsLoop(route) ) {
         
         targetRouteInLap = targetRouteDistance % route.description.distance
-        const prevTargetRouteinLap =  props.prev.routeDistance
+        const prevTargetRouteinLap =  pPrev.routeDistance
 
         if ( prevTargetRouteinLap>targetRouteInLap) {
             cnt=0;
@@ -453,6 +453,8 @@ const getPointAtDistance = (route:Route,routeDistance:number, nearest:boolean=tr
     })
     return point;
 }
+
+
 
 const getPointAtLatLng = (route:Route, latlng:LatLng, nearest:boolean=true):RoutePoint => {
     const points = route.points
