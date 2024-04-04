@@ -1,12 +1,12 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
-import { Observer } from "../../base/types/observer";
+import { Observer, PromiseObserver } from "../../base/types/observer";
 import { useRouteList } from "../../routes";
 import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityDetails, ActivityLogRecord, ActivityRoute, ActivityRouteType, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
+import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityLogRecord, ActivityRoute, ActivityRouteType, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
@@ -18,6 +18,7 @@ import { Route } from "../../routes/base/model/route";
 import { RouteApiDetail } from "../../routes/base/api/types";
 import { ActivityStatsCalculator } from "./stats";
 import { ActivityDuration } from "./duration";
+import { ActivityUploadFactory } from "../upload";
 
 const SAVE_INTERVAL = 5000;
 
@@ -102,6 +103,7 @@ export class ActivityRideService extends IncyclistService {
     protected updateInterval:NodeJS.Timeout
     protected tsPrevSave: number
     protected prevEmit: { distance:number, routeDistance:number, speed:number}
+    protected saveObserver: PromiseObserver<boolean>
 
     protected statsCalculator: ActivityStatsCalculator
     protected durationCalculator: ActivityDuration
@@ -130,6 +132,7 @@ export class ActivityRideService extends IncyclistService {
         super('ActivityRide')
         
     }
+
 
     init(id?:string): Observer { 
         let isClean = true
@@ -168,7 +171,7 @@ export class ActivityRideService extends IncyclistService {
     }
 
     /** 
-     * Starts a new activity
+     * Starts a new activity, should be called once initial pedalling was detected
     */
     start() {
         
@@ -192,6 +195,9 @@ export class ActivityRideService extends IncyclistService {
         this.emit('started')
     }
 
+    /** 
+     * Stops the current activity and finally saves it into the JSON  file
+    */
     stop() {
         
         this.stopWorker()
@@ -210,14 +216,6 @@ export class ActivityRideService extends IncyclistService {
         
 
         waitNextTick().then( ()=> {delete this.observer})
-    }
-
-    private updateActivityTime() {
-        if (!this.activity)
-            return;
-
-        this.activity.timeTotal = (Date.now() - this.tsStart)/1000;
-        this.activity.time = this.activity.timeTotal - (this.activity.timePause ?? 0);
     }
 
     pause(autoResume:boolean=false) {
@@ -330,16 +328,102 @@ export class ActivityRideService extends IncyclistService {
 
     getActivitySummaryDisplayProperties() {
 
+        /*
+        const props = {
+            activity: this.activity
+
+            canShowSave: 
+            canShowContinue
+            detailImages?
+            detail: 'Images' | 'Route
+            uploadEnabled
+
+        }
+        */
+
     }
 
     getActivity():ActivityDetails {
         return this.activity
     }
 
+    setTitle(title:string) {
+        this.activity.title = title;
+        this._save()
+    }
 
-    /** user requested save: will save the activity and convert into TCX and FIT */
-    save() {
-        return this._save()
+    async delete() {
+
+        if (this.state==='idle' || !this.observer)
+            return;
+
+        if (this.state!=='completed') {
+            this.stop()
+            await new Promise( done => {this.observer.on( 'completed', done) })
+        }
+
+        this.getRepo().delete(this.activity.id)
+        this.state = 'idle'        
+    }
+
+
+    /** user requested save: will save the activity, convert into TCX and FIT and upload to connected apps*/
+    save():PromiseObserver<boolean> {
+        if (this.saveObserver) {
+            return this.saveObserver
+        }
+
+        const emit = (event,...args) =>{
+            if (this.saveObserver)
+                this.saveObserver.emit(event,...args)
+        }
+
+        const run = async():Promise<boolean> => {
+            let success = false;
+
+            try {
+                emit('start',success)
+
+                await this._save()
+            
+                let format = undefined;
+
+
+                let uploadSuccess =false;
+                let convertSuccess= await  this.convert('TCX')
+
+                if (convertSuccess) {
+                    format = 'TCX'
+                    this.convert('FIT')
+                }
+                else {
+                    convertSuccess== await this.convert('FIT')
+                    if (convertSuccess)
+                        format = 'FIT'
+                }
+        
+                if (convertSuccess) {
+                    uploadSuccess = await this.upload(format)
+                }
+
+                success = convertSuccess && uploadSuccess
+            }
+            catch(err) {
+    
+                success = false
+            }
+
+            emit('done',success)
+            waitNextTick().then( ()=> { 
+                delete this.saveObserver
+            })
+
+            return success
+        }
+
+        this.saveObserver = new PromiseObserver<boolean>(run())
+        
+        return this.saveObserver
 
     }
 
@@ -394,6 +478,9 @@ export class ActivityRideService extends IncyclistService {
         // not initialized yet
         if (!this.current)
             return 
+
+        if (!data)
+            return;
 
         try {
             this.current.tsDeviceData = Date.now()
@@ -477,7 +564,42 @@ export class ActivityRideService extends IncyclistService {
 
     }
 
+    protected async convert(format:string):Promise<boolean> {
+        
+        this.saveObserver.emit('convert.start',format)
+        try {
+            ActivityConverter.convert(this.activity,format)
+            this.saveObserver.emit('convert.done',format,true)
 
+            if (format.toLowerCase()==='fit')
+                this.activity.fitFileName = this.activity.fileName.replace('json','fit')
+            if (format.toLowerCase()==='tcx')
+                this.activity.tcxFileName = this.activity.fileName.replace('json','tcx')
+            await this._save()
+
+            return true
+        }
+        catch(err) {
+            this.saveObserver.emit('convert.error',format,err)
+            return false
+        }
+    }
+
+    protected async upload(format:string):Promise<boolean> {
+
+        const factory =  this.getActivityUploadFactory()
+
+        this.saveObserver.emit('upload.start')
+        try {
+            await factory.upload( this.activity, format)
+            this.saveObserver.emit('upload.done', format, true)
+            return true
+        }
+        catch(err) {
+            this.saveObserver.emit('upload.error', format, err)
+            return false
+        }
+    }
 
     protected getRepo() {
         if (this.repo)
@@ -624,8 +746,11 @@ export class ActivityRideService extends IncyclistService {
             if (distance!==0) {
                 // update position and elevation gain
                 const prev = this.current.position
-                const position = getNextPosition(this.current.route,{distance,prev:this.current.position} ) ??
-                                 getNextPosition(this.current.route,{routeDistance:this.current.routeDistance} )
+
+                // TODO: improve this. The function should deliver the RoutePoint representing the rider poition after the update. 
+                //       Lat/Lng, Elevation and Slope should be as close as possible to the routeDistance ( considering laps and possibility that the point might be between two way points)
+                const position = getNextPosition(this.current.route,{routeDistance:this.current.routeDistance,prev:this.current.position} ) ??
+                                 getNextPosition(this.current.route,{distance,prev:this.current.position} ) 
                 this.current.position = position??prev
 
                 if (this.activity.realityFactor>0) {
@@ -753,6 +878,15 @@ export class ActivityRideService extends IncyclistService {
         return 'free ride'
     }
 
+    protected updateActivityTime() {
+        if (!this.activity)
+            return;
+
+        this.activity.timeTotal = (Date.now() - this.tsStart)/1000;
+        this.activity.time = this.activity.timeTotal - (this.activity.timePause ?? 0);
+    }
+
+
     getRideProps() {
         const {startPos,realityFactor,routeType} = this.activity
         const {title} = this.current.route.description
@@ -843,6 +977,14 @@ export class ActivityRideService extends IncyclistService {
     // istanbul ignore next
     protected getDeviceConfiguration() {
         return useDeviceConfiguration()
+    }
+
+    protected getActivityUploadFactory() {
+        return new ActivityUploadFactory()
+    }
+
+    protected getActivityConverterfactory() {
+        return new ActivityConverterFactory()        
     }
 
 

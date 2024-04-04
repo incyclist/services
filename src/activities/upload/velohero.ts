@@ -1,16 +1,16 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
-import { useUserSettings } from "../../settings";
+import { UserSettingsService, useUserSettings } from "../../settings";
 import { ActivityDetails } from "../base";
 import crypto from 'crypto'
-import { VeloHeroAuth } from "./types";
+import { IActivityUpload, VeloHeroAuth } from "./types";
 import { valid } from "../../utils/valid";
 import { VeloHeroApi } from "../../apps/base/api";
 
 
 
 @Singleton
-export class VeloHeroUpload extends IncyclistService {
+export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
 
     protected isInitialized
     protected username
@@ -29,6 +29,14 @@ export class VeloHeroUpload extends IncyclistService {
 
         if (this.isInitialized)
             return true
+
+        console.log('~~~ VeloHeroUpload.init')
+
+        if (!this.getUserSettings().isInitialized) {
+            console.log('~~~ VeloHeroUpload.init - usersettings not ready')
+
+            return false
+        }
 
         try {
             const auth = this.getCredentials()
@@ -52,6 +60,7 @@ export class VeloHeroUpload extends IncyclistService {
 
         }
         catch(err) {
+            console.log('~~~ VeloHeroUpload.init - error')
             this.logger.logEvent({message:'error', error:err.message, fn:'init',stack:err.stack})
             this.isInitialized = false;
         }
@@ -63,15 +72,17 @@ export class VeloHeroUpload extends IncyclistService {
         return this.isInitialized
     }
 
-    isConnected() {
+    isConnected():boolean {
+        this.ensureInitialized()
         return (valid(this.username) && valid(this.password))
     }
 
-    isConnecting() {
+    isConnecting():boolean {
         return this._isConnecting;
     }
 
     async login(username:string,password:string):Promise<boolean> {
+        this.ensureInitialized()
 
         this.logger.logEvent({message:'VeloHero Login'})
 
@@ -102,21 +113,29 @@ export class VeloHeroUpload extends IncyclistService {
 
     }
 
-    disconnect() {
+    disconnect():void {
         this.username =undefined
         this.password = undefined
         this.getUserSettings().set('user.auth.velohero',null)   
     }
 
+    protected ensureInitialized() {
+        if (!this.isInitialized)
+            this.init()
+        return this.isInitialized
+    }
 
 
-    async upload(activity: ActivityDetails, format:string='TCX') {
+    async upload(activity: ActivityDetails, format:string='TCX'):Promise<boolean> {
         try {
-            if (!this.isInitialized) {
-                const ok =this.init()
-                if (!ok)
-                    return false;
+            
+            const ok =this.ensureInitialized()
+            if (!ok) {
+                this.logger.logEvent({message:'VeloHero Upload skipped', reason:'not initialized'})
+
+                return false;
             }
+            
             this.logger.logEvent({message:'VeloHero Upload', format})
 
             const username = this.username

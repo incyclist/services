@@ -1,5 +1,5 @@
 import { AxiosError, AxiosResponse } from 'axios';
-import VeloHeroApi from './api';
+import {VeloHeroApi} from './api';
 
 
 describe('VeloHeroApi', () => {
@@ -98,7 +98,7 @@ describe('VeloHeroApi', () => {
 
             expect(result).toBe(true);
 
-            expect(form.createForm).toHaveBeenCalledWith({uri: 'https://app.velohero.com/upload/file'}, {                
+            expect(form.createForm).toHaveBeenCalledWith({url: 'https://app.velohero.com/upload/file'}, {                
                 file: { type: 'file', fileName: 'example.csv' },
                 user: 'testUser',
                 pass: 'testPassword',
@@ -119,7 +119,7 @@ describe('VeloHeroApi', () => {
 
             expect(result).toBe(true);
 
-            expect(form.createForm).toHaveBeenCalledWith({uri: 'https://app.velohero.com/upload/file'}, {                
+            expect(form.createForm).toHaveBeenCalledWith({url: 'https://app.velohero.com/upload/file'}, {                
                 file: { type: 'file', fileName: 'example.csv' },
                 user: 'username',
                 pass: 'password',

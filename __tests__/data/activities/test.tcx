@@ -3,8 +3,8 @@
       <Activities>
       <Activity Sport="Biking">
       <Id>
-      2024-03-04T18:36:06.114Z
-    </Id><Lap StartTime="2024-03-04T18:36:06.114Z">
+      2024-03-10T18:36:06.114Z
+    </Id><Lap StartTime="2024-03-10T18:36:06.114Z">
       <TotalTimeSeconds>
       19.899
     </TotalTimeSeconds><DistanceMeters>
@@ -95,9 +95,9 @@
       <Time>
       2024-03-04T18:36:13.014Z
     </Time><AltitudeMeters>
-      498.6
+      499
     </AltitudeMeters><DistanceMeters>
-      27.655324296486754
+      27.55324296486754
     </DistanceMeters><Cadence>
       0
     </Cadence><SensorState>
@@ -303,7 +303,7 @@
     </Trackpoint>
     </Track>
     </Lap><Notes>
-      Incyclist Ride
+      Incyclist Ride #1
     </Notes>
     </Activity>
     </Activities>

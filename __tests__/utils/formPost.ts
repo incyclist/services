@@ -27,17 +27,20 @@ export class AxiosFormPost  {
         }
 
         
-        return {uri:opts.uri, form}
+        return {...opts, data:form}
     }
 
     async post(opts) { 
-        const url = opts.uri
-        const form = opts.form
-        
-        
+        const props = {...opts}
+        delete props.data
 
         try  {
-            return await axios.post(url,form)
+            const request = {
+                method:'post',
+                data:opts.data,
+                ...props
+            }
+            return await axios.request( request)
 
         }
         catch(err) {

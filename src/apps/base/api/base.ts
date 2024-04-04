@@ -1,4 +1,4 @@
-import { AxiosInstance } from "axios";
+import { AxiosInstance, AxiosResponse } from "axios";
 import { Form } from "../../../api/form";
 import { RestApiClient, getBindings } from "../../../api";
 import { useUserSettings } from "../../../settings";
@@ -10,7 +10,7 @@ export class AppApiBase {
         throw new Error('not implemented')
     }
 
-    protected async get(url:string, config?:object) {
+    protected async get(url:string, config?:object):Promise<AxiosResponse> {
 
         const props = config??{}
         
@@ -27,15 +27,21 @@ export class AppApiBase {
 
  
     protected async postForm (form:Form) {
-        const fp = this.getFormBinding()        
+        try {
+            const fp = this.getFormBinding()        
 
-        return await fp.post( form);
+            return await fp.post( form);
+        }
+        catch(err) {
+            console.log('~~~ POST ERROR', err)
+            throw err
+        }
     
     }
 
-    protected async createForm(url:string,uploadInfo:object):Promise<Form> {
+    protected async createForm(url:string,uploadInfo:object, requestOpts={}):Promise<Form> {
         const fp = this.getFormBinding()        
-        const form =  await fp.createForm({uri:this.getBaseUrl()+url},uploadInfo);
+        const form =  await fp.createForm({url:this.getBaseUrl()+url, ...requestOpts},uploadInfo);
         return form
     }
     

@@ -1,4 +1,4 @@
-import VeloHeroApi from "./api";
+import {VeloHeroApi} from "./api";
 import dotenv from 'dotenv';
 import { AxiosFormPost } from "../../../../../__tests__/utils/formPost";
 
