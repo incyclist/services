@@ -81,7 +81,7 @@ export class GPXParser extends XMLParser {
                 const point:EnhancedRoutePoint = {
                     lat:Number(gpxPt.lat),
                     lng:Number(gpxPt.lon),
-                    elevation: gpxPt.ele ? Number(gpxPt.ele): undefined,
+                    elevation: gpxPt.ele ? Number(gpxPt.ele): prev?.elevation,
                     routeDistance:0,
                     distance:0
                 }

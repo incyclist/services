@@ -68,7 +68,24 @@ describe('GPXParser',()=>{
     
                 
            })
-    
+
+           test('missing elevations',async ()=>{
+            const file = './__tests__/data/routes/ele-missing.gpx'
+
+            
+            getBindings().loader = { open: load}
+            
+            
+
+            const fileInfo:FileInfo = {type:'file', name:file, ext:'gpx',dir:'./__tests__/data/routes',url:undefined, delimiter:'/'}
+            const {data,details} = await parser.import(fileInfo)
+
+            const missing = data.points?.find( p=>p.elevation===undefined)
+            expect(missing).toBeUndefined()
+
+
+        },100000)
+       
         })
 
         describe('supportsContent',()=> {
