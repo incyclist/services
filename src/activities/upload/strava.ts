@@ -144,7 +144,7 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
 
             const fileName =  activity[`${format}FileName`];
             const res = await this.getApi().upload(fileName,{
-                name: activity.name,
+                name: activity.title,
                 description: '',
                 format: this.getStravaFormat(format)                
             })
@@ -204,7 +204,7 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
             this.getUserSettings().set('user.auth.strava',{
                 accesstoken: this.config.accessToken,
                 refreshToken: this.config.refreshToken,
-                expiration: this.config.expiration.toUTCString()
+                expiration: this.config.expiration.toISOString()
             })
 
         }

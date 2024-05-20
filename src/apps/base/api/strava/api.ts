@@ -8,12 +8,13 @@ import { AxiosResponse } from "axios"
 
 const API_BASE_URL = 'https://www.strava.com/api/v3'
 const OAUTH_URL = 'https://www.strava.com/oauth'
+
 /**
  * Represents a client implementation of a subset of the Strava v3 API
  * 
  * It only contains the subset of the APIs that are required by Incyclist
  * I decided against using existing APIs, such as the "strava-v3" module, 
- * as this would generate a dependency to the request module, which is deprecated
+ * as this would generate a dependency to the request library, which is deprecated
  * 
  * @example
  * // Create a new instance of StravaApi
@@ -173,7 +174,7 @@ export class StravaApi extends AppApiBase{
             return response.data;
         }
         else {            
-            throw new Error( response.error?.response?.data?.error|| response.error.message||response.error||`HTTP error ${response.status}`)
+            throw new Error( response.error?.response?.data?.error|| response.error?.response?.message || response.error.message||`HTTP error ${response.status}`)
         }
 
     }

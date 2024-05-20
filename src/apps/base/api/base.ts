@@ -30,10 +30,13 @@ export class AppApiBase {
         try {
             const fp = this.getFormBinding()        
 
-            return await fp.post( form);
+            const response = await fp.post( form);
+
+            if (response.data?.data)
+                response.data = response.data?.data
+            return response
         }
         catch(err) {
-            console.log('~~~ POST ERROR', err)
             throw err
         }
     

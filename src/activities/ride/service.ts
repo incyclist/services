@@ -19,6 +19,7 @@ import { RouteApiDetail } from "../../routes/base/api/types";
 import { ActivityStatsCalculator } from "./stats";
 import { ActivityDuration } from "./duration";
 import { ActivityUploadFactory } from "../upload";
+import { getBindings } from "../../api";
 
 const SAVE_INTERVAL = 5000;
 
@@ -104,6 +105,7 @@ export class ActivityRideService extends IncyclistService {
     protected tsPrevSave: number
     protected prevEmit: { distance:number, routeDistance:number, speed:number}
     protected saveObserver: PromiseObserver<boolean>
+    protected isSaveDone: boolean
 
     protected statsCalculator: ActivityStatsCalculator
     protected durationCalculator: ActivityDuration
@@ -188,6 +190,7 @@ export class ActivityRideService extends IncyclistService {
         this.state = 'active'
         this.tsStart = Date.now()
         this.tsPauseStart = undefined
+        this.isSaveDone = false
 
         this.logEvent({message:'activity started' })
         this.startWorker()
@@ -249,6 +252,8 @@ export class ActivityRideService extends IncyclistService {
 
         this.updateActivityTime();
         this._save()
+
+        this.isSaveDone = false;
     }
 
     getDashboardDisplayProperties() {
@@ -328,19 +333,33 @@ export class ActivityRideService extends IncyclistService {
 
     getActivitySummaryDisplayProperties() {
 
-        /*
-        const props = {
-            activity: this.activity
+        try {
+            const route = useRouteList().getSelected()
 
-            canShowSave: 
-            canShowContinue
-            detailImages?
-            detail: 'Images' | 'Route
-            uploadEnabled
-
+            const showSave = this.activity!==undefined && !this.isSaveDone;
+            const showContinue = this.state!=='completed'
+            const showMap = route?.description?.hasGpx 
+            const preview = showMap ? undefined: route?.description?.previewUrl
+    
+    
+            const props = {
+                activity: this.activity,
+    
+                showSave,
+                showContinue,
+                showMap,
+                preview
+    
+            }
+            
+    
+            return props
+    
         }
-        */
-
+        catch( err) {
+            this.logError(err,'getActivitySummaryDisplayProperties()')
+            return {}
+        }
     }
 
     getActivity():ActivityDetails {
@@ -369,6 +388,9 @@ export class ActivityRideService extends IncyclistService {
 
     /** user requested save: will save the activity, convert into TCX and FIT and upload to connected apps*/
     save():PromiseObserver<boolean> {
+
+        console.log('~~~ ActivityRide.save', this.saveObserver!==undefined, this.isSaveDone)
+
         if (this.saveObserver) {
             return this.saveObserver
         }
@@ -376,6 +398,9 @@ export class ActivityRideService extends IncyclistService {
         const emit = (event,...args) =>{
             if (this.saveObserver)
                 this.saveObserver.emit(event,...args)
+
+            console.log('~~~ ActivityRide.emit', event,args, this.saveObserver!==undefined, this.isSaveDone)
+
         }
 
         const run = async():Promise<boolean> => {
@@ -407,6 +432,8 @@ export class ActivityRideService extends IncyclistService {
                 }
 
                 success = convertSuccess && uploadSuccess
+                this.isSaveDone = true;
+
             }
             catch(err) {
     
@@ -415,6 +442,7 @@ export class ActivityRideService extends IncyclistService {
 
             emit('done',success)
             waitNextTick().then( ()=> { 
+                
                 delete this.saveObserver
             })
 
@@ -423,6 +451,8 @@ export class ActivityRideService extends IncyclistService {
 
         this.saveObserver = new PromiseObserver<boolean>(run())
         
+        console.log('~~~ ActivityRide.save returns', this.saveObserver!==undefined, this.isSaveDone)
+
         return this.saveObserver
 
     }
@@ -565,22 +595,46 @@ export class ActivityRideService extends IncyclistService {
     }
 
     protected async convert(format:string):Promise<boolean> {
-        
-        this.saveObserver.emit('convert.start',format)
-        try {
-            ActivityConverter.convert(this.activity,format)
-            this.saveObserver.emit('convert.done',format,true)
 
-            if (format.toLowerCase()==='fit')
-                this.activity.fitFileName = this.activity.fileName.replace('json','fit')
-            if (format.toLowerCase()==='tcx')
-                this.activity.tcxFileName = this.activity.fileName.replace('json','tcx')
+        const emit = (event,...args) =>{
+            if (this.saveObserver)
+                this.saveObserver.emit(event,...args)
+            else {
+                try {
+                    throw new Error('')
+                }
+                catch(err) {
+                    console.log('~~~ WARN: emitting on non existing observer', event.args, err.stack)
+                }
+                
+            }
+        }
+
+        const fs = this.getFileSystemBinding()
+        emit('convert.start',format)
+        try {
+            let data
+            data = await ActivityConverter.convert(this.activity,format)
+
+            emit('convert.done',format,true)
+
+            if (format.toLowerCase()==='fit') {
+                const fileName = this.activity.fileName.replace('json','fit')
+                await fs.writeFile(fileName, Buffer.from (data ))   
+                this.activity.fitFileName = fileName
+            }
+
+            if (format.toLowerCase()==='tcx') {
+                const fileName = this.activity.fileName.replace('json','tcx')
+                await fs.writeFile(fileName, Buffer.from (data ))   
+                this.activity.tcxFileName = fileName
+            }
             await this._save()
 
             return true
         }
         catch(err) {
-            this.saveObserver.emit('convert.error',format,err)
+            emit('convert.error',format,err)
             return false
         }
     }
@@ -588,10 +642,10 @@ export class ActivityRideService extends IncyclistService {
     protected async upload(format:string):Promise<boolean> {
 
         const factory =  this.getActivityUploadFactory()
-
-        this.saveObserver.emit('upload.start')
+        
+        this.saveObserver.emit('upload.start',format)
         try {
-            await factory.upload( this.activity, format)
+            await factory.upload( this.activity, format.toLowerCase())
             this.saveObserver.emit('upload.done', format, true)
             return true
         }
@@ -721,6 +775,14 @@ export class ActivityRideService extends IncyclistService {
 
         return activity
         
+    }
+
+    protected changeTitle(newTitle:string) {
+        if (!newTitle?.length)
+            return;
+
+        this.activity.title = newTitle
+
     }
 
 
@@ -985,6 +1047,10 @@ export class ActivityRideService extends IncyclistService {
 
     protected getActivityConverterfactory() {
         return new ActivityConverterFactory()        
+    }
+
+    protected getFileSystemBinding() {
+        return getBindings().fs        
     }
 
 
