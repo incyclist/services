@@ -3,10 +3,11 @@ import { FileInfo, getBindings } from "../../../api";
 import { IFileSystem } from "../../../api/fs";
 import { loadFile } from "../../../../__tests__/utils/loadFile";
 import { Route } from "../model/route";
-import { getElevationGainAt, getTotalElevation, validateRoute } from "./route";
+import { getElevationGainAt, getNextPosition, getTotalElevation, validateRoute } from "./route";
 import fs from 'fs'
 import { KWTParser } from "../parsers/kwt";
 import { parseXml } from "../../../utils";
+import { GPXParser } from "../parsers/gpx";
 
 describe( 'Route Utils',()=>{
 
@@ -96,5 +97,22 @@ describe( 'Route Utils',()=>{
         })
 
     })
+
+
+    describe( 'getNextPosition',()=>{
+
+
+        test('1',()=>{
+            const routeDistance = 130
+            const prev = route.points[8]
+
+            const res = getNextPosition(route,{routeDistance,prev} )
+
+            expect(res.slope).toBeCloseTo(2.1,1)
+            expect(res.elevation).toBeCloseTo(213.6,1)
+        })
+
+    })
+
 
 })

@@ -322,7 +322,7 @@ export const getNextPosition = ( route:Route, props:GetNextPositionProps ) => {
         return;
     }
         
-    let pPrev=props.prev || { ...points[0],lap:1};        
+    let pPrev={...(props.prev || { ...points[0],lap:1})};        
     
     const distance = props.distance !== undefined ? props.distance: props.routeDistance-getLapTotalDistance(route,pPrev);
     const targetRouteDistance = props.routeDistance!==undefined ? props.routeDistance : getLapTotalDistance(route,pPrev)+distance;
@@ -500,6 +500,7 @@ function updatePoint(pPrev: LapPoint, point: LapPoint, props: GetNextPositionPro
         const distanceToPrev = targetRouteInLap - pPrev.routeDistance;
         pDest = geo.getPointBetween(pPrev, p, distanceToPrev);
         point.cnt = pPrev.cnt;
+        point.slope = pPrev.slope
     }
     point.lat = pDest.lat;
     point.lng = pDest.lng;
