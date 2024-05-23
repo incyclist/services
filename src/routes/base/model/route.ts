@@ -1,4 +1,5 @@
 import { Countries } from "../../../i18n/countries";
+import clone from "../../../utils/clone";
 import { RouteApiDetail } from "../api/types";
 import { RouteInfo, RoutePoint } from "../types";
 
@@ -55,6 +56,13 @@ export class Route {
 
     protected getCountiesApi() {
         return new Countries()
+    }
+
+    clone() {
+        const description = clone(this._description)
+        const details = clone(this._details)
+
+        return new Route( description,details)
     }
 
     updateCountryFromPoints = async (): Promise<boolean> =>{

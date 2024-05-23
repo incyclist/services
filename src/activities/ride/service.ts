@@ -698,7 +698,7 @@ export class ActivityRideService extends IncyclistService {
         const {weight,ftp} = user
         const uuid = this.getUserSettings().get('uuid',undefined)
                 
-        let selectedRoute = this.getRouteList().getSelected()        
+        let selectedRoute = this.getRouteList().getSelected()?.clone()
         const startSettings:RouteStartSettings = this.getRouteList().getStartSettings()
 
         this.tsStart= Date.now()
