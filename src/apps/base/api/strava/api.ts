@@ -203,17 +203,19 @@ export class StravaApi extends AppApiBase{
     protected async refreshToken():Promise<void> {
         this.logger.logEvent({message: 'Strava refresh Token start'});
 
-        try {
+        let requestData;
 
+        try {
+            requestData =  {
+                grant_type : 'refresh_token',
+                refresh_token : this.config.refreshToken,
+                client_secret: this.config.clientSecret,
+                client_id : this.config.clientId
+            }
             const response = await this.getApi().request( {
                 method:'post',
                 url: this.getOauthBaseUrl()+'/token',
-                data: {
-                    grant_type : 'refresh_token',
-                    refresh_token : this.config.refreshToken,
-                    client_secret: this.config.clientSecret,
-                    client_id : this.config.clientId
-                }
+                data:requestData
             })
             
             this.logger.logEvent({message: 'Strava refresh Token result',status:'success'});
@@ -232,7 +234,7 @@ export class StravaApi extends AppApiBase{
             let errorStr = err.message
             if (err.response) {
                 const {response} = err;
-                errorStr = `HTTP error ${response.status}: ${response.statusText}`
+                errorStr = `HTTP error ${response.status}: ${response.statusText}, url:${this.getOauthBaseUrl()+'/token'}, data:${JSON.stringify(requestData)}`
             }
                 
             this.logger.logEvent({message: 'Strava refresh Token result',status:'error',error:errorStr});
