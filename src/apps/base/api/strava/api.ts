@@ -100,9 +100,11 @@ export class StravaApi extends AppApiBase{
             description: props?.description,
             trainer: props?.trainer ? 'true' : 'false',
             commute: props?.commute ? 'true' : 'false',
+            sport_type: props?.activityType ?? 'VirtualRide',
+
             data_type: props.format,
             external_id: props?.externalId
-        }
+        } 
         const response = await this.createUpload(request)
 
         return await this.waitForUploadResponse(response)

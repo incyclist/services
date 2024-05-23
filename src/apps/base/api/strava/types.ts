@@ -46,6 +46,8 @@ export type StravaRefreshTokenResponse = {
    
 }
 
+export type StravaActivityType = 'AlpineSki' | 'BackcountrySki' | 'Badminton' | 'Canoeing' | 'Crossfit' | 'EBikeRide' | 'Elliptical' | 'EMountainBikeRide' | 'Golf' | 'GravelRide' | 'Handcycle' | 'HighIntensityIntervalTraining' | 'Hike' | 'IceSkate' | 'InlineSkate' | 'Kayaking' | 'Kitesurf' | 'MountainBikeRide' | 'NordicSki' | 'Pickleball' | 'Pilates' | 'Racquetball' | 'Ride' | 'RockClimbing' | 'RollerSki' | 'Rowing' | 'Run' | 'Sail' | 'Skateboard' | 'Snowboard' | 'Snowshoe' | 'Soccer' | 'Squash' | 'StairStepper' | 'StandUpPaddling' | 'Surfing' | 'Swim' | 'TableTennis' | 'Tennis' | 'TrailRun' | 'Velomobile' | 'VirtualRide' | 'VirtualRow' | 'VirtualRun' | 'Walk' | 'WeightTraining' | 'Wheelchair' | 'Windsurf' | 'Workout' | 'Yoga'
+
 export type StravaUploadRequest = {
     /** filename of the file o be uploded */
     file
@@ -67,6 +69,8 @@ export type StravaUploadRequest = {
 
     /** The desired external identifier of the resulting activity. */
     external_id: string
+
+    sport_type: StravaActivityType
 }
 
 export type StravaUploadResponse  ={
@@ -117,6 +121,9 @@ export type StravaUploadProps = {
 
     /** The desired external identifier of the resulting activity. */
     externalId?: string
+
+    /** The desired activity type to be shown in Strava ( cycling, running, virtual cycling,....). */
+    activityType?: StravaActivityType
 
 }
 
