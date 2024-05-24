@@ -25,6 +25,7 @@ type RemainingTimeProps ={
     routePos:number,
     power?:number,
     speed?:number
+    endPos?:number
 }
 
 type RemainingTimeCache ={
@@ -67,7 +68,7 @@ export class ActivityDuration {
     getRemainingTime( props:RemainingTimeProps) { 
 
         try {
-            const {route, routePos, power, speed=0} = props||{}
+            const {route, routePos, power, speed=0,endPos} = props||{}
             const {stats,time=0,user} = this.activity
             const calcPower = stats?.power?.avg || power
             const m = (user.weight||75)+10
@@ -92,7 +93,7 @@ export class ActivityDuration {
             
 
             const tsStart = Date.now()
-            const res = this.calculateRemainingTime(route, routePos, calcPower,m,v, realityFactor)
+            const res = this.calculateRemainingTime(route, routePos, calcPower,m,v, realityFactor,endPos)
 
             if (!res || !Array.isArray(res) || res.length===0) {
                 return undefined
@@ -109,7 +110,7 @@ export class ActivityDuration {
         }
     }
 
-    protected calculateRemainingTime(route:Route, routePos:number, power:number,m:number, v:number=0, realityFactor:number=1):Array<RemainingInfo> {
+    protected calculateRemainingTime(route:Route, routePos:number, power:number,m:number, v:number=0, realityFactor:number=1, endPos?:number):Array<RemainingInfo> {
         
         if (!route)
             return;
@@ -118,7 +119,8 @@ export class ActivityDuration {
         const gpxData = route.points
         const isLap = checkIsLoop(route)
         const lapDistance = isLap ? routePos % route.distance : routePos
-        const totalDistance = route.distance
+        const totalDistance = endPos!==undefined ? endPos : route.distance
+       
 
         // start with 0km/h
         const fromStart = []
@@ -185,6 +187,9 @@ export class ActivityDuration {
                 
                     if (p.routeDistance<startDistance && (i===gpxData.length-1 || gpxData[i+1].routeDistance<startDistance))
                         return;
+
+                    if (endPos!==undefined && p.routeDistance>endPos)
+                        return
 
                     const segmentEnd = i===gpxData.length-1 ? totalDistance : gpxData[i+1].routeDistance;
                     const segmentLength = segmentEnd-segmentStart;

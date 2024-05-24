@@ -118,7 +118,7 @@ export class ActivityRideService extends IncyclistService {
         route?:Route
         position?: RoutePoint,       
         deviceData: DeviceData
-
+        endPos?:number,
         tsDeviceData?: number
         tsUpdate?:number,
         routeDistance?:number        
@@ -256,6 +256,11 @@ export class ActivityRideService extends IncyclistService {
         this.isSaveDone = false;
     }
 
+    ignoreEndPos() {
+        delete this.current.endPos
+
+    }
+
     getDashboardDisplayProperties() {
 
         try {
@@ -274,7 +279,7 @@ export class ActivityRideService extends IncyclistService {
             if (distanceRemaining<0) distanceRemaining=0
 
             const timeRemaining = this.durationCalculator.getRemainingTime(
-                {route:this.current.route, speed:this.current.deviceData.speed,routePos:this.activity.distance+(this.activity.startPos??0)}
+                {route:this.current.route, speed:this.current.deviceData.speed,routePos:this.activity.distance+(this.activity.startPos??0), endPos:this.current.endPos}
             )
         
 
@@ -389,8 +394,6 @@ export class ActivityRideService extends IncyclistService {
     /** user requested save: will save the activity, convert into TCX and FIT and upload to connected apps*/
     save():PromiseObserver<boolean> {
 
-        console.log('~~~ ActivityRide.save', this.saveObserver!==undefined, this.isSaveDone)
-
         if (this.saveObserver) {
             return this.saveObserver
         }
@@ -398,9 +401,6 @@ export class ActivityRideService extends IncyclistService {
         const emit = (event,...args) =>{
             if (this.saveObserver)
                 this.saveObserver.emit(event,...args)
-
-            console.log('~~~ ActivityRide.emit', event,args, this.saveObserver!==undefined, this.isSaveDone)
-
         }
 
         const run = async():Promise<boolean> => {
@@ -450,9 +450,6 @@ export class ActivityRideService extends IncyclistService {
         }
 
         this.saveObserver = new PromiseObserver<boolean>(run())
-        
-        console.log('~~~ ActivityRide.save returns', this.saveObserver!==undefined, this.isSaveDone)
-
         return this.saveObserver
 
     }
@@ -732,6 +729,7 @@ export class ActivityRideService extends IncyclistService {
                     validateRoute(selectedRoute)
                     const s = (startSettings as RouteSettings)
                     startPos = s.startPos
+                    this.current.endPos = s.endPos
                     realityFactor = s.realityFactor
                     routeId = selectedRoute.description.id
                     routeHash = selectedRoute.description.routeHash
@@ -756,6 +754,7 @@ export class ActivityRideService extends IncyclistService {
         this.current.elevationGainDisplay = 0
         this.current.elevationGainAtPos = realityFactor>0 ? getElevationGainAt(selectedRoute,startPos) : 0
         this.current.tsUpdate = Date.now()
+        
 
         const activity:ActivityDetails =  { 
             type:'IncyclistActivity',version:DB_VERSION,  
@@ -838,8 +837,8 @@ export class ActivityRideService extends IncyclistService {
         if (!route)
             return 0;
 
-        const totalRouteDistance = route.points[route.points.length-1]?.routeDistance
         const isLoop = checkIsLoop(route)
+        const totalRouteDistance = this.current.endPos!==undefined&&!isLoop  ? this.current.endPos : route.points[route.points.length-1]?.routeDistance
         if (isLoop) {
             const currentLap = Math.floor((this.current.routeDistance??0)/totalRouteDistance)
             return totalRouteDistance-(this.activity.startPos??0)+currentLap*totalRouteDistance
@@ -854,10 +853,18 @@ export class ActivityRideService extends IncyclistService {
         if (!route)
             return 0;
 
-        const totalElevation = route.points[route.points.length-1]?.elevationGain
-        const totalRouteDistance = route.points[route.points.length-1]?.routeDistance
-        const gainAtStart = getElevationGainAt(route,this.activity.startPos??0)
         const isLoop = checkIsLoop(route)
+        const totalRouteDistance = this.current.endPos!==undefined&&!isLoop  ? this.current.endPos : route.points[route.points.length-1]?.routeDistance
+        let totalElevation = route.points[route.points.length-1]?.elevationGain
+        if (this.current.endPos!==undefined&&!isLoop) {
+            const endPosPoint = route.points.find( p=> p.routeDistance>=this.current.endPos)
+            if (endPosPoint) {
+                totalElevation = endPosPoint.elevationGain
+            }
+                
+        }
+
+        const gainAtStart = getElevationGainAt(route,this.activity.startPos??0)
         if (isLoop) {
             const currentLap = Math.floor((this.current.routeDistance??0)/totalRouteDistance)
             return totalElevation-gainAtStart+currentLap*totalElevation
