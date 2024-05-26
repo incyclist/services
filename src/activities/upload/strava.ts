@@ -203,7 +203,7 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
             
             this.getUserSettings().set('user.auth.strava',{
                 accesstoken: this.config.accessToken,
-                refreshToken: this.config.refreshToken,
+                refreshtoken: this.config.refreshToken,
                 expiration: this.config.expiration.toISOString()
             })
 
