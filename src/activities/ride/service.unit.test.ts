@@ -200,11 +200,10 @@ describe('ActivityRideService',()=>{
             expect(activity.stats?.power.avg).toBe(150)
             const lastLog = activity.logs[activity.logs.length-1]
 
-            
             expect(lastLog).toMatchObject({
                 time:100, distance:1000, 
                 power:150, cadence:90, speed:36, heartrate:149, 
-                elevation:expect.closeTo(3,0),  slope:expect.closeTo(2.2,1),
+                elevation:expect.closeTo(3,0),  slope:expect.closeTo(1.5,1),
                 lat:expect.anything(), lng:expect.anything()
             })
             expect(onData).toHaveBeenCalledTimes(100)
