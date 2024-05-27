@@ -89,15 +89,12 @@ describe('ActivityStats',()=>{
             const activity:Partial<ActivityDetails> = {
                 logs:[]
             }
-            console.log('~~~ adding records')
             const calc = new ActivityStatsCalculator(activity as ActivityDetails)
             for (let i=0;i<3600;i++) {
                 calc.add( {time:1, power:100, timeDelta:1, cadence:90,speed:30 })
             }
             const ts = Date.now()
-            console.log('~~~ calculating ...')
             calc.addPowerCurve()
-            console.log('~~~ calculating done', Date.now()-ts)
             const curve = activity.stats?.powerCurve??{}
             expect(curve[1]).toBeCloseTo(100,0)
             expect(curve[7200]).toBeCloseTo(100,0)

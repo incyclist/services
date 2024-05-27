@@ -231,9 +231,6 @@ describe('ActivityRideService',()=>{
 
             expect(activity.totalElevation).toBeCloseTo(6,0)       // total elevation (29) - elevation gain at 3700m (29) + elevation gain at ~900m (6)
             expect(activity.logs[activity.logs.length-1]).toMatchObject({time:100, distance:1000,lat:expect.anything(),lng:expect.anything()})
-
-            console.log(activity.logs)
-
         })
 
 

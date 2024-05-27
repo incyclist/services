@@ -99,7 +99,6 @@ export class DeviceConfigurationService  extends EventEmitter{
                 await this.initFromLegacy(settings)                
             }
             catch(err) {
-                console.log('~~~ ERROR',err)
                 this.logError(err,'init()')
             }
 

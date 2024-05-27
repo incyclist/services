@@ -13,9 +13,6 @@ describe.skip( 'previewlist',()=>{
     test('generate list',async ()=>{
         
         const files = await fs.readdir(XML_DIR).then( res=> res.map(f=>path.join(XML_DIR,f)))
-        console.log('FILES:',files)
-
-
         
         const previews = previewsData || {}
         const parser = new KWTParser()

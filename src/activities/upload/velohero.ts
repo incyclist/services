@@ -30,11 +30,7 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
         if (this.isInitialized)
             return true
 
-        console.log('~~~ VeloHeroUpload.init')
-
         if (!this.getUserSettings().isInitialized) {
-            console.log('~~~ VeloHeroUpload.init - usersettings not ready')
-
             return false
         }
 
@@ -60,7 +56,6 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
 
         }
         catch(err) {
-            console.log('~~~ VeloHeroUpload.init - error')
             this.logger.logEvent({message:'error', error:err.message, fn:'init',stack:err.stack})
             this.isInitialized = false;
         }

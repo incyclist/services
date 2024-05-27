@@ -54,7 +54,6 @@ export class BaseCard implements Card<Route> {
             return card.getCardType()===this.getCardType() && card.getId()===this.getId()
         }
         catch(err) {
-            console.log('~~~~ ERROR',card,err)
             return false
         }
 

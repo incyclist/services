@@ -30,9 +30,6 @@ describe('RouteApiLoader',()=>{
             observer.on( 'route.updated', route=>{console.log('updated ',route.description.title)})
 
             await sleep(5000)
-
-            console.log(routes)
-            
             
         },6000)
     })

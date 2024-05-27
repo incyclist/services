@@ -108,7 +108,7 @@ export class RouteDownloadService extends IncyclistService {
             
             this.logEvent({message:'start download',title, id,url})
             session.on('started', ()=>{observer.emit('started') })
-            session.on('close', ()=> { console.log('~~~ CLOSE')})
+            session.on('close', ()=> { /*console.log('~~~ CLOSE') */ })
             session.on('progress', (pct,speed,bytes)=> { this.onDownloadProgress(id,observer,pct,speed,bytes)})
             
             session.on('error', observer.emit.bind(observer) )
