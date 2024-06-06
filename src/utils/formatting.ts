@@ -65,7 +65,7 @@ export const formatTime = ( seconds:number, cutMissing:boolean ) =>{
  * @returns {string} The formatted number string.
  */
 export const formatNumber = ( value:number,maxDigits:number, maxLength:number=-1 ):string =>{
-    if (value===undefined || isNaN(value))
+    if (value===undefined || value===null || isNaN(value))
         return ''
 
     if (maxLength===-1)
