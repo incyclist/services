@@ -5,7 +5,7 @@ import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
 import { PowerLimit,  StepDefinition, Workout } from "../base/model";
-import { WorkoutListService, getWorkoutList } from "../list";
+import { WorkoutListService, getWorkoutList, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
 import { ActiveWorkoutLimit, WorkoutDisplayProperties } from "./types";
 
@@ -269,10 +269,11 @@ export class WorkoutRide extends IncyclistService{
      * 
      * This method needs to be called whenever a workout is either completed or a user wants to manually stop it.
      * 
+     * @param clearFromList if set, will also unselect the workout from the list 
      * 
      * @emits   __completed__
      */
-    stop():void {
+    stop( clearFromList?:boolean):void {
         try {
 
             if (!this.workout || this.state==='idle')
@@ -286,6 +287,10 @@ export class WorkoutRide extends IncyclistService{
     
             waitNextTick()
                 .then( ()=>{this.resetWorkout()})
+
+            if (clearFromList) {
+                useWorkoutList().unselect()
+            }
     
         }
         catch(err) {
