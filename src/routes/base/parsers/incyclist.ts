@@ -21,9 +21,13 @@ export class IncyclistXMLParser extends XMLParser{
         const xmlName = fileInfo.name
         const fileName = data['gpx-file-path']|| xmlName.replace('xml','gpx')
 
-        if (fileName.startsWith('http')||fileName.startsWith('file')||fileName.startsWith('/')||fileName.startsWith('\\')||fileName.startsWith('.')) {
+        if (fileName.startsWith('file')||fileName.startsWith('/')||fileName.startsWith('\\')||fileName.startsWith('.')) {
             gpxFile.type = 'file'
             gpxFile.filename = fileName
+        }
+        else if (fileName.startsWith('http')) {
+            gpxFile.type = 'url'
+            gpxFile.url = fileName
         }
         else {
             if (fileInfo.type==='url') {
