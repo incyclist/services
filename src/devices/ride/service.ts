@@ -36,6 +36,7 @@ export class DeviceRideService  extends EventEmitter{
     protected simulatorEnforced:boolean
     protected logger: EventLogger
     protected debug;
+    protected promiseSendUpdate: Promise<UpdateRequest|void>[]
 
     protected deviceDataHandler = this.onData.bind(this)
 
@@ -106,6 +107,10 @@ export class DeviceRideService  extends EventEmitter{
 
         return {udid, name,isControl,capabilities,isStarted}
 
+    }
+
+    getData() {
+        return this.data
     }
 
     protected getAdapterList(onlySelected=true):AdapterRideInfo[] {
@@ -1144,15 +1149,36 @@ export class DeviceRideService  extends EventEmitter{
         return { enabledCapabilities, toBeReplaced };
     }
 
-    sendUpdate( request:UpdateRequest):void {
+    isUpdateBusy():boolean {
+        return this.promiseSendUpdate!==undefined && this.promiseSendUpdate!==null
+    }
+
+    async waitForUpdateFinish():Promise<void> {
+        if (this.promiseSendUpdate) {
+            try {
+                await Promise.allSettled( this.promiseSendUpdate)
+            }
+            catch {}            
+        }
+        return
+    }
+
+
+    async sendUpdate( request:UpdateRequest):Promise<void> {
+        
         const adapters = this.getAdapterList();
 
+        this.promiseSendUpdate = []
         adapters?.forEach(ai=> {
             if ( ai.adapter && ai.adapter.isControllable()) {
                 const d = ai.adapter as IncyclistDeviceAdapter
-                d.sendUpdate(request)
+                this.promiseSendUpdate.push( d.sendUpdate(request) )
             }
         })
+
+        await this.waitForUpdateFinish()
+
+        this.promiseSendUpdate = undefined        
     }
 
     getCyclingMode(udid?:string):CyclingMode {

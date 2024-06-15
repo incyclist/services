@@ -1,6 +1,9 @@
+import { CyclingMode } from "incyclist-devices";
+import { useActivityRide } from "../../activities";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer } from "../../base/types/observer";
+import { useDeviceConfiguration, useDeviceRide } from "../../devices";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
@@ -175,6 +178,7 @@ export class WorkoutRide extends IncyclistService{
             this.tsCurrent=ts
             this.offset = 0
             this.manualTimeOffset = 0;
+            this.currentLimits = undefined
 
             this.emit('started')
             this.logEvent( {message:'workout started',settings:this.settings})
@@ -275,6 +279,7 @@ export class WorkoutRide extends IncyclistService{
      */
     stop( clearFromList?:boolean):void {
         try {
+            console.log('~~~ Stop Workout')
 
             if (!this.workout || this.state==='idle')
                 return;
@@ -574,6 +579,41 @@ export class WorkoutRide extends IncyclistService{
 
     }
 
+    protected async resetLimits() {
+
+        const rideService =  useDeviceRide()
+        
+        rideService.resetCyclingMode()
+        const mode = rideService.getCyclingMode()
+        const data = rideService.getData()
+        
+        const isERG = (mode.constructor as typeof CyclingMode).supportsERGMode()
+
+        console.log('~~~ resetting Limits',mode.getName(),isERG,data)
+
+        if (!this.currentLimits) 
+            return;
+
+        await rideService.waitForUpdateFinish()
+
+        if (isERG ) {
+            
+            rideService.sendUpdate({targetPower:data.power})            
+        }
+        else if (data.slope!==undefined) {
+            rideService.sendUpdate({slope:data.slope})            
+        }
+        else {
+            const initRequests = mode.getBikeInitRequest()
+            rideService.sendUpdate(initRequests)
+        }
+
+
+
+
+
+    }
+
     protected resetTimes() {
         this.manualTimeOffset= 0
         this.tsStart = undefined
@@ -701,7 +741,7 @@ export class WorkoutRide extends IncyclistService{
         this.state = 'idle'
         this.resetTimes()
         this.manualPowerOffset = 0
-        this.currentLimits = undefined
+        this.resetLimits()
     }
 
     emit(eventName: string , ...args): boolean {
