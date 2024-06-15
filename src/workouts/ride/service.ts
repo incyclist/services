@@ -279,8 +279,6 @@ export class WorkoutRide extends IncyclistService{
      */
     stop( clearFromList?:boolean):void {
         try {
-            console.log('~~~ Stop Workout')
-
             if (!this.workout || this.state==='idle')
                 return;
 
@@ -587,11 +585,9 @@ export class WorkoutRide extends IncyclistService{
         const mode = rideService.getCyclingMode()
         const data = rideService.getData()
         
-        const isERG = (mode.constructor as typeof CyclingMode).supportsERGMode()
+        const isERG = mode ? (mode.constructor as typeof CyclingMode).supportsERGMode() : false
 
-        console.log('~~~ resetting Limits',mode.getName(),isERG,data)
-
-        if (!this.currentLimits) 
+        if (!this.currentLimits || !mode) 
             return;
 
         await rideService.waitForUpdateFinish()
