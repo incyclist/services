@@ -992,6 +992,16 @@ export class DeviceRideService  extends EventEmitter{
         return true
     }
 
+    async resetLimits() {
+        try {
+            const mode = this.getCyclingMode()
+            const resetRequest = mode?.getBikeInitRequest() ?? {}
+            
+            await this.sendUpdate({...resetRequest,slope:0,forced:true})
+        }
+        catch { }
+    }
+
     pause():void {
         const adapters = this.getAdapterList();
 
