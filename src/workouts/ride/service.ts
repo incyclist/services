@@ -95,10 +95,12 @@ export class WorkoutRide extends IncyclistService{
     protected currentLimits:ActiveWorkoutLimit
     protected updateInterval:NodeJS.Timeout
     protected currentStep: StepDefinition
+    protected isFreeRide: boolean
 
     constructor () {
         super('WorkoutRide')   
         this.state='idle'
+        this.isFreeRide = true        
     }
 
     /**
@@ -505,6 +507,20 @@ export class WorkoutRide extends IncyclistService{
     }
 
     /**
+     * Provides information if the workout is currently applying limits
+     * 
+     * A segment of the workout could represent a "free ride" (no limits)
+     * In these cases, 
+     *  - the app should behave as a ride without workout
+     *  - but workout should still be shown in dashboard
+     * 
+     * @return boolean true: workout is applying limits, false: workout
+     */
+    appliesLimits(): boolean {
+        return this.inUse() && !this.isFreeRide
+    }
+    
+    /**
      * Provides information if the workout is in _active_ state
      * 
      * 
@@ -563,6 +579,14 @@ export class WorkoutRide extends IncyclistService{
 
 
             if (this.currentStep!==prevStep) {
+
+                if (!this.currentStep.power && prevStep.power ) {
+                    this.startFreeRide()
+                }
+                else if (this.currentStep.power && !prevStep.power ) { 
+                    this.stopFreeRide()
+                }
+
                 this.emit('step-changed', this.getDashboardDisplayProperties())
             }
 
@@ -577,13 +601,27 @@ export class WorkoutRide extends IncyclistService{
 
     }
 
+
+    protected async startFreeRide() {
+        // we might have enforced ERG Mode
+        if (this.settings.useErgMode) {
+            useDeviceRide().resetCyclingMode(false)            
+        }
+        this.resetLimits()
+    }
+
+    protected async stopFreeRide() {
+        if (this.settings.useErgMode) {
+            useDeviceRide().enforceERG()           
+        }
+        this.resetLimits()        
+    }
+
     protected async resetLimits() {
 
         const rideService =  useDeviceRide()
         
-        rideService.resetCyclingMode()
         const mode = rideService.getCyclingMode()
-        const data = rideService.getData()
         
         const isERG = mode ? (mode.constructor as typeof CyclingMode).supportsERGMode() : false
 
@@ -592,8 +630,9 @@ export class WorkoutRide extends IncyclistService{
 
         await rideService.waitForUpdateFinish()
 
+        const data = rideService.getData()
+        
         if (isERG ) {
-            
             rideService.sendUpdate({targetPower:data.power})            
         }
         else if (data.slope!==undefined) {
@@ -604,7 +643,7 @@ export class WorkoutRide extends IncyclistService{
             rideService.sendUpdate(initRequests)
         }
 
-
+        
 
 
 
@@ -641,8 +680,8 @@ export class WorkoutRide extends IncyclistService{
             request.maxHrm = limits.hrm?.max ? Math.round(limits.hrm.max) : undefined;
             this.currentLimits = { ...request, duration: limits.duration, remaining:limits.remaining };                 
         }
-        
-        
+
+        this.isFreeRide = limits.power===undefined || limits.power===null
         
 
         this.logger.logEvent( {message: 'workout requests', ...this.currentLimits,ftp})
