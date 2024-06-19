@@ -292,7 +292,6 @@ describe('ActivityRideService',()=>{
         
 
         test('current ride is slower - time and distance in middle of prev ride',()=>{
-            console.log(troll)
             const details = troll as ActivityDetails
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
@@ -317,7 +316,6 @@ describe('ActivityRideService',()=>{
         })
 
         test('current ride is slower - time beyond end of prev ride',()=>{
-            console.log(troll)
             const details = troll as ActivityDetails
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
@@ -342,7 +340,6 @@ describe('ActivityRideService',()=>{
         })
 
         test('current ride is slower - distance beyond end of prev ride',()=>{
-            console.log(troll)
             const details = troll as ActivityDetails
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
@@ -365,7 +362,6 @@ describe('ActivityRideService',()=>{
         })
 
         test('current ride is faster - time and distance in middle of ride',()=>{
-            console.log(troll)
             const details = troll as ActivityDetails
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
@@ -390,7 +386,6 @@ describe('ActivityRideService',()=>{
         })
 
         test('current ride is faster - time and distance beyond duration of prev ride',()=>{
-            console.log(troll)
             const details = troll as ActivityDetails
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}

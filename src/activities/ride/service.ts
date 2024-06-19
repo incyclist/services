@@ -173,7 +173,7 @@ export class ActivityRideService extends IncyclistService {
         this.activity = this.createActivity(id)
 
         const settings = useRouteList().getStartSettings()
-        if (settings.type==='Route') {
+        if (settings?.type==='Route') {
             const rs = settings as RouteSettings
             if (rs.showPrev) {
                 this.initPrevActivities(rs)                
@@ -568,7 +568,7 @@ export class ActivityRideService extends IncyclistService {
             const routeDistance = res.distance + ai.summary.startPos
 
             let lat,lng;
-            if ( this.current.route.description.hasGpx) {
+            if ( this.current?.route?.description?.hasGpx) {
                 const point = getPosition(this.current.route,{distance:routeDistance,nearest:true})
                 lat = point?.lat
                 lng = point?.lng
