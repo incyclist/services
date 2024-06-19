@@ -1,8 +1,9 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer, PromiseObserver } from "../../base/types/observer";
-import { ActivitiesRepository } from "../base";
-import { ActivityInfo } from "../base/model";
+import { ActivitiesRepository, ActivitySearchCriteria } from "../base";
+import { ActivityInfo, ActivityLogRecord } from "../base/model";
+import { PastActivityInfo, PastActivityLogEntry } from "./types";
 
 /**
  * This service is used by the Front-End to manage and query the current and past activities
@@ -72,6 +73,17 @@ export class ActivityListService extends IncyclistService {
         return this.preloadObserver
     }
 
+
+    getPastActivities( filter:ActivitySearchCriteria, props?:{details:boolean}): Array<ActivityInfo> {
+        const activities  = this.getRepo().search(filter)
+
+        if (props?.details) {
+            activities.forEach( ai => this.getRepo().getWithDetails(ai.summary.id))
+        }
+        return activities;
+    }
+
+
     protected async loadActivities():Promise<void> {
 
         return new Promise<void> ( done => {
@@ -84,6 +96,8 @@ export class ActivityListService extends IncyclistService {
             observer.on('done',done)
         })
     }
+
+
 
     /*
     protected add(data: ActivityInfo|Array<ActivityInfo>) {

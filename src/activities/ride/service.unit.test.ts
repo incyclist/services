@@ -6,6 +6,11 @@ import { RouteApiDetail } from "../../routes/base/api/types"
 import { EventEmitter } from "stream"
 import { waitNextTick } from "../../utils"
 
+
+import troll from '../../../__tests__/data/activities/troll-90.json'
+import { ActivityDetails, buildSummary } from '../base'
+
+
 describe('ActivityRideService',()=>{
 
     const mockUserSettingsGet = (key,defValue) => {
@@ -266,4 +271,146 @@ describe('ActivityRideService',()=>{
         })
 
     })
+
+
+
+
+
+    describe('getPrevRideStats',()=>{
+        let service:ActivityRideService
+
+
+        beforeEach( ()=>{
+            service = new ActivityRideService()
+            
+        })
+
+        afterEach( ()=>{
+            service.stop()
+            resetSingleton(service)
+        })
+        
+
+        test('current ride is slower - time and distance in middle of prev ride',()=>{
+            console.log(troll)
+            const details = troll as ActivityDetails
+            const summary = buildSummary(details,'Test')
+            const activity = {summary,details}
+
+            const data = service.getPrevRideStats([activity],{
+                "time": 12.001,
+                "timeDelta": 1,
+                "speed": 8.216255076817461,
+                "cadence": 90,
+                "heartrate": 156,
+                "power": 150,
+                "distance": 30.900156300358663,
+                "slope": 8.29999999999984,
+                "elevation": 186.50471297292978
+            },)
+
+
+            expect (data.length).toBe(2)
+            expect(data[1]?.title).toBe('current')
+            expect(data[0]?.distanceGap).toBe('16m')
+            expect(data[0]?.timeGap).toBe('3.7s')
+        })
+
+        test('current ride is slower - time beyond end of prev ride',()=>{
+            console.log(troll)
+            const details = troll as ActivityDetails
+            const summary = buildSummary(details,'Test')
+            const activity = {summary,details}
+
+            const data = service.getPrevRideStats([activity],{
+                "time": 48.001,
+                "timeDelta": 1,
+                "speed": 2.05,
+                "cadence": 90,
+                "heartrate": 156,
+                "power": 15,
+                "distance": 13,
+                "slope": 8.29999999999984,
+                "elevation": 186.50471297292978
+            },)
+
+
+            expect (data.length).toBe(2)
+            expect(data[1]?.title).toBe('current')
+            expect(data[0]?.distanceGap).toBe('110m')
+            expect(data[0]?.timeGap).toBe('44.1s')
+        })
+
+        test('current ride is slower - distance beyond end of prev ride',()=>{
+            console.log(troll)
+            const details = troll as ActivityDetails
+            const summary = buildSummary(details,'Test')
+            const activity = {summary,details}
+
+            const data = service.getPrevRideStats([activity],{
+                "time": 90.001,
+                "timeDelta": 1,
+                "speed": 2.05,
+                "cadence": 90,
+                "heartrate": 156,
+                "power": 15,
+                "distance": 130,
+                "slope": 8.29999999999984,
+                "elevation": 186.50471297292978
+            },)
+
+
+            expect (data.length).toBe(0)
+            
+        })
+
+        test('current ride is faster - time and distance in middle of ride',()=>{
+            console.log(troll)
+            const details = troll as ActivityDetails
+            const summary = buildSummary(details,'Test')
+            const activity = {summary,details}
+
+            const data = service.getPrevRideStats([activity],{
+                "time": 12.001,
+                "timeDelta": 1,
+                "speed": 8.216255076817461,
+                "cadence": 90,
+                "heartrate": 156,
+                "power": 150,
+                "distance": 56.9,
+                "slope": 8.29999999999984,
+                "elevation": 186.50471297292978
+            },)
+
+
+            expect (data.length).toBe(2)
+            expect(data[0]?.title).toBe('current')
+            expect(data[1]?.distanceGap).toBe('-10m')
+            expect(data[1]?.timeGap).toBe('-2.5s')
+        })
+
+        test('current ride is faster - time and distance beyond duration of prev ride',()=>{
+            console.log(troll)
+            const details = troll as ActivityDetails
+            const summary = buildSummary(details,'Test')
+            const activity = {summary,details}
+
+            const data = service.getPrevRideStats([activity],{
+                "time": 28.001,
+                "timeDelta": 1,
+                "speed": 8.216255076817461,
+                "cadence": 90,
+                "heartrate": 156,
+                "power": 150,
+                "distance": 156.9,
+                "slope": 8.29999999999984,
+                "elevation": 186.50471297292978
+            },)
+
+
+            expect (data.length).toBe(0)
+        })
+
+    })
+
 })

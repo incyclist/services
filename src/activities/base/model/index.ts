@@ -84,6 +84,8 @@ export type ActivitySummary = {
 
     /** unique id of route (or "free ride") */
     routeId: string;
+    routeHash: string;
+
 
     previewImage?: string
     startTime: number

@@ -7,6 +7,7 @@ import { ActivityDB, ActivityDetails, ActivityInfo, UploadInfo  } from "../model
 import { ActivitySearchCriteria } from "./types";
 import { buildSummary } from "../utils";
 import { JSONObject } from "../../../utils/xml";
+import clone from "../../../utils/clone";
 
 export const DB_VERSION = '1'
 
@@ -204,6 +205,9 @@ export class ActivitiesRepository {
         if (result?.length>0 && criteria?.routeId) {
             result = result.filter( ai=> ai.summary.routeId===criteria.routeId)
         }
+        if (result?.length>0 && criteria?.routeHash) {
+            result = result.filter( ai=> ai.summary.routeHash===criteria.routeHash)
+        }
         if (result?.length>0 && criteria?.startPos!==undefined) {
             result = result.filter( ai=> ai.summary.startPos===criteria.startPos)
         }
@@ -338,6 +342,8 @@ export class ActivitiesRepository {
             if (cnt!==this.activities.length) {
                 await this.write(true)
             }
+
+            await this.fixMissingHash()
             return
            
         }
@@ -373,6 +379,32 @@ export class ActivitiesRepository {
     protected async listActivities():Promise<Array<string>> {
         return this.getRepo().list(['db'])
 
+    }
+
+    /**
+     * In earlier versions of this class, the routeHash was not added to the ActivitySummary
+     * This method fixes legacy records without that routeHash
+     * 
+     */
+    protected async fixMissingHash() {
+        try {
+            const target = this.activities.filter( ai=>ai.summary && ai.summary.routeHash===undefined)
+            if (!target || target.length===0) {
+                return
+            }
+            this.logger.logEvent( {message:'fixing missing hashes in activities', cnt:target.length})
+            const promises = []
+            target.forEach( ai=> {
+                promises.push( this.loadDetails( ai.summary.name).then( ()=> ai.summary.routeHash = ai.details?.route?.hash))
+            })
+
+            await Promise.allSettled(promises)
+
+            await this.write(true)
+        }
+        catch(err) {
+            this.logError(err,'fixMissingHash')
+        }
     }
 
     protected async loadDetailsByName(name:string):Promise<ActivityDetails> {

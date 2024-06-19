@@ -6,7 +6,7 @@ import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityLogRecord, ActivityRoute, ActivityRouteType, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
+import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
@@ -20,6 +20,7 @@ import { ActivityStatsCalculator } from "./stats";
 import { ActivityDuration } from "./duration";
 import { ActivityUploadFactory } from "../upload";
 import { getBindings } from "../../api";
+import { PastActivityInfo, PastActivityLogEntry, useActivityList } from "../list";
 
 const SAVE_INTERVAL = 5000;
 
@@ -127,7 +128,10 @@ export class ActivityRideService extends IncyclistService {
         elevationGainDisplay?:number,
         elevation?:number
         isAutoResume?: boolean,
+        showPrev?:boolean,
         dataState: Record<string,HealthStatus>
+        prevRides?: Array<ActivityInfo>
+        prevRidesLogs?: PastActivityInfo
     }
 
     constructor() {
@@ -149,6 +153,7 @@ export class ActivityRideService extends IncyclistService {
             deviceData:{},
             dataState:{}
         }
+
         const observer = new Observer()    
 
         if (isClean) {
@@ -166,9 +171,20 @@ export class ActivityRideService extends IncyclistService {
         }
 
         this.activity = this.createActivity(id)
+
+        const settings = useRouteList().getStartSettings()
+        if (settings.type==='Route') {
+            const rs = settings as RouteSettings
+            if (rs.showPrev) {
+                this.initPrevActivities(rs)                
+            }
+            
+        }
+
         this.durationCalculator = new ActivityDuration(this.activity)
 
         this.getDeviceRide().on('data',this.deviceDataHandler)
+
         return observer
     }
 
@@ -494,6 +510,131 @@ export class ActivityRideService extends IncyclistService {
         this.current.route.details.distance = points[points.length-1].routeDistance
         addDetails(this.current.route,this.current.route.details)
     }
+
+
+    getPrevRideStats( activities: Array<ActivityInfo>, current:ActivityLogRecord):PastActivityInfo {
+
+        if (!activities?.length)
+            return []
+
+        const logs =  activities.map( ai=> { return this.getActivityLog(ai,current)})?.filter( a => a!==null)
+        if (logs.length===0)
+                return logs
+        
+        logs.push( this.getCurrentActivityLog(activities[0],current))     
+        const sorted =  logs.sort( (a,b) => b.distance-a.distance)
+
+        return sorted
+    }
+
+    protected getActivityLog(ai:ActivityInfo,current:ActivityLogRecord):PastActivityLogEntry|null {
+        try {
+            if (!ai.details) {
+                return null;
+            }
+
+            const logs = ai.details.logs
+            const totalDistance = ai.summary.distance
+
+            // we are beyond the totals distance ridden in the previous ride -> skip
+            if (current.distance>totalDistance)
+                return null
+
+
+            // calculate distance Gap, based on the record with same (or larger) timestamp
+            let prev = undefined;
+            let res = logs.find( (log,idx) => {
+                if (log.time>=current.time) {
+                    if (idx>0)
+                        prev = logs[idx-1]
+                    return true
+                }
+                return false
+            })
+            if (!res) {
+                res = logs[logs.length-1]
+                
+            }
+            else {
+                // At this point, res is the first record equal to or beyond the same timestamp as in current ride
+                if (Math.abs(res.time-current.time)>0.1) {                
+                    const t = res.time-current.time
+                    const v = res.speed/3.6
+                    res.distance-=(v*t)
+                }
+            }
+            const distanceDelta = res.distance-current.distance
+            const {power,heartrate,distance,speed} = res
+            const routeDistance = res.distance + ai.summary.startPos
+
+            let lat,lng;
+            if ( this.current.route.description.hasGpx) {
+                const point = getPosition(this.current.route,{distance:routeDistance,nearest:true})
+                lat = point?.lat
+                lng = point?.lng
+            }
+            const distanceGap = Math.abs(distanceDelta)>1000 ? `${(distanceDelta/1000).toFixed(1)}km` : `${distanceDelta.toFixed(0)}m`
+
+            // calculate time Gap, based on the record with same (or larger) distance
+            prev = undefined;
+            res = logs.find( (log,idx) => {
+                if (log.distance>=current.distance) {
+                    if (idx>0)
+                        prev = logs[idx-1]
+                    return true
+                }
+                return false
+            })
+
+
+            const s = res.distance-current.distance
+            const v = res.speed/3.6
+            const t = v===0  ? Infinity : s/v 
+            res.time-=t;         
+
+            const timeGap = `${Number(current.time-res.time).toFixed(1)}s`
+
+
+            const routeHash = ai.summary.routeHash
+            const routeId = ai.summary.routeId
+            const tsStart = ai.summary.startTime
+            const title = new Date(ai.summary.startTime).toLocaleDateString()
+
+            const calculate = {time:current.time, routeHash,routeId,tsStart,title,power,heartrate,speed,distance,timeGap,distanceGap,routeDistance,lat,lng} as  PastActivityLogEntry
+            
+
+
+
+            return  calculate 
+        }
+        catch(err) {
+            this.logError(err,'getActivityLog')
+            return null;
+        }        
+    }
+
+    protected getCurrentActivityLog(ai:ActivityInfo,current:ActivityLogRecord):PastActivityLogEntry|null {
+        try {
+            const timeGap = ''
+            const distanceGap = ''
+            const routeHash = ai.summary.routeHash
+            const routeId = ai.summary.routeId
+            const tsStart = ai.summary.startTime
+            const title = 'current'
+            const routeDistance = current.distance
+            const {power,heartrate,distance,speed,lat,lng} = current
+
+            const calculate = {routeHash,routeId,tsStart,title,power,heartrate,speed,distance,timeGap,distanceGap,lat,lng} as  PastActivityLogEntry
+            calculate.routeDistance = calculate.distance + ai.summary.startPos
+            return  calculate 
+        }
+        catch(err) {
+            this.logError(err,'getCurrentActivityLog')
+            return null
+        }
+        
+    }
+
     
     protected onPositionUpdate(position:RoutePoint) {
         this.current.position = position
@@ -539,6 +680,25 @@ export class ActivityRideService extends IncyclistService {
         catch(err) {
             this.logError(err,'onDeviceData')
         }        
+    }
+
+    protected initPrevActivities(settings:RouteSettings) {
+        try {
+            if (!this.current || !this.activity?.route)
+                return
+            this.current.showPrev = settings.showPrev
+
+            const {startPos,realityFactor} = settings
+            const routeId = this.activity.route.id
+            const routeHash = this.activity.route.hash
+            const filter = { routeId,routeHash,startPos,realityFactor}
+            const prevRides = useActivityList().getPastActivities(filter, {details:true})
+
+            this.current.prevRides = prevRides
+        }
+        catch(err) {
+            this.logError(err,'initPrevActivities')
+        }
     }
 
 
@@ -891,8 +1051,8 @@ export class ActivityRideService extends IncyclistService {
                     routeDistance: this.current.routeDistance,
                     distance
                 }
-                this.emit('data', data)
-                this.prevEmit = data;
+
+
                 const logRecord = this.createLogRecord()
     
     
@@ -904,7 +1064,15 @@ export class ActivityRideService extends IncyclistService {
                 
                 this.activity.distance  = this.current.routeDistance-this.activity.startPos
                 this.activity.totalElevation =  this.current.elevationGain
+                let list
                 
+                if (this.current.showPrev) {
+                    list = this.getPrevRideStats(this.current.prevRides, logRecord)
+                    this.emit('prevRides',list)
+                }
+
+                this.emit('data', data,list)
+                this.prevEmit = data;
                 
                 this.logActivityUpdateMessage()
                 this.updateRepo()

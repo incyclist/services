@@ -45,7 +45,9 @@ export interface StartSettings {
     downloadProgress?:number,
     convertProgress?:number,
     loopOverwrite?: boolean,
-    nextOverwrite?:boolean
+    nextOverwrite?:boolean,
+    showPrev?:boolean
+
 }
 
 export type RouteSettings = StartSettings & RouteStartSettings

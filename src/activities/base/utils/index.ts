@@ -5,6 +5,7 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
 
     const name = proposedName ?? activity.name
     const routeId = route?.id
+    const routeHash = route?.hash
     const shots = screenshots??[]
     const preview = shots.find( s=>s.isHighlight)??shots[0]
     const previewImage = preview?.fileName
@@ -19,7 +20,7 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
     }
 
     return {
-        id,title,name, routeId, previewImage,startTime,rideTime,distance,startPos,realityFactor,uploadStatus,laps
+        id,title,name, routeId, routeHash, previewImage,startTime,rideTime,distance,startPos,realityFactor,uploadStatus,laps
     }
 }
 
