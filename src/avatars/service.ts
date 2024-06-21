@@ -53,11 +53,11 @@ export class AvatarService extends IncyclistService {
             return;
 
         this.options = []
-        const colors:Array<Color> = [ 'yellow' , 'red', 'blue', 'green', 'purple', 'orange', 'pink', 'brown', 'grey', 'black', 'white' ]
+        const colors:Array<Color> = [ 'yellow' ,'red' ,'blue' , 'green' , 'purple', 'orange', 'hotpink', 'brown', 'grey','black', 'white' , 'violet' , 'lime' , 'olive' , 'cyan' , 'skyblue']
 
         
         colors.forEach( helmet => { 
-            colors.forEach( shirt => { 
+            colors.forEach( shirt => {             
                 this.options.push({ avatar:{helmet,shirt},usageCnt:0})
             })   
         })

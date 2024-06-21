@@ -1,5 +1,5 @@
 
-export type Color = 'yellow' |'red' |'blue' | 'green' | 'purple'| 'orange'| 'pink'| 'brown'| 'grey'| 'black'| 'white' 
+export type Color = 'yellow' |'red' |'blue' | 'green' | 'purple'| 'orange'| 'hotpink'| 'brown'| 'grey'| 'black'| 'white' | 'violet' | 'lime' | 'olive' | 'cyan' | 'skyblue'
 
 export type Avatar  = {
     helmet: Color,

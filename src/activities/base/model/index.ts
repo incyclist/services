@@ -256,7 +256,7 @@ export type ActivityLogRecord = {
     slope?: number,     
 
     /** current cadence (in rpm)  */
-    cadence: number,    
+    cadence?: number,    
     
     /** current heartrate (in bpm)  */
     heartrate?: number, 

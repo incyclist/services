@@ -8,7 +8,10 @@ import { waitNextTick } from "../../utils"
 
 
 import troll from '../../../__tests__/data/activities/troll-90.json'
-import { ActivityDetails, buildSummary } from '../base'
+import prev1 from '../../../__tests__/data/activities/prevRide.json'
+import prev2 from '../../../__tests__/data/activities/prevRide1.json'
+import { ActivityDetails, ActivityInfo, ActivityLogRecord, buildSummary } from '../base'
+import { PastActivityLogEntry } from "../list"
 
 
 describe('ActivityRideService',()=>{
@@ -273,12 +276,21 @@ describe('ActivityRideService',()=>{
     })
 
 
-
-
-
     describe('getPrevRideStats',()=>{
         let service:ActivityRideService
 
+        const template = {
+            time: 48.001,
+            distance: 13,
+            routeDistance: 13,
+            timeDelta: 1,
+            speed:0,
+            power:0,
+
+        }
+        const current = (time,distance) => {
+            return {...template, time,distance,routeDistance:distance}
+        }
 
         beforeEach( ()=>{
             service = new ActivityRideService()
@@ -296,23 +308,29 @@ describe('ActivityRideService',()=>{
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
 
-            const data = service.getPrevRideStats([activity],{
-                "time": 12.001,
-                "timeDelta": 1,
-                "speed": 8.216255076817461,
-                "cadence": 90,
-                "heartrate": 156,
-                "power": 150,
-                "distance": 30.900156300358663,
-                "slope": 8.29999999999984,
-                "elevation": 186.50471297292978
-            },)
-
+            const data = service.getPrevRideStats([activity], current(12.011,30.900156300358663))
 
             expect (data.length).toBe(2)
             expect(data[1]?.title).toBe('current')
-            expect(data[0]?.distanceGap).toBe('16m')
-            expect(data[0]?.timeGap).toBe('3.7s')
+            expect(data[0]?.distanceGap).toBe('-16m')
+            expect(data[0]?.timeGap).toBe('-3.7s')
+        })
+
+        test('bug: time and distance contradict',()=>{
+            
+            const activities: Array<ActivityInfo> = []
+            
+            activities.push( {summary: buildSummary(prev2 as ActivityDetails,'2'), details:prev2 as ActivityDetails})
+            
+            let data
+
+            data = service.getPrevRideStats(activities, current(16.001,74.99548756151944))
+            data = service.getPrevRideStats(activities, current(17.001,80.91931132633276))
+
+            const res = data.find(a=>a.title==='6/19/2024')
+            
+            expect(res?.distanceGap).toBe('-1m')
+            expect(res?.timeGap).toBe('-0.2s')
         })
 
         test('current ride is slower - time beyond end of prev ride',()=>{
@@ -320,23 +338,12 @@ describe('ActivityRideService',()=>{
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
 
-            const data = service.getPrevRideStats([activity],{
-                "time": 48.001,
-                "timeDelta": 1,
-                "speed": 2.05,
-                "cadence": 90,
-                "heartrate": 156,
-                "power": 15,
-                "distance": 13,
-                "slope": 8.29999999999984,
-                "elevation": 186.50471297292978
-            },)
-
+            const data = service.getPrevRideStats([activity],current(48.001,13))
 
             expect (data.length).toBe(2)
             expect(data[1]?.title).toBe('current')
-            expect(data[0]?.distanceGap).toBe('110m')
-            expect(data[0]?.timeGap).toBe('44.1s')
+            expect(data[0]?.distanceGap).toBe('-110m')
+            expect(data[0]?.timeGap).toBe('-44.1s')
         })
 
         test('current ride is slower - distance beyond end of prev ride',()=>{
@@ -344,17 +351,7 @@ describe('ActivityRideService',()=>{
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
 
-            const data = service.getPrevRideStats([activity],{
-                "time": 90.001,
-                "timeDelta": 1,
-                "speed": 2.05,
-                "cadence": 90,
-                "heartrate": 156,
-                "power": 15,
-                "distance": 130,
-                "slope": 8.29999999999984,
-                "elevation": 186.50471297292978
-            },)
+            const data = service.getPrevRideStats([activity],current(90.001, 130))
 
 
             expect (data.length).toBe(0)
@@ -366,23 +363,12 @@ describe('ActivityRideService',()=>{
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
 
-            const data = service.getPrevRideStats([activity],{
-                "time": 12.001,
-                "timeDelta": 1,
-                "speed": 8.216255076817461,
-                "cadence": 90,
-                "heartrate": 156,
-                "power": 150,
-                "distance": 56.9,
-                "slope": 8.29999999999984,
-                "elevation": 186.50471297292978
-            },)
-
+            const data = service.getPrevRideStats([activity],current(12.001, 56.9))
 
             expect (data.length).toBe(2)
             expect(data[0]?.title).toBe('current')
-            expect(data[1]?.distanceGap).toBe('-10m')
-            expect(data[1]?.timeGap).toBe('-2.5s')
+            expect(data[1]?.distanceGap).toBe('+10m')
+            expect(data[1]?.timeGap).toBe('+2.5s')
         })
 
         test('current ride is faster - time and distance beyond duration of prev ride',()=>{
@@ -390,21 +376,100 @@ describe('ActivityRideService',()=>{
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
 
-            const data = service.getPrevRideStats([activity],{
-                "time": 28.001,
-                "timeDelta": 1,
-                "speed": 8.216255076817461,
-                "cadence": 90,
-                "heartrate": 156,
-                "power": 150,
-                "distance": 156.9,
-                "slope": 8.29999999999984,
-                "elevation": 186.50471297292978
-            },)
-
+            const data = service.getPrevRideStats([activity],current(28.001, 156.9))
 
             expect (data.length).toBe(0)
         })
+
+    })
+
+    describe('getPrevRidesListDisplay',()=>{
+        let service:ActivityRideService
+        let svc
+
+        const template:PastActivityLogEntry = {tsStart:1, title:'', routeDistance:1, timeGap:'', distanceGap:''} 
+
+        const prepareList = (cnt:number,posCurrent:number)  =>{
+            const prevRidesLogs:Array<PastActivityLogEntry> =[]
+            for(let i=0;i<cnt;i++) {
+                prevRidesLogs.push( {...template, routeDistance:1000-i*10, title:`${i+1}`})
+
+            }
+            prevRidesLogs[posCurrent-1].title = 'current'
+            svc.current = {prevRidesLogs}
+
+        }
+
+        const getList = (l) => l.map(e=>e.title).join(',')
+
+        beforeEach( ()=>{
+            svc = service = new ActivityRideService()
+        })
+
+        afterEach( ()=>{
+            service.stop()
+            resetSingleton(service)            
+        })
+
+        test('less than max entries',()=>{
+            prepareList(5,3)
+
+            const res = service.getPrevRidesListDisplay(5)
+            expect(res.length).toBe(5)
+            expect(getList(res)).toBe('1,2,current,4,5')           
+        })
+        test('exactly max entries',()=>{
+            prepareList(5,5)
+
+            const res = service.getPrevRidesListDisplay(5)
+            expect(res.length).toBe(5)
+            expect(getList(res)).toBe('1,2,3,4,current')           
+        })
+
+        test('max+1 entries, current is max+1',()=>{
+            prepareList(6,6)
+
+            const res = service.getPrevRidesListDisplay(5)            
+            expect(getList(res)).toBe('1,2,3,4,current')           
+        })
+        test('max+1 entries, current is last but one',()=>{
+            prepareList(6,5)
+
+            const res = service.getPrevRidesListDisplay(5)
+            expect(getList(res)).toBe('1,2,3,current,6')           
+        })
+        test('max+1 entries, current is last but two',()=>{
+            prepareList(6,4)
+
+            const res = service.getPrevRidesListDisplay(5)
+            expect(getList(res)).toBe('1,2,3,current,+2')           
+        })
+        test('max+10 entries, current is somewhere in the middle',()=>{
+            prepareList(15,7)
+
+            const res = service.getPrevRidesListDisplay(5)
+            expect(getList(res)).toBe('1,2,3,current,+8')           
+        })
+        test('max+10 entries, current=maxEntries',()=>{
+            prepareList(15,5)
+
+            const res = service.getPrevRidesListDisplay(5)
+            expect(getList(res)).toBe('1,2,3,current,+10')           
+        })
+        test('max+10 entries, current=maxEntries-1',()=>{
+            prepareList(15,4)
+
+            const res = service.getPrevRidesListDisplay(5)
+            expect(getList(res)).toBe('1,2,3,current,+11')           
+        })
+        test('max+10 entries, current=total-1',()=>{
+            prepareList(15,14)
+
+            const res = service.getPrevRidesListDisplay(5)
+            expect(getList(res)).toBe('1,2,3,current,15')           
+        })
+
+
 
     })
 

@@ -20,7 +20,9 @@ import { ActivityStatsCalculator } from "./stats";
 import { ActivityDuration } from "./duration";
 import { ActivityUploadFactory } from "../upload";
 import { getBindings } from "../../api";
-import { PastActivityInfo, PastActivityLogEntry, useActivityList } from "../list";
+import { PastActivityInfo, PastActivityLogEntry, PrevRidesListDisplayProps, useActivityList } from "../list";
+import { useAvatars } from "../../avatars";
+import clone from "../../utils/clone";
 
 const SAVE_INTERVAL = 5000;
 
@@ -118,7 +120,7 @@ export class ActivityRideService extends IncyclistService {
     protected current: {
         route?:Route
         position?: RoutePoint,       
-        deviceData: DeviceData
+        deviceData?: DeviceData
         endPos?:number,
         tsDeviceData?: number
         tsUpdate?:number,
@@ -136,7 +138,7 @@ export class ActivityRideService extends IncyclistService {
 
     constructor() {
         super('ActivityRide')
-        
+        this.current = { dataState:{}}
     }
 
 
@@ -517,17 +519,78 @@ export class ActivityRideService extends IncyclistService {
         if (!activities?.length)
             return []
 
-        const logs =  activities.map( ai=> { return this.getActivityLog(ai,current)})?.filter( a => a!==null)
+        const logs =  activities.map( ai=> { return this.getPrevActivityLog(ai,current)})?.filter( a => a!==null)
         if (logs.length===0)
                 return logs
         
         logs.push( this.getCurrentActivityLog(activities[0],current))     
         const sorted =  logs.sort( (a,b) => b.distance-a.distance)
 
+        
+        this.current.prevRidesLogs = sorted
+        console.log('~~~ PREV RIDES', activities.map(a=>`${a.summary.name}:${a.summary.startTime}`),sorted)
+        
         return sorted
     }
 
-    protected getActivityLog(ai:ActivityInfo,current:ActivityLogRecord):PastActivityLogEntry|null {
+    getPrevRidesListDisplay( maxEntries:number=12):Array<PrevRidesListDisplayProps> {
+
+        const prevRides = this.current.prevRidesLogs
+        if (!prevRides?.length)
+            return []
+
+        const sorted = prevRides.filter(a=>a!==null).sort( (a,b) => b.routeDistance-a.routeDistance);
+        const props:Array<PrevRidesListDisplayProps> = sorted.map( (a,idx)=>{
+            const position = idx+1;
+            const key = a.title==='current' ? 'current' : `${a.tsStart}`
+            const avatar = useAvatars().get(key)
+            return {position,avatar,...a}
+        })
+
+        if (props.length>maxEntries) {
+            const len = props.length
+            const currentIdx = props.findIndex( a=> a.title==='current')
+            if (currentIdx<maxEntries-1) {
+
+
+                let deleted = props.splice(maxEntries-1)
+                props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})
+            }
+            else if (currentIdx>maxEntries-1){
+                // last two records
+                if (currentIdx<props.length-2) {
+                    const deleted = props.splice(currentIdx+1)
+                    props.splice( maxEntries-2, currentIdx-(maxEntries-2))
+                    props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})
+                }
+                else if (currentIdx===props.length-2) {
+                    props.splice( maxEntries-2, props.length-maxEntries)
+                }
+                else {
+                    const keep = maxEntries-1
+                    const cut = props.length-maxEntries
+                    props.splice( keep,cut)
+                }
+
+            }
+            else if (currentIdx===props.length-2) {
+                props.splice( maxEntries-2, props.length-maxEntries)
+            }
+            else if (currentIdx===maxEntries-1) {
+                let deleted = props.splice( currentIdx+1, props.length-currentIdx)
+                props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})   
+                props.splice( currentIdx-1, 1)
+            }
+            
+        }
+        
+
+        return props
+    }
+    
+
+
+    protected getPrevActivityLog(ai:ActivityInfo,current:ActivityLogRecord):PastActivityLogEntry|null {
         try {
             if (!ai.details) {
                 return null;
@@ -543,16 +606,16 @@ export class ActivityRideService extends IncyclistService {
 
             // calculate distance Gap, based on the record with same (or larger) timestamp
             let prev = undefined;
-            let res = logs.find( (log,idx) => {
+            let res = clone(logs.find( (log,idx) => {
                 if (log.time>=current.time) {
                     if (idx>0)
                         prev = logs[idx-1]
                     return true
                 }
                 return false
-            })
+            }))
             if (!res) {
-                res = logs[logs.length-1]
+                res = clone(logs[logs.length-1])
                 
             }
             else {
@@ -563,7 +626,7 @@ export class ActivityRideService extends IncyclistService {
                     res.distance-=(v*t)
                 }
             }
-            const distanceDelta = res.distance-current.distance
+            const distanceDelta = current.distance-res.distance
             const {power,heartrate,distance,speed} = res
             const routeDistance = res.distance + ai.summary.startPos
 
@@ -573,18 +636,20 @@ export class ActivityRideService extends IncyclistService {
                 lat = point?.lat
                 lng = point?.lng
             }
-            const distanceGap = Math.abs(distanceDelta)>1000 ? `${(distanceDelta/1000).toFixed(1)}km` : `${distanceDelta.toFixed(0)}m`
+
+            let prefix = Math.sign(distanceDelta)>0 ? '+' : ''
+            const distanceGap = prefix + (Math.abs(distanceDelta)>1000 ? `${(distanceDelta/1000).toFixed(1)}km` : `${distanceDelta.toFixed(0)}m`)
 
             // calculate time Gap, based on the record with same (or larger) distance
             prev = undefined;
-            res = logs.find( (log,idx) => {
+            res = clone(logs.find( (log,idx) => {
                 if (log.distance>=current.distance) {
                     if (idx>0)
                         prev = logs[idx-1]
                     return true
                 }
                 return false
-            })
+            }))
 
 
             const s = res.distance-current.distance
@@ -592,7 +657,9 @@ export class ActivityRideService extends IncyclistService {
             const t = v===0  ? Infinity : s/v 
             res.time-=t;         
 
-            const timeGap = `${Number(current.time-res.time).toFixed(1)}s`
+            const timeDelta = res.time-current.time
+            prefix = Math.sign(timeDelta)>0 ? '+' : '-'
+            const timeGap = prefix+ ( Math.abs(timeDelta)<60 ? `${Math.abs(timeDelta).toFixed(1)}s` : formatTime(Math.abs(timeDelta),true) )
 
 
             const routeHash = ai.summary.routeHash
@@ -693,6 +760,7 @@ export class ActivityRideService extends IncyclistService {
             const routeHash = this.activity.route.hash
             const filter = { routeId,routeHash,startPos,realityFactor}
             const prevRides = useActivityList().getPastActivities(filter, {details:true})
+                                .filter( a=> a.summary.rideTime>60)
 
             this.current.prevRides = prevRides
         }
