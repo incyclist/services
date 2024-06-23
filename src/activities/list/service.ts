@@ -75,12 +75,14 @@ export class ActivityListService extends IncyclistService {
 
 
     getPastActivities( filter:ActivitySearchCriteria, props?:{details:boolean}): Array<ActivityInfo> {
-        const activities  = this.getRepo().search(filter)
-
+        const activities  = this.getRepo().search(filter) ?? []
+        
         if (props?.details) {
             activities.forEach( ai => this.getRepo().getWithDetails(ai.summary.id))
+
+            
         }
-        return activities;
+        return activities.filter(ai => ai.details!==undefined && ai.details!==null)
     }
 
 

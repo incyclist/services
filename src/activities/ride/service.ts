@@ -592,7 +592,7 @@ export class ActivityRideService extends IncyclistService {
 
     protected getPrevActivityLog(ai:ActivityInfo,current:ActivityLogRecord):PastActivityLogEntry|null {
         try {
-            if (!ai.details) {
+            if (!ai.details || !ai.summary) {
                 return null;
             }
 
@@ -675,7 +675,7 @@ export class ActivityRideService extends IncyclistService {
             return  calculate 
         }
         catch(err) {
-            this.logError(err,'getActivityLog')
+            this.logError(err,'getPrevActivityLog')
             return null;
         }        
     }
