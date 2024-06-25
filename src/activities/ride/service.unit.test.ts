@@ -278,6 +278,7 @@ describe('ActivityRideService',()=>{
 
     describe('getPrevRideStats',()=>{
         let service:ActivityRideService
+        let svc
 
         const template = {
             time: 48.001,
@@ -293,7 +294,7 @@ describe('ActivityRideService',()=>{
         }
 
         beforeEach( ()=>{
-            service = new ActivityRideService()
+            svc = service = new ActivityRideService()
             
         })
 
@@ -307,8 +308,9 @@ describe('ActivityRideService',()=>{
             const details = troll as ActivityDetails
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
-
-            const data = service.getPrevRideStats([activity], current(12.011,30.900156300358663))
+            
+            svc.current.prevRides = [activity]
+            const data = service.getPrevRideStats(current(12.011,30.900156300358663))
 
             expect (data.length).toBe(2)
             expect(data[1]?.title).toBe('current')
@@ -324,8 +326,9 @@ describe('ActivityRideService',()=>{
             
             let data
 
-            data = service.getPrevRideStats(activities, current(16.001,74.99548756151944))
-            data = service.getPrevRideStats(activities, current(17.001,80.91931132633276))
+            svc.current.prevRides = activities
+            data = service.getPrevRideStats(current(16.001,74.99548756151944))
+            data = service.getPrevRideStats(current(17.001,80.91931132633276))
 
             const res = data.find(a=>a.title==='6/19/2024')
             
@@ -338,7 +341,8 @@ describe('ActivityRideService',()=>{
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
 
-            const data = service.getPrevRideStats([activity],current(48.001,13))
+            svc.current.prevRides = [activity]
+            const data = service.getPrevRideStats(current(48.001,13))
 
             expect (data.length).toBe(2)
             expect(data[1]?.title).toBe('current')
@@ -351,7 +355,8 @@ describe('ActivityRideService',()=>{
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
 
-            const data = service.getPrevRideStats([activity],current(90.001, 130))
+            svc.current.prevRides = [activity]
+            const data = service.getPrevRideStats(current(90.001, 130))
 
 
             expect (data.length).toBe(0)
@@ -363,7 +368,8 @@ describe('ActivityRideService',()=>{
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
 
-            const data = service.getPrevRideStats([activity],current(12.001, 56.9))
+            svc.current.prevRides = [activity]
+            const data = service.getPrevRideStats(current(12.001, 56.9))
 
             expect (data.length).toBe(2)
             expect(data[0]?.title).toBe('current')
@@ -376,7 +382,8 @@ describe('ActivityRideService',()=>{
             const summary = buildSummary(details,'Test')
             const activity = {summary,details}
 
-            const data = service.getPrevRideStats([activity],current(28.001, 156.9))
+            svc.current.prevRides = [activity]
+            const data = service.getPrevRideStats(current(28.001, 156.9))
 
             expect (data.length).toBe(0)
         })
