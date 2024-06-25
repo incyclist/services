@@ -7,9 +7,9 @@ import { ActivityDB, ActivityDetails, ActivityInfo, UploadInfo  } from "../model
 import { ActivitySearchCriteria } from "./types";
 import { buildSummary } from "../utils";
 import { JSONObject } from "../../../utils/xml";
-import clone from "../../../utils/clone";
 
 export const DB_VERSION = '1'
+export const DB_NAME = 'db'
 
 /**
  * This class is used to load Activities from the local database
@@ -238,6 +238,13 @@ export class ActivitiesRepository {
                 })
             }
         }
+
+        if (result?.length>0 && criteria?.minTime!==undefined) {
+            result = result.filter( ai=> ai.summary.rideTime>=criteria.minTime)
+        }
+        if (result?.length>0 && criteria?.minDistance!==undefined) {
+            result = result.filter( ai=> ai.summary.distance>=criteria.minDistance)
+        }
         
         return result
     }
@@ -256,7 +263,7 @@ export class ActivitiesRepository {
                     isComplete,
                     activities: this.activities.map( ai=>ai.summary)
                 }
-                await this.getRepo().write('db',dbData as JSONObject)
+                await this.getRepo().write(DB_NAME,dbData as JSONObject)
             }
             catch(err) {
                 this.logger.logEvent({message:'could not safe repo',error:err.message })
@@ -323,7 +330,7 @@ export class ActivitiesRepository {
      */
 
     protected async loadSummaries():Promise<void> {
-        const dbData = await this.getRepo().read('db')  as unknown as ActivityDB
+        const dbData = await this.getRepo().read(DB_NAME)  as unknown as ActivityDB
 
         // we got some data
         if (dbData) {
@@ -377,7 +384,7 @@ export class ActivitiesRepository {
      * @returns Array with the names of the activities
      */
     protected async listActivities():Promise<Array<string>> {
-        return this.getRepo().list(['db'])
+        return this.getRepo().list([DB_NAME])
 
     }
 

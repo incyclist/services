@@ -225,10 +225,18 @@ export class ActivityRideService extends IncyclistService {
         if (!this.observer)
             return;
 
+        if (this.state==='paused')  {
+            const pauseDuration = (Date.now()-this.tsPauseStart)/1000;
+            this.activity.timePause=(this.activity.timePause??0)+pauseDuration
+            this.current.tsUpdate = Date.now()
+    
+        }
+
         useDeviceRide().off('data',this.deviceDataHandler)
         this.state = 'completed'
 
         this.updateActivityTime();
+
         this._save()
         this.emit('completed')
 
@@ -514,8 +522,9 @@ export class ActivityRideService extends IncyclistService {
     }
 
 
-    getPrevRideStats( activities: Array<ActivityInfo>, current:ActivityLogRecord):PastActivityInfo {
+    getPrevRideStats(  current:ActivityLogRecord):PastActivityInfo {
 
+        const activities = this.current.prevRides
         if (!activities?.length)
             return []
 
@@ -528,7 +537,6 @@ export class ActivityRideService extends IncyclistService {
 
         
         this.current.prevRidesLogs = sorted
-        console.log('~~~ PREV RIDES', activities.map(a=>`${a.summary.name}:${a.summary.startTime}`),sorted)
         
         return sorted
     }
@@ -583,7 +591,18 @@ export class ActivityRideService extends IncyclistService {
             }
             
         }
+
+        let logInfo = ''
+        try {
+            logInfo = `(${props.length}/${prevRides.length})`
+                      + props.map( pr => `${pr.position}:${pr.avatar?.shirt}-${pr.avatar?.helmet}:${pr.title}:${pr.timeGap}:${pr.distanceGap}`)
+                             .join(',')
+
+        }
+        catch {}
+        this.logEvent({message:'PrevRides', prevRides:logInfo})
         
+
 
         return props
     }
@@ -753,16 +772,22 @@ export class ActivityRideService extends IncyclistService {
         try {
             if (!this.current || !this.activity?.route)
                 return
+
             this.current.showPrev = settings.showPrev
+            this.current.prevRides = undefined
 
             const {startPos,realityFactor} = settings
             const routeId = this.activity.route.id
             const routeHash = this.activity.route.hash
-            const filter = { routeId,routeHash,startPos,realityFactor}
-            const prevRides = useActivityList().getPastActivities(filter, {details:true})
-                                .filter( a=> a.summary.rideTime>60)
+            const filter = { routeId,routeHash,startPos,realityFactor,minTime:60, minDistance:500}
 
-            this.current.prevRides = prevRides
+            useActivityList()
+                .getPastActivitiesWithDetails(filter)
+                .then( prevRides=> {
+                    this.current.prevRides = prevRides
+                    this.observer.emit('list.init',prevRides)
+                })
+            
         }
         catch(err) {
             this.logError(err,'initPrevActivities')
@@ -1135,7 +1160,7 @@ export class ActivityRideService extends IncyclistService {
                 let list
                 
                 if (this.current.showPrev) {
-                    list = this.getPrevRideStats(this.current.prevRides, logRecord)
+                    list = this.getPrevRideStats(logRecord)
                     this.emit('prevRides',list)
                 }
 

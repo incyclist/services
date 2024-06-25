@@ -74,15 +74,38 @@ export class ActivityListService extends IncyclistService {
     }
 
 
-    getPastActivities( filter:ActivitySearchCriteria, props?:{details:boolean}): Array<ActivityInfo> {
-        const activities  = this.getRepo().search(filter) ?? []
-        
-        if (props?.details) {
-            activities.forEach( ai => this.getRepo().getWithDetails(ai.summary.id))
-
-            
+    getPastActivities( filter:ActivitySearchCriteria): Array<ActivityInfo> {
+        try {
+            const activities  = this.getRepo().search(filter) ?? []
+            return activities 
         }
-        return activities.filter(ai => ai.details!==undefined && ai.details!==null)
+        catch(err) {
+            this.logError(err,'getPastActivities')
+            return []
+        }
+
+    }
+
+    async getPastActivitiesWithDetails( filter:ActivitySearchCriteria): Promise<Array<ActivityInfo>> {
+        try {
+            const activities  = this.getRepo().search(filter) ?? []
+            const promises = []
+            
+            activities.forEach( ai => {
+                promises.push(this.getRepo().getWithDetails(ai.summary.id))
+            })
+            
+            await Promise.allSettled(promises)
+            
+            
+            const res = activities.filter( a => a.details!==undefined && a.details!==null )
+                    
+            return res
+        }
+        catch(err) {
+            this.logError(err,'getPastActivitiesWithDetails')
+            return []
+        }
     }
 
 

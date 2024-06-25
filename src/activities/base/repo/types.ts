@@ -7,5 +7,7 @@ export interface ActivitySearchCriteria {
     startPos?: number,
     realityFactor?: number,
     uploadStatus?: UploadInfo|Array<UploadInfo>
-    isSaved?:boolean
+    isSaved?:boolean,
+    minTime?:number,
+    minDistance?:number
 }
