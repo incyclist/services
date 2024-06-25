@@ -92,6 +92,8 @@ export type ActivitySummary = {
     rideTime: number
     distance: number
     startPos: number
+    endPos?:number
+    segment?:string,
     realityFactor: number
 
     uploadStatus: Array<UploadInfo>
@@ -198,6 +200,13 @@ export interface ActivityDetails  {
 
     /** starting position [in m] of this activity*/
     startPos: number,
+
+    /** user selected end position [in m] of this activity*/
+    endPos?: number,
+
+    /** user selected segment of this activity*/
+    segment?: string,
+    
 
     /** @deprecated */
     startpos?: number

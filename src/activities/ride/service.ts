@@ -956,6 +956,7 @@ export class ActivityRideService extends IncyclistService {
         this.current = {deviceData:{},dataState:{}}
 
         let startPos = 0;
+        let endPos,segment
         let realityFactor
         let routeName
         let routeId
@@ -982,6 +983,8 @@ export class ActivityRideService extends IncyclistService {
                     validateRoute(selectedRoute)
                     const s = (startSettings as RouteSettings)
                     startPos = s.startPos
+                    endPos = s.endPos
+                    segment = s.segment
                     this.current.endPos = s.endPos
                     realityFactor = s.realityFactor
                     routeId = selectedRoute.description.id
@@ -1021,7 +1024,7 @@ export class ActivityRideService extends IncyclistService {
             distance:0,
             totalElevation:0,
             logs:[],
-            startPos,realityFactor,
+            startPos,endPos,segment,realityFactor,
             fileName
         }
 

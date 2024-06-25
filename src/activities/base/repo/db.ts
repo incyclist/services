@@ -211,6 +211,9 @@ export class ActivitiesRepository {
         if (result?.length>0 && criteria?.startPos!==undefined) {
             result = result.filter( ai=> ai.summary.startPos===criteria.startPos)
         }
+        if (result?.length>0 && criteria?.endPos!==undefined) {
+            result = result.filter( ai=> ai.summary.endPos===criteria.endPos)
+        }
         if (result?.length>0 && criteria?.realityFactor!==undefined) {
             result = result.filter( ai=> (ai.summary.realityFactor??100)===criteria.realityFactor)
         }
