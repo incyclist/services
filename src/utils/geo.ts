@@ -1,5 +1,6 @@
 import { RoutePoint } from '../routes/base/types';
 import {rad,abs, degrees}  from './math'
+import { Vector } from './vector';
 
 
 const rEarth = 6378.100;
@@ -143,5 +144,78 @@ export const calculateHeaderFromPoints = (p1:LatLng, p2:LatLng):number => {
     }
     catch {
         return;
+    }
+}
+
+/* 
+    return the crossing point between the two vectors AB and CD
+
+*/
+
+export function crossing( AB, CD, AC ) {
+    if ( AB===undefined || (!Vector.isVector(AB) && !Array.isArray(AB)) ) throw new Error('AB is not a vector');
+    if ( CD===undefined || (!Vector.isVector(CD) && !Array.isArray(CD)) ) throw new Error('CD is not a vector');
+    if ( AC===undefined || (!Vector.isVector(AC) && !Array.isArray(AC)) ) throw new Error('AC is not a vector');
+
+    // if both lines are parallel, we only need to check if they are overlapping
+    if ( AB.isParallel(CD) ) {
+        if (!AB.isParallel(AC))
+            return undefined;
+
+        // are both lines pointing in the same direction?
+        if ( AB.isSameDirection(CD)) {
+            if ( AB.isSameDirection(AC) && AB.len()>=AC.len() )
+                return AC;
+            else    
+                return undefined;
+        }
+
+        let AD = Vector.add(AC,CD);
+
+        // CD is pointing in the oposite direction, D->C
+        if (AB.isParallel(AD) && AB.len()>=AD.len() ){
+            // we need to check if point D is closer to A than point C (ie. vector CD shows in the oposite direction)
+            let da = AD.len();
+            let dc = da-CD.len();
+            if ( dc>=0 ) 
+                return AD
+            else
+                return new Vector([0,0])
+        } 
+        else {
+            return undefined
+        }
+    }
+    else {
+
+        /* Crossing is when: 
+            [AB]*x  = [AC]+[CD]*y
+            =>
+            AB.x*x = AC.x+CD.x*y
+            AB.y*x = AC.y+CD.y*y
+        */
+        let x,y;
+        if (abs(AB.x)<0.0001) {
+            y = AC.x/CD.x*-1;
+            x = (AC.y+CD.y*y)/AB.y;
+            return Vector.multiply(x,AB); 
+        }
+        if (abs(AB.y)<0.0001) {
+            y = AC.y/CD.y*-1;
+            x = (AC.x+CD.x*y)/AB.x;
+            return Vector.multiply(x,AB); 
+        }
+        if (abs(CD.x)<0.0001) {
+            x = AC.x/AB.x;        
+            return Vector.multiply(x,AB); 
+        }
+        if (abs(CD.y)<0.0001) {
+            x = AC.y/AB.y;        
+            return Vector.multiply(x,AB); 
+        }
+
+        y = (AB.x*AC.y/AB.y-AC.x)/(CD.x-AB.x*CD.y/AB.y)
+        x = (AC.y+CD.y*y)/AB.y
+        return Vector.multiply(x,AB); 
     }
 }

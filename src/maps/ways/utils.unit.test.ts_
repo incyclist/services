@@ -1,0 +1,26 @@
+import {generateQuery, parseMapData} from './utils'
+import testData from '../../../__tests__/data/overpass/test.json'
+
+describe ('Utils',()=>{
+    describe('generateQuery',()=>{
+        test('default',()=>{
+            const expected = '[out:json];way[highway](50.79443732481083,4.3097273590848415,50.88426937434451,4.451979920353074);(._;>;);out geom;'
+            const res = generateQuery({lat:50.83935334957767, lng:4.380853639718958}, 5000)
+            expect(res).toBe(expected)
+        })
+
+        test('500',()=>{
+            //const expected = '[out:json];way[highway](50.79443732481083,4.3097273590848415,50.88426937434451,4.451979920353074);(._;>;);out geom;'
+            const res = generateQuery({lat:50.83935334957767, lng:4.380853639718958}, 500)
+            console.log(res)
+        })
+
+    })
+
+    describe('parseMapData',()=>{
+        test('default',()=>{
+            const res = parseMapData(JSON.stringify(testData),undefined)
+            console.log(res)
+        })
+    })
+})

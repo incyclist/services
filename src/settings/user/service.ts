@@ -187,8 +187,8 @@ export class UserSettingsService {
     }
 
     async updateSettings(data:any):Promise<boolean> {        
-        if (!this.isInitialized)
-        throw new Error('Settings are not yet initialized')
+        if (!this.isInitialized || !this.settings)
+            throw new Error('Settings are not yet initialized')
         try {
 
             merge(this.settings,data);

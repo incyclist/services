@@ -191,7 +191,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         let details;
         try {
             const id = description.legacyId || description.id
-            details = await repo.read(id) as RouteApiDetail
+            details = await repo.read(id) as undefined as RouteApiDetail
             description.originalName = details.title
 
             if (description.hasVideo) {                
@@ -204,7 +204,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
             if (description.id && description.legacyId !== description.id) {
                 try {                    
-                    details = await repo.read(description.id) as RouteApiDetail
+                    details = await repo.read(description.id) as undefined as RouteApiDetail
                     description.originalName = details.title
                 }
                 catch(err) {
@@ -284,7 +284,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
         const save = async ():Promise<void>=> {
             try {
-                await repo.write(id,route.details)
+                await repo.write(id,route.details as undefined as JSONObject)
             }
             catch(err) {
                 console.log(err)
