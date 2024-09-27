@@ -1,4 +1,5 @@
 import { FileInfo } from "../../../api";
+import { LatLng } from "../../../utils/geo";
 
 export type RouteType = 'gpx' | 'video';
 export type RouteCategory = 'Imported' | 'Free' | 'Demo' | 'personal';
@@ -63,11 +64,9 @@ export type DaumEpp = {
 }
 
 
-export type RoutePoint = {
+export interface RoutePoint extends LatLng {
     cnt?: number,
     heading?: number,
-    lat: number;
-    lng: number;
     routeDistance: number;
     elevation: number;
     elevationGain?:number
@@ -75,6 +74,7 @@ export type RoutePoint = {
     distance?:number
     videoSpeed?:number,
     videoTime?:number
+    isCut?:boolean
 };
 
 export interface VideoRoutePoint extends RoutePoint {

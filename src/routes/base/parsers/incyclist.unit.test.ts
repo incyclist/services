@@ -129,7 +129,19 @@ describe('IncyclistParser',()=>{
 
             })
 
+            // test('Rioja',async ()=>{
+            //     const file = '/mnt/c/videos/Madrid/Day_11/ES_Rioja_p1.xml'
+  
+                
+            //     getBindings().loader = { open: load}
+            
+            //     const fileInfo:FileInfo = {type:'file', filename:file, name:'ES_Rioja_p1.xml', ext:'xml',dir:'/mnt/c/videos/Madrid/Day_11',url:undefined, delimiter:'/'}
+            //     const {data,details} = await parser.import(fileInfo)
 
+            //     const mappings = details?.video?.mappings
+            //     const lastMapping = mappings?.[mappings.length-1]
+            //     expect(lastMapping?.frame).toBeLessThanOrEqual(98209)
+            // })
     
     
         })

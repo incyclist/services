@@ -1,4 +1,7 @@
+import { JSONObject, parseTime } from '../../../utils';
+import { RouteApiDetail } from '../api/types';
 import { EnhancedRoutePoint, GPXParser } from './gpx';
+import { CutInfo } from './types';
 import { XMLParser, XmlParserContext } from './xml';
 
 
@@ -41,6 +44,61 @@ export class IncyclistXMLParser extends XMLParser{
 
         const gpx = await new GPXParser({addTime:true}).import(gpxFile)
         route.points = gpx.details.points
+
+    }
+
+    protected processCuts(data:JSONObject,route:RouteApiDetail):void { 
+        const cuts = data['cuts']
+        cuts?.forEach( cut => {
+            const timeStr = cut['time']
+            const time = parseTime(timeStr)
+            const cutInfo:CutInfo = {time, startFrame:cut['start-frame'], endFrame:cut['end-frame']}
+
+            const mappings = route.video.mappings
+            const points = route.points
+            if (!mappings || !points)
+                return;
+
+            const mappingAtCutIdx = mappings.findIndex( p => p.time===cutInfo.time)
+            const mappingAtCut = mappings[mappingAtCutIdx]
+            const mappingBeforeCut = mappings[mappingAtCutIdx-1]
+            
+            // find nearest point in points based on route.routeDistance and mappings.distance
+            const distanceToCut = points.map( (p,index)=> {
+                const distance = Math.abs(p.routeDistance-mappingAtCut.distance)
+                return {index,distance}
+            }).sort( (a,b) => a.distance-b.distance)
+
+            const pointAtCut = points[distanceToCut[0].index]
+            const pointBeforeCut = points[distanceToCut[0].index-1]
+
+            const v = mappingAtCut.videoSpeed/3.6
+            const t = mappingAtCut.time-mappingBeforeCut.time
+            const distanceAtCutStart = pointAtCut.routeDistance-v*t
+            const offset = distanceAtCutStart-pointBeforeCut.routeDistance
+
+            pointAtCut.routeDistance-=offset
+            pointAtCut.distance-=offset
+            pointAtCut.isCut = true
+            points.forEach( (p,idx) => {
+                if (idx>distanceToCut[0].index) {
+                    p.routeDistance-=offset
+                }
+            })
+
+
+            mappingBeforeCut.videoSpeed = mappingAtCut.videoSpeed
+            mappings.forEach( (m,idx) => { 
+                if (idx>=mappingAtCutIdx) {
+                    m.distance-=Math.round(offset)
+                }
+            })
+            
+
+        })
+
+        route.distance = route.points[route.points.length-1].routeDistance
+
     }
 
 
@@ -48,11 +106,15 @@ export class IncyclistXMLParser extends XMLParser{
 
         await super.parseVideo(context)
 
-        const {route} = context
+        const {data,route} = context
         const points = route.points as Array<EnhancedRoutePoint>
 
         route.video.mappings =  points.map( (p,idx) => {
             const time = p.time
+
+            if (time>1659) {
+                let i = 1
+            }
             
             let videoSpeed;
             if (idx!==points.length-1) {
@@ -60,6 +122,10 @@ export class IncyclistXMLParser extends XMLParser{
             }
             else {
                 videoSpeed = points[idx-1].videoSpeed
+            }
+
+            if (p.distance>500) {
+
             }
             const distance = Math.round(p.routeDistance);
             const frame = Math.round(p.time*route.video.framerate);
@@ -69,6 +135,11 @@ export class IncyclistXMLParser extends XMLParser{
 
             return {time,videoSpeed,distance,frame};            
         })
+
+
+        if (data['cuts']) {
+            this.processCuts(data,route)
+        }
 
 
     }

@@ -11,3 +11,9 @@ export type Altitude = {
     height?: string;
 };
 
+export type CutInfo = {
+    time: number;
+    startFrame?: number;
+    endFrame?: number;
+}
+
