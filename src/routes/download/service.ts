@@ -92,6 +92,7 @@ export class RouteDownloadService extends IncyclistService {
         let url;
         try {
             url = route?.description?.downloadUrl || route?.description?.videoUrl
+            
             const {id,title} = route.description;
 
             const {path,downloadManager} = getBindings()
@@ -101,6 +102,10 @@ export class RouteDownloadService extends IncyclistService {
             }
 
             const info = path.parse( url)
+            if (!info) {
+                this.logEvent({message:'no URL specified',description:route.description})
+                observer.emit('error', new Error('no URL specified'))
+            }
             const file = path.join( targetDir, info.base)
             const session = downloadManager.createSession(url,file)
 
@@ -119,7 +124,7 @@ export class RouteDownloadService extends IncyclistService {
             session.start()
         }
         catch(err) {
-            this.logError(err,'downloadRoute',url)
+            this.logError(err,'downloadRoute',{url})
             observer.emit('error',err)
         }        
 

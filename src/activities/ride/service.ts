@@ -619,7 +619,7 @@ export class ActivityRideService extends IncyclistService {
             const totalDistance = ai.summary.distance
 
             // we are beyond the totals distance ridden in the previous ride -> skip
-            if (current.distance>totalDistance)
+            if (!current?.distance ||current.distance>totalDistance)
                 return null
 
 
@@ -633,8 +633,12 @@ export class ActivityRideService extends IncyclistService {
                 }
                 return false
             }))
+
             if (!res) {
                 res = clone(logs[logs.length-1])
+                if (!res) {
+                    return null
+                }
                 
             }
             else {
@@ -669,6 +673,9 @@ export class ActivityRideService extends IncyclistService {
                 }
                 return false
             }))
+
+            if (!res)
+                return null
 
 
             const s = res.distance-current.distance

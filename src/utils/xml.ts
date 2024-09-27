@@ -18,10 +18,21 @@ export const toXml = (obj:JSONObject):string =>{
     return xml;
 }
 
+export const removeUTFBom = (str:string) => {
+    //str = str.replace(/^\uFEFF/, '');
+
+    while (str.charCodeAt(0)===0 || str.charCodeAt(0)===0xFEFF || str.charCodeAt(0)===0xFFFD)
+        str = str.substring(1);
+
+    return str
+}
+
 export const parseXml = async (str:string):Promise<XmlJSON> => { 
     return new Promise((resolve,reject) =>  {        
 
-        parseString(str, (err,result)=> {
+        const cleanStr = removeUTFBom(str)
+
+        parseString(cleanStr, (err,result)=> {
             if (err) {
                     return reject(err);
             }
