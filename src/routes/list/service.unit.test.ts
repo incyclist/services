@@ -180,6 +180,17 @@ describe('RouteListService',()=>{
     describe( 'search',()=>{
 
         let service;
+        let userSettings
+
+        beforeEach(()=>{ 
+            userSettings = useUserSettings()
+            userSettings.get = jest.fn().mockReturnValue({})
+            userSettings.set = jest.fn()
+        })
+
+        afterEach( ()=>{
+            userSettings?.reset()
+        })
 
         beforeAll ( async ()=>{
             service = prepareMock(null,{mockLoad:true})
@@ -208,6 +219,7 @@ describe('RouteListService',()=>{
     describe('import',()=>{
         let service;
         let originalParser
+        let userSettings
 
         beforeAll ( async ()=>{
             service = prepareMock(null,{mockLoad:true})
@@ -215,6 +227,9 @@ describe('RouteListService',()=>{
 
         beforeEach( ()=>{
             originalParser = RouteParser.parse
+            userSettings = useUserSettings()
+            userSettings.get = jest.fn().mockReturnValue({})
+            userSettings.set = jest.fn()
 
         })
 
@@ -222,6 +237,7 @@ describe('RouteListService',()=>{
         afterEach( ()=>{
             RouteParser.parse = originalParser
             service.reset()
+            userSettings?.reset()
             
 
         })
