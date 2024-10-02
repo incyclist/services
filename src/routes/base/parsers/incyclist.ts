@@ -142,7 +142,6 @@ export class IncyclistXMLParser extends XMLParser{
             this.processCuts(data,route)
         }
 
-        console.log('~~~ SHIFTING ELEVATION ??',data['elevation-shift'])
         if (data['elevation-shift'])
             this.processElevationShift( Number(data['elevation-shift']) ,route.points)
         
@@ -156,7 +155,6 @@ export class IncyclistXMLParser extends XMLParser{
         if (!elevationShift ||!points || points.length<2 || points.length<elevationShift)
             return;
 
-        console.log('~~~ PROCESSING ELEVATION-SHIFT ~~~',elevationShift)
         const cuts = points.filter( p => p.isCut) || []
         const lastPoints = []
         cuts.forEach(cut => {
