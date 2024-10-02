@@ -1,5 +1,6 @@
 import { JSONObject, parseTime } from '../../../utils';
 import { RouteApiDetail } from '../api/types';
+import { RoutePoint } from '../types';
 import { EnhancedRoutePoint, GPXParser } from './gpx';
 import { CutInfo } from './types';
 import { XMLParser, XmlParserContext } from './xml';
@@ -141,7 +142,50 @@ export class IncyclistXMLParser extends XMLParser{
             this.processCuts(data,route)
         }
 
+        console.log('~~~ SHIFTING ELEVATION ??',data['elevation-shift'])
+        if (data['elevation-shift'])
+            this.processElevationShift( Number(data['elevation-shift']) ,route.points)
+        
 
+
+    }
+
+    protected processElevationShift(elevationShift:number,points:RoutePoint[]):void { 
+
+        
+        if (!elevationShift ||!points || points.length<2 || points.length<elevationShift)
+            return;
+
+        console.log('~~~ PROCESSING ELEVATION-SHIFT ~~~',elevationShift)
+        const cuts = points.filter( p => p.isCut) || []
+        const lastPoints = []
+        cuts.forEach(cut => {
+            lastPoints.push( points[cut.cnt-1])
+        })
+        lastPoints.push(points[points.length-1])
+
+        let idx = 0;
+        let prev = undefined
+        lastPoints.forEach( lp => {
+            
+            const lastIdx = lp.cnt;
+            const lastSlope = lp.slope
+            let lastElevation = lp.elevation
+            while (idx+elevationShift<=lastIdx) {
+                points[idx].elevation = points[idx+elevationShift].elevation
+                points[idx].slope = points[idx+elevationShift].slope
+                points[idx].elevationGain = points[idx+elevationShift].elevationGain
+                idx++
+            }
+            while(idx<=lastIdx) {                
+                points[idx].elevation = lastElevation+lastSlope*points[idx].distance/100;
+                points[idx].elevationGain += (points[idx].elevation-lastElevation)
+                lastElevation = points[idx].elevation
+                idx++
+            }
+        })
+
+        
     }
    
 

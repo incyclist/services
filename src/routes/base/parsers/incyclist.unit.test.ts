@@ -3,6 +3,7 @@ import { FileInfo, getBindings } from '../../../api'
 import { IncyclistXMLParser } from './incyclist'
 import path from 'path'
 import { IFileSystem } from '../../../api/fs'
+import { RoutePoint } from '../types'
 
 describe('IncyclistParser',()=>{
     let parser:IncyclistXMLParser
@@ -140,10 +141,90 @@ describe('IncyclistParser',()=>{
 
             //     const mappings = details?.video?.mappings
             //     const lastMapping = mappings?.[mappings.length-1]
-            //     expect(lastMapping?.frame).toBeLessThanOrEqual(98209)
+            //     expect(lastMapping?.frame).toBeLessThanOrEqual(3994*30)
             // })
     
     
+        })
+
+        describe('processElevationShift',()=>{
+
+            let points:RoutePoint[]
+            let p
+            beforeEach( ()=>{                
+                p = parser = new IncyclistXMLParser()                    
+                points = []
+                for (let i = 0; i < 10; i++) { 
+                    const p = {
+                        cnt: i,
+                        routeDistance: i*100,
+                        elevation: i*2,
+                        slope: 2,
+                        distance: 100,       
+                        elevationGain: i*2,             
+                    }
+                    points.push(p as unknown as RoutePoint)
+                }
+            })
+
+            test('with cut',()=>{
+                points[6].isCut = true
+                points.forEach( (pp,idx) => { 
+                    if(idx>=6)  { 
+                        pp.elevation+=100; 
+                        pp.elevationGain =  pp.elevationGain??0+100
+                    }
+                })
+
+                //og(points.map(p=>p.elevation).join(','))
+
+                p.processElevationShift(3,points)
+
+                const elevations = points.map(p=>p.elevation).join(',')
+                expect(elevations).toBe('6,8,10,12,14,16,118,120,122,124')
+                    
+            })
+
+            test('no cut',()=>{
+                p.processElevationShift(3,points)
+
+                const elevations = points.map(p=>p.elevation).join(',')
+                expect(elevations).toBe('6,8,10,12,14,16,18,20,22,24')
+                    
+            })
+
+            test('slope change',()=>{
+
+                points = []
+                let e = 0;
+                let eg = 0;
+                for (let i = 0; i < 10; i++) { 
+                    const slope = i>5 ? 1 : 2;
+
+                    const p = {
+                        cnt: i,
+                        routeDistance: i*100,
+                        elevation: i==0 ? 0: slope+e,
+                        slope,
+                        distance: 100,       
+                        elevationGain: i==0 ? 0: slope+eg,           
+                    }
+                    points.push(p as unknown as RoutePoint)
+                    e = p.elevation
+                    eg = p.elevationGain
+                }
+
+                p.processElevationShift(3,points)
+                const elevations = points.map(p=>p.elevation).join(',')
+                expect(elevations).toBe('6,8,10,11,12,13,14,15,16,17')
+
+                const slopes = points.map(p=>p.slope).join(',')
+                expect(slopes).toBe('2,2,2,1,1,1,1,1,1,1')
+                    
+            })
+
+
+
         })
 
         
