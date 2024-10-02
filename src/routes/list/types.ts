@@ -50,3 +50,9 @@ export interface SearchFilterOptions {
     contentTypes: Array<string>
     routeTypes: Array<string>
 }
+
+export interface RoutesRepoUpdates {
+    prev?: number,
+    current?: number,
+    initial?:number
+}

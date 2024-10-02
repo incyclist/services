@@ -14,6 +14,7 @@ import { RouteParser } from "../base/parsers";
 import { RouteApiDetail } from "../base/api/types";
 import { ParseResult, RouteInfo } from "../base/types";
 import { Observer } from "../../base/types/observer";
+import { useUserSettings } from "../../settings";
 
 let cnt = 0
 
@@ -114,17 +115,22 @@ describe('RouteListService',()=>{
 
         let db
         let service:MockeableService
+        let userSettings
 
 
 
         beforeEach(()=>{ 
             service = prepareMock(db,{mockLoad:false})
+            userSettings = useUserSettings()
+            userSettings.get = jest.fn().mockReturnValue({})
+            userSettings.set = jest.fn()
         })
 
         afterEach( ()=>{
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (service as any).reset()
             db?.reset()
+            userSettings?.reset()
         })
 
         test('1',async ()=>{

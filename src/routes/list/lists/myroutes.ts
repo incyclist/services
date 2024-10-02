@@ -3,9 +3,11 @@ import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
 import { RouteCard } from "../cards/RouteCard";
 import { RouteCardType } from "../cards/types";
+import { checkIsNew } from "../utils";
 
 const score = (r:RouteInfo):number =>{
     let val = 0;
+
     const tsAction = (Date.now()-Math.max(r.tsImported||0,r.tsLastStart||0))/1000/3600/24      // days since last action
 
     if (r.hasVideo || (1-tsAction)>0) val+=1

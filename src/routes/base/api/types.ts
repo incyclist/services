@@ -23,6 +23,8 @@ export interface RouteApiDescription extends RouteBase {
     type?: RouteType,
     localizedTitle?:LocalizedText,
     previewUrl?:string,
+    downloadUrl?:string,
+    requiresDownload?:boolean,
     isDeleted?:boolean
     selectableSegments?: Array<RouteSegment>
 
@@ -55,6 +57,7 @@ export type RouteApiDetail = {
     distance?: number;
     elevation?: number
     points?: Array<RoutePoint> 
+    requiresDownload?: boolean
     downloadUrl?:string
     downloadType?: string
     gpxDisabled?: boolean

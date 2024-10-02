@@ -130,8 +130,12 @@ export const addDetails =(route:Route, details:RouteApiDetail):void => {
     route.description.distance = details.distance ?? points[points.length-1].routeDistance
     
     if (route.description.hasVideo) {
-        route.description.requiresDownload = valid(details.downloadUrl)
-        route.description.downloadUrl = details.downloadUrl
+        if (!valid(route.description.requiresDownload))
+            route.description.requiresDownload = details.requiresDownload===undefined ?  valid(details.downloadUrl) : details.requiresDownload
+
+        if (!valid(route.description.downloadUrl))
+            route.description.downloadUrl = details.downloadUrl
+
         if (!valid(route.description.videoUrl)) {
             route.description.videoUrl = details.video.url 
         }

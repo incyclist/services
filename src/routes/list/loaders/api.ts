@@ -1,3 +1,4 @@
+import { EventLogger } from "gd-eventlog";
 import { Observer, PromiseObserver } from "../../../base/types/observer";
 import IncyclistRoutesApi from "../../base/api";
 import { RouteApiDescription, RouteApiDetail } from "../../base/api/types";
@@ -15,10 +16,12 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     protected api: IncyclistRoutesApi
     protected loadObserver: Observer
     protected saveObserver: PromiseObserver<void>
+    protected logger: EventLogger
 
     constructor () {
         super()
         this.api = IncyclistRoutesApi.getInstance()        
+        this.logger = new EventLogger('RoutesApi')
     }
 
 
@@ -50,7 +53,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
                     
                         let description;
-
+                        let isUpdated = false
                         const existing = this.getDescriptionFromDB(descr.routeId||descr.id)
                         const {isDeleted=false} = descr
 
@@ -68,6 +71,18 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
                         }
                         else {
                             description = this.buildRouteInfo(descr)
+                            
+                            if (!existing) {
+                                this.logger.logEvent({message:'route added',id:description.id,title:description.title,ts:description.tsImported})
+                                
+                                description.tsImported = Date.now()
+                            }
+                            else {
+                                description.tsImported = existing.tsImported
+                                this.logger.logEvent({message:'route updated',id:description.id,title:description.title,from:existing.version, to:description.version,ts:Date.now(), tsImported:description.tsImported})
+                                
+                                isUpdated = true                                   
+                            }
                         }
 
                         if (!description) {
@@ -90,6 +105,9 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
                         }
                         else {
                             this.save(route,true)
+                            if (isUpdated) {
+                                this.loadObserver.emit('route.updated',route)
+                            }
                         }
 
                     }
@@ -209,9 +227,9 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     }
 
     protected buildRouteInfo( descr:RouteApiDescription, isLocal?:boolean): RouteInfo {
-        const { id,routeId,title,localizedTitle,country,distance,elevation, category,provider, video, points,previewUrl,routeHash,version,isDeleted} = descr
+        const { id,routeId,title,localizedTitle,country,distance,elevation, category,provider, video, requiresDownload,points,previewUrl,downloadUrl,routeHash,version,isDeleted} = descr
         
-        const data:RouteInfo = { title,localizedTitle,country,distance,elevation,provider,category,previewUrl,routeHash,version,isDeleted}
+        const data:RouteInfo = { title,localizedTitle,country,distance,elevation,provider,category,previewUrl,requiresDownload,downloadUrl,routeHash,version,isDeleted}
 
         data.hasVideo = false;
         data.hasGpx = false;

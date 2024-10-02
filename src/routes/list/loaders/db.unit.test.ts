@@ -12,6 +12,7 @@ import { RoutesDbLoader } from './db';
 import { RouteInfo } from '../../base/types';
 import { RoutesLegacyDbLoader } from './LegacyDB';
 import { JSONObject } from '../../../utils/xml';
+import exp from 'constants';
 
 class MockRepository extends JsonRepository {
     static create(repoName:string):JsonRepository {
@@ -142,6 +143,9 @@ describe('LegacyDBLoader',()=>{
             expect(descr.country).toBe('AU')
             expect(descr.isLoop).toBe(true)
             expect(descr.isLocal).toBe(false)
+
+            expect(routes[0].description.tsImported).toBeDefined()
+            delete routes[0].description.tsImported
             expect(routes[0]).toMatchSnapshot()
 
             loaderObj = {...loader}

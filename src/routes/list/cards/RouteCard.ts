@@ -20,7 +20,7 @@ import { getLocalizedData } from "../../base/utils/localization";
 import { EventLogger } from "gd-eventlog";
 import { getPosition} from "../../base/utils/route";
 import { getWorkoutList } from "../../../workouts";
-
+import { checkIsNew } from "../utils";
 
 export interface SummaryCardDisplayProps extends RouteInfo{
     loaded:boolean
@@ -31,6 +31,7 @@ export interface SummaryCardDisplayProps extends RouteInfo{
     observer:Observer
     initialized:boolean;
     loading?:boolean
+    isNew?:boolean
 }
 
 export interface DetailCardDisplayProps  {
@@ -241,8 +242,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 points = undefined
             }
 
+            let isNew = checkIsNew(descr);
+
             const loading = this.deleteObserver!==undefined
-            return {...descr, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,
+            return {...descr, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,isNew,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
                     observer:this.cardObserver}
         }

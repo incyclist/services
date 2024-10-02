@@ -183,6 +183,25 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
     }
 
 
+    protected verifyImportDate(routes:Array<RouteInfoDBEntry>)
+    {
+        
+        let changed =false
+        routes.forEach( r=> {
+            if (!r.tsImported) {
+                r.tsImported = Date.now()
+                changed = true
+            }
+        })
+
+        
+        if (changed) {
+             this.isDirty = true;
+             this.write()
+        }
+        
+    }
+
     protected async loadDetailRecord(target:Route|RouteInfo):Promise<RouteApiDetail> {
         
         const description = ((target as Route).description || target) as RouteInfo

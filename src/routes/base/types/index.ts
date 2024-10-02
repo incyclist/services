@@ -2,7 +2,7 @@ import { FileInfo } from "../../../api";
 import { LatLng } from "../../../utils/geo";
 
 export type RouteType = 'gpx' | 'video';
-export type RouteCategory = 'Imported' | 'Free' | 'Demo' | 'personal';
+export type RouteCategory = 'Imported' | 'Free' | 'Demo' | 'personal' | 'alternatives' | 'selected';
 export type RouteState = 'prepared' | 'loading' | 'loaded' | 'error';
 
 export type RouteProvider = {
@@ -116,6 +116,7 @@ export interface    RouteInfo extends RouteBase{
     segments?:Array<RouteSegment>,
     tsImported?: number,
     tsLastStart?: number,
+    tsReleased?:number,
     next?:string,
     legacyId?:string,
     isDownloaded?:boolean  

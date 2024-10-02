@@ -120,4 +120,8 @@ export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
         throw new Error('not implemented')
     }
 
+    protected verifyImportDate(routes: RouteDBApiDescription[]) {
+        
+    }
+
 }

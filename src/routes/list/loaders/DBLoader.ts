@@ -39,6 +39,9 @@ export abstract class DBLoader<T> extends Loader<T> {
 
     protected async _load() {
         this.routeDescriptions = await this.loadDescriptions();
+        this.verifyImportDate(this.routeDescriptions)
+
+
         const promises:Array<Promise<void>> = []
         this.routeDescriptions?.forEach(descr => {
 
@@ -57,6 +60,10 @@ export abstract class DBLoader<T> extends Loader<T> {
         this.emitDone()
         
     }
+
+    
+    protected abstract verifyImportDate(routes:Array<T>) 
+
 
 
     protected getVideosRepo(): JsonRepository {

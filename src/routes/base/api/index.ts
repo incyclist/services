@@ -2,7 +2,7 @@ import {EventLogger} from 'gd-eventlog'
 import { RouteApiDescription, RouteApiDetail, RouteDescriptionQuery } from "./types";
 import { AxiosInstance } from "axios";
 import { DEFAULT_ROUTE_API, NO_CACHE, ROUTE_API } from './consts'
-import { RestApiClient } from '../../../api';
+import { IncyclistRestApiClient } from '../../../api';
 import { useUserSettings } from '../../../settings';
 import { RoutePoint } from '../types';
 
@@ -31,7 +31,7 @@ export default class IncyclistRoutesApi {
 
     protected getApi():AxiosInstance {
         if (!this.api) {
-            this.api = RestApiClient.getClient()
+            this.api = IncyclistRestApiClient.getClient()
             return this.api
         }
         return this.api

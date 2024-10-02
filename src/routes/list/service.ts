@@ -21,6 +21,8 @@ import IncyclistRoutesApi from "../base/api";
 import { ActiveImportCard } from "./cards/ActiveImportCard";
 import { SelectedRoutes } from "./lists/selected";
 import { AlternativeRoutes } from "./lists/alternatives";
+import { getRepoUpdates, updateRepoStats } from "./utils";
+import { sleep } from "incyclist-devices/lib/utils/utils";
 
 
 @Singleton
@@ -291,6 +293,7 @@ export class RouteListService extends IncyclistService {
                         }
                         this.logEvent( {message:'preload route list completed',cards})
                         this.initialized = true
+                        updateRepoStats()
                         this.emitLists('loaded')
                         process.nextTick( ()=>{delete this.preloadObserver})
                     })
@@ -584,9 +587,27 @@ export class RouteListService extends IncyclistService {
     }
 
     protected async loadRoutes():Promise<void> {
-
         await this.loadRoutesFromRepo()
+        await this.checkUIUpdateWithNoRepoStats();
         await this.loadRoutesFromApi()
+    }
+
+    // In case a user already had  aprevious version of the UI installed and routes were in the DB, we need to initialize the "tsImported" field
+    // with the current timestamp minus one minute. 
+    // This will ensure that any new routes added to the repo will show up as "New" in the UI for those users, which otherwise would not happen
+    protected async checkUIUpdateWithNoRepoStats() {
+        const repoUpdate = getRepoUpdates();
+        if (this.routes.length > 0 && repoUpdate.initial === undefined) {
+
+            const ts = Date.now() - 60000;
+            this.routes.forEach(r => {
+                r.description.tsImported = ts;
+                this.update(r);
+            });
+            updateRepoStats(ts);
+            await sleep(5); // just to make sure that any following route import will have a different tsImported
+
+        }
     }
 
     protected async loadRoutesFromRepo():Promise<void> {
@@ -622,12 +643,20 @@ export class RouteListService extends IncyclistService {
         if (!description.hasVideo) {
             if (category==='personal' || description.isLocal)
                 return this.myRoutes
+
+            if (description.category=='alternatives')
+                return this.alternatives
+            if (description.category=='selected')
+                return this.selectedRoutes
             return description.category ? this.alternatives : this.selectedRoutes
         }
         else {
             if (description.isLocal || description.isDownloaded)
                 return this.myRoutes
-            if (description.isDemo || (description.requiresDownload && !description.isDownloaded))
+            if (description.category=='selected')
+                return this.selectedRoutes
+
+            if (description.category=='alternatives' || description.isDemo || (description.requiresDownload && !description.isDownloaded))
                 return this.alternatives
 
             if (category===undefined || category==='personal' || category==='imported')
@@ -812,6 +841,7 @@ export class RouteListService extends IncyclistService {
         return cards;
 
     }
+
 
 }
 
