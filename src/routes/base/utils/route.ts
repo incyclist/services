@@ -62,7 +62,15 @@ export const updateSlopes = (points: Array<RoutePoint>):void => {
             if (point.distance===undefined) {
                 point.distance = geo.distanceBetween(prevPoint,point);
             }
-            prevPoint.slope = (point.elevation-prevPoint.elevation)/point.distance*100;
+            if (!point.isCut)
+                prevPoint.slope = (point.elevation-prevPoint.elevation)/point.distance*100;
+            else {
+                if (prevPoint.slope===undefined || prevPoint.slope>50) {
+                    const nextPoint = points[i+1];
+                    prevPoint.slope = point.slope ?? (nextPoint.elevation-point.elevation)/nextPoint.distance*100
+                }
+            }
+        
         }
     
         
