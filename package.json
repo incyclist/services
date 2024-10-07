@@ -39,6 +39,6 @@
   },
   "dependencies": {
     "incyclist-devices": "^2.1.18",
-    "uuid": "^9.0.0"
+    "uuid": "^10.0.0"
   }
 }
