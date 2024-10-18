@@ -293,6 +293,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
         let showLoopOverwrite, showNextOverwrite;
         let hasWorkout=true
 
+        this.adjustStartPosAvi(settings)
+
         try {
             showLoopOverwrite = this.route?.description?.isLoop
             showNextOverwrite = valid(this.route?.description?.next) 
@@ -328,6 +330,17 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.logError(err,'changeSettings')
         }
             
+    }
+
+    protected adjustStartPosAvi(settings:RouteSettings) {
+        try {
+            if (this.route.description.videoFormat==='avi') {
+                settings.startPos = 0
+            }
+        }
+        catch(err) {
+            this.logError(err,'adjustStartPosAvi')
+        }
     }
 
     async save():Promise<void> {
