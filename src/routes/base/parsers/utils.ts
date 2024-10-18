@@ -46,6 +46,12 @@ export class BinaryReader {
         return val;
     }
 
+    ReadDouble() {
+        const val = this.buffer.readDoubleLE(this.pos)
+        this.pos +=8
+        return val;
+    }
+
     ReadInt32() {
         return this.ReadUint32();
     }
@@ -58,6 +64,22 @@ export class BinaryReader {
         const end = str.indexOf( '\x00' )
         if (end!==-1)
             return str.substring(0,end)
+        return str
+    }
+
+    ReadNetString(cnt:number) {
+        const part = Buffer.from(this.buffer.subarray(this.pos,this.pos+cnt*2))
+        this.pos+=cnt*2
+
+        let str=''
+        let i = 0
+        while (i<cnt) {
+            const c = part.readUInt16LE(i*2)
+            if (c===0) 
+                return str
+            str+=String.fromCharCode(c)
+            i++
+        }
         return str
     }
 

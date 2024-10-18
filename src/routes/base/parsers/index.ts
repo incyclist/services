@@ -10,6 +10,7 @@ import { ParseResult } from '../types'
 import { RouteApiDetail } from '../api/types'
 import { BikeLabParser } from './bikelab'
 import { EPMParser } from './epm'
+import { TacxParser } from './tacx/TacxParser'
 
 export const useParsers = () => {
 
@@ -19,6 +20,7 @@ export const useParsers = () => {
         parsers.add( new MultipleXMLParser([KWTParser,IncyclistXMLParser,BikeLabParser]) )
         parsers.add( new GPXParser() )
         parsers.add( new EPMParser() )
+        parsers.add( new TacxParser() )
         parsers.setInitialized(true)
     }
     return parsers;

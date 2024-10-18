@@ -293,6 +293,9 @@ export const getRouteHash = (route:RouteApiDetail):string => {
         }        
         return undefined
     }
+    else if (route.gpxDisabled) {
+        json = { decoded:route.points.map( p => ({d:Math.round(p.routeDistance), e:Math.round(p.elevation)})) }            
+    }
     else {
         json = { decoded:route.points.map( p => ({lat:p.lat, lng: p.lng})) }            
     }
@@ -317,7 +320,8 @@ export interface GetNextPositionProps {
 
 const getLapTotalDistance = ( route:Route, point:LapPoint):number =>{
     const lap = valid(point?.lap) ? point.lap : 1
-    return (lap-1)*route.description.distance + point?.routeDistance??0
+    const pointDistance = point?.routeDistance
+    return (lap-1)*route.description.distance + (pointDistance??0)
 }
 
 
