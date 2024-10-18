@@ -11,9 +11,8 @@
     },
     "include": [
         "src/**/*.js",
-        "src/**/*.ts", 
-        "src/routes/base/parsers/gpx.unit.test ts"    
-, "src/routes/base/parsers/bikelab.unit.test ts"      ],
+        "src/**/*.ts"
+      ],
     "exclude": [
       "src/**/*.spec.*",
       "__tests__/**/*.ts",
