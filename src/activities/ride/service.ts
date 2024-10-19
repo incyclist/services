@@ -998,7 +998,7 @@ export class ActivityRideService extends IncyclistService {
                     realityFactor = s.realityFactor
                     routeId = selectedRoute.description.id
                     routeHash = selectedRoute.description.routeHash
-                    routeName = selectedRoute.description.title
+                    routeName = selectedRoute.description.originalName??selectedRoute.description.title
                     routeType = selectedRoute.description.hasVideo ? 'Video':'GPX'
                     this.current.position = getPosition(selectedRoute,{distance:startPos})
                 }

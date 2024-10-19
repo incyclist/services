@@ -1,5 +1,6 @@
 import { ActivityRideService } from "./service"
 import sydney from '../../../__tests__/data/routes/sydney.json'
+import video from '../../../__tests__/data/routes/demo.json'
 import sydney1 from '../../../__tests__/data/routes/sydney1.json'
 import { createFromJson} from "../../routes/base/utils/route"
 import { RouteApiDetail } from "../../routes/base/api/types"
@@ -58,7 +59,7 @@ describe('ActivityRideService',()=>{
         let service:ActivityRideService
         beforeEach( ()=>{
             service = new ActivityRideService()
-            jest .useFakeTimers().setSystemTime(new Date('getActivitySummaryDisplayProperties2020-01-01'));
+            jest .useFakeTimers().setSystemTime(new Date('2020-01-01'));
         })
 
         afterEach( ()=>{
@@ -75,7 +76,7 @@ describe('ActivityRideService',()=>{
             expect(observer).toBeDefined()
             expect(service.getActivity()).toMatchObject({
                 type:'IncyclistActivity',
-                version: '1',
+                version: '2',
                 id: expect.anything(),
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
@@ -116,7 +117,7 @@ describe('ActivityRideService',()=>{
             expect(observer).toBeDefined()
             expect(service.getActivity()).toMatchObject({
                 type:'IncyclistActivity',
-                version: '1',
+                version: '2',
                 id: expect.anything(),
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
@@ -131,7 +132,22 @@ describe('ActivityRideService',()=>{
             
         })
         test('Video from start of route',()=>{
-            // TODO  
+            const route  = createFromJson(video as unknown as RouteApiDetail)
+            route.description.originalName = 'XX_DEMO'
+            route.description.routeHash = '123'
+            route.description.id = '4711'
+
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'}})
+            const observer = service.init()
+            expect(observer).toBeDefined()
+            expect(service.getActivity()).toMatchObject({
+                distance:0,time:0, totalElevation:0,
+                startPos: 0,
+                realityFactor:100,
+                logs:[],
+                version:'2',
+                route:{name:'XX_DEMO',id:'4711',hash:'123'}
+            })
 
         })
         test('Video from different start position',()=>{
