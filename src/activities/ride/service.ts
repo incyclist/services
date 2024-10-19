@@ -6,13 +6,13 @@ import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
+import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType, ActivitySummary, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
 import { sleep } from "incyclist-devices/lib/utils/utils";
-import { ActivityState } from "./types";
+import { ActivityState, ActivitySummaryDisplayProperties } from "./types";
 import { addDetails, checkIsLoop, getElevationGainAt, getNextPosition, getPosition, validateRoute } from "../../routes/base/utils/route";
 import { Route } from "../../routes/base/model/route";
 import { RouteApiDetail } from "../../routes/base/api/types";
@@ -324,7 +324,7 @@ export class ActivityRideService extends IncyclistService {
                 heartrateDetails = {value:formatNumber(stats?.hrm?.avg,0), label:'avg'}
                 cadenceDetails = {value:formatNumber(stats?.cadence?.avg,0), label:'avg'}
 
-                let elevationGainRemaining = this.getTotalElevation()-this.current.elevationGainDisplay??0
+                let elevationGainRemaining = this.getTotalElevation()-(this.current.elevationGainDisplay??0)
                 if (isNaN(elevationGainRemaining)) elevationGainRemaining=undefined
                 if (elevationGainRemaining<0) elevationGainRemaining=0
                 const value = elevationGainRemaining!==undefined ? `-${formatNumber(elevationGainRemaining,0)}` : undefined
@@ -362,14 +362,16 @@ export class ActivityRideService extends IncyclistService {
         }
     }
 
-    getActivitySummaryDisplayProperties() {
+    getActivitySummaryDisplayProperties():ActivitySummaryDisplayProperties {
 
         try {
-            const route = useRouteList().getSelected()
+            const route =  this.getRouteList().getSelected()
+            const startSettings:RouteStartSettings = this.getRouteList().getStartSettings()
 
+            const isFreeRide = startSettings?.type==='Free-Ride'
             const showSave = this.activity!==undefined && !this.isSaveDone;
             const showContinue = this.state!=='completed'
-            const showMap = route?.description?.hasGpx 
+            const showMap = isFreeRide || (route?.description?.hasGpx)
             const preview = showMap ? undefined: route?.description?.previewUrl
     
     

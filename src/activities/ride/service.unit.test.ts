@@ -58,7 +58,7 @@ describe('ActivityRideService',()=>{
         let service:ActivityRideService
         beforeEach( ()=>{
             service = new ActivityRideService()
-            jest .useFakeTimers().setSystemTime(new Date('2020-01-01'));
+            jest .useFakeTimers().setSystemTime(new Date('getActivitySummaryDisplayProperties2020-01-01'));
         })
 
         afterEach( ()=>{
@@ -275,6 +275,31 @@ describe('ActivityRideService',()=>{
 
     })
 
+    describe('ActiveRideService', () => {
+        let service: ActivityRideService;
+        let s
+        beforeEach(() => {
+          s = service = new ActivityRideService();
+        });
+      
+        test('Free ride', () => {
+
+
+            const path =[
+                {lat: 40.28908245275464, lng: 23.389428365252346,elevation: 0.1061634434781438,routeDistance:0},
+                {lat: 40.289108886192935, lng: 23.389433183088087,elevation: 0.18467297903991475,routeDistance:3 }
+                ]               
+
+            mockServices(service,{startSettings:{startPos:0,realityFactor:100,type:'Free-Ride',option:{path}}})
+          
+      
+          // Act
+          const props = service.getActivitySummaryDisplayProperties();
+      
+          // Assert
+          expect(props.showMap).toBeTruthy()
+        });
+    })
 
     describe('getPrevRideStats',()=>{
         let service:ActivityRideService
