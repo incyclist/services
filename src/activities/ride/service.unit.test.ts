@@ -81,7 +81,7 @@ describe('ActivityRideService',()=>{
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
                 realityFactor:100,
-                name: 'Incyclist Ride-20200101010000',
+                name: 'Incyclist Ride-20200101000000',
                 routeType: 'GPX',
                 route: expect.objectContaining({
                     name:'Sydney Opera House and Botanic Garden'
@@ -122,7 +122,7 @@ describe('ActivityRideService',()=>{
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
                 realityFactor:0,
-                name: 'Incyclist Ride-20200101010000',
+                name: 'Incyclist Ride-20200101000000',
                 routeType: 'Free-Ride',
                 route: expect.objectContaining({
                     name:'Free Ride'

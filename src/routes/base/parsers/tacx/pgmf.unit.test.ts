@@ -21,7 +21,7 @@ describe ('PGMF Reader', ()=>{
             const data = await loadFile(null,file) as Buffer
 
             const fileInfo = reader.parse( data )
-    console.log(fileInfo)
+    
 
             // expect(fileInfo.rlvInfo?.videoFile).toBe('D:\\RLV-Training\\RLV\\ES_Andalusia-1\\ES_Andalusia-1.avi')
             // expect(fileInfo.rlvInfo?.framerate).toBe(25)
