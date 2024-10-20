@@ -194,7 +194,7 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
         const uuid = this.getUuid()
         const key = `${uuid.substring(0,32)}`
         
-        const cipher = crypto.createCipheriv('aes256',key,iv);
+        const cipher = crypto.createCipheriv('AES-256-CCM',key,iv);
         
         const text = JSON.stringify({username:this.username, password:this.password})
 
@@ -217,12 +217,29 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
         const uuid = this.getUuid()
         const key = `${uuid.substring(0,32)}`
 
-        
-        const cipher = crypto.createDecipheriv('aes256',key,iv);
 
-        let text = cipher.update(authKey, 'hex','utf8');
-        text += cipher.final('utf8');
-        const user = JSON.parse(text)        
+        const decipher = (em) => {
+            try {
+                const cipher = crypto.createDecipheriv(em,key,iv);
+
+                let text = cipher.update(authKey, 'hex','utf8');
+                text += cipher.final('utf8');
+                const user = JSON.parse(text)                        
+                return user
+            }
+            catch(err) {
+                // istanbul ignore next
+            }
+    
+        }
+
+        let user 
+        
+        user = decipher('AES-256-CCM')
+        if (!user) {
+            user = decipher('aes256')
+        }
+
 
         return user
     }
