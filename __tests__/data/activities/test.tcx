@@ -1,0 +1,310 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2" xmlns:ns2="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Activities>
+      <Activity Sport="Biking">
+      <Id>
+      2024-03-10T18:36:06.114Z
+    </Id><Lap StartTime="2024-03-10T18:36:06.114Z">
+      <TotalTimeSeconds>
+      19.899
+    </TotalTimeSeconds><DistanceMeters>
+      92.50840460419484
+    </DistanceMeters><MaximumSpeed>
+      5.915975070193038
+    </MaximumSpeed><Calories>
+      0
+    </Calories><AverageHeartRateBpm>
+      <Value>
+      0
+    </Value>
+    </AverageHeartRateBpm><MaximumHeartRateBpm>
+      <Value>
+      0
+    </Value>
+    </MaximumHeartRateBpm><Intensity>
+      Active
+    </Intensity><Cadence>
+      0
+    </Cadence><TriggerMethod>
+      Distance
+    </TriggerMethod><Track>
+      <Trackpoint>
+      <Time>
+      2024-03-04T18:36:08.014Z
+    </Time><AltitudeMeters>
+      498.24
+    </AltitudeMeters><DistanceMeters>
+      8.11559997412058
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      3.660105631817042
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:10.013Z
+    </Time><AltitudeMeters>
+      498.44
+    </AltitudeMeters><DistanceMeters>
+      15.366706445263908
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      3.9907917251968295
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:12.013Z
+    </Time><AltitudeMeters>
+      498.52
+    </AltitudeMeters><DistanceMeters>
+      23.372927430960566
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      4.371560975399081
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:13.014Z
+    </Time><AltitudeMeters>
+      499
+    </AltitudeMeters><DistanceMeters>
+      27.55324296486754
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      4.527876319497579
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:14.013Z
+    </Time><AltitudeMeters>
+      498.68
+    </AltitudeMeters><DistanceMeters>
+      32.10504294393508
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      4.6674503779171035
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:15.014Z
+    </Time><AltitudeMeters>
+      498.76
+    </AltitudeMeters><DistanceMeters>
+      36.702706292642425
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      4.792758238769205
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:17.013Z
+    </Time><AltitudeMeters>
+      499
+    </AltitudeMeters><DistanceMeters>
+      46.2407134439937
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      4.850320875230174
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:19.013Z
+    </Time><AltitudeMeters>
+      499.24
+    </AltitudeMeters><DistanceMeters>
+      55.95430969717489
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      4.951510293663873
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:20.013Z
+    </Time><AltitudeMeters>
+      499.32
+    </AltitudeMeters><DistanceMeters>
+      60.881816498334345
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      5.049074890895174
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:22.013Z
+    </Time><AltitudeMeters>
+      499.48
+    </AltitudeMeters><DistanceMeters>
+      70.97315128991295
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      5.209241873730803
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:23.013Z
+    </Time><AltitudeMeters>
+      499.52
+    </AltitudeMeters><DistanceMeters>
+      76.14427698062984
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      5.373078917110761
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:24.013Z
+    </Time><AltitudeMeters>
+      499.52
+    </AltitudeMeters><DistanceMeters>
+      81.43543737605063
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      5.522779226998577
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+<Trackpoint>
+      <Time>
+      2024-03-04T18:36:26.013Z
+    </Time><AltitudeMeters>
+      499.48
+    </AltitudeMeters><DistanceMeters>
+      92.50840460419484
+    </DistanceMeters><Cadence>
+      0
+    </Cadence><SensorState>
+      Present
+    </SensorState><Extensions>
+      <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
+      <Speed>
+      5.915975070193038
+    </Speed><Watts>
+      0
+    </Watts>
+    </TPX>
+    </Extensions>
+    </Trackpoint>
+    </Track>
+    </Lap><Notes>
+      Incyclist Ride #1
+    </Notes>
+    </Activity>
+    </Activities>
+    </TrainingCenterDatabase>

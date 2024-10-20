@@ -1,0 +1,42 @@
+{
+    "id": "0d6b5d59-fd10-467b-aa9b-2536615d1647",
+    "title": "Incyclist Ride",
+    "status": "active",
+    "logs": [
+        {
+        "time": 1.001,
+        "speed": 9.519466298548563,
+        "slope": 0.8713689787042157,
+        "cadence": 90,
+        "heartrate": 150,
+        "distance": 3.9417730722334605,
+        "power": 150,
+        "lat": 44.66024393291314,
+        "lon": 5.42094031949577,
+        "elevation": 0.05386582628379017
+        },
+        {
+        "time": 2.001,
+        "speed": 11.116171800387049,
+        "slope": 2.3644352329037286,
+        "cadence": 90,
+        "heartrate": 155,
+        "distance": 2.8660608470743902,
+        "power": 150,
+        "lat": 44.660261545936464,
+        "lon": 5.42096652181311,
+        "elevation": 0.014686056098067312
+        }
+    ],
+    "laps": [],    
+    "startTime": "2024-03-04T19:36:02.496Z",
+    "time": 6.601,
+    "timeTotal": 6.601,
+    "timePause": 0,
+    "distance": 23.340621954454363,
+    "user": {
+        "id": "1b4ff3d2-f602-4cc5-9d7b-a9f9444e5797",
+        "weight": 0
+    },
+    "screenshots": []
+}

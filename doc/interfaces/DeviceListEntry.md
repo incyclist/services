@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / DeviceListEntry
+[incyclist-services - v1.2.2](../README.md) / DeviceListEntry
 
 # Interface: DeviceListEntry
 

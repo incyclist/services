@@ -5,6 +5,10 @@ export function merge(base:any,data:any,depth=0) {
     if (!base)
         return;
 
+    if (typeof(data)==='object' && typeof(base)!=='object') {
+        base = data        
+    }
+
     let key;
     for (key in data) {
         if (typeof(data[key])==='object' && depth<4) {

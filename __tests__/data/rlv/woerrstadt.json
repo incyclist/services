@@ -1,0 +1,83 @@
+{
+    "title": "Triathlon Wörrstadt",
+    "distance": 36662.934035368286,
+    "decoded": [],
+    "elevation": 327.95569005439245,
+    "private": true,
+    "validated": true,
+    "video": {
+        "file": "Triathlon_Woerrstadt_Loop.mp4",
+        "framerate": 29.97,
+        "format": "mp4",
+        "mappings": [
+            {
+                "time": 0,
+                "videoSpeed": 28.780121671580904,
+                "distance": 0,
+                "frame": 0
+            },
+            {
+                "time": 1,
+                "videoSpeed": 30.12517999318877,
+                "distance": 7.9944782421058065,
+                "frame": 29.97
+            },
+            {
+                "time": 2,
+                "videoSpeed": 30.171357527391113,
+                "distance": 16.362583795769353,
+                "frame": 59.94
+            },
+            {
+                "time": 3,
+                "videoSpeed": 32.1339018831862,
+                "distance": 24.743516442266884,
+                "frame": 89.91
+            },
+            {
+                "time": 4,
+                "videoSpeed": 32.842472443225255,
+                "distance": 33.66960029870749,
+                "frame": 119.88
+            },
+            {
+                "time": 5,
+                "videoSpeed": 33.887068586602574,
+                "distance": 42.79250931071451,
+                "frame": 149.85
+            },
+            {
+                "time": 6,
+                "videoSpeed": 34.424213986384515,
+                "distance": 52.20558391810411,
+                "frame": 179.82
+            },
+            {
+                "time": 7,
+                "videoSpeed": 35.98517466126927,
+                "distance": 61.7678655809887,
+                "frame": 209.79
+            },
+            {
+                "time": 8,
+                "videoSpeed": 35.76004451295101,
+                "distance": 71.76374743134127,
+                "frame": 239.76
+            },
+            {
+                "time": 9,
+                "videoSpeed": 36.05967279734315,
+                "distance": 81.69709312938322,
+                "frame": 269.73
+            },
+            {
+                "time": 10,
+                "videoSpeed": 35.8337233558177,
+                "distance": 91.71366890642298,
+                "frame": 299.7
+            }
+       ],
+        "url": "video:///C:\\Temp\\videos\\Wörrstadt-Triathlon-Loop\\Triathlon_Woerrstadt_Loop.mp4"
+    },
+    "id": "fdc5c70f-3541-4f34-9714-775b9cadcc26"
+}

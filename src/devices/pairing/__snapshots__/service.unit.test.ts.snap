@@ -84,6 +84,9 @@ exports[`PairingService api start no devices in configuration will start scan 1`
     "stopped": false,
   },
   {
+    "canStartRide": false,
+  },
+  {
     "capabilities": [
       {
         "capability": "control",

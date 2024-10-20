@@ -1,0 +1,855 @@
+import { Vector, geo } from "../../utils";
+import { LatLng, crossing } from "../../utils/geo";
+import { abs, cos, degrees, rad, sin } from "../../utils/math";
+import { GET_WAYS_IN_AREA, MAX_DISTANCE_FROM_PATH, RADIUS_EARTH } from "./consts";
+import { Boundary, CrossingInfo, IncyclistNode, OverpassResult, OverpassWay, IncyclistWay, FreeRideDataSet, SplitPointInfo, WaySplitInfo } from "./types";
+
+
+export function addNode(node:number,nodesLookup:Record<string,IncyclistNode>,id:number,path:Array<IncyclistNode>):void {
+    let point = nodesLookup[node];
+
+    if (point!==undefined )
+        path.push ( point)
+
+    
+    if (point.ways===undefined) point.ways=[];
+    let found = point.ways.find ( e=> (e.toString()===id.toString()) );
+
+    if (found===undefined) nodesLookup[node].ways.push(id.toString());
+}
+
+
+
+export function addWay(w:IncyclistWay,ways:Array<IncyclistWay>,waysLookup:Record<string, IncyclistWay>):void {
+    if ( waysLookup[w.id]!==undefined)
+        ways = ways.filter( e => e.id!==w.id )
+    ways.push(w);        
+    waysLookup[w.id.toString()] =w; 
+}
+
+export function updateTypeStats(types:Record<string,number>,type:string):void {
+    let t = (type===undefined ? '-' : type);
+    if (types[t]!==undefined)   
+        types[t]++;
+    else   
+        types[t]=1;    
+}
+
+
+
+export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
+    if (str===undefined) 
+        return;
+
+    let data: OverpassResult
+
+    if ( typeof(str)==='string') {
+        try {
+            data = JSON.parse(str);
+        }
+        catch (error) {
+//                this.logger.logEvent({message:"_parse: parsing error:",error})
+            return;
+        }    
+    }
+    else {
+        data = str as unknown as  OverpassResult;
+    }
+    if ( data.elements===undefined)
+        return;
+
+    let nodesLookup:Record<string, IncyclistNode> = {};
+    let waysLookup:Record<string, IncyclistWay> = {}
+    let ways: Array<IncyclistWay> = []
+    let types: Record<string,number> = {}
+    let idx = 0;
+    let id;
+
+    // 1st pass search all nodes
+    data.elements.forEach(element => {
+        if (element.type==='node') {
+            id =  ( element.id!==undefined && typeof  element.id ==='number' )  ? id =  element.id.toString() : '_INT_'+idx;
+            nodesLookup[element.id.toString()] = {  id, lat:element.lat, lng:element.lon, tags: element.tags} ;
+            idx++;
+        }
+    });
+
+    // 2nd pass search all ways, if node id is present, but lat/lon is missing enrich with node data
+    idx=0;
+    data.elements.forEach(element => {
+        let path = [];
+        if (element.type==='way') {
+
+            const way = element as OverpassWay
+            id =  ( element.id!==undefined && typeof  element.id ==='number' )  ? id =  element.id.toString() : '_INT_'+idx;
+            const name = element.tags?.name;
+            const type = element.tags?.highway;
+        
+            if ( type!==undefined && (filter===undefined || filter.find( e => e===type)===undefined)) {
+               
+                way.nodes?.forEach( node => {
+                    addNode(node, nodesLookup,id,path)
+                });
+
+                updateTypeStats(types,type);
+                addWay({ id:id.toString(),path, type, name, tags: element.tags, bounds:way.bounds},ways,waysLookup)
+                idx++;    
+
+            } 
+        }
+    });
+
+
+    return {ways,nodesLookup,waysLookup,typeStats:types}
+}
+
+
+
+export function splitAtPointInfo(way:IncyclistWay,pointInfo:SplitPointInfo):Array< Array<IncyclistNode> > {
+    if (!way)
+        return;
+
+    let path=way.path;
+    let result= [ [],[]]
+    let foundBranch2=false;
+    path.forEach( (node,idx)=> {
+
+        if ( idx<=pointInfo.idx) result[0].push(node)
+        if ( idx===pointInfo.idx) {
+            result[1].push(node)
+        } 
+        if ( !foundBranch2 && idx>pointInfo.idx && node.ways.length===1) result[1].push(node)
+        if ( !foundBranch2 && idx>pointInfo.idx && node.ways.length>1) {
+            if ( findAdditional( pointInfo.branches, node.ways,way.id, (id1,id2)=>(id1===id2) )!==undefined) 
+                foundBranch2 = true;
+            result[1].push(node);
+
+        } 
+    });
+    return result;
+}
+
+
+export function getUntilFirstBranch(w:WaySplitInfo, props?:{reverse?:boolean, ignore?:string}):WaySplitInfo {
+    if (!w)
+        return;
+
+    const reverse = (props!==undefined) ? props.reverse : false;
+    const ignore = (props!==undefined) ? props.ignore : undefined;
+    let branch;
+
+    let path = w.path;
+    if (reverse) {
+        w.path = [...path];
+        w.path.reverse();
+        path = w.path;
+    }
+
+    let piBranch = getFirstBranch(w as IncyclistWay,ignore);
+
+
+    if (piBranch!== undefined) {
+        branch={id:w.id,path:[]};
+        path.forEach( (p,idx)=> {
+            if ( idx<=piBranch.idx) branch.path.push(p)
+        }); 
+    }
+    else {
+        branch ={id:w.id,path:w.path}
+    }
+    return branch;
+}
+
+export function isRoundabout(w, strictCheck=false) {
+    if (!w)
+        return;
+
+    let roundabout  = (w.tags!==undefined && (w.tags.roundabout===true || w.tags.junction==='roundabout'));
+    if ( roundabout) return true;
+
+    if (strictCheck) return false;
+    
+    if ( w.path===undefined || w.path.length<2)
+        return false;
+
+    roundabout= (w.path[0].id===w.path[w.path.length-1].id);
+    return roundabout;
+}
+
+
+export function splitAtIndex(way, idxSplit) {
+    let path=way.path;
+    let result= [ [],[]]
+    path.forEach( (p,idx)=> {
+
+        if ( idx<=idxSplit) result[0].push(p);
+        if ( idx>=idxSplit) result[1].push(p);
+    });
+    return result;
+}
+
+export function removeDuplicates(options) {
+    const endPoints = []; 
+    const unique = [];
+    const uniqueUsed = []
+    options.forEach( (o) => { endPoints.push(o.path[ o.path.length-1].id) })
+    endPoints.forEach( (id) => {
+        if ( unique.indexOf(id)<0 ) {
+            unique.push(id);
+            uniqueUsed.push(false);
+        }
+    })
+
+    return options.filter( (o) => {
+        const id = o.path[ o.path.length-1].id;
+        const idx = unique.indexOf(id);
+        if (idx>=0 && !uniqueUsed[idx]) {
+            uniqueUsed[idx] = true;
+            return true;
+        }
+        return false;
+    } )
+
+
+}
+
+
+
+export function splitAtPoint(way:IncyclistWay, point:IncyclistNode):Array<WaySplitInfo> {
+    let path=way.path;
+    let result= [ {id:way.id,path:[],onewayReverse:false},{id:way.id,path:[],onewayReverse:false}]
+    let found = false;
+
+
+    let roundabout = isRoundabout(way)
+
+    if ( !roundabout) {
+        path.forEach( (p,idx)=> {
+            if ( !found) result[0].path.push(p);
+            if (!found)
+                found =  pointEquals(p,point) ;
+            if ( found) result[1].path.push(p);
+        });
+        result[0].path.reverse();    
+        if ( isOneWay(way))
+            result[0].onewayReverse = true;
+    }
+    else {
+        
+        // loop until point
+        let idx = undefined;
+        
+        path.forEach( (p,i)=> {
+            if (!found) {
+                found =  pointEquals(p,point) ;
+                if (found)
+                    idx = i;
+            }
+        });
+        if (idx!==undefined) {
+            let i;
+            for (i=0;i<path.length;i++) {
+                let len = path.length;
+                let p = path[(idx+i)%len];
+                let q = path[(idx-i+len)%len];
+                if ( result[0].path.length===0 || 
+                     (p.id!==result[0].path[result[0].path.length-1].id && p.id!==result[0].path[0].id) )
+                    result[0].path.push(p);
+                if ( result[1].path.length===0 || 
+                     (q.id!==result[1].path[result[1].path.length-1].id && q.id!==result[1].path[0].id) )
+                    result[1].path.push(q);
+            }
+
+            if ( isOneWay(way)) {
+                result[1].onewayReverse = true;
+            }
+
+        }
+        else {
+            return ([])
+        }
+
+    }
+    return result;
+}
+
+
+/* Generates a unique ID for an array of way-id's. Changing the order of the ways whould result into the same ID
+* @param {MapAreay.String[]} Array containing all IDs of ways 
+* @returns {String} Unique ID
+*/
+export function  generateID   (ways)  {
+    if (ways===undefined || ways.length===0) return;
+    if (ways.length<2) return ways[0];
+    let w = [...ways];
+    let widStr = 'R:'+w.sort( ).join(',');
+
+    return widStr;
+};
+
+
+export function buildQuery(template,boundary:Boundary):string {
+    if (template===undefined)
+        return;
+    return template.replace('__boundary__',boundaryToString(boundary))
+}
+
+export function generateQuery(location:LatLng,radius:number):string {
+    const boundary = getBounds(location.lat,location.lng,radius);
+    const template = GET_WAYS_IN_AREA;
+    return buildQuery(template,boundary)
+}
+
+
+export function boundaryToString(boundary:Boundary) {
+    if ( boundary===undefined )
+        return 'undefined';
+
+    let ne = boundary.northeast;
+    let sw = boundary.southwest;
+
+    if (ne!==undefined && (ne.lat===undefined || ne.lng===undefined))
+        return 'error: northeast incorrect' 
+    if (sw!==undefined && (sw.lat===undefined || sw.lng===undefined))
+        return 'error: southwest incorrect' 
+
+    if (ne === undefined) ne = sw;
+    if (sw === undefined) sw = ne;
+
+    if (sw===undefined)
+        return'undefined';
+    let str = sw.lat + ',' + sw.lng +','+ ne.lat + ',' + ne.lng;
+    return str;
+}
+
+
+export function pointEquals(p1,p2) {
+    if (p1===undefined || p2===undefined)
+        return false;
+    return (p1.id===p2.id || (p1.lat!==undefined && p1.lng!==undefined && p1.lat===p2.lat&&p1.lng===p2.lng) )
+}
+
+export function isWay(p) {
+    if (p===undefined || p===null || p.id===undefined || p.path===undefined || p.tags===undefined)
+        return false;
+    
+    return true;
+}
+
+export function isNode(p) {
+    if (p===undefined || p===null || p.id===undefined || p.lat===undefined || p.lng===undefined || p.ways===undefined)
+        return false;
+    
+    return true;
+}
+
+export function isAllowed( way, from, to ) {
+
+    if (isNode(from) && isWay(way)) {
+        const fromIdx = way.path.findIndex( p => p.id===from.id);
+        // point is on the path - if it's not a one way, that's all we need to know
+        if (fromIdx!==-1 && !isOneWay(way))
+            return true;
+
+        let p0 = way.path[0];
+        let pN = way.path[way.path.length-1];
+        if (from.id===p0.id)
+            return true;
+
+        if ( from.id!==p0.id && from.id===pN.id)
+            return !isOneWay(way);
+        
+        
+        if ( isNode(to) && to.id === pN.id)
+            return true;
+
+        if ( isNode(from) && isNode(to )) {
+            const toId   = way.path.findIndex( p => p.id===to.id);
+            if ( fromIdx===-1 || toId===-1)
+                return;
+            return !isOneWay(way) || fromIdx<toId;
+        }
+
+    }
+
+
+    return undefined;
+} 
+
+export function isOneWay(way:IncyclistWay):boolean {
+    if ( !way || !way.tags || !way.tags.oneway)
+        return false; 
+    let ow = way.tags.oneway; 
+    return (ow.toString()==='true' || ow==='yes')
+}
+
+export function getFirstBranch(way:IncyclistWay,ignore?:string):SplitPointInfo {
+    if (way===undefined || way.path===undefined)
+        return;
+
+    let pFound = undefined
+    way.path.forEach( (node,idx)=> {
+
+        if (idx===0)
+            return
+
+        let ways = [];
+        
+        node.ways.forEach( (w) => {
+            if (ignore===undefined || w!==ignore) ways.push(w) 
+        })
+
+        if (!pFound && node.ways!==undefined && ways.length>1 ) {
+            let branches = [];
+            ways.forEach( pw => {
+                if ( pw!==way.id) branches.push(pw);
+            }) 
+            pFound =  {point:node,idx,branches};
+        }
+    }); 
+
+    return pFound;
+}
+
+export function findAdditional( a1, a2, id3, fn) {
+    let res= [];
+
+    a1.forEach ( e1 => {
+        a2.forEach( e2 => {
+            if ( !fn(e1,e2) && !fn(e1,id3) && !fn(e2,id3))
+                res.push(e2)
+        })
+    })
+    if ( res.length===0)
+        return undefined;
+    return res;
+}
+
+export function _getPointOnLine(point:LatLng,p1:LatLng,p2:LatLng) {
+    let bL = initialBearingTo(p1,p2);
+    let bP = bL+90;
+    let p3 = destinationPoint(point,100,bP);
+    
+    return getCrossing( p1,p2,point,p3,false)
+}
+
+export function isBetween(point:LatLng,p1:LatLng,p2:LatLng) {
+    if (point===undefined|| p1===undefined || p2===undefined || 
+        point.lat===undefined|| point.lng===undefined ||
+        p1.lat===undefined|| p1.lng===undefined ||
+        p2.lat===undefined|| p2.lng===undefined 
+        ) return undefined;
+
+    let d = geo.distanceBetween(p1,point);    
+    let bDest = initialBearingTo(p1,p2);
+    let bPoint = initialBearingTo(p1,point);
+    let angle = bPoint-bDest; 
+    if ( abs(angle) > 30) // more than 30 degree difference: point is not on path
+        return {between:false, offset:d };
+
+    let dP2 = geo.distanceBetween(p1,p2);    
+    let offset = abs(d*sin(angle));
+
+    if (offset<MAX_DISTANCE_FROM_PATH && dP2>d) {
+        return {between:true, offset};
+    }
+    return {between:false, offset:(dP2-d)};
+}
+
+
+
+export function distanceToPath(point:LatLng,way) {
+    if (point===undefined|| point.lat===undefined|| point.lng===undefined 
+        || way===undefined || way.path===undefined || way.path.length===0) return undefined;
+
+    let minDistance;
+    let minIdx = -1;
+    let prev;
+    let foundExact = false;
+
+    way.path.forEach ( (element,idx) => {
+        // exact match
+        if (element.lat===point.lat && element.lng===point.lng) {
+            minDistance = 0;
+            foundExact = true;
+            return;
+        }
+
+        if ( foundExact)
+            return;
+
+        if (prev!==undefined) {
+            let res = isBetween(point,prev,element);
+            if (res&&res.between)  {
+                minDistance = res.offset;
+                foundExact = true;
+                return;
+            }
+        }
+
+        let distance = geo.distanceBetween(element,point);  
+        if (minDistance===undefined || distance<minDistance) {
+            minDistance = distance;
+            minIdx = idx;
+        }
+
+        prev = element;
+    });
+
+    if ( foundExact)
+        return minDistance;
+
+    
+    if ( minIdx>0) {
+        const alpha = initialBearingTo(way.path[minIdx-1],way.path[minIdx]);
+        const alpha2 = initialBearingTo(way.path[minIdx-1],point)
+        let beta  =  alpha2- alpha;
+        if ( beta>270 ) beta -=360;
+        if ( ( beta>-90 && beta<90)) {
+
+            const dist = sin( abs(beta)) * geo.distanceBetween(way.path[minIdx-1],point);
+            const distPath = cos( abs(beta)) * geo.distanceBetween(way.path[minIdx-1],point);
+            if ( dist<minDistance && distPath>0 && distPath <geo.distanceBetween(way.path[minIdx-1],way.path[minIdx]))
+                minDistance = dist;
+        }
+    }
+
+    if ( minIdx<way.path.length-2) {
+        const alpha = initialBearingTo(way.path[minIdx],way.path[minIdx+1]);
+        let beta  = initialBearingTo(way.path[minIdx],point) - alpha;
+        if ( beta>270 ) beta -=360;
+        if ( ( beta>-90 && beta<90)) {
+            const dist = sin(abs(beta)) * geo.distanceBetween(way.path[minIdx],point);
+            const distPath = cos( abs(beta)) * geo.distanceBetween(way.path[minIdx],point);
+            if ( dist<minDistance && distPath>0 && distPath <geo.distanceBetween(way.path[minIdx],way.path[minIdx+1]))
+                minDistance = dist;
+        }
+    }
+
+    return minDistance;
+}
+
+export function getNearestPath(point,ways) {
+
+    if (ways===undefined || point===undefined)
+        return;
+    let w;
+    let min = { path:undefined, distance:undefined, way:undefined  };
+    
+    for ( w of ways) {
+        let distance = distanceToPath(point,w)
+        if (distance!==undefined && (min.distance===undefined || distance<min.distance))  {
+            min.distance = distance; 
+            min.path = w.path
+            min.way = w;
+        }
+    }
+
+    return min;
+}
+
+
+export function  isWithinRange(distance) {        
+    return abs(distance)<MAX_DISTANCE_FROM_PATH
+}
+
+/* Returns the point where the two lines A->B and C->D are crossing
+* @param {LatLng} A    starting point 1st line
+* @param {LatLng} B    ending point 1st line
+* @param {LatLng} C    starting point 2nd line
+* @param {LatLng} D    ending point 2nd line
+* @param {boolean} exact  true: crossing must happen within both lines, 
+*                       false: crossing just based on direction of both lines 
+* @returns  the crossing point or undefined if no corssing point could be found
+*/
+
+export function getCrossing( A:LatLng,B:LatLng,C:LatLng,D:LatLng,exact=true):CrossingInfo { 
+    let AB = getVector(A,B)
+    let CD = getVector(C,D);
+    let AC = getVector(A,C);
+    
+    const ciA = {...A, distance:0}
+    const ciB = {...B, distance:geo.distanceBetween(A,B)}
+
+    // first check if we have overlaps 
+    if (isWithinRange(geo.distanceBetween(A,C))) 
+        return ciA;
+    if (isWithinRange(geo.distanceBetween(A,D)))
+        return ciA;
+    if (isWithinRange(geo.distanceBetween(B,C)))
+        return ciB;
+    if (isWithinRange(geo.distanceBetween(B,D)))
+        return ciB;
+
+    const V = crossing( AB,CD,AC); // vector from point A to crossing     
+    if (V===undefined)
+        return undefined;  
+    
+    
+    const p1Len = AB.len();
+    const distance =V.len();
+
+    if ( AB.isSameDirection(V) && ( distance<p1Len || isWithinRange(p1Len-distance))){
+        let X = geo.getPointBetween(A,B,distance);
+        let CX= getVector(C,X);
+        if (!exact || (CX.len()<CD.len() ||isWithinRange(CD.len() -CX.len()))) {            
+            return {...X,distance}
+        }
+    }
+    return undefined;
+    
+}
+
+
+
+export function getPointCrossingPath( point,path,closest=false) {
+    let pPrev=undefined;
+    let X = undefined;
+    let pClosest = undefined
+
+    if (path===undefined)
+        return undefined;
+
+    path.forEach ( ( p,i ) =>{
+        let pDist =  abs(geo.distanceBetween(p,point));
+        if ( pClosest===undefined || pClosest.distance>pDist) {
+            pClosest= { distance:pDist, point:p, idx:i}
+        }
+        if (pPrev!==undefined) {
+            let pX = _getPointOnLine(point,pPrev,p);
+            if (pX!==undefined) {
+                let dist = abs(geo.distanceBetween(pX,point))
+                if ( X===undefined || (X.distance>dist) ) {
+                    X = { point:pX, distance:dist,idx:i}
+                }
+            }   
+        }
+        pPrev =p;
+    });
+    if ( X!==undefined) {
+        return X
+    }
+    else {
+        if (closest)
+            return pClosest;
+    }
+}
+
+
+/* Provides information of the first crossing between two MapArea Ways ( i.e. parts of streets)
+* @param {MapArea.way} way1 1st way
+* @param {MapArea.way} way2 2nd way
+* @returns { {point,idx1,idx2} } point: the crossing point, idx1: Index of that point in 1st way, idx2: Index of that point in 2nd way
+*/
+export function getCrossingInfo ( way1, way2) {
+    if (way1===undefined || way1.path===undefined || way2===undefined|| way2.path===undefined) 
+        return;
+    let crossing =undefined;
+
+    way1.path.forEach ( (p1,i) => {
+        way2.path.forEach ( (p2,j) => {
+            if ( crossing===undefined && p1.id === p2.id) {
+                crossing =  {point:p1, idx1:i, idx2: j} 
+            }
+        });
+
+    } )
+    return crossing;
+}
+
+
+/* Creates a vector that represents the path between the points p1 and p2
+* @param {latNg} p1 coordinates of the starting point.
+* @param {latNg} p2 coordinates of the end point
+* @returns {Vector} The vector
+*/
+export function getVector( p1:LatLng, p2:LatLng) {
+    if (p1===undefined) throw new Error("missing mandatory argument: p1");
+    if (p2===undefined) throw new Error("missing mandatory argument: p2");
+
+    let distance = geo.distanceBetween(p1,p2);    
+    if (distance===0) {
+        return new Vector([0,0])
+    }
+    let bearing = initialBearingTo(p1,p2);
+
+    return new Vector( { path:{bearing,distance}} );
+}
+
+
+export function getBounds( lat:number, lng:number, offset:number ) {
+    const pi = Math.PI;
+    const m =  (1 / ((2 * pi / 360) * RADIUS_EARTH)) / 1000;  //1 meter in degree;
+    
+    let boundary = {
+        northeast:{lat:undefined, lng:undefined},
+        southwest:{lat:undefined, lng:undefined}
+    }    
+
+    boundary.northeast.lat = lat+offset*m;
+    boundary.northeast.lng = lng+(offset*m)/Math.cos(lat*pi/180)
+    boundary.southwest.lat = lat-offset*m;
+    boundary.southwest.lng = lng-(offset*m)/Math.cos(lat*pi/180)
+    return boundary;
+}
+
+export function isWithinBoundary( location:LatLng, boundary:Boundary) {
+    if (location===undefined || location.lat===undefined || location.lng===undefined)
+        return false;
+    
+    const lat = location.lat;
+    const lng = location.lng;
+    const sw = boundary.southwest;
+    const ne = boundary.northeast;
+
+    return ( lat>=sw.lat && lat<=ne.lat  && lng>=sw.lng && lng<=ne.lng)
+}
+
+/**
+ * Returns the initial bearing from ‘this’ point to destination point.
+ *
+ * @param   {LatLon} p1 - Latitude/longitude of originating point.
+ * @param   {LatLon} p2 - Latitude/longitude of destination point.
+ * @returns {number} Initial bearing in degrees from north (0°..360°).
+ *
+ * @example
+ *   const p1 = new LatLon(52.205, 0.119);
+ *   const p2 = new LatLon(48.857, 2.351);
+ *   const b1 = p1.initialBearingTo(p2); // 156.2°
+ */
+export function initialBearingTo(p1:LatLng,p2:LatLng) {
+    if (p1===undefined || p2===undefined || (p1.lat===p2.lat && p1.lng===p2.lng) )
+        return;
+
+    // tanθ = sinΔλ⋅cosφ2 / cosφ1⋅sinφ2 − sinφ1⋅cosφ2⋅cosΔλ
+    // see mathforum.org/library/drmath/view/55417.html for derivation
+
+    const φ1 = rad(p1.lat)
+    const φ2 = rad(p2.lat);
+    const Δλ = rad(p2.lng - p1.lng);
+
+    const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+    const y = Math.sin(Δλ) * Math.cos(φ2);
+    const θ = Math.atan2(y, x);
+
+    const bearing = degrees(θ);
+
+    return bearing;
+}
+
+
+
+
+/**
+ * Returns how far a given point is along a path from from start-point, heading towards end-point.
+ * That is, if a perpendicular is drawn from ‘this’ point to the (great circle) path, the
+ * along-track distance is the distance from the start point to where the perpendicular crosses
+ * the path.
+ *
+ * @param   {LatLon} point - point to be verified.
+ * @param   {LatLon} pathStart - Start point of great circle path.
+ * @param   {LatLon} pathEnd - End point of great circle path.
+ * @param   {number} [radius=6371e3] - (Mean) radius of earth (defaults to radius in metres).
+ * @returns {number} Distance along great circle to point nearest ‘this’ point.
+ *
+ * @example
+ *   const pCurrent = new LatLon(53.2611, -0.7972);
+ *   const p1 = new LatLon(53.3206, -1.7297);
+ *   const p2 = new LatLon(53.1887,  0.1334);
+ *   const d = pCurrent.alongTrackDistanceTo(p1, p2);  // 62.331 km
+ */
+export function alongTrackDistanceTo(point:LatLng, pathStart:LatLng, pathEnd:LatLng, radius:number=RADIUS_EARTH*1000) {
+    if (point===undefined || pathStart===undefined || pathEnd===undefined)
+        return;
+
+    const R = radius;
+    const δ13 = geo.calculateDistance(pathStart.lat,pathStart.lng,point.lat,point.lng,R) / R;
+    const θ13 = rad(initialBearingTo(pathStart,point));
+    const θ12 = rad(initialBearingTo(pathStart,pathEnd));
+
+
+
+    const δxt = Math.asin(Math.sin(δ13) * Math.sin(θ13-θ12));
+
+    const δat = Math.acos(Math.cos(δ13) / Math.abs(Math.cos(δxt)));
+
+    let d = δat*Math.sign(Math.cos(θ12-θ13)) * R;
+   
+    return d;
+}
+
+/**
+ * Returns the destination point from ‘this’ point having travelled the given distance on the
+ * given initial bearing (bearing normally varies around path followed).
+ *
+ * @param   {LatLng} start - starting point
+ * @param   {number} distance - Distance travelled, in same units as earth radius (default: metres).
+ * @param   {number} bearing - Initial bearing in degrees from north.
+ * @param   {number} [radius=6371e3] - (Mean) radius of earth (defaults to radius in metres).
+ * @returns {LatLon} Destination point.
+ *
+ * @example
+ *   const p1 = new LatLon(51.47788, -0.00147);
+ *   const p2 = p1.destinationPoint(7794, 300.7); // 51.5136°N, 000.0983°W
+ */
+export function destinationPoint(start:LatLng, distance:number, bearing:number, radius:number=RADIUS_EARTH*1000) {
+    // sinφ2 = sinφ1⋅cosδ + cosφ1⋅sinδ⋅cosθ
+    // tanΔλ = sinθ⋅sinδ⋅cosφ1 / cosδ−sinφ1⋅sinφ2
+    // see mathforum.org/library/drmath/view/52049.html for derivation
+
+    const δ = distance / radius; // angular distance in radians
+    const θ = rad(bearing);
+
+    const φ1 = rad(start.lat), λ1 = rad(start.lng);
+
+    const sinφ2 = Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ);
+    const φ2 = Math.asin(sinφ2);
+    const y = Math.sin(θ) * Math.sin(δ) * Math.cos(φ1);
+    const x = Math.cos(δ) - Math.sin(φ1) * sinφ2;
+    const λ2 = λ1 + Math.atan2(y, x);
+
+    const lat = degrees(φ2);
+    const lng = degrees(λ2);
+
+    return {lat,lng}
+}
+
+/** from: http://www.movable-type.co.uk/scripts/latlong.html
+     * Returns the destination point from ‘this’ point having travelled the given distance on the
+     * given initial bearing (bearing normally varies around path followed).
+     *
+     * @param   {number} lat - Latitude of original point
+     * @param   {number} lon - Longitude of original point.
+     * @param   {number} distance - Distance travelled, in same units as earth radius (default: metres).
+     * @param   {number} bearing - Initial bearing in degrees from north.
+     * @param   {number} [radius=6378100] - (Mean) radius of earth (defaults to radius in metres).
+     * @returns {LatLng} Destination point.
+     *
+     */
+
+/* (More correct) alternative to getBounds():
+
+destinationPoint(lat,lon,distance, bearing, radius= 6378100) {
+    // sinφ2 = sinφ1⋅cosδ + cosφ1⋅sinδ⋅cosθ
+    // tanΔλ = sinθ⋅sinδ⋅cosφ1 / cosδ−sinφ1⋅sinφ2
+    // see mathforum.org/library/drmath/view/52049.html for derivation
+
+    const angDist = distance / radius; // angular distance in radians
+    const bearingRad = rad(bearing);
+
+    const latRad = rad(lat), lonRad = rad(lon);
+
+    const sinLat2Rad = Math.sin(latRad) * Math.cos(angDist) + Math.cos(latRad) * Math.sin(angDist) * Math.cos(bearingRad);
+    const lat2Rad = Math.asin(sinLat2Rad);
+    const y = Math.sin(bearingRad) * Math.sin(angDist) * Math.cos(latRad);
+    const x = Math.cos(angDist) - Math.sin(latRad) * sinLat2Rad;
+    const lon2Rad = lonRad + Math.atan2(y, x);
+
+    let point = {
+        lat : degrees(lat2Rad),
+        lng : degrees(lon2Rad)
+    }
+
+    return point;
+}
+*/

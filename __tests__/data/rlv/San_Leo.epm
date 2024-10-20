@@ -1,0 +1,2202 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<roadmovie>
+	<name>San_Leo</name>
+	<id>71586bbca0d7c9bdb92d1b49c60c06c6</id>
+	<fileId />
+	<video-file-path>San_Leo.avi</video-file-path>
+	<framerate>25</framerate>
+	<start-frame>0</start-frame>
+	<end-frame>32000</end-frame>
+	<width>1920</width>
+	<height>768</height>
+	<clipmapper>DistanceEp</clipmapper>
+	<mappings>
+		<mapping frame="0" distance="0" />
+		<mapping frame="25" distance="8" />
+		<mapping frame="75" distance="24" />
+		<mapping frame="125" distance="41" />
+		<mapping frame="175" distance="59" />
+		<mapping frame="225" distance="77" />
+		<mapping frame="275" distance="96" />
+		<mapping frame="325" distance="116" />
+		<mapping frame="375" distance="136" />
+		<mapping frame="425" distance="156" />
+		<mapping frame="475" distance="177" />
+		<mapping frame="525" distance="199" />
+		<mapping frame="575" distance="221" />
+		<mapping frame="625" distance="244" />
+		<mapping frame="675" distance="267" />
+		<mapping frame="725" distance="290" />
+		<mapping frame="775" distance="314" />
+		<mapping frame="825" distance="338" />
+		<mapping frame="875" distance="361" />
+		<mapping frame="925" distance="385" />
+		<mapping frame="975" distance="408" />
+		<mapping frame="1025" distance="430" />
+		<mapping frame="1075" distance="453" />
+		<mapping frame="1125" distance="475" />
+		<mapping frame="1175" distance="497" />
+		<mapping frame="1225" distance="520" />
+		<mapping frame="1275" distance="543" />
+		<mapping frame="1325" distance="566" />
+		<mapping frame="1375" distance="588" />
+		<mapping frame="1425" distance="611" />
+		<mapping frame="1475" distance="634" />
+		<mapping frame="1525" distance="657" />
+		<mapping frame="1575" distance="680" />
+		<mapping frame="1625" distance="704" />
+		<mapping frame="1675" distance="728" />
+		<mapping frame="1725" distance="753" />
+		<mapping frame="1775" distance="779" />
+		<mapping frame="1825" distance="804" />
+		<mapping frame="1875" distance="830" />
+		<mapping frame="1925" distance="856" />
+		<mapping frame="1975" distance="881" />
+		<mapping frame="2025" distance="907" />
+		<mapping frame="2075" distance="932" />
+		<mapping frame="2125" distance="957" />
+		<mapping frame="2175" distance="983" />
+		<mapping frame="2225" distance="1008" />
+		<mapping frame="2275" distance="1034" />
+		<mapping frame="2325" distance="1059" />
+		<mapping frame="2375" distance="1085" />
+		<mapping frame="2425" distance="1110" />
+		<mapping frame="2475" distance="1135" />
+		<mapping frame="2525" distance="1159" />
+		<mapping frame="2575" distance="1184" />
+		<mapping frame="2625" distance="1209" />
+		<mapping frame="2675" distance="1235" />
+		<mapping frame="2725" distance="1261" />
+		<mapping frame="2775" distance="1288" />
+		<mapping frame="2825" distance="1314" />
+		<mapping frame="2875" distance="1341" />
+		<mapping frame="2925" distance="1368" />
+		<mapping frame="2975" distance="1395" />
+		<mapping frame="3025" distance="1421" />
+		<mapping frame="3075" distance="1448" />
+		<mapping frame="3125" distance="1474" />
+		<mapping frame="3175" distance="1501" />
+		<mapping frame="3225" distance="1527" />
+		<mapping frame="3275" distance="1554" />
+		<mapping frame="3325" distance="1580" />
+		<mapping frame="3375" distance="1606" />
+		<mapping frame="3425" distance="1632" />
+		<mapping frame="3475" distance="1657" />
+		<mapping frame="3525" distance="1683" />
+		<mapping frame="3575" distance="1708" />
+		<mapping frame="3625" distance="1734" />
+		<mapping frame="3675" distance="1761" />
+		<mapping frame="3725" distance="1788" />
+		<mapping frame="3775" distance="1816" />
+		<mapping frame="3825" distance="1845" />
+		<mapping frame="3875" distance="1874" />
+		<mapping frame="3925" distance="1903" />
+		<mapping frame="3975" distance="1931" />
+		<mapping frame="4025" distance="1959" />
+		<mapping frame="4075" distance="1987" />
+		<mapping frame="4125" distance="2015" />
+		<mapping frame="4175" distance="2042" />
+		<mapping frame="4225" distance="2069" />
+		<mapping frame="4275" distance="2096" />
+		<mapping frame="4325" distance="2123" />
+		<mapping frame="4375" distance="2149" />
+		<mapping frame="4425" distance="2174" />
+		<mapping frame="4475" distance="2199" />
+		<mapping frame="4525" distance="2223" />
+		<mapping frame="4575" distance="2247" />
+		<mapping frame="4625" distance="2271" />
+		<mapping frame="4675" distance="2295" />
+		<mapping frame="4725" distance="2320" />
+		<mapping frame="4775" distance="2346" />
+		<mapping frame="4825" distance="2372" />
+		<mapping frame="4875" distance="2399" />
+		<mapping frame="4925" distance="2426" />
+		<mapping frame="4975" distance="2453" />
+		<mapping frame="5025" distance="2481" />
+		<mapping frame="5075" distance="2509" />
+		<mapping frame="5125" distance="2535" />
+		<mapping frame="5175" distance="2560" />
+		<mapping frame="5225" distance="2584" />
+		<mapping frame="5275" distance="2607" />
+		<mapping frame="5325" distance="2628" />
+		<mapping frame="5375" distance="2650" />
+		<mapping frame="5425" distance="2671" />
+		<mapping frame="5475" distance="2691" />
+		<mapping frame="5525" distance="2712" />
+		<mapping frame="5575" distance="2733" />
+		<mapping frame="5625" distance="2753" />
+		<mapping frame="5675" distance="2773" />
+		<mapping frame="5725" distance="2794" />
+		<mapping frame="5775" distance="2813" />
+		<mapping frame="5825" distance="2833" />
+		<mapping frame="5875" distance="2854" />
+		<mapping frame="5925" distance="2874" />
+		<mapping frame="5975" distance="2896" />
+		<mapping frame="6025" distance="2917" />
+		<mapping frame="6075" distance="2939" />
+		<mapping frame="6125" distance="2962" />
+		<mapping frame="6175" distance="2986" />
+		<mapping frame="6225" distance="3011" />
+		<mapping frame="6275" distance="3037" />
+		<mapping frame="6325" distance="3063" />
+		<mapping frame="6375" distance="3088" />
+		<mapping frame="6425" distance="3111" />
+		<mapping frame="6475" distance="3134" />
+		<mapping frame="6525" distance="3155" />
+		<mapping frame="6575" distance="3176" />
+		<mapping frame="6625" distance="3198" />
+		<mapping frame="6675" distance="3221" />
+		<mapping frame="6725" distance="3245" />
+		<mapping frame="6775" distance="3271" />
+		<mapping frame="6825" distance="3298" />
+		<mapping frame="6875" distance="3326" />
+		<mapping frame="6925" distance="3353" />
+		<mapping frame="6975" distance="3381" />
+		<mapping frame="7025" distance="3409" />
+		<mapping frame="7075" distance="3436" />
+		<mapping frame="7125" distance="3462" />
+		<mapping frame="7175" distance="3487" />
+		<mapping frame="7225" distance="3510" />
+		<mapping frame="7275" distance="3531" />
+		<mapping frame="7325" distance="3552" />
+		<mapping frame="7375" distance="3573" />
+		<mapping frame="7425" distance="3595" />
+		<mapping frame="7475" distance="3618" />
+		<mapping frame="7525" distance="3641" />
+		<mapping frame="7575" distance="3666" />
+		<mapping frame="7625" distance="3691" />
+		<mapping frame="7675" distance="3717" />
+		<mapping frame="7725" distance="3743" />
+		<mapping frame="7775" distance="3769" />
+		<mapping frame="7825" distance="3796" />
+		<mapping frame="7875" distance="3823" />
+		<mapping frame="7925" distance="3850" />
+		<mapping frame="7975" distance="3876" />
+		<mapping frame="8025" distance="3903" />
+		<mapping frame="8075" distance="3929" />
+		<mapping frame="8125" distance="3956" />
+		<mapping frame="8175" distance="3983" />
+		<mapping frame="8225" distance="4010" />
+		<mapping frame="8275" distance="4037" />
+		<mapping frame="8325" distance="4065" />
+		<mapping frame="8375" distance="4092" />
+		<mapping frame="8425" distance="4119" />
+		<mapping frame="8475" distance="4145" />
+		<mapping frame="8525" distance="4172" />
+		<mapping frame="8575" distance="4197" />
+		<mapping frame="8625" distance="4223" />
+		<mapping frame="8675" distance="4248" />
+		<mapping frame="8725" distance="4273" />
+		<mapping frame="8775" distance="4297" />
+		<mapping frame="8825" distance="4321" />
+		<mapping frame="8875" distance="4345" />
+		<mapping frame="8925" distance="4369" />
+		<mapping frame="8975" distance="4394" />
+		<mapping frame="9025" distance="4418" />
+		<mapping frame="9075" distance="4442" />
+		<mapping frame="9125" distance="4466" />
+		<mapping frame="9175" distance="4489" />
+		<mapping frame="9225" distance="4512" />
+		<mapping frame="9275" distance="4534" />
+		<mapping frame="9325" distance="4555" />
+		<mapping frame="9375" distance="4574" />
+		<mapping frame="9425" distance="4591" />
+		<mapping frame="9475" distance="4606" />
+		<mapping frame="9525" distance="4620" />
+		<mapping frame="9575" distance="4633" />
+		<mapping frame="9625" distance="4646" />
+		<mapping frame="9675" distance="4659" />
+		<mapping frame="9725" distance="4672" />
+		<mapping frame="9775" distance="4685" />
+		<mapping frame="9825" distance="4699" />
+		<mapping frame="9875" distance="4713" />
+		<mapping frame="9925" distance="4728" />
+		<mapping frame="9975" distance="4743" />
+		<mapping frame="10025" distance="4757" />
+		<mapping frame="10075" distance="4772" />
+		<mapping frame="10125" distance="4787" />
+		<mapping frame="10175" distance="4801" />
+		<mapping frame="10225" distance="4816" />
+		<mapping frame="10275" distance="4830" />
+		<mapping frame="10325" distance="4843" />
+		<mapping frame="10375" distance="4857" />
+		<mapping frame="10425" distance="4871" />
+		<mapping frame="10475" distance="4885" />
+		<mapping frame="10525" distance="4900" />
+		<mapping frame="10575" distance="4914" />
+		<mapping frame="10625" distance="4928" />
+		<mapping frame="10675" distance="4941" />
+		<mapping frame="10725" distance="4955" />
+		<mapping frame="10775" distance="4968" />
+		<mapping frame="10825" distance="4981" />
+		<mapping frame="10875" distance="4993" />
+		<mapping frame="10925" distance="5006" />
+		<mapping frame="10975" distance="5019" />
+		<mapping frame="11025" distance="5032" />
+		<mapping frame="11075" distance="5045" />
+		<mapping frame="11125" distance="5058" />
+		<mapping frame="11175" distance="5071" />
+		<mapping frame="11225" distance="5085" />
+		<mapping frame="11275" distance="5099" />
+		<mapping frame="11325" distance="5113" />
+		<mapping frame="11375" distance="5128" />
+		<mapping frame="11425" distance="5142" />
+		<mapping frame="11475" distance="5158" />
+		<mapping frame="11525" distance="5173" />
+		<mapping frame="11575" distance="5189" />
+		<mapping frame="11625" distance="5204" />
+		<mapping frame="11675" distance="5220" />
+		<mapping frame="11725" distance="5236" />
+		<mapping frame="11775" distance="5253" />
+		<mapping frame="11825" distance="5269" />
+		<mapping frame="11875" distance="5287" />
+		<mapping frame="11925" distance="5305" />
+		<mapping frame="11975" distance="5324" />
+		<mapping frame="12025" distance="5345" />
+		<mapping frame="12075" distance="5366" />
+		<mapping frame="12125" distance="5387" />
+		<mapping frame="12175" distance="5409" />
+		<mapping frame="12225" distance="5432" />
+		<mapping frame="12275" distance="5454" />
+		<mapping frame="12325" distance="5477" />
+		<mapping frame="12375" distance="5500" />
+		<mapping frame="12425" distance="5522" />
+		<mapping frame="12475" distance="5544" />
+		<mapping frame="12525" distance="5566" />
+		<mapping frame="12575" distance="5587" />
+		<mapping frame="12625" distance="5607" />
+		<mapping frame="12675" distance="5627" />
+		<mapping frame="12725" distance="5647" />
+		<mapping frame="12775" distance="5666" />
+		<mapping frame="12825" distance="5684" />
+		<mapping frame="12875" distance="5700" />
+		<mapping frame="12925" distance="5715" />
+		<mapping frame="12975" distance="5728" />
+		<mapping frame="13025" distance="5740" />
+		<mapping frame="13075" distance="5751" />
+		<mapping frame="13125" distance="5762" />
+		<mapping frame="13175" distance="5774" />
+		<mapping frame="13225" distance="5788" />
+		<mapping frame="13275" distance="5802" />
+		<mapping frame="13325" distance="5818" />
+		<mapping frame="13375" distance="5834" />
+		<mapping frame="13425" distance="5851" />
+		<mapping frame="13475" distance="5869" />
+		<mapping frame="13525" distance="5887" />
+		<mapping frame="13575" distance="5905" />
+		<mapping frame="13625" distance="5924" />
+		<mapping frame="13675" distance="5942" />
+		<mapping frame="13725" distance="5961" />
+		<mapping frame="13775" distance="5979" />
+		<mapping frame="13825" distance="5996" />
+		<mapping frame="13875" distance="6013" />
+		<mapping frame="13925" distance="6029" />
+		<mapping frame="13975" distance="6043" />
+		<mapping frame="14025" distance="6057" />
+		<mapping frame="14075" distance="6071" />
+		<mapping frame="14125" distance="6084" />
+		<mapping frame="14175" distance="6097" />
+		<mapping frame="14225" distance="6110" />
+		<mapping frame="14275" distance="6123" />
+		<mapping frame="14325" distance="6136" />
+		<mapping frame="14375" distance="6149" />
+		<mapping frame="14425" distance="6163" />
+		<mapping frame="14475" distance="6176" />
+		<mapping frame="14525" distance="6190" />
+		<mapping frame="14575" distance="6203" />
+		<mapping frame="14625" distance="6217" />
+		<mapping frame="14675" distance="6230" />
+		<mapping frame="14725" distance="6244" />
+		<mapping frame="14775" distance="6257" />
+		<mapping frame="14825" distance="6271" />
+		<mapping frame="14875" distance="6285" />
+		<mapping frame="14925" distance="6299" />
+		<mapping frame="14975" distance="6313" />
+		<mapping frame="15025" distance="6328" />
+		<mapping frame="15075" distance="6343" />
+		<mapping frame="15125" distance="6358" />
+		<mapping frame="15175" distance="6373" />
+		<mapping frame="15225" distance="6387" />
+		<mapping frame="15275" distance="6402" />
+		<mapping frame="15325" distance="6417" />
+		<mapping frame="15375" distance="6432" />
+		<mapping frame="15425" distance="6447" />
+		<mapping frame="15475" distance="6462" />
+		<mapping frame="15525" distance="6478" />
+		<mapping frame="15575" distance="6494" />
+		<mapping frame="15625" distance="6510" />
+		<mapping frame="15675" distance="6526" />
+		<mapping frame="15725" distance="6542" />
+		<mapping frame="15775" distance="6558" />
+		<mapping frame="15825" distance="6575" />
+		<mapping frame="15875" distance="6591" />
+		<mapping frame="15925" distance="6607" />
+		<mapping frame="15975" distance="6623" />
+		<mapping frame="16025" distance="6638" />
+		<mapping frame="16075" distance="6654" />
+		<mapping frame="16125" distance="6669" />
+		<mapping frame="16175" distance="6684" />
+		<mapping frame="16225" distance="6698" />
+		<mapping frame="16275" distance="6713" />
+		<mapping frame="16325" distance="6727" />
+		<mapping frame="16375" distance="6742" />
+		<mapping frame="16425" distance="6756" />
+		<mapping frame="16475" distance="6771" />
+		<mapping frame="16525" distance="6786" />
+		<mapping frame="16575" distance="6800" />
+		<mapping frame="16625" distance="6815" />
+		<mapping frame="16675" distance="6828" />
+		<mapping frame="16725" distance="6841" />
+		<mapping frame="16775" distance="6854" />
+		<mapping frame="16825" distance="6866" />
+		<mapping frame="16875" distance="6878" />
+		<mapping frame="16925" distance="6890" />
+		<mapping frame="16975" distance="6902" />
+		<mapping frame="17025" distance="6913" />
+		<mapping frame="17075" distance="6925" />
+		<mapping frame="17125" distance="6936" />
+		<mapping frame="17175" distance="6948" />
+		<mapping frame="17225" distance="6959" />
+		<mapping frame="17275" distance="6970" />
+		<mapping frame="17325" distance="6981" />
+		<mapping frame="17375" distance="6992" />
+		<mapping frame="17425" distance="7002" />
+		<mapping frame="17475" distance="7012" />
+		<mapping frame="17525" distance="7022" />
+		<mapping frame="17575" distance="7032" />
+		<mapping frame="17625" distance="7041" />
+		<mapping frame="17675" distance="7050" />
+		<mapping frame="17725" distance="7059" />
+		<mapping frame="17775" distance="7068" />
+		<mapping frame="17825" distance="7076" />
+		<mapping frame="17875" distance="7084" />
+		<mapping frame="17925" distance="7091" />
+		<mapping frame="17975" distance="7098" />
+		<mapping frame="18025" distance="7105" />
+		<mapping frame="18075" distance="7112" />
+		<mapping frame="18125" distance="7119" />
+		<mapping frame="18175" distance="7125" />
+		<mapping frame="18225" distance="7132" />
+		<mapping frame="18275" distance="7139" />
+		<mapping frame="18325" distance="7146" />
+		<mapping frame="18375" distance="7153" />
+		<mapping frame="18425" distance="7160" />
+		<mapping frame="18475" distance="7166" />
+		<mapping frame="18525" distance="7172" />
+		<mapping frame="18575" distance="7179" />
+		<mapping frame="18625" distance="7185" />
+		<mapping frame="18675" distance="7191" />
+		<mapping frame="18725" distance="7196" />
+		<mapping frame="18775" distance="7202" />
+		<mapping frame="18825" distance="7208" />
+		<mapping frame="18875" distance="7213" />
+		<mapping frame="18925" distance="7219" />
+		<mapping frame="18975" distance="7225" />
+		<mapping frame="19025" distance="7231" />
+		<mapping frame="19075" distance="7237" />
+		<mapping frame="19125" distance="7243" />
+		<mapping frame="19175" distance="7249" />
+		<mapping frame="19225" distance="7255" />
+		<mapping frame="19275" distance="7261" />
+		<mapping frame="19325" distance="7267" />
+		<mapping frame="19375" distance="7273" />
+		<mapping frame="19425" distance="7279" />
+		<mapping frame="19475" distance="7285" />
+		<mapping frame="19525" distance="7291" />
+		<mapping frame="19575" distance="7297" />
+		<mapping frame="19625" distance="7303" />
+		<mapping frame="19675" distance="7310" />
+		<mapping frame="19725" distance="7317" />
+		<mapping frame="19775" distance="7323" />
+		<mapping frame="19825" distance="7331" />
+		<mapping frame="19875" distance="7338" />
+		<mapping frame="19925" distance="7345" />
+		<mapping frame="19975" distance="7352" />
+		<mapping frame="20025" distance="7360" />
+		<mapping frame="20075" distance="7367" />
+		<mapping frame="20125" distance="7375" />
+		<mapping frame="20175" distance="7382" />
+		<mapping frame="20225" distance="7390" />
+		<mapping frame="20275" distance="7398" />
+		<mapping frame="20325" distance="7406" />
+		<mapping frame="20375" distance="7414" />
+		<mapping frame="20425" distance="7422" />
+		<mapping frame="20475" distance="7430" />
+		<mapping frame="20525" distance="7437" />
+		<mapping frame="20575" distance="7445" />
+		<mapping frame="20625" distance="7453" />
+		<mapping frame="20675" distance="7461" />
+		<mapping frame="20725" distance="7469" />
+		<mapping frame="20775" distance="7476" />
+		<mapping frame="20825" distance="7484" />
+		<mapping frame="20875" distance="7492" />
+		<mapping frame="20925" distance="7499" />
+		<mapping frame="20975" distance="7507" />
+		<mapping frame="21025" distance="7515" />
+		<mapping frame="21075" distance="7523" />
+		<mapping frame="21125" distance="7530" />
+		<mapping frame="21175" distance="7538" />
+		<mapping frame="21225" distance="7546" />
+		<mapping frame="21275" distance="7554" />
+		<mapping frame="21325" distance="7562" />
+		<mapping frame="21375" distance="7570" />
+		<mapping frame="21425" distance="7578" />
+		<mapping frame="21475" distance="7586" />
+		<mapping frame="21525" distance="7594" />
+		<mapping frame="21575" distance="7602" />
+		<mapping frame="21625" distance="7610" />
+		<mapping frame="21675" distance="7618" />
+		<mapping frame="21725" distance="7627" />
+		<mapping frame="21775" distance="7635" />
+		<mapping frame="21825" distance="7643" />
+		<mapping frame="21875" distance="7651" />
+		<mapping frame="21925" distance="7660" />
+		<mapping frame="21975" distance="7667" />
+		<mapping frame="22025" distance="7675" />
+		<mapping frame="22075" distance="7683" />
+		<mapping frame="22125" distance="7691" />
+		<mapping frame="22175" distance="7699" />
+		<mapping frame="22225" distance="7707" />
+		<mapping frame="22275" distance="7716" />
+		<mapping frame="22325" distance="7724" />
+		<mapping frame="22375" distance="7732" />
+		<mapping frame="22425" distance="7741" />
+		<mapping frame="22475" distance="7749" />
+		<mapping frame="22525" distance="7758" />
+		<mapping frame="22575" distance="7767" />
+		<mapping frame="22625" distance="7775" />
+		<mapping frame="22675" distance="7783" />
+		<mapping frame="22725" distance="7792" />
+		<mapping frame="22775" distance="7800" />
+		<mapping frame="22825" distance="7808" />
+		<mapping frame="22875" distance="7815" />
+		<mapping frame="22925" distance="7823" />
+		<mapping frame="22975" distance="7831" />
+		<mapping frame="23025" distance="7838" />
+		<mapping frame="23075" distance="7845" />
+		<mapping frame="23125" distance="7853" />
+		<mapping frame="23175" distance="7860" />
+		<mapping frame="23225" distance="7867" />
+		<mapping frame="23275" distance="7875" />
+		<mapping frame="23325" distance="7882" />
+		<mapping frame="23375" distance="7890" />
+		<mapping frame="23425" distance="7897" />
+		<mapping frame="23475" distance="7905" />
+		<mapping frame="23525" distance="7912" />
+		<mapping frame="23575" distance="7920" />
+		<mapping frame="23625" distance="7927" />
+		<mapping frame="23675" distance="7935" />
+		<mapping frame="23725" distance="7943" />
+		<mapping frame="23775" distance="7950" />
+		<mapping frame="23825" distance="7958" />
+		<mapping frame="23875" distance="7965" />
+		<mapping frame="23925" distance="7973" />
+		<mapping frame="23975" distance="7981" />
+		<mapping frame="24025" distance="7988" />
+		<mapping frame="24075" distance="7996" />
+		<mapping frame="24125" distance="8003" />
+		<mapping frame="24175" distance="8011" />
+		<mapping frame="24225" distance="8018" />
+		<mapping frame="24275" distance="8026" />
+		<mapping frame="24325" distance="8033" />
+		<mapping frame="24375" distance="8041" />
+		<mapping frame="24425" distance="8048" />
+		<mapping frame="24475" distance="8056" />
+		<mapping frame="24525" distance="8064" />
+		<mapping frame="24575" distance="8071" />
+		<mapping frame="24625" distance="8079" />
+		<mapping frame="24675" distance="8087" />
+		<mapping frame="24725" distance="8095" />
+		<mapping frame="24775" distance="8103" />
+		<mapping frame="24825" distance="8112" />
+		<mapping frame="24875" distance="8120" />
+		<mapping frame="24925" distance="8129" />
+		<mapping frame="24975" distance="8137" />
+		<mapping frame="25025" distance="8146" />
+		<mapping frame="25075" distance="8155" />
+		<mapping frame="25125" distance="8164" />
+		<mapping frame="25175" distance="8172" />
+		<mapping frame="25225" distance="8181" />
+		<mapping frame="25275" distance="8190" />
+		<mapping frame="25325" distance="8199" />
+		<mapping frame="25375" distance="8208" />
+		<mapping frame="25425" distance="8217" />
+		<mapping frame="25475" distance="8226" />
+		<mapping frame="25525" distance="8234" />
+		<mapping frame="25575" distance="8243" />
+		<mapping frame="25625" distance="8252" />
+		<mapping frame="25675" distance="8260" />
+		<mapping frame="25725" distance="8269" />
+		<mapping frame="25775" distance="8277" />
+		<mapping frame="25825" distance="8286" />
+		<mapping frame="25875" distance="8294" />
+		<mapping frame="25925" distance="8302" />
+		<mapping frame="25975" distance="8310" />
+		<mapping frame="26025" distance="8318" />
+		<mapping frame="26075" distance="8326" />
+		<mapping frame="26125" distance="8334" />
+		<mapping frame="26175" distance="8342" />
+		<mapping frame="26225" distance="8350" />
+		<mapping frame="26275" distance="8359" />
+		<mapping frame="26325" distance="8368" />
+		<mapping frame="26375" distance="8376" />
+		<mapping frame="26425" distance="8385" />
+		<mapping frame="26475" distance="8394" />
+		<mapping frame="26525" distance="8403" />
+		<mapping frame="26575" distance="8413" />
+		<mapping frame="26625" distance="8422" />
+		<mapping frame="26675" distance="8431" />
+		<mapping frame="26725" distance="8441" />
+		<mapping frame="26775" distance="8451" />
+		<mapping frame="26825" distance="8460" />
+		<mapping frame="26875" distance="8470" />
+		<mapping frame="26925" distance="8480" />
+		<mapping frame="26975" distance="8490" />
+		<mapping frame="27025" distance="8500" />
+		<mapping frame="27075" distance="8510" />
+		<mapping frame="27125" distance="8519" />
+		<mapping frame="27175" distance="8529" />
+		<mapping frame="27225" distance="8539" />
+		<mapping frame="27275" distance="8548" />
+		<mapping frame="27325" distance="8558" />
+		<mapping frame="27375" distance="8567" />
+		<mapping frame="27425" distance="8577" />
+		<mapping frame="27475" distance="8587" />
+		<mapping frame="27525" distance="8596" />
+		<mapping frame="27575" distance="8606" />
+		<mapping frame="27625" distance="8615" />
+		<mapping frame="27675" distance="8625" />
+		<mapping frame="27725" distance="8634" />
+		<mapping frame="27775" distance="8643" />
+		<mapping frame="27825" distance="8653" />
+		<mapping frame="27875" distance="8662" />
+		<mapping frame="27925" distance="8671" />
+		<mapping frame="27975" distance="8680" />
+		<mapping frame="28025" distance="8689" />
+		<mapping frame="28075" distance="8698" />
+		<mapping frame="28125" distance="8707" />
+		<mapping frame="28175" distance="8716" />
+		<mapping frame="28225" distance="8725" />
+		<mapping frame="28275" distance="8734" />
+		<mapping frame="28325" distance="8743" />
+		<mapping frame="28375" distance="8752" />
+		<mapping frame="28425" distance="8760" />
+		<mapping frame="28475" distance="8769" />
+		<mapping frame="28525" distance="8777" />
+		<mapping frame="28575" distance="8786" />
+		<mapping frame="28625" distance="8794" />
+		<mapping frame="28675" distance="8803" />
+		<mapping frame="28725" distance="8812" />
+		<mapping frame="28775" distance="8820" />
+		<mapping frame="28825" distance="8829" />
+		<mapping frame="28875" distance="8838" />
+		<mapping frame="28925" distance="8847" />
+		<mapping frame="28975" distance="8855" />
+		<mapping frame="29025" distance="8864" />
+		<mapping frame="29075" distance="8872" />
+		<mapping frame="29125" distance="8881" />
+		<mapping frame="29175" distance="8889" />
+		<mapping frame="29225" distance="8897" />
+		<mapping frame="29275" distance="8905" />
+		<mapping frame="29325" distance="8912" />
+		<mapping frame="29375" distance="8920" />
+		<mapping frame="29425" distance="8928" />
+		<mapping frame="29475" distance="8935" />
+		<mapping frame="29525" distance="8943" />
+		<mapping frame="29575" distance="8950" />
+		<mapping frame="29625" distance="8958" />
+		<mapping frame="29675" distance="8965" />
+		<mapping frame="29725" distance="8972" />
+		<mapping frame="29775" distance="8979" />
+		<mapping frame="29825" distance="8986" />
+		<mapping frame="29875" distance="8993" />
+		<mapping frame="29925" distance="9000" />
+		<mapping frame="29975" distance="9008" />
+		<mapping frame="30025" distance="9015" />
+		<mapping frame="30075" distance="9023" />
+		<mapping frame="30125" distance="9030" />
+		<mapping frame="30175" distance="9038" />
+		<mapping frame="30225" distance="9046" />
+		<mapping frame="30275" distance="9054" />
+		<mapping frame="30325" distance="9062" />
+		<mapping frame="30375" distance="9071" />
+		<mapping frame="30425" distance="9079" />
+		<mapping frame="30475" distance="9086" />
+		<mapping frame="30525" distance="9094" />
+		<mapping frame="30575" distance="9102" />
+		<mapping frame="30625" distance="9109" />
+		<mapping frame="30675" distance="9117" />
+		<mapping frame="30725" distance="9124" />
+		<mapping frame="30775" distance="9131" />
+		<mapping frame="30825" distance="9138" />
+		<mapping frame="30875" distance="9145" />
+		<mapping frame="30925" distance="9153" />
+		<mapping frame="30975" distance="9160" />
+		<mapping frame="31025" distance="9168" />
+		<mapping frame="31075" distance="9175" />
+		<mapping frame="31125" distance="9183" />
+		<mapping frame="31175" distance="9190" />
+		<mapping frame="31225" distance="9198" />
+		<mapping frame="31275" distance="9205" />
+		<mapping frame="31325" distance="9212" />
+		<mapping frame="31375" distance="9220" />
+		<mapping frame="31425" distance="9227" />
+		<mapping frame="31475" distance="9234" />
+		<mapping frame="31525" distance="9242" />
+		<mapping frame="31575" distance="9249" />
+		<mapping frame="31625" distance="9256" />
+		<mapping frame="31675" distance="9264" />
+		<mapping frame="31725" distance="9271" />
+		<mapping frame="31775" distance="9279" />
+		<mapping frame="31825" distance="9286" />
+		<mapping frame="31875" distance="9294" />
+		<mapping frame="31925" distance="9302" />
+		<mapping frame="31975" distance="9310" />
+		<mapping frame="32025" distance="9317" />
+		<mapping frame="32075" distance="9325" />
+		<mapping frame="32125" distance="9333" />
+		<mapping frame="32175" distance="9340" />
+		<mapping frame="32225" distance="9348" />
+		<mapping frame="32275" distance="9356" />
+		<mapping frame="32325" distance="9363" />
+		<mapping frame="32375" distance="9371" />
+		<mapping frame="32425" distance="9379" />
+		<mapping frame="32475" distance="9387" />
+		<mapping frame="32525" distance="9395" />
+		<mapping frame="32575" distance="9404" />
+		<mapping frame="32625" distance="9412" />
+		<mapping frame="32675" distance="9420" />
+		<mapping frame="32725" distance="9428" />
+		<mapping frame="32775" distance="9436" />
+		<mapping frame="32825" distance="9444" />
+		<mapping frame="32875" distance="9451" />
+		<mapping frame="32925" distance="9459" />
+		<mapping frame="32975" distance="9466" />
+		<mapping frame="33025" distance="9473" />
+		<mapping frame="33075" distance="9480" />
+		<mapping frame="33125" distance="9487" />
+		<mapping frame="33175" distance="9495" />
+		<mapping frame="33225" distance="9502" />
+		<mapping frame="33275" distance="9509" />
+		<mapping frame="33325" distance="9517" />
+		<mapping frame="33375" distance="9524" />
+		<mapping frame="33425" distance="9532" />
+		<mapping frame="33475" distance="9539" />
+		<mapping frame="33525" distance="9546" />
+		<mapping frame="33575" distance="9552" />
+		<mapping frame="33625" distance="9559" />
+		<mapping frame="33675" distance="9565" />
+		<mapping frame="33725" distance="9571" />
+		<mapping frame="33775" distance="9576" />
+		<mapping frame="33825" distance="9582" />
+		<mapping frame="33875" distance="9587" />
+		<mapping frame="33925" distance="9593" />
+		<mapping frame="33975" distance="9599" />
+		<mapping frame="34025" distance="9605" />
+		<mapping frame="34075" distance="9611" />
+		<mapping frame="34125" distance="9618" />
+		<mapping frame="34175" distance="9625" />
+		<mapping frame="34225" distance="9633" />
+		<mapping frame="34275" distance="9641" />
+		<mapping frame="34325" distance="9650" />
+		<mapping frame="34375" distance="9659" />
+		<mapping frame="34425" distance="9668" />
+		<mapping frame="34475" distance="9677" />
+		<mapping frame="34525" distance="9686" />
+		<mapping frame="34575" distance="9694" />
+		<mapping frame="34625" distance="9703" />
+		<mapping frame="34675" distance="9712" />
+		<mapping frame="34725" distance="9721" />
+		<mapping frame="34775" distance="9729" />
+		<mapping frame="34825" distance="9738" />
+		<mapping frame="34875" distance="9747" />
+		<mapping frame="34925" distance="9755" />
+		<mapping frame="34975" distance="9764" />
+		<mapping frame="35025" distance="9773" />
+		<mapping frame="35075" distance="9782" />
+		<mapping frame="35125" distance="9790" />
+		<mapping frame="35175" distance="9799" />
+		<mapping frame="35225" distance="9807" />
+		<mapping frame="35275" distance="9815" />
+		<mapping frame="35325" distance="9823" />
+		<mapping frame="35375" distance="9831" />
+		<mapping frame="35425" distance="9838" />
+		<mapping frame="35475" distance="9846" />
+		<mapping frame="35525" distance="9853" />
+		<mapping frame="35575" distance="9859" />
+		<mapping frame="35625" distance="9866" />
+		<mapping frame="35675" distance="9873" />
+		<mapping frame="35725" distance="9880" />
+		<mapping frame="35775" distance="9886" />
+		<mapping frame="35825" distance="9893" />
+		<mapping frame="35875" distance="9899" />
+		<mapping frame="35925" distance="9906" />
+		<mapping frame="35975" distance="9913" />
+		<mapping frame="36025" distance="9920" />
+		<mapping frame="36075" distance="9926" />
+		<mapping frame="36125" distance="9933" />
+		<mapping frame="36175" distance="9940" />
+		<mapping frame="36225" distance="9947" />
+		<mapping frame="36275" distance="9953" />
+		<mapping frame="36325" distance="9960" />
+		<mapping frame="36375" distance="9967" />
+		<mapping frame="36425" distance="9973" />
+		<mapping frame="36475" distance="9980" />
+		<mapping frame="36525" distance="9986" />
+		<mapping frame="36575" distance="9993" />
+		<mapping frame="36625" distance="10000" />
+		<mapping frame="36675" distance="10006" />
+		<mapping frame="36725" distance="10013" />
+		<mapping frame="36775" distance="10020" />
+		<mapping frame="36825" distance="10026" />
+		<mapping frame="36875" distance="10033" />
+		<mapping frame="36925" distance="10040" />
+		<mapping frame="36975" distance="10046" />
+		<mapping frame="37025" distance="10053" />
+		<mapping frame="37075" distance="10059" />
+		<mapping frame="37125" distance="10066" />
+		<mapping frame="37175" distance="10072" />
+		<mapping frame="37225" distance="10078" />
+		<mapping frame="37275" distance="10084" />
+		<mapping frame="37325" distance="10091" />
+		<mapping frame="37375" distance="10097" />
+		<mapping frame="37425" distance="10103" />
+		<mapping frame="37475" distance="10109" />
+		<mapping frame="37525" distance="10115" />
+		<mapping frame="37575" distance="10121" />
+		<mapping frame="37625" distance="10128" />
+		<mapping frame="37675" distance="10134" />
+		<mapping frame="37725" distance="10141" />
+		<mapping frame="37775" distance="10148" />
+		<mapping frame="37825" distance="10155" />
+		<mapping frame="37875" distance="10162" />
+		<mapping frame="37925" distance="10169" />
+		<mapping frame="37975" distance="10176" />
+		<mapping frame="38025" distance="10183" />
+		<mapping frame="38075" distance="10190" />
+		<mapping frame="38125" distance="10198" />
+		<mapping frame="38175" distance="10205" />
+		<mapping frame="38225" distance="10212" />
+		<mapping frame="38275" distance="10219" />
+		<mapping frame="38325" distance="10226" />
+		<mapping frame="38375" distance="10233" />
+		<mapping frame="38425" distance="10240" />
+		<mapping frame="38475" distance="10247" />
+		<mapping frame="38525" distance="10254" />
+		<mapping frame="38575" distance="10261" />
+		<mapping frame="38625" distance="10267" />
+		<mapping frame="38675" distance="10274" />
+		<mapping frame="38725" distance="10281" />
+		<mapping frame="38775" distance="10288" />
+		<mapping frame="38825" distance="10295" />
+		<mapping frame="38875" distance="10302" />
+		<mapping frame="38925" distance="10309" />
+		<mapping frame="38975" distance="10316" />
+		<mapping frame="39025" distance="10324" />
+		<mapping frame="39075" distance="10331" />
+		<mapping frame="39125" distance="10339" />
+		<mapping frame="39175" distance="10346" />
+		<mapping frame="39225" distance="10353" />
+		<mapping frame="39275" distance="10360" />
+		<mapping frame="39325" distance="10367" />
+		<mapping frame="39375" distance="10374" />
+		<mapping frame="39425" distance="10382" />
+		<mapping frame="39475" distance="10389" />
+		<mapping frame="39525" distance="10397" />
+		<mapping frame="39575" distance="10404" />
+		<mapping frame="39625" distance="10413" />
+		<mapping frame="39675" distance="10421" />
+		<mapping frame="39725" distance="10429" />
+		<mapping frame="39775" distance="10438" />
+		<mapping frame="39825" distance="10447" />
+		<mapping frame="39875" distance="10456" />
+		<mapping frame="39925" distance="10465" />
+		<mapping frame="39975" distance="10474" />
+		<mapping frame="40025" distance="10483" />
+		<mapping frame="40075" distance="10492" />
+		<mapping frame="40125" distance="10500" />
+		<mapping frame="40175" distance="10509" />
+		<mapping frame="40225" distance="10517" />
+		<mapping frame="40275" distance="10526" />
+		<mapping frame="40325" distance="10534" />
+		<mapping frame="40375" distance="10542" />
+		<mapping frame="40425" distance="10549" />
+		<mapping frame="40475" distance="10557" />
+		<mapping frame="40525" distance="10564" />
+		<mapping frame="40575" distance="10571" />
+		<mapping frame="40625" distance="10579" />
+		<mapping frame="40675" distance="10586" />
+		<mapping frame="40725" distance="10593" />
+		<mapping frame="40775" distance="10601" />
+		<mapping frame="40825" distance="10608" />
+		<mapping frame="40875" distance="10615" />
+		<mapping frame="40925" distance="10622" />
+		<mapping frame="40975" distance="10629" />
+		<mapping frame="41025" distance="10636" />
+		<mapping frame="41075" distance="10643" />
+		<mapping frame="41125" distance="10650" />
+		<mapping frame="41175" distance="10657" />
+		<mapping frame="41225" distance="10663" />
+		<mapping frame="41275" distance="10670" />
+		<mapping frame="41325" distance="10677" />
+		<mapping frame="41375" distance="10683" />
+		<mapping frame="41425" distance="10690" />
+		<mapping frame="41475" distance="10697" />
+		<mapping frame="41525" distance="10704" />
+		<mapping frame="41575" distance="10711" />
+		<mapping frame="41625" distance="10718" />
+		<mapping frame="41675" distance="10725" />
+		<mapping frame="41725" distance="10732" />
+		<mapping frame="41775" distance="10739" />
+		<mapping frame="41825" distance="10747" />
+		<mapping frame="41875" distance="10754" />
+		<mapping frame="41925" distance="10761" />
+		<mapping frame="41975" distance="10768" />
+		<mapping frame="42025" distance="10775" />
+		<mapping frame="42075" distance="10783" />
+		<mapping frame="42125" distance="10790" />
+		<mapping frame="42175" distance="10797" />
+		<mapping frame="42225" distance="10804" />
+		<mapping frame="42275" distance="10812" />
+		<mapping frame="42325" distance="10820" />
+		<mapping frame="42375" distance="10827" />
+		<mapping frame="42425" distance="10835" />
+		<mapping frame="42475" distance="10842" />
+		<mapping frame="42525" distance="10850" />
+		<mapping frame="42575" distance="10857" />
+		<mapping frame="42625" distance="10864" />
+		<mapping frame="42675" distance="10872" />
+		<mapping frame="42725" distance="10880" />
+		<mapping frame="42775" distance="10887" />
+		<mapping frame="42825" distance="10895" />
+		<mapping frame="42875" distance="10903" />
+		<mapping frame="42925" distance="10910" />
+		<mapping frame="42975" distance="10917" />
+		<mapping frame="43025" distance="10924" />
+		<mapping frame="43075" distance="10932" />
+		<mapping frame="43125" distance="10939" />
+		<mapping frame="43175" distance="10946" />
+		<mapping frame="43225" distance="10954" />
+		<mapping frame="43275" distance="10962" />
+		<mapping frame="43325" distance="10970" />
+		<mapping frame="43375" distance="10979" />
+		<mapping frame="43425" distance="10987" />
+		<mapping frame="43475" distance="10995" />
+		<mapping frame="43525" distance="11003" />
+		<mapping frame="43575" distance="11012" />
+		<mapping frame="43625" distance="11020" />
+		<mapping frame="43675" distance="11028" />
+		<mapping frame="43725" distance="11037" />
+		<mapping frame="43775" distance="11045" />
+		<mapping frame="43825" distance="11054" />
+		<mapping frame="43875" distance="11062" />
+		<mapping frame="43925" distance="11071" />
+		<mapping frame="43975" distance="11079" />
+		<mapping frame="44025" distance="11088" />
+		<mapping frame="44075" distance="11097" />
+		<mapping frame="44125" distance="11105" />
+		<mapping frame="44175" distance="11113" />
+		<mapping frame="44225" distance="11122" />
+		<mapping frame="44275" distance="11130" />
+		<mapping frame="44325" distance="11138" />
+		<mapping frame="44375" distance="11146" />
+		<mapping frame="44425" distance="11154" />
+		<mapping frame="44475" distance="11163" />
+		<mapping frame="44525" distance="11171" />
+		<mapping frame="44575" distance="11179" />
+		<mapping frame="44625" distance="11187" />
+		<mapping frame="44675" distance="11195" />
+		<mapping frame="44725" distance="11203" />
+		<mapping frame="44775" distance="11211" />
+		<mapping frame="44825" distance="11219" />
+		<mapping frame="44875" distance="11227" />
+		<mapping frame="44925" distance="11235" />
+		<mapping frame="44975" distance="11243" />
+		<mapping frame="45025" distance="11252" />
+		<mapping frame="45075" distance="11260" />
+		<mapping frame="45125" distance="11268" />
+		<mapping frame="45175" distance="11277" />
+		<mapping frame="45225" distance="11285" />
+		<mapping frame="45275" distance="11294" />
+		<mapping frame="45325" distance="11302" />
+		<mapping frame="45375" distance="11311" />
+		<mapping frame="45425" distance="11319" />
+		<mapping frame="45475" distance="11328" />
+		<mapping frame="45525" distance="11336" />
+		<mapping frame="45575" distance="11345" />
+		<mapping frame="45625" distance="11353" />
+		<mapping frame="45675" distance="11362" />
+		<mapping frame="45725" distance="11370" />
+		<mapping frame="45775" distance="11379" />
+		<mapping frame="45825" distance="11387" />
+		<mapping frame="45875" distance="11396" />
+		<mapping frame="45925" distance="11404" />
+		<mapping frame="45975" distance="11413" />
+		<mapping frame="46025" distance="11422" />
+		<mapping frame="46075" distance="11430" />
+		<mapping frame="46125" distance="11439" />
+		<mapping frame="46175" distance="11447" />
+		<mapping frame="46225" distance="11456" />
+		<mapping frame="46275" distance="11464" />
+		<mapping frame="46325" distance="11473" />
+		<mapping frame="46375" distance="11481" />
+		<mapping frame="46425" distance="11490" />
+		<mapping frame="46475" distance="11498" />
+		<mapping frame="46525" distance="11507" />
+		<mapping frame="46575" distance="11515" />
+		<mapping frame="46625" distance="11524" />
+		<mapping frame="46675" distance="11533" />
+		<mapping frame="46725" distance="11541" />
+		<mapping frame="46775" distance="11550" />
+		<mapping frame="46825" distance="11558" />
+		<mapping frame="46875" distance="11567" />
+		<mapping frame="46925" distance="11575" />
+		<mapping frame="46975" distance="11584" />
+		<mapping frame="47025" distance="11592" />
+		<mapping frame="47075" distance="11600" />
+		<mapping frame="47125" distance="11609" />
+		<mapping frame="47175" distance="11617" />
+		<mapping frame="47225" distance="11625" />
+		<mapping frame="47275" distance="11634" />
+		<mapping frame="47325" distance="11642" />
+		<mapping frame="47375" distance="11650" />
+		<mapping frame="47425" distance="11659" />
+		<mapping frame="47475" distance="11667" />
+		<mapping frame="47525" distance="11676" />
+		<mapping frame="47575" distance="11685" />
+		<mapping frame="47625" distance="11693" />
+		<mapping frame="47675" distance="11701" />
+		<mapping frame="47725" distance="11710" />
+		<mapping frame="47775" distance="11718" />
+		<mapping frame="47825" distance="11726" />
+		<mapping frame="47875" distance="11733" />
+		<mapping frame="47925" distance="11741" />
+		<mapping frame="47975" distance="11749" />
+		<mapping frame="48025" distance="11756" />
+		<mapping frame="48075" distance="11764" />
+		<mapping frame="48125" distance="11772" />
+		<mapping frame="48175" distance="11779" />
+		<mapping frame="48225" distance="11787" />
+		<mapping frame="48275" distance="11795" />
+		<mapping frame="48325" distance="11803" />
+		<mapping frame="48375" distance="11811" />
+		<mapping frame="48425" distance="11819" />
+		<mapping frame="48475" distance="11827" />
+		<mapping frame="48525" distance="11835" />
+		<mapping frame="48575" distance="11843" />
+		<mapping frame="48625" distance="11852" />
+		<mapping frame="48675" distance="11860" />
+		<mapping frame="48725" distance="11868" />
+		<mapping frame="48775" distance="11875" />
+		<mapping frame="48825" distance="11883" />
+		<mapping frame="48875" distance="11891" />
+		<mapping frame="48925" distance="11898" />
+		<mapping frame="48975" distance="11905" />
+		<mapping frame="49025" distance="11912" />
+		<mapping frame="49075" distance="11919" />
+		<mapping frame="49125" distance="11925" />
+		<mapping frame="49175" distance="11931" />
+		<mapping frame="49225" distance="11938" />
+		<mapping frame="49275" distance="11944" />
+		<mapping frame="49325" distance="11950" />
+		<mapping frame="49375" distance="11956" />
+		<mapping frame="49425" distance="11963" />
+		<mapping frame="49475" distance="11969" />
+		<mapping frame="49525" distance="11975" />
+		<mapping frame="49575" distance="11982" />
+		<mapping frame="49625" distance="11989" />
+		<mapping frame="49675" distance="11995" />
+		<mapping frame="49725" distance="12002" />
+		<mapping frame="49775" distance="12009" />
+		<mapping frame="49825" distance="12017" />
+		<mapping frame="49875" distance="12024" />
+		<mapping frame="49925" distance="12031" />
+		<mapping frame="49975" distance="12039" />
+		<mapping frame="50025" distance="12047" />
+		<mapping frame="50075" distance="12054" />
+		<mapping frame="50125" distance="12062" />
+		<mapping frame="50175" distance="12070" />
+		<mapping frame="50225" distance="12077" />
+		<mapping frame="50275" distance="12085" />
+		<mapping frame="50325" distance="12092" />
+		<mapping frame="50375" distance="12100" />
+		<mapping frame="50425" distance="12107" />
+		<mapping frame="50475" distance="12115" />
+		<mapping frame="50525" distance="12122" />
+		<mapping frame="50575" distance="12129" />
+		<mapping frame="50625" distance="12136" />
+		<mapping frame="50675" distance="12144" />
+		<mapping frame="50725" distance="12151" />
+		<mapping frame="50775" distance="12159" />
+		<mapping frame="50825" distance="12167" />
+		<mapping frame="50875" distance="12176" />
+		<mapping frame="50925" distance="12186" />
+		<mapping frame="50975" distance="12197" />
+		<mapping frame="51025" distance="12210" />
+		<mapping frame="51075" distance="12223" />
+		<mapping frame="51125" distance="12237" />
+		<mapping frame="51175" distance="12252" />
+		<mapping frame="51225" distance="12268" />
+		<mapping frame="51275" distance="12285" />
+		<mapping frame="51325" distance="12302" />
+		<mapping frame="51375" distance="12318" />
+		<mapping frame="51425" distance="12333" />
+		<mapping frame="51475" distance="12347" />
+		<mapping frame="51525" distance="12361" />
+		<mapping frame="51575" distance="12373" />
+		<mapping frame="51625" distance="12386" />
+		<mapping frame="51675" distance="12398" />
+		<mapping frame="51725" distance="12410" />
+		<mapping frame="51775" distance="12421" />
+		<mapping frame="51825" distance="12432" />
+		<mapping frame="51875" distance="12442" />
+		<mapping frame="51925" distance="12453" />
+		<mapping frame="51975" distance="12463" />
+		<mapping frame="52025" distance="12472" />
+		<mapping frame="52075" distance="12480" />
+		<mapping frame="52125" distance="12489" />
+		<mapping frame="52175" distance="12498" />
+		<mapping frame="52225" distance="12506" />
+		<mapping frame="52275" distance="12514" />
+		<mapping frame="52325" distance="12522" />
+		<mapping frame="52375" distance="12530" />
+		<mapping frame="52425" distance="12537" />
+		<mapping frame="52475" distance="12544" />
+		<mapping frame="52525" distance="12551" />
+		<mapping frame="52575" distance="12558" />
+		<mapping frame="52625" distance="12565" />
+		<mapping frame="52675" distance="12572" />
+		<mapping frame="52725" distance="12578" />
+		<mapping frame="52775" distance="12585" />
+		<mapping frame="52825" distance="12592" />
+		<mapping frame="52875" distance="12599" />
+		<mapping frame="52925" distance="12606" />
+		<mapping frame="52975" distance="12613" />
+		<mapping frame="53025" distance="12620" />
+		<mapping frame="53075" distance="12627" />
+		<mapping frame="53125" distance="12634" />
+		<mapping frame="53175" distance="12639" />
+		<mapping frame="53225" distance="12644" />
+		<mapping frame="53275" distance="12649" />
+		<mapping frame="53325" distance="12654" />
+		<mapping frame="53375" distance="12659" />
+		<mapping frame="53425" distance="12666" />
+		<mapping frame="53475" distance="12674" />
+		<mapping frame="53525" distance="12684" />
+		<mapping frame="53575" distance="12695" />
+		<mapping frame="53625" distance="12707" />
+		<mapping frame="53675" distance="12719" />
+		<mapping frame="53725" distance="12731" />
+		<mapping frame="53775" distance="12744" />
+		<mapping frame="53825" distance="12756" />
+		<mapping frame="53875" distance="12769" />
+		<mapping frame="53925" distance="12781" />
+		<mapping frame="53975" distance="12794" />
+		<mapping frame="54025" distance="12807" />
+		<mapping frame="54075" distance="12820" />
+		<mapping frame="54125" distance="12833" />
+		<mapping frame="54175" distance="12846" />
+		<mapping frame="54225" distance="12859" />
+		<mapping frame="54275" distance="12872" />
+		<mapping frame="54325" distance="12885" />
+		<mapping frame="54375" distance="12898" />
+		<mapping frame="54425" distance="12910" />
+		<mapping frame="32000" distance="12910" />
+	</mappings>
+	<segments>
+		<segment name="Total" start="0" end="12910" />
+	</segments>
+	<marks />
+	<informations />
+	<positions>
+		<position distance="8" lat="43.946854941" lon="12.31852529599999" height="0" />
+		<position distance="24" lat="43.946728941" lon="12.318476186999988" height="0" />
+		<position distance="41" lat="43.946598617000006" lon="12.318398968999986" height="0" />
+		<position distance="59" lat="43.946506078" lon="12.318253722999998" height="0" />
+		<position distance="77" lat="43.946480000000008" lon="12.318067775999992" height="0" />
+		<position distance="96" lat="43.946523813" lon="12.317857343000014" height="0" />
+		<position distance="116" lat="43.946562704" lon="12.317640667000006" height="0" />
+		<position distance="136" lat="43.946604137000008" lon="12.317420829000014" height="0" />
+		<position distance="156" lat="43.946656813000004" lon="12.317193720000006" height="0" />
+		<position distance="177" lat="43.946713569999986" lon="12.316966476999994" height="0" />
+		<position distance="199" lat="43.94677457" lon="12.31673072000001" height="0" />
+		<position distance="221" lat="43.94683556999999" lon="12.31649831499999" height="0" />
+		<position distance="244" lat="43.946879432999992" lon="12.316256044" height="0" />
+		<position distance="267" lat="43.946856105999984" lon="12.316011720000006" height="0" />
+		<position distance="290" lat="43.946705667" lon="12.315823346000002" height="0" />
+		<position distance="314" lat="43.946547156000008" lon="12.315656560999997" height="0" />
+		<position distance="338" lat="43.946390237" lon="12.31548788500001" height="0" />
+		<position distance="361" lat="43.946238155999993" lon="12.315323723000006" height="0" />
+		<position distance="385" lat="43.946085237000005" lon="12.315190779000005" height="0" />
+		<position distance="408" lat="43.945911370999994" lon="12.315143242999994" height="0" />
+		<position distance="430" lat="43.945735127999995" lon="12.315173813000001" height="0" />
+		<position distance="453" lat="43.945570480000015" lon="12.315254678999992" height="0" />
+		<position distance="475" lat="43.945403128000009" lon="12.315310055999987" height="0" />
+		<position distance="497" lat="43.945224451999991" lon="12.315295566999993" height="0" />
+		<position distance="520" lat="43.945049047" lon="12.315273133999995" height="0" />
+		<position distance="543" lat="43.944877128" lon="12.315205725999988" height="0" />
+		<position distance="566" lat="43.944698371000015" lon="12.315065075000007" height="0" />
+		<position distance="588" lat="43.94452948" lon="12.314934778999998" height="0" />
+		<position distance="611" lat="43.944351047" lon="12.314848863000009" height="0" />
+		<position distance="634" lat="43.944156452000016" lon="12.314880893999998" height="0" />
+		<position distance="657" lat="43.944006479999985" lon="12.314941541999986" height="0" />
+		<position distance="680" lat="43.943853832" lon="12.314815775999989" height="0" />
+		<position distance="704" lat="43.943780215000004" lon="12.31459723399999" height="0" />
+		<position distance="728" lat="43.943907980999995" lon="12.314337340000009" height="0" />
+		<position distance="753" lat="43.944022383000004" lon="12.31409463899999" height="0" />
+		<position distance="779" lat="43.944162167999991" lon="12.313869748000002" height="0" />
+		<position distance="804" lat="43.944289383000012" lon="12.313641558" height="0" />
+		<position distance="830" lat="43.944385598" lon="12.313380015999996" height="0" />
+		<position distance="856" lat="43.944451813" lon="12.313105178" height="0" />
+		<position distance="881" lat="43.944506136999991" lon="12.312817663999994" height="0" />
+		<position distance="907" lat="43.944584273999993" lon="12.312557720000001" height="0" />
+		<position distance="932" lat="43.944708087000009" lon="12.312364642000006" height="0" />
+		<position distance="957" lat="43.944805598000016" lon="12.312185209000006" height="0" />
+		<position distance="983" lat="43.944842432999991" lon="12.311979747999999" height="0" />
+		<position distance="1008" lat="43.944744235499996" lon="12.311723042500006" height="0" />
+		<position distance="1034" lat="43.944595969000005" lon="12.311454125000012" height="0" />
+		<position distance="1059" lat="43.944500049999988" lon="12.311203801000005" height="0" />
+		<position distance="1085" lat="43.944391183999983" lon="12.310981099999992" height="0" />
+		<position distance="1110" lat="43.944228127999992" lon="12.310853049999992" height="0" />
+		<position distance="1135" lat="43.944060804" lon="12.310893436000015" height="0" />
+		<position distance="1159" lat="43.943910832" lon="12.311064710000011" height="0" />
+		<position distance="1184" lat="43.943769508" lon="12.311265657000007" height="0" />
+		<position distance="1209" lat="43.94361748" lon="12.311464142999995" height="0" />
+		<position distance="1235" lat="43.943449804000011" lon="12.311645548000001" height="0" />
+		<position distance="1261" lat="43.943278803999988" lon="12.311833981000007" height="0" />
+		<position distance="1288" lat="43.943114804000004" lon="12.312029899999999" height="0" />
+		<position distance="1314" lat="43.94292901899999" lon="12.312208034000008" height="0" />
+		<position distance="1341" lat="43.94271199100001" lon="12.312345249000003" height="0" />
+		<position distance="1368" lat="43.942505342999993" lon="12.312490087000015" height="0" />
+		<position distance="1395" lat="43.94231777600001" lon="12.312632653999998" height="0" />
+		<position distance="1421" lat="43.942120019000015" lon="12.312721165" height="0" />
+		<position distance="1448" lat="43.941910343000018" lon="12.312750270999999" height="0" />
+		<position distance="1474" lat="43.941712018999993" lon="12.312797488999991" height="0" />
+		<position distance="1501" lat="43.941513100000009" lon="12.312876598000003" height="0" />
+		<position distance="1527" lat="43.941307343000005" lon="12.312954246000004" height="0" />
+		<position distance="1554" lat="43.94109858600001" lon="12.313010055999996" height="0" />
+		<position distance="1580" lat="43.940880991" lon="12.31303810899999" height="0" />
+		<position distance="1606" lat="43.94065999099999" lon="12.31305918999999" height="0" />
+		<position distance="1632" lat="43.940442586000017" lon="12.313082027999997" height="0" />
+		<position distance="1657" lat="43.940239343" lon="12.313096352000002" height="0" />
+		<position distance="1683" lat="43.940048695" lon="12.313153002999997" height="0" />
+		<position distance="1708" lat="43.939897831999986" lon="12.313301953000007" height="0" />
+		<position distance="1734" lat="43.93974548" lon="12.313484791000008" height="0" />
+		<position distance="1761" lat="43.939553343" lon="12.313623897000014" height="0" />
+		<position distance="1788" lat="43.939332315" lon="12.313725111999986" height="0" />
+		<position distance="1816" lat="43.939107315" lon="12.313831625999995" height="0" />
+		<position distance="1845" lat="43.938875558000007" lon="12.313939787999999" height="0" />
+		<position distance="1874" lat="43.938646234000004" lon="12.314005299000002" height="0" />
+		<position distance="1903" lat="43.938427343" lon="12.313952483000008" height="0" />
+		<position distance="1931" lat="43.938239452000005" lon="12.313801804000008" height="0" />
+		<position distance="1959" lat="43.938049694999989" lon="12.313636398999989" height="0" />
+		<position distance="1987" lat="43.937836667" lon="12.31350685999999" height="0" />
+		<position distance="2015" lat="43.937615910000005" lon="12.313396455000003" height="0" />
+		<position distance="2042" lat="43.937390910000005" lon="12.313286454999997" height="0" />
+		<position distance="2069" lat="43.937168667000009" lon="12.31317645499999" height="0" />
+		<position distance="2096" lat="43.93696601900001" lon="12.313070049999993" height="0" />
+		<position distance="2123" lat="43.936790127999984" lon="12.312988915999995" height="0" />
+		<position distance="2149" lat="43.936614128" lon="12.312959486000011" height="0" />
+		<position distance="2174" lat="43.936439371000006" lon="12.313001488999987" height="0" />
+		<position distance="2199" lat="43.936263128000007" lon="12.313080840999987" height="0" />
+		<position distance="2223" lat="43.936092046999988" lon="12.313150408000013" height="0" />
+		<position distance="2247" lat="43.935909371000008" lon="12.313166324000008" height="0" />
+		<position distance="2271" lat="43.935711018999996" lon="12.31313062000001" height="0" />
+		<position distance="2295" lat="43.93551669499999" lon="12.313116837999985" height="0" />
+		<position distance="2320" lat="43.935311342999995" lon="12.313162650999999" height="0" />
+		<position distance="2346" lat="43.935105343000004" lon="12.313229326999988" height="0" />
+		<position distance="2372" lat="43.934891666999988" lon="12.313283137000013" height="0" />
+		<position distance="2399" lat="43.934611823000012" lon="12.313348517000009" height="0" />
+		<position distance="2426" lat="43.934403910000015" lon="12.313393894" height="0" />
+		<position distance="2453" lat="43.934178910000014" lon="12.313435704" height="0" />
+		<position distance="2481" lat="43.933946315000014" lon="12.313443000000007" height="0" />
+		<position distance="2509" lat="43.933699530000013" lon="12.313407673" height="0" />
+		<position distance="2535" lat="43.933480342999985" lon="12.313371971999999" height="0" />
+		<position distance="2560" lat="43.933292047000009" lon="12.313346972000005" height="0" />
+		<position distance="2584" lat="43.93314183199999" lon="12.313300349000002" height="0" />
+		<position distance="2607" lat="43.933000832000005" lon="12.313190617000004" height="0" />
+		<position distance="2628" lat="43.932873293" lon="12.313019776000004" height="0" />
+		<position distance="2650" lat="43.932759616999988" lon="12.312793881999994" height="0" />
+		<position distance="2671" lat="43.932640617000004" lon="12.312556153000003" height="0" />
+		<position distance="2691" lat="43.932526617000008" lon="12.312368047000007" height="0" />
+		<position distance="2712" lat="43.932404941000016" lon="12.312221588999989" height="0" />
+		<position distance="2733" lat="43.932249237000008" lon="12.312144673000006" height="0" />
+		<position distance="2753" lat="43.932103589000008" lon="12.31211264800001" height="0" />
+		<position distance="2773" lat="43.931966589000012" lon="12.312131461000007" height="0" />
+		<position distance="2794" lat="43.931833184" lon="12.312201598000002" height="0" />
+		<position distance="2813" lat="43.931691588999996" lon="12.31231797800001" height="0" />
+		<position distance="2833" lat="43.931568698000007" lon="12.312459087000008" height="0" />
+		<position distance="2854" lat="43.931458941000017" lon="12.312607410999988" height="0" />
+		<position distance="2874" lat="43.931307479999987" lon="12.312709517000002" height="0" />
+		<position distance="2896" lat="43.931151479999983" lon="12.312753270999991" height="0" />
+		<position distance="2917" lat="43.930966342999994" lon="12.312781056000006" height="0" />
+		<position distance="2939" lat="43.930782370999992" lon="12.312836245999989" height="0" />
+		<position distance="2962" lat="43.930627912999995" lon="12.312963087000014" height="0" />
+		<position distance="2986" lat="43.930500617000007" lon="12.313175037000008" height="0" />
+		<position distance="3011" lat="43.930397616999983" lon="12.313455389000012" height="0" />
+		<position distance="3037" lat="43.930287617000005" lon="12.313716712999991" height="0" />
+		<position distance="3063" lat="43.930183968999984" lon="12.313976822" height="0" />
+		<position distance="3088" lat="43.930077293000011" lon="12.31425006500001" height="0" />
+		<position distance="3111" lat="43.929959617000009" lon="12.314509551000015" height="0" />
+		<position distance="3134" lat="43.92986272600001" lon="12.314743171000004" height="0" />
+		<position distance="3155" lat="43.929749941000011" lon="12.314852245999987" height="0" />
+		<position distance="3176" lat="43.929616264999993" lon="12.314768536000003" height="0" />
+		<position distance="3198" lat="43.929567785000017" lon="12.314576638999995" height="0" />
+		<position distance="3221" lat="43.929594460999994" lon="12.314354234000007" height="0" />
+		<position distance="3245" lat="43.929676598000015" lon="12.31408442099999" height="0" />
+		<position distance="3271" lat="43.929757246000008" lon="12.313794311999999" height="0" />
+		<position distance="3298" lat="43.929822489" lon="12.313479636000011" height="0" />
+		<position distance="3326" lat="43.929883488999991" lon="12.313174392999997" height="0" />
+		<position distance="3353" lat="43.929948489" lon="12.312859879000001" height="0" />
+		<position distance="3381" lat="43.930023922000004" lon="12.312562745000008" height="0" />
+		<position distance="3409" lat="43.930089489000011" lon="12.312252798000003" height="0" />
+		<position distance="3436" lat="43.930150489" lon="12.311944312000009" height="0" />
+		<position distance="3462" lat="43.93020781300001" lon="12.311670773000003" height="0" />
+		<position distance="3487" lat="43.930250461000014" lon="12.31145261399999" height="0" />
+		<position distance="3510" lat="43.93021643" lon="12.311263480000008" height="0" />
+		<position distance="3531" lat="43.930093588999995" lon="12.311152591999985" height="0" />
+		<position distance="3552" lat="43.929941560999993" lon="12.311167570000009" height="0" />
+		<position distance="3573" lat="43.929785156000008" lon="12.311280492000009" height="0" />
+		<position distance="3595" lat="43.92965183199999" lon="12.311466790999987" height="0" />
+		<position distance="3618" lat="43.92950315600001" lon="12.31164879100001" height="0" />
+		<position distance="3641" lat="43.929346479999992" lon="12.311838061999993" height="0" />
+		<position distance="3666" lat="43.929190156000004" lon="12.312020628999989" height="0" />
+		<position distance="3691" lat="43.929073969" lon="12.312235928000007" height="0" />
+		<position distance="3717" lat="43.929013862999994" lon="12.312496822000014" height="0" />
+		<position distance="3743" lat="43.928983539" lon="12.312799283000004" height="0" />
+		<position distance="3769" lat="43.928945862999996" lon="12.313106444999988" height="0" />
+		<position distance="3796" lat="43.928867969000009" lon="12.313388984" height="0" />
+		<position distance="3823" lat="43.928736156000014" lon="12.313636199000001" height="0" />
+		<position distance="3850" lat="43.928582913000014" lon="12.313866603999998" height="0" />
+		<position distance="3876" lat="43.92843791300001" lon="12.314081495000011" height="0" />
+		<position distance="3903" lat="43.928318617" lon="12.31430287500001" height="0" />
+		<position distance="3929" lat="43.928241077999985" lon="12.314571983999997" height="0" />
+		<position distance="3956" lat="43.928157725999995" lon="12.314868768999986" height="0" />
+		<position distance="3983" lat="43.92806972599999" lon="12.315172201999985" height="0" />
+		<position distance="4010" lat="43.927967617000007" lon="12.315457659999993" height="0" />
+		<position distance="4037" lat="43.927875401999984" lon="12.315726469999987" height="0" />
+		<position distance="4065" lat="43.927780049999996" lon="12.315991389000004" height="0" />
+		<position distance="4092" lat="43.927655265" lon="12.316244117999986" height="0" />
+		<position distance="4119" lat="43.927522264999993" lon="12.316487523000006" height="0" />
+		<position distance="4145" lat="43.927381832000009" lon="12.316704414000014" height="0" />
+		<position distance="4172" lat="43.927240831999995" lon="12.316911575999995" height="0" />
+		<position distance="4197" lat="43.927095831999992" lon="12.317131523" height="0" />
+		<position distance="4223" lat="43.926968940999984" lon="12.317370955999991" height="0" />
+		<position distance="4248" lat="43.926864725999991" lon="12.317637308000002" height="0" />
+		<position distance="4273" lat="43.926783753999985" lon="12.317896117999993" height="0" />
+		<position distance="4297" lat="43.926707158999989" lon="12.318144631999985" height="0" />
+		<position distance="4321" lat="43.926682890999984" lon="12.31839611800001" height="0" />
+		<position distance="4345" lat="43.926710785000012" lon="12.318638198999992" height="0" />
+		<position distance="4369" lat="43.926773921999995" lon="12.318865332999991" height="0" />
+		<position distance="4394" lat="43.926904167999993" lon="12.319055872000007" height="0" />
+		<position distance="4418" lat="43.927092980999987" lon="12.319190816000003" height="0" />
+		<position distance="4442" lat="43.927266196000005" lon="12.319321167999988" height="0" />
+		<position distance="4466" lat="43.927405383000007" lon="12.319492709999992" height="0" />
+		<position distance="4489" lat="43.927487569999982" lon="12.31971068499999" height="0" />
+		<position distance="4512" lat="43.927486648000013" lon="12.319947603999992" height="0" />
+		<position distance="4534" lat="43.92743207800001" lon="12.32017852300001" height="0" />
+		<position distance="4555" lat="43.927326050000005" lon="12.320428117999995" height="0" />
+		<position distance="4574" lat="43.927234725999995" lon="12.320649494999998" height="0" />
+		<position distance="4591" lat="43.927164511" lon="12.320819763000003" height="0" />
+		<position distance="4606" lat="43.927118186999991" lon="12.320939030999995" height="0" />
+		<position distance="4620" lat="43.927064863" lon="12.320956891000009" height="0" />
+		<position distance="4633" lat="43.927008106000017" lon="12.320894078000009" height="0" />
+		<position distance="4646" lat="43.926969539" lon="12.320807725999998" height="0" />
+		<position distance="4659" lat="43.926924187" lon="12.320709211999997" height="0" />
+		<position distance="4672" lat="43.926856078000014" lon="12.320592022" height="0" />
+		<position distance="4685" lat="43.926784078" lon="12.320464941000012" height="0" />
+		<position distance="4699" lat="43.926707158999989" lon="12.320346021999995" height="0" />
+		<position distance="4713" lat="43.926630754" lon="12.320218103000002" height="0" />
+		<position distance="4728" lat="43.926561835" lon="12.320084427000012" height="0" />
+		<position distance="4743" lat="43.926489753999988" lon="12.319942750999985" height="0" />
+		<position distance="4757" lat="43.926416835" lon="12.319808265000006" height="0" />
+		<position distance="4772" lat="43.926345078" lon="12.319674346" height="0" />
+		<position distance="4787" lat="43.926272753999996" lon="12.319552697999995" height="0" />
+		<position distance="4801" lat="43.926203754" lon="12.319434698000009" height="0" />
+		<position distance="4816" lat="43.926134835" lon="12.319314184000007" height="0" />
+		<position distance="4830" lat="43.926073511" lon="12.31919202200001" height="0" />
+		<position distance="4843" lat="43.92600207800001" lon="12.319075859999998" height="0" />
+		<position distance="4857" lat="43.925936430000007" lon="12.318942670000013" height="0" />
+		<position distance="4871" lat="43.925867834999991" lon="12.318809507999987" height="0" />
+		<position distance="4885" lat="43.925795754000006" lon="12.318686103000005" height="0" />
+		<position distance="4900" lat="43.925718835" lon="12.318556265000012" height="0" />
+		<position distance="4914" lat="43.925646754000013" lon="12.318432698000009" height="0" />
+		<position distance="4928" lat="43.925567402000013" lon="12.318313455000009" height="0" />
+		<position distance="4941" lat="43.925494077999986" lon="12.318219483000007" height="0" />
+		<position distance="4955" lat="43.925410402000011" lon="12.318140158999995" height="0" />
+		<position distance="4968" lat="43.925319726" lon="12.31807834899999" height="0" />
+		<position distance="4981" lat="43.925220969000009" lon="12.318029943999989" height="0" />
+		<position distance="4993" lat="43.92512105" lon="12.317994295999995" height="0" />
+		<position distance="5006" lat="43.925025726" lon="12.31795945799999" height="0" />
+		<position distance="5019" lat="43.924930969" lon="12.317916781999998" height="0" />
+		<position distance="5032" lat="43.924827969000006" lon="12.317880701000007" height="0" />
+		<position distance="5045" lat="43.92472496900001" lon="12.317839539000005" height="0" />
+		<position distance="5058" lat="43.924628726000009" lon="12.317791024999991" height="0" />
+		<position distance="5071" lat="43.924534050000005" lon="12.317734430000002" height="0" />
+		<position distance="5085" lat="43.924438968999993" lon="12.317658402000006" height="0" />
+		<position distance="5099" lat="43.92434672600001" lon="12.317564887999993" height="0" />
+		<position distance="5113" lat="43.924258726000005" lon="12.31746905" height="0" />
+		<position distance="5128" lat="43.924171645" lon="12.317355698" height="0" />
+		<position distance="5142" lat="43.924087402" lon="12.317235183999998" height="0" />
+		<position distance="5158" lat="43.923999401999993" lon="12.317115779000005" height="0" />
+		<position distance="5173" lat="43.92390772600001" lon="12.31699286" height="0" />
+		<position distance="5189" lat="43.92382040199999" lon="12.316861426999992" height="0" />
+		<position distance="5204" lat="43.923728726000007" lon="12.316728264999995" height="0" />
+		<position distance="5220" lat="43.923630049999986" lon="12.316594264999992" height="0" />
+		<position distance="5236" lat="43.923534644999989" lon="12.316466184000007" height="0" />
+		<position distance="5253" lat="43.923446401999996" lon="12.316355969" height="0" />
+		<position distance="5269" lat="43.923358726000004" lon="12.31623826500001" height="0" />
+		<position distance="5287" lat="43.923270726" lon="12.316070209000003" height="0" />
+		<position distance="5305" lat="43.923201430000006" lon="12.315891181000012" height="0" />
+		<position distance="5324" lat="43.923154863000008" lon="12.315674910000013" height="0" />
+		<position distance="5345" lat="43.923098753999994" lon="12.315445638999989" height="0" />
+		<position distance="5366" lat="43.923022159" lon="12.315218990999995" height="0" />
+		<position distance="5387" lat="43.92292437399999" lon="12.314991314999986" height="0" />
+		<position distance="5409" lat="43.922810940999994" lon="12.314774828999987" height="0" />
+		<position distance="5432" lat="43.92268894099999" lon="12.314570343000014" height="0" />
+		<position distance="5454" lat="43.922563265000008" lon="12.314370180999987" height="0" />
+		<position distance="5477" lat="43.922440940999991" lon="12.31417393800001" height="0" />
+		<position distance="5500" lat="43.922329617" lon="12.313983938000007" height="0" />
+		<position distance="5522" lat="43.922252077999985" lon="12.313854143500009" height="0" />
+		<position distance="5544" lat="43.92214661700001" lon="12.313674695000003" height="0" />
+		<position distance="5566" lat="43.922032617000013" lon="12.313490209000008" height="0" />
+		<position distance="5587" lat="43.921917616999991" lon="12.313323561000004" height="0" />
+		<position distance="5607" lat="43.921794427000009" lon="12.313159237000008" height="0" />
+		<position distance="5627" lat="43.921669616999992" lon="12.31301810299999" height="0" />
+		<position distance="5647" lat="43.921544264999994" lon="12.312900697999993" height="0" />
+		<position distance="5666" lat="43.921429940999985" lon="12.312779264999989" height="0" />
+		<position distance="5684" lat="43.921299941" lon="12.312657021999996" height="0" />
+		<position distance="5700" lat="43.921170265" lon="12.312543616999989" height="0" />
+		<position distance="5715" lat="43.921062645000006" lon="12.312440563999985" height="0" />
+		<position distance="5728" lat="43.920966402000005" lon="12.312357996999992" height="0" />
+		<position distance="5740" lat="43.920908187000009" lon="12.312299943999989" height="0" />
+		<position distance="5751" lat="43.920855106000005" lon="12.312250943999999" height="0" />
+		<position distance="5762" lat="43.920801186999995" lon="12.312211862999988" height="0" />
+		<position distance="5774" lat="43.920740835000004" lon="12.312185405000008" height="0" />
+		<position distance="5788" lat="43.920672429999996" lon="12.312242679000008" height="0" />
+		<position distance="5802" lat="43.920585969" lon="12.312373573000002" height="0" />
+		<position distance="5818" lat="43.920475616999994" lon="12.312519844000008" height="0" />
+		<position distance="5834" lat="43.920365617000016" lon="12.312675681999991" height="0" />
+		<position distance="5851" lat="43.920254617000012" lon="12.312829682" height="0" />
+		<position distance="5869" lat="43.920151050000015" lon="12.312982844000004" height="0" />
+		<position distance="5887" lat="43.920040373999996" lon="12.313136844000013" height="0" />
+		<position distance="5905" lat="43.919934292999983" lon="12.313281329999995" height="0" />
+		<position distance="5924" lat="43.919823293000007" lon="12.313424249000008" height="0" />
+		<position distance="5942" lat="43.919716292999993" lon="12.313569168000015" height="0" />
+		<position distance="5961" lat="43.919613050000009" lon="12.313713330000013" height="0" />
+		<position distance="5979" lat="43.919510049999985" lon="12.313854410999994" height="0" />
+		<position distance="5996" lat="43.91940704999999" lon="12.313995411000008" height="0" />
+		<position distance="6013" lat="43.919307968999988" lon="12.314131492000001" height="0" />
+		<position distance="6029" lat="43.91921940200001" lon="12.314247625999997" height="0" />
+		<position distance="6043" lat="43.919139078" lon="12.314355626000008" height="0" />
+		<position distance="6057" lat="43.919069835000016" lon="12.314456949999993" height="0" />
+		<position distance="6071" lat="43.919005754000011" lon="12.314562868999985" height="0" />
+		<position distance="6084" lat="43.918936754000015" lon="12.314672545000008" height="0" />
+		<position distance="6097" lat="43.918861077999992" lon="12.31478262600001" height="0" />
+		<position distance="6110" lat="43.918784077999987" lon="12.314884707000005" height="0" />
+		<position distance="6123" lat="43.918715754000004" lon="12.314988787999994" height="0" />
+		<position distance="6136" lat="43.918639078000012" lon="12.315090950000013" height="0" />
+		<position distance="6149" lat="43.918559077999987" lon="12.315194031000004" height="0" />
+		<position distance="6163" lat="43.918483078000008" lon="12.315302626000005" height="0" />
+		<position distance="6176" lat="43.918403401999996" lon="12.315417302000014" height="0" />
+		<position distance="6190" lat="43.918327078000004" lon="12.315527545000009" height="0" />
+		<position distance="6203" lat="43.918257753999995" lon="12.315639464000014" height="0" />
+		<position distance="6217" lat="43.918188834999995" lon="12.315741949999989" height="0" />
+		<position distance="6230" lat="43.918113078000005" lon="12.315842868999994" height="0" />
+		<position distance="6244" lat="43.918037078" lon="12.31594870699999" height="0" />
+		<position distance="6257" lat="43.917960077999993" lon="12.316056626000005" height="0" />
+		<position distance="6271" lat="43.917880402000009" lon="12.316162625999994" height="0" />
+		<position distance="6285" lat="43.917804078000017" lon="12.316272383000012" height="0" />
+		<position distance="6299" lat="43.917724402000005" lon="12.316388140000015" height="0" />
+		<position distance="6313" lat="43.917636726000012" lon="12.316507059000003" height="0" />
+		<position distance="6328" lat="43.917548401999994" lon="12.316630140000001" height="0" />
+		<position distance="6343" lat="43.917464402000007" lon="12.316753978000008" height="0" />
+		<position distance="6358" lat="43.917384078" lon="12.316875382999996" height="0" />
+		<position distance="6373" lat="43.917300159000007" lon="12.316984706999989" height="0" />
+		<position distance="6387" lat="43.917220078000014" lon="12.317096464000002" height="0" />
+		<position distance="6402" lat="43.917136401999983" lon="12.317206545000005" height="0" />
+		<position distance="6417" lat="43.917052401999996" lon="12.317323302000006" height="0" />
+		<position distance="6432" lat="43.916968402000009" lon="12.317444139999992" height="0" />
+		<position distance="6447" lat="43.916873726000006" lon="12.317565382999987" height="0" />
+		<position distance="6462" lat="43.91677872599999" lon="12.317688059000005" height="0" />
+		<position distance="6478" lat="43.916686402000011" lon="12.317816735000008" height="0" />
+		<position distance="6494" lat="43.916584617000012" lon="12.317934707000006" height="0" />
+		<position distance="6510" lat="43.916470941" lon="12.318033192999991" height="0" />
+		<position distance="6526" lat="43.916348940999995" lon="12.318104570000003" height="0" />
+		<position distance="6542" lat="43.916222941" lon="12.318159056000013" height="0" />
+		<position distance="6558" lat="43.916093265" lon="12.318194704000007" height="0" />
+		<position distance="6575" lat="43.915970617" lon="12.318238379999997" height="0" />
+		<position distance="6591" lat="43.915848616999995" lon="12.318282137000011" height="0" />
+		<position distance="6607" lat="43.915734617" lon="12.318326136999986" height="0" />
+		<position distance="6623" lat="43.915615941" lon="12.318387408000007" height="0" />
+		<position distance="6638" lat="43.91550161699999" lon="12.318457083999988" height="0" />
+		<position distance="6654" lat="43.915390374" lon="12.318541517" height="0" />
+		<position distance="6669" lat="43.915291050000008" lon="12.318634030999988" height="0" />
+		<position distance="6684" lat="43.915198726" lon="12.318735707000002" height="0" />
+		<position distance="6698" lat="43.915126078000014" lon="12.318874654000013" height="0" />
+		<position distance="6713" lat="43.915056835" lon="12.318998220999987" height="0" />
+		<position distance="6727" lat="43.915010539000008" lon="12.319126815999994" height="0" />
+		<position distance="6742" lat="43.914989648000017" lon="12.31927743899999" height="0" />
+		<position distance="6756" lat="43.915000351999993" lon="12.319443196000009" height="0" />
+		<position distance="6771" lat="43.915019109000013" lon="12.319616953000008" height="0" />
+		<position distance="6786" lat="43.915042028000016" lon="12.319782277000002" height="0" />
+		<position distance="6800" lat="43.91505375700001" lon="12.319950358" height="0" />
+		<position distance="6815" lat="43.915076432999996" lon="12.320103601" height="0" />
+		<position distance="6828" lat="43.91510670400001" lon="12.320253006000002" height="0" />
+		<position distance="6841" lat="43.915132785" lon="12.320389815999988" height="0" />
+		<position distance="6854" lat="43.915156109000009" lon="12.32051773500001" height="0" />
+		<position distance="6866" lat="43.915161323999996" lon="12.320631058999993" height="0" />
+		<position distance="6878" lat="43.915186785" lon="12.320752978000002" height="0" />
+		<position distance="6890" lat="43.915206028" lon="12.320876978000001" height="0" />
+		<position distance="6902" lat="43.915225109000005" lon="12.321002058999994" height="0" />
+		<position distance="6913" lat="43.915248028000008" lon="12.321127977999993" height="0" />
+		<position distance="6925" lat="43.915274704000012" lon="12.321250977999995" height="0" />
+		<position distance="6936" lat="43.915308460999995" lon="12.32135911200001" height="0" />
+		<position distance="6948" lat="43.915342460999994" lon="12.321467626000015" height="0" />
+		<position distance="6959" lat="43.91538413699999" lon="12.321574787999992" height="0" />
+		<position distance="6970" lat="43.915437812999983" lon="12.321691463999997" height="0" />
+		<position distance="6981" lat="43.915486813" lon="12.321796193000012" height="0" />
+		<position distance="6992" lat="43.915540813000007" lon="12.321895111999993" height="0" />
+		<position distance="7002" lat="43.915590137000009" lon="12.321979002999996" height="0" />
+		<position distance="7012" lat="43.915640137" lon="12.322067435999998" height="0" />
+		<position distance="7022" lat="43.915688894" lon="12.322151354999988" height="0" />
+		<position distance="7032" lat="43.915739137" lon="12.32222424599999" height="0" />
+		<position distance="7041" lat="43.915788813000006" lon="12.322289407999989" height="0" />
+		<position distance="7050" lat="43.915841812999986" lon="12.32234521800001" height="0" />
+		<position distance="7059" lat="43.915891813" lon="12.322406569999998" height="0" />
+		<position distance="7068" lat="43.915937137000014" lon="12.322470489000011" height="0" />
+		<position distance="7076" lat="43.915997893999986" lon="12.322534651000012" height="0" />
+		<position distance="7084" lat="43.916037380000006" lon="12.322604003000009" height="0" />
+		<position distance="7091" lat="43.916071784999986" lon="12.322683084000005" height="0" />
+		<position distance="7098" lat="43.916091351999995" lon="12.322750488999986" height="0" />
+		<position distance="7105" lat="43.916106676" lon="12.322823164999988" height="0" />
+		<position distance="7112" lat="43.916121756999985" lon="12.322898759999987" height="0" />
+		<position distance="7119" lat="43.916125676000007" lon="12.322984517000009" height="0" />
+		<position distance="7125" lat="43.916125999999991" lon="12.323069922000002" height="0" />
+		<position distance="7132" lat="43.916119243" lon="12.323143084000009" height="0" />
+		<position distance="7139" lat="43.916107648000008" lon="12.323216922" height="0" />
+		<position distance="7146" lat="43.916084971999993" lon="12.323285408000004" height="0" />
+		<position distance="7153" lat="43.916077567" lon="12.323342408000002" height="0" />
+		<position distance="7160" lat="43.916058566999993" lon="12.323402570000013" height="0" />
+		<position distance="7166" lat="43.916054" lon="12.323472245999994" height="0" />
+		<position distance="7172" lat="43.916054324000015" lon="12.323539489000012" height="0" />
+		<position distance="7179" lat="43.916042323999989" lon="12.323600408000004" height="0" />
+		<position distance="7185" lat="43.916031324000016" lon="12.323668246000011" height="0" />
+		<position distance="7191" lat="43.916031000000004" lon="12.323729893999996" height="0" />
+		<position distance="7196" lat="43.916023324000008" lon="12.323788731999997" height="0" />
+		<position distance="7202" lat="43.916022999999996" lon="12.323852165000005" height="0" />
+		<position distance="7208" lat="43.916026676" lon="12.323906650999987" height="0" />
+		<position distance="7213" lat="43.916022999999996" lon="12.323978165" height="0" />
+		<position distance="7219" lat="43.916026352000017" lon="12.324045165000001" height="0" />
+		<position distance="7225" lat="43.916026999999985" lon="12.324112407999991" height="0" />
+		<position distance="7231" lat="43.916026676" lon="12.324184003" height="0" />
+		<position distance="7237" lat="43.91604567600001" lon="12.324243650999989" height="0" />
+		<position distance="7243" lat="43.916049999999984" lon="12.324304812999998" height="0" />
+		<position distance="7249" lat="43.916049999999984" lon="12.324369327" height="0" />
+		<position distance="7255" lat="43.916049999999984" lon="12.324424650999987" height="0" />
+		<position distance="7261" lat="43.916057676000008" lon="12.324485407999987" height="0" />
+		<position distance="7267" lat="43.916064675999991" lon="12.324552407999988" height="0" />
+		<position distance="7273" lat="43.916072676" lon="12.324619245999998" height="0" />
+		<position distance="7279" lat="43.916079757000006" lon="12.324690164999993" height="0" />
+		<position distance="7285" lat="43.916087675999989" lon="12.324757326999986" height="0" />
+		<position distance="7291" lat="43.916088" lon="12.324822489000013" height="0" />
+		<position distance="7297" lat="43.916088" lon="12.324885408" height="0" />
+		<position distance="7303" lat="43.916095676" lon="12.324952246000009" height="0" />
+		<position distance="7310" lat="43.916096323999994" lon="12.325027597999991" height="0" />
+		<position distance="7317" lat="43.916091999999992" lon="12.325120760000004" height="0" />
+		<position distance="7323" lat="43.916084323999996" lon="12.325199083999991" height="0" />
+		<position distance="7331" lat="43.916077567" lon="12.325273841000012" height="0" />
+		<position distance="7338" lat="43.916061971999994" lon="12.325352678999991" height="0" />
+		<position distance="7345" lat="43.916035891000007" lon="12.325431841000011" height="0" />
+		<position distance="7352" lat="43.916009215" lon="12.325496326999996" height="0" />
+		<position distance="7360" lat="43.915978295999992" lon="12.32557276" height="0" />
+		<position distance="7367" lat="43.915952215000004" lon="12.325633893999992" height="0" />
+		<position distance="7375" lat="43.915917620000016" lon="12.325700407999989" height="0" />
+		<position distance="7382" lat="43.915865187000009" lon="12.325753380000009" height="0" />
+		<position distance="7390" lat="43.915815186999993" lon="12.325811488999989" height="0" />
+		<position distance="7398" lat="43.915769863000008" lon="12.325874489" height="0" />
+		<position distance="7406" lat="43.915731214999994" lon="12.325930975000006" height="0" />
+		<position distance="7414" lat="43.915685862999993" lon="12.325987650999991" height="0" />
+		<position distance="7422" lat="43.91563618699999" lon="12.326047570000014" height="0" />
+		<position distance="7430" lat="43.915583105999985" lon="12.326108570000002" height="0" />
+		<position distance="7437" lat="43.91553286300001" lon="12.326162812999996" height="0" />
+		<position distance="7445" lat="43.91549053899999" lon="12.326207299000004" height="0" />
+		<position distance="7453" lat="43.915442106" lon="12.326256137000001" height="0" />
+		<position distance="7461" lat="43.915384835" lon="12.32629094699999" height="0" />
+		<position distance="7469" lat="43.915319538999995" lon="12.326319270999989" height="0" />
+		<position distance="7476" lat="43.915262511000009" lon="12.326328999999987" height="0" />
+		<position distance="7484" lat="43.915201510999992" lon="12.32634143300001" height="0" />
+		<position distance="7492" lat="43.915144510999994" lon="12.326343081000005" height="0" />
+		<position distance="7499" lat="43.91508743" lon="12.326340081000012" height="0" />
+		<position distance="7507" lat="43.915018511" lon="12.326332323999992" height="0" />
+		<position distance="7515" lat="43.914953835000006" lon="12.326322405000013" height="0" />
+		<position distance="7523" lat="43.914892511000005" lon="12.326307729000007" height="0" />
+		<position distance="7530" lat="43.914820429999992" lon="12.326309919000011" height="0" />
+		<position distance="7538" lat="43.914751754000008" lon="12.326306081000013" height="0" />
+		<position distance="7546" lat="43.914694187000009" lon="12.326301486000006" height="0" />
+		<position distance="7554" lat="43.914637105999986" lon="12.326293324000005" height="0" />
+		<position distance="7562" lat="43.914572429999993" lon="12.326301999999998" height="0" />
+		<position distance="7570" lat="43.914511430000005" lon="12.326305324000003" height="0" />
+		<position distance="7578" lat="43.914438835" lon="12.326301838000006" height="0" />
+		<position distance="7586" lat="43.914370429999991" lon="12.326305918999992" height="0" />
+		<position distance="7594" lat="43.914305430000013" lon="12.326293485999997" height="0" />
+		<position distance="7602" lat="43.914237077999985" lon="12.326283080999986" height="0" />
+		<position distance="7610" lat="43.914175510999996" lon="12.326275162000002" height="0" />
+		<position distance="7618" lat="43.914116592" lon="12.326271621500013" height="0" />
+		<position distance="7627" lat="43.914049835000014" lon="12.326268161999991" height="0" />
+		<position distance="7635" lat="43.913974077999995" lon="12.326275594999999" height="0" />
+		<position distance="7643" lat="43.913912430000011" lon="12.326277000000005" height="0" />
+		<position distance="7651" lat="43.913843834999994" lon="12.326273323999999" height="0" />
+		<position distance="7660" lat="43.913782510999994" lon="12.326273000000015" height="0" />
+		<position distance="7667" lat="43.913721511000006" lon="12.326274919000014" height="0" />
+		<position distance="7675" lat="43.913660510999989" lon="12.326271162000012" height="0" />
+		<position distance="7683" lat="43.913591835000005" lon="12.326264404999989" height="0" />
+		<position distance="7691" lat="43.913523754000011" lon="12.326263837999989" height="0" />
+		<position distance="7699" lat="43.913458754000004" lon="12.326279190000008" height="0" />
+		<position distance="7707" lat="43.91339743" lon="12.326312865999995" height="0" />
+		<position distance="7716" lat="43.913340105999993" lon="12.32634654200001" height="0" />
+		<position distance="7724" lat="43.913279429999989" lon="12.326388299000001" height="0" />
+		<position distance="7732" lat="43.913221511000017" lon="12.32643597500001" height="0" />
+		<position distance="7741" lat="43.913172186999986" lon="12.326483975000002" height="0" />
+		<position distance="7749" lat="43.913115105999992" lon="12.326537894000012" height="0" />
+		<position distance="7758" lat="43.913057186999993" lon="12.326598488999991" height="0" />
+		<position distance="7767" lat="43.913014296" lon="12.326667165000004" height="0" />
+		<position distance="7775" lat="43.912976539" lon="12.326737922000007" height="0" />
+		<position distance="7783" lat="43.91293853900001" lon="12.326810921999993" height="0" />
+		<position distance="7792" lat="43.912904215" lon="12.326882084000005" height="0" />
+		<position distance="7800" lat="43.912869620000009" lon="12.326966274" height="0" />
+		<position distance="7808" lat="43.912838891000007" lon="12.327042164999995" height="0" />
+		<position distance="7815" lat="43.912808296000009" lon="12.327106407999992" height="0" />
+		<position distance="7823" lat="43.912778215" lon="12.327169569999995" height="0" />
+		<position distance="7831" lat="43.912747295999992" lon="12.327240002999986" height="0" />
+		<position distance="7838" lat="43.912717214999986" lon="12.327308084000009" height="0" />
+		<position distance="7845" lat="43.912686296000004" lon="12.327374407999997" height="0" />
+		<position distance="7853" lat="43.912656215" lon="12.327442165000008" height="0" />
+		<position distance="7860" lat="43.912625295999987" lon="12.327511246" height="0" />
+		<position distance="7867" lat="43.912594891" lon="12.327585002999996" height="0" />
+		<position distance="7875" lat="43.912564296" lon="12.327657165000005" height="0" />
+		<position distance="7882" lat="43.912534214999994" lon="12.327727084000003" height="0" />
+		<position distance="7890" lat="43.912503539" lon="12.327799921999997" height="0" />
+		<position distance="7897" lat="43.912473215000006" lon="12.327873084000004" height="0" />
+		<position distance="7905" lat="43.912438296000005" lon="12.32794324599999" height="0" />
+		<position distance="7912" lat="43.912404215000009" lon="12.328014002999993" height="0" />
+		<position distance="7920" lat="43.912377295999988" lon="12.328090922000001" height="0" />
+		<position distance="7927" lat="43.912350891000017" lon="12.328165003000009" height="0" />
+		<position distance="7935" lat="43.912324215000012" lon="12.328238164999988" height="0" />
+		<position distance="7943" lat="43.912293620000014" lon="12.328307165000012" height="0" />
+		<position distance="7950" lat="43.91225953899999" lon="12.328378003000012" height="0" />
+		<position distance="7958" lat="43.912229214999996" lon="12.32845116499999" height="0" />
+		<position distance="7965" lat="43.91219061999999" lon="12.328520164999986" height="0" />
+		<position distance="7973" lat="43.912160215" lon="12.328589002999991" height="0" />
+		<position distance="7981" lat="43.912129295999989" lon="12.328663003000003" height="0" />
+		<position distance="7988" lat="43.912099215000012" lon="12.328733164999989" height="0" />
+		<position distance="7996" lat="43.912068296" lon="12.328805003000014" height="0" />
+		<position distance="8003" lat="43.912034215000006" lon="12.328876084000001" height="0" />
+		<position distance="8011" lat="43.912007296000013" lon="12.328951002999986" height="0" />
+		<position distance="8018" lat="43.911977215000007" lon="12.329021245999996" height="0" />
+		<position distance="8026" lat="43.911943538999992" lon="12.329091164999994" height="0" />
+		<position distance="8033" lat="43.911912215" lon="12.329163002999991" height="0" />
+		<position distance="8041" lat="43.91188129599999" lon="12.329238083999996" height="0" />
+		<position distance="8048" lat="43.911851215000013" lon="12.329309246000008" height="0" />
+		<position distance="8056" lat="43.911813539000008" lon="12.329378246000005" height="0" />
+		<position distance="8064" lat="43.911778295999994" lon="12.329444246000008" height="0" />
+		<position distance="8071" lat="43.911740538999993" lon="12.329512165000011" height="0" />
+		<position distance="8079" lat="43.911698863" lon="12.329580246000006" height="0" />
+		<position distance="8087" lat="43.91165686299999" lon="12.329645327000009" height="0" />
+		<position distance="8095" lat="43.91161186299999" lon="12.329718165000003" height="0" />
+		<position distance="8103" lat="43.911565862999993" lon="12.329782408" height="0" />
+		<position distance="8112" lat="43.911519862999995" lon="12.329846408000009" height="0" />
+		<position distance="8120" lat="43.911473863" lon="12.329912326999988" height="0" />
+		<position distance="8129" lat="43.911425105999996" lon="12.329981164999992" height="0" />
+		<position distance="8137" lat="43.911371186999986" lon="12.330047326999988" height="0" />
+		<position distance="8146" lat="43.911322106" lon="12.330113326999992" height="0" />
+		<position distance="8155" lat="43.911271862999996" lon="12.330177488999993" height="0" />
+		<position distance="8164" lat="43.911225863" lon="12.330243488999997" height="0" />
+		<position distance="8172" lat="43.911181106000015" lon="12.330300732000012" height="0" />
+		<position distance="8181" lat="43.911130862999983" lon="12.330368327000002" height="0" />
+		<position distance="8190" lat="43.911078105999991" lon="12.330435327000004" height="0" />
+		<position distance="8199" lat="43.91102418700001" lon="12.330505003000013" height="0" />
+		<position distance="8208" lat="43.910975105999995" lon="12.330570488999996" height="0" />
+		<position distance="8217" lat="43.910924862999991" lon="12.330635489000002" height="0" />
+		<position distance="8226" lat="43.910872106" lon="12.330699326999991" height="0" />
+		<position distance="8234" lat="43.91081818699999" lon="12.330765326999995" height="0" />
+		<position distance="8243" lat="43.910771863000008" lon="12.330833165000001" height="0" />
+		<position distance="8252" lat="43.910719186999984" lon="12.330900245999999" height="0" />
+		<position distance="8260" lat="43.910668863000012" lon="12.330959651" height="0" />
+		<position distance="8269" lat="43.910616187000016" lon="12.331019569999995" height="0" />
+		<position distance="8277" lat="43.910565862999988" lon="12.331080488999987" height="0" />
+		<position distance="8286" lat="43.910516863" lon="12.331140731999994" height="0" />
+		<position distance="8294" lat="43.910467186999995" lon="12.331197731999993" height="0" />
+		<position distance="8302" lat="43.910420863000013" lon="12.331248974999994" height="0" />
+		<position distance="8310" lat="43.910379782000007" lon="12.331299569999999" height="0" />
+		<position distance="8318" lat="43.910337782" lon="12.331362326999994" height="0" />
+		<position distance="8326" lat="43.910284187" lon="12.331427327" height="0" />
+		<position distance="8334" lat="43.910231106" lon="12.331489489000006" height="0" />
+		<position distance="8342" lat="43.910174106" lon="12.33155056999999" height="0" />
+		<position distance="8350" lat="43.910124187000008" lon="12.331612326999988" height="0" />
+		<position distance="8359" lat="43.910071106000004" lon="12.331678407999988" height="0" />
+		<position distance="8368" lat="43.910013510999988" lon="12.331741408" height="0" />
+		<position distance="8376" lat="43.909960186999996" lon="12.331803408000013" height="0" />
+		<position distance="8385" lat="43.90990618699999" lon="12.331870245999994" height="0" />
+		<position distance="8394" lat="43.909849511000004" lon="12.331942083999991" height="0" />
+		<position distance="8403" lat="43.909796186999984" lon="12.33201308400001" height="0" />
+		<position distance="8413" lat="43.909742187000006" lon="12.332085326999987" height="0" />
+		<position distance="8422" lat="43.909685187000008" lon="12.33215816500001" height="0" />
+		<position distance="8431" lat="43.909628510999994" lon="12.332246193000003" height="0" />
+		<position distance="8441" lat="43.909575106000005" lon="12.332326083999988" height="0" />
+		<position distance="8451" lat="43.909521186999996" lon="12.332400922000005" height="0" />
+		<position distance="8460" lat="43.909464187" lon="12.332477084000004" height="0" />
+		<position distance="8470" lat="43.909407106" lon="12.332556678999993" height="0" />
+		<position distance="8480" lat="43.909353186999994" lon="12.332642436000015" height="0" />
+		<position distance="8490" lat="43.909304106000008" lon="12.332720840999997" height="0" />
+		<position distance="8500" lat="43.909250187" lon="12.332804597999996" height="0" />
+		<position distance="8510" lat="43.909193511000012" lon="12.332887760000006" height="0" />
+		<position distance="8519" lat="43.909143782" lon="12.332967679000007" height="0" />
+		<position distance="8529" lat="43.909090187000004" lon="12.333047679000003" height="0" />
+		<position distance="8539" lat="43.909043862999994" lon="12.333128598000002" height="0" />
+		<position distance="8548" lat="43.908995105999992" lon="12.333208759999991" height="0" />
+		<position distance="8558" lat="43.908941187000011" lon="12.333283840999997" height="0" />
+		<position distance="8567" lat="43.908888187" lon="12.333370355" height="0" />
+		<position distance="8577" lat="43.908838187000015" lon="12.333457355000007" height="0" />
+		<position distance="8587" lat="43.90879253899999" lon="12.333539679000012" height="0" />
+		<position distance="8596" lat="43.90875362" lon="12.333633192999997" height="0" />
+		<position distance="8606" lat="43.908715539000013" lon="12.333724192999995" height="0" />
+		<position distance="8615" lat="43.908688891" lon="12.333819112000015" height="0" />
+		<position distance="8625" lat="43.908672324000008" lon="12.333924545000002" height="0" />
+		<position distance="8634" lat="43.908675676" lon="12.334030869000003" height="0" />
+		<position distance="8643" lat="43.908683352" lon="12.334128950000007" height="0" />
+		<position distance="8653" lat="43.908702027999993" lon="12.33422594999999" height="0" />
+		<position distance="8662" lat="43.908731784999986" lon="12.334325111999988" height="0" />
+		<position distance="8671" lat="43.908762784999993" lon="12.334413678999994" height="0" />
+		<position distance="8680" lat="43.908792785" lon="12.334505355000005" height="0" />
+		<position distance="8689" lat="43.908827704000004" lon="12.334591598000003" height="0" />
+		<position distance="8698" lat="43.908861785" lon="12.334674678999988" height="0" />
+		<position distance="8707" lat="43.908895460999986" lon="12.33475759800001" height="0" />
+		<position distance="8716" lat="43.908934380000005" lon="12.334840598" height="0" />
+		<position distance="8725" lat="43.908968785000013" lon="12.334924760000007" height="0" />
+		<position distance="8734" lat="43.909010461000008" lon="12.335008678999998" height="0" />
+		<position distance="8743" lat="43.909048461" lon="12.335092841000005" height="0" />
+		<position distance="8752" lat="43.909082461" lon="12.335169084" height="0" />
+		<position distance="8760" lat="43.90911770400001" lon="12.335244840999991" height="0" />
+		<position distance="8769" lat="43.909155461000012" lon="12.335321921999991" height="0" />
+		<position distance="8777" lat="43.909193461" lon="12.335396164999992" height="0" />
+		<position distance="8786" lat="43.909239136999986" lon="12.335462245999992" height="0" />
+		<position distance="8794" lat="43.90929181300001" lon="12.335529245999993" height="0" />
+		<position distance="8803" lat="43.909345813000016" lon="12.335596245999994" height="0" />
+		<position distance="8812" lat="43.909398812999996" lon="12.335669002999993" height="0" />
+		<position distance="8820" lat="43.909430433000011" lon="12.335753355000009" height="0" />
+		<position distance="8829" lat="43.909435" lon="12.335849112000005" height="0" />
+		<position distance="8838" lat="43.909406539" lon="12.335929840999995" height="0" />
+		<position distance="8847" lat="43.909353511000006" lon="12.335993731999992" height="0" />
+		<position distance="8855" lat="43.909282402" lon="12.336024270999985" height="0" />
+		<position distance="8864" lat="43.909216511000011" lon="12.336029161999988" height="0" />
+		<position distance="8872" lat="43.909147835" lon="12.336027161999994" height="0" />
+		<position distance="8881" lat="43.90908343000001" lon="12.336026000000004" height="0" />
+		<position distance="8889" lat="43.909021510999992" lon="12.336027000000001" height="0" />
+		<position distance="8897" lat="43.908964510999994" lon="12.336024081000005" height="0" />
+		<position distance="8905" lat="43.908911187" lon="12.336031595000009" height="0" />
+		<position distance="8912" lat="43.90885043" lon="12.336043432999986" height="0" />
+		<position distance="8920" lat="43.908789430000013" lon="12.336056352000014" height="0" />
+		<position distance="8928" lat="43.90872843" lon="12.336071594999993" height="0" />
+		<position distance="8935" lat="43.90867143" lon="12.336084432999996" height="0" />
+		<position distance="8943" lat="43.908609511000009" lon="12.336096513999991" height="0" />
+		<position distance="8950" lat="43.908552511000011" lon="12.336106513999994" height="0" />
+		<position distance="8958" lat="43.908502862999995" lon="12.336114675999994" height="0" />
+		<position distance="8965" lat="43.908445511" lon="12.336121676000005" height="0" />
+		<position distance="8972" lat="43.908392187000004" lon="12.336125756999991" height="0" />
+		<position distance="8979" lat="43.908339106" lon="12.336132676000005" height="0" />
+		<position distance="8986" lat="43.908281187" lon="12.33614343299999" height="0" />
+		<position distance="8993" lat="43.908224187" lon="12.336152676000012" height="0" />
+		<position distance="9000" lat="43.908170863000009" lon="12.336158595" height="0" />
+		<position distance="9008" lat="43.908117187000016" lon="12.336186542000007" height="0" />
+		<position distance="9015" lat="43.908064187000008" lon="12.336243408000001" height="0" />
+		<position distance="9023" lat="43.908025215000009" lon="12.336311083999988" height="0" />
+		<position distance="9030" lat="43.908009243000009" lon="12.336382084000007" height="0" />
+		<position distance="9038" lat="43.908005" lon="12.336460678999998" height="0" />
+		<position distance="9046" lat="43.908019352" lon="12.33653984099999" height="0" />
+		<position distance="9054" lat="43.908052461000011" lon="12.336621760000014" height="0" />
+		<position distance="9062" lat="43.908097812999983" lon="12.336696326999999" height="0" />
+		<position distance="9071" lat="43.908154569999994" lon="12.336757651" height="0" />
+		<position distance="9079" lat="43.908208812999987" lon="12.336806136999996" height="0" />
+		<position distance="9086" lat="43.908265813000014" lon="12.336850298999991" height="0" />
+		<position distance="9094" lat="43.90831889399999" lon="12.336887622999996" height="0" />
+		<position distance="9102" lat="43.908365461000017" lon="12.336928298999993" height="0" />
+		<position distance="9109" lat="43.908415136999992" lon="12.336967622999993" height="0" />
+		<position distance="9117" lat="43.908461137000018" lon="12.337002622999989" height="0" />
+		<position distance="9124" lat="43.908513813000013" lon="12.337038460999992" height="0" />
+		<position distance="9131" lat="43.908564136999985" lon="12.337077298999986" height="0" />
+		<position distance="9138" lat="43.908609136999985" lon="12.337117379999995" height="0" />
+		<position distance="9145" lat="43.908662813000007" lon="12.337155461000009" height="0" />
+		<position distance="9153" lat="43.908711893999993" lon="12.337195379999997" height="0" />
+		<position distance="9160" lat="43.908765813" lon="12.337236299000011" height="0" />
+		<position distance="9168" lat="43.908814893999988" lon="12.337273460999995" height="0" />
+		<position distance="9175" lat="43.908872813000016" lon="12.337311542000009" height="0" />
+		<position distance="9183" lat="43.908925812999996" lon="12.337346542000006" height="0" />
+		<position distance="9190" lat="43.908978894" lon="12.337381622999999" height="0" />
+		<position distance="9198" lat="43.90903281300001" lon="12.337415542000002" height="0" />
+		<position distance="9205" lat="43.90908581299999" lon="12.337452541999994" height="0" />
+		<position distance="9212" lat="43.909139812999996" lon="12.337488785000005" height="0" />
+		<position distance="9220" lat="43.909200812999984" lon="12.337516865999987" height="0" />
+		<position distance="9227" lat="43.909253812999992" lon="12.337546785" height="0" />
+		<position distance="9234" lat="43.909306894" lon="12.337575785000013" height="0" />
+		<position distance="9242" lat="43.909360813000006" lon="12.337610541999993" height="0" />
+		<position distance="9249" lat="43.909410137000009" lon="12.33764554199999" height="0" />
+		<position distance="9256" lat="43.909467812999992" lon="12.337676703999989" height="0" />
+		<position distance="9264" lat="43.909524489000006" lon="12.337712541999991" height="0" />
+		<position distance="9271" lat="43.909577893999995" lon="12.337747623000013" height="0" />
+		<position distance="9279" lat="43.909642570000017" lon="12.337780704000011" height="0" />
+		<position distance="9286" lat="43.909699894" lon="12.337814622999986" height="0" />
+		<position distance="9294" lat="43.909757489000015" lon="12.33784662299999" height="0" />
+		<position distance="9302" lat="43.909810488999995" lon="12.337884379999991" height="0" />
+		<position distance="9310" lat="43.909863894000011" lon="12.337924380000004" height="0" />
+		<position distance="9317" lat="43.909917812999993" lon="12.337967136999993" height="0" />
+		<position distance="9325" lat="43.909967136999995" lon="12.338018650999999" height="0" />
+		<position distance="9333" lat="43.910009137" lon="12.338079650999987" height="0" />
+		<position distance="9340" lat="43.910055137" lon="12.338145327000007" height="0" />
+		<position distance="9348" lat="43.910101137" lon="12.338207812999997" height="0" />
+		<position distance="9356" lat="43.910139461" lon="12.33826681299999" height="0" />
+		<position distance="9363" lat="43.910181461000008" lon="12.338326488999996" height="0" />
+		<position distance="9371" lat="43.910219461" lon="12.338387489000013" height="0" />
+		<position distance="9379" lat="43.910253785000009" lon="12.338455084000003" height="0" />
+		<position distance="9387" lat="43.910292137" lon="12.338527083999992" height="0" />
+		<position distance="9395" lat="43.910337137" lon="12.338597084000014" height="0" />
+		<position distance="9404" lat="43.910379460999991" lon="12.338661489000003" height="0" />
+		<position distance="9412" lat="43.910417461000009" lon="12.338718650999994" height="0" />
+		<position distance="9420" lat="43.910456460999995" lon="12.338779732000006" height="0" />
+		<position distance="9428" lat="43.910504812999989" lon="12.338835813000003" height="0" />
+		<position distance="9436" lat="43.910558812999994" lon="12.338882218000009" height="0" />
+		<position distance="9444" lat="43.910608137" lon="12.338923461000007" height="0" />
+		<position distance="9451" lat="43.910646784999983" lon="12.33896138" height="0" />
+		<position distance="9459" lat="43.910688461000007" lon="12.339018570000008" height="0" />
+		<position distance="9466" lat="43.910715785000008" lon="12.339085003000008" height="0" />
+		<position distance="9473" lat="43.910725000000014" lon="12.339156003" height="0" />
+		<position distance="9480" lat="43.910713971999996" lon="12.339230165000004" height="0" />
+		<position distance="9487" lat="43.910676539000008" lon="12.339297488999989" height="0" />
+		<position distance="9495" lat="43.910634539" lon="12.339362327000004" height="0" />
+		<position distance="9502" lat="43.910584863" lon="12.339411893999994" height="0" />
+		<position distance="9509" lat="43.910539539000013" lon="12.33946948900001" height="0" />
+		<position distance="9517" lat="43.910497539000005" lon="12.339536326999991" height="0" />
+		<position distance="9524" lat="43.91045586300001" lon="12.339596650999994" height="0" />
+		<position distance="9532" lat="43.910413863" lon="12.339656327" height="0" />
+		<position distance="9539" lat="43.910363862999986" lon="12.339712813000006" height="0" />
+		<position distance="9546" lat="43.910323377" lon="12.339766596499999" height="0" />
+		<position distance="9552" lat="43.910294891000007" lon="12.339809460999987" height="0" />
+		<position distance="9559" lat="43.91026789099999" lon="12.339852056000012" height="0" />
+		<position distance="9565" lat="43.910248567" lon="12.339893380000007" height="0" />
+		<position distance="9571" lat="43.910221971999988" lon="12.339932541999986" height="0" />
+		<position distance="9576" lat="43.910192214999995" lon="12.339976218000004" height="0" />
+		<position distance="9582" lat="43.910165215000006" lon="12.340016299000013" height="0" />
+		<position distance="9587" lat="43.910141648000007" lon="12.340048784999993" height="0" />
+		<position distance="9593" lat="43.910108538999992" lon="12.340097813" height="0" />
+		<position distance="9599" lat="43.910073538999995" lon="12.340145893999988" height="0" />
+		<position distance="9605" lat="43.910031538999988" lon="12.340189623000015" height="0" />
+		<position distance="9611" lat="43.909997215000004" lon="12.340228623000002" height="0" />
+		<position distance="9618" lat="43.909967214999995" lon="12.340256704000012" height="0" />
+		<position distance="9625" lat="43.909910510999993" lon="12.340307569999993" height="0" />
+		<position distance="9633" lat="43.909849511000004" lon="12.340354380000008" height="0" />
+		<position distance="9641" lat="43.909784835000011" lon="12.340399217999988" height="0" />
+		<position distance="9650" lat="43.909720754000006" lon="12.340459489000011" height="0" />
+		<position distance="9659" lat="43.909651754000009" lon="12.340541002999999" height="0" />
+		<position distance="9668" lat="43.909579159" lon="12.340600380000012" height="0" />
+		<position distance="9677" lat="43.909514753999986" lon="12.340639379999999" height="0" />
+		<position distance="9686" lat="43.909453429999985" lon="12.340687975000009" height="0" />
+		<position distance="9694" lat="43.909391510999995" lon="12.340741812999994" height="0" />
+		<position distance="9703" lat="43.909330511000007" lon="12.340786460999993" height="0" />
+		<position distance="9712" lat="43.909273511000009" lon="12.340822542000012" height="0" />
+		<position distance="9721" lat="43.909208511" lon="12.340852866000006" height="0" />
+		<position distance="9729" lat="43.909140753999992" lon="12.340879946999991" height="0" />
+		<position distance="9738" lat="43.909079429999991" lon="12.340912623000008" height="0" />
+		<position distance="9747" lat="43.909014430000013" lon="12.340943785000007" height="0" />
+		<position distance="9755" lat="43.908945835" lon="12.340980623000007" height="0" />
+		<position distance="9764" lat="43.908877754" lon="12.341013298999997" height="0" />
+		<position distance="9773" lat="43.908808754000006" lon="12.341036190000011" height="0" />
+		<position distance="9782" lat="43.908735835000016" lon="12.341058946999993" height="0" />
+		<position distance="9790" lat="43.908674511000015" lon="12.341089704000012" height="0" />
+		<position distance="9799" lat="43.908609834999993" lon="12.341130894000003" height="0" />
+		<position distance="9807" lat="43.908545430000004" lon="12.341163623" height="0" />
+		<position distance="9815" lat="43.908487186999992" lon="12.341198622999997" height="0" />
+		<position distance="9823" lat="43.908434187000012" lon="12.341234785000012" height="0" />
+		<position distance="9831" lat="43.908384186999996" lon="12.341264784999993" height="0" />
+		<position distance="9838" lat="43.908335187000006" lon="12.34128819" height="0" />
+		<position distance="9846" lat="43.908280863000016" lon="12.341312028000004" height="0" />
+		<position distance="9853" lat="43.908231863" lon="12.341332351999995" height="0" />
+		<position distance="9859" lat="43.908182186999994" lon="12.341348270999987" height="0" />
+		<position distance="9866" lat="43.908129186999986" lon="12.341368109000001" height="0" />
+		<position distance="9873" lat="43.908075187000009" lon="12.341389028000009" height="0" />
+		<position distance="9880" lat="43.908022187" lon="12.341414947000004" height="0" />
+		<position distance="9886" lat="43.907971863" lon="12.341437108999998" height="0" />
+		<position distance="9893" lat="43.907926863" lon="12.341458189999997" height="0" />
+		<position distance="9899" lat="43.907884862999992" lon="12.341474352000006" height="0" />
+		<position distance="9906" lat="43.907835186999989" lon="12.34149327099999" height="0" />
+		<position distance="9913" lat="43.907789186999992" lon="12.341510432999996" height="0" />
+		<position distance="9920" lat="43.907739863000018" lon="12.341535109000006" height="0" />
+		<position distance="9926" lat="43.907686186999996" lon="12.341560947000005" height="0" />
+		<position distance="9933" lat="43.907640781999987" lon="12.341588784999999" height="0" />
+		<position distance="9940" lat="43.90758718699999" lon="12.34160927100001" height="0" />
+		<position distance="9947" lat="43.907538106000004" lon="12.341627270999993" height="0" />
+		<position distance="9953" lat="43.907488187000013" lon="12.341647109000007" height="0" />
+		<position distance="9960" lat="43.907435106000008" lon="12.341665352000007" height="0" />
+		<position distance="9967" lat="43.907381510999983" lon="12.341682514000013" height="0" />
+		<position distance="9973" lat="43.907328105999994" lon="12.341692676000008" height="0" />
+		<position distance="9980" lat="43.907278187" lon="12.341696000000013" height="0" />
+		<position distance="9986" lat="43.907231539000009" lon="12.341672296000013" height="0" />
+		<position distance="9993" lat="43.907196891000012" lon="12.341621268000012" height="0" />
+		<position distance="10000" lat="43.907181323999993" lon="12.341556591999989" height="0" />
+		<position distance="10006" lat="43.907191433000008" lon="12.341488835000007" height="0" />
+		<position distance="10013" lat="43.907199676000005" lon="12.341420077999999" height="0" />
+		<position distance="10020" lat="43.907206756999983" lon="12.341341158999995" height="0" />
+		<position distance="10026" lat="43.907196647999996" lon="12.341265996999994" height="0" />
+		<position distance="10033" lat="43.907170296000004" lon="12.341198592000012" height="0" />
+		<position distance="10040" lat="43.907128863" lon="12.341145105999999" height="0" />
+		<position distance="10046" lat="43.907094215" lon="12.341097944000012" height="0" />
+		<position distance="10053" lat="43.907056538999996" lon="12.341048943999994" height="0" />
+		<position distance="10059" lat="43.907018539000006" lon="12.340999944000004" height="0" />
+		<position distance="10066" lat="43.906976539" lon="12.340960539000008" height="0" />
+		<position distance="10072" lat="43.906934863000004" lon="12.340922457999994" height="0" />
+		<position distance="10078" lat="43.906892862999996" lon="12.340887377000001" height="0" />
+		<position distance="10084" lat="43.906850862999988" lon="12.340851458000003" height="0" />
+		<position distance="10091" lat="43.906812538999986" lon="12.340813620000006" height="0" />
+		<position distance="10097" lat="43.906770539000007" lon="12.340765943999998" height="0" />
+		<position distance="10103" lat="43.906724862999994" lon="12.340726458000006" height="0" />
+		<position distance="10109" lat="43.906682863000015" lon="12.340688620000009" height="0" />
+		<position distance="10115" lat="43.906652538999992" lon="12.340657620000002" height="0" />
+		<position distance="10121" lat="43.906606863000007" lon="12.340625971999998" height="0" />
+		<position distance="10128" lat="43.906553186999986" lon="12.340603566999988" height="0" />
+		<position distance="10134" lat="43.906500187000006" lon="12.340595242999996" height="0" />
+		<position distance="10141" lat="43.906447106" lon="12.340600595000012" height="0" />
+		<position distance="10148" lat="43.90638643" lon="12.340611351999996" height="0" />
+		<position distance="10155" lat="43.906332187000004" lon="12.340633028000013" height="0" />
+		<position distance="10162" lat="43.906279106" lon="12.340652190000014" height="0" />
+		<position distance="10169" lat="43.90622518699999" lon="12.340672189999992" height="0" />
+		<position distance="10176" lat="43.906171863" lon="12.340686513999998" height="0" />
+		<position distance="10183" lat="43.906115106000016" lon="12.340692595000007" height="0" />
+		<position distance="10190" lat="43.906057186999988" lon="12.340692162000011" height="0" />
+		<position distance="10198" lat="43.906000186999989" lon="12.340697675999991" height="0" />
+		<position distance="10205" lat="43.90594718700001" lon="12.340706756999992" height="0" />
+		<position distance="10212" lat="43.905904539000005" lon="12.340713595000011" height="0" />
+		<position distance="10219" lat="43.905851186999996" lon="12.340713324000006" height="0" />
+		<position distance="10226" lat="43.905794187" lon="12.340727514000008" height="0" />
+		<position distance="10233" lat="43.905737187" lon="12.340740270999987" height="0" />
+		<position distance="10240" lat="43.905686863" lon="12.340763785000007" height="0" />
+		<position distance="10247" lat="43.905630511" lon="12.340786189999989" height="0" />
+		<position distance="10254" lat="43.905577187000006" lon="12.340801352" height="0" />
+		<position distance="10261" lat="43.905523187" lon="12.340817433000012" height="0" />
+		<position distance="10267" lat="43.905470186999992" lon="12.340826676000006" height="0" />
+		<position distance="10274" lat="43.90541343000001" lon="12.340835594999987" height="0" />
+		<position distance="10281" lat="43.905366862999983" lon="12.340848432999991" height="0" />
+		<position distance="10288" lat="43.905314105999992" lon="12.340859432999991" height="0" />
+		<position distance="10295" lat="43.905256511000005" lon="12.340873514000009" height="0" />
+		<position distance="10302" lat="43.905203186999984" lon="12.340888352000007" height="0" />
+		<position distance="10309" lat="43.90514643" lon="12.340901352000003" height="0" />
+		<position distance="10316" lat="43.905089430000004" lon="12.34091167599999" height="0" />
+		<position distance="10324" lat="43.905027511000014" lon="12.340924352000002" height="0" />
+		<position distance="10331" lat="43.904963430000009" lon="12.340945027999993" height="0" />
+		<position distance="10339" lat="43.904908863" lon="12.340967027999994" height="0" />
+		<position distance="10346" lat="43.904860106" lon="12.340993623000003" height="0" />
+		<position distance="10353" lat="43.904813863000015" lon="12.341038136999998" height="0" />
+		<position distance="10360" lat="43.904779214999991" lon="12.341086974999996" height="0" />
+		<position distance="10367" lat="43.904744214999994" lon="12.341143569999986" height="0" />
+		<position distance="10374" lat="43.904717296" lon="12.341210246000003" height="0" />
+		<position distance="10382" lat="43.904687214999996" lon="12.341290759999993" height="0" />
+		<position distance="10389" lat="43.904653539000009" lon="12.341369678999996" height="0" />
+		<position distance="10397" lat="43.904629891000013" lon="12.341447759999994" height="0" />
+		<position distance="10404" lat="43.904606891000014" lon="12.341529597999994" height="0" />
+		<position distance="10413" lat="43.904573539000012" lon="12.341615517000008" height="0" />
+		<position distance="10421" lat="43.904542214999992" lon="12.34169067900001" height="0" />
+		<position distance="10429" lat="43.904504539000015" lon="12.341777274000009" height="0" />
+		<position distance="10438" lat="43.904466539" lon="12.341871273999999" height="0" />
+		<position distance="10447" lat="43.90443497199999" lon="12.341960274000002" height="0" />
+		<position distance="10456" lat="43.904405215" lon="12.342049193000008" height="0" />
+		<position distance="10465" lat="43.904363863000015" lon="12.342131679000005" height="0" />
+		<position distance="10474" lat="43.904315304299985" lon="12.342207922" height="0" />
+		<position distance="10483" lat="43.904271539000007" lon="12.34228576000001" height="0" />
+		<position distance="10492" lat="43.904229539" lon="12.342363760000012" height="0" />
+		<position distance="10500" lat="43.904203214999995" lon="12.342450355000011" height="0" />
+		<position distance="10509" lat="43.904182972" lon="12.342543274000008" height="0" />
+		<position distance="10517" lat="43.904171324" lon="12.342629598000002" height="0" />
+		<position distance="10526" lat="43.904163323999995" lon="12.342720192999991" height="0" />
+		<position distance="10534" lat="43.904160243000007" lon="12.342809517000006" height="0" />
+		<position distance="10542" lat="43.904140971999993" lon="12.342895598000013" height="0" />
+		<position distance="10549" lat="43.904100782" lon="12.342951894000009" height="0" />
+		<position distance="10557" lat="43.904043511" lon="12.342966999999987" height="0" />
+		<position distance="10564" lat="43.903997782000005" lon="12.342930943999988" height="0" />
+		<position distance="10571" lat="43.903955782" lon="12.342882105999991" height="0" />
+		<position distance="10579" lat="43.903909538999983" lon="12.342824186999991" height="0" />
+		<position distance="10586" lat="43.903867863000016" lon="12.342774025000011" height="0" />
+		<position distance="10593" lat="43.903821539000006" lon="12.342727781999997" height="0" />
+		<position distance="10601" lat="43.903775862999993" lon="12.342675025000006" height="0" />
+		<position distance="10608" lat="43.903729862999995" lon="12.342621349000012" height="0" />
+		<position distance="10615" lat="43.903681186999989" lon="12.342571025000012" height="0" />
+		<position distance="10622" lat="43.903620429999989" lon="12.342527700999995" height="0" />
+		<position distance="10629" lat="43.903566186999996" lon="12.342499890999989" height="0" />
+		<position distance="10636" lat="43.903517187000006" lon="12.342494162000008" height="0" />
+		<position distance="10643" lat="43.903460106000011" lon="12.342493676000004" height="0" />
+		<position distance="10650" lat="43.903417539" lon="12.342521541999986" height="0" />
+		<position distance="10657" lat="43.90337186299999" lon="12.342562299000008" height="0" />
+		<position distance="10663" lat="43.903329539" lon="12.342605217999989" height="0" />
+		<position distance="10670" lat="43.903295539" lon="12.342653893999994" height="0" />
+		<position distance="10677" lat="43.903260539" lon="12.342706732000011" height="0" />
+		<position distance="10683" lat="43.903229890999995" lon="12.342773002999991" height="0" />
+		<position distance="10690" lat="43.903195619999991" lon="12.342834489000012" height="0" />
+		<position distance="10697" lat="43.903157539000006" lon="12.342892570000004" height="0" />
+		<position distance="10704" lat="43.903115862999982" lon="12.342946732000002" height="0" />
+		<position distance="10711" lat="43.903070781999986" lon="12.342986623000002" height="0" />
+		<position distance="10718" lat="43.903021187000007" lon="12.343019704" height="0" />
+		<position distance="10725" lat="43.90296443" lon="12.343035676" height="0" />
+		<position distance="10732" lat="43.902910187" lon="12.343025648000008" height="0" />
+		<position distance="10739" lat="43.902849511" lon="12.343019080999994" height="0" />
+		<position distance="10747" lat="43.902788510999983" lon="12.343019838000004" height="0" />
+		<position distance="10754" lat="43.902731511000013" lon="12.343034270999993" height="0" />
+		<position distance="10761" lat="43.902670511" lon="12.343058866000007" height="0" />
+		<position distance="10768" lat="43.902619539" lon="12.343081947000002" height="0" />
+		<position distance="10775" lat="43.902570862999994" lon="12.343114622999991" height="0" />
+		<position distance="10783" lat="43.902520863000007" lon="12.343151623000011" height="0" />
+		<position distance="10790" lat="43.902474619999992" lon="12.343198731999991" height="0" />
+		<position distance="10797" lat="43.902432863" lon="12.343255731999989" height="0" />
+		<position distance="10804" lat="43.902406214999985" lon="12.343324921999994" height="0" />
+		<position distance="10812" lat="43.90237162" lon="12.343394488999991" height="0" />
+		<position distance="10820" lat="43.902329619999989" lon="12.343461165000008" height="0" />
+		<position distance="10827" lat="43.902302891000005" lon="12.343537760000004" height="0" />
+		<position distance="10835" lat="43.902272296000007" lon="12.343605408000002" height="0" />
+		<position distance="10842" lat="43.902238215000011" lon="12.343671164999989" height="0" />
+		<position distance="10850" lat="43.90221889099999" lon="12.343748678999987" height="0" />
+		<position distance="10857" lat="43.902203567000015" lon="12.343829841000002" height="0" />
+		<position distance="10864" lat="43.902187647999995" lon="12.343907922" height="0" />
+		<position distance="10872" lat="43.902172648000004" lon="12.343992517000004" height="0" />
+		<position distance="10880" lat="43.902149971999989" lon="12.344070759999994" height="0" />
+		<position distance="10887" lat="43.902130647999996" lon="12.344153516999995" height="0" />
+		<position distance="10895" lat="43.902111891000004" lon="12.344243355000003" height="0" />
+		<position distance="10903" lat="43.902096567" lon="12.344325760000004" height="0" />
+		<position distance="10910" lat="43.902081243" lon="12.344410274000012" height="0" />
+		<position distance="10917" lat="43.90206564799999" lon="12.344484083999987" height="0" />
+		<position distance="10924" lat="43.902054324000005" lon="12.344550083999991" height="0" />
+		<position distance="10932" lat="43.902042324000007" lon="12.344621921999988" height="0" />
+		<position distance="10939" lat="43.902035323999996" lon="12.344700840999991" height="0" />
+		<position distance="10946" lat="43.902035000000012" lon="12.344785516999991" height="0" />
+		<position distance="10954" lat="43.902035000000012" lon="12.344878193" height="0" />
+		<position distance="10962" lat="43.902041757000006" lon="12.344974193000013" height="0" />
+		<position distance="10970" lat="43.90205" lon="12.345064436000001" height="0" />
+		<position distance="10979" lat="43.902060433" lon="12.345153517" height="0" />
+		<position distance="10987" lat="43.902068676" lon="12.345235760000008" height="0" />
+		<position distance="10995" lat="43.902076676000007" lon="12.345329031000006" height="0" />
+		<position distance="11003" lat="43.902080676" lon="12.345419435999986" height="0" />
+		<position distance="11012" lat="43.90208100000001" lon="12.34551143600001" height="0" />
+		<position distance="11020" lat="43.902069648000008" lon="12.345607193000006" height="0" />
+		<position distance="11028" lat="43.902058566999983" lon="12.345693436000005" height="0" />
+		<position distance="11037" lat="43.90203924299999" lon="12.345790193" height="0" />
+		<position distance="11045" lat="43.902020891000006" lon="12.345879517000014" height="0" />
+		<position distance="11054" lat="43.901997566999995" lon="12.345970354999992" height="0" />
+		<position distance="11062" lat="43.901974891000009" lon="12.346066193000013" height="0" />
+		<position distance="11071" lat="43.901955891" lon="12.346159274000002" height="0" />
+		<position distance="11079" lat="43.901932891" lon="12.346248355" height="0" />
+		<position distance="11088" lat="43.901913567000008" lon="12.346343031000004" height="0" />
+		<position distance="11097" lat="43.901891215000006" lon="12.346428355" height="0" />
+		<position distance="11105" lat="43.901875243000006" lon="12.346505760000014" height="0" />
+		<position distance="11113" lat="43.901855971999993" lon="12.346581922000013" height="0" />
+		<position distance="11122" lat="43.901822538999994" lon="12.346665516999991" height="0" />
+		<position distance="11130" lat="43.901792215" lon="12.346745921999997" height="0" />
+		<position distance="11138" lat="43.901761214999993" lon="12.346820922000006" height="0" />
+		<position distance="11146" lat="43.90172689100001" lon="12.346901516999992" height="0" />
+		<position distance="11154" lat="43.901692620000006" lon="12.346980922" height="0" />
+		<position distance="11163" lat="43.901650862999986" lon="12.347057841000009" height="0" />
+		<position distance="11171" lat="43.901609782000008" lon="12.347134245999996" height="0" />
+		<position distance="11179" lat="43.901567215" lon="12.347203084" height="0" />
+		<position distance="11187" lat="43.901528539" lon="12.347271408000012" height="0" />
+		<position distance="11195" lat="43.901494215000014" lon="12.347339164999994" height="0" />
+		<position distance="11203" lat="43.901466972000009" lon="12.34740816499999" height="0" />
+		<position distance="11211" lat="43.901433215" lon="12.347487597999987" height="0" />
+		<position distance="11219" lat="43.901403215000016" lon="12.347562084000003" height="0" />
+		<position distance="11227" lat="43.901368214999991" lon="12.347638002999986" height="0" />
+		<position distance="11235" lat="43.901341296" lon="12.347711083999997" height="0" />
+		<position distance="11243" lat="43.901311214999993" lon="12.347778003000002" height="0" />
+		<position distance="11252" lat="43.901277539000006" lon="12.347858760000008" height="0" />
+		<position distance="11260" lat="43.901231862999992" lon="12.347927083999991" height="0" />
+		<position distance="11268" lat="43.901185862999995" lon="12.348001922000009" height="0" />
+		<position distance="11277" lat="43.901147538999993" lon="12.348081678999989" height="0" />
+		<position distance="11285" lat="43.901113215000009" lon="12.348162760000008" height="0" />
+		<position distance="11294" lat="43.901055539" lon="12.348260489000012" height="0" />
+		<position distance="11302" lat="43.901010539" lon="12.348334840999996" height="0" />
+		<position distance="11311" lat="43.900968863" lon="12.348409922000002" height="0" />
+		<position distance="11319" lat="43.900926539000011" lon="12.34848116500001" height="0" />
+		<position distance="11328" lat="43.900884539" lon="12.348551922000013" height="0" />
+		<position distance="11336" lat="43.900846538999986" lon="12.34862984099999" height="0" />
+		<position distance="11345" lat="43.900804539000006" lon="12.348708003000013" height="0" />
+		<position distance="11353" lat="43.900765620000016" lon="12.348788759999991" height="0" />
+		<position distance="11362" lat="43.900727539" lon="12.348865840999991" height="0" />
+		<position distance="11370" lat="43.900689538999984" lon="12.348938003" height="0" />
+		<position distance="11379" lat="43.900659539" lon="12.349019679000008" height="0" />
+		<position distance="11387" lat="43.900621538999985" lon="12.349102517000006" height="0" />
+		<position distance="11396" lat="43.900582539" lon="12.349184597999994" height="0" />
+		<position distance="11404" lat="43.900540538999991" lon="12.349271355000013" height="0" />
+		<position distance="11413" lat="43.900502539" lon="12.349361192999993" height="0" />
+		<position distance="11422" lat="43.900468214999989" lon="12.349439246000003" height="0" />
+		<position distance="11430" lat="43.900440972000013" lon="12.349517759999998" height="0" />
+		<position distance="11439" lat="43.900407539000014" lon="12.34959500299999" height="0" />
+		<position distance="11447" lat="43.90037629599999" lon="12.349681435999997" height="0" />
+		<position distance="11456" lat="43.900349890999991" lon="12.349764435999987" height="0" />
+		<position distance="11464" lat="43.900319214999996" lon="12.349852354999996" height="0" />
+		<position distance="11473" lat="43.900285539000009" lon="12.349937436000005" height="0" />
+		<position distance="11481" lat="43.900250620000008" lon="12.350013165000007" height="0" />
+		<position distance="11490" lat="43.900198510999985" lon="12.350077489" height="0" />
+		<position distance="11498" lat="43.900133834999991" lon="12.350115785000014" height="0" />
+		<position distance="11507" lat="43.900073077999991" lon="12.350121838000007" height="0" />
+		<position distance="11515" lat="43.900011511" lon="12.350105971999994" height="0" />
+		<position distance="11524" lat="43.899950187" lon="12.35007113399999" height="0" />
+		<position distance="11533" lat="43.899885834999992" lon="12.35004489100001" height="0" />
+		<position distance="11541" lat="43.899820511" lon="12.350016377000003" height="0" />
+		<position distance="11550" lat="43.899759511000013" lon="12.349965268000005" height="0" />
+		<position distance="11558" lat="43.899702187" lon="12.34991561999999" height="0" />
+		<position distance="11567" lat="43.899637511000009" lon="12.349870863000007" height="0" />
+		<position distance="11575" lat="43.899584187000016" lon="12.34980951099999" height="0" />
+		<position distance="11584" lat="43.899531105999984" lon="12.34974359200001" height="0" />
+		<position distance="11592" lat="43.899480863000008" lon="12.349692024999996" height="0" />
+		<position distance="11600" lat="43.899431187000005" lon="12.349641187000003" height="0" />
+		<position distance="11609" lat="43.899374187000006" lon="12.349593943999992" height="0" />
+		<position distance="11617" lat="43.899321106" lon="12.349536268000009" height="0" />
+		<position distance="11625" lat="43.899267186999992" lon="12.349479349000006" height="0" />
+		<position distance="11634" lat="43.899221781999984" lon="12.34941851100001" height="0" />
+		<position distance="11642" lat="43.899179538999988" lon="12.349346158999992" height="0" />
+		<position distance="11650" lat="43.899137539000009" lon="12.349268321000011" height="0" />
+		<position distance="11659" lat="43.899102539000012" lon="12.349187078" height="0" />
+		<position distance="11667" lat="43.899056863" lon="12.349114915999991" height="0" />
+		<position distance="11676" lat="43.899008186999993" lon="12.349044996999993" height="0" />
+		<position distance="11685" lat="43.898961539" lon="12.348967077999987" height="0" />
+		<position distance="11693" lat="43.898897835000014" lon="12.348909862999989" height="0" />
+		<position distance="11701" lat="43.898829753999991" lon="12.348877971999997" height="0" />
+		<position distance="11710" lat="43.89876842999999" lon="12.348877351999988" height="0" />
+		<position distance="11718" lat="43.89870743" lon="12.348900703999988" height="0" />
+		<position distance="11726" lat="43.898653187000008" lon="12.348943136999992" height="0" />
+		<position distance="11733" lat="43.898606863" lon="12.348999488999993" height="0" />
+		<position distance="11741" lat="43.898579891" lon="12.34907092200001" height="0" />
+		<position distance="11749" lat="43.898560567000004" lon="12.349146921999989" height="0" />
+		<position distance="11756" lat="43.898540972000006" lon="12.349222760000004" height="0" />
+		<position distance="11764" lat="43.898525648" lon="12.349300841000002" height="0" />
+		<position distance="11772" lat="43.898510648000013" lon="12.349384598" height="0" />
+		<position distance="11779" lat="43.898477539" lon="12.349461921999989" height="0" />
+		<position distance="11787" lat="43.898453891" lon="12.349542840999987" height="0" />
+		<position distance="11795" lat="43.898423538999992" lon="12.349619084000011" height="0" />
+		<position distance="11803" lat="43.898385862999987" lon="12.349684327000006" height="0" />
+		<position distance="11811" lat="43.898337105999985" lon="12.349729379999985" height="0" />
+		<position distance="11819" lat="43.898275834999993" lon="12.349763946999985" height="0" />
+		<position distance="11827" lat="43.898211753999988" lon="12.349775757000003" height="0" />
+		<position distance="11835" lat="43.89814675400001" lon="12.349783594999991" height="0" />
+		<position distance="11843" lat="43.898077753999985" lon="12.349786999999992" height="0" />
+		<position distance="11852" lat="43.898016511000009" lon="12.349787918999994" height="0" />
+		<position distance="11860" lat="43.897951511" lon="12.349787080999988" height="0" />
+		<position distance="11868" lat="43.897883753999992" lon="12.349789676" height="0" />
+		<position distance="11875" lat="43.897825186999995" lon="12.349786324000007" height="0" />
+		<position distance="11883" lat="43.897764835000004" lon="12.349782081" height="0" />
+		<position distance="11891" lat="43.897711187" lon="12.349789837999992" height="0" />
+		<position distance="11898" lat="43.897654106000005" lon="12.34979100000001" height="0" />
+		<position distance="11905" lat="43.897596187000005" lon="12.349794594999992" height="0" />
+		<position distance="11912" lat="43.897546863" lon="12.349807513999991" height="0" />
+		<position distance="11919" lat="43.897496863000015" lon="12.349808918999997" height="0" />
+		<position distance="11925" lat="43.897444186999991" lon="12.349799404999999" height="0" />
+		<position distance="11931" lat="43.897397538999996" lon="12.349797999999993" height="0" />
+		<position distance="11938" lat="43.897344863" lon="12.349791567000011" height="0" />
+		<position distance="11944" lat="43.897295187" lon="12.349772972000011" height="0" />
+		<position distance="11950" lat="43.897252538999993" lon="12.349748053000013" height="0" />
+		<position distance="11956" lat="43.897203781999991" lon="12.349712700999987" height="0" />
+		<position distance="11963" lat="43.89715786299999" lon="12.349664944000011" height="0" />
+		<position distance="11969" lat="43.897111862999992" lon="12.34962170099999" height="0" />
+		<position distance="11975" lat="43.897069863000013" lon="12.349586458000005" height="0" />
+		<position distance="11982" lat="43.897035539" lon="12.349544863000006" height="0" />
+		<position distance="11989" lat="43.897000539000004" lon="12.349491943999993" height="0" />
+		<position distance="11995" lat="43.896955781999992" lon="12.349440186999999" height="0" />
+		<position distance="12002" lat="43.896909862999991" lon="12.349383267999997" height="0" />
+		<position distance="12009" lat="43.896863862999993" lon="12.349334862999996" height="0" />
+		<position distance="12017" lat="43.896821539" lon="12.349291944000015" height="0" />
+		<position distance="12024" lat="43.896790890999995" lon="12.349233349000002" height="0" />
+		<position distance="12031" lat="43.896756538999995" lon="12.349147321000004" height="0" />
+		<position distance="12039" lat="43.896744324" lon="12.349061645000006" height="0" />
+		<position distance="12047" lat="43.89674767599999" lon="12.348977402000003" height="0" />
+		<position distance="12054" lat="43.89674824299999" lon="12.348890645000012" height="0" />
+		<position distance="12062" lat="43.896773432999993" lon="12.348815997000003" height="0" />
+		<position distance="12070" lat="43.896789351999985" lon="12.348734482999987" height="0" />
+		<position distance="12077" lat="43.896786566999992" lon="12.348651563999994" height="0" />
+		<position distance="12085" lat="43.896789676" lon="12.348571996999993" height="0" />
+		<position distance="12092" lat="43.896790243" lon="12.348492402000005" height="0" />
+		<position distance="12100" lat="43.896782324000014" lon="12.348406563999987" height="0" />
+		<position distance="12107" lat="43.896767566999984" lon="12.348331754000014" height="0" />
+		<position distance="12115" lat="43.896731106000004" lon="12.348274943999996" height="0" />
+		<position distance="12122" lat="43.89668486299999" lon="12.348238215000009" height="0" />
+		<position distance="12129" lat="43.89662443" lon="12.348201700999994" height="0" />
+		<position distance="12136" lat="43.896566511" lon="12.348166295999988" height="0" />
+		<position distance="12144" lat="43.896502753999982" lon="12.348139134000007" height="0" />
+		<position distance="12151" lat="43.896437106000008" lon="12.348108647999993" height="0" />
+		<position distance="12159" lat="43.896383187" lon="12.348086053000003" height="0" />
+		<position distance="12167" lat="43.896334105999983" lon="12.348044267999995" height="0" />
+		<position distance="12176" lat="43.896273105999995" lon="12.347963969000006" height="0" />
+		<position distance="12186" lat="43.896216106" lon="12.347870212000004" height="0" />
+		<position distance="12197" lat="43.896169539" lon="12.347735750999988" height="0" />
+		<position distance="12210" lat="43.896134539" lon="12.347592670000012" height="0" />
+		<position distance="12223" lat="43.896078835" lon="12.347452102999995" height="0" />
+		<position distance="12237" lat="43.895930155999991" lon="12.347441946999993" height="0" />
+		<position distance="12252" lat="43.895795265000004" lon="12.347446972" height="0" />
+		<position distance="12268" lat="43.895708834999994" lon="12.347325751" height="0" />
+		<position distance="12285" lat="43.895699894000018" lon="12.347099068999995" height="0" />
+		<position distance="12302" lat="43.895735461000015" lon="12.346857233999998" height="0" />
+		<position distance="12318" lat="43.895755352000009" lon="12.346650019000009" height="0" />
+		<position distance="12333" lat="43.895770352" lon="12.346484913000012" height="0" />
+		<position distance="12347" lat="43.895778675999992" lon="12.346330426999998" height="0" />
+		<position distance="12361" lat="43.89580070400001" lon="12.346213941000002" height="0" />
+		<position distance="12373" lat="43.895827432999994" lon="12.346100102999998" height="0" />
+		<position distance="12386" lat="43.895824323999989" lon="12.345959913000002" height="0" />
+		<position distance="12398" lat="43.895803215" lon="12.345815318000007" height="0" />
+		<position distance="12410" lat="43.895775566999987" lon="12.345695535999994" height="0" />
+		<position distance="12421" lat="43.895745296" lon="12.345578617000001" height="0" />
+		<position distance="12432" lat="43.895725647999996" lon="12.345470535999993" height="0" />
+		<position distance="12442" lat="43.895702972000009" lon="12.345368049999991" height="0" />
+		<position distance="12453" lat="43.895677215000006" lon="12.345273807000012" height="0" />
+		<position distance="12463" lat="43.895642538999994" lon="12.345180806999991" height="0" />
+		<position distance="12472" lat="43.895615891000006" lon="12.345086887999997" height="0" />
+		<position distance="12480" lat="43.895611" lon="12.344972374000008" height="0" />
+		<position distance="12489" lat="43.895617757" lon="12.344855373999991" height="0" />
+		<position distance="12498" lat="43.895640109" lon="12.344740860000002" height="0" />
+		<position distance="12506" lat="43.895652676" lon="12.344629373999993" height="0" />
+		<position distance="12514" lat="43.895641648000009" lon="12.344526645000002" height="0" />
+		<position distance="12522" lat="43.895622972000012" lon="12.344442077999986" height="0" />
+		<position distance="12530" lat="43.895599972000014" lon="12.344361321000008" height="0" />
+		<position distance="12537" lat="43.895577296" lon="12.344271888000009" height="0" />
+		<position distance="12544" lat="43.895565324000017" lon="12.34417464500001" height="0" />
+		<position distance="12551" lat="43.89559470399999" lon="12.344110349000005" height="0" />
+		<position distance="12558" lat="43.895620785000006" lon="12.344063863000002" height="0" />
+		<position distance="12565" lat="43.895662136999988" lon="12.344003673000003" height="0" />
+		<position distance="12572" lat="43.895715489" lon="12.343949944000002" height="0" />
+		<position distance="12578" lat="43.89576121799999" lon="12.343893430000009" height="0" />
+		<position distance="12585" lat="43.895789108999992" lon="12.343832673000009" height="0" />
+		<position distance="12592" lat="43.895812108999991" lon="12.343778025000006" height="0" />
+		<position distance="12599" lat="43.895838460999983" lon="12.343709754000003" height="0" />
+		<position distance="12606" lat="43.895868460999992" lon="12.343635834999986" height="0" />
+		<position distance="12613" lat="43.89588843300001" lon="12.343561996999995" height="0" />
+		<position distance="12620" lat="43.895944165" lon="12.343499672999997" height="0" />
+		<position distance="12627" lat="43.896009136999993" lon="12.343436268000005" height="0" />
+		<position distance="12634" lat="43.896058812999996" lon="12.343391457999985" height="0" />
+		<position distance="12639" lat="43.896087028000011" lon="12.343378324000014" height="0" />
+		<position distance="12644" lat="43.896105704000007" lon="12.343363323999995" height="0" />
+		<position distance="12649" lat="43.896125028" lon="12.343354323999989" height="0" />
+		<position distance="12654" lat="43.896144351999993" lon="12.343339404999995" height="0" />
+		<position distance="12659" lat="43.896167028000008" lon="12.343314133999996" height="0" />
+		<position distance="12666" lat="43.896190028000007" lon="12.343319433000005" height="0" />
+		<position distance="12674" lat="43.896209027999987" lon="12.343349974999995" height="0" />
+		<position distance="12684" lat="43.896237569999982" lon="12.343358405000004" height="0" />
+		<position distance="12695" lat="43.896295218000006" lon="12.343349404999998" height="0" />
+		<position distance="12707" lat="43.89634848899999" lon="12.343336566999994" height="0" />
+		<position distance="12719" lat="43.896395137000013" lon="12.34331272899999" height="0" />
+		<position distance="12731" lat="43.896440218000009" lon="12.343313513999988" height="0" />
+		<position distance="12744" lat="43.896468352" lon="12.343326432999987" height="0" />
+		<position distance="12756" lat="43.896516813000005" lon="12.343360380000007" height="0" />
+		<position distance="12769" lat="43.896569812999985" lon="12.343400137000003" height="0" />
+		<position distance="12781" lat="43.896620137000014" lon="12.343478112000014" height="0" />
+		<position distance="12794" lat="43.896654461" lon="12.343569760000008" height="0" />
+		<position distance="12807" lat="43.896678028" lon="12.343649841000001" height="0" />
+		<position distance="12820" lat="43.896675000000016" lon="12.343718488999997" height="0" />
+		<position distance="12833" lat="43.896671" lon="12.343778488999988" height="0" />
+		<position distance="12846" lat="43.896659676000013" lon="12.343849489000007" height="0" />
+		<position distance="12859" lat="43.896682676000012" lon="12.343882756999989" height="0" />
+		<position distance="12872" lat="43.896686999999986" lon="12.343872648000001" height="0" />
+		<position distance="12885" lat="43.896679000000006" lon="12.343821999999989" height="0" />
+		<position distance="12898" lat="43.896679000000006" lon="12.343821999999989" height="0" />
+		<position distance="12910" lat="43.896679000000006" lon="12.343821999999989" height="0" />
+	</positions>
+</roadmovie>

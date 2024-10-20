@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<gpx-import>
+    <name>DE_Rimberg_Kronenberg</name>
+    <id>5ca8f42ccdfb11ec9d82001999dc158f</id>
+    <country>DE</country>
+    <title>Klosterberg, Rimberg, Kronenberg</title>
+
+    <video-file-path>DE_Rimberg-Kronenberg.mp4</video-file-path>
+    <gpx-file-path>DE_Rimberg-Kronenberg.gpx</gpx-file-path>
+    <framerate>30.0</framerate>
+    <start-frame>1</start-frame>
+    <end-frame>97351</end-frame>
+	<informations>
+        <information distance="80" de="Rimberg - Kronenberg\nL&auml;nge: 17,9 km - Anstieg: 365 hm\nSchwierigkeitsgrad: Mittelschwer" en="Lahntal - Marburg\nLength: 17.9 km - Moderate: 365 hm\nDifficulty: Easy" />        
+		<information distance="500" de="Kernbach (Lahntal) - H&ouml;he: 219 m" en="Kernbach (Lahntal) - Elevation: 219 m" />
+		<information distance="700" de="N&auml;chste 800 m: \nca. 4% Steigung (max. 10 %), 27 hm" en="Next 800 m: \nascent ca. 4% (max. 10%) , 27 hm" />
+		<information distance="1400" de="Ende des Anstiegs\n246 m &uuml;ber Meeresspiegel" en="Top of ascent\n246 meters above sea level" />
+		<information distance="2525" de="Caldern (Lahntal)" en="Caldern (Lahntal)" />        
+		<information distance="2700" de="N&auml;chste 700 m: \nKlosterberg - ca. 7% Steigung (max. 20 %), 42 hm" en="Next 700 m: \nKlosterberg - ascent ca. 7% (max. 20 %) , 42 hm" />
+		<information distance="4100" de="N&auml;chste 1900 m: \nRimberg (Ostanfahrt) - ca. 6 % Steigung (max. 21 %), 165 hm" en="Next 1900 m: \nRimberg - ascent ca. 6 % (max. 21 %) , 165 hm" />
+		<information distance="6180" de="Ende des Anstiegs\n385 m &uuml;ber Meeresspiegel" en="Top of ascent\n385 meters above sea level" />
+		<information distance="7400" de="Damshausen" en="Damshausen" />   
+		<information distance="8200" de="N&auml;chste 2 km: \nKronenberg - ca. 3.7 % Steigung (max. 7 %), 101 hm" en="Next 2 km: \nKronenberg - ascent ca. 3.7 % (max. 7 %) , 101 hm" />
+		<information distance="10200" de="Ende des Anstiegs\n416 m &uuml;ber Meeresspiegel" en="Top of ascent\n416 meters above sea level" />
+		<information distance="11900" de="Allendorf (Dautphetal)" en="Allendorf (Dautphetal)" />   
+		<information distance="12700" de="N&auml;chste 1000 m: \nca. 5% Steigung (max. 7 %), 19 hm" en="Next 1000 m: \nascent ca. 5% (max. 7%) , 49 hm" />
+		<information distance="13700" de="Ende des Anstiegs\n331 m &uuml;ber Meeresspiegel" en="Top of ascent\n331 meters above sea level" />
+		<information distance="15690" de="Lahnradweg" en="Lahnradweg" /> 
+    </informations>
+</gpx-import>

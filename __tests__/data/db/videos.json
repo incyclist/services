@@ -1,0 +1,465 @@
+[
+    {
+        "id": "20ef79b5-6ce0-4140-9d3e-3aa9ad728f36",
+        "routeHash": "4287767686b6327b8284fab983c6621b",
+        "title": "DE_Arnbach",
+        "version": 3,
+        "distance": 11722,
+        "elevation": 201.9054766945829,
+        "category": "Imported",
+        "provider": {
+            "name": "RealLifeVideo",
+            "url": "https://www.reallifevideo.de/index.php",
+            "logo": "https://videos.incyclist.com/reallifevideo.svg"
+        },
+        "video": {
+            "framerate": 25,
+            "width": 1920,
+            "height": 600,
+            "format": "mp4"
+        }
+    },
+    {
+        "id": "e28066cd-5c00-462f-97a5-07ce2e8e1aae",
+        "routeId": "e8b20d962bc5404db7ddb76ad877132c",
+        "title": "Menglonnais",
+        "category": "Imported",
+        "country": "FR",
+        "distance": 11992.295979674931,
+        "elevation": 154.35999999999996,
+        "video": {
+            "framerate": 30,
+            "format": "mp4"
+        },
+        "routeHash": "0a7566592f510c8c0482a3fa8e2c975a"
+    },
+    {
+        "id": "8ec98050-9bee-4e76-9a9f-e0c2ab1756f3",
+        "title": "Passo Pordoi",
+        "distance": 13000,
+        "elevation": 771.5589632626577,
+        "category": "Free",
+        "country": "IT",
+        "video": {
+            "file": null,
+            "framerate": 30,
+            "width": 1920,
+            "height": 768,
+            "format": "mp4"
+        },
+        "routeHash": "a1951c0af7b35c1812f4fba689b0d4dc"
+    },
+    {
+        "id": "effd6fd1-2661-42ad-ae12-75145ca59be2",
+        "routeId": "b95365e59ac8d783a7847f9144b288dc",
+        "title": "GR_Polygyros",
+        "distance": 40166,
+        "elevation": 722.9826956451793,
+        "category": "Free",
+        "country": "GR",
+        "video": {
+            "file": null,
+            "url": "https://videos.incyclist.com/GR_Polygyros.mp4",
+            "framerate": 25,
+            "width": 1920,
+            "height": 768,
+            "format": "mp4"
+        },
+        "routeHash": "6998fa0e143687a6b0687fc9e8fd3c69"
+    },
+    {
+        "id": "c20c846e-1415-48c1-ac68-525ce6eefe25",
+        "title": "PT_Alferce_Demo",
+        "country": "PT",
+        "distance": 3254,
+        "elevation": 46.39705132629575,
+        "localizedTitle": {
+            "de": "Alferce",
+            "en": "Alferce"
+        },
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "provider": {
+            "name": "RealLifeVideo",
+            "url": "https://www.reallifevideo.de/index.php",
+            "logo": "https://videos.incyclist.com/reallifevideo.svg"
+        },
+        "category": "Demo",
+        "routeHash": "f0dcb7925f78b24bc30818289e9f14b6"
+    },
+    {
+        "id": "1bcd4de5-ad87-4943-8e76-d85b9bf24360",
+        "title": "DE_Allgäu_Demo",
+        "country": "DE",
+        "distance": 3229,
+        "elevation": 27.74599999999907,
+        "category": "Demo",
+        "localizedTitle": {
+            "de": "Allgäu",
+            "en": "Allgäu"
+        },
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "routeHash": "a8d007823c038d41d2f9c990cd32be49"
+    },
+    {
+        "id": "f15b62d7-7976-42d1-bbe6-eb4884c8b703",
+        "title": "Col du Galibier",
+        "country": "FR",
+        "distance": 4970,
+        "elevation": 326.1525847688363,
+        "localizedTitle": {
+            "de": "Col du Galibier",
+            "en": "Col du Galibier"
+        },
+        "provider": {
+            "name": "RealLifeVideo",
+            "url": "https://www.reallifevideo.de/index.php",
+            "logo": "https://videos.incyclist.com/reallifevideo.svg"
+        },
+        "category": "Demo",
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "routeHash": "4489fd75d9d9b19c4945f931869e799c"
+    },
+    {
+        "id": "9f808dfe-808a-444a-85ce-b166c8f899e0",
+        "title": "CiM-Demo-Corvara",
+        "country": "IT",
+        "distance": 1639,
+        "elevation": 112.41200000000003,
+        "category": "Demo",
+        "localizedTitle": {
+            "de": "Corvara",
+            "en": "Corvara"
+        },
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "routeHash": "e88ca3fed9c7ff9f55b2d39403e143ad"
+    },
+    {
+        "id": "89fa6eda-cee7-4bdb-b1ce-d79e98c84c77",
+        "title": "ES_AlcStElm_Demo",
+        "country": "ES",
+        "distance": 4449,
+        "elevation": 138.01776235662376,
+        "localizedTitle": {
+            "de": "Mallorca: Alcudia - Sant Elm",
+            "en": "Mallorca: Alcudia - Sant Elm"
+        },
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "provider": {
+            "name": "RealLifeVideo",
+            "url": "https://www.reallifevideo.de/index.php",
+            "logo": "https://videos.incyclist.com/reallifevideo.svg"
+        },
+        "category": "Demo",
+        "routeHash": "0a11b4842229d33c4ef8e83cac44c820"
+    },
+    {
+        "id": "0abad56e-c34a-46b1-9ca6-3b80ce74925f",
+        "title": "Menorca",
+        "country": "ES",
+        "distance": 2877,
+        "elevation": 15.351999999999995,
+        "localizedTitle": {
+            "de": "Menorca West",
+            "en": "Menorca West"
+        },
+        "provider": {
+            "name": "RealLifeVideo",
+            "url": "https://www.reallifevideo.de/index.php",
+            "logo": "https://videos.incyclist.com/reallifevideo.svg"
+        },
+        "category": "Demo",
+        "video": {
+            "file": null,
+            "framerate": 29.97,
+            "format": "mp4"
+        },
+        "routeHash": "7efd0a4d722635b1af9422a2a32b4ddd"
+    },
+    {
+        "id": "e0917134-dd7e-4837-ae8a-6b0e239a2682",
+        "title": "IT_Monte-Baldo_Demo",
+        "country": "IT",
+        "distance": 4782,
+        "elevation": 2.171999999999997,
+        "category": "Demo",
+        "localizedTitle": {
+            "de": "Monto Baldo",
+            "en": "Monte Baldo"
+        },
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "routeHash": "c083b9974e9501076a21a1164a5d209f"
+    },
+    {
+        "id": "3fe5ca2f-5048-4c34-95bc-cb238e8f1e4c",
+        "title": "DE_Queich_Demo",
+        "country": "DE",
+        "category": "Demo",
+        "provider": {
+            "name": "RealLifeVideo",
+            "url": "https://www.reallifevideo.de/index.php",
+            "logo": "https://videos.incyclist.com/reallifevideo.svg"
+        },
+        "distance": 4639,
+        "elevation": 20.733891318717355,
+        "localizedTitle": {
+            "de": "Queichtalradweg",
+            "en": "Queichtal bikeway"
+        },
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "routeHash": "fb289f79a521c12377b8cef5d2bda57c"
+    },
+    {
+        "id": "1da71d03-b339-48ab-8fd8-9a53a4f3975d",
+        "title": "Rheinradweg 2022",
+        "country": "DE",
+        "distance": 3464,
+        "elevation": 4.311499107324153,
+        "provider": {
+            "name": "RealLifeVideo",
+            "url": "https://www.reallifevideo.de/index.php",
+            "logo": "https://videos.incyclist.com/reallifevideo.svg"
+        },
+        "category": "Demo",
+        "localizedTitle": {
+            "de": "Rheinradweg 2022",
+            "en": "Rhine Cycle Path 2022"
+        },
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "routeHash": "f31b5221a89a9bb53ad61e68e79c26b4"
+    },
+    {
+        "id": "cad14755-4db2-4ba6-bb3b-d079f8266241",
+        "title": "DE_MRhein_Demo",
+        "country": "DE",
+        "distance": 4999,
+        "elevation": 9.009253154110212,
+        "localizedTitle": {
+            "de": "Rheinradweg Mittelrhein",
+            "en": "Rhine Bikeway"
+        },
+        "provider": {
+            "name": "RealLifeVideo",
+            "url": "https://www.reallifevideo.de/index.php",
+            "logo": "https://videos.incyclist.com/reallifevideo.svg"
+        },
+        "category": "Demo",
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "routeHash": "e0f7187e408bdfee71c5518f8bf97e9f"
+    },
+    {
+        "id": "3510255c-f2da-41db-b0d0-5272f8a2fdf4",
+        "title": "NO_Troll-Demo",
+        "country": "NO",
+        "distance": 2426,
+        "elevation": 207.88899999999984,
+        "gpxDisabled": true,
+        "localizedTitle": {
+            "de": "Trollstigen",
+            "en": "Trollstigen"
+        },
+        "video": {
+            "file": null,
+            "framerate": 25,
+            "format": "mp4"
+        },
+        "provider": {
+            "name": "RealLifeVideo",
+            "url": "https://www.reallifevideo.de/index.php",
+            "logo": "https://videos.incyclist.com/reallifevideo.svg"
+        },
+        "category": "Demo",
+        "routeHash": "0c80ca8a3a5ef0ea65c5c86eb2020bd4"
+    },
+    {
+        "id": "a07c62c0-61a0-4f81-b55f-e743b9245006",
+        "routeId": "d35cf23e-90d3-4b77-8cb8-b1255b8b6ddf",
+        "title": "Valdrôme 1 - Col de Prémol",
+        "version": 2,
+        "category": "Free",
+        "country": "FR",
+        "distance": 22645.541971360508,
+        "elevation": 517.6000000000001,
+        "video": {
+            "file": null,
+            "framerate": 30,
+            "format": "mp4"
+        },
+        "routeHash": "70fd6b6ae8d29083686c80d4c542b091"
+    },
+    {
+        "id": "63389bb8-0aee-4da3-8fca-4f55657c3c53",
+        "routeId": "3aefb91a-be3e-42c1-b7cb-47bc80bebce5",
+        "title": "Valdrôme 2 - Col du Fays, Col de Rossas ",
+        "version": 2,
+        "category": "Free",
+        "country": "FR",
+        "distance": 17116.539243010033,
+        "elevation": 408.60000000000036,
+        "video": {
+            "file": null,
+            "framerate": 30,
+            "format": "mp4"
+        },
+        "routeHash": "765d2c7cb80ce7405011db603ae38db6"
+    },
+    {
+        "id": "8dbfa4c8-be36-4068-9ca1-cc9dcbfd42d7",
+        "routeId": "b69e2524-e5d1-4945-97ac-7c6b80836ff3",
+        "title": "Valdrôme 3 - Les Claps de Luc",
+        "version": 2,
+        "category": "Free",
+        "country": "FR",
+        "distance": 27205.058559774185,
+        "elevation": 135.99999999999972,
+        "video": {
+            "file": null,
+            "framerate": 30,
+            "format": "mp4"
+        },
+        "routeHash": "c62b855ca6769a53c4cc47ecd01ac276"
+    },
+    {
+        "id": "ad33afde-f865-419a-91ea-d09d426f07cb",
+        "routeId": "fe92483905ba4a26bce4db89714ddded",
+        "title": "ES_SaCalobra",
+        "country": "ES",
+        "distance": 10757,
+        "elevation": 628.2219999999998,
+        "gpxDisabled": true,
+        "localizedTitle": {
+            "de": "Sa Calobra",
+            "en": "Sa Calobra"
+        },
+        "video": {
+            "file": null,
+            "framerate": 29.97,
+            "format": "mp4"
+        },
+        "routeHash": "b1113dcb6b39bc44a0f0445d6b642eb7"
+    },
+    {
+        "id": "021dd6dd-c08b-431f-a888-2cd3183b1911",
+        "routeId": "06e11e6f-4517-48a7-8fd5-f8ba08b8f282",
+        "title": "DE_Holzweiler-Keyenberg",
+        "country": "DE",
+        "distance": 8297.890839807143,
+        "elevation": 25.22,
+        "video": {
+            "file": "DE_Holzweiler-Keyenberg.mp4",
+            "framerate": 50,
+            "format": "mp4"
+        },
+        "routeHash": "45ea2f828ad18b38b9c4e43c2dd18964"
+    },
+    {
+        "id": "ad19439c-5768-4e70-8cd1-d1b2e34caa9e",
+        "routeId": "17c4fe5b9a824e9aa450832f57a34fed",
+        "title": "DE_ChallengeRoth",
+        "distance": 94259,
+        "elevation": 811.0206727770162,
+        "video": {
+            "file": "DE_ChallengeRoth.mp4",
+            "framerate": 25,
+            "width": 1600,
+            "height": 600,
+            "format": "mp4"
+        },
+        "routeHash": "d0d79efb023e9ff89aa8fa5b05845ed5"
+    },
+    {
+        "id": "7f78dfe9-7664-41a4-8028-74a5038dbcc7",
+        "routeId": "e1bd3245-cb2b-483a-9f28-237713445540",
+        "title": "Col de Grimone - 1 - Gorges des Gâts",
+        "country": "FR",
+        "distance": 25647.042009507146,
+        "elevation": 539.8,
+        "video": {
+            "file": "FR_Col_de_Grimone_Part_1.mp4",
+            "framerate": 30,
+            "format": "mp4"
+        },
+        "routeHash": "c3e5d6059cb517b26bfe161b36d4d72f"
+    },
+    {
+        "id": "f2481125-d914-4069-ab3a-14bb97ab7fd9",
+        "routeId": "20210035b247e3c89d644cda39b0f271",
+        "title": "Ring",
+        "distance": 24620,
+        "elevation": 511.3758658286927,
+        "video": {
+            "file": "Ring.mp4",
+            "framerate": 29.97,
+            "width": 1280,
+            "height": 720,
+            "format": "mp4"
+        },
+        "routeHash": "a52774c15904541d289361bce96719d9"
+    },
+    {
+        "id": "c3958847-7ec8-407c-91c0-31c27b5e72c2",
+        "routeId": "0d58609a1ad14d6ba12d69ffe9816633",
+        "title": "DE_Rad-am-Ring",
+        "distance": 24326,
+        "elevation": 473.3271493465682,
+        "video": {
+            "file": "DE_Rad-am-Ring.mp4",
+            "framerate": 25,
+            "width": 1920,
+            "height": 600,
+            "format": "mp4"
+        },
+        "routeHash": "619e67811e63fd32e868c3f72330f3af"
+    },
+    {
+        "id": "6722a060-b1fc-4d72-b9e9-97a7554b7388",
+        "routeId": "cc566cab8fb942919a7e011d540b0164",
+        "title": "Aigen",
+        "distance": 40100,
+        "elevation": 323.02932357788086,
+        "gpxDisabled": true,
+        "video": {
+            "file": "Aigen.mp4",
+            "framerate": 50,
+            "width": 720,
+            "height": 480,
+            "format": "mp4"
+        },
+        "routeHash": "8b79920fa7a4cfa6b15c6c5a3c92b61f"
+    }
+]

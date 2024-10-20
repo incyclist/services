@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / DevicePairingData
+[incyclist-services - v1.2.2](../README.md) / DevicePairingData
 
 # Interface: DevicePairingData
 
@@ -13,6 +13,7 @@
 - [value](DevicePairingData.md#value)
 - [unit](DevicePairingData.md#unit)
 - [selected](DevicePairingData.md#selected)
+- [interfaceInactive](DevicePairingData.md#interfaceinactive)
 
 ## Properties
 
@@ -55,3 +56,9 @@ ___
 ### selected
 
 • **selected**: `boolean`
+
+___
+
+### interfaceInactive
+
+• `Optional` **interfaceInactive**: `boolean`

@@ -29,7 +29,7 @@ export interface LegacySerialSettings {
     protocols: {
         name: string;
         selected: boolean;
-        id: number
+        id?: number
     } []
 }
 

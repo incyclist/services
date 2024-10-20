@@ -1,0 +1,115 @@
+{
+    "title": "Valdrôme 1 - Col de Prémol",
+    "downloadUrl": "https://cycling.vangestel.online/incyclist/FR_Valdrome_Part_1.mp4",
+    "downloadType": "mp4",
+    "distance": 22645.541971360508,
+    "elevation": 511.85192175768367,
+    "private": true,
+    "validated": true,
+    "routeId": "d35cf23e-90d3-4b77-8cb8-b1255b8b6ddf",
+    "country": "FR",
+    "video": {
+        "file": null,
+        "framerate": 30,
+        "informations": [
+            {
+                "information": [
+                    {
+                        "$": {
+                            "distance": 120,
+                            "localizedText": {
+                                "de": "Valdrôme - Teil 1 - Col de Prémol\\nLänge: 22,6 km - Gesamtanstieg: 518 hm\\nSchwierigkeitsgrad: Mittel",
+                                "en": "Valdrôme - Part 1 - Col de Prémol\\nLength: 22.6 km - Total ascent: 518 hm\\nDifficulty: Moderate"
+                            },
+                            "text": "Valdrôme - Teil 1 - Col de Prémol\\nLänge: 22,6 km - Gesamtanstieg: 518 hm\\nSchwierigkeitsgrad: Mittel"
+                        }
+                    },
+                    {
+                        "$": {
+                            "distance": 220,
+                            "localizedText": {
+                                "de": "cycling.vangestel.online\\nLizens: CC BY-NC-SA 4.0\\n(Creative Commons - Namensnennung - Nicht-kommerziell)",
+                                "en": "cycling.vangestel.online\\nLicense: CC BY-NC-SA 4.0\\n(Creative Commons Attribution-NonCommercial-ShareAlike)"
+                            },
+                            "text": "cycling.vangestel.online\\nLizens: CC BY-NC-SA 4.0\\n(Creative Commons - Namensnennung - Nicht-kommerziell)"
+                        }
+                    }
+                ]
+            }
+        ],
+        "next": "3aefb91a-be3e-42c1-b7cb-47bc80bebce5",
+        "format": "mp4",
+        "mappings": [
+            {
+                "time": 0,
+                "videoSpeed": 11.40720750677645,
+                "distance": 0,
+                "frame": 0
+            },
+            {
+                "time": 1,
+                "videoSpeed": 17.22146573125324,
+                "distance": 3,
+                "frame": 30
+            },
+            {
+                "time": 2,
+                "videoSpeed": 17.89484837853591,
+                "distance": 8,
+                "frame": 60
+            }
+        ]
+    },
+    "infoTexts": [
+        {
+            "distance": 120,
+            "localizedText": {
+                "de": "Valdrôme - Teil 1 - Col de Prémol\\nLänge: 22,6 km - Gesamtanstieg: 518 hm\\nSchwierigkeitsgrad: Mittel",
+                "en": "Valdrôme - Part 1 - Col de Prémol\\nLength: 22.6 km - Total ascent: 518 hm\\nDifficulty: Moderate"
+            },
+            "text": "Valdrôme - Teil 1 - Col de Prémol\\nLänge: 22,6 km - Gesamtanstieg: 518 hm\\nSchwierigkeitsgrad: Mittel"
+        },
+        {
+            "distance": 220,
+            "localizedText": {
+                "de": "cycling.vangestel.online\\nLizens: CC BY-NC-SA 4.0\\n(Creative Commons - Namensnennung - Nicht-kommerziell)",
+                "en": "cycling.vangestel.online\\nLicense: CC BY-NC-SA 4.0\\n(Creative Commons Attribution-NonCommercial-ShareAlike)"
+            },
+            "text": "cycling.vangestel.online\\nLizens: CC BY-NC-SA 4.0\\n(Creative Commons - Namensnennung - Nicht-kommerziell)"
+        }
+    ],
+    "id": "a07c62c0-61a0-4f81-b55f-e743b9245006",
+    "points": [
+        {
+            "lat": 44.657485,
+            "lng": 5.416174,
+            "elevation": 491.93333333333334,
+            "distance": 0,
+            "routeDistance": 0,
+            "slope": -0.5002100642607301,
+            "heading": 230.77556018271142,
+            "cnt": 0
+        },
+        {
+            "lat": 44.657467,
+            "lng": 5.416143,
+            "elevation": 491.91748333333334,
+            "distance": 3.1686687518823473,
+            "routeDistance": 3.1686687518823473,
+            "slope": -1.0002632916855783,
+            "heading": 231.07544181812705,
+            "cnt": 1
+        },
+        {
+            "lat": 44.65744,
+            "lng": 5.416096,
+            "elevation": 491.86963333333335,
+            "distance": 4.783740480903677,
+            "routeDistance": 7.9524092327860245,
+            "slope": -0.8047008667175451,
+            "heading": 232.79606914659462,
+            "cnt": 2
+        }
+    ]
+    
+}

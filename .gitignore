@@ -2,6 +2,10 @@
 logs
 *.log
 
+# Environment files
+.env
+
+
 # VERSION file
 VERSION
 
@@ -15,6 +19,8 @@ lib-cov
 
 # Coverage directory used by tools like istanbul
 coverage
+coverage.e2e
+coverage.integ
 
 # Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
@@ -37,3 +43,5 @@ typings
 # VS Code settings
 .settings
 .vscode
+nohup.out
+

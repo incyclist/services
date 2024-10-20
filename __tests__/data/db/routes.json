@@ -1,0 +1,125 @@
+[
+    {
+        "private": false,
+        "title": "Sydney Opera House and Botanic Garden",
+        "distance": 3801.452188724582,
+        "elevation": 35.19111323845895,
+        "author": {
+            "id": "5c728772bafd14f613a98961"
+        },
+        "hash": "cfd527a96afb43d9ed24b9143defef1e003b3475d9e91495501006811e1a6590",
+        "points": {
+            "id": "5c7a6ae31b1befc1c4854cb4"
+        },
+        "__v": 0,
+        "id": "5c7a6ae31b1bef04c5854cb3"
+    },
+    {
+        "private": false,
+        "title": "Sarti-Toroni-Sarti",
+        "distance": 58144.65148583883,
+        "elevation": 924.4000129702023,
+        "author": {
+            "id": "5c728772bafd14f613a98961"
+        },
+        "hash": "a1a97bf515633ad8683d81a8cef4bdd8ac06713bd4b17114a1f3a97c0b9aa79e",
+        "points": {
+            "id": "5c9625c44fb4dd4494d67ec9"
+        },
+        "__v": 0,
+        "id": "5c9625c44fb4dd03f6d67ec8"
+    },
+    {
+        "private": false,
+        "title": "Seaside Vancouver",
+        "distance": 20019.063093828154,
+        "elevation": 54.70924429516317,
+        "author": {
+            "id": "5c728772bafd14f613a98961"
+        },
+        "hash": "0501e78851ce942b51e7e5608cd95def4cfcba0a0c749023f75f93d814a30e2b",
+        "points": {
+            "id": "5cd7f5d8906ac860b5cb9fa9"
+        },
+        "__v": 0,
+        "id": "5cd7f5d8906ac87be4cb9fa8"
+    },
+    {
+        "private": false,
+        "title": "Malaga City Tour",
+        "distance": 10129.26255082863,
+        "elevation": 139.41287283607005,
+        "author": {
+            "id": "5c728772bafd14f613a98961"
+        },
+        "hash": "cabf124e8db71b04bf37520eabf3494121377c2c1d754bdd3aebe757dbd8041e",
+        "points": {
+            "id": "5d794472049b4e5d8a7b4cfc"
+        },
+        "__v": 0,
+        "id": "5d794472049b4e39617b4cfb"
+    },
+    {
+        "private": false,
+        "title": "Ventoux - Malaucene",
+        "distance": 97061,
+        "elevation": 0,
+        "author": {
+            "id": "5cb2111f6da3fea5e50ef62d"
+        },
+        "hash": "e648cdb5d7d727a1577739fa6d57c140581edf43ab0fd73f5a4313b70e3594c1",
+        "points": {
+            "id": "600ff63b49d3f11dda6398ab"
+        },
+        "__v": 0,
+        "id": "600ff63b49d3f19eaa6398aa"
+    },
+    {
+        "private": false,
+        "title": "Würzjoch ",
+        "distance": 40621,
+        "elevation": 0,
+        "author": {
+            "id": "5cb2111f6da3fea5e50ef62d"
+        },
+        "hash": "999cd1bd310c2859d05ea911c595355d64aa525199a02804c2007ca109df767c",
+        "points": {
+            "id": "6010012941991a08321754cc"
+        },
+        "__v": 0,
+        "id": "6010012941991a02471754cb"
+    },
+    {
+        "private": false,
+        "title": "Captain  Cook Highway",
+        "distance": 87035.68290882153,
+        "elevation": 229.8657380688822,
+        "author": {
+            "id": "5cb2111f6da3fea5e50ef62d"
+        },
+        "hash": "22bc52cc1ba0f2dc889bd87fda5684d26eae53ed2800d66a6f04bbf09cf4d7d1",
+        "points": {
+            "id": "601003e141991a7565175e0e"
+        },
+        "__v": 0,
+        "id": "601003e141991abc5c175e0d"
+    },
+    {
+        "id": "20b1ba7a-93c6-4ce3-aafa-f9d24325c7be",
+        "title": "Visiting Jeroen - Part 14",
+        "distance": 116009.98233245034,
+        "elevation": 2083.7787620000013,
+        "category": "personal",
+        "routeHash": "3cfd4fb14cf9eee2c1b9eb5b0106393e",
+        "selected": false
+    },
+    {
+        "id": "9b779bbc-7a20-44f9-b490-76eecac34ee9",
+        "title": "Visiting Jeroen - Part 15",
+        "distance": 120734.21308904006,
+        "elevation": 1409.4124139999992,
+        "category": "personal",
+        "routeHash": "fc467f1f6ccf90f18a6baa839175f640",
+        "selected": true
+    }
+]

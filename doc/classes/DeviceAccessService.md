@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / DeviceAccessService
+[incyclist-services - v1.2.2](../README.md) / DeviceAccessService
 
 # Class: DeviceAccessService
 
@@ -76,6 +76,7 @@ const connected = await connect();
 - [setInterfaceProperties](DeviceAccessService.md#setinterfaceproperties)
 - [getInterfaceInfo](DeviceAccessService.md#getinterfaceinfo)
 - [enrichWithAccessState](DeviceAccessService.md#enrichwithaccessstate)
+- [initInterface](DeviceAccessService.md#initinterface)
 - [connect](DeviceAccessService.md#connect)
 - [disconnect](DeviceAccessService.md#disconnect)
 - [scan](DeviceAccessService.md#scan)
@@ -90,7 +91,11 @@ const connected = await connect();
 
 ### constructor
 
-• **new DeviceAccessService**()
+• **new DeviceAccessService**(): [`DeviceAccessService`](DeviceAccessService.md)
+
+#### Returns
+
+[`DeviceAccessService`](DeviceAccessService.md)
 
 #### Overrides
 
@@ -120,7 +125,7 @@ ___
 
 ### enableInterface
 
-▸ **enableInterface**(`ifaceName`, `binding?`, `props?`): `void`
+▸ **enableInterface**(`ifaceName`, `binding?`, `props?`): `Promise`\<`void`\>
 
 Enables an interface to be used for device access
 
@@ -136,7 +141,7 @@ only enabled interfaces will be considered during device scans and connection at
 
 #### Returns
 
-`void`
+`Promise`\<`void`\>
 
 **`Example`**
 
@@ -151,7 +156,7 @@ ___
 
 ### disableInterface
 
-▸ **disableInterface**(`ifaceName`, `avalailable?`): `void`
+▸ **disableInterface**(`ifaceName`, `avalailable?`): `Promise`\<`void`\>
 
 Disables an interface 
 
@@ -168,7 +173,7 @@ If this method is called during an ongoing device scan on that interface, the on
 
 #### Returns
 
-`void`
+`Promise`\<`void`\>
 
 ___
 
@@ -240,9 +245,27 @@ This method provides information (e.g. scanning state, connection state) about a
 
 ___
 
+### initInterface
+
+▸ **initInterface**(`ifaceName`, `binding`, `props?`): `void`
+
+#### Parameters
+
+| Name | Type |
+| :------ | :------ |
+| `ifaceName` | `string` |
+| `binding` | `any` |
+| `props` | [`InterfaceAccessProps`](../interfaces/InterfaceAccessProps.md) |
+
+#### Returns
+
+`void`
+
+___
+
 ### connect
 
-▸ **connect**(`ifaceName?`): `Promise`<`boolean`\>
+▸ **connect**(`ifaceName?`): `Promise`\<`boolean`\>
 
 Tries to open a connection to the interface. 
 
@@ -257,7 +280,7 @@ For Ant+ and BLE, this will try to establish a connection to the USB port
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 true if the interface could be connected, otherwise false
 
@@ -265,7 +288,7 @@ ___
 
 ### disconnect
 
-▸ **disconnect**(`ifaceName?`): `Promise`<`boolean`\>
+▸ **disconnect**(`ifaceName?`): `Promise`\<`boolean`\>
 
 Closes the connection to the interface. 
 
@@ -279,7 +302,7 @@ This will _not_ automatically stop all connected Device Adapters. This needs to 
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 true if the interface could be disconnected, otherwise false
 
@@ -287,7 +310,7 @@ ___
 
 ### scan
 
-▸ **scan**(`filter?`, `props?`): `Promise`<`DeviceSettings`[]\>
+▸ **scan**(`filter?`, `props?`): `Promise`\<`DeviceSettings`[]\>
 
 Performs a device scan. 
 
@@ -304,7 +327,7 @@ This will _not_ automatically stop all connected Device Adapters. This needs to 
 
 #### Returns
 
-`Promise`<`DeviceSettings`[]\>
+`Promise`\<`DeviceSettings`[]\>
 
 [[DeviceSettings]][] a list of Devices that were detected during the scan
 
@@ -312,7 +335,7 @@ ___
 
 ### scanForNew
 
-▸ **scanForNew**(`filter?`, `maxDevices?`, `timeout?`): `Promise`<`DeviceSettings` \| `DeviceSettings`[]\>
+▸ **scanForNew**(`filter?`, `maxDevices?`, `timeout?`): `Promise`\<`DeviceSettings` \| `DeviceSettings`[]\>
 
 Scans for devices that were not yet listed in the device configuration
 
@@ -328,7 +351,7 @@ This will _not_ automatically stop all connected Device Adapters. This needs to 
 
 #### Returns
 
-`Promise`<`DeviceSettings` \| `DeviceSettings`[]\>
+`Promise`\<`DeviceSettings` \| `DeviceSettings`[]\>
 
 [[DeviceSettings]][]|[[DeviceSettings]] if [[maxDevices]] is set to 1, it will return the detected devices, otherwise it will return a list of Devices that were detected during the scan
 
@@ -336,7 +359,7 @@ ___
 
 ### getPaths
 
-▸ **getPaths**(`ifaceName`): `Promise`<`string`[]\>
+▸ **getPaths**(`ifaceName`): `Promise`\<`string`[]\>
 
 #### Parameters
 
@@ -346,7 +369,7 @@ ___
 
 #### Returns
 
-`Promise`<`string`[]\>
+`Promise`\<`string`[]\>
 
 ___
 
@@ -368,11 +391,11 @@ ___
 
 ### stopScan
 
-▸ **stopScan**(): `Promise`<`boolean`\>
+▸ **stopScan**(): `Promise`\<`boolean`\>
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 ___
 
@@ -394,7 +417,7 @@ ___
 
 ### getInstance
 
-▸ `Static` **getInstance**(): [`DeviceAccessService`](DeviceAccessService.md)
+▸ **getInstance**(): [`DeviceAccessService`](DeviceAccessService.md)
 
 #### Returns
 

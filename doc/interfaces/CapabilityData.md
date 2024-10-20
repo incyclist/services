@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / CapabilityData
+[incyclist-services - v1.2.2](../README.md) / CapabilityData
 
 # Interface: CapabilityData
 
@@ -57,7 +57,7 @@ ___
 
 ### selected
 
-• **selected**: `string`
+• `Optional` **selected**: `string`
 
 ___
 
