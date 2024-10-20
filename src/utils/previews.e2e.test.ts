@@ -126,9 +126,9 @@ describe.skip( 'previewlist',()=>{
 
         }
     
-        await fs.writeFile( '/mnt/c/temp/Incyclist/previews.json', JSON.stringify(previews,null,2))
+        await fs.writeFile( '/tmp/previews.json', JSON.stringify(previews,null,2))
 
-        await fs.writeFile( '/mnt/c/temp/Incyclist/errors.json', JSON.stringify(errors,null,2))
+        await fs.writeFile( '/tmp/errors.json', JSON.stringify(errors,null,2))
     
     },1000000)
 
@@ -178,7 +178,7 @@ describe.skip( 'previewlist',()=>{
             //await sleep(3000)
         }
 
-        await fs.writeFile( '/mnt/c/temp/Incyclist/errors.json', JSON.stringify(errors,null,2))
+        await fs.writeFile( '/tmp/errors.json', JSON.stringify(errors,null,2))
     
     },1000000)    
 
