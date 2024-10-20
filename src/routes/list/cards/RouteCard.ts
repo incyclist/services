@@ -651,14 +651,14 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     protected async finishConversion( result:{error?:Error,url?:string } ) {
-        const {url} = result
+        let {url} = result
 
         if (url) {
             const description = this.getRouteDescription()
             const details = this.getRouteData()
 
             if (url.startsWith('file:'))
-                url.replace('file:','video:')
+                url = url.replace('file:','video:')
 
             description.videoUrl = url;
             description.videoFormat = 'mp4'

@@ -31,7 +31,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
     }
 
     async save(route:Route, enforcedWriteDetails:boolean = false):Promise<void> {
-        const stringify = (json) => { try {JSON.stringify(json)} catch {/* */}}
+        const stringify = (json) => { try {return JSON.stringify(json)} catch {/* */}}
 
         let prev
         const idx = this.routeDescriptions.findIndex( d=> d.id===route.description.id)

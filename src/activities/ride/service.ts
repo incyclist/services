@@ -338,7 +338,7 @@ export class ActivityRideService extends IncyclistService {
             info.push({ title:'Time', data:[
                 {value:formatTime(time,true)},
                 {value:timeRemaining!==undefined? `-${formatTime(timeRemaining,true)}` : undefined }]
-            }),
+            })
             info.push({ title:'Distance', data:[{value:formatNumber(distance,2),unit:'km'},{value:distanceRemaining!==undefined? `-${formatNumber(distanceRemaining,2)}`: undefined  }]})
                 
             info.push({ title:'Speed', data:[{value:formatNumber(speed,1),unit:'km/h'},speedDetails],dataState: this.current.dataState?.speed})
@@ -450,7 +450,7 @@ export class ActivityRideService extends IncyclistService {
                     this.convert('FIT')
                 }
                 else {
-                    convertSuccess== await this.convert('FIT')
+                    convertSuccess= await this.convert('FIT')
                     if (convertSuccess)
                         format = 'FIT'
                 }

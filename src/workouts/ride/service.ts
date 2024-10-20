@@ -566,7 +566,7 @@ export class WorkoutRide extends IncyclistService{
             else if (this.state!=='active')
                 return
 
-            const time = (Date.now() -this.tsStart-this.offset??0) / 1000 +  this.manualTimeOffset??0;
+            const time = (Date.now() -this.tsStart-(this.offset??0)) / 1000 +  (this.manualTimeOffset??0);
             const end = this.workout.getEnd();
 
             if ( time>=end) {

@@ -28,19 +28,19 @@ describe ( 'constructor', () => {
 
     test ( 'incorrect array', () => {
         expect(() => {
-             new Vector( [1])
-        }).toThrowError("incorrect value of: props");
+             const v = new Vector( [1])
+        }).toThrow("incorrect value of: props");
     } );
     test ( 'incorrect coordinate', () => {
         expect(() => {
-             new Vector({coordinates:{a:1, b:1}} )
-        }).toThrowError("incorrect value of: props.coordinates");
+            const v = new Vector({coordinates:{a:1, b:1}} )
+        }).toThrow("incorrect value of: props.coordinates");
     } );
     test ( 'incorrect path', () => {
         expect(() => {
-             new Vector({path:{}} )
-        }).toThrowError("incorrect value of: props.path");
-    } );
+            const v = new Vector({path:{}} )
+        }).toThrow("incorrect value of: props.path");
+    } );    
     
 });
 

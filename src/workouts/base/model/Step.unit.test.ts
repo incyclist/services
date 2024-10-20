@@ -51,12 +51,12 @@ describe ( 'Step' ,() => {
 
         test ( 'Empty' ,() => {
             
-            expect( ()=> {new Step()} ).toThrow()
+            expect( ()=> {const s =new Step()} ).toThrow()
         });    
 
         test ( 'invalid object' ,() => {
             
-            expect( ()=> {new Step({a:1, b:2})} ).toThrow()
+            expect( ()=> {const s = new Step({a:1, b:2})} ).toThrow()
         });    
 
         

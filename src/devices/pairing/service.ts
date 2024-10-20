@@ -1117,21 +1117,14 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected disconnectInterface(name:string):void {
-        try {
-            this.access.disableInterface(name)
-        }
-        catch(err) {
-            this.logError(err,'disableInterface')
-        }
+        
+        this.access.disableInterface(name)
+            .catch ( (err) =>{ this.logError(err,'disableInterface')})
     }
 
     protected connectInterface(name:string):void {
-        try {
-            this.access.enableInterface(name,undefined,{autoConnect:true})        
-        }
-        catch(err) {
-            this.logError(err,'enableInterface')
-        }
+        this.access.enableInterface(name)
+            .catch ( (err) =>{ this.logError(err,'enableInterface')})
     }
 
     protected updateCapabilityConfig() {

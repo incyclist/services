@@ -159,7 +159,7 @@ export class Segment extends Step implements SegmentDefinition {
 
     protected getSingleDuration() {
         if (this.steps.length===0) return 0;
-        return this.steps.map(s=>s.duration).reduce( (a,b) => a+b );
+        return this.steps.map(s=>s.duration).reduce( (a,b) => a+b,0 );
     }
 
 

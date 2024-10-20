@@ -72,7 +72,7 @@ export class ActivitiesRepository {
      * @param [writeDetails=true] indicates if only the summary should be update or if also the details shoudl be saved
      */
     async save(activity:ActivityInfo,writeDetails:boolean = true):Promise<void> {
-        const stringify = (json) => { try {JSON.stringify(json)} catch {/* */}}
+        const stringify = (json) => { try {return JSON.stringify(json)} catch {/* */}}
 
         let prev
         const idx = this.activities.findIndex( ai=> ai.summary.id===activity.summary.id)
@@ -226,8 +226,10 @@ export class ActivitiesRepository {
                     const requested = criteria.uploadStatus as Array<UploadInfo>
                     const actual =  ai.summary.uploadStatus
 
-                    const r = requested.sort().map( us=> `${us.service}:${us.status}`).join(';')
-                    const a = actual.sort().map( us=> `${us.service}:${us.status}`).join(';')
+                    const sortFn = (a,b) => a.service.localeCompare(b.service)
+
+                    const r = requested.sort(sortFn).map( us=> `${us.service}:${us.status}`).join(';')
+                    const a = actual.sort(sortFn).map( us=> `${us.service}:${us.status}`).join(';')
                     return r===a
                 })
             }

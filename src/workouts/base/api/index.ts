@@ -58,13 +58,12 @@ export class IncyclistWorkoutsApi {
         
     }
 
-    async reload() {
+    async reload():Promise<void> {
         try {
-            this._get( `/reload` )                   
+            await this._get( `/reload` )                   
         }
         catch(err) {
             this.logError(err,'reload')
-            return undefined
         }
 
     }

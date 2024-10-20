@@ -51,7 +51,7 @@ export interface RlvFile extends TacxFile {
 export interface PgmfFile extends TacxFile { 
     generalInfo?: GeneralInfo
     program?: TacxProgram
-}2
+}
 
 export type TacxBlock = {
     blockType : TacxBlockType

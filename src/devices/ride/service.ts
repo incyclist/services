@@ -764,7 +764,7 @@ export class DeviceRideService  extends EventEmitter{
             const i = InterfaceFactory.create(ifName);
             
             const promisesStop = [];
-            adapters.map(ai => {
+            adapters.forEach(ai => {
                 promisesStop.push( this.stopAfterRestart(ai));
 
                 
@@ -785,7 +785,7 @@ export class DeviceRideService  extends EventEmitter{
             if (!stopRequested) {
 
                 const promisesStart = [];
-                adapters.map(ai => { promisesStart.push(ai.adapter.start()); });
+                adapters.forEach(ai => { promisesStart.push(ai.adapter.start()); });
 
                 if (promisesStart.length > 0) {
                     // to avoid channel collisions, start ant adapters in sequence
@@ -811,7 +811,7 @@ export class DeviceRideService  extends EventEmitter{
             this.logger.logEvent({ message: 'restart interface failed', interface: ifName, reason: err.message });
         }
 
-        adapters.map(ai => {
+        adapters.forEach(ai => {
             if (ai.adapter.isStarted()) {
                 ai.tsLastData = Date.now()
             }
@@ -1138,9 +1138,6 @@ export class DeviceRideService  extends EventEmitter{
                 if (toBeReplaced.includes(cd.selected))
                     cd.selected = adapterInfo.udid;
             });
-
-            selected.forEach;
-
 
             selected.forEach(sd => {
                 const duplicate = duplicates.find(dai => dai.info.udid === sd.selected);
