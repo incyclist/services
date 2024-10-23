@@ -1,8 +1,15 @@
 import { DeviceProperties } from "incyclist-devices/lib/types/device";
 import { AdapterInfo, ExtendedIncyclistCapability } from "../configuration";
 
+export type HealthStatus = 'green' | 'amber' | 'red'
+
 export interface AdapterRideInfo extends AdapterInfo {
     isStarted: boolean
+    tsLastData?: number
+    isHealthy?: boolean
+    isRestarting?: boolean
+    dataStatus?: HealthStatus
+    ivToCheck?: NodeJS.Timeout
 
 }
 

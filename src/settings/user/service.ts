@@ -4,12 +4,15 @@ import clone from '../../utils/clone';
 import { merge } from '../../utils/merge';
 import { valid } from '../../utils/valid';
 import {IUserSettingsBinding } from './bindings';
+import { Observer } from '../../base/types/observer';
+
 
 
 
 export class UserSettingsService {
 
-    static _instance:UserSettingsService;
+    protected static _instance:UserSettingsService;
+    protected static _defaultBinding: IUserSettingsBinding
 
     settings: any
     binding: IUserSettingsBinding
@@ -17,6 +20,9 @@ export class UserSettingsService {
     isInitialized: boolean
     isDirty: boolean
     savePromise: Promise<boolean> | null
+    instanceId: number;
+    initPromise: Promise<boolean>
+    observers: Array<{id:string,key:string, observer:Observer}> = []
     
 
     static getInstance() {
@@ -32,24 +38,38 @@ export class UserSettingsService {
         this.isInitialized = false;
         this.isDirty = false
         this.savePromise = null;
-
+        this.instanceId = Date.now()
+        this.initPromise = undefined
         this.setBinding(binding)
     }
 
+
     setBinding(binding: IUserSettingsBinding) {
         this.binding = binding;        
+        UserSettingsService.setDefaultBinding(binding)
+    }
+
+    static setDefaultBinding(binding: IUserSettingsBinding){
+        UserSettingsService._defaultBinding = binding
     }
 
 
     async init():Promise<boolean> {
+            
 
         if (this.isInitialized)
             return true;
-        if (!this.binding)
+
+        if (this.initPromise)
+            return await this.initPromise;
+
+        const binding = this.binding||UserSettingsService._defaultBinding;
+        if (!binding)
             return false;
 
         try {            
-            this.settings = await this.binding.getAll()
+            this.initPromise = binding.getAll()
+            this.settings = await this.initPromise
             this.logger.logEvent({message:'settings loaded'})
             this.isInitialized = true;
             return true;
@@ -69,23 +89,22 @@ export class UserSettingsService {
     }
 
     get( key:string, defValue:any ):any {
-
         if (!this.isInitialized)
             throw new Error('Settings are not yet initialized')
 
         const settings = this.settings
         const keys = key.split('.');
         if (keys.length<2)
-            return settings[key] || defValue
+            return valid(settings[key]) ? settings[key] : defValue
         
-        const retVal = (value) => valid(value) ? clone(value) : value;
+        const retVal = (value,defValue?) => valid(value) ? clone(value) : defValue;
     
         let child = {}
         for (let index=0;index<keys.length;index++) {
             const k = keys[index];
     
             if (index===keys.length-1)
-                return  retVal(child[k] || defValue);
+                return  retVal(child[k],defValue);
             else { 
                 child = index===0? settings[k] : child[k]
                 if ( child===undefined) {
@@ -106,6 +125,11 @@ export class UserSettingsService {
 
         if ( key===undefined || key===null || key==='') {
             throw new Error('key must be specified')
+        }
+
+        const observers = this.observers.filter(oi=>oi.key===key)
+        if (observers?.length) {
+            observers.forEach( o=> o.observer.emit('changed',value))
         }
 
         const keys = key.split('.');
@@ -145,13 +169,26 @@ export class UserSettingsService {
         }
     }
 
+    requestNotifyOnChange(requesterId:string,key:string):Observer {
+        const observer = new Observer()
+        this.observers.push({id:requesterId, key, observer})
+        return observer
+    }
+
+    stopNotifyOnChange(requesterId:string):void {
+        const observerIdx = this.observers.findIndex(oi=>oi.id===requesterId)
+        
+        if (observerIdx!==-1)
+            this.observers.splice(observerIdx,1)
+    }
+
     async update(data:any):Promise<boolean> {
         return await this.updateSettings(data)
     }
 
     async updateSettings(data:any):Promise<boolean> {        
-        if (!this.isInitialized)
-        throw new Error('Settings are not yet initialized')
+        if (!this.isInitialized || !this.settings)
+            throw new Error('Settings are not yet initialized')
         try {
 
             merge(this.settings,data);
@@ -199,6 +236,10 @@ export class UserSettingsService {
         this.binding.save(this.settings, true)
     }
 
+    protected reset():void {
+        delete UserSettingsService._instance
+    }
+
 
 }
 
@@ -207,5 +248,6 @@ export const useUserSettings = ()=>UserSettingsService.getInstance()
 export const initUserSettings = (binding: IUserSettingsBinding)=> {
     const us = UserSettingsService.getInstance()
     us.setBinding(binding)
+    us.init()
     return us
 }

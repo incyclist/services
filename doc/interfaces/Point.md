@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / Point
+[incyclist-services - v1.2.2](../README.md) / Point
 
 # Interface: Point
 

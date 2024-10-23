@@ -7,8 +7,12 @@ import clone from "../../utils/clone";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
-import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { setInterval } from "timers";
 
+
+const NO_DATA_THRESHOLD = 10000
+const UNHEALTHY_THRESHOLD = 60000
 
 /**
  * Provides method to consume a devcie
@@ -32,10 +36,9 @@ export class DeviceRideService  extends EventEmitter{
     protected simulatorEnforced:boolean
     protected logger: EventLogger
     protected debug;
+    protected promiseSendUpdate: Promise<UpdateRequest|void>[]
 
     protected deviceDataHandler = this.onData.bind(this)
-
-
 
     static getInstance():DeviceRideService{
         if (!DeviceRideService._instance)
@@ -104,6 +107,10 @@ export class DeviceRideService  extends EventEmitter{
 
         return {udid, name,isControl,capabilities,isStarted}
 
+    }
+
+    getData() {
+        return this.data
     }
 
     protected getAdapterList(onlySelected=true):AdapterRideInfo[] {
@@ -446,14 +453,98 @@ export class DeviceRideService  extends EventEmitter{
 
     }
 
+    /**
+     * 
+     * ANT+ seems to cause problems if the same deviceID is used as sensor for multiple capabilties. 
+     * This will cause that multiple channels will be opened with the same DEviceID, causing CHANNEL_COLLISION events 
+     * 
+     * Thus, we need to check if mutliple sensors are used with the same device ID and if so, only start the "most powerful"
+     * 
+     * @param adapters 
+     * 
+     * @returns An array, where every record contains the udid of the "most powerful" adapter and the AdapterInfo of the duplicates
+     */
+
+    protected checkAntSameDeviceID(adapters:AdapterRideInfo[]):Array<{udid:string,info:AdapterInfo}> {
+
+        try {
+
+            const antDevices = adapters.map((ai,idx)=>({...ai,idx}))                      // keep index in adapter list for reference
+                                        .filter(ai=>ai.adapter.getInterface()==='ant')     // we are only looking for ant adapters
+                                        .map(ai=>({idx:ai.idx, deviceID:ai.adapter.getID(), capabilities:ai.capabilities,udid:ai.udid}))
+
+            const antDeviceIds = antDevices.map(di=>di.deviceID)        
+            const duplicateIds = antDeviceIds.filter((item, index) => antDeviceIds.indexOf(item) !== index)
+
+            const score = (capabilities) => {
+                let value = 0;
+                if (capabilities.includes(IncyclistCapability.Control)) value += 100;
+                if (capabilities.includes(IncyclistCapability.Power)) value += 50;
+                value += capabilities.length
+                return value;
+            }
+
+            const duplicateDevices = antDevices.filter( di=> duplicateIds.includes(di.deviceID) ).sort( (a,b) => score(b.capabilities)-score(a.capabilities) )
+                
+
+            const leading = duplicateDevices[0]
+
+            const duplicateAdapters = []
+            duplicateDevices.forEach( (di,i) => {
+                if (i==0)
+                    return
+                
+                duplicateAdapters.push( {udid:leading.udid, info:adapters[di.idx]})
+                //adapters[di.idx] = null
+                
+            })
+            return duplicateAdapters
+        }
+        catch(err) {
+            return []
+        }
+
+    }
    
     async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check' | 'pair',props?:RideServiceDeviceProperties ):Promise<boolean> {
         
+
         const { forceErgMode, startPos, realityFactor, rideMode, route} = props||{};
 
+        const duplicates = this.checkAntSameDeviceID(adapters)
+
+
         this.startPromises = adapters?.map( async ai=> {
+            if (duplicates.find(dai=>dai.info.udid===ai.udid))
+                return
             const startProps = clone(props||{})
-            
+
+            let mode,settings,bike;
+
+            if (ai.adapter?.isControllable()) {
+                bike = ai.adapter
+
+                const modeInfo = this.configurationService.getModeSettings(ai.udid)
+                mode = modeInfo?.mode
+                settings = modeInfo?.settings||{}
+
+
+                if (!this.simulatorEnforced && forceErgMode) {
+                    const modes = bike.getSupportedCyclingModes().filter( C => C.supportsERGMode())
+                    if (modes.length>0)  {
+                        mode = new modes[0](bike)
+                        const modeInfo = this.configurationService.getModeSettings(ai.udid,mode)
+                        settings = modeInfo.settings
+                    }
+                }
+
+                if (!mode)
+                    mode = bike.getDefaultCyclingMode();
+
+
+                bike.setCyclingMode(mode,settings)
+            }
+
 
             if (startType==='check' || startType==='pair') {
                 startProps.timeout = 10000;
@@ -462,39 +553,12 @@ export class DeviceRideService  extends EventEmitter{
             }
 
             if (startType==='start') {
-
-                if (ai.adapter && ai.adapter.isControllable()) {
-                    const d = ai.adapter as IncyclistDeviceAdapter
-
-                    let mode,settings;
-
-                    if (!this.simulatorEnforced) {
-
-                        if (forceErgMode) {
-                            const modes = d.getSupportedCyclingModes().filter( C => C.supportsERGMode())
-                            if (modes.length>0)  {
-                                mode = new modes[0](d)                            
-                                const modeInfo = this.configurationService.getModeSettings(ai.udid,mode)
-                                settings = modeInfo.settings
-                            }
-                        }                    
-                        if (!mode) {
-                            const modeInfo = this.configurationService.getModeSettings(ai.udid)
-                            mode = modeInfo.mode
-                            settings = modeInfo.settings
-                        }
-        
-                    }
-
-                    if (!mode)
-                        mode = d.getDefaultCyclingMode();
-
-
-                    d.setCyclingMode(mode,settings)
+                
+                if (ai.adapter?.isControllable()) {
 
                     // Special Case Daum8i "Daum Classic" mode:
                     // we need to upload the route data (in Epp format) as part of the start commands
-                    if (d.getCyclingMode().getModeProperty('eppSupport')) {
+                    if (bike.getCyclingMode().getModeProperty('eppSupport')) {
                         startProps.route = this.prepareEppRoute({route,startPos,realityFactor,rideMode})
                         startProps.onStatusUpdate = (completed:number, total:number) => {                         
                             this.emit('start-update',this.getAdapterStateInfo(ai), completed,total)                    
@@ -514,44 +578,27 @@ export class DeviceRideService  extends EventEmitter{
             logProps[sType] = ai.adapter.getUniqueName()
             logProps.cability = ai.adapter.getCapabilities().join('/')
             logProps.interface = getLegacyInterface(ai.adapter) 
-            if (sType==='bike')
-                logProps.cyclingMode = (ai.adapter as IncyclistDeviceAdapter).getCyclingMode()?.getName()
+            if (sType==='bike'){
+                const bike = ai.adapter
+                logProps.cyclingMode = bike.getCyclingMode()?.getName()
+                logProps.bikeType = bike.getCyclingMode().getSetting('bikeType') 
+            }
             this.logEvent( {message:`${startType} ${sType} request`,...logProps})
 
-            
+
             return ai.adapter.start(startProps)
                 .then( async (success)=>{
                     if (success) {
-                        this.emit(`${startType}-success`, this.getAdapterStateInfo(ai))
-                        this.logEvent( {message:`${startType} ${sType} request finished`,...logProps})
-                        if (startType==='check') 
-                            await ai.adapter.pause().catch( console.log)                        
-                        if (ai.adapter.isControllable())
-                            this.setSerialPortInUse(ai.adapter as IncyclistDeviceAdapter)
-
-                        if (startType==='pair') {
-                            ai.adapter.on('data',this.deviceDataHandler)                            
-                        }
+                        await this.handleStartSuccess(startType, ai, duplicates, sType, logProps);
+                        return true
                     }
-                    else {
-                        this.emit(`${startType}-error`, this.getAdapterStateInfo(ai))
-                        this.logEvent( {message:`${startType} ${sType} request failed`,...logProps})
-                        if (startType==='check' || startType==='pair') 
-                            await ai.adapter.stop().catch( console.log)                        
-                    }
-                    ai.isStarted = success;
-                    return success
+                    
+                    await this.handleStartFailure(startType, ai, duplicates, sType, logProps);
+                    return false
                 })
                 .catch(async err=>{                    
-                    ai.isStarted = false;
 
-                    this.logEvent( {message:`${startType} ${sType} request failed`,...logProps, reason:err.message })
-
-                    this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err)
-                    if (startType==='check' || startType==='pair') {
-                        await ai.adapter.stop().catch( console.log)                        
-                    }
-
+                    await this.handleStartRejection(startType, sType, logProps, err, ai, duplicates);
                     return false
                 })
         })
@@ -573,6 +620,299 @@ export class DeviceRideService  extends EventEmitter{
         
     }
 
+    private async handleStartRejection(startType: string, sType: string, logProps: any, err: any, ai: AdapterRideInfo, duplicates: { udid: string; info: AdapterInfo; }[]) {
+        this.logEvent({ message: `${startType} ${sType} request failed`, ...logProps, reason: err.message });
+
+        this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err);
+        if (duplicates.find(dai => dai.udid === ai.udid)) {
+            duplicates.forEach(dai => { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info)); });
+        }
+        if (startType === 'check' || startType === 'pair') {
+            await ai.adapter.stop().catch(console.log);
+        }
+
+        ai.isStarted = false;
+    }
+
+    private async handleStartFailure(startType: string, ai: AdapterRideInfo, duplicates: { udid: string; info: AdapterInfo; }[], sType: string, logProps: any) {
+        this.emit(`${startType}-error`, this.getAdapterStateInfo(ai));
+        if (duplicates.find(dai => dai.udid === ai.udid)) {
+            duplicates.forEach(dai => { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info)); });
+        }
+
+        this.logEvent({ message: `${startType} ${sType} request failed`, ...logProps });
+        if (startType === 'check' || startType === 'pair')
+            await ai.adapter.stop().catch(console.log);
+
+        ai.isStarted = false;
+    }
+
+    private async handleStartSuccess(startType: string, ai: AdapterRideInfo, duplicates: { udid: string; info: AdapterInfo; }[], sType: string, logProps: any) {
+        this.emit(`${startType}-success`, this.getAdapterStateInfo(ai));
+        if (duplicates.find(dai => dai.udid === ai.udid)) {
+            duplicates.forEach(dai => { this.emit(`${startType}-success`, this.getAdapterStateInfo(dai.info)); });
+        }
+        this.logEvent({ message: `${startType} ${sType} request finished`, ...logProps });
+        if (startType === 'check')
+            await ai.adapter.pause().catch(console.log);
+        if (ai.adapter.isControllable())
+            this.setSerialPortInUse(ai.adapter);
+
+        if (startType === 'pair') {
+            ai.adapter.on('data', this.deviceDataHandler);
+        }
+        else if (startType === 'start') {
+            this.startHealthCheck(ai);
+        }
+
+        ai.isStarted = true
+    }
+
+    startHealthCheck(ai: AdapterRideInfo) {
+
+        const check = ()=> {
+            if (!ai.ivToCheck) // I have no clue why this is needed, but removing it would cause the check() function to be executed after the interval has been cleared
+                return;
+            
+            const tsNow = Date.now()
+
+            const isPaused = ai.adapter.isPaused()
+            const prevStatus = ai.dataStatus
+
+            // paused or no data received yet => no need to check
+            if (isPaused || !ai.tsLastData) {
+                ai.tsLastData = tsNow
+                ai.dataStatus = 'green'
+                return;
+            }
+
+            const isAmber = (tsNow-ai.tsLastData)>NO_DATA_THRESHOLD
+            const isRed = (tsNow-ai.tsLastData)>UNHEALTHY_THRESHOLD
+
+
+            ai.dataStatus = 'green'
+            if (isAmber)
+                ai.dataStatus = 'amber'
+            if (isRed)
+                ai.dataStatus = 'red'
+
+
+            if (ai.isHealthy && (isAmber || isRed)) {                
+                ai.isHealthy = false;
+                this.logEvent({message:'device unhealthy', device:ai.adapter.getUniqueName(), udid:ai.udid, noDataSince: (tsNow-ai.tsLastData), tsLastData:ai.tsLastData  })
+
+
+                this.prepareReconnect(ai)
+
+            }
+            else if (!ai.isHealthy && !isAmber && !isRed) {               
+                ai.isHealthy = true;
+                this.logEvent({message:'device healthy', device:ai.adapter.getUniqueName(), udid:ai.udid })                
+            }
+
+            if (ai.dataStatus!==prevStatus) {
+                const {enabledCapabilities} = this.getEnabledCapabilities(ai)
+                this.emit('health',ai.udid, ai.dataStatus, enabledCapabilities)                
+            }
+            
+        }
+
+        if (ai.ivToCheck) {
+            this.stopHealthCheck(ai)
+        }
+
+        if (ai.adapter.getInterface()==='simulator')
+            return;
+
+        ai.ivToCheck = setInterval( ()=>{check()}, 1000)
+        ai.isHealthy = true
+    }
+
+    stopHealthCheck(ai: AdapterRideInfo) {
+        if (ai.ivToCheck) {
+            clearInterval(ai.ivToCheck)
+            delete ai.ivToCheck
+            delete ai.isHealthy
+        }
+        
+    }
+
+    async prepareReconnect(unhealthy:AdapterRideInfo) {
+        if (unhealthy.isRestarting)
+            return;
+
+        await sleep( UNHEALTHY_THRESHOLD-NO_DATA_THRESHOLD-5000)
+
+        if (unhealthy.isHealthy || unhealthy.isRestarting)
+            return;
+      
+        // are all adapters on the same interface down?
+        const ifName = unhealthy.adapter.getInterface()
+        const adapters = this.getAdapterList().filter( ai=> ai.adapter.getInterface()===ifName)
+        if (!adapters.find(ai=>ai.isHealthy)) {
+            await this.reconnectInterface(ifName, adapters);
+
+        }
+        else {
+            await this.reconnectSingle(unhealthy);  
+            
+        }
+        unhealthy.isRestarting = false;       
+    }
+
+    private async reconnectInterface(ifName: string, adapters: AdapterRideInfo[]) {
+
+        // simulator does not need to be restarted
+        if (ifName==='simulator')
+            return;
+
+        // restart Interface and adapaters
+        this.logger.logEvent({ message: 'restart interface', interface: ifName });
+
+        let stopRequested = false;
+        this.once('stop-ride',()=>{ stopRequested= true;})
+
+        try {
+            await this.stopAdapters(adapters);
+
+            if (stopRequested) // could have changed in the meantime ( based on event)
+                return;
+
+            await this.performInterfaceReconnect(ifName);
+            
+            if (stopRequested) // could have changed in the meantime ( based on event)
+                return;
+
+            await this.reconnectAdapters(adapters, ifName);   
+        }
+        catch (err) {
+            this.logger.logEvent({ message: 'restart interface failed', interface: ifName, reason: err.message });
+        }
+
+        this.finalizeAdaptersAfterRestart(adapters);
+    }
+
+    private finalizeAdaptersAfterRestart(adapters: AdapterRideInfo[]) {
+        adapters.forEach(ai => {
+            if (ai.adapter.isStarted()) {
+                ai.tsLastData = Date.now();
+            }
+            else {
+                ai.isRestarting = false;
+                this.prepareReconnect(ai);
+            }
+            ai.adapter.on('data', this.deviceDataHandler);
+            ai.isRestarting = false;
+        });
+    }
+
+    private async performInterfaceReconnect(ifName: string) {
+        const i = InterfaceFactory.create(ifName);
+        await i.disconnect();
+        await sleep(1000);
+        await i.connect();
+    }
+
+    private async stopAdapters(adapters: AdapterRideInfo[]) {
+        const promisesStop = [];
+        adapters.forEach(ai => {
+            promisesStop.push(this.stopAfterRestart(ai));
+
+
+        });
+
+
+        if (promisesStop.length > 0) {
+            await Promise.race([sleep(66000), Promise.allSettled(promisesStop)]);
+        }
+    }
+
+    private async reconnectAdapters(adapters: AdapterRideInfo[], ifName: string) {
+        const promisesStart = [];
+        adapters.forEach(ai => { promisesStart.push(ai.adapter.start()); });
+
+        if (promisesStart.length > 0) {
+            // to avoid channel collisions, start ant adapters in sequence
+            if (ifName === 'ant') {
+                for (let i = 0; i < promisesStart.length; i++) {
+                    try {
+                        await promisesStart[i];
+                    }
+                    catch {
+                        // ignore failures
+                    }
+                }
+
+            }
+            else {
+                await Promise.allSettled(promisesStart);
+            }
+        }
+    }
+
+    protected async stopAfterRestart(unhealthy: AdapterRideInfo) {
+        this.emit('stop-adapter',unhealthy.udid)
+        if (unhealthy.isRestarting) {
+            
+            await  new Promise<void>( done=> {
+
+                const to = setTimeout( done, 65000)
+
+                this.once('stop-adapter-confirmed',(udid)=>{ 
+                    if(udid===unhealthy.udid) {
+                        clearTimeout(to)
+                        done()
+                    }
+                })
+        
+            })
+        }
+        unhealthy.isRestarting = true;
+        unhealthy.adapter.off('data', this.deviceDataHandler);            
+
+        await unhealthy.adapter.stop()
+    }
+
+    private async reconnectSingle(unhealthy: AdapterRideInfo) {
+        unhealthy.isRestarting = true;
+
+        let stopRequested = false;
+        this.once('stop-ride',()=>{ stopRequested= true;})
+        this.once('stop-adapter',(udid)=>{ 
+            if(udid===unhealthy.udid) 
+                stopRequested= true;
+        })
+
+        let success = false;
+        do {
+            this.logger.logEvent({ message: 'restart adapter', device: unhealthy.udid });
+            unhealthy.adapter.off('data', this.deviceDataHandler);
+            const adapter = unhealthy.adapter;
+            try {
+                const started = await adapter.restart();
+                if (started) {
+                    unhealthy.tsLastData = Date.now()
+                    success = true;
+                }
+            }
+            catch (err) {
+                this.logger.logEvent({ message: 'restart adapter failed', device: unhealthy.udid, reason: err.message });
+                this.prepareReconnect(unhealthy);
+            }
+            unhealthy.adapter.on('data', this.deviceDataHandler);
+
+            if (!success) {
+
+                // retry in a minute                
+                for (let i=0;i<60 && !stopRequested;i++)
+                    await sleep(1000)
+            }
+        }
+        while (!stopRequested && !success)
+
+        this.emit('stop-adapter-confirmed', unhealthy.udid)
+    }
+
     async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
         await this.lazyInit();
         const adapters = this.getAdapterList()
@@ -582,8 +922,7 @@ export class DeviceRideService  extends EventEmitter{
         const goodToGo = await this.waitForPreviousStartToFinish()
         if (!goodToGo) 
             return;
-
-
+        
         return this.startAdapters( adapters,'start',props)
     }
 
@@ -606,16 +945,29 @@ export class DeviceRideService  extends EventEmitter{
     }
 
     async cancelStart():Promise<boolean> {
+
+        if (!this.startPromises)
+            return;
+
+        this.logEvent({message:'cancel start'})
+
         const adapters = this.getAdapterList()
 
+        const promises:Array<Promise<boolean>> = []
         adapters?.forEach(ai=> {
             const d = ai.adapter
             d.off('data',this.deviceDataHandler)
-            if (!ai.isStarted)
-                d.stop()
+            if (!d.isStarted()){
+                this.logEvent({message:'cancel start of device',udid:ai.udid})
+                promises.push(d.stop())
+            }
+            else {
+                d.pause()
+            }
             
         })
 
+        await Promise.allSettled(promises)
         this.startPromises = null;
         
         return true;
@@ -625,7 +977,6 @@ export class DeviceRideService  extends EventEmitter{
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     startRide(_props) {
         const adapters = this.getAdapterList()
-
         adapters?.forEach(ai=> {
             
 
@@ -636,7 +987,7 @@ export class DeviceRideService  extends EventEmitter{
 
             */
 
-            ai.adapter.removeAllListeners('data')
+            ai.adapter.off('data',this.deviceDataHandler)
             ai.adapter.on('data',this.deviceDataHandler)
         })
     }
@@ -655,6 +1006,7 @@ export class DeviceRideService  extends EventEmitter{
 
         const promises = adapters?.filter( ai=> udid ? ai.udid===udid : true)        
         .map(ai => {
+            this.stopHealthCheck(ai)
             ai.adapter.off('data',this.deviceDataHandler)
             return ai.adapter.stop()
 
@@ -666,12 +1018,24 @@ export class DeviceRideService  extends EventEmitter{
         return true
     }
 
+    async resetLimits() {
+        try {
+            const mode = this.getCyclingMode()
+            const resetRequest = mode?.getBikeInitRequest() ?? {}
+            
+            await this.sendUpdate({...resetRequest,slope:0,forced:true})
+        }
+        catch { }
+    }
+
     pause():void {
         const adapters = this.getAdapterList();
 
         adapters?.forEach(ai=> {
+            ai.tsLastData = Date.now()
             ai.adapter.pause()
             ai.adapter.off('data',this.deviceDataHandler)
+            this.stopHealthCheck(ai)
         })
     }
 
@@ -679,8 +1043,10 @@ export class DeviceRideService  extends EventEmitter{
         const adapters = this.getAdapterList();
 
         adapters?.forEach(ai=> {
+            ai.tsLastData = Date.now()
             ai.adapter.resume()
             ai.adapter.on('data',this.deviceDataHandler)
+            this.startHealthCheck(ai)
         })
     }
 
@@ -705,6 +1071,7 @@ export class DeviceRideService  extends EventEmitter{
 
     }
 
+
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
 
         
@@ -714,6 +1081,9 @@ export class DeviceRideService  extends EventEmitter{
         const adapterInfo = adapters?.find( ai=>ai.adapter.isEqual(deviceSettings))
         if (!adapterInfo)
             return;
+
+        // register data update for health check
+        adapterInfo.tsLastData = data.timestamp||Date.now()
 
         // refresh capabilities from device (might have changed since original scan)
         adapters?.forEach( ai => ai.capabilities = ai.adapter.getCapabilities())
@@ -728,9 +1098,10 @@ export class DeviceRideService  extends EventEmitter{
         this.verifySelected(selectedDevices, IncyclistCapability.Cadence)
         this.verifySelected(selectedDevices, IncyclistCapability.Power)
 
+
         // get list of capabilities, where the device sending the data was selected by the user
-        const enabledCapabilities = selectedDevices.filter( sd => sd.selected===adapterInfo.udid).map( c => c.capability)
-        
+        const { enabledCapabilities, toBeReplaced } = this.getEnabledCapabilities(adapterInfo,selectedDevices);
+                    
         this.logEvent({message:'Data Update', device:adapterInfo.adapter.getName(), data, enabledCapabilities})
 
         enabledCapabilities.forEach( capability=> {
@@ -759,19 +1130,87 @@ export class DeviceRideService  extends EventEmitter{
         })
 
         this.emit( 'data', this.data, adapterInfo.udid)
+        if (toBeReplaced) {
+            toBeReplaced.forEach( udid => {
+                this.emit( 'data', this.data, udid)
+            })
+        }
+
+
 
 
     }
 
-    sendUpdate( request:UpdateRequest):void {
+    private getEnabledCapabilities(adapterInfo: AdapterRideInfo, selected?:Array<{capability:IncyclistCapability,selected?:string }> ) {
+
+        const adapters = this.getAdapterList();
+        const selectedDevices = selected ?? this.configurationService.getSelectedDevices()
+
+        let enabledCapabilities = [];
+
+        const duplicates = this.checkAntSameDeviceID(adapters);
+        const toBeReplaced = duplicates.filter(dai => dai.udid === adapterInfo.udid).map(dai => dai.info.udid);
+
+
+
+        if (this.simulatorEnforced) {
+            enabledCapabilities = [IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed, IncyclistCapability.HeartRate, IncyclistCapability.Cadence];
+        }
+        else if (duplicates.length > 0 && duplicates.find(d => d.udid === adapterInfo.udid)) {
+
+
+            const selected = clone(selectedDevices);
+            selected.forEach(cd => {
+                if (toBeReplaced.includes(cd.selected))
+                    cd.selected = adapterInfo.udid;
+            });
+
+            selected.forEach(sd => {
+                const duplicate = duplicates.find(dai => dai.info.udid === sd.selected);
+                if (duplicate)
+                    sd.selected = duplicate.udid;
+
+            });
+            enabledCapabilities = selected.map(c => c.capability);
+
+
+        }
+        else {
+            enabledCapabilities = selectedDevices.filter(sd => sd.selected === adapterInfo.udid).map(c => c.capability);
+
+        }
+        return { enabledCapabilities, toBeReplaced };
+    }
+
+    isUpdateBusy():boolean {
+        return this.promiseSendUpdate!==undefined && this.promiseSendUpdate!==null
+    }
+
+    async waitForUpdateFinish():Promise<void> {
+        if (this.promiseSendUpdate) {
+            try {
+                await Promise.allSettled( this.promiseSendUpdate)
+            }
+            catch {}            
+        }
+    }
+
+
+    async sendUpdate( request:UpdateRequest):Promise<void> {
+        
         const adapters = this.getAdapterList();
 
+        this.promiseSendUpdate = []
         adapters?.forEach(ai=> {
             if ( ai.adapter && ai.adapter.isControllable()) {
                 const d = ai.adapter as IncyclistDeviceAdapter
-                d.sendUpdate(request)
+                this.promiseSendUpdate.push( d.sendUpdate(request) )
             }
         })
+
+        await this.waitForUpdateFinish()
+
+        this.promiseSendUpdate = undefined        
     }
 
     getCyclingMode(udid?:string):CyclingMode {
@@ -787,6 +1226,66 @@ export class DeviceRideService  extends EventEmitter{
         if (adapter)
             return adapter.getCyclingMode()
     }
+
+    async resetCyclingMode(sendInit:boolean=false) {
+        try {
+            const adapters = this.getAdapterList();
+
+            const adapterInfo = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control)) 
+            if (!adapterInfo?.adapter)
+                return
+
+            const {udid,adapter} = adapterInfo
+            const modeInfo = this.configurationService.getModeSettings(udid)
+            const mode = modeInfo?.mode
+            const settings = modeInfo.settings
+            
+            // We can't switch back to DaumClassic mode on Daum Premium, we would have to sent the whole route mid ride
+            if (adapter.getCyclingMode().getModeProperty('eppSupport'))
+                return;
+
+
+            const device = adapter
+            device.setCyclingMode(mode,settings)
+            if (sendInit)
+                await device.sendInitCommands()
+        }
+        catch(err) {
+            this.logEvent({message:'error', error:err.message,fn:'resetCyclingMode'})
+        }
+
+    }
+
+    async enforceERG() {
+        try {
+            const adapters = this.getAdapterList();
+
+            const adapterInfo = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control)) 
+            if (!adapterInfo?.adapter)
+                return
+            const {udid,adapter} = adapterInfo
+
+            // We can't switch back to DaumClassic mode on Daum Premium, we would have to sent the whole route mid ride
+            if (adapter.getCyclingMode().getModeProperty('eppSupport'))
+                return;
+            
+            const modes = adapter.getSupportedCyclingModes().filter( C => C.supportsERGMode())
+            if (modes.length>0)  {
+                const mode = new modes[0](adapter)
+                const modeInfo = this.configurationService.getModeSettings(udid,mode.getName())
+                const settings = modeInfo.settings
+
+                const device = adapter
+                device.setCyclingMode(mode,settings)
+    
+            }
+        }
+        catch(err) {
+            this.logEvent({message:'error', error:err.message,fn:'enforceERG'})
+        }
+
+    }
+
 
     async onCyclingModeChanged(udid:string,mode:string, settings):Promise<void> {
         // TODO: 

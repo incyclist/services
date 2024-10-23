@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / LegacyAntSettings
+[incyclist-services - v1.2.2](../README.md) / LegacyAntSettings
 
 # Interface: LegacyAntSettings
 

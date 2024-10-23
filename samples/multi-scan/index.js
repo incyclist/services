@@ -1,15 +1,13 @@
 const {EventLogger,ConsoleAdapter} = require( 'gd-eventlog');
 const {AntDevice} = require('incyclist-ant-plus/lib/bindings');
-const { autoDetect } = require('@serialport/bindings-cpp')
-const {useDeviceAccess} = require('incyclist-services');
 const { TCPBinding } = require('incyclist-devices');
+
+const { DeviceAccessService } = require('incyclist-services');
 
 EventLogger.registerAdapter(new ConsoleAdapter()) 
 
 const parseArgs = ()=> {
     // TODO
-    const args = process.argv.slice(2)
-
     return {command:'scan'}
 
 }
@@ -21,10 +19,9 @@ class App {
     logger;
 
     constructor(props) {
-
         this.props = props;
         this.logger= new EventLogger('SampleApp')
-        this.deviceAccess = useDeviceAccess()
+        this.deviceAccess = DeviceAccessService.getInstance()
     }
 
     async run() {
@@ -32,6 +29,7 @@ class App {
 
         switch( command) {
             case 'scan':
+            default:
                 await this.scan({timeout:10000});
         }
     

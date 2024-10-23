@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<roadmovie>
+	<name>ES_MajorcaDemo</name>
+	<id>08c17c0200d65f9c142535464909685f</id>
+	<video-file-path>ES_MajorcaDemo.avi</video-file-path>
+	<framerate>24</framerate>
+	<start-frame>0</start-frame>
+	<end-frame>6993</end-frame>
+	<width>768</width>
+	<height>576</height>
+	<mappings>
+		<mapping frame="0" dpf="0.579150558" />
+		<mapping frame="1" dpf="0.579150558" />
+	</mappings>
+	<segments>
+		<segment name="Majorca Tour Demo" start="10" end="4050" />
+		<segment name="Route 1" start="10" end="2330" />
+		<segment name="Route 2" start="2330" end="4050" />
+	</segments>
+	<marks>
+		<mark distance="2330" />
+	</marks>
+	<informations />
+	<positions />
+</roadmovie>

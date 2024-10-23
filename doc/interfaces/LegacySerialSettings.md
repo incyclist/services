@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / LegacySerialSettings
+[incyclist-services - v1.2.2](../README.md) / LegacySerialSettings
 
 # Interface: LegacySerialSettings
 
@@ -19,4 +19,4 @@ ___
 
 ### protocols
 
-• **protocols**: { `name`: `string` ; `selected`: `boolean` ; `id`: `number`  }[]
+• **protocols**: \{ `name`: `string` ; `selected`: `boolean` ; `id?`: `number`  }[]

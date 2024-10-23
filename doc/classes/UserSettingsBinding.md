@@ -1,4 +1,4 @@
-[incyclist-services - v1.0.36](../README.md) / UserSettingsBinding
+[incyclist-services - v1.2.2](../README.md) / UserSettingsBinding
 
 # Class: UserSettingsBinding
 
@@ -24,17 +24,21 @@
 
 ### constructor
 
-• **new UserSettingsBinding**()
+• **new UserSettingsBinding**(): [`UserSettingsBinding`](UserSettingsBinding.md)
+
+#### Returns
+
+[`UserSettingsBinding`](UserSettingsBinding.md)
 
 ## Methods
 
 ### getAll
 
-▸ `Abstract` **getAll**(): `Promise`<`any`\>
+▸ **getAll**(): `Promise`\<`any`\>
 
 #### Returns
 
-`Promise`<`any`\>
+`Promise`\<`any`\>
 
 #### Implementation of
 
@@ -44,7 +48,7 @@ ___
 
 ### set
 
-▸ `Abstract` **set**(`key`, `value`): `Promise`<`boolean`\>
+▸ **set**(`key`, `value`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -55,7 +59,7 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 #### Implementation of
 
@@ -65,7 +69,7 @@ ___
 
 ### save
 
-▸ `Abstract` **save**(`settings`, `final?`): `Promise`<`boolean`\>
+▸ **save**(`settings`, `final?`): `Promise`\<`boolean`\>
 
 #### Parameters
 
@@ -76,7 +80,7 @@ ___
 
 #### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 #### Implementation of
 
@@ -86,7 +90,7 @@ ___
 
 ### canOverwrite
 
-▸ `Abstract` **canOverwrite**(): `boolean`
+▸ **canOverwrite**(): `boolean`
 
 #### Returns
 
@@ -100,7 +104,7 @@ ___
 
 ### getInstance
 
-▸ `Static` **getInstance**(): [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md)
+▸ **getInstance**(): [`IUserSettingsBinding`](../interfaces/IUserSettingsBinding.md)
 
 #### Returns
 

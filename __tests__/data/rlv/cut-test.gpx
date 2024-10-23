@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="GPS Track Editor" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:gte="http://www.gpstrackeditor.com/xmlschemas/General/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3" targetNamespace="http://www.topografix.com/GPX/1/1" elementFormDefault="qualified" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+<metadata>
+	<name>test</name>
+</metadata>
+<trk>
+	<name>Pamplona Rennradfahren</name>
+	<trkseg>
+		<trkpt lat="42.318491" lon="-1.825485">
+			<ele>454.60</ele>
+			<time>2024-08-01T11:00:00Z</time>
+		</trkpt>
+		<trkpt lat="42.318455" lon="-1.825473">
+			<ele>454.60</ele>
+			<time>2024-08-01T11:00:01Z</time>
+		</trkpt>
+		<trkpt lat="42.318411" lon="-1.825458">
+			<ele>454.60</ele>
+			<time>2024-08-01T11:00:02Z</time>
+		</trkpt>
+		<trkpt lat="42.318381" lon="-1.825449">
+			<ele>454.80</ele>
+			<time>2024-08-01T11:00:03Z</time>
+		</trkpt>
+		<trkpt lat="42.318343" lon="-1.825436">
+			<ele>454.80</ele>
+			<time>2024-08-01T11:00:04Z</time>
+		</trkpt>
+		<trkpt lat="42.318300" lon="-1.825421">
+			<ele>455.00</ele>
+			<time>2024-08-01T11:00:05Z</time>
+		</trkpt>
+		<trkpt lat="42.318262" lon="-1.825410">
+			<ele>455.00</ele>
+			<time>2024-08-01T11:00:06Z</time>
+		</trkpt>
+		<trkpt lat="42.318230" lon="-1.825402">
+			<ele>455.20</ele>
+			<time>2024-08-01T11:00:07Z</time>
+		</trkpt>
+		<trkpt lat="42.318189" lon="-1.825393">
+			<ele>455.20</ele>
+			<time>2024-08-01T11:00:08Z</time>
+		</trkpt>
+		<trkpt lat="42.318149" lon="-1.825384">
+			<ele>455.40</ele>
+			<time>2024-08-01T11:00:09Z</time>
+		</trkpt>
+		<extensions>
+			<gte:name>GX010060</gte:name>
+			<gte:color>#00ce00</gte:color>
+		</extensions>
+	</trkseg>
+	<trkseg>
+		<trkpt lat="42.149141" lon="-1.816651">
+			<ele>370.80</ele>
+			<time>2024-08-01T11:00:10Z</time>
+		</trkpt>
+		<trkpt lat="42.149108" lon="-1.816709">
+			<ele>370.80</ele>
+			<time>2024-08-01T11:00:11Z</time>
+		</trkpt>
+		<trkpt lat="42.149074" lon="-1.816769">
+			<ele>370.80</ele>
+			<time>2024-08-01T11:00:12Z</time>
+		</trkpt>
+		<trkpt lat="42.149041" lon="-1.816830">
+			<ele>371.00</ele>
+			<time>2024-08-01T11:00:13Z</time>
+		</trkpt>
+		<trkpt lat="42.148999" lon="-1.816904">
+			<ele>371.00</ele>
+			<time>2024-08-01T11:00:14Z</time>
+		</trkpt>
+		<trkpt lat="42.148970" lon="-1.816952">
+			<ele>371.00</ele>
+			<time>2024-08-01T11:00:15Z</time>
+		</trkpt>
+		<trkpt lat="42.148935" lon="-1.817011">
+			<ele>371.20</ele>
+			<time>2024-08-01T11:00:16Z</time>
+		</trkpt>
+		<trkpt lat="42.148900" lon="-1.817072">
+			<ele>371.40</ele>
+			<time>2024-08-01T11:00:17Z</time>
+		</trkpt>
+		<trkpt lat="42.148860" lon="-1.817143">
+			<ele>371.40</ele>
+			<time>2024-08-01T11:00:18Z</time>
+		</trkpt>
+		<trkpt lat="42.148833" lon="-1.817190">
+			<ele>371.80</ele>
+			<time>2024-08-01T11:00:19Z</time>
+		</trkpt>
+		<extensions>
+			<gte:name>GX010061_p1</gte:name>
+			<gte:color>#1cff1c</gte:color>
+		</extensions>
+	</trkseg>
+</trk>
+</gpx>

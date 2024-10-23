@@ -1,0 +1,91 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<roadmovie>
+	<name>Tryvann</name>
+	<id>54907828b7798b878516df216822951b</id>
+	<video-file-path>Tryvann.avi</video-file-path>
+	<framerate>25</framerate>
+	<start-frame>0</start-frame>
+	<end-frame>21138</end-frame>
+	<width>720</width>
+	<height>480</height>
+	<mappings>
+		<mapping frame="0" dpf="0.2957392" />
+		<mapping frame="283" dpf="0.29248932" />
+		<mapping frame="564" dpf="0.269740164" />
+		<mapping frame="837" dpf="0.269740164" />
+		<mapping frame="1151" dpf="0.282739669" />
+		<mapping frame="1472" dpf="0.2762399" />
+		<mapping frame="1791" dpf="0.2794898" />
+		<mapping frame="2106" dpf="0.282739669" />
+		<mapping frame="2443" dpf="0.2632404" />
+		<mapping frame="2761" dpf="0.272990018" />
+		<mapping frame="3068" dpf="0.2762399" />
+		<mapping frame="3378" dpf="0.269740164" />
+		<mapping frame="3654" dpf="0.269740164" />
+		<mapping frame="3970" dpf="0.266490281" />
+		<mapping frame="4259" dpf="0.269740164" />
+		<mapping frame="4583" dpf="0.269740164" />
+		<mapping frame="4886" dpf="0.2599905" />
+		<mapping frame="5191" dpf="0.266490281" />
+		<mapping frame="5479" dpf="0.2599905" />
+		<mapping frame="5734" dpf="0.253490746" />
+		<mapping frame="6033" dpf="0.246990979" />
+		<mapping frame="6332" dpf="0.266490281" />
+		<mapping frame="6638" dpf="0.2794898" />
+		<mapping frame="6961" dpf="0.289239436" />
+		<mapping frame="7285" dpf="0.29248932" />
+		<mapping frame="7601" dpf="0.2762399" />
+		<mapping frame="7920" dpf="0.2599905" />
+		<mapping frame="8209" dpf="0.25674063" />
+		<mapping frame="8513" dpf="0.272990018" />
+		<mapping frame="8840" dpf="0.2599905" />
+		<mapping frame="9153" dpf="0.2632404" />
+		<mapping frame="9492" dpf="0.2762399" />
+		<mapping frame="9813" dpf="0.282739669" />
+		<mapping frame="10130" dpf="0.29248932" />
+		<mapping frame="10449" dpf="0.2989891" />
+		<mapping frame="10754" dpf="0.2599905" />
+		<mapping frame="11058" dpf="0.266490281" />
+		<mapping frame="11372" dpf="0.2632404" />
+		<mapping frame="11699" dpf="0.269740164" />
+		<mapping frame="12025" dpf="0.2794898" />
+		<mapping frame="12337" dpf="0.266490281" />
+		<mapping frame="12644" dpf="0.269740164" />
+		<mapping frame="12962" dpf="0.2794898" />
+		<mapping frame="13288" dpf="0.282739669" />
+		<mapping frame="13608" dpf="0.266490281" />
+		<mapping frame="13900" dpf="0.2794898" />
+		<mapping frame="14195" dpf="0.2599905" />
+		<mapping frame="14468" dpf="0.266490281" />
+		<mapping frame="14757" dpf="0.266490281" />
+		<mapping frame="15046" dpf="0.2762399" />
+		<mapping frame="15339" dpf="0.2794898" />
+		<mapping frame="15643" dpf="0.253490746" />
+		<mapping frame="15961" dpf="0.227491692" />
+		<mapping frame="16264" dpf="0.25674063" />
+		<mapping frame="16583" dpf="0.240491226" />
+		<mapping frame="16891" dpf="0.282739669" />
+		<mapping frame="17195" dpf="0.2632404" />
+		<mapping frame="17504" dpf="0.224241808" />
+		<mapping frame="17813" dpf="0.23074159" />
+		<mapping frame="18086" dpf="0.217742071" />
+		<mapping frame="18362" dpf="0.204742521" />
+		<mapping frame="18620" dpf="0.2372413" />
+		<mapping frame="18881" dpf="0.272990018" />
+		<mapping frame="19188" dpf="0.266490281" />
+		<mapping frame="19530" dpf="0.282739669" />
+		<mapping frame="19868" dpf="0.272990018" />
+		<mapping frame="20231" dpf="0.2599905" />
+		<mapping frame="20541" dpf="0.2632404" />
+		<mapping frame="20858" dpf="0.224241808" />
+	</mappings>
+	<segments>
+		<segment name="Tryvann b.tempo" start="0" end="5630" />
+		<segment name="Siste halvdel" start="2000" end="5630" />
+	</segments>
+	<marks>
+		<mark distance="2000" />
+	</marks>
+	<informations />
+	<positions />
+</roadmovie>

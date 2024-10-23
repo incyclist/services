@@ -49,16 +49,28 @@ export interface PairingState {
     adapters?: Array<AdapterInfo>  
 }
 
+export interface DeleteListEntry  {
+    capability: IncyclistCapability,
+    udid: string
+}
+
 export interface InternalPairingState extends PairingState {
     initialized: boolean;
     stopRequested?:boolean
     stopped?:boolean
+    waiting?:boolean
+    deleted: Array<DeleteListEntry>
+    scanTo?: NodeJS.Timeout
+    tsPrevStart?: number;
 
     check?: {
-        promise:Promise<boolean>
+        preparing?:number
+        promise?:Promise<boolean>
+        to?: NodeJS.Timeout
     }
     scan?: {
-        promise: Promise<DeviceSettings[]>
+        preparing?:number
+        promise?: Promise<DeviceSettings[]>
         adapters?: Array<{ udid:string,adapter:IncyclistDeviceAdapter, handler}>
     }
     props?:PairingProps
@@ -71,6 +83,7 @@ export interface InternalPairingState extends PairingState {
 export interface DeviceSelectState {
     capability:IncyclistCapability
     devices:Array<DevicePairingData>
+    isScanning?: boolean
 }
 
 

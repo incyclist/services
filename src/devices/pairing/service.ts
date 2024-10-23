@@ -1,12 +1,12 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
 import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState  } from "./model";
-import { EventLogger } from 'gd-eventlog';
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
-import EventEmitter from "events";
 import { sleep } from "incyclist-devices/lib/utils/utils";
+import { IncyclistService } from "../../base/service";
+import { EnrichedInterfaceSetting } from "../access";
 
 
 const Units = [
@@ -15,31 +15,6 @@ const Units = [
     { capability:IncyclistCapability.Speed, unit:'km/h', value:'speed', decimals:1},
     { capability:IncyclistCapability.Cadence, unit:'rpm', value:'cadence', decimals:0},
 ]
-
-export const mappedCapability = (c:CapabilityInformation):CapabilityData => {
-
-    const {devices} = c;
-
-    const mapped = {...c} as unknown  as CapabilityData
-
-    mapped.deviceNames = devices.map(d=>d.name).join(';')
-    mapped.selected = devices.find( d => d.selected)?.udid
-    mapped.deviceName = devices.find( d => d.selected)?.name
-    mapped.interface = devices.find( d => d.selected)?.interface
-    mapped.devices = devices as Array<DevicePairingData>
-
-    return mapped
-}
-
-export const mappedCapabilities = (capabilities:DeviceConfigurationInfo):Array<CapabilityData>=> {
-    const caps = []
-    const ci = capabilities ? Object.keys(capabilities) || [] : []
-    ci.forEach( name=> {
-        const c = capabilities[name]
-        caps.push(mappedCapability(c))
-    })        
-    return caps
-}
 
 const getInterfaceSettings = (ifName,v) => {
     if(!v)
@@ -77,19 +52,19 @@ export interface Services{
  * @noInheritDoc
  * 
  */
-export class DevicePairingService  extends EventEmitter{
+export class DevicePairingService  extends IncyclistService{
 
     protected static _instance: DevicePairingService
+    protected static checkCounter =0
+    protected static scanCounter =0
 
     protected configuration: DeviceConfigurationService
     protected access: DeviceAccessService
     protected rideService: DeviceRideService
 
-    protected logger: EventLogger
-    protected debug;
 
     protected settings: PairingSettings={}
-    protected state:InternalPairingState = { initialized:false}
+    protected state:InternalPairingState = { initialized:false, deleted:[]}
     protected deviceSelectState:DeviceSelectState|null = null
     
 
@@ -110,7 +85,8 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     constructor( services?:Services) {
-        super()
+
+        super('Pairing')
 
         // inject external dependencies
         if (services) {
@@ -120,8 +96,6 @@ export class DevicePairingService  extends EventEmitter{
         }
 
         this.state.initialized = false;
-        this.logger = new EventLogger('Pairing')
-        this.debug = false;   
     }
 
    /**
@@ -146,43 +120,61 @@ export class DevicePairingService  extends EventEmitter{
     */
 
     async start( onStateChanged: (newState:PairingState)=>void) {
+        if (this.state.stopped) {
+            // cleanup on 2nd launch
+            this.state.stopped = false;
+            this.state.deleted = []
+        }
+
 
         try {
-            if (this.settings.onStateChanged) {
-                this.settings.onStateChanged = onStateChanged
+            await this.loadConfiguration();
+            this.updateCapabilityConfig()
+            
+            
+
+            const alreadyInitialized =  this.settings.onStateChanged!==undefined && this.settings.onStateChanged!==null
+            this.settings.onStateChanged = onStateChanged
+    
+
+            if (alreadyInitialized) {
                 this.emitStateChange(this.state)
+                this.emitStartStatus()
                 return;
             }
-                
+               
     
-            await this.waitForInit()
-            const {capabilities,interfaces} = this.configuration.load()
-    
-            this.state.capabilities = mappedCapabilities(capabilities)
-            this.state.interfaces = this.access.enrichWithAccessState(interfaces)
-            this.state.canStartRide = this.configuration.canStartRide()
-            this.state.stopRequested = false
-            this.state.stopped = false
-
-            this.logCapabilities()
-
+            this.initConfigHandlers();  
             this.state.interfaces.forEach( i=> {
                 if (!this.isInterfaceEnabled(i.name))
-                    this.disableAdaptersOnInterface(i.name)
+                    this.unselectOnInterface(i.name)
                     
             })
     
-            this.settings.onStateChanged = onStateChanged
+            
             this.emitStateChange(this.state)
-    
-            this.initConfigHandlers();  
-           
+            this.emitStartStatus()
+
             this.run()    
+            
     
         }
         catch (err) { // istanbul ignore next
             this.logError(err,'start')
         }
+    }
+
+    protected async loadConfiguration() {
+        await this.waitForInit();
+        const { capabilities, interfaces } = this.configuration.load();
+
+        this.state.capabilities = this.mappedCapabilities(capabilities);
+        this.state.interfaces = this.access.enrichWithAccessState(interfaces);
+        this.state.canStartRide = this.configuration.canStartRide();
+        this.state.stopRequested = false;
+        this.state.stopped = false;
+
+        this.logCapabilities();
     }
 
     protected initConfigHandlers() {
@@ -215,14 +207,20 @@ export class DevicePairingService  extends EventEmitter{
    async stop():Promise<void> {
         this.logEvent({message:'Stop Pairing'})
         try {
+            this.state.stopRequested = true;
+            
             await this._stop();
 
             this.pauseAdapters(this.state.adapters);
 
-            this.state.stopRequested = true;
             this.removeConfigHandlers()
             this.settings = {}
             this.state.initialized = false
+            this.state.waiting = false;
+            this.state.check = null;
+            this.state.scan = null;
+            this.state.stopRequested = false;
+            this.state.stopped = true
         }
         catch (err) { // istanbul ignore next
             this.logError(err,'stop')
@@ -267,7 +265,7 @@ export class DevicePairingService  extends EventEmitter{
             
             this.settings = Object.assign( this.settings||{}, {onDeviceSelectStateChanged,capabilityForScan:capability})
             const devices = capabilityData?.devices||[]
-            const available = devices.filter( d=> this.isInterfaceEnabled(d.interface))
+            const available = devices.filter( d=> this.isInterfaceEnabled(d.interface)).filter( d=> !this.isOnDeletedList(capability,d.udid))
 
             const startScan = async () => {
                 if( devices.length>0)
@@ -351,9 +349,12 @@ export class DevicePairingService  extends EventEmitter{
         let changed:boolean = false;
     
         try {
+            const adapter = this.getDeviceAdapter(udid) 
+            if (!adapter)
+                return;
+            
             if (addAll) {
-                const adapter = this.getDeviceAdapter(udid)
-                const capabilities = adapter.getCapabilities()
+                const capabilities = adapter.getCapabilities().filter( name=> this.wouldChangeCapability(name,udid) )
 
                 capabilities.forEach( (c,idx) => {
                     const shouldEmit = (idx===capabilities.length-1)
@@ -370,7 +371,7 @@ export class DevicePairingService  extends EventEmitter{
     
         }
         catch (err) { // istanbul ignore next
-            this.logError(err, 'selectDevice')
+            this.logError(err, 'selectDevice',{capability,udid,addAll})
         }
     }
 
@@ -381,7 +382,7 @@ export class DevicePairingService  extends EventEmitter{
      * 
      * As the user might want to delete multiple devices, the screen will typically remain open
      * 
-     * This method not stop an ongoing scan. I.e. if the device will be detected again in the scan, it will be re-added
+     * This method does not stop an ongoing scan. I.e. if the device will be detected again in the scan, it will be re-added
      * 
      * @param capability the capability to be managed <br><br> One of ( 'control', 'power', 'heartrate', 'speed', 'cadence')
      * @param udid The unique device ID of the device to be selected
@@ -401,7 +402,8 @@ export class DevicePairingService  extends EventEmitter{
             const c = this.getCapability(capability)
             if (cntSelected===1 && c.selected===udid) {
                 const adapter = this.getDeviceAdapter(udid)
-                adapter.stop();
+                if (adapter)
+                    adapter.stop();
             }
 
             if (deleteAll) {
@@ -410,7 +412,7 @@ export class DevicePairingService  extends EventEmitter{
                 
 
 
-                capabilities.forEach( (c,idx) => {
+                capabilities?.forEach( (c,idx) => {
                     const shouldEmit = (idx===capabilities.length-1)
                     this.deleteCapabilityDevice(c,udid,shouldEmit)
                 })
@@ -419,6 +421,7 @@ export class DevicePairingService  extends EventEmitter{
             }
             else {
                 this.deleteCapabilityDevice(capability,udid)
+                   
             }        
     
         }
@@ -426,6 +429,31 @@ export class DevicePairingService  extends EventEmitter{
             this.logError(err, 'deleteDevice')
         }
     }
+
+    /**
+     * Should be called when the user wants to unselect all devices for a capability
+     * 
+     * 
+     * @param capability the capability to be managed <br><br> One of ( 'control', 'power', 'heartrate', 'speed', 'cadence')
+     * 
+     * @example 
+     * const service = useDevicePairing()
+     * await service.unselectCapability('control)
+     * 
+     * @throws  
+     * Does not throw errors
+     * 
+    */
+    async unselectDevices(capability:IncyclistCapability):Promise<void> { 
+        try  {
+            this.configuration.unselect(capability,true)
+        }
+        catch(err) { // istanbul ignore next
+            this.logError(err, 'deleteDevice')
+        }
+
+    }
+
 
    /**
      * Should be called when the user has changed the iterface settings ( enabled/disabled and interface)
@@ -448,7 +476,7 @@ export class DevicePairingService  extends EventEmitter{
    async changeInterfaceSettings (name:string,settings:InterfaceSetting) {
         try {
             
-
+            
             const _interface = this.state.interfaces.find( i=>i.name===name)
             const changed = settings.enabled !== _interface.enabled
 
@@ -457,19 +485,6 @@ export class DevicePairingService  extends EventEmitter{
 
             this.configuration.setInterfaceSettings(name,settings)
 
-            if (settings.enabled) {
-                this.connectInterface(name)
-            }
-            else {
-                this.stopAdaptersOnInterface(name)
-                this.disconnectInterface(name)
-            }
-
-            
-            this.emitStateChange()
-
-            // restart pairing or scanning            
-            await this.restart();            
             
         }
         catch (err) { // istanbul ignore next
@@ -477,43 +492,86 @@ export class DevicePairingService  extends EventEmitter{
         }
     }
 
+    protected async restartPair() {
+        if (!this.isPairing())
+            return
 
-    private async restart() {
-        await this._stop();
-        this.run();
+        if (this.state.check?.to) 
+            clearTimeout(this.state.check?.to)
+        delete this.state.check;
+
+        this.run()
+    }
+
+    protected async restart() {
+
+
+        const wasActive = this.isPairing() || this.isScanning()
+
+        if (this.state.scanTo) {
+            clearTimeout(this.state.scanTo)
+            delete this.state.scanTo
+            this.state.waiting = true
+        }
+        else {
+            await this._stop();
+
+        }
+
+        if (this.state.tsPrevStart) {
+
+            if (this.state.tsPrevStart===-1) {
+                return
+            }
+
+            const timeSincePrev = Date.now()-this.state.tsPrevStart;
+            if (timeSincePrev<3000) {
+                this.state.tsPrevStart=-1
+                await sleep( 3000-timeSincePrev)
+            }
+        }
+        
+        
+
+        if (wasActive) {
+            await this.rideService.stop()
+
+            await sleep(500)
+            this.run();
+        }
+
+        if (this.state.waiting) {
+            this.state.waiting = false;
+            this.run()
+        }
     }
 
     protected async _stop() {
+      
+
         if (this.isPairing())
             await this.stopPairing();
         if (this.isScanning())
             await this.stopScanning();
+
+        this.state.capabilities.forEach(c => c.connectState='waiting')
+        this.state.waiting = true;
     }
 
-    protected logEvent(event) {
-        this.logger.logEvent(event)
-        this.emit('log',event)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = global.window as any
-    
-        if (this.debug || w?.SERVICE_DEBUG || process.env.DEBUG) 
-            console.log('~~~ PAIRING-SVC', event)
-    }
-
-    protected setDebug(enabled:boolean) {
-        this.debug = enabled
-    }
-
-    protected logError(err:Error, fn:string) {
-        this.logger.logEvent({message:'Error', fn, error:err.message, stack:err.stack})
-    }
 
     protected getCapability(capability:IncyclistCapability|CapabilityData):CapabilityData {
         const target = typeof capability==='object' ? capability.capability: capability
 
         const {capabilities=[]} = this.state
 
-        return capabilities.find( c=>c.capability===target)
+        return capabilities.find( c=>c.capability===target)       
+    }
+
+    protected wouldChangeCapability(capability:IncyclistCapability|CapabilityData, udid:string) {
+        const c = this.getCapability(capability)
+        if (!c) return false;
+
+        return c.selected!==udid && !this.isOnDeletedList(capability,udid)
     }
 
     protected getCapabilityDevice(capability:IncyclistCapability|CapabilityData,udid?:string):DevicePairingData {
@@ -523,7 +581,7 @@ export class DevicePairingService  extends EventEmitter{
             return
 
         if (udid) {
-            return c.devices.find( d=> d.udid===udid)
+            return c.devices.find( d=> d.udid===udid && !this.isOnDeletedList(capability,udid))
         }
         else {
             return c.devices.find( d=> d.selected)
@@ -536,7 +594,7 @@ export class DevicePairingService  extends EventEmitter{
         if (this.state.initialized)
             return
 
-        this.state.capabilities = mappedCapabilities(capabilitiesLoaded)               
+        this.state.capabilities = this.mappedCapabilities(capabilitiesLoaded)               
         this.state.canStartRide = this.configuration.canStartRide()
         this.state.interfaces = this.access.enrichWithAccessState(interfacesLoaded)
         this.state.initialized = true;
@@ -584,6 +642,8 @@ export class DevicePairingService  extends EventEmitter{
         delete state.scan
         delete state.initialized
         delete state.props
+        delete state.deleted
+        delete state.waiting
 
         return state
     }
@@ -591,6 +651,8 @@ export class DevicePairingService  extends EventEmitter{
     protected emitStateChange(newState?:PairingState) {
 
         const {onStateChanged,onDeviceSelectStateChanged} = this.settings||{}
+
+        this.checkCanStart()
 
         // don't send any updates if we are stopping
         if (this.state.stopRequested)
@@ -607,7 +669,19 @@ export class DevicePairingService  extends EventEmitter{
             onDeviceSelectStateChanged( this.getDeviceSelectionState() )
     }
 
+    protected emitStartStatus() {
+        
+        const {onStateChanged} = this.settings||{}
+        const {canStartRide} = this.state
+
+        if (onStateChanged && typeof onStateChanged ==='function') {
+            onStateChanged( {canStartRide}) 
+        }
+
+    }
+
     protected onInterfaceConfigChanged (ifName:string,settings:InterfaceSetting)  {
+        this.logEvent({message:'Interface Config changed', interface:ifName, settings})
 
         const prev = this.state.interfaces;
         if (!prev)
@@ -618,12 +692,19 @@ export class DevicePairingService  extends EventEmitter{
             
             if (settings.enabled && !current.enabled) {
                 const {port,protocol} = settings
-                this.access.enableInterface(ifName,undefined, {port:Number(port),protocol})            
-                this.enableAdaptersOnInterface(ifName)
+                this.access.enableInterface(ifName,undefined, {port:Number(port),protocol,autoConnect:true})            
+
+                this.selectFromInterface(ifName)
+
+    
             }
             else if (!settings.enabled && current.enabled) {    
                 this.access.disableInterface(ifName)            
-                this.disableAdaptersOnInterface(ifName)
+                this.unselectOnInterface(ifName);
+                this.unselectDisabledInterfaces()
+    
+
+
                 this.stopAdaptersOnInterface(ifName).catch(err=>{
                     this.logError(err,'stopAdaptersOnInterface()')
                 })
@@ -631,7 +712,17 @@ export class DevicePairingService  extends EventEmitter{
             else {
                 return;
             }
+
+            current.enabled = settings.enabled
+            current.port = settings.port
+            current.protocol = settings.protocol
+
+            
+
             this.emitStateChange()
+
+
+            this.restart();            
 
         }
         catch (err) { // istanbul ignore next
@@ -660,6 +751,8 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     protected onConfigurationUpdate (newCapabilities:DeviceConfigurationInfo) {
+        this.logEvent({message:'Capability Config changed', capabilities:newCapabilities})
+
         try {
             const {capabilities} = this.state||{};
             const keys = Object.keys(newCapabilities)
@@ -667,7 +760,7 @@ export class DevicePairingService  extends EventEmitter{
             keys.forEach( key => {
                 const newCap = newCapabilities[key]
                 const current = capabilities.find( c=>c.capability===key)
-                this.mergeState(current,mappedCapability(newCap))
+                this.mergeState(current,this.mappedCapability(newCap))
             })
 
             this.checkCanStart()
@@ -683,46 +776,41 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     protected async onInterfaceStateChanged  (ifName,ifDetails, interfacesNew? ) { 
+
         const prev = this.state.interfaces;
-
         const current = getInterfaceSettings(ifName,prev)
-
         const changed = ( current.state!==ifDetails.state || current.isScanning!==ifDetails.isScanning || current.enabled!==ifDetails.enabled)
         
         if (!changed) {
             return;
         }
 
+        this.logEvent({message:'interface state changed', interface:ifName, state:ifDetails.state})
 
         try {
            
+
             if (interfacesNew) {
-                const getData = (i) => ( {name:i.name, enabled:i.enabled,state:i.state} )
-
-                if ( !prev)
-                    return (interfacesNew.map(getData))
-                else {                            
-                    interfacesNew.forEach( i=> this.onInterfaceStateChanged(i.name,i))
-                }
+                this.onNewInterface(interfacesNew)
+                return 
             }
-            else if (prev) {
-                const changedIdx = prev.findIndex( i=>i.name===ifName)
 
-                if (ifDetails.state==='disconnected' && current.state!=='disconnected') {
-                    // set all devices to failed state
-                    this.failAdaptersOnInterface(ifName)
-                }
-                else  if (ifDetails.state==='unavailable' && current.state!=='unavailable') {
-                    // set all devices to failed state
-                    this.disableAdaptersOnInterface(ifName)
-                }
+            if (prev) {
                 
+
+                const { restartScan, restartPair } = this.checkRequiredActions(ifDetails, current, ifName); 
+                const changedIdx = prev.findIndex( i=>i.name===ifName)
                 if (changedIdx!==-1) {
                     prev[changedIdx].isScanning = ifDetails.isScanning
-                    prev[changedIdx].enabled = ifDetails.enabled
                     prev[changedIdx].state = ifDetails.state
                 }
 
+                if (restartScan) {
+                    this.restart()
+                }
+                if (restartPair && this.isInterfaceInUse(ifName)) {
+                    this.restartPair();
+                }
 
                 this.emitStateChange( {interfaces:this.state.interfaces})
                 
@@ -734,6 +822,58 @@ export class DevicePairingService  extends EventEmitter{
         }
     }
 
+    protected checkRequiredActions(ifDetails: any, current: any, ifName: any ) {
+        let restartScan = false
+        let restartPair = false
+
+        if (ifDetails.state === 'disconnected' && current.state !== 'disconnected') {
+            // set all devices to failed state
+            this.failAdaptersOnInterface(ifName);
+            if (this.isPairing()) {
+
+
+                const pairing = this.getPairingInterfaces();
+                if (pairing.includes(ifName)) {
+              
+                        current.state = 'disconnected';
+                        this.emitStateChange({ interfaces: this.state.interfaces });
+
+                        sleep(1000).then( ()=> {
+                            this.access.connect(ifName)
+                                       .catch( (err) => {this.logError(err, 'reconnect')})
+                        })
+                }
+
+            }
+        }
+        else if (ifDetails.state === 'unavailable' && current.state !== 'unavailable') {
+            // set all devices to failed state
+            this.disableAdaptersOnInterface(ifName);
+            this.unselectOnInterface(ifName);
+        }
+        else if (ifDetails.state !== 'unavailable' && current.state === 'unavailable') {
+            this.enableAdaptersOnInterface(ifName);
+        }
+        else if (ifDetails.state === 'connected' && current.state !== 'connected' && !this.isPairing() && !this.state.canStartRide) {
+            restartScan = true;
+        }
+        else if (ifDetails.state === 'connected' && current.state !== 'connected' && this.isPairingWaiting()) {
+            restartPair = true;
+        }
+        return { restartScan, restartPair };
+    }
+
+    protected onNewInterface(interfacesNew) {
+        const getData = (i) => ( {name:i.name, enabled:i.enabled,state:i.state} )
+
+        if ( !this.state.interfaces)
+            this.state.interfaces  = (interfacesNew.map(getData))
+        else {                            
+            interfacesNew.forEach( i=> this.onInterfaceStateChanged(i.name,i))
+        }
+
+    }
+
     protected isInterfaceEnabled(target:string|InterfaceSetting) {
         
         const name = (typeof target ==='string') ? target: target.name; 
@@ -743,11 +883,19 @@ export class DevicePairingService  extends EventEmitter{
         return interfaces.find( i=> i.name===name && i.enabled && i.state!=='unavailable')!==undefined
     }
 
+    protected isInterfaceInUse(target:string|InterfaceSetting) {
+        
+        const name = (typeof target ==='string') ? target: target.name; 
+        const {capabilities} = this.state
+        const res = capabilities.find( c=> c.interface===name)
+        return res
+    }
+
     protected logCapabilities ( capabilities?:Array<CapabilityData>) {
         const ci = capabilities||this.state.capabilities
         ci.forEach( c=> {
             const {devices=[],disabled} = c;
-            const deviceNames = devices.map(d=>d.name).join(';')
+            const deviceNames = devices.filter(d=>!this.isOnDeletedList(c.capability,d.udid)).map(d=>d.name).join(';')
             const selected = devices.find( d => d.selected)?.name
             this.logEvent({message:'capability info', capability:c.capability,  devices: deviceNames,selected,disabled })
         })        
@@ -884,6 +1032,10 @@ export class DevicePairingService  extends EventEmitter{
             return;
 
         capabilities.forEach( c=> {
+
+            if (this.isOnDeletedList(c,udid))
+                return;
+
             const unitInfo = Units.find( ui=> ui.capability === c.capability)
             const device =this.getCapabilityDevice(c,udid)
 
@@ -911,6 +1063,7 @@ export class DevicePairingService  extends EventEmitter{
         this.logEvent({message:'device detected',device:deviceSettings})
         
         const udid = this.configuration.add(deviceSettings,{legacy:false})
+        
         if(!udid) {
             this.logEvent({message:'device could not be added', reason:'add() failed'})
             return;
@@ -922,6 +1075,7 @@ export class DevicePairingService  extends EventEmitter{
             this.markConnected(adapter, udid);
 
             if (this.isScanning()) {
+                
                 if ( this.state.scan.adapters.find( a=>a.udid===udid)===undefined  ) {
                     const handler = ( deviceSettings:DeviceSettings, data:DeviceData)=>{
                         this.onDeviceData(data,udid)
@@ -936,6 +1090,9 @@ export class DevicePairingService  extends EventEmitter{
 
             this.checkCanStart()
         }
+        else {
+            this.logEvent({message:'Could not get adapter', deviceSettings})
+        }
         
         this.onPairingSuccess(udid)       
     }
@@ -944,7 +1101,15 @@ export class DevicePairingService  extends EventEmitter{
         const capabilites = adapter.getCapabilities();
 
         capabilites.forEach(c => {
+
+            if (this.isOnDeletedList(c,udid))
+                return;
+
             const info = this.getCapability(c);
+            if  (!info) {
+                this.logEvent({message:'warning: capabability not found',c, caps:this.state.capabilities})
+                return
+            }
             let device = this.getCapabilityDevice(c, udid);
 
             if (device) {
@@ -962,20 +1127,28 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     protected disconnectInterface(name:string):void {
-        try {
-            this.access.disableInterface(name)
-        }
-        catch(err) {
-            this.logError(err,'disableInterface')
-        }
+        
+        this.access.disableInterface(name)
+            .catch ( (err) =>{ this.logError(err,'disableInterface')})
     }
 
     protected connectInterface(name:string):void {
+        this.access.enableInterface(name)
+            .catch ( (err) =>{ this.logError(err,'enableInterface')})
+    }
+
+    protected updateCapabilityConfig() {
         try {
-            this.access.enableInterface(name)        
+            const {capabilities} = this.state
+
+            capabilities.forEach(c => {
+                if (c.connectState!=='connected' && c.selected && this.getDeviceAdapter(c.selected)?.isStarted() )
+                    c.connectState = 'connected'
+
+            })
         }
         catch(err) {
-            this.logError(err,'enableInterface')
+            console.log(err)
         }
     }
 
@@ -985,17 +1158,19 @@ export class DevicePairingService  extends EventEmitter{
             const prev = this.state.canStartRide
 
             const configReadyToRide = this.configuration.canStartRide() // we either have a power or a conto
-            if (!configReadyToRide)
+            if (!configReadyToRide) {
+                this.state.canStartRide = false;
                 return false;
+            }
             
             const control = this.getCapability(IncyclistCapability.Control)
             const power = this.getCapability(IncyclistCapability.Power)
 
-            const canStartRide =   (control?.connectState!=='failed' || power?.connectState!=='failed')
+            const canStartRide =   (control?.connectState==='connected' || power?.connectState==='connected')
             this.state.canStartRide = canStartRide
 
-            if (this.state.canStartRide!==prev) {
-                this.emitStateChange( {canStartRide})
+            if (canStartRide!==prev) {
+                this.emitStartStatus()
             }
         }
         catch(err) {
@@ -1043,9 +1218,11 @@ export class DevicePairingService  extends EventEmitter{
 
     protected async run(props:PairingProps={}):Promise<void> {
 
+        
         this.emit('run')
+
         // pairing already ongoing ? stop previous paring
-        if (this.isPairing() || this.isScanning()) {
+        if ((this.isPairing() || this.isScanning()) && !this.state.waiting)  {
             await this._stop()
         }
         if (this.state.stopRequested || this.state.stopped) {
@@ -1053,9 +1230,10 @@ export class DevicePairingService  extends EventEmitter{
             this.state.stopRequested = false
             return;
         }
-            
+        
         await this.waitForInit();
         await this.rideService.lazyInit()
+
 
         this.state.props= props 
 
@@ -1068,15 +1246,23 @@ export class DevicePairingService  extends EventEmitter{
 
         const configOKToStart = this.configuration.canStartRide()
 
+
         if (this.state.stopRequested || this.state.stopped) {
             this.state.stopped = true;
             this.state.stopRequested = false
             return;
         }
 
+        //await this.waitForInterfacesInitialized()
 
-        if (configOKToStart && !this.deviceSelectState && !props.enforcedScan) {
-            await this.startPairing(adapters, props);
+        if (configOKToStart && !this.deviceSelectState && !props.enforcedScan)  {
+
+            if (this.checkPairingSuccess()!==true)
+                await this.startPairing(adapters, props);
+            else {
+                this.logEvent({message:'Pairing completed'})
+                this.emitStateChange()
+            }
 
         }
         else {
@@ -1085,35 +1271,95 @@ export class DevicePairingService  extends EventEmitter{
     }
 
     private async startPairing(adapters: AdapterInfo[], props: PairingProps) {
-        this.emit('pairing-start');
 
-        this.logEvent({ message: 'Start Pairing', adapters, props });
+
+
+        if (this.isPairing() ||  this.checkPairingSuccess()) 
+            return;
+
+        const preparing = DevicePairingService.checkCounter++
+        this.state.check={preparing}   // will cause that next call to isPairing() will be true
+        
+        this.emit('pairing-start');
+        
+        const { isReady, busyRequired } = this.isReadyToPair();
+
+
+        if (!isReady) {
+            this.logEvent({ message: 'Pairing: waiting for interfaces', interfaces:busyRequired?.name });
+
+            this.state.check.to = setTimeout(() => {
+
+                if ( (!this.isPairing() || this.state.check.preparing===preparing) && !this.isScanning()) {
+                    
+
+                    const { isReady } = this.isReadyToPair();
+                    if (isReady) {
+                        delete this.state.check                    
+                        //this.run()
+                    }
+                    
+                }
+            }, 1000);
+
+            return;
+        }
+        
+        this.state.tsPrevStart = Date.now();
 
         // unpause /adapt connectState for started adapters
         this.processConnectedDevices(adapters);
 
         const selected = this.state.capabilities.map( c=>c.selected)
 
-        const target = adapters.filter(ai => !ai.adapter.isStarted() && selected.includes(ai.udid));
+        const target = adapters.filter(ai => /*!ai.adapter.isStarted() &&*/ selected.includes(ai.udid));
+        //const targetResume = adapters.filter(ai => ai.adapter.isStarted() && ai.adapter.isPaused() && selected.includes(ai.udid));
+
+        if ( (this.isPairing() && this.state.check.preparing!==preparing) || (this.checkPairingSuccess()===true)){
+            return;
+        }
 
         this.initPairingCallbacks();
         const selectedAdapters = target.map(ai=>({...ai, isStarted:false}))
+
         const promise = this.rideService.startAdapters(selectedAdapters, 'pair');
         this.state.check={promise}
         this.onPairingStarted();
 
 
+        this.logEvent({ message: 'Start Pairing', adapters, props });
         await this.state.check.promise;
+
+        this.checkCanStart()
+
+        //targetResume.forEach( ai=> {ai.adapter.resume()})
         if (this.state.check)
             delete this.state.check
 
         this.emit('pairing-done');
         if (!this.checkPairingSuccess()) {
             this.logEvent({ message: 'Pairing done', adapters, props });
+            await this.rideService.stop()
             await sleep(this.getPairingRetryDelay());
             if (!this.state.scan)
                 this.run();
         }
+
+
+    }
+
+    private isReadyToPair() {
+        const requiredInterfaces = this.getPairingInterfaces();
+
+
+
+        const busyRequired = this.state.interfaces
+            .filter(i => requiredInterfaces.includes(i.name))
+            .find(i => i.enabled && i.state !== 'connected' && i.state !== 'unavailable');
+
+        const isReady = busyRequired === undefined;
+
+        return { isReady, busyRequired };
     }
 
     private processConnectedDevices(adapters: AdapterInfo[]) {
@@ -1132,20 +1378,55 @@ export class DevicePairingService  extends EventEmitter{
         });
     }
 
-    private async startScanning(adapters: AdapterInfo[], props: PairingProps) {
-        const interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i))||[].map(i=>i.name)
+    protected async startScanning(adapters: AdapterInfo[], props: PairingProps) {
+
+        const interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
+                            .map(i=>i.name)
+
+
+        if (this.isScanning())
+            return;
+
+        const preparing = DevicePairingService.scanCounter++
+        this.state.scan={preparing,adapters:[]}   // will cause that next call to isPairing() will be true
+                    
+
         if (interfaces.length===0) {
-            await sleep(500)
-            this.run()
+            if (this.state.scanTo) 
+                return;
+
+            this.state.scanTo = setTimeout(() => {
+                delete this.state.scanTo
+                if ( !this.isPairing() && (!this.isScanning()  || this.state.scan.preparing===preparing)) {
+                    delete this.state.scan
+                    this.run()
+                }
+            }, 1000);
+
             return;
         }
+
+
         this.emit('scanning-start')
 
-        this.logEvent({message:'Start Scanning',props})
+        this.state.tsPrevStart = Date.now();
+
+        // multiple scans can be triggered within a few ms 
+
+        if (this.isScanning() && this.state.scan.preparing!==preparing)
+            return;
+
+
+        this.logEvent({message:'Stopping Adapters',interfaces:interfaces.join(','),props})
+        const stopPromises = []
+        interfaces.forEach( i=> stopPromises.push(this.stopAdaptersOnInterface(i)))
+        await Promise.allSettled(stopPromises)
+
+        this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props})
         this.initScanningCallbacks()
         
         const timeout = props.enforcedScan ? 1000*60*60 /*1h*/ : undefined
-        const promise = this.access.scan({excludeDisabled:true},{includeKnown:props.enforcedScan, timeout})
+        const promise = this.access.scan({interfaces,excludeDisabled:true},{includeKnown:props.enforcedScan, timeout})
         this.state.scan = {promise, adapters:[]}
         this.onPairingStarted()
 
@@ -1159,6 +1440,7 @@ export class DevicePairingService  extends EventEmitter{
             this.logError(err,'start()->scan')
         }
 
+        
         this.emit('scanning-done')
         
 
@@ -1234,29 +1516,6 @@ export class DevicePairingService  extends EventEmitter{
 
     }
 
-    protected disableAdaptersOnInterface(name:string) {
-        const target = this.getAdaptersOnInterface(name)
-        const {capabilities} = this.state
-
-
-        target.forEach( ai => {
-            const {udid} = ai;
-            capabilities.forEach( c=> {
-                const device = this.getCapabilityDevice(c,udid)
-                if (device) {
-                    device.interfaceInactive = true
-                    if (c.selected===udid) {
-                        this.configuration.unselect(c.capability)
-                        const alternative = c.devices.find( d=>!d.interfaceInactive)
-
-                        if (alternative)
-                            this.configuration.select( alternative.udid,c.capability)
-                    }
-                }
-            })
-        })
-    }
-
     protected failAdaptersOnInterface(name:string) {
         const target = this.getAdaptersOnInterface(name)
         const {capabilities} = this.state
@@ -1275,6 +1534,22 @@ export class DevicePairingService  extends EventEmitter{
         })
     }
 
+    protected disableAdaptersOnInterface(name:string) {
+        const target = this.getAdaptersOnInterface(name)
+        const {capabilities} = this.state
+
+
+        target.forEach( ai => {
+            const {udid} = ai;
+            capabilities.forEach( c=> {
+                const device = this.getCapabilityDevice(c,udid)
+                if (device) {
+                    device.interfaceInactive = true
+                }
+            })
+        })
+    }    
+
     protected enableAdaptersOnInterface(name:string) {
         const target = this.getAdaptersOnInterface(name)
         const {capabilities} = this.state
@@ -1282,16 +1557,77 @@ export class DevicePairingService  extends EventEmitter{
         target.forEach( ai => {
             const {udid} = ai;
             capabilities.forEach( c=> {
-                const alternative = c.devices.find( d=>!d.interfaceInactive)
-
                 const device = this.getCapabilityDevice(c,udid)                
                 if(device)
                     delete device.interfaceInactive 
-
-                if (!c.selected && alternative)
-                    this.configuration.select( alternative.udid,c.capability)
             })
         })
+    }
+
+
+
+    protected unselectDisabledInterfaces() {
+        const disabled = this.getDisabledInterfaces()
+        disabled.forEach( i => this.unselectOnInterface(i.name) )    
+    }
+
+    
+    protected unselectOnInterface(name: string) {
+        const impactedCapabilties = this.getCapabilitiesUsingInterface(name);
+        const enabledInterfaces = this.getEnabedInterfaces().filter(i => i.name !== name).map(i => i.name);
+
+        impactedCapabilties.forEach(c => {
+            const available = c.devices
+                .filter(d => d.interface !== name && enabledInterfaces.includes(d.interface))
+                .filter(d=>!this.isOnDeletedList(c,d.udid))
+
+            if (!available?.length) {
+                this.configuration.unselect(c.capability, true);
+            }
+            else {
+                this.configuration.select(available[0].udid, c.capability, { emit: true });
+            }
+        });
+    }
+
+    protected selectFromInterface(name: string) {
+        const impactedCapabilties = this.state.capabilities.filter( c=> !c.selected)
+        const enabledInterfaces = this.getEnabedInterfaces().filter(i => i.name !== name).map(i => i.name);
+
+        impactedCapabilties.forEach(c => {
+            const available = c.devices
+                .filter(d => d.interface === name || enabledInterfaces.includes(d.interface))
+                .filter(d=>!this.isOnDeletedList(c,d.udid))
+
+
+            if (available?.length>0) {
+                this.configuration.select(available[0].udid, c.capability, { emit: true });
+            }
+        });
+    }
+
+
+    protected getCapabilitiesUsingInterface(name: string):CapabilityData[] {
+        return this.state.capabilities.filter(c => {
+            return this.getCapabilityDevice(c)?.interface === name;
+        });
+    }
+
+    protected getEnabedInterfaces():EnrichedInterfaceSetting[] {
+        return this.state.interfaces.filter(i => i.enabled===true)
+    }
+    protected getDisabledInterfaces():EnrichedInterfaceSetting[] {
+        return this.state.interfaces.filter(i => !i.enabled)
+    }
+
+    protected getPairingInterfaces():Array<string> {
+        const interfaces = this.state.capabilities.map (ci=>ci.interface)
+        const selected = []
+        interfaces.forEach( i=> {
+            if (!selected.includes(i))
+                selected.push(i)
+        })
+        return selected;
     }
 
 
@@ -1299,12 +1635,23 @@ export class DevicePairingService  extends EventEmitter{
     protected getDeviceAdapter(udid:string) {
         const {adapters=[]} = this.state
         const target = adapters.find( ai=> ai.udid===udid )
-        return target?.adapter
+        if (target?.adapter)
+            return target?.adapter
+
+        if (this.configuration.getAdapter(udid)) {
+            this.logEvent({message:'adapter list out of sync',missing:udid})
+            // Pairing Service and Device Config are out of sync, reload adapaters
+            this.state.adapters = this.configuration.getAdapters(false)            
+            return this.configuration.getAdapter(udid)
+        }
     }
 
     protected async stopAdaptersWithCapability( capability:IncyclistCapability|CapabilityData,udid?:string) {
 
         const c = this.getCapability(capability)
+        if(!c)
+            return;
+        
         const {adapters=[],capabilities} = this.state
         const maxRetries = 3;
 
@@ -1342,6 +1689,9 @@ export class DevicePairingService  extends EventEmitter{
 
 
     protected pauseAdapters(adapters: AdapterInfo[],enforced=false) {
+        if (!adapters)
+            return;
+
         const capabilities = this.state.capabilities;
 
         capabilities.forEach(c => {
@@ -1360,7 +1710,8 @@ export class DevicePairingService  extends EventEmitter{
         
         const devices = capabilityData?.devices||[]
         const available = devices.filter( d=> this.isInterfaceEnabled(d.interface))
-        return {capability, devices:available}
+        const isScanning = this.isScanning()
+        return {capability, devices:available,isScanning}
 
     }
 
@@ -1379,14 +1730,14 @@ export class DevicePairingService  extends EventEmitter{
 
     protected selectCapabilityDevice(capability:IncyclistCapability,udid:string, emitUpdate:boolean=true):boolean { 
        
-        const c = this.getCapability(capability)
-        if (c.selected===udid)
-            return false;
+        if (!this.wouldChangeCapability(capability,udid))
+            return;
 
+        const c = this.getCapability(capability)
         const device = this.getCapabilityDevice(capability,udid)        
         c.value = device?.value
         this.configuration.select(udid,capability,{emit:emitUpdate})
-        
+
         if (emitUpdate)
             this.emitStateChange( {capabilities:this.state.capabilities})
             
@@ -1410,6 +1761,7 @@ export class DevicePairingService  extends EventEmitter{
         }
         
         this.configuration.delete(udid,capability,shouldEmit)
+        this.addToDeletedList(capability,udid)
         this.emitStateChange( {capabilities:this.state.capabilities})
     }
 
@@ -1419,6 +1771,10 @@ export class DevicePairingService  extends EventEmitter{
 
     protected isPairing() {
         return this.state.check!==undefined && this.state?.check!==null
+    }
+
+    protected isPairingWaiting() {
+        return this.isPairing() && this.state.check.to
     }
 
     protected async _stopDeviceSelection(changed:boolean) {
@@ -1443,6 +1799,55 @@ export class DevicePairingService  extends EventEmitter{
         return (this.state.capabilities || []).map(c => c.selected === udid ? 1 : 0).reduce((a, c) => a + c, 0);
     }
 
+    protected addToDeletedList(capability:IncyclistCapability|CapabilityData,udid:string ) {
+        if (this.isOnDeletedList(capability,udid))
+            return;
+
+        const c = this.getCapability(capability)        
+        this.state.deleted.push( { capability:c.capability,udid })       
+    }
+
+    protected removeFromDeletedList(capability:IncyclistCapability|CapabilityData,udid:string ) {
+        const c = this.getCapability(capability)        
+        const idx = this.state.deleted.findIndex( e=> e.capability===c.capability && e.udid===udid)
+        if (idx===-1)
+            return
+
+        this.state.deleted.splice(idx,1)       
+    }
+
+    protected isOnDeletedList(c:IncyclistCapability|CapabilityData,udid:string ):boolean {
+        const capability = this.getCapability(c)        
+
+        return this.state.deleted.find( e=> e.capability===capability.capability && e.udid===udid)!==undefined
+    }
+
+    mappedCapability (c:CapabilityInformation):CapabilityData {
+
+        const {devices} = c;
+    
+        const mapped = {...c} as unknown  as CapabilityData
+    
+        const available = devices.filter( d=> !this.isOnDeletedList(c.capability as IncyclistCapability,d.udid))
+
+        mapped.deviceNames = available.map(d=>d.name).join(';')
+        mapped.selected = available.find( d => d.selected)?.udid
+        mapped.deviceName = devices.find( d => d.selected)?.name
+        mapped.interface = devices.find( d => d.selected)?.interface
+        mapped.devices = devices as Array<DevicePairingData>
+    
+        return mapped
+    }
+    
+    protected mappedCapabilities (capabilities:DeviceConfigurationInfo):Array<CapabilityData> {
+        const caps = []
+        const ci = capabilities ? Object.keys(capabilities) || [] : []
+        ci.forEach( name=> {
+            const c = capabilities[name]
+            caps.push(this.mappedCapability(c))
+        })        
+        return caps
+    }
 
     
 }
