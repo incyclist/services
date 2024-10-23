@@ -202,15 +202,15 @@ export class ActivitiesRepository {
 
         let result = this.activities
 
-        this.checkIdFilter(result, criteria);
-        this.checkHashFilter(result, criteria);
-        this.checkStartPosFilter(result, criteria);
-        this.checkEndPosFilter(result, criteria);
-        this.checkRealityFactorFilter(result, criteria);
-        this.checkIsSavedFilter(result, criteria);        
-        this.checkUploadStatusFilter(result, criteria);
-        this.checkTimeFilter(result, criteria);
-        this.checkDistanceFilter(result, criteria);
+        result = this.checkIdFilter(result, criteria);
+        result = this.checkHashFilter(result, criteria);
+        result = this.checkStartPosFilter(result, criteria);
+        result = this.checkEndPosFilter(result, criteria);
+        result = this.checkRealityFactorFilter(result, criteria);
+        result = this.checkIsSavedFilter(result, criteria);        
+        result = this.checkUploadStatusFilter(result, criteria);
+        result = this.checkTimeFilter(result, criteria);
+        result = this.checkDistanceFilter(result, criteria);
         
         return result
     }
@@ -220,12 +220,14 @@ export class ActivitiesRepository {
         if (result?.length > 0 && criteria?.routeId) {
             result = result.filter(ai => ai.summary.routeId === criteria.routeId);
         }        
+        return result
     }
 
     private checkHashFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
         if (result?.length > 0 && criteria?.routeHash) {
             result = result.filter(ai => ai.summary.routeHash === criteria.routeHash);
         }
+        return result
     }
 
 
@@ -233,11 +235,13 @@ export class ActivitiesRepository {
         if (result?.length > 0 && criteria?.startPos !== undefined) {
             result = result.filter(ai => ai.summary.startPos === criteria.startPos);
         }
+        return result
     }
     private checkEndPosFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
         if (result?.length > 0 && criteria?.endPos !== undefined) {
             result = result.filter(ai => ai.summary.endPos === criteria.endPos);
         }
+        return result
     }
 
     private checkRealityFactorFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
@@ -258,13 +262,15 @@ export class ActivitiesRepository {
         if (result?.length > 0 && criteria?.uploadStatus !== undefined) {
             if (Array.isArray(criteria.uploadStatus)) {
                 result = result.filter(ai => {
-                    const requested = criteria.uploadStatus as Array<UploadInfo>;
-                    const actual = ai.summary.uploadStatus;
+                    const requested = Array.from(criteria.uploadStatus as Array<UploadInfo>);
+                    const actual = Array.from(ai.summary.uploadStatus);
     
                     const sortFn = (a, b) => a.service.localeCompare(b.service);
-    
-                    const r = requested.sort(sortFn).map(us => `${us.service}:${us.status}`).join(';');
-                    const a = actual.sort(sortFn).map(us => `${us.service}:${us.status}`).join(';');
+                    requested.sort(sortFn)
+                    actual.sort(sortFn)
+
+                    const r= requested.map(us => `${us.service}:${us.status}`).join(';');
+                    const a = actual.map(us => `${us.service}:${us.status}`).join(';');
                     return r === a;
                 });
             }

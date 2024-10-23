@@ -113,7 +113,7 @@ describe('IncyclistParser',()=>{
             })
 
             test('cut tag',async ()=>{
-                const {data,details} = await run('cut-test.xml')
+                const {data} = await run('cut-test.xml')
                 
                 const points = data.points??[]
 

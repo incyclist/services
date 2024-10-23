@@ -6,7 +6,7 @@ import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType, ActivityStats, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
+import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
@@ -290,13 +290,12 @@ export class ActivityRideService extends IncyclistService {
     getDashboardDisplayProperties() {
 
         try {
-            const { distance, time, speed, power, slope, heartrate, cadence,distanceRemaining,timeRemaining } = this.getCurrentValues();
-
+            const currentValues = this.getCurrentValues();
+            const {time } = currentValues
             const display = Math.floor(time / 3) % 2;
             const avgMaxStats = (display===0) ? this.getAverageValues() :  this.getMaximumValues();
-            const {speedDetails,powerDetails,elevationGain, heartrateDetails,cadenceDetails} = avgMaxStats
-     
-            const info = this.buildDashboardInfo(time, timeRemaining, distance, distanceRemaining, speed, speedDetails, power, powerDetails, slope, elevationGain, heartrate, heartrateDetails, cadence, cadenceDetails);
+    
+            const info = this.buildDashboardInfo(currentValues, avgMaxStats, display);
             
             this.logger.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value||''}:${i.data[1]?.value||''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
             return info
@@ -310,7 +309,10 @@ export class ActivityRideService extends IncyclistService {
 
 
 
-    protected buildDashboardInfo(time: number, timeRemaining: number, distance: number, distanceRemaining: number, speed: number, speedDetails: { value: string; label: string; }, power: number, powerDetails: { value: string; label: string; }, slope: number, elevationGain: { value: string; label: string; unit: string; }, heartrate: number, heartrateDetails: { value: string; label: string; }, cadence: number, cadenceDetails: { value: string; label: string; }) {
+    protected buildDashboardInfo(currentValues, avgMaxStats, display) {
+
+        const { distance, time, speed, power, slope, heartrate, cadence,distanceRemaining,timeRemaining } = currentValues
+        const {speedDetails,powerDetails,elevationGain, heartrateDetails,cadenceDetails} = avgMaxStats
         const info = [];
 
         info.push({
@@ -702,7 +704,6 @@ export class ActivityRideService extends IncyclistService {
        
         
         const distanceDelta = current.distance-res.distance
-        const {power,heartrate,distance,speed} = res
         const routeDistance = res.distance + ai.summary.startPos
 
         let lat,lng;

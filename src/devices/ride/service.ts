@@ -656,7 +656,7 @@ export class DeviceRideService  extends EventEmitter{
         if (startType === 'check')
             await ai.adapter.pause().catch(console.log);
         if (ai.adapter.isControllable())
-            this.setSerialPortInUse(ai.adapter as IncyclistDeviceAdapter);
+            this.setSerialPortInUse(ai.adapter);
 
         if (startType === 'pair') {
             ai.adapter.on('data', this.deviceDataHandler);

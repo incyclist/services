@@ -58,7 +58,6 @@ describe('ActivityRideService',()=>{
     describe ('init',()=>{
         let service:ActivityRideService
         beforeEach( ()=>{
-            Date.prototype.getTimezoneOffset = jest.fn(() => 0);
             service = new ActivityRideService()
             jest .useFakeTimers().setSystemTime(new Date('2020-01-01'));
         })

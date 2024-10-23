@@ -8,7 +8,6 @@ import { RouteSettings } from "../routes/list/cards/RouteCard";
 import { UserSettingsService, useUserSettings } from "../settings";
 import { waitNextTick } from "../utils";
 import { Coach } from "./coach";
-import { CoachStatus } from "./types";
 import { IncyclistAdapterData } from "incyclist-devices/lib/types";
 import { getNextPosition } from "../routes/base/utils/route";
 

@@ -141,7 +141,7 @@ describe ('ParserFactory',()=> {
             parsers.add(p3)
             
 
-            expect( ()=>{parsers.findMatching('XX'),{}}).toThrow('invalid file format XX')
+            expect( ()=>{parsers.findMatching('XX',{})}).toThrow('invalid file format XX')
         })
 
 

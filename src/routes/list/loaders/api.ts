@@ -108,7 +108,6 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             }
             description = existing
             this.logger.logEvent({message:'route details missing',id:description.id,title:description.title})                
-            isUpdated = true;
             
         }
         else {
@@ -126,7 +125,6 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             else {
                 description.tsImported = existing.tsImported
                 this.logger.logEvent({message:'route updated',id:description.id,title:description.title,from:existing.version, to:description.version,ts:Date.now(), tsImported:description.tsImported})                
-                isUpdated = true                                   
             }
         }
 

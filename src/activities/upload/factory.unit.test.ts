@@ -1,4 +1,4 @@
-import { ActivityDetails, UploadInfo } from "../base"
+import { ActivityDetails } from "../base"
 import { ActivityUploadFactory } from "./factory"
 import { IActivityUpload } from "./types"
 

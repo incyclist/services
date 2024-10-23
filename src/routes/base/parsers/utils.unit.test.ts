@@ -33,7 +33,6 @@ describe('Incyclist Parser Utils',()=>{
         test('file scheme URL with file scheme as target',()=>{
             const name= 'test.xml'
             const dir = '/tmp'
-            const filename = `${dir}/${name}`
 
             const fileInfo:FileInfo = {type:'url', filename:undefined, name, ext:'xml',dir,url:`file:///${dir}/${name}`, delimiter:'/'}
 
@@ -43,7 +42,6 @@ describe('Incyclist Parser Utils',()=>{
         test('file scheme URL with video scheme as target',()=>{
             const name= 'test.xml'
             const dir = '/tmp'
-            const filename = `${dir}/${name}`
 
             const fileInfo:FileInfo = {type:'url', filename:undefined, name, ext:'xml',dir,url:`file:///${dir}/${name}`, delimiter:'/'}
 
@@ -54,7 +52,6 @@ describe('Incyclist Parser Utils',()=>{
         test('file scheme URL with relative path',()=>{
             const name= 'test.xml'
             const dir = '/tmp'
-            const filename = `${dir}/${name}`
 
             const fileInfo:FileInfo = {type:'url', filename:undefined, name, ext:'xml',dir,url:`file:///${dir}/${name}`, delimiter:'/'}
 

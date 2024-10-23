@@ -1,10 +1,8 @@
-import { sleep } from '../../../utils/sleep'
 import IncyclistRoutesApi from '../../base/api'
 import { DEFAULT_ROUTE_API } from '../../base/api/consts'
 import { Route } from '../../base/model/route'
 import {RoutesApiLoader}  from './api'
 import { RouteListService } from '../service'
-import clone from '../../../utils/clone'
 import { waitNextTick } from '../../../utils'
 
 describe('RouteApiLoader',()=>{

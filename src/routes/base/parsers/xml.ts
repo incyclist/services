@@ -229,7 +229,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
     }
     
     private parseVideoMappings(context:XmlParserContext) {
-        const {data,route,fileInfo} = context
+        const {data,route} = context
         const mappings = data['mappings'];
 
         if (mappings) {
