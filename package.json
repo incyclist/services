@@ -5,21 +5,20 @@
     "gd-eventlog": "^0.1.26"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.4",
-    "@types/node": "^20.8.9",
-    "@typescript-eslint/eslint-plugin": "^7.1.1",
-    "@typescript-eslint/parser": "^7.1.1",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.7.9",
+    "@typescript-eslint/eslint-plugin": "^8.11.0",
+    "@typescript-eslint/parser": "^8.11.0",
     "dotenv": "^16.4.5",
-    "eslint": "^8.52.0",
-    "eslint-config-react-app": "^7.0.1",
+    "eslint": "^9.13.0",
     "formdata-node": "^6.0.3",
     "jest": "^29.7.0",
-    "jsdoc": "^4.0.2",
-    "ts-jest": "^29.1.1",
+    "jsdoc": "^4.0.4",
+    "ts-jest": "^29.2.5",
     "typedoc": "^0.26.10",
-    "typedoc-plugin-markdown": "^3.15.4",
+    "typedoc-plugin-markdown": "^4.2.9",
     "typedoc-plugin-no-inherit": "^1.4.0",
-    "typescript": "^5.4.2"
+    "typescript": "^5.6.3"
   },
   "scripts": {
     "lint": "eslint . --ext .ts",
@@ -42,11 +41,11 @@
     "lib": "./src"
   },
   "dependencies": {
-    "axios": "^1.6.1",
+    "axios": "^1.7.7",
     "incyclist-devices": "^2.2.4",
     "promise.any": "^2.0.6",
     "tcx-builder": "^1.1.1",
-    "uuid": "^9.0.0",
+    "uuid": "^10.0.0",
     "xml2js": "^0.6.2"
   }
 }
