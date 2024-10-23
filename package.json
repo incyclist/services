@@ -42,7 +42,7 @@
     "lib": "./src"
   },
   "dependencies": {
-    "axios": "^1.6.1",
+    "axios": "^1.7.4",
     "incyclist-devices": "^2.2.4",
     "promise.any": "^2.0.6",
     "tcx-builder": "^1.1.1",
