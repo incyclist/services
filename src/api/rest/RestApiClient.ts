@@ -24,7 +24,7 @@ import { ApiClient } from './api';
 
 
 export class RestApiClient {
-    static _api: ApiClient
+    protected static _api: ApiClient
 
     /**
      * Provides access to the axios client object

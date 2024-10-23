@@ -32,7 +32,7 @@ export const parseXml = async (str:string):Promise<XmlJSON> => {
 
         const cleanStr = removeUTFBom(str)
 
-        parseString(cleanStr, (err,result)=> {
+        parseString(cleanStr, (err:Error,result)=> {
             if (err) {
                     return reject(err);
             }
@@ -44,7 +44,7 @@ export const parseXml = async (str:string):Promise<XmlJSON> => {
 export class XmlJSON {
 
     
-    constructor( private _json:JSONObject, private scheme?:string) {
+    constructor( private readonly _json:JSONObject, private scheme?:string) {
         
     }
 

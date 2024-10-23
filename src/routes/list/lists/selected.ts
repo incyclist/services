@@ -39,13 +39,14 @@ export class SelectedRoutes extends CardList<Route> {
 
     getCards(): Array<Card<Route>> {
 
-        const cards:Array<ExtRouteCard> = this.cards.map( (c,idx) => {
+        const cards:Array<ExtRouteCard> = Array.from(this.cards.map( (c,idx) => {
             const card = c as ExtRouteCard
             card.idx = idx
             return card
-        })
-        const sorted = cards.sort( sortFn )
-        return sorted.map(c=>c as Card<Route>);
+        }))
+        cards.sort( sortFn )
+
+        return cards
     }
 
 }

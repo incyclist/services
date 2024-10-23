@@ -10,7 +10,8 @@ export class JsonRepository {
     static create(repoName:string):JsonRepository {
         if (JsonRepository._instances[repoName])
             return JsonRepository._instances[repoName]
-            JsonRepository._instances[repoName] = new JsonRepository(repoName)
+
+        JsonRepository._instances[repoName] = new JsonRepository(repoName)
         return JsonRepository._instances[repoName]
     }
 
@@ -36,12 +37,7 @@ export class JsonRepository {
     async write(objectName:string, data:JSONObject):Promise<boolean> {
         await this.open()
 
-        // TODO check if busy
-        
         const success = await this.access.write(objectName,data)
-        if (!success) {
-            // TODO cache data in memory and retry later
-        }
         return success
         
 
@@ -49,20 +45,9 @@ export class JsonRepository {
     async read(objectName:string):Promise<JSONObject> {
         await this.open()
 
-        // TODO check if busy
-        
-        try {
-            const data = await this.access.read(objectName)
-            
-            if (!data) {
-                // TODO 
-            }
-            return data
-        }
-        catch(err) {
-            // TODO
-        }
- 
+        const data = await this.access.read(objectName)
+        return data
+
     }
 
     async delete(objectName:string):Promise<boolean> {

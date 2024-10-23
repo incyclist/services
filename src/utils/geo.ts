@@ -159,41 +159,49 @@ export function crossing( AB, CD, AC ) {
 
     // if both lines are parallel, we only need to check if they are overlapping
     if ( AB.isParallel(CD) ) {
-        if (!AB.isParallel(AC))
-            return undefined;
-
-        // are both lines pointing in the same direction?
-        if ( AB.isSameDirection(CD)) {
-            if ( AB.isSameDirection(AC) && AB.len()>=AC.len() )
-                return AC;
-            else    
-                return undefined;
-        }
-
-        let AD = Vector.add(AC,CD);
-
-        // CD is pointing in the oposite direction, D->C
-        if (AB.isParallel(AD) && AB.len()>=AD.len() ){
-            // we need to check if point D is closer to A than point C (ie. vector CD shows in the oposite direction)
-            let da = AD.len();
-            let dc = da-CD.len();
-            if ( dc>=0 ) 
-                return AD
-            else
-                return new Vector([0,0])
-        } 
-        else {
-            return undefined
-        }
+        return crossingParallel(AB,CD,AC);
     }
     else {
+        return crossingNotParallel(AB,CD,AC);
+    }
+}
 
-        /* Crossing is when: 
-            [AB]*x  = [AC]+[CD]*y
-            =>
-            AB.x*x = AC.x+CD.x*y
-            AB.y*x = AC.y+CD.y*y
-        */
+const crossingParallel = (AB,CD,AC) =>{
+    if (!AB.isParallel(AC))
+        return undefined;
+
+    // are both lines pointing in the same direction?
+    if ( AB.isSameDirection(CD)) {
+        if ( AB.isSameDirection(AC) && AB.len()>=AC.len() )
+            return AC;
+        else    
+            return undefined;
+    }
+
+    let AD = Vector.add(AC,CD);
+
+    // CD is pointing in the oposite direction, D->C
+    if (AB.isParallel(AD) && AB.len()>=AD.len() ){
+        // we need to check if point D is closer to A than point C (ie. vector CD shows in the oposite direction)
+        let da = AD.len();
+        let dc = da-CD.len();
+        if ( dc>=0 ) 
+            return AD
+        else
+            return new Vector([0,0])
+    } 
+    else {
+        return undefined
+    }
+}
+
+const crossingNotParallel = (AB,CD,AC) =>{
+    /* Crossing is when: 
+        [AB]*x  = [AC]+[CD]*y
+        =>
+        AB.x*x = AC.x+CD.x*y
+        AB.y*x = AC.y+CD.y*y
+    */
         let x,y;
         if (abs(AB.x)<0.0001) {
             y = AC.x/CD.x*-1;
@@ -217,5 +225,5 @@ export function crossing( AB, CD, AC ) {
         y = (AB.x*AC.y/AB.y-AC.x)/(CD.x-AB.x*CD.y/AB.y)
         x = (AC.y+CD.y*y)/AB.y
         return Vector.multiply(x,AB); 
-    }
+    
 }

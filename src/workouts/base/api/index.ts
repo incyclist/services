@@ -1,6 +1,6 @@
 import {EventLogger} from 'gd-eventlog'
 import { AxiosInstance } from "axios";
-import { IncyclistRestApiClient, RestApiClient } from '../../../api';
+import { IncyclistRestApiClient } from '../../../api';
 import { useUserSettings } from '../../../settings';
 import { Singleton } from '../../../base/types';
 import { DEFAULT_WORKOUT_API, WORKOUT_API } from './consts';

@@ -12,7 +12,6 @@ import { RoutesDbLoader } from './db';
 import { RouteInfo } from '../../base/types';
 import { RoutesLegacyDbLoader } from './LegacyDB';
 import { JSONObject } from '../../../utils/xml';
-import exp from 'constants';
 
 class MockRepository extends JsonRepository {
     static create(repoName:string):JsonRepository {

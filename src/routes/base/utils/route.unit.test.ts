@@ -3,11 +3,10 @@ import { FileInfo, getBindings } from "../../../api";
 import { IFileSystem } from "../../../api/fs";
 import { loadFile } from "../../../../__tests__/utils/loadFile";
 import { Route } from "../model/route";
-import { getElevationGainAt, getNextPosition, getTotalElevation, validateRoute } from "./route";
+import { createFromJson, getElevationGainAt, getNextPosition, getTotalElevation, validateRoute,getRouteHash,updateSlopes } from "./route";
 import fs from 'fs'
 import { KWTParser } from "../parsers/kwt";
 import { parseXml } from "../../../utils";
-import { GPXParser } from "../parsers/gpx";
 
 describe( 'Route Utils',()=>{
 
@@ -49,6 +48,17 @@ describe( 'Route Utils',()=>{
 
         })
 
+    })
+
+    describe( 'updateSlopes',()=>{
+        test('no cut',()=>{
+            const slopesBefore = route.details.points.map( p=> p.slope)
+            route.details.points.forEach(p=>{delete p.slope})
+
+            updateSlopes(route.details.points)
+            const slopesAfter = route.details.points.map( p=> p.slope)
+            expect(slopesAfter ).toEqual(slopesBefore)
+        })
     })
 
     describe( 'getElevationGainAt',()=>{
@@ -108,10 +118,68 @@ describe( 'Route Utils',()=>{
 
             const res = getNextPosition(route,{routeDistance,prev} )
 
-            expect(res.slope).toBeCloseTo(2.1,1)
-            expect(res.elevation).toBeCloseTo(213.6,1)
+            expect(res?.slope).toBeCloseTo(2.1,1)
+            expect(res?.elevation).toBeCloseTo(213.6,1)
         })
 
+        test('next lap',()=>{
+            const routeDistance = 11800
+            const prev = route.points[837]
+
+            const res = getNextPosition(route,{routeDistance,prev} )
+            expect(res.lap).toBe(2)
+            expect(res.cnt).toBe(4)
+            expect(res.routeDistance).toBe(78)
+        })
+
+    })
+
+
+    describe( 'createFromJson',()=>{
+
+        test('valid',async ()=>{
+            const file = './__tests__/data/rlv/ES_Teide.json'
+            const jsonStr = await loadFile('utf-8',file) as string
+            const json = JSON.parse(jsonStr)
+
+            const route = createFromJson(json)
+            expect(route.description.title).toBe('Zusammenfügen1')
+            expect(route.description.distance).toBe(67632)
+            expect(route.description.hasGpx).toBeTruthy()
+   
+        })
+        test('no gpx',async ()=>{
+            const file = './__tests__/data/rlv/ES_Teide.json'
+            const jsonStr = await loadFile('utf-8',file) as string
+            const json = JSON.parse(jsonStr)
+            delete json.points
+            delete json.decoded
+
+            const route = createFromJson(json)
+            expect(route.description.title).toBe('Zusammenfügen1')
+            expect(route.description.distance).toBe(67632)
+            expect(route.description.hasGpx).toBeFalsy()
+   
+        })
+
+    })
+
+    describe('getRouteHash',()=>{
+      
+        test('video',()=>{
+
+            const hash = getRouteHash(route.details)
+            expect(hash).toBe('4287767686b6327b8284fab983c6621b')
+        })
+
+        test('no points, but EPP',()=>{
+            
+            delete route.details.points
+            route.details.epp = {programData:[ {elevation:0, distance:0, x:0},{elevation:1, distance:100, x:0},{elevation:2, distance:2000, x:0}] }
+            const hash = getRouteHash(route.details)
+            expect(hash).toBe('41c04620052c18d760611e3a39f1380f')
+            
+        })
     })
 
 

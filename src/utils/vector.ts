@@ -68,19 +68,23 @@ export class Vector {
             return true;
 
         if (Vector.isVector(v)) {
-            if (this._x===0 && v.x===0) return true;
-            if (this._y===0 && v.y===0) return true;
-
-            return ( abs(v.x/this._x - v.y/this._y) < 0.0001 );
+            return this.isParallelToVector(v)
         }
-        else {
-            if (v.length<2)
-                return false;
-            if (this._x===0 && v[0]===0) return true;
-            if (this._y===0 && v[1]===0) return true;
-    
-            return ( abs( v[0]/this._x-v[1]/this._y ) < 0.0001)
-        }        
+
+        return this.isParallelToArray(v)
+    }
+
+    protected isParallelToVector(v:Vector) {
+        return this.isParallelToArray([v._x,v._y])
+    }
+
+    protected isParallelToArray(a:Array<number>) {
+        if (a.length<2)
+            return false;
+        if (this._x===0 && a[0]===0) return true;
+        if (this._y===0 && a[1]===0) return true;
+
+        return ( abs( a[0]/this._x-a[1]/this._y ) < 0.0001)        
     }
 
     isSameDirection(v) {

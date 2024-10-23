@@ -202,56 +202,97 @@ export class ActivitiesRepository {
 
         let result = this.activities
 
-        if (result?.length>0 && criteria?.routeId) {
-            result = result.filter( ai=> ai.summary.routeId===criteria.routeId)
-        }
-        if (result?.length>0 && criteria?.routeHash) {
-            result = result.filter( ai=> ai.summary.routeHash===criteria.routeHash)
-        }
-        if (result?.length>0 && criteria?.startPos!==undefined) {
-            result = result.filter( ai=> ai.summary.startPos===criteria.startPos)
-        }
-        if (result?.length>0 && criteria?.endPos!==undefined) {
-            result = result.filter( ai=> ai.summary.endPos===criteria.endPos)
-        }
-        if (result?.length>0 && criteria?.realityFactor!==undefined) {
-            result = result.filter( ai=> (ai.summary.realityFactor??100)===criteria.realityFactor)
-        }
-        if (result?.length>0 && criteria?.isSaved!==undefined   ) {
-            result = result.filter( ai=> ai.summary.isSaved===criteria.isSaved)
-        }
-        if (result?.length>0 && criteria?.uploadStatus!==undefined  ) {
-            if (Array.isArray(criteria.uploadStatus)) {
-                result = result.filter( ai=> { 
-                    const requested = criteria.uploadStatus as Array<UploadInfo>
-                    const actual =  ai.summary.uploadStatus
-
-                    const sortFn = (a,b) => a.service.localeCompare(b.service)
-
-                    const r = requested.sort(sortFn).map( us=> `${us.service}:${us.status}`).join(';')
-                    const a = actual.sort(sortFn).map( us=> `${us.service}:${us.status}`).join(';')
-                    return r===a
-                })
-            }
-            else {
-                const status = criteria.uploadStatus as UploadInfo               
-                result = result.filter( ai=> {
-                    const serviceInfo = ai.summary.uploadStatus.find(asi=>asi.service===status.service) 
-                    if (!serviceInfo)
-                        return false
-                    return serviceInfo.status === status.status
-                })
-            }
-        }
-
-        if (result?.length>0 && criteria?.minTime!==undefined) {
-            result = result.filter( ai=> ai.summary.rideTime>=criteria.minTime)
-        }
-        if (result?.length>0 && criteria?.minDistance!==undefined) {
-            result = result.filter( ai=> ai.summary.distance>=criteria.minDistance)
-        }
+        this.checkIdFilter(result, criteria);
+        this.checkHashFilter(result, criteria);
+        this.checkStartPosFilter(result, criteria);
+        this.checkEndPosFilter(result, criteria);
+        this.checkRealityFactorFilter(result, criteria);
+        this.checkIsSavedFilter(result, criteria);        
+        this.checkUploadStatusFilter(result, criteria);
+        this.checkTimeFilter(result, criteria);
+        this.checkDistanceFilter(result, criteria);
         
         return result
+    }
+
+
+    private checkIdFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.routeId) {
+            result = result.filter(ai => ai.summary.routeId === criteria.routeId);
+        }        
+    }
+
+    private checkHashFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.routeHash) {
+            result = result.filter(ai => ai.summary.routeHash === criteria.routeHash);
+        }
+    }
+
+
+    private checkStartPosFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.startPos !== undefined) {
+            result = result.filter(ai => ai.summary.startPos === criteria.startPos);
+        }
+    }
+    private checkEndPosFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.endPos !== undefined) {
+            result = result.filter(ai => ai.summary.endPos === criteria.endPos);
+        }
+    }
+
+    private checkRealityFactorFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.realityFactor !== undefined) {
+            result = result.filter(ai => (ai.summary.realityFactor ?? 100) === criteria.realityFactor);
+        }
+        return result;
+    }
+
+    private checkIsSavedFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.isSaved !== undefined) {
+            result = result.filter(ai => ai.summary.isSaved === criteria.isSaved);
+        }
+        return result;
+    }
+
+    private checkUploadStatusFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.uploadStatus !== undefined) {
+            if (Array.isArray(criteria.uploadStatus)) {
+                result = result.filter(ai => {
+                    const requested = criteria.uploadStatus as Array<UploadInfo>;
+                    const actual = ai.summary.uploadStatus;
+    
+                    const sortFn = (a, b) => a.service.localeCompare(b.service);
+    
+                    const r = requested.sort(sortFn).map(us => `${us.service}:${us.status}`).join(';');
+                    const a = actual.sort(sortFn).map(us => `${us.service}:${us.status}`).join(';');
+                    return r === a;
+                });
+            }
+            else {
+                const status = criteria.uploadStatus
+                result = result.filter(ai => {
+                    const serviceInfo = ai.summary.uploadStatus.find(asi => asi.service === status.service);
+                    if (!serviceInfo)
+                        return false;
+                    return serviceInfo.status === status.status;
+                });
+            }
+        }
+        return result;
+    }
+
+    private checkTimeFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.minTime !== undefined) {
+            result = result.filter(ai => ai.summary.rideTime >= criteria.minTime);
+        }
+        return result;
+    }
+
+    private checkDistanceFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.minDistance !== undefined) {
+            result = result.filter(ai => ai.summary.distance >= criteria.minDistance);
+        }
+        return result;
     }
 
     protected async writeRepo() {
@@ -352,17 +393,15 @@ export class ActivitiesRepository {
             
             // check if activities were added, if so: update DB
             if (cnt!==this.activities.length) {
-                await this.write(true)
+                this.write(true)
             }
 
-            await this.fixMissingHash()
+            await this.fixMissingHash()          
             return
-           
         }
 
         // no data yet, we need to create a new DB by scanning the directory
         await this.buildFromLegacy()
-        return
     }
 
     /**
@@ -379,7 +418,7 @@ export class ActivitiesRepository {
         if (names) {
             await this.bulkAddActivities(names)
         }        
-        await this.write(true)
+        this.write(true)
       
     }
 
@@ -412,7 +451,7 @@ export class ActivitiesRepository {
 
             await Promise.allSettled(promises)
 
-            await this.write(true)
+            this.write(true)
         }
         catch(err) {
             this.logError(err,'fixMissingHash')
@@ -468,8 +507,6 @@ export class ActivitiesRepository {
                 }
             }
         })
-        
-        return 
     }
 
 
@@ -524,3 +561,4 @@ export class ActivitiesRepository {
     }
 
 }
+

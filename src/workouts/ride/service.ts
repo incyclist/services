@@ -1,9 +1,8 @@
 import { CyclingMode } from "incyclist-devices";
-import { useActivityRide } from "../../activities";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer } from "../../base/types/observer";
-import { useDeviceConfiguration, useDeviceRide } from "../../devices";
+import { useDeviceRide } from "../../devices";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
@@ -176,7 +175,7 @@ export class WorkoutRide extends IncyclistService{
             this.state = 'active'
 
             const ts = Date.now();
-            this.tsStart=ts, 
+            this.tsStart=ts 
             this.tsCurrent=ts
             this.offset = 0
             this.manualTimeOffset = 0;
@@ -217,7 +216,7 @@ export class WorkoutRide extends IncyclistService{
             }
 
             const ts = Date.now();
-            this.tsPauseStart=ts, 
+            this.tsPauseStart=ts 
             this.tsCurrent=ts
             this.state='paused'
 
@@ -343,8 +342,6 @@ export class WorkoutRide extends IncyclistService{
             const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts);
-
-            // TODO: implement logic to jump to start of current/previous step
 
             const completed = limits.duration-limits.remaining
 
@@ -566,30 +563,18 @@ export class WorkoutRide extends IncyclistService{
             else if (this.state!=='active')
                 return
 
-            const time = (Date.now() -this.tsStart-(this.offset??0)) / 1000 +  (this.manualTimeOffset??0);
-            const end = this.workout.getEnd();
+            const time = this.checkIfDone()
+            if (time===null)
+                return
 
-            if ( time>=end) {
-                this.stop()
-                return;
-            }
 
             const prevStep = this.currentStep
             this.setCurrentLimits(time)
 
 
             if (this.currentStep!==prevStep) {
-
-                if (!this.currentStep.power && prevStep.power ) {
-                    this.startFreeRide()
-                }
-                else if (this.currentStep.power && !prevStep.power ) { 
-                    this.stopFreeRide()
-                }
-
-                this.emit('step-changed', this.getDashboardDisplayProperties())
+                this.onStepChange(prevStep);
             }
-
             else if (Math.round(time)!==prevTime) {
                 this.emit('update', this.getDashboardDisplayProperties())
             }
@@ -598,6 +583,29 @@ export class WorkoutRide extends IncyclistService{
         catch(err) {
             this.logError(err,'update')
         }
+
+    }
+
+    private onStepChange(prevStep: StepDefinition) {
+        if (!this.currentStep.power && prevStep.power) {
+            this.startFreeRide();
+        }
+        else if (this.currentStep.power && !prevStep.power) {
+            this.stopFreeRide();
+        }
+
+        this.emit('step-changed', this.getDashboardDisplayProperties());
+    }
+
+    private checkIfDone() {
+        const time = (Date.now() -this.tsStart-(this.offset??0)) / 1000 +  (this.manualTimeOffset??0);
+        const end = this.workout.getEnd();
+
+        if ( time>=end) {
+            this.stop()
+            return null;
+        }
+        return time
 
     }
 
@@ -716,11 +724,11 @@ export class WorkoutRide extends IncyclistService{
         let ch = ': '
 
 
-        if (segment && segment.text) {
+        if (segment?.text) {
             title += `${ch}${segment.text}`
             ch=' - '
         }
-        if (segment && segment.text &&  segment.repeat>0) {
+        if (segment?.text &&  segment?.repeat>0) {
             const repeatTime = segment.duration/segment.repeat;
             const repeatCount = Math.floor((time-segment.getStart())/repeatTime )+1
             title += `(${repeatCount}/${segment.repeat})`    

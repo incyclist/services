@@ -2,8 +2,7 @@ import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer, PromiseObserver } from "../../base/types/observer";
 import { ActivitiesRepository, ActivitySearchCriteria } from "../base";
-import { ActivityInfo, ActivityLogRecord } from "../base/model";
-import { PastActivityInfo, PastActivityLogEntry } from "./types";
+import { ActivityInfo } from "../base/model";
 
 /**
  * This service is used by the Front-End to manage and query the current and past activities
@@ -122,16 +121,6 @@ export class ActivityListService extends IncyclistService {
         })
     }
 
-
-
-    /*
-    protected add(data: ActivityInfo|Array<ActivityInfo>) {
-        // TODO
-    }
-    protected update(data: ActivityInfo|Array<ActivityInfo>) {
-        // TODO
-    }
-    */
 
     protected getRepo():ActivitiesRepository {
         if (!this.repo)

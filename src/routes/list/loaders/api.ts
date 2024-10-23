@@ -6,10 +6,28 @@ import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
 import { addDetails } from "../../base/utils/route";
 import { RoutesDbLoader } from "./db";
-import { Loader } from "./types";
-import { LoadDetailsTargets } from "./types";
+import { Loader,LoadDetailsTargets } from "./types";
+import { waitNextTick } from "../../../utils";
 
 const valid = (v) => (v!==undefined && v!==null)
+
+class ApiError extends Error {
+    constructor( error:Error, private readonly _type:string ) {super(error.message)}
+    get type (): string {
+        return this._type
+    }
+
+}
+
+const ExistingAndNotUpdated = (existing: RouteInfo, descr: RouteInfo) => {
+    if (!existing)
+        return false
+
+    const {isDeleted=false} = descr
+
+    return ((existing.version || 0) >= (descr.version || 0))
+        && (!isDeleted || (isDeleted && existing.isDownloaded));
+}
 
 export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
@@ -30,97 +48,113 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         if (this.loadObserver)
             return this.loadObserver
 
+        // run two async REST queries in parallel
         const enrichApi = (v:RouteApiDescription,type)=> ({type, ...v })
         const api = [
-            this.api.getRouteDescriptions({type:'gpx'}).then( v=> v.map(e=>enrichApi(e,'gpx'))) ,
-            this.api.getRouteDescriptions({type:'video'}).then( v=> v.map(e=>enrichApi(e,'video')))
+            this.api.getRouteDescriptions({type:'gpx'},true).then( v=> v.map(e=>enrichApi(e,'gpx'))).catch(error => {throw new ApiError(error,'gpx')}) ,
+            this.api.getRouteDescriptions({type:'video'},true).then( v=> v.map(e=>enrichApi(e,'video'))).catch(error => {throw new ApiError(error,'video')}) ,
         ]
 
         this.loadObserver = new Observer()
 
+        // When both queries have completed ( either successfully or failed) then process the result
+        // but ths method should return immediatly (not waiting for the result of the query)
         Promise.allSettled( api).then (async res => {
-
-            // join lists
-            const items: Array<{route:Route, added:boolean}> = []
-
-            // for loop as we have asyncs here
-            for ( let i=0; i<res.length;i++) {
-                const p = res[i]
-
-                if (p.status==='fulfilled') {  
-                    for (let j=0;j<p.value.length;j++) {
-                        const descr = p.value[j]
-
-                    
-                        let description;
-                        let isUpdated = false
-                        const existing = this.getDescriptionFromDB(descr.routeId||descr.id)
-                        const {isDeleted=false} = descr
-
-                        if (existing 
-                              && ((existing.version||0)>=(descr.version||0)) 
-                              && (!isDeleted || (isDeleted && existing.isDownloaded))
-                            ) {
-
-                            const details = await this.getDetailsFromDB(existing.id)
-                            if (details) {
-                                continue;
-                            }
-                            description = existing
-                            
-                        }
-                        else {
-                            description = this.buildRouteInfo(descr)
-                            
-                            if (!existing) {
-                                this.logger.logEvent({message:'route added',id:description.id,title:description.title,ts:description.tsImported})
-                                
-                                description.tsImported = Date.now()
-                            }
-                            else {
-                                description.tsImported = existing.tsImported
-                                this.logger.logEvent({message:'route updated',id:description.id,title:description.title,from:existing.version, to:description.version,ts:Date.now(), tsImported:description.tsImported})
-                                
-                                isUpdated = true                                   
-                            }
-                        }
-
-                        if (!description) {
-                            continue
-                        }
-
-
-                        
-                        const route = new Route( description)
-
-                        const isComplete = this.isCompleted(route)
-                        
-                        if (isComplete) {
-                            this.verifyRouteHash(route)
-                            this.emitRouteAdded(route)
-                        }
-
-                        if (!existing) {
-                            items.push({route,added:isComplete})
-                        }
-                        else {
-                            this.save(route,true)
-                            if (isUpdated) {
-                                this.loadObserver.emit('route.updated',route)
-                            }
-                        }
-
-                    }
-                }
-            }
-
-            await this.loadDetails(items)
-            
-            //delete this.loadObserver
+            this.onLoadDone(api,res)
         });
 
         return this.loadObserver
         
+    }
+
+    private async onLoadDone(api,res) {
+        // join lists
+        const loadDetailRequired: Array<{route:Route, added:boolean}> = []
+
+        // for loop as we have asyncs here
+        for ( let i=0; i<res.length;i++) {
+            const p = res[i]
+
+            if (p.status!=='fulfilled') {                   
+                this.logger.logEvent({message: 'could not load route list',reason:p.reason?.message, type:p.reason?.type})
+                continue;
+            }
+
+            for (let j=0;j<p.value.length;j++) {
+                await this.processRouteFromApi(p.value[j],loadDetailRequired)
+            }
+            
+        }
+        if (loadDetailRequired.length>0)
+            await this.loadDetails(loadDetailRequired)
+
+        this.loadObserver.emit('done')
+
+        await waitNextTick()        
+        delete this.loadObserver        
+        
+    }
+
+    private async processRouteFromApi(descr,items) {
+        let description;
+        let isUpdated = false
+        const existing = this.getDescriptionFromDB(descr.routeId||descr.id)
+
+        if (ExistingAndNotUpdated(existing, descr)) {
+
+            const details = await this.getDetailsFromDB(existing.id)
+            if (details) {
+                return
+            }
+            description = existing
+            this.logger.logEvent({message:'route details missing',id:description.id,title:description.title})                
+            isUpdated = true;
+            
+        }
+        else {
+            description = this.buildRouteInfo(descr)
+            if (!description) {
+                this.logger.logEvent({message:'invalid route',descr})
+                return
+            }
+                    
+            if (!existing) {
+                this.logger.logEvent({message:'route added',id:description.id,title:description.title,ts:description.tsImported})
+                
+                description.tsImported = Date.now()
+            }
+            else {
+                description.tsImported = existing.tsImported
+                this.logger.logEvent({message:'route updated',id:description.id,title:description.title,from:existing.version, to:description.version,ts:Date.now(), tsImported:description.tsImported})                
+                isUpdated = true                                   
+            }
+        }
+
+
+        this.emitAndPrepareLoadDetails(description,items,existing);
+
+    }
+
+
+    private emitAndPrepareLoadDetails(description: any,items,existing) {
+        const route = new Route(description);
+        const isComplete = this.isCompleted(route);
+
+        if (isComplete) {
+            this.verifyRouteHash(route);
+        }
+
+        if (!existing) {
+            if (isComplete)
+                this.emitRouteAdded(route)
+            else 
+                items.push({route,added:true})
+        }
+        else {
+            this.save(route,true)
+            if (!isComplete)
+                items.push({route,added:false})
+        }
     }
 
     stopLoad() {
@@ -149,7 +183,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         const descr = route.description
 
         if (descr.hasVideo) {
-            return valid(descr.points) && ( valid(descr.videoUrl)) || (descr.requiresDownload && valid(descr.downloadUrl))
+            return valid(descr.points) && ( valid(descr.videoUrl) || (descr.requiresDownload && valid(descr.downloadUrl)))
         }
         else {
             return valid(descr.points)
@@ -162,13 +196,12 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     }
 
     protected async loadDetailsFromRepo( items:LoadDetailsTargets):Promise<LoadDetailsTargets>{
-
         // all missing should be loaded from server
         const promises = items.map ( i => this.getDetailsFromDB (i.route.description.id).then( details => { addDetails(i.route,details)}) )
 
         const res = await Promise.allSettled(promises) 
 
-        const {failed} = this.processLoadDetailsResult(res, items, false);
+        const {failed} = await this.processLoadDetailsResult(res, items, false);
         return failed
         
     }
@@ -186,11 +219,11 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
         const res = await Promise.allSettled(promises) 
 
-        this.processLoadDetailsResult(res, items, true);
+        await this.processLoadDetailsResult(res, items, true);
 
     }
 
-    private processLoadDetailsResult(res: PromiseSettledResult<void>[],items: LoadDetailsTargets, save?:boolean):{success:LoadDetailsTargets,  failed: LoadDetailsTargets} {
+    private async processLoadDetailsResult(res: PromiseSettledResult<void>[],items: LoadDetailsTargets, save?:boolean):Promise<{success:LoadDetailsTargets,  failed: LoadDetailsTargets}> {
         const success:LoadDetailsTargets = []
         const failed: LoadDetailsTargets = []
 
@@ -199,21 +232,20 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             else failed.push(items[idx]);
         });
 
-        success.forEach(item => {
-            if (item.added)
-                this.emitRouteUpdate(item.route);
-
-            else
-                this.emitRouteAdded(item.route);
+        for ( let i=0; i<success.length;i++) {
+            const item = success[i]
+//        success.forEach(item => {
+            this.emitRouteEvents(!item.added,item.route)
 
 
-            this.verifyCountry(item.route);
+            await this.verifyCountry(item.route);
             this.verifyRouteHash(item.route)
 
             if (save)
                 this.save(item.route, true);
 
-        });
+        //});
+        }
 
         return {success,failed}
     }
@@ -240,7 +272,6 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
         this.updateRouteCountry(data,{descr})
         this.updateRouteTitle(data,{descr})
-        // Todo: previewImg (could be generated from video/streetview)
 
         if (points) data.hasGpx = true;
 
@@ -256,5 +287,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         return data;
     }
 
+
  
 }
+

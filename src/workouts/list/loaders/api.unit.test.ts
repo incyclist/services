@@ -39,6 +39,7 @@ describe('WorkoutsApiLoader',()=>{
             })
 
             await load()
+            expect(workouts.length).toBe(3)
             
         },6000)
     })

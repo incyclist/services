@@ -13,6 +13,19 @@ const intVal = v=>Number.parseInt(v);
 const floatVal = v=>Number.parseFloat(v);
 const pVal   = v => floatVal(v)*100
 
+const setPowerValues = (power,powerTarget) => {
+    if (power.max === undefined && power.min === undefined) {
+        power.max = powerTarget;
+        power.min = powerTarget;
+    }
+    else if (power.max !== undefined && power.min === undefined) {
+        power.min = powerTarget;
+    }
+    else if (power.min !== undefined && power.max === undefined) {
+        power.max = powerTarget;
+    }
+}
+
 interface ParseResult  {
     step?: StepDefinition,
     segment?: SegmentDefinition
@@ -81,9 +94,6 @@ export class ZwoParser implements WorkoutParser<string>{
         if (Power===undefined && PowerHigh===undefined && PowerLow===undefined)
             return undefined;
 
-        if (Power) {
-            powerTarget = pVal(Power);
-        }
 
         if ( PowerHigh) {
             if ( reverse!==true)
@@ -91,6 +101,7 @@ export class ZwoParser implements WorkoutParser<string>{
             else 
                 power.min = pVal(PowerHigh)
         }
+        
         if ( PowerLow) {
             if ( reverse!==true)
                 power.min = pVal(PowerLow)
@@ -98,19 +109,12 @@ export class ZwoParser implements WorkoutParser<string>{
                 power.max = pVal(PowerLow)
         }
 
-        if ( powerTarget!==undefined) {
-            if ( power.max===undefined && power.min===undefined ) {
-                power.max = powerTarget;
-                power.min = powerTarget;
-            }
-            else if ( power.max!==undefined && power.min===undefined) {
-                power.min = powerTarget
-            }
-            else if ( power.min!==undefined && power.max===undefined) {
-                power.max = powerTarget;
-            }
+        if (Power) {
+            powerTarget = pVal(Power);
+            setPowerValues(power,powerTarget);
         }        
         return power;
+
     }
 
     protected getCadenceLimit( json,reverse?:boolean):Limit {
@@ -166,7 +170,7 @@ export class ZwoParser implements WorkoutParser<string>{
         const power = this.getPowerLimit(json)
         const duration = intVal(Duration);
         const text = Text;
-        const steady = !power || !power.min || !power.max || power.min===power.max;
+        const steady = (power?.min===power?.max || !power?.min || !power?.max );
 
         return  { step:{duration,power,cadence,text,steady} }
     }
@@ -178,7 +182,7 @@ export class ZwoParser implements WorkoutParser<string>{
         const power = this.getPowerLimit(json,true)
         const duration = intVal(Duration);
         const text = Text;
-        const steady = !power || !power.min || !power.max || power.min===power.max;
+        const steady = (power?.min===power?.max || !power?.min || !power?.max );
 
         return  { step:{duration,power,cadence,text,steady,cooldown:true} }
     }
@@ -225,13 +229,7 @@ export class ZwoParser implements WorkoutParser<string>{
     }
 
     protected parseFreeride(json):ParseResult {
-        // Duration FlatRoad ftptest 
-        const {Duration,ftptest}  = json;
-
-        const duration = intVal(Duration);
-        const work = ftptest===true || ftptest==='1';
-
-        return  { step:{duration,work} }
+        return this.parseFreeRide(json)
     }
 
     protected parseMaxEffort(json):ParseResult {
@@ -268,7 +266,7 @@ export class ZwoParser implements WorkoutParser<string>{
     protected parse(data:string,workout:Workout):Promise<Workout> {
         return new Promise( (resolve,reject) =>  {    
 
-            parser.parseString(data, (err,result)=> {
+            parser.parseString(data, (err:Error,result)=> {
                 if (err) {
                     err.message = 'File contains error(s): '+ err.message.replace(/\n/g,' ');
                     this.logger.logEvent( {message: 'error', fn:'parse()', error: err.message, stack: err.stack})

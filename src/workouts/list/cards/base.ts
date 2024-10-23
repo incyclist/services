@@ -60,9 +60,19 @@ export class BaseCard implements Card<Workout> {
 
     }
 
-    onMounted(){}
-    select() {}
-    unselect() {}
+    onMounted(){
+        // base implementation does nothing, subclasses can implement logic
+    }
+
+    select() {
+        // base implementation does nothing, subclasses can implement logic
+
+    }
+
+    unselect() {
+        // base implementation does nothing, subclasses can implement logic
+
+    }
 
 
 }

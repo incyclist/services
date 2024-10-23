@@ -8,7 +8,7 @@ export interface IPathBinding  {
 
 export default class PathSupport {
 
-    static _binding:IPathBinding = undefined;
+    protected static _binding:IPathBinding = undefined;
 
     static initBinding(binding: IPathBinding) {
         PathSupport._binding = binding

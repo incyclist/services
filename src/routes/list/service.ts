@@ -158,45 +158,24 @@ export class RouteListService extends IncyclistService {
                 this.filters = requestedFilters
             const filters = requestedFilters || this.filters
 
+            let routes:Array<SummaryCardDisplayProps> = Array.from(this.getAllCards().map( c=> c.getDisplayProperties()))
+            routes.sort( (a,b) => a.title>b.title? 1 : -1)
 
-            let routes:Array<SummaryCardDisplayProps> =   this.getAllCards().map( c=> c.getDisplayProperties())
+            if (!filters) {                
+                return {routes,filters,observer:this.observer}
+            }
+
+
             routes = routes.filter( r => !r.isDeleted)
-    
-            if (filters?.title && filters.title.length) {
-                
-                routes = routes.filter( r => r.title?.toUpperCase().includes(filters.title.toUpperCase()))
-            }
-    
-            if (filters?.distance?.min)
-                routes = routes.filter( r => r.distance>=filters?.distance?.min)
-    
-            if (filters?.distance?.max)
-                routes = routes.filter( r => r.distance<=filters?.distance?.max)
-    
-            if (filters?.elevation?.min)
-                routes = routes.filter( r => r.elevation>=filters?.elevation?.min)
+
+            routes = this.applyTitleFilter(filters, routes);
+            routes = this.applyDistanceFilter(filters, routes);
+            routes = this.applyElevationFilter(filters, routes);
+            routes = this.applyCountryFilter(filters, routes);
+            routes = this.applyContentTypeFilter(filters, routes);
+            routes = this.applyRouteTypeFilter(filters, routes);
+
             
-            if (filters?.elevation?.max)
-                routes = routes.filter( r => r.elevation<=filters?.elevation?.max)
-    
-            if (filters?.country) {            
-                const iso = filters.country === 'Unknown' ? undefined : getCountries().getIsoFromCountry(filters.country)            
-                routes = routes.filter( r => r.country===iso)
-            }
-
-            if (filters?.contentType) {            
-                const video = filters.contentType===undefined|| filters.contentType==='Video'
-                const gpx = filters.contentType===undefined|| filters.contentType==='GPX'
-                routes = routes.filter( r => ( video && r.hasVideo) || (gpx && !r.hasVideo ) )
-            }
-
-            if (filters?.routeType) {            
-                const loop = filters.routeType===undefined|| filters.routeType==='Loop'
-                const p2p = filters.routeType===undefined|| filters.routeType==='Point to Point'
-                routes = routes.filter( r => ( loop && r.isLoop) || (p2p && !r.isLoop ) )
-            }
-
-            routes = routes.sort( (a,b) => a.title>b.title? 1 : -1)
             return {routes,filters,observer:this.observer}
     
         }
@@ -205,6 +184,57 @@ export class RouteListService extends IncyclistService {
             return {routes:[], filters:{}}
 
         }
+    }
+
+    private applyRouteTypeFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.routeType) {
+            const loop = filters.routeType === undefined || filters.routeType === 'Loop';
+            const p2p = filters.routeType === undefined || filters.routeType === 'Point to Point';
+            routes = routes.filter(r => (loop && r.isLoop) || (p2p && !r.isLoop));
+        }
+        return routes;
+    }
+
+    private applyContentTypeFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.contentType) {
+            const video = filters.contentType === undefined || filters.contentType === 'Video';
+            const gpx = filters.contentType === undefined || filters.contentType === 'GPX';
+            routes = routes.filter(r => (video && r.hasVideo) || (gpx && !r.hasVideo));
+        }
+        return routes;
+    }
+
+    private applyCountryFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.country) {
+            const iso = filters.country === 'Unknown' ? undefined : getCountries().getIsoFromCountry(filters.country);
+            routes = routes.filter(r => r.country === iso);
+        }
+        return routes;
+    }
+
+    private applyElevationFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.elevation?.min)
+            routes = routes.filter(r => r.elevation >= filters.elevation.min);
+
+        if (filters.elevation?.max)
+            routes = routes.filter(r => r.elevation <= filters.elevation.max);
+        return routes;
+    }
+
+    private applyDistanceFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.distance?.min)
+            routes = routes.filter(r => r.distance >= filters.distance.min);
+
+        if (filters.distance?.max)
+            routes = routes.filter(r => r.distance <= filters.distance.max);
+        return routes;
+    }
+
+    private applyTitleFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.title?.length) {
+            routes = routes.filter(r => r.title.toUpperCase().includes(filters.title.toUpperCase()));
+        }
+        return routes;
     }
 
     stopSearch():void {        
@@ -423,7 +453,7 @@ export class RouteListService extends IncyclistService {
 
                     const {data,details} = await RouteParser.parse(file)              
     
-                    const route = new Route(data,details as RouteApiDetail)
+                    const route = new Route(data,details)
                     route.description.tsImported = Date.now()
                     
                     const existing = this.findCard(route)
@@ -638,34 +668,45 @@ export class RouteListService extends IncyclistService {
 
     protected selectList(route:Route):CardList<Route> {
         const description = route.description
-        const category = description.category?.toLocaleLowerCase()
 
         if (!description.hasVideo) {
-            if (category==='personal' || description.isLocal)
-                return this.myRoutes
-
-            if (description.category=='alternatives')
-                return this.alternatives
-            if (description.category=='selected')
-                return this.selectedRoutes
-            return description.category ? this.alternatives : this.selectedRoutes
+            return this.selectListForGPX(route)
         }
-        else {
-            if (description.isLocal || description.isDownloaded)
-                return this.myRoutes
-            if (description.category=='selected')
-                return this.selectedRoutes
+        
+        return this.selectListForVideo(route)
+    }
 
-            if (description.category=='alternatives' || description.isDemo || (description.requiresDownload && !description.isDownloaded))
-                return this.alternatives
+    private selectListForGPX(route:Route):CardList<Route> {
+        const description = route.description
+        const category = description.category?.toLocaleLowerCase()
 
-            if (category===undefined || category==='personal' || category==='imported')
-                return this.myRoutes
-            
+        if (category==='personal' || description.isLocal)
+            return this.myRoutes
+
+        if (description.category=='alternatives')
+            return this.alternatives
+        if (description.category=='selected')
             return this.selectedRoutes
-            
+        return description.category ? this.alternatives : this.selectedRoutes
 
-        }
+    }
+
+    private selectListForVideo(route:Route):CardList<Route> {
+        const description = route.description
+        const category = description.category?.toLocaleLowerCase()
+        if (description.isLocal || description.isDownloaded)
+            return this.myRoutes
+        if (description.category=='selected')
+            return this.selectedRoutes
+
+        if (description.category=='alternatives' || description.isDemo || (description.requiresDownload && !description.isDownloaded))
+            return this.alternatives
+
+        if (category===undefined || category==='personal' || category==='imported')
+            return this.myRoutes
+        
+        return this.selectedRoutes
+        
 
     }
 
@@ -784,7 +825,7 @@ export class RouteListService extends IncyclistService {
             id = target
         }
         else {
-            const route = target as Route
+            const route = target
             id = route.description.id
             legacyId = route.description.legacyId
         }
@@ -814,8 +855,6 @@ export class RouteListService extends IncyclistService {
         card = this.alternatives.getCards().find(c=>c.getData()?.description?.id===id) as RouteCard
         if (card)
             return {card,list:this.alternatives}
-
-        return ;
     }
 
     protected resetCards() {

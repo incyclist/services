@@ -157,7 +157,7 @@ export class GPXParser extends XMLParser {
                 pNext = points[idx+1]
             }
             const heading = geo.calculateHeaderFromPoints(p,pNext)
-            p.heading = heading!==undefined  ? heading : prevHeading
+            p.heading = heading??prevHeading
             prevHeading = p.heading
         })
     }

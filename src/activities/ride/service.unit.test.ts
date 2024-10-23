@@ -58,6 +58,7 @@ describe('ActivityRideService',()=>{
     describe ('init',()=>{
         let service:ActivityRideService
         beforeEach( ()=>{
+            Date.prototype.getTimezoneOffset = jest.fn(() => 0);
             service = new ActivityRideService()
             jest .useFakeTimers().setSystemTime(new Date('2020-01-01'));
         })
@@ -65,6 +66,7 @@ describe('ActivityRideService',()=>{
         afterEach( ()=>{
             service.stop()
             resetSingleton(service)
+            jest.resetAllMocks();
             jest.useRealTimers()
         })
 

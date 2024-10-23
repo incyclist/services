@@ -7,7 +7,7 @@ import { XMLParser, XmlParserContext } from './xml';
 
 
 export class IncyclistXMLParser extends XMLParser{
-    static SCHEME = 'gpx-import'
+    static readonly SCHEME = 'gpx-import'
 
     
     protected async loadDescription(context: XmlParserContext): Promise<void> {
@@ -33,14 +33,12 @@ export class IncyclistXMLParser extends XMLParser{
             gpxFile.type = 'url'
             gpxFile.url = fileName
         }
-        else {
-            if (fileInfo.type==='url') {
+        else if (fileInfo.type==='url') {
                 gpxFile.url = gpxFile.url.replace(xmlName,fileName)
-            }
-            else {
-                gpxFile.filename = gpxFile.filename.replace(xmlName,fileName)
+        }
+        else {
+            gpxFile.filename = gpxFile.filename.replace(xmlName,fileName)
 
-            }
         }
 
         const gpx = await new GPXParser({addTime:true}).import(gpxFile)
@@ -112,10 +110,6 @@ export class IncyclistXMLParser extends XMLParser{
 
         route.video.mappings =  points.map( (p,idx) => {
             const time = p.time
-
-            if (time>1659) {
-                let i = 1
-            }
             
             let videoSpeed;
             if (idx!==points.length-1) {
@@ -125,12 +119,8 @@ export class IncyclistXMLParser extends XMLParser{
                 videoSpeed = points[idx-1].videoSpeed
             }
 
-            if (p.distance>500) {
-
-            }
             const distance = Math.round(p.routeDistance);
             const frame = Math.round(p.time*route.video.framerate);
-
 
             delete p.time;
 

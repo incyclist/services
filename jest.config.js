@@ -3,6 +3,7 @@ module.exports = {
     transform: {
       '^.+\\.tsx?$': 'ts-jest',
     },
+    globalSetup: './jest-setup.js',
     testRegex: '^.+(\\.)?(test|spec)\\.(ts|js)?$',
     moduleFileExtensions: ['ts', 'js', 'json', 'node'],
     collectCoverageFrom: [

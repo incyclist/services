@@ -6,7 +6,7 @@ import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType, ActivitySummary, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
+import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType, ActivityStats, DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
@@ -290,69 +290,15 @@ export class ActivityRideService extends IncyclistService {
     getDashboardDisplayProperties() {
 
         try {
-            const distance = (this.activity?.distance??0)/1000;
-            const speed = (this.current.deviceData.speed??0);
-            const power = (this.current.deviceData.power??0);
-            const slope = this.current.position?.slope
-            const heartrate = this.current.deviceData.heartrate;
-            const cadence = (this.current.deviceData.cadence??0);
-            const time = this.activity?.time??0
-            
-            const display = Math.floor(time/3)%2
+            const { distance, time, speed, power, slope, heartrate, cadence,distanceRemaining,timeRemaining } = this.getCurrentValues();
 
-            let distanceRemaining = (this.getTotalDistance()/1000-distance)
-            if (isNaN(distanceRemaining)) distanceRemaining=undefined
-            if (distanceRemaining<0) distanceRemaining=0
-
-            const timeRemaining = this.durationCalculator.getRemainingTime(
-                {route:this.current.route, speed:this.current.deviceData.speed,routePos:this.activity.distance+(this.activity.startPos??0), endPos:this.current.endPos}
-            )
-        
-
-            let speedDetails,powerDetails,elevationGain, heartrateDetails,cadenceDetails
-            const stats =this.activity?.stats
-            if (display===0) {                
-                speedDetails = {value:formatNumber(stats?.speed?.max,1), label:'max'}
-                powerDetails = {value:formatNumber(stats?.power?.max,0), label:'max'}
-                heartrateDetails = {value:formatNumber(stats?.hrm?.max,0), label:'max'}
-                cadenceDetails = {value:formatNumber(stats?.cadence?.max,0), label:'max'}
-                elevationGain = {value:formatNumber(this.current.elevationGainDisplay??0,0),label:'elev gain',unit:'m'}
-            }
-            else {
-                speedDetails = {value:formatNumber(stats?.speed?.avg,1), label:'avg'}
-                powerDetails = {value:formatNumber(stats?.power?.avg,0), label:'avg'}
-                heartrateDetails = {value:formatNumber(stats?.hrm?.avg,0), label:'avg'}
-                cadenceDetails = {value:formatNumber(stats?.cadence?.avg,0), label:'avg'}
-
-                let elevationGainRemaining = this.getTotalElevation()-(this.current.elevationGainDisplay??0)
-                if (isNaN(elevationGainRemaining)) elevationGainRemaining=undefined
-                if (elevationGainRemaining<0) elevationGainRemaining=0
-                const value = elevationGainRemaining!==undefined ? `-${formatNumber(elevationGainRemaining,0)}` : undefined
-
-                elevationGain = {value,label:'elev gain',unit:'m'}
-
-            }
+            const display = Math.floor(time / 3) % 2;
+            const avgMaxStats = (display===0) ? this.getAverageValues() :  this.getMaximumValues();
+            const {speedDetails,powerDetails,elevationGain, heartrateDetails,cadenceDetails} = avgMaxStats
      
-            const info = []
-            
-            info.push({ title:'Time', data:[
-                {value:formatTime(time,true)},
-                {value:timeRemaining!==undefined? `-${formatTime(timeRemaining,true)}` : undefined }]
-            })
-            info.push({ title:'Distance', data:[{value:formatNumber(distance,2),unit:'km'},{value:distanceRemaining!==undefined? `-${formatNumber(distanceRemaining,2)}`: undefined  }]})
-                
-            info.push({ title:'Speed', data:[{value:formatNumber(speed,1),unit:'km/h'},speedDetails],dataState: this.current.dataState?.speed})
-            info.push({ title:'Power', data:[{value:formatNumber(power,0),unit:'W'},powerDetails],dataState: this.current.dataState?.power})
-            if (this.activity?.routeType!=='Free-Ride') {
-                const rf = this.activity?.realityFactor??100
-                const slopeInfo = rf===100 ? '' :`RF ${rf.toFixed(0)}%`
-                info.push({ title:'Slope', data:[{value:formatNumber(slope,1),unit:'%',info:slopeInfo},elevationGain]})
-            }
-            info.push({ title:'Heartrate', data:[{value:formatNumber(heartrate,0),unit:'bpm'},heartrateDetails],dataState: this.current.dataState?.heartrate})
-            info.push({ title:'Cadence', data:[{value:formatNumber(cadence,0),unit:'rpm'},cadenceDetails],dataState: this.current.dataState?.cadence})
+            const info = this.buildDashboardInfo(time, timeRemaining, distance, distanceRemaining, speed, speedDetails, power, powerDetails, slope, elevationGain, heartrate, heartrateDetails, cadence, cadenceDetails);
             
             this.logger.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value||''}:${i.data[1]?.value||''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
-
             return info
     
         }
@@ -360,6 +306,77 @@ export class ActivityRideService extends IncyclistService {
             this.logError(err,'getDashboardDisplayProperties')
             return []
         }
+    }
+
+
+
+    protected buildDashboardInfo(time: number, timeRemaining: number, distance: number, distanceRemaining: number, speed: number, speedDetails: { value: string; label: string; }, power: number, powerDetails: { value: string; label: string; }, slope: number, elevationGain: { value: string; label: string; unit: string; }, heartrate: number, heartrateDetails: { value: string; label: string; }, cadence: number, cadenceDetails: { value: string; label: string; }) {
+        const info = [];
+
+        info.push({
+            title: 'Time', data: [
+                { value: formatTime(time, true) },
+                { value: timeRemaining !== undefined ? `-${formatTime(timeRemaining, true)}` : undefined }
+            ]
+        });
+        info.push({ title: 'Distance', data: [{ value: formatNumber(distance, 2), unit: 'km' }, { value: distanceRemaining !== undefined ? `-${formatNumber(distanceRemaining, 2)}` : undefined }] });
+
+        info.push({ title: 'Speed', data: [{ value: formatNumber(speed, 1), unit: 'km/h' }, speedDetails], dataState: this.current.dataState?.speed });
+        info.push({ title: 'Power', data: [{ value: formatNumber(power, 0), unit: 'W' }, powerDetails], dataState: this.current.dataState?.power });
+        if (this.activity?.routeType !== 'Free-Ride') {
+            const rf = this.activity?.realityFactor ?? 100;
+            const slopeInfo = rf === 100 ? '' : `RF ${rf.toFixed(0)}%`;
+            info.push({ title: 'Slope', data: [{ value: formatNumber(slope, 1), unit: '%', info: slopeInfo }, elevationGain] });
+        }
+        info.push({ title: 'Heartrate', data: [{ value: formatNumber(heartrate, 0), unit: 'bpm' }, heartrateDetails], dataState: this.current.dataState?.heartrate });
+        info.push({ title: 'Cadence', data: [{ value: formatNumber(cadence, 0), unit: 'rpm' }, cadenceDetails], dataState: this.current.dataState?.cadence });
+        return info;
+    }
+
+    protected getCurrentValues() {
+        const distance = (this.activity?.distance ?? 0) / 1000;
+        const speed = (this.current.deviceData.speed ?? 0);
+        const power = (this.current.deviceData.power ?? 0);
+        const slope = this.current.position?.slope;
+        const heartrate = this.current.deviceData.heartrate;
+        const cadence = (this.current.deviceData.cadence ?? 0);
+        const time = this.activity?.time ?? 0;
+
+        let distanceRemaining = (this.getTotalDistance()/1000-distance)
+        if (isNaN(distanceRemaining)) distanceRemaining=undefined
+        if (distanceRemaining<0) distanceRemaining=0
+
+        const timeRemaining = this.durationCalculator.getRemainingTime(
+            {route:this.current.route, speed:this.current.deviceData.speed,routePos:this.activity.distance+(this.activity.startPos??0), endPos:this.current.endPos}
+        )
+
+        return { distance, time, speed, power, slope, heartrate, cadence, timeRemaining, distanceRemaining };
+    }
+
+    protected getAverageValues() {
+        const stats = this.activity?.stats
+        const speedDetails = { value: formatNumber(stats?.speed?.max, 1), label: 'max' };
+        const powerDetails = { value: formatNumber(stats?.power?.max, 0), label: 'max' };
+        const heartrateDetails = { value: formatNumber(stats?.hrm?.max, 0), label: 'max' };
+        const cadenceDetails = { value: formatNumber(stats?.cadence?.max, 0), label: 'max' };
+        const elevationGain = { value: formatNumber(this.current.elevationGainDisplay ?? 0, 0), label: 'elev gain', unit: 'm' };
+        return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };
+    }
+
+    protected getMaximumValues() {
+        const stats = this.activity?.stats
+        const speedDetails = { value: formatNumber(stats?.speed?.avg, 1), label: 'avg' };
+        const powerDetails = { value: formatNumber(stats?.power?.avg, 0), label: 'avg' };
+        const heartrateDetails = { value: formatNumber(stats?.hrm?.avg, 0), label: 'avg' };
+        const cadenceDetails = { value: formatNumber(stats?.cadence?.avg, 0), label: 'avg' };
+
+        let elevationGainRemaining = this.getTotalElevation() - (this.current.elevationGainDisplay ?? 0);
+        if (isNaN(elevationGainRemaining)) elevationGainRemaining = undefined;
+        if (elevationGainRemaining < 0) elevationGainRemaining = 0;
+        const value = elevationGainRemaining !== undefined ? `-${formatNumber(elevationGainRemaining, 0)}` : undefined;
+
+        const elevationGain = { value, label: 'elev gain', unit: 'm' };
+        return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };
     }
 
     getActivitySummaryDisplayProperties():ActivitySummaryDisplayProperties {
@@ -535,12 +552,12 @@ export class ActivityRideService extends IncyclistService {
                 return logs
         
         logs.push( this.getCurrentActivityLog(activities[0],current))     
-        const sorted =  logs.sort( (a,b) => b.distance-a.distance)
+        logs.sort( (a,b) => b.distance-a.distance)
 
         
-        this.current.prevRidesLogs = sorted
+        this.current.prevRidesLogs = logs
         
-        return sorted
+        return logs
     }
 
     getPrevRidesListDisplay( maxEntries:number=12):Array<PrevRidesListDisplayProps> {
@@ -558,7 +575,6 @@ export class ActivityRideService extends IncyclistService {
         })
 
         if (props.length>maxEntries) {
-            const len = props.length
             const currentIdx = props.findIndex( a=> a.title==='current')
             if (currentIdx<maxEntries-1) {
 
@@ -624,71 +640,21 @@ export class ActivityRideService extends IncyclistService {
             if (!current?.distance ||current.distance>totalDistance)
                 return null
 
+            let prefix =''            
+            const sameTime = this.getRecordWithSameOrBiggerTime(logs,current)
+            if (!sameTime) 
+                return null
+                
+            const {power,heartrate,distance,speed} = sameTime
 
             // calculate distance Gap, based on the record with same (or larger) timestamp
-            let prev = undefined;
-            let res = clone(logs.find( (log,idx) => {
-                if (log.time>=current.time) {
-                    if (idx>0)
-                        prev = logs[idx-1]
-                    return true
-                }
-                return false
-            }))
-
-            if (!res) {
-                res = clone(logs[logs.length-1])
-                if (!res) {
-                    return null
-                }
-                
-            }
-            else {
-                // At this point, res is the first record equal to or beyond the same timestamp as in current ride
-                if (Math.abs(res.time-current.time)>0.1) {                
-                    const t = res.time-current.time
-                    const v = res.speed/3.6
-                    res.distance-=(v*t)
-                }
-            }
-            const distanceDelta = current.distance-res.distance
-            const {power,heartrate,distance,speed} = res
-            const routeDistance = res.distance + ai.summary.startPos
-
-            let lat,lng;
-            if ( this.current?.route?.description?.hasGpx) {
-                const point = getPosition(this.current.route,{distance:routeDistance,nearest:true})
-                lat = point?.lat
-                lng = point?.lng
-            }
-
-            let prefix = Math.sign(distanceDelta)>0 ? '+' : ''
-            const distanceGap = prefix + (Math.abs(distanceDelta)>1000 ? `${(distanceDelta/1000).toFixed(1)}km` : `${distanceDelta.toFixed(0)}m`)
+            const {distanceGap,routeDistance,lat,lng} = this.calculateDistanceGap(ai,sameTime,current)
 
             // calculate time Gap, based on the record with same (or larger) distance
-            prev = undefined;
-            res = clone(logs.find( (log,idx) => {
-                if (log.distance>=current.distance) {
-                    if (idx>0)
-                        prev = logs[idx-1]
-                    return true
-                }
-                return false
-            }))
-
-            if (!res)
+            let sameDistance = this.getRecordWithSameOrBiggerDistance(logs,current)
+            if (!sameDistance)
                 return null
-
-
-            const s = res.distance-current.distance
-            const v = res.speed/3.6
-            const t = v===0  ? Infinity : s/v 
-            res.time-=t;         
-
-            const timeDelta = res.time-current.time
-            prefix = Math.sign(timeDelta)>0 ? '+' : '-'
-            const timeGap = prefix+ ( Math.abs(timeDelta)<60 ? `${Math.abs(timeDelta).toFixed(1)}s` : formatTime(Math.abs(timeDelta),true) )
-
+            const timeGap = this.calculateTimeGap(sameDistance,current)
 
             const routeHash = ai.summary.routeHash
             const routeId = ai.summary.routeId
@@ -708,6 +674,75 @@ export class ActivityRideService extends IncyclistService {
         }        
     }
 
+    protected getRecordWithSameOrBiggerTime(logs,current) {
+
+        let res = clone(logs.find( (log) => {
+            if (log.time>=current.time) {
+                return true
+            }
+            return false
+        }))
+
+        if (res) {
+            // At this point, res is the first record equal to or beyond the same timestamp as in current ride
+            if (Math.abs(res.time-current.time)>0.1) {                
+                const t = res.time-current.time
+                const v = res.speed/3.6
+                res.distance-=(v*t)
+            }            
+        }
+        else {
+            res = clone(logs[logs.length-1])
+        }
+        
+        return res
+    }
+
+    protected calculateDistanceGap(ai:ActivityInfo,res,current) {
+       
+        
+        const distanceDelta = current.distance-res.distance
+        const {power,heartrate,distance,speed} = res
+        const routeDistance = res.distance + ai.summary.startPos
+
+        let lat,lng;
+        if ( this.current?.route?.description?.hasGpx) {
+            const point = getPosition(this.current.route,{distance:routeDistance,nearest:true})
+            lat = point?.lat
+            lng = point?.lng
+        }
+
+        let prefix = Math.sign(distanceDelta)>0 ? '+' : ''
+        const distanceGap = prefix + (Math.abs(distanceDelta)>1000 ? `${(distanceDelta/1000).toFixed(1)}km` : `${distanceDelta.toFixed(0)}m`)
+
+        return {distanceGap, routeDistance,lat,lng}
+    }
+
+    protected calculateTimeGap(sameDistance,current) { 
+        const s = sameDistance.distance-current.distance
+        const v = sameDistance.speed/3.6
+        const t = v===0  ? Infinity : s/v 
+        sameDistance.time-=t;         
+
+        const timeDelta = sameDistance.time-current.time
+        let prefix = Math.sign(timeDelta)>0 ? '+' : '-'
+        const timeGap = prefix+ ( Math.abs(timeDelta)<60 ? `${Math.abs(timeDelta).toFixed(1)}s` : formatTime(Math.abs(timeDelta),true) )
+
+        return timeGap
+
+    }
+
+    protected getRecordWithSameOrBiggerDistance(logs,current) { 
+        const res = clone(logs.find( (log) => {
+            if (log.distance>=current.distance) {
+                return true
+            }
+            return false
+        }))
+
+        return res
+    }
+
     protected getCurrentActivityLog(ai:ActivityInfo,current:ActivityLogRecord):PastActivityLogEntry|null {
         try {
             const timeGap = ''
@@ -716,7 +751,6 @@ export class ActivityRideService extends IncyclistService {
             const routeId = ai.summary.routeId
             const tsStart = ai.summary.startTime
             const title = 'current'
-            const routeDistance = current.distance
             const {power,heartrate,distance,speed,lat,lng} = current
 
             const calculate = {routeHash,routeId,tsStart,title,power,heartrate,speed,distance,timeGap,distanceGap,lat,lng} as  PastActivityLogEntry
@@ -974,9 +1008,6 @@ export class ActivityRideService extends IncyclistService {
         switch (startSettings.type) {
             case 'Free-Ride':
                 {
-                    // TODO: build route
-                    // alternative: route is created in RouteList ( FreeRideCard)
-
                     const s = (startSettings as FreeRideStartSettings)
                     selectedRoute =  this.createFreeRide(s)
                     realityFactor = 0;
@@ -1073,8 +1104,6 @@ export class ActivityRideService extends IncyclistService {
                 // update position and elevation gain
                 const prev = this.current.position
 
-                // TODO: improve this. The function should deliver the RoutePoint representing the rider poition after the update. 
-                //       Lat/Lng, Elevation and Slope should be as close as possible to the routeDistance ( considering laps and possibility that the point might be between two way points)
                 const position = getNextPosition(this.current.route,{routeDistance:this.current.routeDistance,prev:this.current.position} ) ??
                                  getNextPosition(this.current.route,{distance,prev:this.current.position} ) 
                 this.current.position = position??prev
@@ -1258,7 +1287,6 @@ export class ActivityRideService extends IncyclistService {
         const rideProps = this.getRideProps()
         const { distance, time, timePause, totalElevation: elevationGain } = this.activity
 
-        // TODO: add maxUsers to identify group rides
         const rideStats = { distance, duration:time, timePause, elevationGain, maxUsers:1 };
 
         this.logEvent({ message: 'activity update', 

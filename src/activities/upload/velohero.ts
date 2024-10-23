@@ -1,6 +1,6 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
-import { UserSettingsService, useUserSettings } from "../../settings";
+import { useUserSettings } from "../../settings";
 import { ActivityDetails } from "../base";
 import crypto from 'crypto'
 import { IActivityUpload, VeloHeroAuth } from "./types";

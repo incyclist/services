@@ -35,16 +35,19 @@ describe('IncyclistParser',()=>{
     
             })
     
+            const run = async  (name,mocks?) => {
+                const dir = './__tests__/data/rlv'
+                const filename = `${dir}/${name}`
+                getBindings().loader = { open: load}
+                fs.existsSync = mocks?.existsSync ?? jest.fn().mockReturnValue(false)
+                const fileInfo:FileInfo = {type:'file', filename, name, ext:'xml',dir,url:undefined, delimiter:'/'}
+                return await parser.import(fileInfo)
     
+            }
+
 
             test('valid file',async ()=>{
-                const file = './__tests__/data/rlv/Triathlon_Woerrstadt_Loop.xml'
-  
-                
-                getBindings().loader = { open: load}
-            
-                const fileInfo:FileInfo = {type:'file', filename:file, name:'Triathlon_Woerrstadt_Loop.xml', ext:'xml',dir:'./__tests__/data/routes',url:undefined, delimiter:'/'}
-                const {data,details} = await parser.import(fileInfo)
+                const {data,details} = await run('Triathlon_Woerrstadt_Loop.xml')
                     
                 expect(data.localizedTitle).toEqual( {en:'Triathlon Wörrstadt'})
                 expect(data.title).toBe('Triathlon Wörrstadt')
@@ -65,20 +68,15 @@ describe('IncyclistParser',()=>{
             })
 
             test('file with preview',async ()=>{
-                const name = 'FR_Source_Drome_Part_1.xml'
-                const dir = './__tests__/data/rlv'
-                const filename = `${dir}/${name}`
-                
-                getBindings().loader = { open: load}
-                const fileInfo:FileInfo = {type:'file', filename, name, ext:'xml',dir,url:undefined, delimiter:'/'}
-                const {data,details} = await parser.import(fileInfo)
+               
+                const {data,details} = await run('FR_Source_Drome_Part_1.xml',{existsSync: jest.fn().mockReturnValue(true)})
                     
                 expect(data.title).toBe('Source Drôme 1 - Col de Prémol')
                 expect(data.country).toBe('FR')
                 expect(data.distance).toBeCloseTo(22100,-2)
                 expect(data.elevation).toBeCloseTo(459,0)
                 expect(data.hasVideo).toBe(true)
-                expect(data.previewUrl).toBe(`file:///${dir}/FR_Source_Drome_Part_1.png`)
+                expect(data.previewUrl).toBe(`file:///./__tests__/data/rlv/FR_Source_Drome_Part_1.png`)
                 expect(data.videoFormat).toBe('mp4')
                 expect(data.isLocal).toBe(true)
                 expect(data.id).toBe('e60beaa7-1238-41c9-adbb-6be022de73ca')
@@ -90,14 +88,7 @@ describe('IncyclistParser',()=>{
             })
 
             test('file with non-existing preview',async ()=>{
-                const name = 'FR_Source_Drome_Part_1.xml'
-                const dir = './__tests__/data/rlv'
-                const filename = `${dir}/${name}`
-                
-                getBindings().loader = { open: load}
-                fs.existsSync = jest.fn().mockReturnValue(false)
-                const fileInfo:FileInfo = {type:'file', filename, name, ext:'xml',dir,url:undefined, delimiter:'/'}
-                const {data,details} = await parser.import(fileInfo)
+                const {data,details} = await run('FR_Source_Drome_Part_1.xml',{existsSync: jest.fn().mockReturnValue(false)})
                     
                 expect(data.title).toBe('Source Drôme 1 - Col de Prémol')
                 expect(data.country).toBe('FR')
@@ -116,34 +107,24 @@ describe('IncyclistParser',()=>{
             })
 
             test('bug: file delivering no points',async ()=>{
-                const name = 'DE_Rimberg-Kronenberg.xml'
-                const dir = './__tests__/data/rlv'
-                const filename = `${dir}/${name}`
-                
-                getBindings().loader = { open: load}
-                fs.existsSync = jest.fn().mockReturnValue(false)
-                const fileInfo:FileInfo = {type:'file', filename, name, ext:'xml',dir,url:undefined, delimiter:'/'}
-                const {data} = await parser.import(fileInfo)
+                const {data} = await run('DE_Rimberg-Kronenberg.xml')
 
                 expect(data.points?.length).not.toBe(0)
-                    
-
             })
 
-            // test('Rioja',async ()=>{
-            //     const file = '/mnt/c/videos/Madrid/Day_11/ES_Rioja_p1.xml'
-  
+            test('cut tag',async ()=>{
+                const {data,details} = await run('cut-test.xml')
                 
-            //     getBindings().loader = { open: load}
-            
-            //     const fileInfo:FileInfo = {type:'file', filename:file, name:'ES_Rioja_p1.xml', ext:'xml',dir:'/mnt/c/videos/Madrid/Day_11',url:undefined, delimiter:'/'}
-            //     const {data,details} = await parser.import(fileInfo)
+                const points = data.points??[]
 
-            //     const mappings = details?.video?.mappings
-            //     const lastMapping = mappings?.[mappings.length-1]
-            //     expect(lastMapping?.frame).toBeLessThanOrEqual(3994*30)
-            // })
-    
+                expect(points[10].isCut).toBeTruthy()
+                expect(data.distance).toBeCloseTo(101,0)
+
+                // verify that slope is adjusted
+                expect(points[9].elevation).toBeCloseTo(455,0)
+                expect(points[10].elevation).toBeCloseTo(371,0)
+                expect(Math.abs(points[9].slope??0)).toBeLessThan(10)
+            })
     
         })
 

@@ -193,8 +193,10 @@ export class StravaApi extends AppApiBase{
     }
 
     protected getDuplicateActivity(errMessage) {
-        const regex = new RegExp("duplicate of <a href='/activities/([0-9]+)'")
+        
+        const regex = /duplicate of <a href='\/activities\/(\d+)'/
         const res = regex.exec(errMessage)
+
         if (res?.length>1)
             return res[1]
     }

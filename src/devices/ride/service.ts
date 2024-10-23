@@ -522,7 +522,7 @@ export class DeviceRideService  extends EventEmitter{
             let mode,settings,bike;
 
             if (ai.adapter?.isControllable()) {
-                bike = ai.adapter as IncyclistDeviceAdapter
+                bike = ai.adapter
 
                 const modeInfo = this.configurationService.getModeSettings(ai.udid)
                 mode = modeInfo?.mode
@@ -579,7 +579,7 @@ export class DeviceRideService  extends EventEmitter{
             logProps.cability = ai.adapter.getCapabilities().join('/')
             logProps.interface = getLegacyInterface(ai.adapter) 
             if (sType==='bike'){
-                const bike = ai.adapter as IncyclistDeviceAdapter
+                const bike = ai.adapter
                 logProps.cyclingMode = bike.getCyclingMode()?.getName()
                 logProps.bikeType = bike.getCyclingMode().getSetting('bikeType') 
             }
@@ -589,49 +589,16 @@ export class DeviceRideService  extends EventEmitter{
             return ai.adapter.start(startProps)
                 .then( async (success)=>{
                     if (success) {
-                        this.emit(`${startType}-success`, this.getAdapterStateInfo(ai))
-                        if (duplicates.find( dai=> dai.udid === ai.udid)) {
-                            duplicates.forEach( dai=> { this.emit(`${startType}-success`, this.getAdapterStateInfo(dai.info))})
-                        }
-                        this.logEvent( {message:`${startType} ${sType} request finished`,...logProps})
-                        if (startType==='check') 
-                            await ai.adapter.pause().catch( console.log)                        
-                        if (ai.adapter.isControllable())
-                            this.setSerialPortInUse(ai.adapter as IncyclistDeviceAdapter)
-
-                        if (startType==='pair') {
-                            ai.adapter.on('data',this.deviceDataHandler)                               
-                        }
-                        else if (startType==='start') {
-                            this.startHealthCheck(ai)
-                        }
+                        await this.handleStartSuccess(startType, ai, duplicates, sType, logProps);
+                        return true
                     }
-                    else {
-                        this.emit(`${startType}-error`, this.getAdapterStateInfo(ai))
-                        if (duplicates.find( dai=> dai.udid === ai.udid)) {
-                            duplicates.forEach( dai=> { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info))})
-                        }
-
-                        this.logEvent( {message:`${startType} ${sType} request failed`,...logProps})
-                        if (startType==='check' || startType==='pair') 
-                            await ai.adapter.stop().catch( console.log)                        
-                    }
-                    ai.isStarted = success;
-                    return success
+                    
+                    await this.handleStartFailure(startType, ai, duplicates, sType, logProps);
+                    return false
                 })
                 .catch(async err=>{                    
-                    ai.isStarted = false;
 
-                    this.logEvent( {message:`${startType} ${sType} request failed`,...logProps, reason:err.message })
-
-                    this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err)
-                    if (duplicates.find( dai=> dai.udid === ai.udid)) {
-                        duplicates.forEach( dai=> { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info))})
-                    }
-                    if (startType==='check' || startType==='pair') {
-                        await ai.adapter.stop().catch( console.log)                        
-                    }
-
+                    await this.handleStartRejection(startType, sType, logProps, err, ai, duplicates);
                     return false
                 })
         })
@@ -651,6 +618,54 @@ export class DeviceRideService  extends EventEmitter{
 
         return allOK;
         
+    }
+
+    private async handleStartRejection(startType: string, sType: string, logProps: any, err: any, ai: AdapterRideInfo, duplicates: { udid: string; info: AdapterInfo; }[]) {
+        this.logEvent({ message: `${startType} ${sType} request failed`, ...logProps, reason: err.message });
+
+        this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err);
+        if (duplicates.find(dai => dai.udid === ai.udid)) {
+            duplicates.forEach(dai => { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info)); });
+        }
+        if (startType === 'check' || startType === 'pair') {
+            await ai.adapter.stop().catch(console.log);
+        }
+
+        ai.isStarted = false;
+    }
+
+    private async handleStartFailure(startType: string, ai: AdapterRideInfo, duplicates: { udid: string; info: AdapterInfo; }[], sType: string, logProps: any) {
+        this.emit(`${startType}-error`, this.getAdapterStateInfo(ai));
+        if (duplicates.find(dai => dai.udid === ai.udid)) {
+            duplicates.forEach(dai => { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info)); });
+        }
+
+        this.logEvent({ message: `${startType} ${sType} request failed`, ...logProps });
+        if (startType === 'check' || startType === 'pair')
+            await ai.adapter.stop().catch(console.log);
+
+        ai.isStarted = false;
+    }
+
+    private async handleStartSuccess(startType: string, ai: AdapterRideInfo, duplicates: { udid: string; info: AdapterInfo; }[], sType: string, logProps: any) {
+        this.emit(`${startType}-success`, this.getAdapterStateInfo(ai));
+        if (duplicates.find(dai => dai.udid === ai.udid)) {
+            duplicates.forEach(dai => { this.emit(`${startType}-success`, this.getAdapterStateInfo(dai.info)); });
+        }
+        this.logEvent({ message: `${startType} ${sType} request finished`, ...logProps });
+        if (startType === 'check')
+            await ai.adapter.pause().catch(console.log);
+        if (ai.adapter.isControllable())
+            this.setSerialPortInUse(ai.adapter as IncyclistDeviceAdapter);
+
+        if (startType === 'pair') {
+            ai.adapter.on('data', this.deviceDataHandler);
+        }
+        else if (startType === 'start') {
+            this.startHealthCheck(ai);
+        }
+
+        ai.isStarted = true
     }
 
     startHealthCheck(ai: AdapterRideInfo) {
@@ -757,63 +772,30 @@ export class DeviceRideService  extends EventEmitter{
         let stopRequested = false;
         this.once('stop-ride',()=>{ stopRequested= true;})
 
-
-
         try {
+            await this.stopAdapters(adapters);
+
+            if (stopRequested) // could have changed in the meantime ( based on event)
+                return;
+
+            await this.performInterfaceReconnect(ifName);
             
-            const i = InterfaceFactory.create(ifName);
-            
-            const promisesStop = [];
-            adapters.forEach(ai => {
-                promisesStop.push( this.stopAfterRestart(ai));
+            if (stopRequested) // could have changed in the meantime ( based on event)
+                return;
 
-                
-            });
-
-
-            if (promisesStop.length > 0) {
-                await Promise.race( [sleep(66000),Promise.allSettled(promisesStop)]);
-            }
-
-
-            if (!stopRequested) {
-                await i.disconnect();
-                await sleep(1000);
-                await i.connect();
-            }
-
-            if (!stopRequested) {
-
-                const promisesStart = [];
-                adapters.forEach(ai => { promisesStart.push(ai.adapter.start()); });
-
-                if (promisesStart.length > 0) {
-                    // to avoid channel collisions, start ant adapters in sequence
-                    if (ifName==='ant') {
-                        for (let i=0;i<promisesStart.length;i++) {
-                            try {
-                                await promisesStart[i]
-                            }
-                            catch {
-                                // ignore failures
-                            }
-                        }
-
-                    }
-                    else {
-                        await Promise.allSettled(promisesStart);
-                    }
-                }
-            }
-
+            await this.reconnectAdapters(adapters, ifName);   
         }
         catch (err) {
             this.logger.logEvent({ message: 'restart interface failed', interface: ifName, reason: err.message });
         }
 
+        this.finalizeAdaptersAfterRestart(adapters);
+    }
+
+    private finalizeAdaptersAfterRestart(adapters: AdapterRideInfo[]) {
         adapters.forEach(ai => {
             if (ai.adapter.isStarted()) {
-                ai.tsLastData = Date.now()
+                ai.tsLastData = Date.now();
             }
             else {
                 ai.isRestarting = false;
@@ -822,6 +804,50 @@ export class DeviceRideService  extends EventEmitter{
             ai.adapter.on('data', this.deviceDataHandler);
             ai.isRestarting = false;
         });
+    }
+
+    private async performInterfaceReconnect(ifName: string) {
+        const i = InterfaceFactory.create(ifName);
+        await i.disconnect();
+        await sleep(1000);
+        await i.connect();
+    }
+
+    private async stopAdapters(adapters: AdapterRideInfo[]) {
+        const promisesStop = [];
+        adapters.forEach(ai => {
+            promisesStop.push(this.stopAfterRestart(ai));
+
+
+        });
+
+
+        if (promisesStop.length > 0) {
+            await Promise.race([sleep(66000), Promise.allSettled(promisesStop)]);
+        }
+    }
+
+    private async reconnectAdapters(adapters: AdapterRideInfo[], ifName: string) {
+        const promisesStart = [];
+        adapters.forEach(ai => { promisesStart.push(ai.adapter.start()); });
+
+        if (promisesStart.length > 0) {
+            // to avoid channel collisions, start ant adapters in sequence
+            if (ifName === 'ant') {
+                for (let i = 0; i < promisesStart.length; i++) {
+                    try {
+                        await promisesStart[i];
+                    }
+                    catch {
+                        // ignore failures
+                    }
+                }
+
+            }
+            else {
+                await Promise.allSettled(promisesStart);
+            }
+        }
     }
 
     protected async stopAfterRestart(unhealthy: AdapterRideInfo) {
@@ -1167,7 +1193,6 @@ export class DeviceRideService  extends EventEmitter{
             }
             catch {}            
         }
-        return
     }
 
 
@@ -1220,7 +1245,7 @@ export class DeviceRideService  extends EventEmitter{
                 return;
 
 
-            const device = adapter as IncyclistDeviceAdapter
+            const device = adapter
             device.setCyclingMode(mode,settings)
             if (sendInit)
                 await device.sendInitCommands()
@@ -1250,7 +1275,7 @@ export class DeviceRideService  extends EventEmitter{
                 const modeInfo = this.configurationService.getModeSettings(udid,mode.getName())
                 const settings = modeInfo.settings
 
-                const device = adapter as IncyclistDeviceAdapter
+                const device = adapter
                 device.setCyclingMode(mode,settings)
     
             }

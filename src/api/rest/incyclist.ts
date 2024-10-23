@@ -29,7 +29,7 @@ import { ApiClient } from './api';
 
 export class IncyclistRestApiClient  {
 
-    static _api: ApiClient
+    protected static _api: ApiClient
 
     /**
      * Provides access to the axios client object

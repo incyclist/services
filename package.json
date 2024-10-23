@@ -27,7 +27,7 @@
     "build": "tsc",
     "test": "npx jest",
     "test:e2e": "npx jest --coverage -c jest.e2e-config.js  --coverageDirectory coverage.e2e",
-    "test:unit": "TZ=utc npx jest --coverage -c jest.unit-config.js  ",
+    "test:unit": "npx jest --coverage -c jest.unit-config.js  ",
     "dev": "tsc --watch",
     "docgen": "typedoc --options typedoc.json",
     "docgen1": "typedoc --readme none --excludeProtected --excludePrivate --plugin typedoc-plugin-no-inherit --plugin  typedoc-plugin-markdown src/index.ts",

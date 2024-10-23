@@ -129,7 +129,7 @@ export type StravaUploadProps = {
 
 export class DuplicateError extends Error {
     constructor( public stravaId, message?:string){
-        super(message??'Activity already exists')
+        super(message??'Activity already exists: id='+stravaId)
     }
 }
 

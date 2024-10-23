@@ -78,7 +78,7 @@ export class PromiseObserver<T> extends Observer {
                     this.emitter.emit('done',res)
                     resolve(res)
                 })
-                .catch(err => {
+                .catch( (err:Error) => {
                     reject(err)
                 })                    
         })

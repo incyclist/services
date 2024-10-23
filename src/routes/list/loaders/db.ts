@@ -237,25 +237,33 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             return;
         }
 
+        this.validateDetails(details)
+        this.validateDescription(description, details)
+
+
+        return details
+    }
+    
+    private validateDetails(details: any) {
         if (!details.points || !Array.isArray(details.points)) {
             // legacy format?
             details.points = details.decoded
             delete details.decoded
-        }        
-
-        if (details.localizedTitle && typeof(details.localizedTitle)==='string') {
-            details.localizedTitle = { en:details.localizedTitle}
         }
-        
+
+        if (details.localizedTitle && typeof (details.localizedTitle) === 'string') {
+            details.localizedTitle = { en: details.localizedTitle }
+        }
+
         validateDistance(details.points)
         updateSlopes(details.points)
+    }
 
+    private validateDescription(description: RouteInfo, details: any) {
         if (!description.elevation) {
             description.elevation = getTotalElevation(details)
         }
-        return details
     }
-    
 
     protected async loadDetails(route:Route, alreadyAdded?:boolean): Promise<void> {
         const details = await this.loadDetailRecord(route)
@@ -306,7 +314,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
                 await repo.write(id,route.details as undefined as JSONObject)
             }
             catch(err) {
-                console.log(err)
+                //console.log(err)
             }
         }
        

@@ -2,7 +2,7 @@ import { Parser } from "../types"
 
 export class ParserFactory {
 
-    static _instance: ParserFactory
+    protected static _instance: ParserFactory
 
     static getInstance():ParserFactory {
         if (!ParserFactory._instance)
@@ -10,7 +10,7 @@ export class ParserFactory {
         return ParserFactory._instance
     }
 
-    private parsers: Array<Parser<unknown,unknown>> 
+    private readonly parsers: Array<Parser<unknown,unknown>> 
     private initialized: boolean;
 
 
@@ -55,6 +55,11 @@ export class ParserFactory {
 
     setInitialized(done:boolean) {
         this.initialized=done
+    }
+
+    protected reset() {
+        ParserFactory._instance = undefined
+
     }
  
 }

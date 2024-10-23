@@ -3,7 +3,6 @@ import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
 import { RouteCard } from "../cards/RouteCard";
 import { RouteCardType } from "../cards/types";
-import { checkIsNew } from "../utils";
 
 const score = (r:RouteInfo):number =>{
     let val = 0;
@@ -43,11 +42,14 @@ export class MyRoutes extends CardList<Route> {
 
     sort(): Array<Card<Route>> {
 
-        const fixed = this.cards.filter( c=> (c.getCardType() as RouteCardType)!=='Route')
-        const cards = this.cards.filter( c=> (c.getCardType() as RouteCardType)==='Route')
 
-        const sorted = [ ...fixed,...cards.sort( sortFn ) ]
-        return sorted.map(c=>c as Card<Route>);
+        const fixed = this.cards.filter( c=> (c.getCardType() as RouteCardType)!=='Route')
+        
+        const sortable = Array.from(this.cards.filter( c=> (c.getCardType() as RouteCardType)==='Route'))
+        sortable.sort( sortFn )
+        const sorted = [ ...fixed,...sortable ]
+
+        return sorted
     }
 
     add(card:Card<Route>, fromImport:boolean=false) {

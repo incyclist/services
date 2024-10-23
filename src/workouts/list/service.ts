@@ -468,10 +468,10 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             if (forUi && (!this.initialized))
                 return null;
 
-        
+            const lists = this.lists.filter( l=>l.getCards().length>0)
 
             // TODO Add additional Lists (Plans, e.g.)
-            const lists = this.lists.filter( l=>l.getCards().length>0)
+
             return lists
 
         }
@@ -536,20 +536,12 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                     return;
             }
             else {
-                targetList = target as CardList<WP>
+                targetList = target
             }
-
-            //const isSelected = (this.selectedWorkout?.id === card.getId())
 
             source.remove(card)
             targetList.add(card)
 
-            /*
-            if (isSelected) {
-                this.selectCard(card)
-            }
-            */
-            
             this.emitLists('updated')                
             return targetList
     
@@ -568,9 +560,11 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     protected createSettingsList(): CardList<WP> {
         const list = new CardList<Workout>('settings', 'Workouts')
         list.add(new WorkoutImportCard())
-        const sorted = this.items
+
+        this.items
             .sort( (a,b)=> a.name>b.name ? 1: -1)
-        sorted.forEach( i=> {
+            
+        this.items.forEach( i=> {
             if (i.type==='workout') {
                 const card = new WorkoutCard( i as Workout,{list})
                 list.add(card)
@@ -630,7 +624,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         if (item.type==='workout') {            
             card = new WorkoutCard(item as unknown as Workout,{list: list as CardList<Workout>})       
         }
-        else {
+        else if (item.type==='plan') {
             // TODO
         }
 
@@ -692,7 +686,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             id = target
         }
         else {
-            const item = target as WP
+            const item = target
             id = item.id            
         }
 

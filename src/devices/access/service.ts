@@ -222,9 +222,8 @@ export class DeviceAccessService  extends EventEmitter{
         
         if (!avalailable) {
             existing.state = 'unavailable';
-            (existing as InterfaceInfoInternal).unavailable = true;
+            existing.unavailable = true;
             this.emit('interface-changed',ifaceName,{name:ifaceName,state:'unavailable',isScanning:false})
-            return
         }
 
     }       
@@ -317,9 +316,8 @@ export class DeviceAccessService  extends EventEmitter{
 
             this.emit('interface-changed', ifaceName,this.interfaces[ifaceName], interfaces)
         }
-        else {
-            const info = existing as InterfaceInfoInternal
-            info.interface.setBinding(binding)
+        else {           
+            existing.interface.setBinding(binding)
         }
 
     }

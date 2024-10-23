@@ -5,10 +5,9 @@ import { useUserSettings } from "../../../settings";
 import { sleep } from "../../../utils/sleep";
 import { RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
-import { RouteInfo, RoutePoint  } from "../../base/types";
+import { RouteInfo, RoutePoint,AppStatus  } from "../../base/types";
 import { BaseCard } from "./base";
 import { RouteCardType } from "./types";
-import { AppStatus } from "../../base/types";
 import { getRouteList, useRouteList } from "../service";
 import { RouteStartSettings } from "../types";
 import { RoutesDbLoader } from "../loaders/db";
@@ -393,8 +392,6 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     this.deleteFromUIList()
                     this.enableDelete(false)
                     getRouteList().addCardAgain(this)
-                    // TODO: Do we also need to remove the file?
-                   
                     return true
                 }
                 else if (!route.isLocal) {

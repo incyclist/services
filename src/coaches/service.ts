@@ -153,17 +153,6 @@ export class CoachesService extends IncyclistService {
 
     }
 
-    getCoachesRideInfo():Array<CoachStatus> {    
-        try {
-            // TODO replace with proper implementation
-            const a:Array<CoachStatus> = []
-            return a            
-        }
-        catch(err) {
-            this.logError(err,'resumeRide')            
-        }
-    }
-
     protected onCoachDataUpdate(coach:Coach, data:IncyclistAdapterData) {
 
         if (this.isPaused)

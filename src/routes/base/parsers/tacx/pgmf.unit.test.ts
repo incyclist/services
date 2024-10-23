@@ -21,13 +21,22 @@ describe ('PGMF Reader', ()=>{
             const data = await loadFile(null,file) as Buffer
 
             const fileInfo = reader.parse( data )
-    
+            
+            expect(fileInfo.fileType).toBe('pgmf')
+            expect(fileInfo.generalInfo).toMatchObject({
+                checksum: 4046398331,
+                courseName: 'ES_Andalusia-1',
+                wattSlopePulse: 1,
+                timeDist: 1,
+                totalTimeDist: 0,
+                energyCons: 0,
+                altitudeStart: expect.closeTo(58.7,1),
+                brakeCategory: 0
+              })
+            const cntPoints = fileInfo.program
+            expect(cntPoints).toHaveLength(1935)
+            expect(cntPoints?.filter( p=>p.slope!==undefined)).toHaveLength(1935)
 
-            // expect(fileInfo.rlvInfo?.videoFile).toBe('D:\\RLV-Training\\RLV\\ES_Andalusia-1\\ES_Andalusia-1.avi')
-            // expect(fileInfo.rlvInfo?.framerate).toBe(25)
-            // expect(fileInfo.mapping?.length).toBe(1066)
-            // expect(fileInfo.infoBoxes?.length).toBe(0)
-            // expect(fileInfo.courseInfo?.length).toBe(3)
         })
 
         test('invalid file type',async ()=>{

@@ -51,12 +51,12 @@ describe ( 'Step' ,() => {
 
         test ( 'Empty' ,() => {
             
-            expect( ()=> {const s =new Step()} ).toThrow()
+            expect( ()=> {new Step()} ).toThrow()
         });    
 
         test ( 'invalid object' ,() => {
             
-            expect( ()=> {const s = new Step({a:1, b:2})} ).toThrow()
+            expect( ()=> {new Step({a:1, b:2})} ).toThrow()
         });    
 
         
@@ -85,7 +85,6 @@ describe ( 'Step' ,() => {
             catch (err) {
                 return err;
             }
-            return;
         }
 
 
@@ -161,7 +160,6 @@ describe ( 'Step' ,() => {
             catch (err) {
                 return err;
             }
-            return;
         }
 
 

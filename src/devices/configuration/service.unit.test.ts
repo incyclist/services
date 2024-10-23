@@ -581,8 +581,7 @@ describe( 'DeviceConfigurationService',()=>{
 
             const settings = service.settings
             expect(settings.devices.length).toBe(3)
-            const udid = settings.devices[2].udid
-
+            
             expect(settings.capabilities.length).toBe(6)  
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:undefined})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:undefined})

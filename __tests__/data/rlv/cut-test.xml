@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<gpx-import>
+    <name>Cut_Test</name>
+    <id>cut-test-id</id>
+    <country>ES</country>
+    <title>Cut Test</title>
+
+    <video-file-path>cut-test.mp4</video-file-path>
+    <gpx-file-path>cut-test.gpx</gpx-file-path>
+    <framerate>30</framerate>
+    <cuts>
+          <cut time="0:00:10"/>
+    </cuts>
+</gpx-import>

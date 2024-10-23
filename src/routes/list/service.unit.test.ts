@@ -69,7 +69,6 @@ const prepareMock = ( database, props) => {
         service = new MockeableService()            
     }
     
-    if (database) database = db;
     
     
     service.loadRoutesFromApi = jest.fn().mockResolvedValue([])
@@ -186,6 +185,7 @@ describe('RouteListService',()=>{
             userSettings = useUserSettings()
             userSettings.get = jest.fn().mockReturnValue({})
             userSettings.set = jest.fn()
+            service.filters = undefined
         })
 
         afterEach( ()=>{
@@ -207,11 +207,59 @@ describe('RouteListService',()=>{
             expect(routes.length).toBe(1)
             expect(routes.map(r=>r.title)).toEqual( ['Sydney Opera House and Botanic Garden' ])    
         })
+        test('min distance filter',()=>{
+            const {routes} = service.search({distance:{min:100000}})
+            expect(routes.length).toBe(2)
+            expect(routes.map(r=>r.id)).toEqual( ['20b1ba7a-93c6-4ce3-aafa-f9d24325c7be','9b779bbc-7a20-44f9-b490-76eecac34ee9' ])    
+        })
+        test('max distance filter',()=>{
+            const {routes} = service.search({distance:{max:3000}})
+            
+            expect(routes.map(r=>r.title)).toEqual( ['Corvara','Menorca West','Trollstigen' ])    
+        })
+        test('min elevation filter',()=>{
+            const {routes} = service.search({elevation:{min:2000}})
+            expect(routes.map(r=>r.title)).toEqual( ['Visiting Jeroen - Part 14' ])    
+        })
+        test('max elevation filter',()=>{
+            const {routes} = service.search({elevation:{max:1}})
+            expect(routes.map(r=>r.title)).toEqual( ['Ventoux - Malaucene','Würzjoch ' ])    
+        })
+        test('content type video',()=>{
+            const {routes} = service.search({contentType:'Video'})
+            expect(routes.length).toBe(25)
+        })
+        test('content type GPX',()=>{
+            const {routes} = service.search({contentType:'GPX'})
+            expect(routes.length).toBe(9)
+        })
+        test('route type Loop',()=>{
+            const {routes} = service.search({routeType:'Loop'})
+            expect(routes.length).toBe(7)
+        })
+        test('route type Point to Point',()=>{
+            const {routes} = service.search({routeType:'Point to Point'})
+            expect(routes.length).toBe(27)
+        })
 
         test('title filter should be case insensitive',()=>{
             const {routes} = service.search({title:'sydney'})
             expect(routes.length).toBe(1)
             expect(routes.map(r=>r.title)).toEqual( ['Sydney Opera House and Botanic Garden' ])    
+        })
+
+        test('combinations',()=>{
+            const {routes} = service.search({routeType:'Loop',elevation:{min:100}, contentType:'GPX'})
+            expect(routes.map(r=>r.title)).toEqual( ['Malaga City Tour' ])    
+        })
+        test('no filters - initial search',()=>{
+            const {routes} = service.search()
+            expect(routes.length).toBe(34)
+        })
+        test('no filters - after previous search',()=>{
+            service.search({routeType:'Loop',elevation:{min:100}, contentType:'GPX'})
+            const {routes} = service.search()
+            expect(routes.length).toBe(1)
         })
 
     })

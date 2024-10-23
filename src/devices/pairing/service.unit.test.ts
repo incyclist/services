@@ -196,9 +196,12 @@ class TestWrapper extends DevicePairingService {
     }
 
     resetServices() {
+        this.run = jest.fn();
+
         (DeviceAccessService as any)._instance = undefined;
         (DeviceConfigurationService as any)._instance = undefined;
         (DeviceRideService as any)._instance = undefined;  
+
     }
 
     getPairingRetryDelay() {
@@ -650,7 +653,7 @@ describe('PairingService',()=>{
             })
 
         })
-        describe('stopDeviceSelection',()=>{})
+        //describe('stopDeviceSelection',()=>{})
 
 
         describe('selectDevice',()=>{
@@ -665,6 +668,7 @@ describe('PairingService',()=>{
                 stopDeviceSelection = jest.spyOn(svc as any,'_stopDeviceSelection')
             })
             afterEach( ()=>{
+                svc.resetServices()
                 TestWrapper.resetMocks()
             })
 
@@ -864,6 +868,7 @@ describe('PairingService',()=>{
                 })
     
                 afterEach( ()=>{
+                    svc.resetServices()
                     TestWrapper.resetMocks()
                 })
     
@@ -1104,8 +1109,11 @@ describe('PairingService',()=>{
             })
 
             afterEach( ()=>{
+                
+                svc.resetServices()
                 TestWrapper.resetMocks()
                 jest.resetAllMocks()
+
             })
 
             describe('disabled',()=>{
@@ -1192,6 +1200,7 @@ describe('PairingService',()=>{
 
         // emitted by access service whenever an interface is connected/disconnected or enabled/disabled 
         describe('access:interface-changed',()=>{
+
             let ant
             let control
             let cadence
@@ -1227,6 +1236,8 @@ describe('PairingService',()=>{
             })
 
             afterEach( ()=>{
+                svc.resetServices()
+
                 TestWrapper.resetMocks()
                 jest.resetAllMocks()
             })
@@ -1305,6 +1316,7 @@ describe('PairingService',()=>{
             })
 
             afterEach( ()=>{
+                svc.resetServices()
                 TestWrapper.resetMocks()
                 jest.resetAllMocks()
             })
@@ -1507,6 +1519,7 @@ describe('PairingService',()=>{
             })
 
             afterEach( ()=>{
+                svc.resetServices()
                 TestWrapper.resetMocks()
                 jest.resetAllMocks()
             })
@@ -1599,6 +1612,7 @@ describe('PairingService',()=>{
             })
 
             afterEach( ()=>{
+                svc.resetServices()
                 TestWrapper.resetMocks()
                 jest.resetAllMocks()
             })
@@ -1728,6 +1742,7 @@ describe('PairingService',()=>{
             })
 
             afterEach( async ()=>{
+                svc.resetServices()
                 TestWrapper.resetMocks()
                 jest.resetAllMocks()
                 await svc.stop()

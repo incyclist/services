@@ -201,41 +201,37 @@ export class Step implements StepDefinition {
 
 
     protected calc  (ts,limit,includeStepInfo:boolean, isPower=false)  {
-        if (!limit)
+        if (!limit) {
             return ({});
-        const type = isPower ? limit.type : undefined
+        }
 
         const sl = (limits) => this.getRemainder( isPower ? { ...limits, type} : limits, includeStepInfo)
 
+        const type = isPower ? limit.type : undefined
         const part = (ts-this.start) / this.duration;
 
 
-        if ( limit!==undefined ) {
-            if ( limit.max===undefined && limit.min===undefined) {
-                return sl({})
-            }
-
-            let min,max;
-            if ( this.cooldown) {
-                if ( limit.max===undefined && limit.min!==undefined) {
-                    return sl({min:limit.min})
-                } 
-                max = limit.min!==undefined ? limit.max-part*(limit.max-limit.min) : limit.max-part*(limit.max)
-                min = isPower ? max : limit.min
-            }
-            else {
-                if ( limit.max===undefined && limit.min!==undefined) {
-                    return sl({min:limit.min})
-                } 
-                if ( limit.min===undefined && limit.max!==undefined) {
-                    return sl({max:limit.max})
-                } 
-                max = min = limit.max!==undefined ? part*(limit.max-limit.min)+limit.min : limit.max
-                min = isPower ? max : limit.min
-            }
-            limit = {min,max}
+        if ( limit.max===undefined && limit.min===undefined) {
+            return sl({})
         }
-        return sl(limit);
+        if ( limit.max===undefined && limit.min!==undefined) {
+            return sl({min:limit.min})
+        } 
+        
+        if ( this.cooldown) {
+            const max = limit.min!==undefined ? limit.max-part*(limit.max-limit.min) : limit.max-part*(limit.max)
+            const min = isPower ? max : limit.min
+            return sl({min,max});
+        }
+        
+        if ( limit.min===undefined && limit.max!==undefined) {
+            return sl({max:limit.max})
+        } 
+        const max = limit.max!==undefined ? part*(limit.max-limit.min)+limit.min : limit.max
+        const min = isPower ? max : limit.min        
+        return sl({min,max});
+        
+        
     }
 
 }

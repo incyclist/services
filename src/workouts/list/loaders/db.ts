@@ -123,7 +123,7 @@ export class WorkoutsDbLoader extends Loader{
         this.workouts.splice(idx,1)
 
         this.isDirty = true;
-        await this.write()
+        this.write()
     }
 
     protected getRepo() {

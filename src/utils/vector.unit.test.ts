@@ -28,17 +28,17 @@ describe ( 'constructor', () => {
 
     test ( 'incorrect array', () => {
         expect(() => {
-             const v = new Vector( [1])
+             new Vector( [1])
         }).toThrow("incorrect value of: props");
     } );
     test ( 'incorrect coordinate', () => {
         expect(() => {
-            const v = new Vector({coordinates:{a:1, b:1}} )
+            new Vector({coordinates:{a:1, b:1}} )
         }).toThrow("incorrect value of: props.coordinates");
     } );
     test ( 'incorrect path', () => {
         expect(() => {
-            const v = new Vector({path:{}} )
+            new Vector({path:{}} )
         }).toThrow("incorrect value of: props.path");
     } );    
     

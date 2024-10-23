@@ -23,7 +23,6 @@ export class AvatarService extends IncyclistService {
             this.options.push(currentOption)
         }
         currentOption.usageCnt++   
-        return
     }
 
     get( id:string):Avatar {

@@ -1,4 +1,4 @@
-import { FileInfo,  path } from "../../../api";
+import { FileInfo,  getBindings} from "../../../api";
 import { LocalizedText, RouteInfoText } from "../types";
 import { JSONObject } from "../../../utils/xml";
 
@@ -90,58 +90,75 @@ export class BinaryReader {
 }
 
 export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, url?:string}, scheme:string='file'):string=> {
+
+    // Do we check against a local file ? 
     if (info.type!=='url') {
-        if (referenced.file) {
-            const fileName = info.filename.replace(info.name,referenced.file)
-            return `file:///${fileName}`;
-        }
-        return referenced.url;
+        return buildFromFile(info,referenced, scheme)
     }
 
-    const target:{ file?:string, url?:string} = {}
 
-    let fileName = referenced.file;
-
+    // if the target is a URL, just return that
     if (referenced.url) {
         return referenced.url
     }
 
+    if (!referenced.file) {
+        // Target is neither defined as file or URL -> should never happen: throw an Exception
+        throw new Error('referenced.file or referenced.url must be specified')
+    }
     
-    if (fileName) {
-        const inputUrl = info.url;
+    let targetFileName = referenced.file;
+    //const regex = /(\\|\/)/g;
+    const regex = /([\\\/])/g;
 
-        const regex = /(\\|\/)/g;
+    if (targetFileName.startsWith('http://') || targetFileName.startsWith('https://')) { 
+        return targetFileName 
+    }
+    else if (targetFileName.search(regex)===-1) {
+        return buildAbsolutePathTarget(targetFileName,info,scheme)
 
-        if (fileName.startsWith('http://') || fileName.startsWith('https://')) { 
-            return fileName 
-        }
+    }
+    else if (targetFileName.startsWith('.')) {
+        return buildRelativePathTarget(targetFileName,info,scheme)
+    }
+    else {
+        return `${scheme}:///${targetFileName}`
+    }
+}
 
-        else if (fileName.search(regex)===-1) {
-            
-            if (  inputUrl.startsWith('incyclist:') || inputUrl.startsWith('file:')) {
-                const parts = inputUrl.split('://');
-                const targetPath = parts[1].replace(info.name,fileName)
-                return  `${scheme}://${targetPath}`
-            }
+const buildFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}, scheme:string='file') => { 
+    if (referenced.file) {
+        const fileName = info.filename.replace(info.name,referenced.file)
+        return `file:///${fileName}`;
+    }
+    return referenced.url;
 
-        }
-        else {
-            // relative path
-            if ( fileName.startsWith('.') ) {
-                //videoFile = joinPath( info.dir, videoFile, delimiter)
-                fileName = path.join( info.dir, fileName)
-                target.file = fileName
-                target.url = `${scheme}:///${fileName}`;
-            }
-            else {
-                target.url = `${scheme}:///${fileName}`;                                            
-            }
-            return target.url
-        }
+}
 
+const buildAbsolutePathTarget = (fileName: string, info: FileInfo, scheme: string) => { 
+    const inputUrl = info.url;
+
+    if (  inputUrl.startsWith('incyclist:') || inputUrl.startsWith('file:')) {
+        const target:{ file?:string, url?:string} = {}
+        const parts = inputUrl.split('://');
+        const targetPath = parts[1].replace(info.name,fileName)
+        return  `${scheme}://${targetPath}`
     }
 
 }
+
+const buildRelativePathTarget = (fileName: string, info: FileInfo, scheme: string) => {
+    const target:{ file?:string, url?:string} = {}
+    
+    const path = getBindings().path;
+    //videoFile = joinPath( info.dir, videoFile, delimiter)
+    fileName = path.join(info.dir, fileName);
+    target.file = fileName;
+    target.url = `${scheme}:///${fileName}`;
+
+    return target.url;
+}
+
 
 export const parseInformations =( informations?:Array<JSONObject>):Array<RouteInfoText> =>{
     if (!informations || !Array.isArray(informations))
@@ -160,3 +177,4 @@ export const parseInformations =( informations?:Array<JSONObject>):Array<RouteIn
     })
 
 }
+

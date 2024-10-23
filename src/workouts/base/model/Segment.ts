@@ -45,15 +45,12 @@ export class Segment extends Step implements SegmentDefinition {
                     this.steps.push(s);
                 });
             }
-            else {
-                if (ignoreValidate !== true)
+            else if (ignoreValidate !== true) {
                     throw new Error(`Invalid Segment description, no steps defined`);
-
             }
 
         }
-        else {
-            if (ignoreValidate === undefined || ignoreValidate === false)
+        else  if (ignoreValidate === undefined || ignoreValidate === false) {
                 throw new Error(`Invalid Segment description, no steps defined`);
         }
         if (opts.repeat !== undefined) this.repeat = opts.repeat;
@@ -90,12 +87,11 @@ export class Segment extends Step implements SegmentDefinition {
     getStart() {
         if ( this.start!==undefined)
             return this.start;
-        else {
-            if ( this.steps.length>0 )
-                return this.steps[0].start
-            else 
-                return undefined;
-        }
+        else if ( this.steps.length>0 )
+            return this.steps[0].start
+        else 
+            return undefined;
+        
     }
 
     getEnd() {

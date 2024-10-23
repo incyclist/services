@@ -80,7 +80,7 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
     async connect(accessToken:string, refreshToken:string, expiration?:Date):Promise<boolean> {
 
         if (!this.isInitialized) {
-            const ok =this.init()
+            this.init()
         }
 
         this.logger.logEvent({message:'Connect with Strava'})
@@ -94,13 +94,13 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
             }
 
             if (isConnected) {                
-                this.getApi().update(this.config)
+                this.getApi().update(config)
             }
             else {
                 const observer = this.getApi().init(this.config)
                 observer.on('token.updated',this.updateConfig.bind(this) )
             }
-            await this.saveCredentials()
+            this.saveCredentials()
             this.logger.logEvent({message:'Connect with strava success'})           
             return true
             
@@ -114,7 +114,7 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
 
     disconnect() {
         if (!this.isInitialized) {
-            const ok =this.init()
+            this.init()
         }
         try {
             this.getUserSettings().set('user.auth.strava',null)   
@@ -213,8 +213,6 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
         }
 
         this.logger.logEvent({message:'Strava Save Credentials done'})
-        return
-
     }
 
     protected updateConfig(config:StravaConfig) {

@@ -43,7 +43,7 @@ export default class IncyclistRoutesApi {
         return useUserSettings().get(ROUTE_API,DEFAULT_ROUTE_API)
     }
 
-    async getRouteDescriptions(query:RouteDescriptionQuery): Promise<Array<RouteApiDescription>> {
+    async getRouteDescriptions(query:RouteDescriptionQuery, throws:boolean = false): Promise<Array<RouteApiDescription>> {
         const {type='gpx',category} = query;
 
         let url  = (type === 'gpx' ) ? `?private=false` : `/?type=${type}`;
@@ -55,6 +55,9 @@ export default class IncyclistRoutesApi {
             return res.data;           
         }
         catch(err) {
+            if (throws)
+                throw(err)
+
             this.logError(err,'getRouteDescriptions', {query})
             return undefined
         }

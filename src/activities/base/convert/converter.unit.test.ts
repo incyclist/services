@@ -27,7 +27,7 @@ describe('ActivityConverter', () => {
 
     afterEach(() => {
         jest.clearAllMocks()
-        ActivityConverter.factory = undefined
+        ActivityConverter._reset()
     });
 
     test('FIT format', async () => {

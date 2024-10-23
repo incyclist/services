@@ -9,6 +9,7 @@
         "outDir": "lib",
         "removeComments": true
     },
+    "lib": ["ESNext.Array","ES2023.Array"],
     "include": [
         "src/**/*.js",
         "src/**/*.ts"

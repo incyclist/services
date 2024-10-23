@@ -3,7 +3,7 @@ import { JSONObject, XmlJSON, parseXml, toXml } from '../../../utils/xml';
 import { RouteApiDetail } from '../api/types';
 import { ParseResult, Parser, RouteInfo, RoutePoint } from '../types';
 import { FileInfo, getBindings } from '../../../api';
-import { checkIsLoop, getRouteHash, getTotalElevation,getTotalDistance, updateSlopes, validateRoute } from '../utils/route';
+import { checkIsLoop, getRouteHash, getTotalElevation,getTotalDistance, updateSlopes, validateRoute } from '../utils/route'
 import { Position, Altitude } from './types';
 import { getReferencedFileInfo, parseInformations } from './utils';
 
@@ -60,7 +60,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         if (!title)
             return
 
-        if (title.match(/^[A-z]{2}[-_]{1}.*/g)) {            
+        if (title.match(/^[A-z]{2}[-_].*/g)) {            
             return title.substring(0,2)
         }
     }
@@ -224,91 +224,91 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         const extension = fileParts[fileParts.length-1];            
         route.video.format = extension.toLowerCase()
 
-    
-        const mappings = data['mappings']
-    
-        if ( mappings ) {
-            
-            let prev;
-            let prevTime =0;
-           
-    
-            const startFrame = parseInt(data['start-frame']||0 )
-            const endFrame = data['end-frame'] ? parseInt(data['end-frame']) : undefined;
-            
-            try {
-    
-                const getDistance = (mapping,prevMapping,idx?) => {
-                    const prevDist = prevMapping.distance || 0;
-                    const prevFrame = prevMapping.frame || startFrame;
-                    if (mapping.distance!==undefined)
-                        return mapping.distance;
-                    if (prev.dpf!==undefined && mapping.frame!==undefined)
-                        return  prev.dpf*(mapping.frame-prevFrame)+prevDist
-                    throw new Error(`mapping #${idx||'total'}: one of [distance], [dpf or frame] is missing: <mapping ${toXml(mapping) }/>`)
-                }
-    
-    
-                mappings.forEach ( (mapping,idx) => {
-                    if (idx!==0) {
-                   
-                        mapping.distance = (mapping.distance!==undefined && mapping.distance!==null) ? parseInt(mapping.distance) : undefined;
-                        mapping.dpf = (mapping.dpf!==undefined && mapping.dpf!==null) ? parseFloat(mapping.dpf) : undefined;
-                        mapping.frame = (mapping.frame!==undefined && mapping.frame!==null) ? parseInt(mapping.frame) : undefined
-    
-    
-                        const distance = getDistance(mapping,prev,idx)
-                        //if (idx===1) console.log(distance,prev,mapping)
-                        route.distance = mapping.distance = distance;
-    
-                        const frames = mapping.frame-(prev.frame||startFrame);
-                        const videoSpeed = (prev.distance===undefined && mapping.dpf!==undefined) ? 3.6*mapping.dpf* route.video.framerate : 3.6 * (distance-prev.distance) / frames * route.video.framerate
-                        const time = prevTime + frames/route.video.framerate ;
-                        
-                        route.video.mappings.push ( { videoSpeed,time:prevTime, ...prev})
-                        //if (idx<10) console.log(frames,prev, { videoSpeed,time,endFrame:mapping.frame, ...prev})
-                        prev = mapping;
-                        prevTime = time;
-                        
-    
-                        if ( idx===mappings.length-1) {
-                            route.video.mappings.push ( { videoSpeed, time,...mapping})
-                        }
-    
-                    }
-                    else {
-                        mapping.distance = (mapping.distance!==undefined && mapping.distance!==null) ? parseInt(mapping.distance) : undefined;
-                        mapping.dpf = (mapping.dpf!==undefined && mapping.dpf!==null) ? parseFloat(mapping.dpf) : undefined;
-                        mapping.frame = (mapping.frame!==undefined && mapping.frame!==null) ? parseInt(mapping.frame) : undefined
-    
-    
-                        prev = mapping
-                        prevTime = 0;
-    
-                    }
-                })
-    
-                if ( endFrame && prev.dpf!==undefined) {
-                    const mapping  = {frame:endFrame, dpf:prev.dpf};
-                    
-                    route.distance = getDistance(mapping,prev);
-    
-                }
-    
-            }
-            catch(err) {
-                if (!_logger) _logger = new EventLogger('XmlParser');
-                _logger.logEvent({message:'xml details',error:err.message, mappings});
-                 throw new Error( 'Could not parse XML File' );
-            }
-             
-        }
+        this.parseVideoMappings(context);
     
     }
     
+    private parseVideoMappings(context:XmlParserContext) {
+        const {data,route,fileInfo} = context
+        const mappings = data['mappings'];
+
+        if (mappings) {
+
+            const startFrame = parseInt(data['start-frame'] || 0);
+            const endFrame = data['end-frame'] ? parseInt(data['end-frame']) : undefined;
+
+            try {
+                let prev;
+                let prevTime = 0;
     
-    
-    
+                const getDistance = (mapping, prevMapping, idx?) => {
+                    const prevDist = prevMapping.distance || 0;
+                    const prevFrame = prevMapping.frame || startFrame;
+                    if (mapping.distance !== undefined)
+                        return mapping.distance;
+                    if (prev.dpf !== undefined && mapping.frame !== undefined)
+                        return prev.dpf * (mapping.frame - prevFrame) + prevDist;
+                    throw new Error(`mapping #${idx || 'total'}: one of [distance], [dpf or frame] is missing: <mapping ${toXml(mapping)}/>`);
+                };
+
+                const initMapping =(mapping) =>{
+                    mapping.distance = (mapping.distance !== undefined && mapping.distance !== null) ? parseInt(mapping.distance) : undefined;
+                    mapping.dpf = (mapping.dpf !== undefined && mapping.dpf !== null) ? parseFloat(mapping.dpf) : undefined;
+                    mapping.frame = (mapping.frame !== undefined && mapping.frame !== null) ? parseInt(mapping.frame) : undefined;
+                }
+
+                const  addMapping = (mapping: any, prev: any, idx: any, startFrame: number, prevTime: number) => {
+                    initMapping(mapping)
+        
+                    const distance = getDistance(mapping, prev, idx);
+                    //if (idx===1) console.log(distance,prev,mapping)
+                    route.distance = mapping.distance = distance;
+        
+                    const frames = mapping.frame - (prev.frame || startFrame);
+                    const videoSpeed = (prev.distance === undefined && mapping.dpf !== undefined) ? 3.6 * mapping.dpf * route.video.framerate : 3.6 * (distance - prev.distance) / frames * route.video.framerate;
+                    const time = prevTime + frames / route.video.framerate;
+        
+                    route.video.mappings.push({ videoSpeed, time: prevTime, ...prev });
+                    //if (idx<10) console.log(frames,prev, { videoSpeed,time,endFrame:mapping.frame, ...prev})
+                    if (idx === mappings.length - 1) {
+                        route.video.mappings.push({ videoSpeed, time, ...mapping });
+                    }
+                    return time;
+                }
+        
+
+
+                mappings.forEach((mapping, idx) => {
+                    if (idx === 0) {
+                        initMapping(mapping);
+                        prevTime = 0;
+                    }
+                    else {
+                        const time = addMapping(mapping, prev, idx, startFrame, prevTime);
+                        prevTime = time;
+                    }
+                    prev = mapping;
+
+                });
+
+                if (endFrame && prev.dpf !== undefined) {
+                    const mapping = { frame: endFrame, dpf: prev.dpf };
+
+                    route.distance = getDistance(mapping, prev);
+
+                }
+
+            }
+            catch (err) {
+                if (!_logger) _logger = new EventLogger('XmlParser');
+                _logger.logEvent({ message: 'xml details', error: err.message, mappings });
+                throw new Error('Could not parse XML File');
+            }
+
+        }
+
+    }
+
     async loadElevationFromAltitudes (context:XmlParserContext , tagName='altitudes')  {
         const {data,route} = context
         const altitudes =  data[tagName]
@@ -321,7 +321,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             elevation: Number(a.height),
         }));
     
-        const points = route.points as Array<RoutePoint>
+        const points = route.points
         if (points?.length>0) {
             route.distance = points[points.length-1].routeDistance
         }
@@ -384,7 +384,7 @@ const getPreviewUrl = (info:FileInfo,route: RouteApiDetail):string => {
     if (file) {
         const path= getBindings().path
         const fs = getBindings().fs
-        const filename = file.startsWith(info.ext) || file.match(/[A-Za-z]:.*/) ? file : path.join(info.dir,file)
+        const filename = file.startsWith(info.ext) || (/[A-Za-z]:.*/).exec(file) ? file : path.join(info.dir,file)
         if (!fs.existsSync(filename))
             file=undefined
 

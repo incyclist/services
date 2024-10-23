@@ -47,7 +47,6 @@ export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
 
         this.updateRouteCountry(data,{descr})
         this.updateRouteTitle(data,{descr})
-        // Todo: previewImg (could be generated from video/streetview)
 
         if (points) data.hasGpx = true;
 
@@ -121,7 +120,7 @@ export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
     }
 
     protected verifyImportDate(routes: RouteDBApiDescription[]) {
-        
+        // legacy records won't have an import date => nothing to do here
     }
 
 }

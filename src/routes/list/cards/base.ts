@@ -59,7 +59,9 @@ export class BaseCard implements Card<Route> {
 
     }
 
-    onMounted(){}
+    onMounted(){
+        // optional: can be implemented by subclass
+    }
 
     protected getUserSetting(key:string,defValue?) {
         try {
@@ -73,8 +75,13 @@ export class BaseCard implements Card<Route> {
         }
     }
 
-    select() {}
-    unselect() {}
+    select() {
+        // optional: can be implemented by subclass
+    }
+    unselect() {
+        // optional: can be implemented by subclass
+
+    }
 
 
 }

@@ -85,7 +85,7 @@ export abstract class Loader<T extends MinimalDescription> {
         if (data.country)
             return;
 
-        const prefix = this.getCountryPrefix(data.title) as string
+        const prefix = this.getCountryPrefix(data.title)
         if (prefix) {
             data.country = prefix.toLowerCase()
             if (data.category)
@@ -99,7 +99,7 @@ export abstract class Loader<T extends MinimalDescription> {
         if (descr && !data.title) {
             data.title = descr.title
         }
-        const prefix = this.getCountryPrefix(data.title) as string
+        const prefix = this.getCountryPrefix(data.title)
         if (prefix) {
             data.title = this.removeCountryPrefix(data.title)
         }
@@ -138,6 +138,17 @@ export abstract class Loader<T extends MinimalDescription> {
             delete this.loadObserver
         })
     }
+
+    protected emitRouteEvents(isUpdated: boolean, route: Route) {
+        if (isUpdated) {
+            this.emitRouteUpdate(route);
+        }
+        else {
+            this.emitRouteAdded(route);
+
+        }
+    }
+
 
 
 

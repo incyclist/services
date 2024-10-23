@@ -95,43 +95,58 @@ export class ActivityStatsCalculator {
         prop.sum+=value*t;
         
         
-        if (prop.min===undefined || value<prop.min ) {
-            if (prop.minAllowed===undefined || value>prop.minAllowed)
-                prop.min = value; 
-        }
-        if (prop.max===undefined || value>prop.max ) {
-            prop.max = value; 
-        }
-        if ( prop.cntVal>0) {
-            prop.avg = prop.sum/prop.cntVal;            
-        }
+        this.addMinValue(prop, value);
+        this.addMaxValue(prop, value);
+        this.addAverage(prop);
         
         if (inclWeighted) {
-
-            if ( this.statsTemp===undefined) {
-                this.statsTemp = {}
-            }
-            
-            if ( this.statsTemp[propName]===undefined) {
-                this.statsTemp[propName] = { values:[value], cnt:0, sum:0 }
-            }
-            else {
-                if ( this.statsTemp[propName].values.length >= 30) {
-                    this.statsTemp[propName].values.shift();
-                }
-                this.statsTemp[propName].values.push(value)
-            }
-            
-            const avg = average(this.statsTemp[propName].values)
-
-            this.statsTemp[propName].cnt++;
-            this.statsTemp[propName].sum += Math.pow( avg,4);
-            
-            prop.weighted = Math.pow(this.statsTemp[propName].sum/this.statsTemp[propName].cnt,1/4);    
+            this.addWeightedAverages(propName, value, prop);    
         }           
-    
-                    
+                   
 	}
+
+    protected addMinValue(prop: any, value: number) {
+        if (prop.min === undefined || value < prop.min) {
+            if (prop.minAllowed === undefined || value > prop.minAllowed)
+                prop.min = value;
+        }
+    }
+
+    protected addMaxValue(prop: any, value: number) {
+        if (prop.max === undefined || value > prop.max) {
+            prop.max = value;
+        }
+    }
+
+    private addAverage(prop: any) {
+        if (prop.cntVal > 0) {
+            prop.avg = prop.sum / prop.cntVal;
+        }
+    }
+
+    protected addWeightedAverages(propName: string, value: number, prop: any) {
+        if (this.statsTemp === undefined) {
+            this.statsTemp = {};
+        }
+
+        if (this.statsTemp[propName] === undefined) {
+            this.statsTemp[propName] = { values: [value], cnt: 0, sum: 0 };
+        }
+        else {
+            if (this.statsTemp[propName].values.length >= 30) {
+                this.statsTemp[propName].values.shift();
+            }
+            this.statsTemp[propName].values.push(value);
+        }
+
+        const avg = average(this.statsTemp[propName].values);
+
+        this.statsTemp[propName].cnt++;
+        this.statsTemp[propName].sum += Math.pow(avg, 4);
+
+        prop.weighted = Math.pow(this.statsTemp[propName].sum / this.statsTemp[propName].cnt, 1 / 4);
+    }
+
 
     protected get logs():Array<ActivityLogRecord> {
         return this.activity.logs
@@ -181,9 +196,6 @@ export class ActivityStatsCalculator {
     protected calculatePowerCurveValues(logRecord,idx) {
         const durations = [ 1,2,5,10,30,60,120,300,600,1200,3600,7200]
        
-        const tsStart = Date.now()
-
-
         this.powerCurveInput.forEach( (log,i) => {
             if (i>idx)
                 return;
@@ -209,9 +221,6 @@ export class ActivityStatsCalculator {
                 
             })
         })
-
-        //console.log(`~~~ update PowerCurve (length=${this.powerCurveInput.length}) took`, Date.now()-tsStart)
-
     }
 
     protected createPowerCurveStats() {

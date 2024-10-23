@@ -5,7 +5,6 @@ import path from 'path'
 import fs from 'fs'
 import { IFileSystem } from '../../../../api/fs'
 import { loadFile } from '../../../../../__tests__/utils/loadFile'
-import { after } from 'node:test'
 
 const load =  async (file) => {
     let data,error;
@@ -134,7 +133,7 @@ describe('TacxParser',()=>{
         const file = `${dir}/${name}.${ext}`
         const fileInfo:FileInfo = {type:'file', filename:file, name:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
 
-        const {data,details} = await parser.import(fileInfo)
+        const {details} = await parser.import(fileInfo)
 
         expect(details.video?.file).toBe(`video:///__tests__/data/rlv/ES_Andalusia-1.avi`)    
 

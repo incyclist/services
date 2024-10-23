@@ -31,8 +31,11 @@ const sortFn = (a:RouteCard,b:RouteCard):number=> {
 export class AlternativeRoutes extends CardList<Route> {
 
     getCards(): Array<Card<Route>> {
-        const sorted = this.cards.sort( sortFn )
-        return sorted.map(c=>c as Card<Route>);
+        
+        const sorted = Array.from(this.cards)
+        sorted.sort(sortFn)
+        return sorted
+        
     }
 
 }

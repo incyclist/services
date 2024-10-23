@@ -62,7 +62,7 @@ export class ActivityDuration {
      * Therefore we will deliver cached values( minus time advanced) in case the calulation takes too long
      * 
      * @param {*} props 
-     * @returns 
+     * @returns the expected remaining time in seconds of the current activity or undefined if no time is left or remaining time cannot be calculated
      */
 
     getRemainingTime( props:RemainingTimeProps) { 
@@ -71,18 +71,15 @@ export class ActivityDuration {
             const {route, routePos, power, speed=0,endPos} = props||{}
             const {stats,time=0,user} = this.activity
             const calcPower = stats?.power?.avg || power
-            const m = (user.weight||75)+10
+            const m = (user.weight??75)+10
             const v = speed/3.6
             const realityFactor = (this.activity.realityFactor??100)/100
 
-            if  ( (routePos>route.distance /* new lap  */) || 
-                  (this.cache && this.cache.totalDistance!==route.distance /* route has changed*/)
-                ){
-                delete this.cache
-            }
+            this.checkIfCacheIsInvalid(routePos, route);
 
             if (this.cache) {
-                const updateFrequency =time>300 ? 3000 : (time>150 ? 5000: 10000)
+                let updateFrequency = this.getUpdateFrequency(time); 
+
                 const timeSinceLastUpdate = Date.now()-this.cache.ts;
         
                 if (timeSinceLastUpdate<updateFrequency ) {                    
@@ -110,6 +107,20 @@ export class ActivityDuration {
         }
     }
 
+    private checkIfCacheIsInvalid(routePos: number, route: Route) {
+        if ((routePos > route.distance /* new lap  */) ||
+            (this.cache && this.cache.totalDistance !== route.distance /* route has changed*/)) {
+            delete this.cache;
+        }
+    }
+
+    protected getUpdateFrequency(time: number) {
+        let updateFrequency = 10000;
+        if (time > 150) updateFrequency = 5000;
+        if (time > 300) updateFrequency = 3000;
+        return updateFrequency;
+    }
+
     protected calculateRemainingTime(route:Route, routePos:number, power:number,m:number, v:number=0, realityFactor:number=1, endPos?:number):Array<RemainingInfo> {
         
         if (!route)
@@ -119,7 +130,7 @@ export class ActivityDuration {
         const gpxData = route.points
         const isLap = checkIsLoop(route)
         const lapDistance = isLap ? routePos % route.distance : routePos
-        const totalDistance = endPos!==undefined ? endPos : route.distance
+        const totalDistance = endPos??route.distance
        
 
         // start with 0km/h

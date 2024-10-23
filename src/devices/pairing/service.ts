@@ -778,9 +778,7 @@ export class DevicePairingService  extends IncyclistService{
     protected async onInterfaceStateChanged  (ifName,ifDetails, interfacesNew? ) { 
 
         const prev = this.state.interfaces;
-
         const current = getInterfaceSettings(ifName,prev)
-
         const changed = ( current.state!==ifDetails.state || current.isScanning!==ifDetails.isScanning || current.enabled!==ifDetails.enabled)
         
         if (!changed) {
@@ -791,57 +789,17 @@ export class DevicePairingService  extends IncyclistService{
 
         try {
            
-            let restartScan = false
-            let restartPair = false;
 
             if (interfacesNew) {
-                const getData = (i) => ( {name:i.name, enabled:i.enabled,state:i.state} )
-
-                if ( !prev)
-                    return (interfacesNew.map(getData))
-                else {                            
-                    interfacesNew.forEach( i=> this.onInterfaceStateChanged(i.name,i))
-                }
+                this.onNewInterface(interfacesNew)
+                return 
             }
-            else if (prev) {
-                const changedIdx = prev.findIndex( i=>i.name===ifName)
 
-                if (ifDetails.state==='disconnected' && current.state!=='disconnected') {
-                    // set all devices to failed state
-                    this.failAdaptersOnInterface(ifName)
-                    if (this.isPairing()) {
-
-                        
-                        const pairing = this.getPairingInterfaces()
-                        if (pairing.includes( ifName)) {
-                            try {
-                                current.state = 'disconnected'
-                                this.emitStateChange( {interfaces:this.state.interfaces})
-                                await sleep(1000)
-                                this.access.connect(ifName)
-                            }
-                            catch(err) {
-                                this.logError(err,'reconnect')
-                            }
-                        }
-                        
-                    }
-                }
-                else  if (ifDetails.state==='unavailable' && current.state!=='unavailable') {
-                    // set all devices to failed state
-                    this.disableAdaptersOnInterface(ifName)
-                    this.unselectOnInterface(ifName)
-                }
-                else if (ifDetails.state!=='unavailable' && current.state==='unavailable') { 
-                    this.enableAdaptersOnInterface(ifName)
-                }
-                else if (ifDetails.state==='connected' && current.state!=='connected' && !this.isPairing() && !this.state.canStartRide)  {
-                    restartScan = true;
-                } 
-                else if (ifDetails.state==='connected' && current.state!=='connected' && this.isPairingWaiting() ) {
-                    restartPair = true;
-                } 
+            if (prev) {
                 
+
+                const { restartScan, restartPair } = this.checkRequiredActions(ifDetails, current, ifName); 
+                const changedIdx = prev.findIndex( i=>i.name===ifName)
                 if (changedIdx!==-1) {
                     prev[changedIdx].isScanning = ifDetails.isScanning
                     prev[changedIdx].state = ifDetails.state
@@ -862,6 +820,58 @@ export class DevicePairingService  extends IncyclistService{
         catch (err) { // istanbul ignore next
             this.logError(err,'onInterfaceChanged()')
         }
+    }
+
+    protected checkRequiredActions(ifDetails: any, current: any, ifName: any ) {
+        let restartScan = false
+        let restartPair = false
+
+        if (ifDetails.state === 'disconnected' && current.state !== 'disconnected') {
+            // set all devices to failed state
+            this.failAdaptersOnInterface(ifName);
+            if (this.isPairing()) {
+
+
+                const pairing = this.getPairingInterfaces();
+                if (pairing.includes(ifName)) {
+              
+                        current.state = 'disconnected';
+                        this.emitStateChange({ interfaces: this.state.interfaces });
+
+                        sleep(1000).then( ()=> {
+                            this.access.connect(ifName)
+                                       .catch( (err) => {this.logError(err, 'reconnect')})
+                        })
+                }
+
+            }
+        }
+        else if (ifDetails.state === 'unavailable' && current.state !== 'unavailable') {
+            // set all devices to failed state
+            this.disableAdaptersOnInterface(ifName);
+            this.unselectOnInterface(ifName);
+        }
+        else if (ifDetails.state !== 'unavailable' && current.state === 'unavailable') {
+            this.enableAdaptersOnInterface(ifName);
+        }
+        else if (ifDetails.state === 'connected' && current.state !== 'connected' && !this.isPairing() && !this.state.canStartRide) {
+            restartScan = true;
+        }
+        else if (ifDetails.state === 'connected' && current.state !== 'connected' && this.isPairingWaiting()) {
+            restartPair = true;
+        }
+        return { restartScan, restartPair };
+    }
+
+    protected onNewInterface(interfacesNew) {
+        const getData = (i) => ( {name:i.name, enabled:i.enabled,state:i.state} )
+
+        if ( !this.state.interfaces)
+            this.state.interfaces  = (interfacesNew.map(getData))
+        else {                            
+            interfacesNew.forEach( i=> this.onInterfaceStateChanged(i.name,i))
+        }
+
     }
 
     protected isInterfaceEnabled(target:string|InterfaceSetting) {
@@ -1247,7 +1257,7 @@ export class DevicePairingService  extends IncyclistService{
 
         if (configOKToStart && !this.deviceSelectState && !props.enforcedScan)  {
 
-            if (! (this.checkPairingSuccess()===true))
+            if (this.checkPairingSuccess()!==true)
                 await this.startPairing(adapters, props);
             else {
                 this.logEvent({message:'Pairing completed'})
@@ -1368,7 +1378,7 @@ export class DevicePairingService  extends IncyclistService{
         });
     }
 
-    private async startScanning(adapters: AdapterInfo[], props: PairingProps) {
+    protected async startScanning(adapters: AdapterInfo[], props: PairingProps) {
 
         const interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
                             .map(i=>i.name)
@@ -1430,6 +1440,7 @@ export class DevicePairingService  extends IncyclistService{
             this.logError(err,'start()->scan')
         }
 
+        
         this.emit('scanning-done')
         
 

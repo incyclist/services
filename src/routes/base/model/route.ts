@@ -5,7 +5,7 @@ import { RouteInfo, RoutePoint } from "../types";
 
 export class Route {
 
-    private _description:RouteInfo
+    private readonly _description:RouteInfo
     private _details:RouteApiDetail
     
 
@@ -22,10 +22,7 @@ export class Route {
     get points():Array<RoutePoint> {
         const points = this._details?.points ?? this._description?.points 
 
-        if (typeof points==='string') {
-            // TODO: decode
-        }
-        return points as Array<RoutePoint>
+        return points
     }
 
 

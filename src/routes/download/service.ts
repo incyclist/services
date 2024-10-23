@@ -103,8 +103,11 @@ export class RouteDownloadService extends IncyclistService {
 
             const info = path.parse( url)
             if (!info) {
-                this.logEvent({message:'no URL specified',description:route.description})
+                const logInfo = {...route.description}
+                delete logInfo.points
+                this.logEvent({message:'no URL specified',logInfo})
                 observer.emit('error', new Error('no URL specified'))
+                return;
             }
             const file = path.join( targetDir, info.base)
             const session = downloadManager.createSession(url,file)

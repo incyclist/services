@@ -4,7 +4,7 @@ import { WorkoutParser } from "./types";
 @Singleton
 export class WorkoutParserFactory {
 
-    private parsers: Array<WorkoutParser<unknown>> 
+    private readonly parsers: Array<WorkoutParser<unknown>> 
     private initialized: boolean;
 
     constructor() {

@@ -49,7 +49,7 @@ const addVideoSpeed = (points:Array<RoutePoint>,mappings:Array<MappingRecord>):A
 }
 
 export class BikeLabParser extends XMLParser{
-    static SCHEME = 'Track'
+    static readonly SCHEME = 'Track'
     
     protected async loadDescription(context: XmlParserContext): Promise<void> {
         const {data} = context

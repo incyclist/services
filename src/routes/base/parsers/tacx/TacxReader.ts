@@ -1,4 +1,4 @@
-import { COURSE_INFO, FP_CAF, FP_IMF, FP_PGMF, FP_RLV, GENERAL_INFO, PROGRAM_DETAILS, RLV_FRAME_DISTANCE_MAPPING, RLV_INFOBOX, RLV_VIDEO_INFO, RlvCourseInfo, RlvFile, RlvFrameDistanceMapping, RlvInfoBoxInfo, TacxBlock, TacxBlockType, TacxFile, TacxFileType } from "../../model/tacx"
+import { COURSE_INFO, FP_CAF, FP_IMF, FP_PGMF, FP_RLV, GENERAL_INFO, PROGRAM_DETAILS, RLV_FRAME_DISTANCE_MAPPING, RLV_INFOBOX, RLV_VIDEO_INFO, TacxBlock, TacxBlockType, TacxFile, TacxFileType } from "../../model/tacx"
 import { BinaryReader } from "../utils"
 
 export class TacxFileReader<X extends TacxFile> {

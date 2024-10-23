@@ -182,10 +182,6 @@ export class DeviceConfigurationService  extends EventEmitter{
         if (bikeCapIdx!==-1) {
             capabilities.splice( bikeCapIdx,1)
         }
-        return;
-
-
-        
     }
 
     protected initCapabilties():void {
@@ -240,7 +236,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.initCapabilties()
         const {interfaces,devices,capabilities} = this.settings;
 
-        const get = ( (x,def) =>  x===undefined || x===null ? def : x)
+        const get = ( (x,def) =>  x??def)
 
         interfaces.push( {name:'ant', enabled:connections?.ant?.enabled||true})
         interfaces.push( {name:'ble', enabled:true})
@@ -511,8 +507,6 @@ export class DeviceConfigurationService  extends EventEmitter{
             this.emitCapabiltyChanged(capability)
 
         this.updateUserSettings()
-        return;
-
     }
 
     private selectSingleDevice(udid: string, capability: ExtendedIncyclistCapability) {
@@ -691,9 +685,8 @@ export class DeviceConfigurationService  extends EventEmitter{
         if (!record) {
             capabilities.push( {capability, devices:[udid], selected:udid})
         }
-        else {
-            if (!record.devices?.includes(udid))
-                record.devices.push(udid)
+        else if (!record.devices?.includes(udid)) {
+            record.devices.push(udid)
         }            
 
     }

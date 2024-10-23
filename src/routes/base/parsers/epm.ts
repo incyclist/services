@@ -1,6 +1,6 @@
 import { FileInfo, getBindings } from '../../../api';
 import { RouteApiDetail } from '../api/types';
-import { DaumEpp, RouteInfo} from '../types';
+import { DaumEpp, DaumEppProgramEntry, RouteInfo, RoutePoint} from '../types';
 import { JSONObject } from '../../../utils/xml';
 import { BinaryReader } from './utils';
 import { XMLParser, XmlParserContext } from './xml';
@@ -10,7 +10,7 @@ export interface EpmParserContext extends XmlParserContext {
 }
 
 export class EPMParser extends XMLParser{
-    static SCHEME = 'roadmovie'
+    static readonly SCHEME = 'roadmovie'
     
     supportsExtension(extension) {
         return extension.toLowerCase() === 'epm';
@@ -68,14 +68,12 @@ export class EPMParser extends XMLParser{
             file.type = 'file'
             file.filename = fileName
         }
-        else {
-            if (fileInfo.type==='url') {
+        else if (fileInfo.type==='url') {
                 file.url = file.url.replace(fileInfo.name,fileName)
-            }
-            else {
-                file.filename = file.filename.replace(fileInfo.name,fileName)
+        }
+        else {
+            file.filename = file.filename.replace(fileInfo.name,fileName)
 
-            }
         }
 
         const loader = getBindings().loader
@@ -97,6 +95,7 @@ export class EPMParser extends XMLParser{
         json.cnt =  reader.ReadUint32();
         
         if (json.cnt!==num) {
+
             //throw new Error('Invalid program event count ('+json.cnt+' != '+num+')');
         }
         
@@ -132,7 +131,75 @@ export class EPMParser extends XMLParser{
         route.hasGpx = false;
     }
 
-    protected addVideoSpeed(route:RouteApiDetail) {
+    protected combineEpmWithEpp(route:RouteApiDetail, epp:DaumEpp) {
+        if (!route?.points || route.points.length===0)
+            return;
+    
+        let j=0;
+
+        const prevInfo ={ distance:0, elevation:0, slope:0}
+        
+        // enrich points with elevation data from Epp
+        for (let i=0;i<route.points.length;i++) {
+            if (i===0) {
+                route.points[i].elevation = epp.programData[j].elevation;
+                prevInfo.elevation = route.points[i].elevation;
+                prevInfo.slope = route.points[i].slope
+            }
+            else {
+                j = this.getNextProgramIdx(j, epp, route.points[i]);                
+                 
+                if (j<epp.programData.length) {
+                    this.copyEppElevationProfile(epp.programData[j], prevInfo, route.points, i);
+                }
+                else {
+                    this.setFinalElevationProfile(prevInfo, route.points[i]);    
+                }
+            }
+        }
+    
+        // enrich points with video speed data
+        this.addVideoSpeed(route)
+    }
+
+
+    private getNextProgramIdx (j: number, epp: DaumEpp, point:RoutePoint)  {
+        while (j < epp.programData.length && point.routeDistance > epp.programData[j].distance)
+            j++;
+        return j;
+    }
+    
+    private copyEppElevationProfile(eppRecord: DaumEppProgramEntry,prevInfo, points: RoutePoint[], i: number) {
+        const {distance: prevDistance, elevation: prevElevation} = prevInfo
+        const distance = eppRecord.distance - prevDistance;
+        const gain = eppRecord.elevation - prevElevation;
+
+        if (distance !== 0) {
+            const gainToPoint = gain / distance * (points[i].routeDistance - prevDistance);
+            const distToPoint = points[i].routeDistance - prevDistance;
+            points[i].elevation = prevElevation + gainToPoint;
+            points[i - 1].slope = gainToPoint / distToPoint * 100;
+        }
+        else {
+            points[i].elevation = prevElevation;
+        }
+
+        prevInfo.distance = points[i].routeDistance;
+        prevInfo.elevation = points[i].elevation;    
+        prevInfo.slope = points[i].slope;    
+
+    }
+    
+    private setFinalElevationProfile( prevInfo, point: RoutePoint) { 
+        const {distance: prevDistance, elevation: prevElevation, slope:prevSlope} = prevInfo
+
+        point.slope = prevSlope;
+        const distToPoint = point.routeDistance-prevDistance;
+        const gainToPoint = prevSlope/100*distToPoint;
+        point.elevation = prevElevation+gainToPoint;
+    }
+
+    private addVideoSpeed(route:RouteApiDetail) {
         let prevSpeed ;
         let prevTime ;
         let videoIdx = 0;
@@ -167,59 +234,6 @@ export class EPMParser extends XMLParser{
         })
     }    
 
-    protected combineEpmWithEpp(route:RouteApiDetail, epp:DaumEpp) {
-        if (!route?.points || route.points.length===0)
-            return;
-    
-        let j=0;
-        let prevElevation = 0;
-        let prevDistance = 0;
-        let prevSlope = 0;
-        
-        // enrich points with elevation data from Epp
-        for (let i=0;i<route.points.length;i++) {
-            if (i===0) {
-                route.points[i].elevation = epp.programData[j].elevation;
-                prevElevation = route.points[i].elevation;
-                prevSlope = route.points[i].slope
-            }
-            else {
-                while(j<epp.programData.length && route.points[i].routeDistance > epp.programData[j].distance)
-                    j++;
-                
-                 
-                if (j<epp.programData.length) {
-                    const distance =  epp.programData[j].distance - prevDistance;
-                    const gain = epp.programData[j].elevation - prevElevation;
-        
-                    if ( distance!==0) {
-                        const gainToPoint = gain/distance*(route.points[i].routeDistance-prevDistance);
-                        const distToPoint = route.points[i].routeDistance-prevDistance;
-                        route.points[i].elevation = prevElevation+gainToPoint;
-                        route.points[i-1].slope = gainToPoint/distToPoint*100;
-                    }
-                    else {
-                        route.points[i].elevation = prevElevation;
-                    }
-                    prevDistance = route.points[i].routeDistance;
-                    prevElevation = route.points[i].elevation;    
-                    prevSlope = route.points[i].slope;    
-                }
-                else {
-                    route.points[i].slope = prevSlope;
-                    const distToPoint = route.points[i].routeDistance-prevDistance;
-                    const gainToPoint = prevSlope/100*distToPoint;
-                    route.points[i].elevation = prevElevation+gainToPoint;
-    
-                }
-                
-                
-            }
-        }
-    
-        // enrich points with video speed data
-        this.addVideoSpeed(route)
-    }
     
     protected parseEpp( data, route:RouteApiDetail ) {
 
@@ -285,3 +299,6 @@ export class EPMParser extends XMLParser{
     }
 
 }
+
+
+

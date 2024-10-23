@@ -72,16 +72,8 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
         return this.position;
     }
 
-    setOptions() {
-    }
-    selectOption() {
-    }
-
-    getSelectedOption() {
-    }
 
     getData(): Route {
-        // TODO: build route based on option
         return new Route({});
     }
 
@@ -140,6 +132,7 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
     }
 
     cancel() {
+        // Nothing to do when user cancels
     }
 
     protected loadSettings() {

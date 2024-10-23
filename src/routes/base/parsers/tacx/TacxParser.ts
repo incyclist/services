@@ -29,7 +29,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
     }
 
     async getData(info: FileInfo, data?: ArrayBuffer): Promise<ArrayBuffer> {
-        const {loader,fs} = getBindings()
+        const {loader} = getBindings()
         info.encoding = 'binary'
 
         const res = await loader.open(info)
@@ -45,7 +45,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
     protected buildContext(file: FileInfo): TacxParserContext {
 
-        const {dir,delimiter: d,name} = file
+        const {dir,delimiter: d} = file
 
         if (file.ext === 'rlv') {
             const pgmfFile = clone(file)
@@ -96,7 +96,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         if (!title)
             return
 
-        if (title.match(/^[A-z]{2}[-_]{1}.*/g)) {            
+        if (title.match(/^[A-z]{2}[-_].*/g)) {            
             return title.substring(0,2)
         }
     }
@@ -218,20 +218,16 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         const uxFile = file.name.split('/');
 
         let name;
-        let isRelative = false;
         if (winFile.length > 1) {
             name = fileName.split('\\').pop();
-            isRelative = true;
         }
         else if (uxFile.length > 1) {
             name = fileName.split('/').pop();
-            isRelative = true;
         }
         else {
             name = `${file.base}`;
 
         }
-
 
 
         const exists = fs.existsSync(fileName);

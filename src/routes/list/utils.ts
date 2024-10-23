@@ -9,12 +9,14 @@ const DURATION_30_SECONDS = 1000*30
 export const updateRepoStats = (ts?:number):void => {
     const settings = useUserSettings()
     const updates = settings.get('repo.routesUpdates',{}) as unknown as RoutesRepoUpdates
-    if (updates.current)
+
+    if (updates.current) {
         updates.prev = updates.current
-    else 
-        updates.initial = ts ? ts : Date.now()
-    if (ts)
-        updates.initial = ts
+    }
+
+    if (!updates.current || !updates.initial) 
+        updates.initial = ts ?? Date.now()
+        
     updates.current = Date.now()
     settings.set('repo.routesUpdates',updates)
 }

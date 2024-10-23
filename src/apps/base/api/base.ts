@@ -27,20 +27,14 @@ export class AppApiBase {
 
  
     protected async postForm (form:Form) {
-        try {
-            const fp = this.getFormBinding()        
+        const fp = this.getFormBinding()        
 
-            const response = await fp.post( form);
+        const response = await fp.post( form);
 
-            if (response.data?.data)
-                response.data = response.data?.data
-            return response
-        }
-        catch(err) {
-            throw err
-        }
-    
-    }
+        if (response.data?.data)
+            response.data = response.data?.data
+        return response
+}
 
     protected async createForm(url:string,uploadInfo:object, requestOpts={}):Promise<Form> {
         const fp = this.getFormBinding()        

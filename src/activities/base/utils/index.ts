@@ -1,7 +1,7 @@
 import { ActivityDetails, ActivitySummary } from "../model"
 
 export const buildSummary = (activity:ActivityDetails,proposedName?:string):ActivitySummary =>{
-    const {id, title,route,screenshots,startTime: startTimeUTC,time: rideTime,distance,startPos,endPos,segment, realityFactor=100,links,laps} = activity
+    const {id, title,route,screenshots,startTime: startTimeUTC,time: rideTime,distance,startPos,endPos, realityFactor=100,links,laps} = activity
 
     const name = proposedName ?? activity.name
     const routeId = route?.id

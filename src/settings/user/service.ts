@@ -11,8 +11,8 @@ import { Observer } from '../../base/types/observer';
 
 export class UserSettingsService {
 
-    static _instance:UserSettingsService;
-    static _defaultBinding: IUserSettingsBinding
+    protected static _instance:UserSettingsService;
+    protected static _defaultBinding: IUserSettingsBinding
 
     settings: any
     binding: IUserSettingsBinding
