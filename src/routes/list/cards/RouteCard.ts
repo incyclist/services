@@ -316,13 +316,19 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     changeSettings(props:RouteSettings) {
+
         try {
+            
             this.startSettings = {...props}
 
             // update User Settings
             const userSettings = useUserSettings()
             const key = this.buildSettingsKey();
-            userSettings.set(key,props,true)
+
+            userSettings.set(key,{...props,prevRides:undefined},true)
+
+            // bugfix: prevRides were added in previous versions. We need to delete them as they would blow up settings.json
+            userSettings.set( key+'.prevRides',null,true)
 
         }
         catch(err) {
