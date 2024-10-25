@@ -124,6 +124,11 @@ export default class IncyclistRoutesApi {
         return await api.get( baseUrl+url, ...args )       
     }
 
+    // only to be used by unit tests
+    protected _reset() {
+        IncyclistRoutesApi._instance = undefined
+    }
+
 
 }
 

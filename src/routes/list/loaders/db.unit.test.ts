@@ -1,10 +1,4 @@
-import routesData from '../../../../__tests__/data/db/routes.json';
-import videosData from '../../../../__tests__/data/db/videos.json';
-import sydney from '../../../../__tests__/data/routes/sydney.json'
-import holzweiler from '../../../../__tests__/data/rlv/holzweiler.json'
-import valdrome from '../../../../__tests__/data/rlv/valdrome.json'
 
-import repoData from '../../../../__tests__/data/db/db.json'
 import {  JsonRepository } from '../../../api';
 import { Countries } from '../../../i18n/countries';
 import { Route } from "../../base/model/route";
@@ -12,6 +6,16 @@ import { RoutesDbLoader } from './db';
 import { RouteInfo } from '../../base/types';
 import { RoutesLegacyDbLoader } from './LegacyDB';
 import { JSONObject } from '../../../utils/xml';
+import { waitNextTick } from '../../../utils';
+import clone from '../../../utils/clone';
+
+import routesData from '../../../../__tests__/data/db/routes.json';
+import videosData from '../../../../__tests__/data/db/videos.json';
+import sydney from '../../../../__tests__/data/routes/sydney.json'
+import holzweiler from '../../../../__tests__/data/rlv/holzweiler.json'
+import valdrome from '../../../../__tests__/data/rlv/valdrome.json'
+import repoData from '../../../../__tests__/data/db/db.json'
+import { sleep } from '../../../utils/sleep';
 
 class MockRepository extends JsonRepository {
     static create(repoName:string):JsonRepository {
@@ -23,11 +27,13 @@ class MockRepository extends JsonRepository {
     }
 }
 
+let videosRepo:MockRepository
+let routesRepo:MockRepository
 
-async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, t:'video'|'gpx' = 'gpx', legacy:boolean=false) {
-    const videosRepo = MockRepository.create('videos');
-    const routesRepo = MockRepository.create('routes');
+const setSingleRouteMockRepo = (id:string, t:'video'|'gpx' = 'gpx', legacy:boolean=false) => {
 
+    videosRepo = MockRepository.create('videos');
+    routesRepo = MockRepository.create('routes');
 
     const countries = new Countries();
     countries.getIsoFromLatLng = jest.fn().mockResolvedValue('AU');
@@ -36,6 +42,7 @@ async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, t:'vide
     videosRepo['id'] = `${type}-${id}`
     routesRepo['id'] = `${type}-${id}`
 
+    routesRepo.write = jest.fn();
     videosRepo.read = jest.fn(async (file) => {
         if (file === 'routes') {
             const route = type==='video' ? videosData.find(r => r.id === id) : undefined;
@@ -69,27 +76,66 @@ async function dbTest(loader: RoutesDbLoader, routes: Route[],id:string, t:'vide
         return null as unknown as JSONObject;
     });
 
-    routesRepo.write = jest.fn();
+}
 
+const setupMockRepo = (data=repoData) => {
 
-    
-    await new Promise(done => {
-        loader.load()
-            .on('route.added', route => { 
-                routes.push(route); 
-            })
-            .on('route.updated', done)
-            .on('done', () => {                 
-                setTimeout(done, 100); 
-            });           
+    videosRepo = MockRepository.create('videos');
+    routesRepo = MockRepository.create('routes');
+
+    const countries = new Countries();
+    countries.getIsoFromLatLng = jest.fn().mockResolvedValue('AU');
+
+    videosRepo.read = jest.fn(async (file) => {
+        if (file === 'routes') {
+            return videosData as unknown as JSONObject;
+        }
+        return holzweiler as JSONObject;
     });
 
-    videosRepo.read = jest.fn()
-    routesRepo.read = jest.fn()
+    routesRepo.read = jest.fn(async (file) => {
+        if (file === 'db') {
+            return data as unknown as JSONObject;
+        }
+
+
+        if (file === 'routes') {            
+            return null as unknown as JSONObject;
+        }
+        return sydney as unknown as JSONObject;
+    });
+
+    routesRepo.write = jest.fn()
+    routesRepo.delete = jest.fn()
+
+    videosRepo.write = jest.fn()
+    videosRepo.delete = jest.fn()
 
 }
 
+const run = async (loader,routes)=>{
+    await new Promise(done => {
 
+        const observer = loader.load()
+        
+        observer
+            .on('route.added', route => { 
+                routes.push(route); 
+            })
+            .on('route.updated', route => {
+                const idx = routes.findIndex(r=>r.description.id===route.description.id)
+                if (idx==-1)
+                    routes.push(route)
+                routes[idx] = route
+            })
+            .on('done', () => {                 
+                waitNextTick().then( ()=>{
+                    observer.stop()
+                    done(routes)
+                })
+            });           
+    });
+}
 
 
 
@@ -118,7 +164,8 @@ describe('LegacyDBLoader',()=>{
             
             
             const routes:Array<Route> = []
-            await dbTest(loader, routes,'5c7a6ae31b1bef04c5854cb3','gpx',true);            
+            await setSingleRouteMockRepo('5c7a6ae31b1bef04c5854cb3','gpx',true);            
+            await run(loader,routes)
 
             expect(routes.length).toBe(1)
             
@@ -135,7 +182,8 @@ describe('LegacyDBLoader',()=>{
         test('GPX File from DB',async ()=>{
             const routes:Array<Route> = []
 
-            await dbTest(loader, routes,'5c7a6ae31b1bef04c5854cb3');            
+            await setSingleRouteMockRepo('5c7a6ae31b1bef04c5854cb3');            
+            await run(loader,routes)
             expect(routes.length).toBe(1)
             
             const descr = routes[0].description
@@ -155,7 +203,8 @@ describe('LegacyDBLoader',()=>{
         test('Local GPX File from DB',async ()=>{
             const routes:Array<Route> = []
 
-            await dbTest(loader, routes,'9b779bbc-7a20-44f9-b490-76eecac34ee9');            
+            await setSingleRouteMockRepo('9b779bbc-7a20-44f9-b490-76eecac34ee9');            
+            await run(loader,routes)
             expect(routes.length).toBe(1)
             
             const descr = routes[0].description
@@ -171,7 +220,9 @@ describe('LegacyDBLoader',()=>{
             const id = '021dd6dd-c08b-431f-a888-2cd3183b1911'
             const before = {...repoData.find( d=>d.id===id)} as RouteInfo
 
-            await dbTest(loader, routes,id,'video');            
+            await setSingleRouteMockRepo(id,'video');            
+            await run(loader,routes)
+
             expect(routes.length).toBe(1)
             
             const descr = routes[0].description
@@ -191,7 +242,9 @@ describe('LegacyDBLoader',()=>{
             const before = {...repoData.find( d=>d.id===id)} as RouteInfo
             delete before.previewUrl
 
-            await dbTest(loader, routes,id,'video',true);            
+            await setSingleRouteMockRepo(id,'video',true);            
+            await run(loader,routes)
+
             expect(routes.length).toBe(1)
             
             const descr = routes[0].description
@@ -215,7 +268,9 @@ describe('LegacyDBLoader',()=>{
 
             const id = '8ec98050-9bee-4e76-9a9f-e0c2ab1756f3'
 
-            await dbTest(loader, routes,id,'video');            
+            await setSingleRouteMockRepo(id,'video');            
+            await run(loader,routes)
+
             expect(routes.length).toBe(1)
             
             const descr = routes[0].description
@@ -224,6 +279,126 @@ describe('LegacyDBLoader',()=>{
           
         })
 
+        test('repo with gpx and videos',async ()=>{
+            const routes:Array<Route> = []
+
+            const write = loaderObj.write = jest.fn( ()=>{ console.log('write')})
+            loaderObj.writeDetails = jest.fn()
+
+            const save = jest.spyOn(loader,'save')
+            setupMockRepo()
+            await run(loader,routes)
+            expect(routes.length).toBe(34)
+            expect(write).toHaveBeenCalledTimes(1)
+            expect(save).toHaveBeenCalledTimes(0)
+        })
+
+
+
+    })
+
+    describe( 'save',()=>{
+
+        let loader:RoutesDbLoader;
+        let loaderObj 
+        let routes:Array<Route> 
+        beforeEach( async ()=>{
+            loader = loaderObj = new RoutesDbLoader()                    
+            routes= []
+
+            const data = clone(repoData)
+            setupMockRepo(data)
+
+            await run(loader,routes)
+
+            jest.clearAllMocks()
+            
+        })
+
+        afterEach( ()=>{
+            // cleanup Singletons
+            loaderObj.reset()            
+            MockRepository.reset()
+        })
+
+        test('modifying content will update the repo',async ()=>{
+            // modify route
+            const dlRoute:Route = routes.find( r=>r.description.requiresDownload) as Route
+
+            dlRoute.description.isDownloaded = true
+            const write = loaderObj.write= jest.fn()
+
+            await loader.save( dlRoute, false)
+            expect(write).toHaveBeenCalledTimes(1)
+
+            // no change: subsequent save() will not update repo
+            await loader.save( dlRoute, false)
+            expect(write).toHaveBeenCalledTimes(1)
+
+            // next change: subsequent save() does update repo again
+            dlRoute.description.isDownloaded = false
+            await loader.save( dlRoute, false)
+            expect(write).toHaveBeenCalledTimes(2)
+
+        })
+
+    })
+
+    describe( 'delete',()=>{
+
+        let loader:RoutesDbLoader;
+        let loaderObj 
+        let routes:Array<Route> 
+        beforeEach( async ()=>{
+            loader = loaderObj = new RoutesDbLoader()                    
+            routes= []
+
+            const data = clone(repoData)
+            setupMockRepo(data)
+
+            await run(loader,routes)
+
+            jest.clearAllMocks()
+            if (loaderObj.saveObserver)
+                    loaderObj.saveObserver.stop()
+            delete loaderObj.saveObserver
+            
+        })
+
+        afterEach( ()=>{
+            // cleanup Singletons
+            loaderObj.reset()            
+            MockRepository.reset()
+        })
+
+        test('delete video',async ()=>{
+            // modify route
+            const route = routes.find( r=>r.description.hasVideo) as Route
+
+            console.log(route.description.title)
+            await loader.delete( route)
+            
+            expect(routesRepo.write).toHaveBeenCalledTimes(1)   // update routes DB
+
+            expect(videosRepo.write).toHaveBeenCalledTimes(0)   // nothing to save
+            expect(videosRepo.delete).toHaveBeenCalledTimes(1)  // route has been deleted in details DB
+            expect(routesRepo.delete).toHaveBeenCalledTimes(0)  // nothing to do here
+
+        })
+
+        test('delete GPX',async ()=>{
+            // modify route
+            const route = routes.find( r=>!r.description.hasVideo) as Route
+
+            console.log(route.description.title)
+            await loader.delete( route)
+            
+            expect(routesRepo.write).toHaveBeenCalledTimes(1)   // update routes DB
+
+            expect(routesRepo.delete).toHaveBeenCalledTimes(1)  // route has been deleted in details DB
+            expect(videosRepo.delete).toHaveBeenCalledTimes(0)  // nothing to do here
+
+        })
 
     })
 

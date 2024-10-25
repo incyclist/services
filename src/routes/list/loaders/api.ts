@@ -91,6 +91,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         this.loadObserver.emit('done')
 
         await waitNextTick()        
+        this.loadObserver.stop()
         delete this.loadObserver        
         
     }
