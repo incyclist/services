@@ -10,6 +10,7 @@ import { RouteApiDetail } from "../../base/api/types"
 import { waitNextTick } from "../../../utils"
 import { addDetails, getTotalElevation, updateSlopes, validateDistance } from "../../base/utils/route"
 import { JSONObject } from "../../../utils/xml"
+import clone from "../../../utils/clone"
 
 @Singleton
 export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
@@ -33,18 +34,23 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
     async save(route:Route, enforcedWriteDetails:boolean = false):Promise<void> {
         const stringify = (json) => { try {return JSON.stringify(json)} catch {/* */}}
 
-        let prev
+        const updatedDescr = this.buildRouteDBInfo(route.description)
         const idx = this.routeDescriptions.findIndex( d=> d.id===route.description.id)
 
-        if (idx===-1)
-            this.routeDescriptions.push( route.description)
+        let changed = false
+        if (idx===-1) {
+            this.routeDescriptions.push( clone(updatedDescr) )
+            changed = true;
+        }
         else { 
-            prev = stringify(this.buildRouteDBInfo(this.routeDescriptions[idx]))
-            this.routeDescriptions[idx] = route.description
+            const prev = stringify(this.routeDescriptions[idx])
+            const updated = stringify(updatedDescr)
+            changed = (prev!==updated)
+            if (changed)
+                this.routeDescriptions[idx] = clone(updatedDescr)
             
         }
 
-        const changed = !prev || stringify(this.buildRouteDBInfo(this.routeDescriptions[idx]))!==prev
     
         if (changed) {
             this.isDirty = true;
@@ -69,9 +75,9 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         this.routeDescriptions.splice(idx,1)
 
         this.isDirty = true;
-        this.write()
+        await this.writeRepo()
 
-        await this.deleteRoute(id)
+        await this.deleteRouteDetails(route)
 
     }
 
@@ -100,6 +106,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         const save = async ():Promise<void>=> {
             try {
                 await this.routesRepo.write('db',this.routeDescriptions.map(this.buildRouteDBInfo.bind(this)) as JSONObject)
+                this.isDirty = false
             }
             catch(err) {
                 this.logger.logEvent({message:'could not safe repo',error:err.message })
@@ -324,34 +331,32 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
     }
 
-    protected async deleteRoute(id:string) {
-        if (!this.routesRepo)
+    protected async deleteRouteDetails(route:Route) {
+
+        const repo = this.getDetailsRepo(route)
+        if (!repo)
             return;
 
+        const id = route.description.id
         if (this.routesSaveObserver[id])
-            return this.routesSaveObserver[id]
+            await this.routesSaveObserver[id].wait()
 
-        this.routesSaveObserver[id] = new PromiseObserver( this._deleteRoute(id))
+        const  _deleteRoute = async (id):Promise<void> => {
+            await waitNextTick()
+    
+            try {
+                await repo.delete(id)
+                waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
+            }
+            catch(err) {
+                waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
+                throw err
+            }    
+        }
+    
+
+        this.routesSaveObserver[id] = new PromiseObserver( _deleteRoute(id))
         await this.routesSaveObserver[id].start()
-        
-
     }
-
-    protected async _deleteRoute(id):Promise<void> {
-
-        await waitNextTick()
-
-        try {
-            await this.routesRepo.delete(id)
-            waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
-        }
-        catch(err) {
-            waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
-            throw err
-        }
-
-    }
-
-
 
 }
