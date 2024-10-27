@@ -77,6 +77,10 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
         return new Route({});
     }
 
+    getTitle(): string {
+        return 'Free Ride'
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     setData(_data: Route) {
         // ignore

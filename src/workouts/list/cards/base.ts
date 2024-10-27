@@ -27,6 +27,9 @@ export class BaseCard implements Card<Workout> {
     getId(): string {
         throw new Error("Method not implemented.");
     }
+    getTitle(): string {
+        throw new Error("Method not implemented.");
+    }
     getData(): Workout {
         throw new Error("Method not implemented.");
     }

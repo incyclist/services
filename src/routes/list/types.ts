@@ -56,3 +56,8 @@ export interface RoutesRepoUpdates {
     current?: number,
     initial?:number
 }
+
+export interface RouteListLog {
+    counts: Record<string,number>,
+    titles?: Record<string,string>
+}

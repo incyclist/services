@@ -12,7 +12,7 @@ import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard, SummaryCardDisplayProps } from "./cards/RouteCard";
-import { RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
+import { RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
@@ -316,15 +316,11 @@ export class RouteListService extends IncyclistService {
     
                 this.preloadObserver.start()
                     .then( ()=> { 
-                        const cards = {                        
-                            myRoutes:this.myRoutes.length, 
-                            selected:this.selectedRoutes.length ,
-                            alternatives:this.alternatives.length
-                        }
-                        this.logEvent( {message:'preload route list completed',cards})
+                        
+                        this.logEvent( {message:'preload route list completed'})
                         this.initialized = true
                         updateRepoStats()
-                        this.emitLists('loaded')
+                        this.emitLists('loaded',true)
                         process.nextTick( ()=>{delete this.preloadObserver})
                     })
                     .catch( (err)=> {
@@ -338,6 +334,33 @@ export class RouteListService extends IncyclistService {
             this.logError(err,'preload')
         }
         return this.preloadObserver
+    }
+
+    private createRoutesLogEntry(includeDetails=false):RouteListLog {
+        try {
+            const log:RouteListLog = {
+                counts: {
+                    myRoutes: this.myRoutes.length,
+                    selected: this.selectedRoutes.length,
+                    alternatives: this.alternatives.length
+                }
+            };
+
+            if(includeDetails) {
+                log.titles = {}
+                const getTitleLog = (list) => list?.getCards()?.map( r=> r.getTitle()).join(',')
+                
+                log.titles.myRoutes = getTitleLog(this.myRoutes)
+                log.titles.selected = getTitleLog(this.selectedRoutes)
+                log.titles.alternaties = getTitleLog(this.alternatives)
+            }
+
+            return log
+        }
+        catch(err) {
+            this.logError(err,'createRoutesLogEntry')
+        }
+    
     }
 
     getLists(forUi:boolean=true):Array<CardList<Route>> {
@@ -448,11 +471,15 @@ export class RouteListService extends IncyclistService {
                     return;
                 const importCard = importCards[idx]
                 
+                const name = file.url??file.filename??file.name
             
                 try {
 
-                    const {data,details} = await RouteParser.parse(file)              
-    
+                    this.logEvent({message:'start import', name})
+
+                    const {data,details} = await RouteParser.parse(file)     
+                    this.logEvent({message:'import completed', name})
+
                     const route = new Route(data,details)
                     route.description.tsImported = Date.now()
                     
@@ -474,13 +501,14 @@ export class RouteListService extends IncyclistService {
 
                     this.myRoutes.remove(importCard)
                     card.enableDelete(true)              
-                    this.emitLists('updated')     
+                    this.emitLists('updated',true)     
     
                     this.verifyPoints(card,route)
     
                    
                 }
                 catch(err) {
+                    this.logEvent({message:'import failed', name, reason:err.message, stack:err.stack})
                     importCard.setError(err)
                 }
         
@@ -494,13 +522,19 @@ export class RouteListService extends IncyclistService {
         }
     }
 
-    emitLists( event:'loaded'|'updated') {
+    emitLists( event:'loaded'|'updated',log=false) {
         try {
             const lists = this.getLists()
             
             const hash = lists ? lists.map( l=> l.getCards().map(c=>c.getId()).join(',')).join(':') : ''
             if (this.observer)
                 this.observer.emit(event,lists,hash)
+
+            if (log) {
+                const logs = this.createRoutesLogEntry(true)??{}
+                this.logEvent({message:`RoutesList ${event}`, ...logs})
+        
+            }
     
         }
         catch(err) {
@@ -522,7 +556,8 @@ export class RouteListService extends IncyclistService {
         list.add( card)
         card.enableDelete(list.getId()==='myRoutes')
         card.setList(list)
-        this.emitLists('updated')                
+        this.emitLists('updated',true)                
+
     }
 
     protected addImportCard(file:FileInfo):ActiveImportCard {
