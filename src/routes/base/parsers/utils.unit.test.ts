@@ -59,5 +59,16 @@ describe('Incyclist Parser Utils',()=>{
             expect(res).toBe('file:////test.gpx')
         })
 
+        test('neither file nor URL is specified',()=>{
+            const name= 'test.xml'
+            const dir = '/tmp'
+
+            const fileInfo:FileInfo = {type:'url', filename:undefined, name, ext:'xml',dir,url:`file:///${dir}/${name}`, delimiter:'/'}
+
+            const res = getReferencedFileInfo(fileInfo,{})
+            expect(res).toBeUndefined()
+
+        })
+
     })
 })

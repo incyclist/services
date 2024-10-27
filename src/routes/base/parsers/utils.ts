@@ -103,8 +103,9 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
     }
 
     if (!referenced.file) {
-        // Target is neither defined as file or URL -> should never happen: throw an Exception
-        throw new Error('referenced.file or referenced.url must be specified')
+        // Target is neither defined as file or URL 
+        // -> no need to build a target path
+        return
     }
     
     let targetFileName = referenced.file;
