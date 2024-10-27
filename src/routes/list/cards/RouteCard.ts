@@ -361,6 +361,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     delete():PromiseObserver<boolean> {
         try {
 
+            this.logger.logEvent({message: 'delete card',card:this.getTitle()})
             const service = getRouteList()
             service.unselectCard(this)
 
@@ -420,8 +421,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
             // delete route related user settings
             this.deleteRouteUserSettings();
 
+            this.logger.logEvent({message: 'card deleted',card:this.getTitle()})
 
-            getRouteList().emitLists('updated');
+            getRouteList().emitLists('updated',true);
             deleted =true;   
         }
         catch(err) {

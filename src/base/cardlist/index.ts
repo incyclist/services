@@ -6,6 +6,7 @@ export interface Card<T>{
     getData():T
     setData(data:T)
     getCardType()
+    getTitle():string
     getDisplayProperties()
     setInitialized(val:boolean):void
     reset():void

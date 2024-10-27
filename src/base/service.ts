@@ -29,7 +29,7 @@ export class IncyclistService extends EventEmitter {
     logError(err:Error, fn:string, args?) {
         const logInfo = args || {}
 
-        this.logger.logEvent({message:'Error', fn, ...logInfo, error:err.message, stack:err.stack})
+        this.logEvent({message:'Error', fn, ...logInfo, error:err.message, stack:err.stack})
     }
 
 }

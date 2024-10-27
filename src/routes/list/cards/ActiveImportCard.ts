@@ -35,7 +35,7 @@ export class ActiveImportCard extends BaseCard implements Card<Route> {
         const list = useRouteList().getLists().find( l=>l.getId()==='myRoutes')
         if (list) {
             list.remove(this)
-            useRouteList().emitLists('updated');
+            useRouteList().emitLists('updated',true);
         }
         return PromiseObserver.alwaysReturning(true)
         
@@ -73,7 +73,7 @@ export class ActiveImportCard extends BaseCard implements Card<Route> {
     }
 
     getTitle(): string {
-        return DEFAULT_TITLE;
+        return this.error ? `${DEFAULT_TITLE}:${this.getId()}:${this.error}` : `${DEFAULT_TITLE}:${this.getId()}`;
     }
 
     getDisplayProperties(): ActiveImportProps {
