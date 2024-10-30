@@ -512,21 +512,27 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     download(): Observer {
         try {        
-            getRouteList().logEvent({message:'download started', route:this.route?.description?.title})
 
+            
             if (!this.downloadObserver) {           
+                
+                getRouteList().logEvent({message:'download started', route:this.route?.description?.title})
                 const dl = new RouteDownloadService()
                 this.downloadObserver = dl.download(this.route)
                 this.downloadObserver
                     .on('done', this.onDownloadCompleted.bind(this))
-                    .on('error', this.onDownloadError.bind(this))
+                    .on('error',this.onDownloadError.bind(this))
             }
+
+
         }
         catch(err) {
             this.logError(err,'download')
         }
         return this.downloadObserver;
     }
+
+    
 
     stopDownload() {
         try {
@@ -556,9 +562,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             this.route.details.video.file = undefined
             this.route.details.video.url = url;
-            
+
             this.updateRoute( this.route)
-            waitNextTick().then( ()=>{ delete this.downloadObserver})
+            waitNextTick().then( ()=>{ 
+                this.downloadObserver.reset()
+                delete this.downloadObserver
+            })
 
             if (this.list.getId()!=='myRoutes') {
                 this.list.remove(this)
@@ -571,11 +580,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
     }
 
-    protected onDownloadError(err:Error) {        
+    protected async onDownloadError(err:Error) {    
+        
         try {
-            getRouteList().logEvent({message:'download error', error:err.message, route:this.route?.description?.title})
+            getRouteList().logEvent({message:'download failed', reason:err.message, route:this.route?.description?.title})
+            this.downloadObserver.stop()
 
-            waitNextTick().then( ()=>{ delete this.downloadObserver})
+            waitNextTick().then( ()=>{ 
+                this.downloadObserver.reset()
+                delete this.downloadObserver
+            })
         }
         catch(err) {
             this.logError(err,'onDownloadError')

@@ -113,13 +113,18 @@ export class RouteDownloadService extends IncyclistService {
             const session = downloadManager.createSession(url,file)
 
             observer.setSession(session)
-            
+            const onError = (err) => { 
+                this.logEvent({message:'download failed ',title, id,url,reason:err.message })
+                observer.emit('error', err)
+            }
+
+            const onProgress = (pct,speed,bytes)=> { this.onDownloadProgress(id,observer,pct,speed,bytes)}
+
             this.logEvent({message:'start download',title, id,url})
             session.on('started', ()=>{observer.emit('started') })
             session.on('close', ()=> { /*console.log('~~~ CLOSE') */ })
-            session.on('progress', (pct,speed,bytes)=> { this.onDownloadProgress(id,observer,pct,speed,bytes)})
-            
-            session.on('error', observer.emit.bind(observer) )
+            session.on('progress', onProgress)
+            session.on('error', onError)
             session.once('done', ()=>{ 
                 this.logEvent({message:'download finished ',title, id,url})
                 observer.emit('done', `video:///${file}`)
