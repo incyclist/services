@@ -89,7 +89,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
 
     async getDetails (id:string): Promise<RouteApiDetail> {
-        const descr = this.routeDescriptions.find( d=>d.id===id)
+        const descr = this.getDescription(id)
         if (!descr)
             return;
 
@@ -214,32 +214,40 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         const description = ((target as Route).description || target) as RouteInfo
         const repo = description?.hasVideo ? this.getVideosRepo() : this.getRoutesRepo()
 
-        let details;
-        try {
-            const id = description.legacyId || description.id
-            details = await repo.read(id) as undefined as RouteApiDetail
-            description.originalName = details.title
 
-            if (description.hasVideo) {                
-                description.segments = details.video?.selectableSegments|| details?.selectableSegments 
+        const loadFromRepo = async(id, logErrors=true):Promise<RouteApiDetail> => {
+            try {
+
+                const res = await repo.read(id) as undefined as RouteApiDetail                
+                if (res) {
+                    description.originalName = res.title
+
+                    if (description.hasVideo && !description.segments) {
+                        description.segments = res.video?.selectableSegments || res.selectableSegments
+                    }
+        
+                }
+                else if (logErrors)
+                    this.logger.logEvent({ message: 'could not load route details', id, title: description?.title, reason: 'no data received' })
+                return res
             }
-
+            catch (err) {
+                if (logErrors)
+                    this.logger.logEvent({ message: 'could not load route details', id, title: description?.title, reason: err.message, stack: err.stack })
+                return null
+            }
         }
-        catch(err) {
-            this.logger.logEvent({message:'could not load route details', id:description?.legacyId || description?.id, title:description?.title, reason:err.message, stack:err.stack})
 
-            if (description.id && description.legacyId !== description.id) {
-                try {                    
-                    details = await repo.read(description.id) as undefined as RouteApiDetail
-                    description.originalName = details.title
-                }
-                catch(err) {
-                    this.logger.logEvent({message:'could not load route details', id:description?.legacyId || description?.id, title:description?.title, reason:err.message, stack:err.stack})
-                }
-            }        
 
+        let details
+        if (description.legacyId) {
+            details = await loadFromRepo(description.legacyId,false) 
         }
-    
+        if (!details) {
+            details = await loadFromRepo(description.id) 
+        }
+
+
         if (!details) {
             return;
         }

@@ -140,7 +140,7 @@ const run = async (loader,routes)=>{
 
 
 
-describe('LegacyDBLoader',()=>{
+describe('RoutesDbLoader',()=>{
     describe('load',()=>{
 
   
@@ -398,6 +398,103 @@ describe('LegacyDBLoader',()=>{
             expect(routesRepo.delete).toHaveBeenCalledTimes(1)  // route has been deleted in details DB
             expect(videosRepo.delete).toHaveBeenCalledTimes(0)  // nothing to do here
 
+        })
+
+    })
+
+    describe('getDetails',()=>{
+
+        let loader:RoutesDbLoader;
+        let loaderObj 
+        let legacy;
+        let route
+        let log
+
+        const expectLog  = (message,reason,additional={}) => {
+            expect(log).toHaveBeenCalledWith(expect.objectContaining({message, reason, ...additional}))
+        }
+
+        beforeEach( ()=>{
+            loader = loaderObj = new RoutesDbLoader()                    
+            legacy = new RoutesLegacyDbLoader()
+
+            const data = clone(repoData)            
+            setupMockRepo(data)
+
+            const routeInfo = data[19]
+            route = new Route(routeInfo) // Holzweiler
+            loader.getDescription = jest.fn().mockReturnValue(route)
+
+            loaderObj.logger.logEvent = log = jest.fn()
+
+            
+        })
+
+        afterEach( ()=>{
+            // cleanup Singletons
+            loaderObj.reset()            
+            legacy.reset()
+            MockRepository.reset()
+        })
+
+        test('no legacy: data available',async ()=>{
+            videosRepo.read = jest.fn().mockResolvedValue(holzweiler)
+            const details = await loader.getDetails(route.description.id)
+            expect(details).toBeDefined()
+            expect(route.description.originalName).toBe('DE_Holzweiler-Keyenberg')
+            expect(route.details).not.toBeDefined()
+
+        })
+        test('no legacy: no data available',async ()=>{
+            videosRepo.read = jest.fn().mockResolvedValue(null)
+            const details = await loader.getDetails(route.description.id)
+            expect(details).toBeUndefined()
+            expectLog('could not load route details','no data received')
+        })
+        test('no legacy: error when trying to load from repo',async ()=>{
+            videosRepo.read = jest.fn().mockRejectedValue(new Error('some error'))
+            const details = await loader.getDetails(route.description.id)
+            expect(details).toBeUndefined()
+            expectLog('could not load route details','some error')
+        })
+
+        test('legacy: data available',async ()=>{
+            videosRepo.read = jest.fn().mockResolvedValue(holzweiler)
+            route.description.legacyId = 'legacy-123'
+
+            const details = await loader.getDetails(route.description.id)
+            expect(videosRepo.read).toHaveBeenCalledWith('legacy-123')
+            expect(videosRepo.read).not.toHaveBeenCalledWith(route.description.id)
+
+            expect(details).toBeDefined()
+            expect(route.description.originalName).toBe('DE_Holzweiler-Keyenberg')
+            expect(route.details).not.toBeDefined()
+        })
+
+        test('legacy: no legacy data available, but real details available',async ()=>{
+            videosRepo.read = jest.fn(  async (id:string) => {
+                if (id==='legacy-123') return null as unknown as JSONObject
+                return holzweiler as JSONObject
+            })
+            route.description.legacyId = 'legacy-123'
+            const details = await loader.getDetails(route.description.id)
+            expect(videosRepo.read).toHaveBeenCalledWith('legacy-123')
+            expect(videosRepo.read).toHaveBeenCalledWith(route.description.id)
+
+            expect(details).toBeDefined()
+            expect(route.description.originalName).toBe('DE_Holzweiler-Keyenberg')
+            expect(route.details).not.toBeDefined()
+        })
+
+        test('legacy: no legacy data available, and no real details available',async ()=>{
+            videosRepo.read = jest.fn().mockRejectedValue( new Error('some error'))
+            route.description.legacyId = 'legacy-123'
+            const details = await loader.getDetails(route.description.id)
+            expect(videosRepo.read).toHaveBeenCalledWith('legacy-123')
+            expect(videosRepo.read).toHaveBeenCalledWith(route.description.id)
+
+            expect(details).toBeUndefined()
+            expectLog('could not load route details','some error')
         })
 
     })
