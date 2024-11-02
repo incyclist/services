@@ -206,11 +206,12 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     }
 
 
-    async loadDetails( items:LoadDetailsTargets) {
+    async loadDetails( items:LoadDetailsTargets, enforced:boolean=false) {
 
 
         // first try to load details from repo
-        const failed = await this.loadDetailsFromRepo(items)
+        
+        const failed = enforced ? items : await this.loadDetailsFromRepo(items)
 
 
         // all missing should be loaded from server

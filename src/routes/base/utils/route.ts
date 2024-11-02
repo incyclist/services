@@ -168,7 +168,10 @@ const addVideoDetails = (route: Route, details: RouteApiDetail)  => {
         route.description.videoUrl = details.video.url;
     }
     if (!valid(route.description.videoUrl)) {
-        route.description.videoUrl = valid(details.video.file) ? 'video:///' + details.video.file : undefined;
+        if (valid(details.video?.file)) {
+            route.description.videoUrl = details.video.file.startsWith('http') ? details.video.file : 'video:///' + details.video.file ;
+        }
+        
     }
 
     if (!valid(route.description.videoFormat)) {

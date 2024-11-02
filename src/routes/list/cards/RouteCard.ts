@@ -516,7 +516,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
             
             if (!this.downloadObserver) {           
                 
-                getRouteList().logEvent({message:'download started', route:this.route?.description?.title})
+                const routeDescr = this.route?.description
+
+                const lv = (v) => {
+                    if (v===null) return 'null'
+                    if (v===undefined) return undefined
+                    return v
+                }
+
+
+                getRouteList().logEvent({message:'download started', route:routeDescr?.title, videoUrl:lv(routeDescr?.videoUrl), downloadUrl:lv(routeDescr?.downloadUrl)})
                 const dl = new RouteDownloadService()
                 this.downloadObserver = dl.download(this.route)
                 this.downloadObserver
@@ -552,12 +561,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
             getRouteList().logEvent({message:'download completed', route:this.route?.description?.title})
 
             // save original video URL, in case we delete at a later point in time
-            if (!this.route.description.downloadUrl) {
-                this.route.description.downloadUrl = this.route.description.videoUrl
-            }
-            this.route.description.videoUrl = url;
-            this.route.description.isDownloaded = true;
-            this.route.description.tsImported = Date.now()
+            this.saveOriginalVideoUrl();
+
+            const descr = this.getRouteDescription()
+            descr.videoUrl = url;
+            descr.isDownloaded = true;
+            descr.tsImported = Date.now()
 
 
             this.route.details.video.file = undefined
@@ -578,6 +587,21 @@ export class RouteCard extends BaseCard implements Card<Route> {
         catch(err) {
             this.logError(err,'onDownloadComplete')
         }
+    }
+
+    private saveOriginalVideoUrl() {
+        const descr = this.getRouteDescription()
+
+        descr.originalVideoUrl = descr.videoUrl
+        if (!descr.downloadUrl && descr.videoUrl.startsWith('http')) {
+            descr.downloadUrl = descr.videoUrl;
+        }
+        this.save()
+    }
+    private restoreVideoUrl() {
+        const descr = this.getRouteDescription()
+
+        descr.videoUrl = descr.originalVideoUrl ?? descr.downloadUrl
     }
 
     protected async onDownloadError(err:Error) {    
@@ -749,10 +773,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected async resetDownload():Promise<void> {
         const descr = this.getRouteDescription()
         descr.isDownloaded = false
-        descr.videoUrl = descr.downloadUrl;        
+
+        
+        this.restoreVideoUrl()
         descr.tsImported = null
         this.route.details.video.file = undefined
-        this.route.details.video.url = descr.downloadUrl
+        this.route.details.video.url = descr.videoUrl
 
 
         if (this.downloadObserver) {

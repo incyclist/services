@@ -110,6 +110,7 @@ export interface    RouteInfo extends RouteBase{
     requiresDownload?: boolean;
     videoFormat?: string;   
     videoUrl?:string;
+    originalVideoUrl?:string;
     downloadUrl?:string,
     previewUrl?:string;
     points?: Array<RoutePoint>,
