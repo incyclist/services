@@ -3,6 +3,8 @@ import { IncyclistService } from "../../base/service";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { Route } from "../base/model/route";
+import { RoutesApiLoader } from "../list/loaders/api";
+import { RoutesDbLoader } from "../list/loaders/db";
 import { DownloadObserver } from "./types";
 
 
@@ -15,6 +17,14 @@ export class RouteDownloadService extends IncyclistService {
         super('Routes')
         this.progressLogTs = {}
         this.downloads = []
+    }
+
+    getRepo() {
+        return new RoutesDbLoader()
+    }
+
+    getRoutesApi() {
+        return new RoutesApiLoader()
     }
 
     download( route:Route): DownloadObserver {
@@ -92,6 +102,14 @@ export class RouteDownloadService extends IncyclistService {
         let url;
         try {
             url = route?.description?.downloadUrl || route?.description?.videoUrl
+
+            if (!url) {
+                url = this.restoreFromRepo(route)
+            }
+            if (!url) {
+                observer.emit('error', new Error('download not supported'))
+                return;
+            }
             
             const {id,title} = route.description;
 
@@ -135,6 +153,20 @@ export class RouteDownloadService extends IncyclistService {
             this.logError(err,'downloadRoute',{url})
             observer.emit('error',err)
         }        
+
+
+    }
+
+    protected async restoreFromRepo(route:Route) {
+        
+        await this.getRoutesApi().loadDetails([{route, added:false}],true)
+
+        await waitNextTick()
+
+
+
+        const descr = this.getRepo().getDescription(route.description.id)
+        return descr?.downloadUrl || descr?.videoUrl
 
 
     }
