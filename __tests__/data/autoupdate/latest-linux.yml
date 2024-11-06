@@ -1,0 +1,9 @@
+version: 0.9.9
+files:
+  - url: Incyclist-0.9.9.AppImage
+    sha512: XXXXX
+    size: 119950875
+    blockMapSize: 126511
+path: Incyclist-0.9.9.AppImage
+sha512: XXXXX
+releaseDate: '2024-11-02T19:00:22.963Z'
