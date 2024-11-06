@@ -82,14 +82,15 @@ export class ApiClient {
     protected onResponse(res) {
         if (!res)
             return;
+        
+        const { config, status } = res || {};
+        const { headers = {}, url, method, params } = config;
+        const tid = headers['x-transaction-id'];
+        if (!tid)
+            return res;
 
         try {
 
-            const { config, status } = res || {};
-            const { headers = {}, url, method, params } = config;
-            const tid = headers['x-transaction-id'];
-            if (!tid)
-                return res;
 
             const idx = this.requests.findIndex(r => r.tid === tid);
             if (idx !== -1) {
@@ -99,7 +100,7 @@ export class ApiClient {
             }
         }
         catch (err) {
-            this.logger.logEvent({ message: 'error', fn: 'onResponse', error: err.message || err, stack: err.stack });
+            this.logger.logEvent({ message: 'error', fn: 'onResponse', error: err.message || err, tid, stack: err.stack });
         }
 
         return res;
