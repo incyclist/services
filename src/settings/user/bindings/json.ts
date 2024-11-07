@@ -4,7 +4,7 @@ import fs from 'fs/promises'
 
 const DEFAULT_PATH = './settings.json'
 
-export default class JSONFileBindig extends UserSettingsBinding{
+export default class JSONFileBinding extends UserSettingsBinding{
     static _instance: UserSettingsBinding;
     path: string
     settings: any
@@ -12,9 +12,9 @@ export default class JSONFileBindig extends UserSettingsBinding{
     
 
     static getInstance(path?:string): UserSettingsBinding {
-        if (!JSONFileBindig._instance)
-            JSONFileBindig._instance = new JSONFileBindig(path)
-        return JSONFileBindig._instance
+        if (!JSONFileBinding._instance)
+            JSONFileBinding._instance = new JSONFileBinding(path)
+        return JSONFileBinding._instance
     }
 
     constructor(path:string=DEFAULT_PATH) {
