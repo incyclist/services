@@ -168,7 +168,7 @@ export interface ActivityDetails  {
     /** file type - always has to be "IncyclistActivity" */    
     type?: ActivityType     
 
-    /** file version - at the moment always "1" */    
+    /** file version - at the moment always "3" */    
     version?: string;
 
     /** name of the activity */

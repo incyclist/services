@@ -13,6 +13,9 @@ import prev1 from '../../../__tests__/data/activities/prevRide.json'
 import prev2 from '../../../__tests__/data/activities/prevRide1.json'
 import { ActivityDetails, ActivityInfo, ActivityLogRecord, buildSummary } from '../base'
 import { PastActivityLogEntry } from "../list"
+import { initUserSettings } from "../../settings"
+import { MockBinding } from "../../settings/user/mock"
+import { Observer } from "../../base/types/observer"
 
 
 describe('ActivityRideService',()=>{
@@ -27,6 +30,8 @@ describe('ActivityRideService',()=>{
         }
         return json[key]??defValue        
     }
+
+    const protectedMember = (service,member) => service[member]
 
     const resetSingleton = (service) =>{
         service.reset()
@@ -53,6 +58,14 @@ describe('ActivityRideService',()=>{
             }
         })
 
+        if (props.observer) {
+            svc.createObserver = jest.fn().mockReturnValue(props.observer)
+        }
+        if (props.init) {
+            const keys = Object.keys(props.init)
+            keys.forEach( key => svc[key]=props.init[key])
+        }
+
     
     }
     describe ('init',()=>{
@@ -77,7 +90,7 @@ describe('ActivityRideService',()=>{
             expect(observer).toBeDefined()
             expect(service.getActivity()).toMatchObject({
                 type:'IncyclistActivity',
-                version: '2',
+                version: '3',
                 id: expect.anything(),
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
@@ -118,7 +131,7 @@ describe('ActivityRideService',()=>{
             expect(observer).toBeDefined()
             expect(service.getActivity()).toMatchObject({
                 type:'IncyclistActivity',
-                version: '2',
+                version: '3',
                 id: expect.anything(),
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
@@ -146,7 +159,8 @@ describe('ActivityRideService',()=>{
                 startPos: 0,
                 realityFactor:100,
                 logs:[],
-                version:'2',
+                version:'3',
+                startTime:'2020-01-01T00:00:00.000Z',
                 route:{name:'XX_DEMO',id:'4711',hash:'123'}
             })
 
@@ -177,6 +191,173 @@ describe('ActivityRideService',()=>{
 
 
         })
+    })
+
+    describe ('start',()=>{
+        let service:ActivityRideService
+        let settings
+        let observer:Observer
+        const ride   = new EventEmitter()
+
+        beforeEach( ()=>{
+            observer = new Observer()
+            service = new ActivityRideService()
+            jest .useFakeTimers().setSystemTime(new Date('2020-01-01'));
+            const route  = createFromJson(sydney as unknown as RouteApiDetail)
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'},ride,observer})
+        })
+
+        afterEach( ()=>{
+            service.stop()
+            resetSingleton(service)
+            jest.resetAllMocks();
+            jest.useRealTimers()
+
+        })
+
+        test('normal start after init',()=>{
+            const obs = service.init('123')
+            let isStarted = false;            
+            obs.on('started',()=>{isStarted=true})
+            service.start()
+
+            const activity = protectedMember(service,'activity')
+            expect(activity?.id).toBe('123')    
+            expect(activity.startTime).toBe('2020-01-01T00:00:00.000Z')
+
+        })
+
+        test('start called before init',async ()=>{         
+            
+            const initFn = jest.spyOn(service,'init')
+
+            let isStarted = false;            
+            observer.on('started',()=>{isStarted=true})
+
+            service.start()
+            expect(initFn).toHaveBeenCalled()
+            const activity = protectedMember(service,'activity')
+            expect(activity?.id).toBeDefined()    
+            expect(isStarted).toBeTruthy()
+
+
+        })
+
+        test('trying to start while an acitivity is active',()=>{
+
+            let startCount = 0;
+
+            const obs = service.init('124')
+            obs.on('started',()=>{startCount++})
+
+            // first start
+            service.start()
+            const state = protectedMember(service,'state')
+            expect(state).toBe('active')
+
+            jest.advanceTimersByTime(1000*60*60)
+
+            // 2nd start
+            service.start()
+            expect(startCount).toBe(1)
+            const activity = protectedMember(service,'activity')
+            expect(activity.startTime).toBe('2020-01-01T00:00:00.000Z')
+
+        })
+
+
+    
+    })
+
+    describe ('pause/resume',()=>{
+        let service:ActivityRideService
+        let settings
+        let observer:Observer
+        const route  = createFromJson(sydney as unknown as RouteApiDetail)
+
+        beforeEach( ()=>{
+            observer = new Observer()
+            service = new ActivityRideService()
+            jest .useFakeTimers().setSystemTime(new Date('2020-01-01'));
+        })
+
+        afterEach( ()=>{
+            service.stop()
+            resetSingleton(service)
+            jest.resetAllMocks();
+            jest.useRealTimers()
+
+        })
+
+        test('pausing active acitvity',()=>{
+            const activity:Partial<ActivityDetails> = {id:'123',startTime:'2020-01-01T00:00:00.000Z'} 
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'}, 
+                init:{
+                    state:'active',tsStart:Date.now(),
+                    activity,observer
+                }
+            })
+            let isPaused = false
+            jest.advanceTimersByTime(1000)
+            observer.on('paused',()=>{isPaused=true})
+            service.pause()
+
+            expect(activity.startTime).toBe('2020-01-01T00:00:00.000Z')
+            expect(activity.timeTotal).toBe(1)
+            expect(activity.time).toBe(1)
+            expect(activity.timePause).toBeUndefined()
+
+            jest.advanceTimersByTime(1000)
+            service.stop()
+            expect(activity.timeTotal).toBe(2)
+            expect(activity.time).toBe(1)
+            expect(activity.timePause).toBe(1)
+
+        })
+
+
+        test('pausing paused acitvity',()=>{
+            const activity:Partial<ActivityDetails> = {id:'123',startTime:'2020-01-01T00:00:00.000Z'} 
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'}, 
+                init:{
+                    state:'paused',tsStart:Date.now(),
+                    activity,observer
+                }
+            })
+            let isPausedEmitted = false
+            jest.advanceTimersByTime(1000)
+            observer.on('paused',()=>{isPausedEmitted=true})
+            service.pause()
+
+            expect(isPausedEmitted).toBeFalsy()
+        })
+
+
+        test('resuming paused acitvity',()=>{
+            const activity:Partial<ActivityDetails> = {id:'123',startTime:'2020-01-01T00:00:00.000Z'} 
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'}, 
+                init:{
+                    state:'active',tsStart:Date.now(),
+                    activity,observer
+                }
+            })
+            let isPaused = false
+            jest.advanceTimersByTime(1000)
+            observer.on('paused',()=>{isPaused=true})
+            service.pause()
+
+            jest.advanceTimersByTime(1000)
+            service.resume()
+
+            jest.advanceTimersByTime(1000)
+            service.stop()
+            expect(activity.timeTotal).toBe(3)
+            expect(activity.time).toBe(2)
+            expect(activity.timePause).toBe(1)
+
+        })
+
+
     })
 
     describe('typical ride',()=>{

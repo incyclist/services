@@ -156,7 +156,7 @@ export class ActivityRideService extends IncyclistService {
             dataState:{}
         }
 
-        const observer = new Observer()    
+        const observer = this.createObserver()
 
         if (isClean) {
             this.observer = observer
@@ -201,7 +201,7 @@ export class ActivityRideService extends IncyclistService {
             return;
 
         this.tsStart= Date.now()
-        this.activity.startTime = new Date(this.tsStart).toUTCString()
+        this.activity.startTime = new Date(this.tsStart).toISOString()
 
         this.statsCalculator = new ActivityStatsCalculator(this.activity,this.logger)
         this._save()
@@ -222,13 +222,15 @@ export class ActivityRideService extends IncyclistService {
     stop() {
         
         this.stopWorker()
-        if (!this.observer)
+        if (!this.observer || !this.activity)
             return;
 
         if (this.state==='paused')  {
             const pauseDuration = (Date.now()-this.tsPauseStart)/1000;
+            this.activity.timeTotal += pauseDuration
             this.activity.timePause=(this.activity.timePause??0)+pauseDuration
             this.current.tsUpdate = Date.now()
+
     
         }
 
@@ -996,7 +998,7 @@ export class ActivityRideService extends IncyclistService {
         const startSettings:RouteStartSettings = this.getRouteList().getStartSettings()
 
         this.tsStart= Date.now()
-        const startTime = new Date(this.tsStart).toUTCString()
+        const startTime = new Date(this.tsStart).toISOString()
         this.current = {deviceData:{},dataState:{}}
 
         let startPos = 0;
@@ -1326,6 +1328,10 @@ export class ActivityRideService extends IncyclistService {
             clearInterval(this.updateInterval);
             this.updateInterval = undefined;
         }
+    }
+
+    protected createObserver() {
+        return new Observer()            
     }
 
 

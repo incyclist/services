@@ -8,7 +8,7 @@ import { ActivitySearchCriteria } from "./types";
 import { buildSummary } from "../utils";
 import { JSONObject } from "../../../utils/xml";
 
-export const DB_VERSION = '2'
+export const DB_VERSION = '3'
 export const DB_NAME = 'db'
 
 /**

@@ -3,7 +3,7 @@ import { IUserSettingsBinding } from "./bindings";
 import { UserSettingsService } from "./service";
 
 
-class MockBinding implements IUserSettingsBinding {
+export class MockBinding implements IUserSettingsBinding {
     settings
 
     constructor(settings) {

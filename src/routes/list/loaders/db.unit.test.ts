@@ -282,7 +282,9 @@ describe('RoutesDbLoader',()=>{
         test('repo with gpx and videos',async ()=>{
             const routes:Array<Route> = []
 
-            const write = loaderObj.write = jest.fn( ()=>{ console.log('write')})
+            const write = loaderObj.write = jest.fn( ()=>{ 
+                // do nothing
+            })
             loaderObj.writeDetails = jest.fn()
 
             const save = jest.spyOn(loader,'save')
