@@ -51,7 +51,6 @@ describe( 'IncyclistUpdatesApi',()=>{
 
             const res = await api.getLatestAppVersion('linux')
 
-            console.log(res,mockServerResult)
             expect(res).toMatchObject({
                 version:'0.9.9', 
                 path:'Incyclist-0.9.9.AppImage',
