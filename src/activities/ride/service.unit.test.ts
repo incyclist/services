@@ -77,7 +77,7 @@ describe('ActivityRideService',()=>{
             expect(observer).toBeDefined()
             expect(service.getActivity()).toMatchObject({
                 type:'IncyclistActivity',
-                version: '2',
+                version: '3',
                 id: expect.anything(),
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
@@ -118,7 +118,7 @@ describe('ActivityRideService',()=>{
             expect(observer).toBeDefined()
             expect(service.getActivity()).toMatchObject({
                 type:'IncyclistActivity',
-                version: '2',
+                version: '3',
                 id: expect.anything(),
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
@@ -146,7 +146,8 @@ describe('ActivityRideService',()=>{
                 startPos: 0,
                 realityFactor:100,
                 logs:[],
-                version:'2',
+                version:'3',
+                startTime:'2020-01-01T00:00:00.000Z',
                 route:{name:'XX_DEMO',id:'4711',hash:'123'}
             })
 

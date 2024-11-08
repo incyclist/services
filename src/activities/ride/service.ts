@@ -201,7 +201,7 @@ export class ActivityRideService extends IncyclistService {
             return;
 
         this.tsStart= Date.now()
-        this.activity.startTime = new Date(this.tsStart).toUTCString()
+        this.activity.startTime = new Date(this.tsStart).toISOString()
 
         this.statsCalculator = new ActivityStatsCalculator(this.activity,this.logger)
         this._save()
@@ -996,7 +996,7 @@ export class ActivityRideService extends IncyclistService {
         const startSettings:RouteStartSettings = this.getRouteList().getStartSettings()
 
         this.tsStart= Date.now()
-        const startTime = new Date(this.tsStart).toUTCString()
+        const startTime = new Date(this.tsStart).toISOString()
         this.current = {deviceData:{},dataState:{}}
 
         let startPos = 0;
