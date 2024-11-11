@@ -7,7 +7,7 @@ import clone from "../../utils/clone";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
-import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { setInterval } from "timers";
 
 
@@ -1237,7 +1237,6 @@ export class DeviceRideService  extends EventEmitter{
 
 
         const settings = useDeviceConfiguration().getModeSettings(udid)
-        console.log('~~~ isToggleEnabled', settings, settings?.isSIM)
         return settings?.isSIM
         
 
