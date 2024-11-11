@@ -429,8 +429,20 @@ export class WorkoutRide extends IncyclistService{
         catch(err) {
             this.logError(err,'powerDown')
         }
-
     }
+
+    /**
+     * Toggles between the originally selected mode and ERG mode
+     * 
+     * This allows to temporarily swith to SmartTrainer (SIM) mode, 
+     * e.g. if there is a Sprint(max effort) segment upcoming and switch back to ERG after that segment
+     * 
+     */
+    toggleCyclingMode():void {
+        const  deviceRide = useDeviceRide()
+        deviceRide.toggleCyclingMode()
+
+        this.emit('update', this.getDashboardDisplayProperties())    }
 
 
     /**
@@ -464,6 +476,7 @@ export class WorkoutRide extends IncyclistService{
                 ftp:this.settings.ftp, 
                 current:this.currentLimits,
                 start,stop,
+                mode: this.getCyclingModeText(),
                 canShowBackward,
                 canShowForward:true
             }
@@ -800,6 +813,21 @@ export class WorkoutRide extends IncyclistService{
             clearInterval(this.updateInterval);
             this.updateInterval = undefined;
         }
+    }
+
+    protected getCyclingModeText():string {
+        const deviceRide = useDeviceRide()
+        const mode = deviceRide.getCyclingMode()
+
+        const enabled = deviceRide.isToggleEnabled()
+
+        if (!mode || !enabled)
+            return
+
+        if (mode.isERG())
+            return 'SIM'
+        if (mode.isSIM()) 
+            return  'ERG'
     }
 
 }
