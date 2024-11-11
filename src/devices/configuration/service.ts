@@ -768,7 +768,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             if (!device)
                 return;
 
-            let mode:string,modes,settings
+            let mode:string,modes,settings, isERG, isSIM
             let modeObj:CyclingMode
 
             const adapter = AdapterFactory.create(device.settings) 
@@ -791,10 +791,14 @@ export class DeviceConfigurationService  extends EventEmitter{
             if (!settings && modeObj) {
                 settings = modeObj.getSettings()
             }
-            
-            
+
+            const options = modes.map( M=> new M(adapter))
+            if (options?.length) {
+                isERG = options[0].isERG()
+                isSIM = options[0].isSIM()
     
-            return {udid,mode,settings,options:modes.map( M=> new M(adapter))}
+            }
+            return {udid,mode,settings,isERG,isSIM,options}
 
         }
         catch(err) {

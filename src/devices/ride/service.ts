@@ -7,7 +7,7 @@ import clone from "../../utils/clone";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
-import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { setInterval } from "timers";
 
 
@@ -37,7 +37,7 @@ export class DeviceRideService  extends EventEmitter{
     protected logger: EventLogger
     protected debug;
     protected promiseSendUpdate: Promise<UpdateRequest|void>[]
-
+    protected originalMode: CyclingMode
     protected deviceDataHandler = this.onData.bind(this)
 
     static getInstance():DeviceRideService{
@@ -922,6 +922,9 @@ export class DeviceRideService  extends EventEmitter{
         const goodToGo = await this.waitForPreviousStartToFinish()
         if (!goodToGo) 
             return;
+
+        const {adapter} = this.getControlAdapter()??{}
+        this.originalMode = adapter.getCyclingMode() as CyclingMode
         
         return this.startAdapters( adapters,'start',props)
     }
@@ -1227,11 +1230,52 @@ export class DeviceRideService  extends EventEmitter{
             return adapter.getCyclingMode()
     }
 
+    isToggleEnabled():boolean {
+        const {adapter,udid} = this.getControlAdapter()??{}; 
+        if (!adapter)
+            return false
+
+
+        const settings = useDeviceConfiguration().getModeSettings(udid)
+        console.log('~~~ isToggleEnabled', settings, settings?.isSIM)
+        return settings?.isSIM
+        
+
+    }
+
+
+    async toggleCyclingMode() {
+        if (!this.isToggleEnabled())
+            return
+        const {adapter} = this.getControlAdapter()??{}; 
+        if (!adapter)
+            return
+
+        const ergRide = (this.originalMode?.isERG())
+        const targetMode = ergRide ? adapter.getDefaultCyclingMode() : this.originalMode
+        const currentMode = adapter.getCyclingMode() as CyclingMode
+        if (!currentMode)
+            return
+
+        if (!currentMode.isERG())  {
+            const power = adapter.getData().power
+            this.enforceERG()
+            adapter.sendUpdate({targetPower:power})
+        }
+        else  {
+            const slope = adapter.getData().slope
+            adapter.setCyclingMode(targetMode)
+            this.resetCyclingMode(false) 
+            adapter.sendUpdate({slope})
+
+        }
+        
+    }
+
+
     async resetCyclingMode(sendInit:boolean=false) {
         try {
-            const adapters = this.getAdapterList();
-
-            const adapterInfo = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control)) 
+            const adapterInfo = this.getControlAdapter(); 
             if (!adapterInfo?.adapter)
                 return
 
@@ -1256,7 +1300,14 @@ export class DeviceRideService  extends EventEmitter{
 
     }
 
-    async enforceERG() {
+    private getControlAdapter() {
+        const adapters = this.getAdapterList();
+
+        const adapterInfo = adapters?.find(ai => ai.adapter.hasCapability(IncyclistCapability.Control));
+        return adapterInfo;
+    }
+
+    async enforceERG():Promise<void> {
         try {
             const adapters = this.getAdapterList();
 

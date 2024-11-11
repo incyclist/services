@@ -10,6 +10,8 @@ export interface AdapterInfo {
 export interface DeviceModeInfo {
     udid: string
     mode: string
+    isERG?: boolean,
+    isSIM?: boolean
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     settings: any
     options?: string[]
