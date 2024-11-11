@@ -554,9 +554,9 @@ export class ActivitiesRepository {
         return this.activities.find( ai => ai.summary.id===id)
     }
 
-    protected logError(error:Error, fn:string, logProps?) {
+    protected logError(err:Error, fn:string, logProps?) {
         const props = logProps??{}
-        this.logger.logEvent({message:'error',error,fn,...props})
+        this.logger.logEvent({message:'error',fn,error: err.message,...props, stack:err.stack})
     }
 
     protected getRepo() {
