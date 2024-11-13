@@ -1,4 +1,4 @@
-import { getBindings } from "../../../api";
+import { FileInfo, getBindings } from "../../../api";
 import { Card, CardList } from "../../../base/cardlist";
 import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { useUserSettings } from "../../../settings";
@@ -20,6 +20,7 @@ import { EventLogger } from "gd-eventlog";
 import { getPosition} from "../../base/utils/route";
 import { getWorkoutList } from "../../../workouts";
 import { checkIsNew } from "../utils";
+import { useOnlineStatusMonitoring } from "../../../monitoring";
 
 export interface SummaryCardDisplayProps extends RouteInfo{
     loaded:boolean
@@ -31,6 +32,7 @@ export interface SummaryCardDisplayProps extends RouteInfo{
     initialized:boolean;
     loading?:boolean
     isNew?:boolean
+    videoMissing?:boolean
 }
 
 export interface DetailCardDisplayProps  {
@@ -57,6 +59,8 @@ export type RouteCardProps = {
     showLoopOverwrite:boolean,
     showNextOverwrite:boolean,
     hasWorkout?:boolean
+    canStart?:boolean
+    videoMissing?:boolean
 }
 
 
@@ -112,13 +116,18 @@ export class RouteCard extends BaseCard implements Card<Route> {
             const {isOnline} = status
             const route = this.route.description
 
-            if (!route.hasVideo || !route.isLocal || route.videoUrl.startsWith('http')) 
-                return isOnline
+            
 
-            if (route.requiresDownload )
-                return route.isLocal && isOnline 
+            if (!route.hasVideo || !(route.isLocal||route.isDownloaded) || route.videoUrl.startsWith('http')) 
+                return isOnline 
 
-            return true;
+            if (route.requiresDownload)
+                return isOnline  
+
+            if (route.hasVideo)
+                return this.videoExists();
+
+            return true
         }
         catch(err) {
             this.logError(err, 'canStart')
@@ -143,6 +152,31 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
     }
 
+    videoExists():boolean {
+        const descr = this.getRouteDescription()
+        if (!descr?.hasVideo || descr?.videoUrl===undefined)
+            return false
+
+        const videoUrl = descr.videoUrl
+        let path = undefined
+        if ( videoUrl.startsWith('file:///') )
+            path = videoUrl.replace('file:///','')            
+        
+        if ( videoUrl.startsWith('video:///') )
+            path = videoUrl.replace('video:///','')           
+        
+        // local file
+        if (path) {
+            return this.fileExists(path)
+
+        }
+    }
+
+    protected fileExists(path) {
+        const fs = getBindings().fs
+        return fs.existsSync(path)
+
+    }
     previewMissing() {
         try {
             const descr = this.getRouteDescription()
@@ -243,9 +277,15 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             let isNew = checkIsNew(descr);
 
+            let videoMissing = undefined
+            if (descr.hasVideo && descr.isLocal && !this.videoExists()) {
+                videoMissing = true                
+            }
+
             const loading = this.deleteObserver!==undefined
             return {...descr, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,isNew,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
+                    videoMissing, 
                     observer:this.cardObserver}
         }
         catch(err) {
@@ -288,6 +328,14 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         const settings =this.getSettings();
         const workouts = getWorkoutList()
+        const isOnline = useOnlineStatusMonitoring().onlineStatus
+        const canStart = this.canStart( {isOnline})
+        const descr  = this.getRouteDescription()
+        let videoMissing;
+
+        if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) && !this.videoExists()) {
+            videoMissing = true                
+        }
 
         let showLoopOverwrite, showNextOverwrite;
         let hasWorkout=true
@@ -307,11 +355,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     showNextOverwrite = false
                 }
             }
+
         }
         catch(err) {
             this.logError(err,'openSettings')
         }
-        return {settings,showLoopOverwrite,showNextOverwrite,hasWorkout}
+        return {settings,showLoopOverwrite,showNextOverwrite,hasWorkout,canStart, videoMissing}
 
     }
 
@@ -507,6 +556,37 @@ export class RouteCard extends BaseCard implements Card<Route> {
         catch(err) {
             this.logError(err,'setVideoDir')
         }
+
+    }
+
+    onVideoSelected(info:FileInfo) {
+
+        const dropped = Array.isArray(info)?info[0]:info
+        const ext = dropped.ext.toLowerCase()
+
+        if (ext!=='mp4' && ext!=='avi') {
+            return 'Unsupported video format - Please select MP4 or AVI'
+        }
+        
+
+        const path = dropped.url.replace('file:///','')
+        const exists = this.fileExists(path)
+        if (!exists) {
+            return 'Could not open file'
+        }
+
+        const descr = this.getRouteDescription()
+        const details = this.getRouteData()
+        descr.videoUrl = dropped.url
+        descr.videoFormat = ext
+        details.video.file = undefined
+        details.video.url = dropped.url
+        details.video.format = ext
+        
+        this.save()
+
+        
+        return null
 
     }
 
