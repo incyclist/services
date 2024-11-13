@@ -166,7 +166,7 @@ export class RouteListService extends IncyclistService {
             }
 
 
-            routes = routes.filter( r => !r.isDeleted)
+            routes = routes.filter( r => !r?.isDeleted)
 
             routes = this.applyTitleFilter(filters, routes);
             routes = this.applyDistanceFilter(filters, routes);
@@ -316,9 +316,9 @@ export class RouteListService extends IncyclistService {
     
                 this.preloadObserver.start()
                     .then( ()=> { 
+                        this.initialized = true
                         
                         this.logEvent( {message:'preload route list completed'})
-                        this.initialized = true
                         updateRepoStats()
                         this.emitLists('loaded',true)
                         process.nextTick( ()=>{delete this.preloadObserver})

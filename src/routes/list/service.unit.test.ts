@@ -75,8 +75,10 @@ const prepareMock = ( database, props) => {
     
 
     const filesystem = fs as unknown as IFileSystem;
-    filesystem.checkDir = jest.fn()
 
+    filesystem.checkDir = jest.fn()
+    filesystem.existsSync = jest.fn().mockReturnValue(true)
+    
     getBindings().path = path;
     getBindings().fs = filesystem
     getBindings().video = {
@@ -144,7 +146,7 @@ describe('RouteListService',()=>{
             routes.forEach( r => {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const d = r as any
-                delete d.observer
+                delete d?.observer
             })
             //expect(routes.sort(sort)).toMatchObject(repoData.sort(sort))
             
@@ -181,11 +183,13 @@ describe('RouteListService',()=>{
         let service;
         let userSettings
 
-        beforeEach(()=>{ 
+        beforeEach(async ()=>{ 
             userSettings = useUserSettings()
             userSettings.get = jest.fn().mockReturnValue({})
             userSettings.set = jest.fn()
             service.filters = undefined
+            await service.preload().wait()
+
         })
 
         afterEach( ()=>{
