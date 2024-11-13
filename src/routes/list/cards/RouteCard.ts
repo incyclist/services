@@ -173,7 +173,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     protected fileExists(path) {
+
         const fs = getBindings().fs
+        if (!fs) return true
+        
         return fs.existsSync(path)
 
     }
