@@ -8,4 +8,5 @@ export * from './avatars'
 export * from './activities'
 export { useUserSettings,initUserSettings, UserSettingsService,UserSettingsBinding,IUserSettingsBinding } from './settings'
 export * from './autoupdate'
+export * from './monitoring'
 
