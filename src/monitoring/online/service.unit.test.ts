@@ -45,6 +45,28 @@ describe('OnlineStateMonitoringService', () => {
         expect(callback).toHaveBeenCalledWith(true);
     });
 
+    describe('initialize', () => {
+        let service: OnlineStateMonitoringService;
+        let s
+        beforeEach(() => {
+            s = service = useOnlineStatusMonitoring();
+        });
+    
+        afterEach( () => {
+            s.reset()
+        })
+
+        test('should change initialize state after calling initialized()', () => {
+
+            
+            expect(service.isInitialized()).toBe(false)
+            service.initialize(true);
+            expect(service.isInitialized()).toBe(true)
+          });
+        
+
+    })
+
     describe( 'start', () => {
         let service: OnlineStateMonitoringService;
         let s

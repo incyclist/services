@@ -17,12 +17,37 @@ export class OnlineStateMonitoringService extends IncyclistService {
     protected isOnline:boolean 
     protected _observer:Observer
     protected contextHandlers: Record<string,(online:boolean)=>void> = {}
+    protected _isInitialized = false
 
     constructor() {
         super('OnlineStatee')
         this._observer = new Observer()
     }
 
+
+    /**
+     * Initialize the service by setting the initial online status.
+     * 
+     * This method is called automatically when the service is first used.
+     * It sets the online status to the given value, and emits an 'onlineStatus' event
+     * if the status is changed.
+     * 
+     * @param isOnline {boolean} The initial online status.
+     */
+    initialize(isOnline:boolean ) {
+        this._isInitialized = true
+        this.setOnline(isOnline)
+    }
+
+    /**
+     * Indicates whether the service has been initialized.
+     * @returns {boolean} True if the service has been initialized, false otherwise.
+     */
+    isInitialized():boolean {
+        return this._isInitialized
+    }
+
+    
     /**
      * Set the online status of the application.
      * If the status is changed, it emits an 'onlineStatus' event.
