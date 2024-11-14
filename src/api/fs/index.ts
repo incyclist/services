@@ -6,6 +6,7 @@ export interface IFileSystem {
     createWriteStream(...args)
     createReadStream(...args)
 
+    access(path:string,mode?:number):Promise<void>
     existsSync(path:string):boolean
     checkDir(path:string):void
 
