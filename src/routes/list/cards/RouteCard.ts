@@ -185,7 +185,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             return true
         }
         catch(err) {
-            this.logError(err,'fileExists')
+            this.logger.logEvent({message:'file does not exist', path, reason:err.message})
             return false
         }
     }
