@@ -568,7 +568,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
-    onVideoSelected(info:FileInfo) {
+    async onVideoSelected(info:FileInfo) {
 
         const dropped = Array.isArray(info)?info[0]:info
         const ext = dropped.ext.toLowerCase()
@@ -579,7 +579,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         
 
         const path = dropped.url.replace('file:///','')
-        const exists = this.fileExists(path)
+        const exists = await this.fileExists(path)
         if (!exists) {
             return 'Could not open file'
         }
