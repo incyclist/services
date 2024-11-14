@@ -32,7 +32,6 @@ export interface SummaryCardDisplayProps extends RouteInfo{
     initialized:boolean;
     loading?:boolean
     isNew?:boolean
-    videoMissing?:boolean
 }
 
 export interface DetailCardDisplayProps  {
@@ -60,7 +59,8 @@ export type RouteCardProps = {
     showNextOverwrite:boolean,
     hasWorkout?:boolean
     canStart?:boolean
-    videoMissing?:boolean
+    videoMissing?:Promise<boolean>
+    videoChecking?:boolean
 }
 
 
@@ -124,9 +124,6 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (route.requiresDownload)
                 return isOnline  
 
-            if (route.hasVideo)
-                return this.videoExists();
-
             return true
         }
         catch(err) {
@@ -152,7 +149,12 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
     }
 
-    videoExists():boolean {
+    protected async isVideoMissing() {
+        const exists = await this.videoExists()
+        return !exists
+    }
+
+    async videoExists():Promise<boolean> {
         const descr = this.getRouteDescription()
         if (!descr?.hasVideo || descr?.videoUrl===undefined)
             return false
@@ -167,18 +169,25 @@ export class RouteCard extends BaseCard implements Card<Route> {
         
         // local file
         if (path) {
-            return this.fileExists(path)
+            return await this.fileExists(path)
 
         }
+        return true;
     }
 
-    protected fileExists(path) {
+    protected async fileExists(path):Promise<boolean> {
 
         const fs = getBindings().fs
         if (!fs) return true
         
-        return fs.existsSync(path)
-
+        try {
+            await fs.access(path)
+            return true
+        }
+        catch(err) {
+            this.logError(err,'fileExists')
+            return false
+        }
     }
     previewMissing() {
         try {
@@ -280,15 +289,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             let isNew = checkIsNew(descr);
 
-            let videoMissing = undefined
-            if (descr.hasVideo && descr.isLocal && !this.videoExists()) {
-                videoMissing = true                
-            }
-
             const loading = this.deleteObserver!==undefined
             return {...descr, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,isNew,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
-                    videoMissing, 
                     observer:this.cardObserver}
         }
         catch(err) {
@@ -332,12 +335,15 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const settings =this.getSettings();
         const workouts = getWorkoutList()
         const isOnline = useOnlineStatusMonitoring().onlineStatus
-        const canStart = this.canStart( {isOnline})
+        let canStart = this.canStart( {isOnline})
         const descr  = this.getRouteDescription()
         let videoMissing;
+        let videoChecking = false
 
-        if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) && !this.videoExists()) {
-            videoMissing = true                
+        if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) ) {            
+            canStart = false            
+            videoChecking = true
+            videoMissing = this.isVideoMissing()
         }
 
         let showLoopOverwrite, showNextOverwrite;
@@ -363,7 +369,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         catch(err) {
             this.logError(err,'openSettings')
         }
-        return {settings,showLoopOverwrite,showNextOverwrite,hasWorkout,canStart, videoMissing}
+        return {settings,showLoopOverwrite,showNextOverwrite,hasWorkout,canStart, videoChecking, videoMissing}
 
     }
 
@@ -562,7 +568,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
-    onVideoSelected(info:FileInfo) {
+    async onVideoSelected(info:FileInfo) {
 
         const dropped = Array.isArray(info)?info[0]:info
         const ext = dropped.ext.toLowerCase()
@@ -573,7 +579,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         
 
         const path = dropped.url.replace('file:///','')
-        const exists = this.fileExists(path)
+        const exists = await this.fileExists(path)
         if (!exists) {
             return 'Could not open file'
         }
