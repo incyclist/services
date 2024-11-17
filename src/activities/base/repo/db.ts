@@ -503,10 +503,12 @@ export class ActivitiesRepository {
                 try {
                     const details = result.value?.details 
                     const name = result.value?.name
-                
-                    const summary = buildSummary(details,name)
-                    this.activities.push( {summary})
-                    this.emitAdded({summary})
+                    if (details) {
+                        const summary = buildSummary(details,name)
+                        this.activities.push( {summary})
+                        this.emitAdded({summary})
+    
+                    }
                 }
                 catch(err) {
                     this.logError(err,'bulkAddActivities.loop')
