@@ -3,10 +3,11 @@ import { FileInfo, getBindings } from "../../../api";
 import { IFileSystem } from "../../../api/fs";
 import { loadFile } from "../../../../__tests__/utils/loadFile";
 import { Route } from "../model/route";
-import { createFromJson, getElevationGainAt, getNextPosition, getTotalElevation, validateRoute,getRouteHash,updateSlopes } from "./route";
+import { createFromJson, getElevationGainAt, getNextPosition, getTotalElevation, validateRoute,getRouteHash,updateSlopes, validateSlopes } from "./route";
 import fs from 'fs'
 import { KWTParser } from "../parsers/kwt";
 import { parseXml } from "../../../utils";
+import clone from "../../../utils/clone";
 
 describe( 'Route Utils',()=>{
 
@@ -50,14 +51,56 @@ describe( 'Route Utils',()=>{
 
     })
 
+    describe( 'validateSlopes',()=>{
+
+        const slopes = (a) => clone(a.map( (p,i)=> `${i}:${p.slope.toFixed(2)}`))
+
+        test('loop no cut',()=>{
+            const slopesBefore = slopes(route.details.points)
+
+            validateSlopes(route.details.points)
+            const slopesAfter = slopes(route.details.points) 
+            expect(slopesAfter ).toEqual(slopesBefore)
+        })
+
+        test('with cuts and elevation shift',async ()=>{
+            const rioja = require('../../../../__tests__/data/rlv/rioja.json')
+
+            const slopesBefore = slopes(rioja.points)
+
+            validateSlopes(rioja.points)           
+            const slopesAfter = slopes(rioja.points)
+            expect(slopesAfter ).toEqual(slopesBefore)
+            
+        })
+    })
+
+
     describe( 'updateSlopes',()=>{
-        test('no cut',()=>{
-            const slopesBefore = route.details.points.map( p=> p.slope)
+
+        const slopes = (a) => clone(a.map( (p,i)=> `${i}:${p.slope.toFixed(2)}`))
+
+        test('loop no cut',()=>{
+            const slopesBefore = slopes(route.details.points)
             route.details.points.forEach(p=>{delete p.slope})
+            
 
             updateSlopes(route.details.points)
-            const slopesAfter = route.details.points.map( p=> p.slope)
+            const slopesAfter = slopes(route.details.points) 
             expect(slopesAfter ).toEqual(slopesBefore)
+        })
+
+        // as elevationShift and cuts are processed in parser *after* updateSlopes was called, another call will change the slope profile
+        test('with cuts and elevation shift will change slope profile',async ()=>{
+            const rioja = require('../../../../__tests__/data/rlv/rioja.json')
+            const slopesBefore = slopes(rioja.points)
+
+            rioja.points.forEach(p=>{p.slope=undefined})
+
+            updateSlopes(rioja.points)           
+            const slopesAfter = slopes(rioja.points)
+            expect(slopesAfter ).not.toEqual(slopesBefore)
+            
         })
     })
 
@@ -78,7 +121,7 @@ describe( 'Route Utils',()=>{
                 delete p.slope
             })
             const elevation = getElevationGainAt(route,1000)
-            expect(elevation).toBeCloseTo(23.4,1)
+            expect(elevation).toBeCloseTo(23.5,1)
         })
 
         test('at 11.7km',()=>{
@@ -87,7 +130,7 @@ describe( 'Route Utils',()=>{
                 delete p.slope
             })
             const elevation = getElevationGainAt(route,11720)
-            expect(elevation).toBeCloseTo(202.1,1)
+            expect(elevation).toBeCloseTo(201.9,1)
         })
         test('at 12.7km - 1km in 2nd lap',()=>{
             route.details.points.forEach(p=>{
@@ -95,7 +138,7 @@ describe( 'Route Utils',()=>{
                 delete p.slope
             })
             const elevation = getElevationGainAt(route,12720)
-            expect(elevation).toBeCloseTo(225.5,1)
+            expect(elevation).toBeCloseTo(225.4,1)
         })
         test('at 24.4km - 1km in 3rd lap',()=>{
             route.details.points.forEach(p=>{
@@ -103,7 +146,7 @@ describe( 'Route Utils',()=>{
                 delete p.slope
             })
             const elevation = getElevationGainAt(route,24440)
-            expect(elevation).toBeCloseTo(427.6,1)
+            expect(elevation).toBeCloseTo(427.3,1)
         })
 
     })

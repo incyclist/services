@@ -8,7 +8,7 @@ import { RouteInfoDBEntry } from "./types"
 import { DBLoader } from "./DBLoader"
 import { RouteApiDetail } from "../../base/api/types"
 import { waitNextTick } from "../../../utils"
-import { addDetails, getTotalElevation, updateSlopes, validateDistance } from "../../base/utils/route"
+import { addDetails, getTotalElevation, updateSlopes, validateDistance, validateSlopes } from "../../base/utils/route"
 import { JSONObject } from "../../../utils/xml"
 import clone from "../../../utils/clone"
 
@@ -271,7 +271,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         }
 
         validateDistance(details.points)
-        updateSlopes(details.points)
+        validateSlopes(details.points)
     }
 
     private validateDescription(description: RouteInfo, details: any) {
