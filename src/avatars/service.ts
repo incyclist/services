@@ -38,10 +38,14 @@ export class AvatarService extends IncyclistService {
     deleteAll() {
         const currentAvatar = this.registered.current
 
-        this.options.forEach( o=> {o.usageCnt=0}) 
+        this.options.forEach( o=> {
+            if (o)
+                o.usageCnt=0
+        }) 
         this.currentBucket = 0
         const currentOption = this.find(currentAvatar)
-        currentOption.usageCnt=1
+        if (currentOption)
+            currentOption.usageCnt=1
 
         this.registered= {current:currentAvatar}
     }
@@ -65,18 +69,20 @@ export class AvatarService extends IncyclistService {
 
     protected getNextAvailable():Avatar {
 
-        let available = this.options.find( a=>a.usageCnt===this.currentBucket)
+        let available = this.options.find( a=>a?.usageCnt===this.currentBucket)
         if (!available) {
             this.currentBucket++
 
             // block current rider avatar
             const currentOption = this.find('current')
-            currentOption.usageCnt++
+            if (currentOption)
+                currentOption.usageCnt++
     
-            available = this.options.find( a=>a.usageCnt===this.currentBucket)
+            available = this.options.find( a=>a?.usageCnt===this.currentBucket)
         }
 
-        available.usageCnt++;
+        if (available)
+            available.usageCnt++;
 
         return available?.avatar;
     }
@@ -95,8 +101,8 @@ export class AvatarService extends IncyclistService {
         }
 
         const currentAvatar = this.registered.current
-        const inUse = this.options.filter(a=>!currentAvatar || (a.avatar.helmet!==currentAvatar.helmet && a.avatar.shirt!==currentAvatar.shirt )).sort( (a,b)=>b.usageCnt-a.usageCnt)
-        this.currentBucket = inUse[0].usageCnt
+        const inUse = this.options.filter(a=>!currentAvatar || (a.avatar.helmet!==currentAvatar.helmet && a.avatar.shirt!==currentAvatar.shirt )).sort( (a,b)=>b?.usageCnt-a?.usageCnt)
+        this.currentBucket = inUse[0]?.usageCnt
     }
 
     protected find(avatar):AvatarOption {

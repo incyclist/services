@@ -304,6 +304,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const markers = []
         try {
             const startSettings = settings || this.getSettings()
+            this.adjustStartPosAvi(startSettings)
+
             const startDistance = startSettings.startPos||0
             const startPos = getPosition(this.route, {distance:startDistance,nearest:true})
             markers.push(startPos)
