@@ -1,4 +1,5 @@
 import { geo } from "../../../utils";
+import clone from "../../../utils/clone";
 import { LatLng, calculateDistance } from "../../../utils/geo";
 import { valid } from "../../../utils/valid";
 import { RouteApiDetail } from "../api/types";
@@ -50,12 +51,43 @@ export const checkIsLoop = (_route:Route|Array<RoutePoint>):boolean =>  {
     
 }
 
-export const updateSlopes = (points: Array<RoutePoint>):void => {
+export const validateSlopes = (points: Array<RoutePoint>):void => {
+    updateSlopes(points, true)
+
+}
+
+export const updateSlopes = (points: Array<RoutePoint>, validateOnly=false):void => {
     let prevPoint = null;
+
+    if (!validateOnly) {
+        const lapMode = checkIsLoop(points)
+        if (lapMode) {
+            const distance = geo.distanceBetween(points[0], points[points.length-1]);
+            let elevationShift
+            if (distance === 0) {
+                elevationShift = points[0].elevation - points[points.length-1].elevation;
+            }
+            else {
+                const distanceLast = geo.distanceBetween(points[points.length-2], points[points.length-1]);
+                const slopeLast = (points[points.length-1].elevation - points[points.length-2].elevation) / distanceLast * 100;
+                const elevationLast = points[0].elevation - slopeLast * distance/100;
+                elevationShift = points[0].elevation - elevationLast;
+            }
+    
+            validateDistance(points)
+            const totalDistance = points[points.length-1].routeDistance
+            points.forEach( (point) => { 
+                point.elevation += elevationShift*(point.routeDistance/totalDistance)
+            })
+        }
+            
+    }
 
     points.forEach( (point) => {
         const i = point.cnt
-    
+        if (validateOnly && point.slope!==undefined)
+            return;
+
         if ( i>0) {
             updateSlopePrevPoint(point, prevPoint, points);
         }
@@ -191,8 +223,8 @@ export const validateRoute = (route:Route|RouteApiDetail):void =>{
     if (!route?.points?.length)
         return;
 
-    validateDistance(route.points)
-    updateSlopes(route.points);
+    validateDistance(route.points)    
+    validateSlopes(route.points)
     updateElevationGain(route.points)
 
     route.distance = route.points[ route.points.length-1].routeDistance
@@ -600,7 +632,8 @@ interface LegacyRouteApiDetail extends RouteApiDetail {
     decoded? : Array<RoutePoint>
 }
 
-export const createFromJson = (data:LegacyRouteApiDetail) => {
+export const createFromJson = (r:LegacyRouteApiDetail) => {
+    const data = clone(r)
     if (data.decoded) {
         data.points = data.decoded
         delete data.decoded

@@ -15,7 +15,6 @@ import sydney from '../../../../__tests__/data/routes/sydney.json'
 import holzweiler from '../../../../__tests__/data/rlv/holzweiler.json'
 import valdrome from '../../../../__tests__/data/rlv/valdrome.json'
 import repoData from '../../../../__tests__/data/db/db.json'
-import { sleep } from '../../../utils/sleep';
 
 class MockRepository extends JsonRepository {
     static create(repoName:string):JsonRepository {
@@ -49,9 +48,9 @@ const setSingleRouteMockRepo = (id:string, t:'video'|'gpx' = 'gpx', legacy:boole
             return [route] as unknown as JSONObject;
         }
         if (file === id && !legacy)
-            return holzweiler as JSONObject;
+            return clone(holzweiler) as JSONObject;
         if (file === id && legacy)
-            return valdrome as unknown as JSONObject
+            return clone(valdrome) as unknown as JSONObject
 
         return null as unknown as JSONObject;
 
