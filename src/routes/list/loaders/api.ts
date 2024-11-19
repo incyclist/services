@@ -86,7 +86,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             
         }
         if (loadDetailRequired.length>0)
-            await this.loadDetails(loadDetailRequired)
+            await this.loadDetails(loadDetailRequired,true)
 
         this.loadObserver.emit('done')
 
@@ -125,6 +125,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             }
             else {
                 description.tsImported = existing.tsImported
+                items.push({route:new Route(description),added:false})
                 this.logger.logEvent({message:'route updated',id:description.id,title:description.title,from:existing.version, to:description.version,ts:Date.now(), tsImported:description.tsImported})                
             }
         }
@@ -208,7 +209,15 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
     async loadDetails( items:LoadDetailsTargets, enforced:boolean=false) {
 
-
+        try {
+            const isUnique = (v,i,a)=> {
+                return a.findIndex( item => item.route.description.id===v.route.description.id)===i
+            }
+            items = items.filter(isUnique )
+        }
+        catch(err) {
+            this.logger.logEvent({ message: 'error', fn:'loadDetails#unique',error: err.message, stack: err.stack })
+        }
         // first try to load details from repo
         
         const failed = enforced ? items : await this.loadDetailsFromRepo(items)
