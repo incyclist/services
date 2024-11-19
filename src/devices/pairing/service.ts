@@ -1315,7 +1315,7 @@ export class DevicePairingService  extends IncyclistService{
         const target = adapters.filter(ai => /*!ai.adapter.isStarted() &&*/ selected.includes(ai.udid));
         //const targetResume = adapters.filter(ai => ai.adapter.isStarted() && ai.adapter.isPaused() && selected.includes(ai.udid));
 
-        if ( (this.isPairing() && this.state.check.preparing!==preparing) || (this.checkPairingSuccess()===true)){
+        if ( (this.isPairing() && this.state.check.preparing!==preparing) ){
             return;
         }
 
@@ -1365,6 +1365,8 @@ export class DevicePairingService  extends IncyclistService{
     private processConnectedDevices(adapters: AdapterInfo[]) {
         const started = adapters.filter(ai => ai.adapter.isStarted());
         started.forEach(ai => {
+
+
             if (ai.adapter.isPaused())
                 ai.adapter.resume();
 
