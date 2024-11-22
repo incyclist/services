@@ -7,12 +7,15 @@ import clone from "../../utils/clone";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
-import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, IVirtualShifting, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { setInterval } from "timers";
+import { Observer } from "../../base/types/observer";
+import { waitNextTick } from "../../utils";
 
 
 const NO_DATA_THRESHOLD = 10000
 const UNHEALTHY_THRESHOLD = 60000
+
 
 /**
  * Provides method to consume a devcie
@@ -39,6 +42,9 @@ export class DeviceRideService  extends EventEmitter{
     protected promiseSendUpdate: Promise<UpdateRequest|void>[]
     protected originalMode: CyclingMode
     protected deviceDataHandler = this.onData.bind(this)
+    protected gearMonitor:Observer
+
+
 
     static getInstance():DeviceRideService{
         if (!DeviceRideService._instance)
@@ -372,6 +378,123 @@ export class DeviceRideService  extends EventEmitter{
 
     }
 
+    /**
+     * Retrieves the current cycling mode of the selected SmartTrainer ( device selcted for category "Control").
+     * 
+     * @returns {CyclingMode} The current cycling mode as determined by the device's adapter.
+    */
+    getCurrentCyclingMode():CyclingMode {
+        const {adapter} = this.getControlAdapter()??{}        
+        return adapter.getCyclingMode() as CyclingMode
+    }
+   
+
+    /**
+     * toggle virtual shifting for the currently connected trainer
+     * 
+     * Virtual shifting is only supported by ANT+ and BLE SmartTrainers in SIM mode
+     * All other adapters will always return false
+     * 
+     * If Virtual Shifting is enabled, the trainer will adjust the slope sent to the trainer to match the virtual gear
+     * 
+     * @returns true if virtual shifting is now on, false if it is off
+     */
+        
+    toggleVirtualShifting():boolean { 
+        if (!this.isVirtualShiftingSupported())
+            return false;
+
+        const mode = this.getCurrentCyclingMode()
+        const enabled = mode.getModeProperty('virtualShifting')
+
+        const enableTarget = !enabled
+        mode.setModeProperty('virtualShifting',enableTarget)
+
+        this.logEvent({message:'virtual shifting state changed',enabled:enableTarget})
+        if (enableTarget) {
+            const shifter = mode as unknown as IVirtualShifting
+            shifter.initGears().then(gear => {
+                this.logEvent({message:'virtual shifting initial gear',gear})
+                this.emitGear(gear)
+            })    
+        }
+        else {
+            this.stopGearMonitor()
+        }
+        
+
+        return enableTarget
+    }
+
+    /**
+     * Increase the virtual gear by the given number of gears
+     * 
+     * Currently, If virtual shifting is disabled, this function does nothing
+     * In the future, this might send a signal to devices such as Zwift Shift
+     * 
+     * @param numGears the number of gears to increase
+     * @returns a promise with the new gear number
+     */
+    async gearUp(numGears: number):Promise<number> { 
+        if (!this.isVirtualShiftingEnabled())
+            return;
+
+        this.logEvent({message:'gear change request', up:numGears})
+
+        const mode = this.getCurrentCyclingMode();
+        const shifter = mode as unknown as IVirtualShifting
+        const newGear =  await shifter.gearUp(numGears)
+
+        this.emitGear(newGear)
+        this.logEvent({message:'gear change result', gear:newGear})
+        return newGear
+    }
+
+    /**
+     * Indicates whether virtual shifting is enabled for the current cycling mode.
+     * 
+     * In particular, this checks whether the current cycling mode is a SmartTrainer (SIM) mode
+     * and whether virtual shifting is enabled for that mode.
+     * 
+     * @returns true if virtual shifting is enabled, false otherwise
+     */
+    isVirtualShiftingEnabled():boolean {
+        const mode = this.getCurrentCyclingMode()
+        if (!mode.isSIM())
+            return false
+
+        return mode.getModeProperty('virtualShifting') as boolean
+    }
+
+    startGearMonitor():Observer {
+        if (!this.gearMonitor)
+            this.gearMonitor = new Observer()
+
+        return this.gearMonitor
+    }
+
+    async stopGearMonitor():Promise<void> {
+        if (!this.gearMonitor)
+            return
+
+        this.gearMonitor.stop()
+        await waitNextTick()
+        delete this.gearMonitor        
+    }
+
+    protected emitGear(gear:number) {
+        if (!this.gearMonitor)
+            return
+        this.gearMonitor.emit('gear',gear)
+    }
+    
+
+
+    protected isVirtualShiftingSupported():boolean {        
+        const mode = this.getCurrentCyclingMode()
+
+        return (mode.isSIM())
+    }
 
     async waitForPreviousStartToFinish():Promise<boolean> {        
         const TIMEOUT = 3000;
