@@ -23,6 +23,7 @@ export class UserSettingsService {
     instanceId: number;
     initPromise: Promise<boolean>
     observers: Array<{id:string,key:string, observer:Observer}> = []
+    isNew: boolean
     
 
     static getInstance() {
@@ -41,6 +42,7 @@ export class UserSettingsService {
         this.instanceId = Date.now()
         this.initPromise = undefined
         this.setBinding(binding)
+        this.isNew = false
     }
 
 
@@ -238,6 +240,14 @@ export class UserSettingsService {
 
     protected reset():void {
         delete UserSettingsService._instance
+    }
+
+    markAsNew():void {
+        this.isNew = true
+    }
+
+    isNewUser(): boolean {
+        return this.isNew
     }
 
 

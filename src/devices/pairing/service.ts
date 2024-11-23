@@ -204,14 +204,14 @@ export class DevicePairingService  extends IncyclistService{
      * 
     */
 
-   async stop():Promise<void> {
+   async stop(adapterFilter:Array<string>=[]):Promise<void> {
         this.logEvent({message:'Stop Pairing'})
         try {
             this.state.stopRequested = true;
             
             await this._stop();
 
-            this.pauseAdapters(this.state.adapters);
+            this.pauseAdapters(this.state.adapters.filter( a=> !adapterFilter.includes(a.udid)));
 
             this.removeConfigHandlers()
             this.settings = {}
@@ -490,6 +490,15 @@ export class DevicePairingService  extends IncyclistService{
         catch (err) { // istanbul ignore next
             this.logError(err,'changeInterfaceSettings')
         }
+    }
+
+    /**
+     * Determines if the system is ready to start a ride.
+     * 
+     * @returns {boolean} True if the ride can start, based on the current state.
+     */
+    isReadyToStart():boolean {
+        return this.state.canStartRide
     }
 
     protected async restartPair() {

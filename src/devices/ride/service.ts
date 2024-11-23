@@ -9,6 +9,7 @@ import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
 import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { setInterval } from "timers";
+import { getRouteList } from "../../routes";
 
 
 const NO_DATA_THRESHOLD = 10000
@@ -1370,6 +1371,17 @@ export class DeviceRideService  extends EventEmitter{
 
     enforceSimulator(enforced=true) {
         this.simulatorEnforced = enforced
+    }
+
+    canEnforceSimulator():boolean {
+        const selected = getRouteList().getSelected()
+        if (selected?.description?.hasVideo)
+            return true
+
+        const isNew = useUserSettings().isNewUser()
+
+        return isNew  ? true : false;
+        
     }
 
 
