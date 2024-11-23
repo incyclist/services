@@ -917,6 +917,14 @@ export class DeviceConfigurationService  extends EventEmitter{
         return adapters;
 
     }
+
+    getSimulatorAdapterId(): string|undefined {
+        const adapters = this.getAllAdapters()
+
+        const found =  adapters.find( a => a.adapter.getInterface()==='simulator')
+
+        return found ? found.udid: undefined
+    }
     
     getSelected(capability:ExtendedIncyclistCapability): IncyclistDeviceAdapter|undefined {
         const {capabilities} = this.settings||{}
