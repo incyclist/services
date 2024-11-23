@@ -1378,9 +1378,7 @@ export class DeviceRideService  extends EventEmitter{
         if (selected?.description?.hasVideo)
             return true
 
-        const isNew = useUserSettings().isNewUser()
-
-        return isNew  ? true : false;
+        return useUserSettings().isNewUser()
         
     }
 
