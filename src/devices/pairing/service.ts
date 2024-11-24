@@ -1165,18 +1165,7 @@ export class DevicePairingService  extends IncyclistService{
     protected checkCanStart():boolean {
         try {
             const prev = this.state.canStartRide
-
-            const configReadyToRide = this.configuration.canStartRide() // we either have a power or a conto
-            if (!configReadyToRide) {
-                this.state.canStartRide = false;
-                return false;
-            }
-            
-            const control = this.getCapability(IncyclistCapability.Control)
-            const power = this.getCapability(IncyclistCapability.Power)
-
-            const canStartRide =   (control?.connectState==='connected' || power?.connectState==='connected')
-            this.state.canStartRide = canStartRide
+            const canStartRide = this.checkPairingSuccess()
 
             if (canStartRide!==prev) {
                 this.emitStartStatus()
@@ -1198,6 +1187,7 @@ export class DevicePairingService  extends IncyclistService{
         const power = this.getCapability(IncyclistCapability.Power)
 
         const success =   (control?.connectState==='connected' || power?.connectState==='connected')
+        this.state.canStartRide = success
         return success
     }
 
