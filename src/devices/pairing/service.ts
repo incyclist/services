@@ -498,6 +498,7 @@ export class DevicePairingService  extends IncyclistService{
      * @returns {boolean} True if the ride can start, based on the current state.
      */
     isReadyToStart():boolean {
+        this.checkCanStart()
         return this.state.canStartRide
     }
 
