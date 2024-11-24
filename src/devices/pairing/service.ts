@@ -61,6 +61,7 @@ export class DevicePairingService  extends IncyclistService{
     protected configuration: DeviceConfigurationService
     protected access: DeviceAccessService
     protected rideService: DeviceRideService
+    protected pairingConfirmed: boolean = false
 
 
     protected settings: PairingSettings={}
@@ -120,6 +121,9 @@ export class DevicePairingService  extends IncyclistService{
     */
 
     async start( onStateChanged: (newState:PairingState)=>void) {
+
+        this.pairingConfirmed = false
+        
         if (this.state.stopped) {
             // cleanup on 2nd launch
             this.state.stopped = false;
@@ -497,9 +501,12 @@ export class DevicePairingService  extends IncyclistService{
      * 
      * @returns {boolean} True if the ride can start, based on the current state.
      */
-    isReadyToStart():boolean {
-        this.checkCanStart()
-        return this.state.canStartRide
+    isReadyToStart():boolean {        
+        return this.pairingConfirmed;
+    }
+
+    setReadyToStart() {
+        this.pairingConfirmed = true
     }
 
     protected async restartPair() {
