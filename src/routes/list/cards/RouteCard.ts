@@ -402,6 +402,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (this.route.description.videoFormat==='avi') {
                 settings.startPos = 0
             }
+
+            if (this.route.details?.video?.format==='avi') {
+                settings.startPos = 0
+            }
         }
         catch(err) {
             this.logError(err,'adjustStartPosAvi')
