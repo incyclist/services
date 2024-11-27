@@ -1,6 +1,8 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer, PromiseObserver } from "../../base/types/observer";
+import { waitNextTick } from "../../utils";
+import clone from "../../utils/clone";
 import { ActivitiesRepository, ActivitySearchCriteria } from "../base";
 import { ActivityInfo } from "../base/model";
 
@@ -19,7 +21,9 @@ export class ActivityListService extends IncyclistService {
     protected preloadObserver: PromiseObserver<void>;
     protected initialized: boolean
     protected repo:ActivitiesRepository 
+
     protected observer: Observer
+    protected filter:ActivitySearchCriteria
 
     constructor() {
         super('ActivityList')
@@ -51,10 +55,19 @@ export class ActivityListService extends IncyclistService {
     
                 this.preloadObserver.start()
                     .then( ()=> { 
-                        this.logEvent( {message:'preload route list completed', cnt:this.activities?.length })
-                        this.initialized = true
-                        this.emitLists('loaded')
-                        process.nextTick( ()=>{delete this.preloadObserver})
+
+                        const getDetails = (this.getRepo().search({})??[]).filter( (a,i)=> i<20).map( a=>this.loadDetails(a))
+
+                        Promise.allSettled(getDetails).then( ()=>{
+
+                            this.logEvent( {message:'preload activity list completed', cnt:this.activities?.length })
+                            console.log( '~~~~ ACTIVITIES', clone(this.activities) )
+    
+                            this.initialized = true
+                            this.emitLists('loaded')
+                            process.nextTick( ()=>{delete this.preloadObserver})
+    
+                        })
                     })
                     .catch( (err)=> {
                         this.logError(err,'preload')
@@ -72,16 +85,106 @@ export class ActivityListService extends IncyclistService {
         return this.preloadObserver
     }
 
+    openList() {
+        if (!this.observer)
+            this.observer = new Observer()
+        return this.getListDisplayProperties()
 
-    getPastActivities( filter:ActivitySearchCriteria): Array<ActivityInfo> {
+    }
+
+    getListObserver():Observer {
+        if (!this.observer)
+            this.observer = new Observer()
+        return this.observer        
+    }
+
+    closeList():void {
+        if (this.observer) {
+            this.observer.stop()
+            delete this.observer
+        }
+
+    }
+
+    /**
+     * checks if the preload is still ongoing
+     * 
+     * @returns true, if the preload is still ongoing, false otherwise
+     */
+    isStillLoading():boolean { 
+        return !this.initialized 
+    }
+
+    setFilter(filter:ActivitySearchCriteria) {
+        this.filter = filter
+    }
+
+    protected getPastActivities(): Array<ActivityInfo> {
+        
+
         try {
-            const activities  = this.getRepo().search(filter) ?? []
-            return activities 
+            const activities  = this.getRepo().search(this.filter) ?? []
+            return activities.sort( (a,b) => b.summary?.startTime - a.summary?.startTime )
         }
         catch(err) {
             this.logError(err,'getPastActivities')
             return []
         }
+
+    }
+
+
+
+    getActivityDetails(id:string): Observer {
+        const observer = new Observer()
+        try {
+            const activity = this.getActivity(id)
+            if (activity.details) {
+                waitNextTick().then( () => observer.emit('loaded', activity.details) )
+                return;
+            }
+                
+
+            this.getRepo().getWithDetails(id).then(ai => {
+                if (!ai)
+                    return;
+    
+                if (activity) {
+                    activity.details = ai.details
+                }
+                observer.emit('loaded', activity.details)
+    
+            })
+            .catch(err => {
+                this.logError(err,'getActivityDetails#getWithDetails')
+            })
+        }
+        catch(err) {
+            this.logError(err,'getActivityDetails')
+        }
+        return observer
+    }
+
+    /**
+     * Deletes an activity by its ID from the local repository.
+     * 
+     * @param id The unique ID of the activity to be deleted.
+     * 
+     * @returns A promise that resolves to true if the deletion was successful, false otherwise.
+     */
+    async delete(id:string):Promise<boolean> {
+        try {
+            await this.getRepo().delete(id)
+            this.emitLists('updated')
+            return true
+
+        }
+        catch(err) {
+            this.logError(err,'delete')
+            return false
+        }
+        return false
+
 
     }
 
@@ -121,6 +224,17 @@ export class ActivityListService extends IncyclistService {
         })
     }
 
+    protected async loadDetails(activity):Promise<void> {
+        const ai = await this.getRepo().getWithDetails(activity.summary.id)
+        if (!ai)
+            return;
+
+        if (activity) {
+            activity.details = ai.details
+        }
+
+    }
+
 
     protected getRepo():ActivitiesRepository {
         if (!this.repo)
@@ -132,23 +246,27 @@ export class ActivityListService extends IncyclistService {
         return this.getRepo().getAll()
     }
 
-    protected getListDisplayProperties( activities:Array<ActivityInfo>) {
-        // TODO
-        return activities
+    protected getActivity(id:string): ActivityInfo { 
+        return this.activities?.find( a => a.summary.id === id)
+    }
+
+
+    protected getListDisplayProperties() {
+        
+        const activities = this.getPastActivities()
+        const filter = this.filter
+        return {filter,activities}
     }
 
     protected emitLists( event:'loaded'|'updated') {
         try {
-            const activities = this.getRepo().getAll()
-
-            
             
             if (this.observer)
-                this.observer.emit(event,this.getListDisplayProperties(activities))
+                this.observer.emit(event,this.getListDisplayProperties())
     
         }
         catch(err) {
-            this.logError(err,'emitLists',event)
+            this.logError(err,'emitLists',{event})
 
         }
     }

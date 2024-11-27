@@ -10,3 +10,4 @@ export { useUserSettings,initUserSettings, UserSettingsService,UserSettingsBindi
 export * from './autoupdate'
 export * from './monitoring'
 
+export * from './base/types'

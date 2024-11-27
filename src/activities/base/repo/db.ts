@@ -122,7 +122,7 @@ export class ActivitiesRepository {
 
         const id = target.summary.id
         const idx = this.activities.findIndex( ai=>ai.summary.id===id)
-        if (idx) {
+        if (idx!==-1) {
             this.activities.splice( idx,1)
             this.write(true)
         }
@@ -200,7 +200,8 @@ export class ActivitiesRepository {
      */
     search( criteria:ActivitySearchCriteria):Array<ActivityInfo> {
 
-        let result = this.activities
+        
+        let result = this.activities?.filter(ai => ai.summary.rideTime>30)
 
         result = this.checkIdFilter(result, criteria);
         result = this.checkHashFilter(result, criteria);
@@ -211,6 +212,10 @@ export class ActivitiesRepository {
         result = this.checkUploadStatusFilter(result, criteria);
         result = this.checkTimeFilter(result, criteria);
         result = this.checkDistanceFilter(result, criteria);
+
+        if (criteria?.maxValues!==undefined && result?.length>criteria.maxValues) {
+             result = result.slice(0,criteria.maxValues-1)
+         }
         
         return result
     }
