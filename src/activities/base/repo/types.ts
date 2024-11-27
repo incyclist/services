@@ -11,4 +11,5 @@ export interface ActivitySearchCriteria {
     isSaved?:boolean,
     minTime?:number,
     minDistance?:number
+    maxValues?:number
 }
