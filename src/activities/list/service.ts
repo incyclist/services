@@ -183,9 +183,6 @@ export class ActivityListService extends IncyclistService {
             this.logError(err,'delete')
             return false
         }
-        return false
-
-
     }
 
     async getPastActivitiesWithDetails( filter:ActivitySearchCriteria): Promise<Array<ActivityInfo>> {
