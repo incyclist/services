@@ -22,7 +22,9 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
     }
 
     if (name===undefined) {
-        const match  = /.*[\\/]([^\\/]+)\.json/.exec(fileName)
+        const parts = fileName.split(/[\/\\]/)
+
+        const match  = /([^\\/]+)\.json/.exec(parts[parts.length-1])
         if (match && match[1]) 
             name = match[1]
         
