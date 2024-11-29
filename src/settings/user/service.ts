@@ -120,44 +120,39 @@ export class UserSettingsService {
 
 
     set( key:string, value:any, save:boolean=true):void {
-        if (!this.isInitialized)
-            throw new Error('Settings are not yet initialized')
 
-        const settings = this.settings;
-
-        if ( key===undefined || key===null || key==='') {
-            throw new Error('key must be specified')
-        }
-
-        const observers = this.observers.filter(oi=>oi.key===key)
-        if (observers?.length) {
-            observers.forEach( o=> o.observer.emit('changed',value))
-        }
+        const settings = this.getSettings(key, value);
+        this.emitChanged(key, value);
 
         const keys = key.split('.');
         if (keys.length<2) {
-            if (value===null)
-                delete settings[key]
-            else 
-                settings[key] = value 
-            
-            if(save)
-                this.save()      
-            return value;
+            return this.setKeyValue( settings, key,value,  save);
         }
     
+        this.setChildValue(settings, key, value, save);
+    }
+
+
+    private setKeyValue(object: any, key: string,value: any,   save: boolean) {
+        if (value === null)
+            delete object[key];
+
+        else
+            object[key] = value;
+
+        if (save)
+            this.save();
+        return value;
+    }
+
+    protected setChildValue(settings: any, key: string, value: any, save: boolean) { 
+        const keys = key.split('.');
         let child = {}
         for (let index=0;index<keys.length;index++) {
             const k = keys[index];
     
             if (index===keys.length-1) {
-                if (value===null)
-                    delete child[k]
-                else 
-                    child[k] = value;
-                if (save)
-                    this.save()
-                return value;
+                return this.setKeyValue(child, k, value, save);
             }
             else { 
                 const prev = index===0? settings : child
@@ -169,6 +164,22 @@ export class UserSettingsService {
             }
         
         }
+
+
+    }
+
+
+    private getSettings(key: string, value: any) {
+        if (!this.isInitialized)
+            throw new Error('Settings are not yet initialized');
+
+        const settings = this.settings;
+
+        if (key === undefined || key === null || key === '') {
+            throw new Error('key must be specified');
+        }
+
+        return settings;
     }
 
     requestNotifyOnChange(requesterId:string,key:string):Observer {
@@ -230,7 +241,6 @@ export class UserSettingsService {
             this.logger.logEvent({message:'Error', fn:'save()', error:err.message, stack:err.stack})
             this.isDirty = false; // retry will not help
         }
-        return
     }
 
     
@@ -249,6 +259,15 @@ export class UserSettingsService {
     isNewUser(): boolean {
         return this.isNew
     }
+
+    protected emitChanged(key: string, value: any) {
+        const observers = this.observers.filter(oi => oi.key === key);
+        if (observers?.length) {
+            observers.forEach(o => o.observer.emit('changed', value));
+        }
+    }
+
+
 
 
 }
