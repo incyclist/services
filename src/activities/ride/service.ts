@@ -6,7 +6,7 @@ import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,DEFAULT_ACTIVITY_TITLE,ScreenShotInfo, buildSummary } from "../base";
+import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,DEFAULT_ACTIVITY_TITLE,ScreenShotInfo } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
@@ -23,6 +23,7 @@ import { getBindings } from "../../api";
 import { PastActivityInfo, PastActivityLogEntry, PrevRidesListDisplayProps, useActivityList } from "../list";
 import { useAvatars } from "../../avatars";
 import clone from "../../utils/clone";
+import { buildSummary } from "../base/utils";
 
 const SAVE_INTERVAL = 5000;
 

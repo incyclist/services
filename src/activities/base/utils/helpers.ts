@@ -21,7 +21,7 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
             title = activity.route.name??title
     }
 
-    if (name===undefined) {
+    if (name===undefined && fileName!==undefined) {
         const parts = fileName.split(/[\/\\]/)
 
         const match  = /([^\\/]+)\.json/.exec(parts[parts.length-1])
