@@ -1,8 +1,8 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer, PromiseObserver } from "../../base/types/observer";
+import { RouteCard } from "../../routes/list/cards/RouteCard";
 import { waitNextTick } from "../../utils";
-import clone from "../../utils/clone";
 import { ActivitiesRepository, Activity, ActivitySearchCriteria } from "../base";
 import { ActivityInfo } from "../base/model";
 import { ActivityDisplayProperties, ActivityErrorDisplayProperties, ActivityListDisplayProperties, SelectedActivityDisplayProperties } from "./types";
@@ -27,6 +27,7 @@ export class ActivityListService extends IncyclistService {
     protected filter:ActivitySearchCriteria
 
     protected selected:Activity
+    protected listTop:number
 
     constructor() {
         super('ActivityList')
@@ -64,7 +65,6 @@ export class ActivityListService extends IncyclistService {
                         Promise.allSettled(getDetails).then( ()=>{
 
                             this.logEvent( {message:'preload activity list completed', cnt:this.activities?.length })
-                            console.log( '~~~~ ACTIVITIES', clone(this.activities) )
     
                             this.initialized = true
                             this.emitLists('loaded')
@@ -95,6 +95,14 @@ export class ActivityListService extends IncyclistService {
 
     }
 
+    setListTop(top:number) {
+        this.listTop = top
+    }
+
+    getListTop() {
+        return this.listTop
+    }
+
     /**
      * returns an observer that is used to inform the UI about relevant changes
      * 
@@ -122,6 +130,7 @@ export class ActivityListService extends IncyclistService {
             this.observer.stop()
             delete this.observer
         }
+        delete this.listTop
 
     }
 
@@ -192,6 +201,7 @@ export class ActivityListService extends IncyclistService {
      * @returns A promise that resolves to true if the deletion was successful, false otherwise.
      */
     async delete(id:string):Promise<boolean> {
+
         try {
             await this.getRepo().delete(id)
             this.emitLists('updated')
@@ -233,7 +243,6 @@ export class ActivityListService extends IncyclistService {
         const activity = this.selected.details
 
         const points = activity.logs.map( p => ({lat:p.lat,lng:p.lng??p.lon}) )
-        console.log(activity.logs,points)
 
         const props:ActivityDisplayProperties = {
             title: this.selected.getTitle(),
@@ -270,6 +279,13 @@ export class ActivityListService extends IncyclistService {
         card.changeSettings(startStettings)
         card.start()
         return true;
+    }
+
+    openRoute():RouteCard {
+        const startStettings = this.selected.createStartSettings()
+        const card = this.selected.getRouteCard()
+        card.changeSettings(startStettings)
+        return card
     }
 
     closeSelected(keepSelected?:boolean):void {

@@ -37,6 +37,10 @@ export class Activity implements ActivityInfo{
         this.info.details = details
     }
 
+    get id():string {
+        return this.info.summary.id
+    }
+
     setLoading(loading:PromiseObserver<void>) {
         this.loadingObserver = loading
         this.loadingObserver.wait().then( ()=>{
