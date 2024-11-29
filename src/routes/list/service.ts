@@ -413,6 +413,15 @@ export class RouteListService extends IncyclistService {
         }
     }
 
+    getRouteDescription(id:string) {
+        try {
+            return this.routes.find( r => r.description.id===id)?.description
+        }
+        catch(err) {
+            this.logError(err,'getRouteDescription',id)
+        }
+    }
+
     async getSelectedRouteDetails():Promise<RouteApiDetail> {
         try {
             const selected = this.getSelected()

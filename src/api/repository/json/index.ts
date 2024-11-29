@@ -45,7 +45,17 @@ export class JsonRepository {
     async read(objectName:string):Promise<JSONObject> {
         await this.open()
 
+
         const data = await this.access.read(objectName)
+
+        try {
+            const str = JSON.stringify(data)
+            if (str === '{}' || str.length<2)
+                return null
+        }
+        catch(err) {
+            return null
+        }
         return data
 
     }

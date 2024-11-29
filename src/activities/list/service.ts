@@ -1,10 +1,12 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer, PromiseObserver } from "../../base/types/observer";
+import { useRouteList } from "../../routes";
 import { waitNextTick } from "../../utils";
 import clone from "../../utils/clone";
-import { ActivitiesRepository, ActivitySearchCriteria } from "../base";
-import { ActivityInfo } from "../base/model";
+import { ActivitiesRepository, ActivitySearchCriteria,Activity } from "../base";
+import { ActivityDB, ActivityInfo } from "../base/model";
+import { ActivityDisplayProperties, ActivityErrorDisplayProperties, ActivityListDisplayProperties, SelectedActivityDisplayProperties } from "./types";
 
 /**
  * This service is used by the Front-End to manage and query the current and past activities
@@ -24,6 +26,8 @@ export class ActivityListService extends IncyclistService {
 
     protected observer: Observer
     protected filter:ActivitySearchCriteria
+
+    protected selected:Activity
 
     constructor() {
         super('ActivityList')
@@ -92,12 +96,28 @@ export class ActivityListService extends IncyclistService {
 
     }
 
+    /**
+     * returns an observer that is used to inform the UI about relevant changes
+     * 
+     * @returns an observer that emits the following events
+     * 
+     * @emits started   observer just has been created
+     * @emits loading   list is being loaded
+     * @emits loaded    loading has been completed, provides lists as parameter
+     * @emits updated   lists have been updated, provides lists as first parameter, provides a hash as 2nd paramter (allows UI to only refresh if hash has changed)
+     */
     getListObserver():Observer {
         if (!this.observer)
             this.observer = new Observer()
         return this.observer        
     }
 
+    /**
+     * Cleans up the list observer by stopping it and removing the listeners
+     * 
+     * This method should be called when the activity list is no longer needed 
+     * to ensure proper resource management.
+     */
     closeList():void {
         if (this.observer) {
             this.observer.stop()
@@ -185,6 +205,85 @@ export class ActivityListService extends IncyclistService {
         }
     }
 
+    select (id:string):boolean {
+        const selected = this.getActivity(id)
+
+        if (selected) {
+            this.selected = new Activity(selected)
+            if (!this.selected.isComplete() && !this.selected.isLoading()) {
+                const observer = new PromiseObserver<void>(this.loadDetails(this.selected))
+                this.selected.setLoading(observer)
+            }            
+            return true
+        }
+        return false
+    }
+
+    getSelected():Activity {
+        return this.selected
+    }
+
+    openSelected():SelectedActivityDisplayProperties { 
+
+        if (!this.selected) {
+            const props:ActivityErrorDisplayProperties = {title:'Activity', error:'Activity not found'}
+            return props
+        }
+
+        
+        const activity = this.selected.details
+
+        const points = activity.logs.map( p => ({lat:p.lat,lng:p.lng??p.lon}) )
+        console.log(activity.logs,points)
+
+        const props:ActivityDisplayProperties = {
+            title: this.selected.getTitle(),
+            distance: activity.distance,
+            duration: activity.time,
+            elevation: this.selected.getElevation(),
+            startPos: activity.segment ? undefined : activity.startPos,
+            segment:  activity.segment,
+            started: new Date(activity.startTime),
+            showMap: true,
+            points,
+            activity, 
+            stats: activity.stats,
+            exports: this.selected.getExports(),
+            canStart: this.selected.canStart(),
+            canOpen: this.selected.isRouteAvailable(),
+            uploads: [
+                { type: 'Strava', url: 'https://www.strava.com/activities/12913907723', status:'success' },
+                { type: 'VeloHero', status:'unknown' },
+                { type: 'Intervals.icu', status:'failed' },
+                
+            ] 
+        }
+
+        return props
+
+
+    }
+
+    rideAgain():boolean {
+        if (!this.selected?.canStart()) {
+            return false    
+        }
+
+        const startStettings = this.selected.createStartSettings()
+        const card = this.selected.getRouteCard()
+
+        
+        card.changeSettings(startStettings)
+        card.start()
+        return true;
+    }
+
+    closeSelected(keepSelected?:boolean):void {
+        if (!keepSelected)
+            this.selected = null
+    }
+
+
     async getPastActivitiesWithDetails( filter:ActivitySearchCriteria): Promise<Array<ActivityInfo>> {
         try {
             const activities  = this.getRepo().search(filter) ?? []
@@ -221,7 +320,7 @@ export class ActivityListService extends IncyclistService {
         })
     }
 
-    protected async loadDetails(activity):Promise<void> {
+    protected async loadDetails(activity:ActivityInfo):Promise<void> {
         const ai = await this.getRepo().getWithDetails(activity.summary.id)
         if (!ai)
             return;
@@ -248,7 +347,7 @@ export class ActivityListService extends IncyclistService {
     }
 
 
-    protected getListDisplayProperties() {
+    protected getListDisplayProperties():ActivityListDisplayProperties {
         
         const activities = this.getPastActivities()
         const filter = this.filter

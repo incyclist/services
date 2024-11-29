@@ -11,7 +11,7 @@ import { waitNextTick } from "../../utils"
 import troll from '../../../__tests__/data/activities/troll-90.json'
 import prev1 from '../../../__tests__/data/activities/prevRide.json'
 import prev2 from '../../../__tests__/data/activities/prevRide1.json'
-import { ActivityDetails, ActivityInfo, ActivityLogRecord, buildSummary } from '../base'
+import { ActivityDetails, ActivityInfo, ActivityLogRecord, buildSummary, DB_VERSION } from '../base'
 import { PastActivityLogEntry } from "../list"
 import { initUserSettings } from "../../settings"
 import { MockBinding } from "../../settings/user/mock"
@@ -90,7 +90,7 @@ describe('ActivityRideService',()=>{
             expect(observer).toBeDefined()
             expect(service.getActivity()).toMatchObject({
                 type:'IncyclistActivity',
-                version: '3',
+                version: DB_VERSION,
                 id: expect.anything(),
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
@@ -131,7 +131,7 @@ describe('ActivityRideService',()=>{
             expect(observer).toBeDefined()
             expect(service.getActivity()).toMatchObject({
                 type:'IncyclistActivity',
-                version: '3',
+                version: DB_VERSION,
                 id: expect.anything(),
                 distance:0,time:0, totalElevation:0,
                 startPos: 0,
@@ -159,7 +159,7 @@ describe('ActivityRideService',()=>{
                 startPos: 0,
                 realityFactor:100,
                 logs:[],
-                version:'3',
+                version:DB_VERSION,
                 startTime:'2020-01-01T00:00:00.000Z',
                 route:{name:'XX_DEMO',id:'4711',hash:'123'}
             })
