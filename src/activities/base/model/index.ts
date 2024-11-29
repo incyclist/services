@@ -1,5 +1,7 @@
 import { RoutePoint } from "../../../routes/base/types"
 
+export const DEFAULT_ACTIVITY_TITLE = 'Incyclist Ride'
+
 export type ActivityUser = {
     uuid?:string
     weight: number,
@@ -10,6 +12,7 @@ export type ActivityRoute = {
     id?:string
     hash: string,
     name: string
+    title?:string
 }
 
 
@@ -95,6 +98,7 @@ export type ActivitySummary = {
     endPos?:number
     segment?:string,
     realityFactor: number
+    totalElevation: number
 
     uploadStatus: Array<UploadInfo>
     isCompleted?: boolean
