@@ -7,8 +7,10 @@ import { ActivityDB, ActivityDetails, ActivityInfo, UploadInfo  } from "../model
 import { ActivitySearchCriteria } from "./types";
 import { buildSummary } from "../utils";
 import { JSONObject } from "../../../utils/xml";
+import { useRouteList } from "../../../routes";
+import { ActivitiesDBMigratorFactory } from "./migration/factory";
 
-export const DB_VERSION = '3'
+export const DB_VERSION = '4'
 export const DB_NAME = 'db'
 
 /**
@@ -96,6 +98,96 @@ export class ActivitiesRepository {
             }    
         }
 
+    }
+
+    /**
+     * Migrates the given activity to the latest data format.
+     * 
+     * This function is responsible for updating the activity details to match the current version of the database schema.
+     * 
+     * @param activity The activity to be migrated, containing its summary and details.
+     */
+    migrate(activity:ActivityInfo, writeSummary = true):ActivityDetails {
+        try {
+            const {details} = activity??{}
+            if (!details) 
+                return
+
+            let summaryChanged = false
+            let detailsChanged = false    
+           
+            const {version} = details
+
+            if (version===DB_VERSION)
+                return details
+
+            const verNo = version===undefined ? 0 :Number(version)
+            const currentVerNo = Number(DB_VERSION)
+
+
+            ActivitiesDBMigratorFactory.inject('repo',this)
+            ActivitiesDBMigratorFactory.inject('routeList',this.getRouteList())
+            for (let i=1;i<=currentVerNo;i++) {
+                if (verNo<i) {
+                    const migrater = ActivitiesDBMigratorFactory.create(i-1)
+                    if (migrater) {
+                        const res = migrater.migrate(activity)
+                        summaryChanged = summaryChanged || res?.summaryChanged
+                        detailsChanged = detailsChanged || res?.detailsChanged
+                    }    
+                }
+            }                                
+    
+            details.version = DB_VERSION
+
+            this.writeDetails(activity)
+            if (summaryChanged && writeSummary) {
+                this.writeRepo()            
+            }
+            return details
+    
+        }
+        catch(err) {
+            this.logError(err,'migrate')
+        }
+    }
+
+    async migrateDB() {
+
+        let deleted = []
+        try {
+            const promises = []
+            this.activities.forEach( activity => {
+                if (activity.details) {
+                    const details = this.migrate(activity)                    
+                    activity.summary = buildSummary(details??activity.details)            
+                }
+                else 
+                    promises.push( this.loadDetailsById(activity.summary.id).then( (details)=> {
+                        if (!details ) {
+                            deleted.push(activity.summary.id)
+                            return
+                        }
+
+                        const updated = {...activity,details}
+                        const updatedDetails = this.migrate(updated,false)
+                        activity.summary = buildSummary(updatedDetails??details)                
+                        
+                    }))            
+            })
+    
+            await Promise.allSettled(promises)
+
+            if (deleted.length) {
+                this.activities = this.activities.filter( ai => !deleted.includes(ai.summary.id))                
+            }
+        
+            await this.writeRepo()
+    
+        }
+        catch(err) {
+            this.logError(err,'migrateDB')
+        }
     }
 
     getFilename(activityName:string):string {
@@ -407,7 +499,19 @@ export class ActivitiesRepository {
                 this.write(true)
             }
 
-            await this.fixMissingHash()          
+            await this.fixMissingHash()     
+            
+            
+            if (dbData.version!==DB_VERSION) {
+                this.logger.logEvent({message:'migrating activities database', from:DB_VERSION, to:DB_VERSION})
+                try {
+                    await this.migrateDB()
+                    this.logger.logEvent({message:'finished migrating activities database', from:DB_VERSION, to:DB_VERSION})
+                }
+                catch(err) {
+                    this.logError(err,'loadSummaries')
+                }
+            }
             return
         }
 
@@ -422,15 +526,12 @@ export class ActivitiesRepository {
      */
 
     protected async buildFromLegacy():Promise<void> {
-        
-
         this.activities = []
         const names = await this.scanForNewActivities()
         if (names) {
             await this.bulkAddActivities(names)
         }        
-        this.write(true)
-      
+        this.write(true)      
     }
 
     /**
@@ -473,12 +574,19 @@ export class ActivitiesRepository {
         let details
         try {
             details = await this.getRepo().read(name)
+
         }
         catch(err) {
             this.logger.logEvent({message:'could not load activity details',name, reason:err.message, stack:err.stack})            
         }
         return details
     }
+
+    protected async loadDetailsById(id:string):Promise<ActivityDetails> { 
+        const activity = this.getActivity(id)
+        return await this.loadDetailsByName(activity.summary.name)
+    }
+
 
     protected async  loadDetails(name:string, id?:string):Promise<void>{
         const details = await this.loadDetailsByName(name)
@@ -554,6 +662,7 @@ export class ActivitiesRepository {
 
     protected async _load() {
         await this.loadSummaries(); 
+
         this.emitDone()       
     }
 
@@ -571,6 +680,11 @@ export class ActivitiesRepository {
            this.repo  =JsonRepository.create('activities')
         return this.repo
 
+    }
+
+    protected getRouteList()
+    {
+        return useRouteList()
     }
 
 }

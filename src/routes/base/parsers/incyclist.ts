@@ -13,8 +13,18 @@ export class IncyclistXMLParser extends XMLParser{
     protected async loadDescription(context: XmlParserContext): Promise<void> {
         await super.loadDescription(context)
 
-        if (context.data['title']) 
-            context.route.title = context.data['title']
+        const title = context.data['title']
+        if (title) {
+            
+            if (typeof title==='string') {
+                context.route.title = title
+            }
+            else if (typeof title==='object') {
+                 const language = Object.keys(title)[0]
+                 context.route.title = title[language]
+             }
+            
+        }
     }
 
     protected async loadPoints(context: XmlParserContext): Promise<void> {

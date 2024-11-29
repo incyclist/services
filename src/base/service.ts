@@ -4,6 +4,7 @@ import { EventLogger } from 'gd-eventlog';
 export class IncyclistService extends EventEmitter {
     protected logger: EventLogger
     protected debug;
+    protected injected:Record<string,any> = {}
 
     constructor(serviceName:string) {
         super()
@@ -11,6 +12,10 @@ export class IncyclistService extends EventEmitter {
         this.debug = false;   
     }
 
+    inject (string, value) {
+        this.injected[string] = value
+    }
+    
     logEvent(event) {
         this.logger.logEvent(event)
         this.emit('log',event)

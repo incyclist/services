@@ -15,6 +15,9 @@ describe ('ActivityUploadFactory',()=>{
         isConnecting(): boolean { throw new Error("Method not implemented.")}
         disconnect(): void { throw new Error("Method not implemented.") }
         upload(activity: ActivityDetails, format?: string): Promise<boolean> { throw new Error("Method not implemented.") } 
+        getUrl(id: string): string {
+            throw new Error("Method not implemented.")
+        }
     }
 
     describe('add',()=>{

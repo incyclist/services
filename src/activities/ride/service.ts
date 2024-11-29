@@ -6,7 +6,7 @@ import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,ScreenShotInfo, buildSummary } from "../base";
+import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,DEFAULT_ACTIVITY_TITLE,ScreenShotInfo } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
@@ -23,6 +23,7 @@ import { getBindings } from "../../api";
 import { PastActivityInfo, PastActivityLogEntry, PrevRidesListDisplayProps, useActivityList } from "../list";
 import { useAvatars } from "../../avatars";
 import clone from "../../utils/clone";
+import { buildSummary } from "../base/utils";
 
 const SAVE_INTERVAL = 5000;
 
@@ -1007,6 +1008,7 @@ export class ActivityRideService extends IncyclistService {
         let routeName
         let routeId
         let routeHash
+        let routeTitle
         let routeType:ActivityRouteType;
         switch (startSettings.type) {
             case 'Free-Ride':
@@ -1033,17 +1035,18 @@ export class ActivityRideService extends IncyclistService {
                     routeId = selectedRoute.description.id
                     routeHash = selectedRoute.description.routeHash
                     routeName = selectedRoute.description.originalName??selectedRoute.description.title
+                    routeTitle = selectedRoute.description.title
                     routeType = selectedRoute.description.hasVideo ? 'Video':'GPX'
                     this.current.position = getPosition(selectedRoute,{distance:startPos})
                 }
                 break;
         }
-        const title = 'Incyclist Ride'
+        const title = DEFAULT_ACTIVITY_TITLE
         const id = requestedId ?? generateUUID()
         const date = formatDateTime (new Date (), "%Y%m%d%H%M%S", false)
         const name = `${title}-${date}`
         const fileName = this.getRepo().getFilename(name)
-        const route:ActivityRoute = {name:routeName, hash:routeHash}
+        const route:ActivityRoute = {name:routeName, hash:routeHash, title:routeTitle}
         if (routeId)
             route.id = routeId
 

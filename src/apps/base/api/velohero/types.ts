@@ -11,12 +11,18 @@ export type VeloHeroLoginReponse = {
     id: string
 }
 
+
+export type VeloHeroResponseKeys = 'id' | 'url-show' | 'url-edit' | 'velo'
+export type VeloHeroUploadResponse = Record<VeloHeroResponseKeys,string>
+
 export type VeloHeroUploadProps = {
     /** Username */
     username?: string;
     /** Password */
     password?: string;
     /** file format ( TCX,FIT,...), needs to be supproted by VeloHero */
+ 
+ 
     format?: string 
 }
 export type VeloHeroAccountType = 'Pro' | 'Free'

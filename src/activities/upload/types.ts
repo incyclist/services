@@ -28,4 +28,5 @@ export interface IActivityUpload {
     isConnecting():boolean
     disconnect():void
     upload(activity: ActivityDetails, format?:string):Promise<boolean>
+    getUrl(id:string):string
 }

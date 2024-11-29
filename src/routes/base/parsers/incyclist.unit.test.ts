@@ -7,12 +7,15 @@ import { RoutePoint } from '../types'
 
 describe('IncyclistParser',()=>{
     let parser:IncyclistXMLParser
+    let transform
 
     const load =  async (file) => {
         let data,error;
 
         try {
             data = await loadFile('utf-8',file.filename) as string            
+            if (transform && typeof transform === 'function')
+                data = transform(data)
             
         }
         catch(err) {
@@ -23,6 +26,10 @@ describe('IncyclistParser',()=>{
     }
 
     describe('Incyclist-XML',()=>{
+
+        afterEach( ()=>{
+            transform = undefined
+        })
 
 
         describe('import',()=>{
@@ -103,6 +110,17 @@ describe('IncyclistParser',()=>{
                 expect(data.routeHash).toBe('3d94fa436f9d90bb28c1a8ad08bb9bf8')
 
                 expect(details.video?.mappings.length).toBe(4182)
+
+            })
+
+            test('title in multiple languages',async ()=>{  
+                transform = (data) => {
+                    const regex = /<title>(.*?)<\/title>/
+                    return data.replace(regex, "<title de='DE Title' en='EN Title'/>")
+                }
+
+                const {data,details} = await run('FR_Source_Drome_Part_1.xml',{existsSync: jest.fn().mockReturnValue(false)})
+                expect(data.title).toBe('DE Title')
 
             })
 

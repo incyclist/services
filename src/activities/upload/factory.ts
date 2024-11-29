@@ -25,6 +25,14 @@ export class ActivityUploadFactory {
             this.uploaders[existing] = {service,uploader}
     }
 
+    get(service:string):IActivityUpload {
+        const existing = this.uploaders.findIndex( ui=> ui.service===service)
+        if (existing===-1)
+            return null
+        else 
+            return this.uploaders[existing].uploader
+    }
+
     /**
      * Uploads the activity to all connected services.
      * @param {ActivityDetails} activity - The activity to upload.

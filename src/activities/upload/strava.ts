@@ -141,6 +141,8 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
                 return false; 
 
             this.logger.logEvent({message:'Strava Upload', format})
+            if (!activity.links)
+                activity.links  = {}
 
             const fileName =  activity[`${format}FileName`];
             const res = await this.getApi().upload(fileName,{
@@ -149,19 +151,36 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
                 format: this.getStravaFormat(format)                
             })
             this.logger.logEvent({message:'Strava Upload success', activityId: res.stravaId})
+
+            activity.links.strava = {
+                activity_id: res.stravaId,
+                url: this.getUrl(res.stravaId)
+            }
             return true;
 
         }
         catch(err) {
             if (err instanceof DuplicateError) {
                 this.logger.logEvent({message:'Strava Upload failure', error: 'duplicate', activityId:err.stravaId})
+                activity.links.strava = {
+                    activity_id: err.stravaId,
+                    url: this.getUrl(err.stravaId)
+                }
+    
             }
             else {
                 this.logger.logEvent({message:'Strava Upload failure', error: err.message})
+                activity.links.strava = {
+                    error: err.message
+                }
             }
             return false
 
         }
+    }
+
+    getUrl(activityId:string):string {
+        return `https://www.strava.com/activities/${activityId}`
     }
 
     protected getStravaFormat(format:string):StravaFormat {
@@ -226,6 +245,8 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
     protected getSecret(key:string):string {
         return getBindings()?.secret?.getSecret(key)
     }
+
+
 
     // istanbul ignore next
     protected getUserSettings() {
