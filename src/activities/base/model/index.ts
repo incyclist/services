@@ -38,13 +38,16 @@ export type ActivityStats = {
     powerCurve?: Record<string,number>
 }
 
-export type StravaAppLink = {
-    upload_id: number,
-    activity_id: number,
+export interface ActivityAppLink  {
+    error?: string
+    activity_id?: string,
+    url?:string
 }
 
+
 export type ActivityAppLinks = {
-    strava? : StravaAppLink
+    strava? : ActivityAppLink
+    velohero?: ActivityAppLink
 }
 
 

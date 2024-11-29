@@ -250,12 +250,7 @@ export class ActivityListService extends IncyclistService {
             exports: this.selected.getExports(),
             canStart: this.selected.canStart(),
             canOpen: this.selected.isRouteAvailable(),
-            uploads: [
-                { type: 'Strava', url: 'https://www.strava.com/activities/12913907723', status:'success' },
-                { type: 'VeloHero', status:'unknown' },
-                { type: 'Intervals.icu', status:'failed' },
-                
-            ] 
+            uploads: this.selected.getUploadStatus()
         }
 
         return props

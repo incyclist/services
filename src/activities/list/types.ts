@@ -44,10 +44,11 @@ export type DisplayExportInfo = {
     file?: string
 }
 
+export type ActivityUploadStatus  = 'success' | 'failed' | 'unknown'
 export type DisplayUploadInfo = {
     type: string,
     url?: string,
-    status: 'success' | 'failed' | 'unknown'
+    status: ActivityUploadStatus
 }
 
 export interface ActivityDisplayProperties extends SelectedActivityDisplayProperties {

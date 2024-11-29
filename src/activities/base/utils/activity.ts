@@ -1,11 +1,12 @@
 import { PromiseObserver } from "../../../base/types";
 import { useRouteList } from "../../../routes";
-import { DisplayExportInfo } from "../../list";
+import { DisplayExportInfo, DisplayUploadInfo, ActivityUploadStatus } from "../../list";
 import { ActivityInfo, DEFAULT_ACTIVITY_TITLE } from "../model";
 import { ActivitiesRepository, DB_VERSION } from "../repo";
 import { getBindings } from "../../../api";
 import { RouteCard, RouteSettings } from "../../../routes/list/cards/RouteCard";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../../monitoring";
+import { useAppsService } from "../../../apps";
 
 export class Activity implements ActivityInfo{
     
@@ -128,15 +129,38 @@ export class Activity implements ActivityInfo{
         return useRouteList().getRouteDescription(this.details.route.id)!==undefined
     }
 
+    getUploadStatus():Array<DisplayUploadInfo>  {
+
+        const uploads:Array<DisplayUploadInfo> = []
+
+        const services = this.getAppsService().getConnectedServices('ActivityUpload')
+        services.forEach( service => {
+            let status:ActivityUploadStatus = 'unknown'
+
+            const info = this.details?.links?.[service.key]
+            if (info) {
+                status =  (info.error || !info.activity_id) ? 'failed' : 'success'
+                
+            }            
+
+            uploads.push({
+                type:service.key,status
+            })    
+        })
+
+        return uploads
+
+    }
+
     canStart() {
         if (!this.details?.route) return false
 
         if (this.details.routeType==='Free-Ride')
             return false
 
-        if (this.details.routeType==='Video') {
+        if (this.details.routeType==='Video' ) {
             const isOnline = this.getOnlineMonitoring().onlineStatus
-            return this.getRouteCard().canStart({isOnline})
+            return this.getRouteCard()?.canStart({isOnline})
         }
 
         return useRouteList().getRouteDescription(this.details.route.id)!==undefined
@@ -172,9 +196,6 @@ export class Activity implements ActivityInfo{
     }
 
 
-    protected getRepo():ActivitiesRepository {
-        return new ActivitiesRepository()            
-    }
 
     protected getOnlineMonitoring():OnlineStateMonitoringService {
         return useOnlineStatusMonitoring()
@@ -183,5 +204,14 @@ export class Activity implements ActivityInfo{
     protected save():Promise<void> {
         return this.getRepo().save(this.info)        
     }
+
+    // 
+
+    protected getRepo():ActivitiesRepository {
+        return new ActivitiesRepository()            
+    }
+    protected getAppsService() {
+        return useAppsService()
+    } 
 
 }

@@ -1,5 +1,5 @@
 import { valid } from '../../../../utils/valid';
-import { VeloHeroAccountType, VeloHeroLoginReponse, VeloHeroUploadProps } from './types';
+import { VeloHeroAccountType, VeloHeroLoginReponse, VeloHeroUploadProps, VeloHeroUploadResponse } from './types';
 import { AppApiBase } from '../base';
 
 const BASE_URL = 'https://app.velohero.com'
@@ -123,7 +123,7 @@ export class VeloHeroApi  extends AppApiBase{
      * @returns {Promise<boolean>} Indicates if the upload was successful.
      * @throws {Error} Throws an error if not authenticated.
      */
-    async upload(fileName:string, props?:VeloHeroUploadProps) {
+    async upload(fileName:string, props?:VeloHeroUploadProps):Promise<VeloHeroUploadResponse> {
 
         if (!this.loginResponse && (!props?.username && !props?.password)) {
             throw new Error('not authenticated')
@@ -143,7 +143,8 @@ export class VeloHeroApi  extends AppApiBase{
 
         const response = await this.postForm(form)
         if (response.data && !response.error) {
-            return true;
+            
+            return response.data;
         }
         else {
             const errMessage =  response.error?.response?.data?.error|| response.error?.response?.message ||  response.error.message

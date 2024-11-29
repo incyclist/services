@@ -130,22 +130,40 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
 
                 return false;
             }
-            
+
             this.logger.logEvent({message:'VeloHero Upload', format})
+
+            if (!activity.links)
+                activity.links  = {}
 
             const username = this.username
             const password = this.password
             const fileName =  activity[`${format}FileName`];
-            await this.getApi().upload(fileName,{username,password})
-            this.logger.logEvent({message:'VeloHero Upload success'})
+            const res = await this.getApi().upload(fileName,{username,password})
+
+            this.logger.logEvent({message:'VeloHero Upload success',...res})
+            console.log(new Date().toISOString(), 'VeloHero Upload success', res)
+            
+            activity.links.velohero = {
+                activity_id: res.id,
+                url: res['url-show']??this.getUrl(res.id)
+            }
+
             return true;
 
         }
         catch(err) {
             this.logger.logEvent({message:'VeloHero Upload failure', error: err.message})
+            activity.links.velohero = {
+                error: err.message
+            }
             return false
 
         }
+    }
+
+    getUrl(id: string): string {
+        return `https://app.velohero.com/workouts/show/${id}`
     }
 
 

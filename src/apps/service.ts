@@ -14,7 +14,7 @@ export class AppsService extends IncyclistService   {
     }
 
     protected readonly serviceMap: Array<AppDefinition> = [
-        { name:'Strava', key:'strava' },
+        { name:'Strava', key:'strava'  },
         { name:'VeloHero', key:'velohero' },
     ]
 

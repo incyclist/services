@@ -1,5 +1,6 @@
 import { AxiosError, AxiosResponse } from 'axios';
 import {VeloHeroApi} from './api';
+import exp from 'constants';
 
 
 describe('VeloHeroApi', () => {
@@ -91,12 +92,13 @@ describe('VeloHeroApi', () => {
     describe('upload', () => {
         test('successfull upload with credentials', async () => {
             mockLoginResponse(api,{ username: 'testUser', id: 123, session: 'session123', isPro: true });
-            form.createForm.mockResolvedValue({});
+            const mockData = {id:'123','url-show': './show/123', 'url-edit': './edit/123'}
+            form.createForm.mockResolvedValue(mockData);
             form.post = jest.fn( (data)=>({ data, error: null }));
 
             const result = await api.upload('example.csv',{username:'testUser',password:'testPassword'});
 
-            expect(result).toBe(true);
+            expect(result).toMatchObject( mockData);
 
             expect(form.createForm).toHaveBeenCalledWith({url: 'https://app.velohero.com/upload/file'}, {                
                 file: { type: 'file', fileName: 'example.csv' },
@@ -112,12 +114,13 @@ describe('VeloHeroApi', () => {
             await api.login('username', 'password');
            
 
-            form.createForm.mockResolvedValue({});
+            const mockData = {id:'123','url-show': './show/123', 'url-edit': './edit/123'}
+            form.createForm.mockResolvedValue(mockData);
             form.post = jest.fn( async (data)=>({ data, error: null }));
 
             const result = await api.upload('example.csv');
 
-            expect(result).toBe(true);
+            expect(result).toEqual(mockData);
 
             expect(form.createForm).toHaveBeenCalledWith({url: 'https://app.velohero.com/upload/file'}, {                
                 file: { type: 'file', fileName: 'example.csv' },
