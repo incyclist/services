@@ -15,7 +15,7 @@ export class IncyclistService extends EventEmitter {
     inject (string, value) {
         this.injected[string] = value
     }
-
+    
     logEvent(event) {
         this.logger.logEvent(event)
         this.emit('log',event)
