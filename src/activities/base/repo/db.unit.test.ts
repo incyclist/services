@@ -57,7 +57,7 @@ describe('ActivityDB',()=>{
                     totalElevation: 150000,
                 }
   
-            await db.migrate({details,summary})
+            db.migrate({details,summary})
 
             expect(summary.title).toBe('skyrunners hausrunde')
             expect(summary.name).toBe('Incyclist Ride-20240306181607')
@@ -80,7 +80,7 @@ describe('ActivityDB',()=>{
                     name: "Incyclist Ride-20240522165548",
             }
   
-            await db.migrate({details,summary})
+            db.migrate({details,summary})
 
             expect(summary.title).toBe("Giro d'Italia 2024 Stage 16: Livigno - Santa Cristina Valgardena/St. Christina in Gröden (Monte Pana)")
             expect(summary.name).toBe('Incyclist Ride-20240522165548')
@@ -107,7 +107,7 @@ describe('ActivityDB',()=>{
                     name: "Incyclist Ride-20240522165548",
             }
   
-            await db.migrate({details,summary})
+            db.migrate({details,summary})
 
             expect(summary.title).toBe("TEST")
             expect(summary.name).toBe('Incyclist Ride-20240522165548')

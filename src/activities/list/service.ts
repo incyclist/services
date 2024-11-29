@@ -1,11 +1,10 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer, PromiseObserver } from "../../base/types/observer";
-import { useRouteList } from "../../routes";
 import { waitNextTick } from "../../utils";
 import clone from "../../utils/clone";
-import { ActivitiesRepository, ActivitySearchCriteria,Activity } from "../base";
-import { ActivityDB, ActivityInfo } from "../base/model";
+import { ActivitiesRepository, Activity, ActivitySearchCriteria } from "../base";
+import { ActivityInfo } from "../base/model";
 import { ActivityDisplayProperties, ActivityErrorDisplayProperties, ActivityListDisplayProperties, SelectedActivityDisplayProperties } from "./types";
 
 /**

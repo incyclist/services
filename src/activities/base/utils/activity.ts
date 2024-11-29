@@ -1,4 +1,3 @@
-import exp from "constants";
 import { PromiseObserver } from "../../../base/types";
 import { useRouteList } from "../../../routes";
 import { DisplayExportInfo } from "../../list";
@@ -6,6 +5,7 @@ import { ActivityInfo, DEFAULT_ACTIVITY_TITLE } from "../model";
 import { ActivitiesRepository, DB_VERSION } from "../repo";
 import { getBindings } from "../../../api";
 import { RouteCard, RouteSettings } from "../../../routes/list/cards/RouteCard";
+import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../../monitoring";
 
 export class Activity implements ActivityInfo{
     
@@ -122,7 +122,7 @@ export class Activity implements ActivityInfo{
     isRouteAvailable() {
         if (!this.details?.route) return false
 
-        if (this.details.routeType=='Free-Ride')
+        if (this.details.routeType==='Free-Ride')
             return false
 
         return useRouteList().getRouteDescription(this.details.route.id)!==undefined
@@ -131,8 +131,13 @@ export class Activity implements ActivityInfo{
     canStart() {
         if (!this.details?.route) return false
 
-        if (this.details.routeType=='Free-Ride')
+        if (this.details.routeType==='Free-Ride')
             return false
+
+        if (this.details.routeType==='Video') {
+            const isOnline = this.getOnlineMonitoring().onlineStatus
+            return this.getRouteCard().canStart({isOnline})
+        }
 
         return useRouteList().getRouteDescription(this.details.route.id)!==undefined
 
@@ -169,6 +174,10 @@ export class Activity implements ActivityInfo{
 
     protected getRepo():ActivitiesRepository {
         return new ActivitiesRepository()            
+    }
+
+    protected getOnlineMonitoring():OnlineStateMonitoringService {
+        return useOnlineStatusMonitoring()
     }
 
     protected save():Promise<void> {

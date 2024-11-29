@@ -6,14 +6,14 @@ import { MigrationV3 } from "./v3"
 
 export class ActivitiesDBMigratorFactory {
 
-    static migrators: Array< typeof ActivitiesDBMigrator > = [
+    static readonly migrators: Array< typeof ActivitiesDBMigrator > = [
         MigrationV0,
         MigrationV1,
         MigrationV2,
         MigrationV3
     ]
 
-    static injected:Record<string,any> ={}
+    static readonly injected:Record<string,any> ={}
 
     static inject(string, value) {
         this.injected[string] = value

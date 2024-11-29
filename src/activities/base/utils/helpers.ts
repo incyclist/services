@@ -22,10 +22,10 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
     }
 
     if (name===undefined && fileName!==undefined) {
-        const parts = fileName.split(/[\/\\]/)
+        const parts = fileName.split(/[/\\]/)
 
         const match  = /([^\\/]+)\.json/.exec(parts[parts.length-1])
-        if (match && match[1]) 
+        if (match?.[1]) 
             name = match[1]
         
     }

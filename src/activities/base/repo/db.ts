@@ -107,7 +107,7 @@ export class ActivitiesRepository {
      * 
      * @param activity The activity to be migrated, containing its summary and details.
      */
-    async migrate(activity:ActivityInfo, writeSummary = true):Promise<ActivityDetails> {
+    migrate(activity:ActivityInfo, writeSummary = true):ActivityDetails {
         try {
             const {details} = activity??{}
             if (!details) 
@@ -132,10 +132,8 @@ export class ActivitiesRepository {
                     const migrater = ActivitiesDBMigratorFactory.create(i-1)
                     if (migrater) {
                         const res = migrater.migrate(activity)
-                        {
-                            summaryChanged = summaryChanged || res.summaryChanged
-                            detailsChanged = detailsChanged || res.detailsChanged
-                        }
+                        summaryChanged = summaryChanged || res?.summaryChanged
+                        detailsChanged = detailsChanged || res?.detailsChanged
                     }    
                 }
             }                                
@@ -160,10 +158,10 @@ export class ActivitiesRepository {
         try {
             const promises = []
             this.activities.forEach( activity => {
-                if (activity.details)
-                    promises.push(this.migrate(activity,false).then(details=> {                        
-                        activity.summary = buildSummary(details??activity.details)            
-                }))
+                if (activity.details) {
+                    const details = this.migrate(activity)                    
+                    activity.summary = buildSummary(details??activity.details)            
+                }
                 else 
                     promises.push( this.loadDetailsById(activity.summary.id).then( (details)=> {
                         if (!details ) {
@@ -172,9 +170,9 @@ export class ActivitiesRepository {
                         }
 
                         const updated = {...activity,details}
-                        this.migrate(updated,false).then(updatedDetails=> {
-                            activity.summary = buildSummary(updatedDetails??details)                
-                        })                        
+                        const updatedDetails = this.migrate(updated,false)
+                        activity.summary = buildSummary(updatedDetails??details)                
+                        
                     }))            
             })
     

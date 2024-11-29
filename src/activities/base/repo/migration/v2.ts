@@ -1,5 +1,4 @@
 import { ActivityInfo } from "../../model";
-import { getTotalElevation } from "../../utils";
 import { ActivitiesDBMigrator, MigrationResult } from "./types";
 
 export class MigrationV2 extends ActivitiesDBMigrator{

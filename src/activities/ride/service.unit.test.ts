@@ -9,12 +9,9 @@ import { waitNextTick } from "../../utils"
 
 
 import troll from '../../../__tests__/data/activities/troll-90.json'
-import prev1 from '../../../__tests__/data/activities/prevRide.json'
 import prev2 from '../../../__tests__/data/activities/prevRide1.json'
-import { ActivityDetails, ActivityInfo, ActivityLogRecord, buildSummary, DB_VERSION } from '../base'
+import { ActivityDetails, ActivityInfo, buildSummary, DB_VERSION } from '../base'
 import { PastActivityLogEntry } from "../list"
-import { initUserSettings } from "../../settings"
-import { MockBinding } from "../../settings/user/mock"
 import { Observer } from "../../base/types/observer"
 
 
