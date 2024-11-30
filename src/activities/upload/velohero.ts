@@ -6,8 +6,6 @@ import crypto from 'crypto'
 import { IActivityUpload, VeloHeroAuth } from "./types";
 import { valid } from "../../utils/valid";
 import { VeloHeroApi } from "../../apps/base/api";
-import { deprecate } from "util";
-
 
 
 /**
