@@ -18,7 +18,9 @@ export class IncyclistService extends EventEmitter {
     
     logEvent(event) {
         this.logger.logEvent(event)
-        this.emit('log',event)
+        const emitPayload = {...event}
+        delete emitPayload.ts
+        this.emit('log',emitPayload)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const w = global.window as any
     
@@ -35,6 +37,10 @@ export class IncyclistService extends EventEmitter {
         const logInfo = args || {}
 
         this.logEvent({message:'Error', fn, ...logInfo, error:err.message, stack:err.stack})
+    }
+
+    reset() {        
+        this.removeAllListeners()
     }
 
 }
