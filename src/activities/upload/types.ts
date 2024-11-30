@@ -8,7 +8,8 @@ export interface Credentials {
 
 export interface VeloHeroAuth extends Credentials {
     id?: string;
-    authKey?: string;
+    authKey?: string;    
+    version?: string    
 }
 
 export type UploaderInfo = {

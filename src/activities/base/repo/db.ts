@@ -148,7 +148,7 @@ export class ActivitiesRepository {
     
         }
         catch(err) {
-            this.logError(err,'migrate')
+            this.logError(err,'migrate',{activity})
         }
     }
 

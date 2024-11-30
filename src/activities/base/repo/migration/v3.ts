@@ -9,7 +9,7 @@ export class MigrationV3 extends ActivitiesDBMigrator{
 
         if (details.routeType==='Video' && details.route) {
             const route = this.getRouteList().getRouteDescription(details.route.id)
-            if (route.title) {
+            if (route?.title) {
                 details.route.title = route.title
                 detailsChanged = true
             }
