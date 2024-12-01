@@ -1,10 +1,8 @@
-import { format } from 'path'
 import { VeloHeroApi } from '../../apps'
 import { UserSettingsService } from '../../settings'
-import { Activity, ActivityDetails } from '../base'
+import { ActivityDetails } from '../base'
 import { Credentials, VeloHeroAuth } from './types'
 import { VeloHeroUpload } from './velohero'
-import { error } from 'console'
 
 const UserSettingsMock = (initialized:boolean, credentials:VeloHeroAuth|null,uuid?:string):Partial<UserSettingsService>=>({
         isInitialized: initialized,
