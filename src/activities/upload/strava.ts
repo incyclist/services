@@ -5,7 +5,8 @@ import { ActivityDetails } from "../base";
 import { valid } from "../../utils/valid";
 import { DuplicateError, StravaApi, StravaConfig, StravaFormat } from "../../apps/base/api/strava";
 import { getBindings } from "../../api";
-import { IActivityUpload } from "./types";
+import { IActivityUpload, StravaAuth } from "./types";
+import { Injectable } from "../../base/decorators/Injection";
 
 
 
@@ -16,6 +17,8 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
     protected api: StravaApi
     protected config: StravaConfig
     protected _isConnecting
+
+    protected tokenUpdateHandler = this.updateConfig.bind(this)
 
     constructor() {
         super('StravaUpload')
@@ -40,30 +43,33 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
 
 
             if (clientId && clientSecret && auth) {           
-                this.logger.logEvent( {message:'Strava init done', hasCredentials:true})            
+                this.logEvent( {message:'Strava init done', hasCredentials:true})            
                 this.config = {
                     clientId, clientSecret,
                     accessToken: auth.accesstoken,
                     refreshToken: auth.refreshtoken,
                     expiration: new Date(auth.expiration)
                 }
-                const observer = this.getApi().init(this.config)
-
-                observer.on('token.updated',this.updateConfig.bind(this) )
+                
+                this.initApi(this.config);
             }
             else {
-                this.logger.logEvent( {message:'Strava init done', hasCredentials:false})            
+                this.logEvent( {message:'Strava init done', hasCredentials:false})            
             }
             this.isInitialized = true;           
 
+
+
         }
         catch(err) {
-            this.logger.logEvent({message:'error', error:err.message, fn:'init',stack:err.stack})
+            this.logEvent({message:'error', error:err.message, fn:'init',stack:err.stack})
             this.isInitialized = false;
+            delete this.config
         }
 
         return this.isInitialized
     }
+
 
     isConnected() {
         if (!this.isInitialized) {
@@ -79,11 +85,9 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
 
     async connect(accessToken:string, refreshToken:string, expiration?:Date):Promise<boolean> {
 
-        if (!this.isInitialized) {
-            this.init()
-        }
+        this.ensureInitialized()
 
-        this.logger.logEvent({message:'Connect with Strava'})
+        this.logEvent({message:'Connect with Strava'})
 
         try {
             const isConnected = this.isConnected()
@@ -97,31 +101,32 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
                 this.getApi().update(config)
             }
             else {
-                const observer = this.getApi().init(this.config)
-                observer.on('token.updated',this.updateConfig.bind(this) )
+                const observer = this.initApi(config)
+                this.saveCredentials(config)
             }
-            this.saveCredentials()
-            this.logger.logEvent({message:'Connect with strava success'})           
+
+            this.logEvent({message:'Connect with Strava success'})           
             return true
             
         }
         catch(err) {
-            this.logger.logEvent({message:'Connect with Strava failed',error: err.message})
+            // Should never happen, but just in case ...  I will log
+            // istanbul ignore next
+            this.logError(err,'connect')
             throw err
         }
 
     }
 
     disconnect() {
-        if (!this.isInitialized) {
-            this.init()
-        }
-        try {
-            this.getUserSettings().set('user.auth.strava',null)   
+        try {            
             this.config = undefined
+            this.saveCredentials()
             this.getApi().init(undefined)
         }
         catch(err) {
+            // Should never happen, but just in case ...  I will log
+            // istanbul ignore next
             this.logError(err,'disconnect')
         }
     }
@@ -131,26 +136,30 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
     async upload(activity: ActivityDetails, format:string='TCX'):Promise<boolean> {
         try {
             
-            if (!this.isInitialized) {
-                const ok =this.init()
-                if (!ok)
-                    return false;
+            const ok =this.ensureInitialized()
+            if (!ok) {
+                this.logEvent({message:'Strava Upload skipped', reason:'not initialized'})
+
+                return false;
             }
 
             if (!this.isConnected())
                 return false; 
 
-            this.logger.logEvent({message:'Strava Upload', format})
+            const lcFormat = format.toLowerCase()
+            const ucFormat = format.toUpperCase()
+
+            this.logEvent({message:'Strava Upload', format:ucFormat})
             if (!activity.links)
                 activity.links  = {}
 
-            const fileName =  activity[`${format}FileName`];
+            const fileName =  activity[`${lcFormat}FileName`];
             const res = await this.getApi().upload(fileName,{
                 name: activity.title,
                 description: '',
                 format: this.getStravaFormat(format)                
             })
-            this.logger.logEvent({message:'Strava Upload success', activityId: res.stravaId})
+            this.logEvent({message:'Strava Upload success', activityId: res.stravaId})
 
             activity.links.strava = {
                 activity_id: res.stravaId,
@@ -161,7 +170,7 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
         }
         catch(err) {
             if (err instanceof DuplicateError) {
-                this.logger.logEvent({message:'Strava Upload failure', error: 'duplicate', activityId:err.stravaId})
+                this.logEvent({message:'Strava Upload failure', error: 'duplicate', activityId:err.stravaId})
                 activity.links.strava = {
                     activity_id: err.stravaId,
                     url: this.getUrl(err.stravaId)
@@ -169,7 +178,7 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
     
             }
             else {
-                this.logger.logEvent({message:'Strava Upload failure', error: err.message})
+                this.logEvent({message:'Strava Upload failure', error: err.message})
                 activity.links.strava = {
                     error: err.message
                 }
@@ -197,9 +206,14 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
         }   
     }
 
+    protected ensureInitialized() {
+        if (!this.isInitialized)
+            this.init()
+        return this.isInitialized
+    }
 
 
-    protected getCredentials() {
+    protected getCredentials():StravaAuth {
         const userSettings = this.getUserSettings()
         try {
             return userSettings.get('user.auth.strava',null)        
@@ -209,17 +223,20 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
         }
     }
 
-    protected saveCredentials():void {
-        this.logger.logEvent({message:'Strava Save Credentials'})
+    protected saveCredentials(config?:StravaConfig):void {
 
+        if (config)
+            this.config = config
         
         try {
 
             if (!this.isConnected()) {
+                this.logEvent({message:'Strava Delete Credentials'})            
                 this.getUserSettings().set('user.auth.strava',null)
                 return;    
             }
-            
+
+            this.logEvent({message:'Strava Save Credentials'})            
             this.getUserSettings().set('user.auth.strava',{
                 accesstoken: this.config.accessToken,
                 refreshtoken: this.config.refreshToken,
@@ -228,10 +245,10 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
 
         }
         catch(err) {
-            this.logger.logEvent( {message: 'error', fn:'saveCredentials', error:err.message, stack:err.stack})
+            this.logEvent( {message: 'error', fn:'saveCredentials', error:err.message, stack:err.stack})
         }
 
-        this.logger.logEvent({message:'Strava Save Credentials done'})
+        this.logEvent({message:'Strava Save Credentials done'})
     }
 
     protected updateConfig(config:StravaConfig) {
@@ -240,19 +257,31 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
         this.saveCredentials()
     }
 
+    protected initApi(config:StravaConfig) {
+        const observer = this.getApi().init(config);
+        observer.on('token.updated', this.tokenUpdateHandler);
+    }
+   
     
-    // istanbul ignore next
     protected getSecret(key:string):string {
-        return getBindings()?.secret?.getSecret(key)
+        return this.getSecretBindings()?.getSecret(key)
     }
 
+    @Injectable
+    // istanbul ignore next
+    getSecretBindings() {
+        return getBindings()?.secret
+    }
 
-
+    @Injectable
     // istanbul ignore next
     protected getUserSettings() {
         return useUserSettings()
     }
 
+    
+    @Injectable
+    // istanbul ignore next
     protected getApi() {
         if (!this.api)
             this.api = new StravaApi()
