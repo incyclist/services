@@ -40,7 +40,7 @@ const ApiMock = (props:{loginSuccess?:boolean, loginError?:string, uploadRespons
 type MockDefinition = {
     api?: Partial<VeloHeroApi>,
     userSettings?: Partial<UserSettingsService>
-    decryptMock?:(auth:VeloHeroAuth)=>Credentials
+    decryptMock?:(algo:string,auth:VeloHeroAuth)=>Credentials
 }
 
 const createCredentials = (s) =>{
@@ -48,17 +48,7 @@ const createCredentials = (s) =>{
     s.password = 'test'
     s.getUuid = ()=>'12345678-0000-1111-2222-123456789abc'
 
-    const credentials = s.encrypt()
-    
-    return credentials
-}
-
-const createLegacyCredentials = (s,algo) =>{
-    s.username = 'test'
-    s.password = 'test'
-    s.getUuid = ()=>'12345678-0000-1111-2222-123456789abc'
-
-    const credentials = s.encryptLegacy(algo)
+    const credentials = s.encrypt('aes256')
     
     return credentials
 }
@@ -115,6 +105,7 @@ describe ('VeloHeroUpload', ()=>{
             expect(service.isConnected()).toBe(true)    
 
         })
+
 
         test('credentials in clear text',()=>{
             
@@ -180,23 +171,6 @@ describe ('VeloHeroUpload', ()=>{
             expect(service.isConnected()).toBe(false)    
         })
 
-        test('legacy cipher',()=>{
-
-            
-            const credentials = createLegacyCredentials(service,'aes256')
-            
-            const mocks: MockDefinition = {
-              userSettings: UserSettingsMock(true, credentials,'12345678-0000-1111-2222-123456789abc'),
-              //decryptMock:jest.fn( () => ({username:'test',password:'test'}))
-            };
-            setupMocks(mocks);         
-         
-            const success = service.init();
-            expect(success).toBe(true)
-            expect(logSpy).toHaveBeenCalledWith({message:'VeloHero init done', hasCredentials:true})
-            expect(service.isConnected()).toBe(true)    
-
-        })
 
 
 
@@ -241,7 +215,7 @@ describe ('VeloHeroUpload', ()=>{
             expect(logSpy).not.toHaveBeenCalledWith(expect.objectContaining({message:'error'}))
 
             expect(service.isConnecting()).toBe(false)    
-            expect(mocks.userSettings?.set).toHaveBeenCalledWith('user.auth.velohero',{ id: expect.anything(), authKey: expect.anything(),version:'2' })
+            expect(mocks.userSettings?.set).toHaveBeenCalledWith('user.auth.velohero',{ id: expect.anything(), authKey: expect.anything() })
         })
 
         test('login failure',async ()=>{                    

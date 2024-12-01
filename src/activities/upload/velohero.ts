@@ -7,6 +7,7 @@ import { IActivityUpload, VeloHeroAuth } from "./types";
 import { valid } from "../../utils/valid";
 import { VeloHeroApi } from "../../apps/base/api";
 
+const CRYPT_ALGO = 'aes256'
 
 /**
  * Service for uploading activities to VeloHero.
@@ -54,7 +55,7 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
 
                 }
                 else {            
-                    const user = this.decrypt(auth)
+                    const user = this.decrypt(CRYPT_ALGO,auth)
                     this.username = user.username;
                     this.password = user.password
                 }   
@@ -240,7 +241,7 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
 
         let auth
         try {
-            auth = this.encrypt();
+            auth = this.encrypt(CRYPT_ALGO);
             this.getUserSettings().set('user.auth.velohero',auth)
 
         }
@@ -253,34 +254,8 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
 
     }
 
-    protected encrypt():VeloHeroAuth {
-        const iv = crypto.randomBytes(16)
-        
-        const uuid = this.getUuid()
-        const key = `${uuid.substring(0,32)}`
-        
-        const cipher = crypto.createCipheriv('aes-256-gcm',key,iv);
-        
-        const text = JSON.stringify({username:this.username, password:this.password})
 
-        let ciphered
-
-        ciphered = (Buffer.concat(
-            [cipher.update(text), cipher.final(), cipher.getAuthTag()])).toString("hex"); // Alternatively, base64 also works
-
-        const auth =  {
-            id: iv.toString('hex'),
-            authKey: ciphered,
-            version:'2'
-        }
-
-        return auth
-    }
-
-    /**
-    @deprecate
-     **/
-    protected encryptLegacy(algo):VeloHeroAuth {
+    protected encrypt(algo:string):VeloHeroAuth {
         const iv = crypto.randomBytes(16)
         
         const uuid = this.getUuid()
@@ -306,55 +281,44 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
     }
 
 
-    protected decrypt(auth:VeloHeroAuth) {
-
+    protected decrypt(algo:string, auth:VeloHeroAuth) {
         const {id,authKey,version} = auth
 
         const iv = Buffer.from(id,'hex')
         const uuid = this.getUuid()
         const key = `${uuid.substring(0,32)}`
 
-
-        const decipher = (em,props?) => {
-            try {
-                
-                const cipher = crypto.createDecipheriv(em,key,iv,props);
-
-
-                let text;
-
-                if (em==='aes-256-gcm') {
-                    const raw = Buffer.from(authKey, "hex"); 
-
-                    const authTagBuff = raw.subarray(raw.length - 16); // Returns a new Buffer that references the same memory as the original, but offset and cropped by the start and end indices.
-                    const encTextBuff = raw.subarray(0, raw.length - 16); // Returns a new Buffer that references the same memory as the original, but offset and cropped by the start and end indices.
+        try {
             
-                    cipher.setAuthTag(authTagBuff);
+            let text;
+
+            if (algo==='aes-256-gcm') {
+                const cipher = crypto.createDecipheriv(algo,key,iv);
+                const raw = Buffer.from(authKey, "hex"); 
+
+                const authTagBuff = raw.subarray(raw.length - 16); // Returns a new Buffer that references the same memory as the original, but offset and cropped by the start and end indices.
+                const encTextBuff = raw.subarray(0, raw.length - 16); // Returns a new Buffer that references the same memory as the original, but offset and cropped by the start and end indices.
+        
+                cipher.setAuthTag(authTagBuff);
+        
+                // Decrypting
+                text = cipher.update(encTextBuff);
+                text += cipher.final('utf8');
+            }
+            else {
+                const cipher = crypto.createDecipheriv(algo,key,iv);
+                text = cipher.update(authKey, 'hex','utf8');                
+                text += cipher.final('utf8');    
+            }
             
-                    // Decrypting
-                    text = cipher.update(encTextBuff);
-                    text += cipher.final('utf8');
-                }
-                else {
-                    text = cipher.update(authKey, 'hex','utf8');                
-                    text += cipher.final('utf8');    
-                }
-                
-                const user = JSON.parse(text)                        
-                return user
-            }
-            catch(err) {
-                // istanbul ignore next
-            }
-    
+            const user = JSON.parse(text)                        
+            return user
         }
-
-         
-        
-        if (version==='2')
-            return decipher('aes-256-gcm')
-        
-        return decipher('AES-256-CCM')?? decipher('aes256')
+        catch(err) {
+            // istanbul ignore next
+            this.logError(err,'decrypt',{algo,id,authKey})
+            return null
+        }
 
     }
 
@@ -380,6 +344,11 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
         if (!this.api)
             this.api = new VeloHeroApi()
         return this.api
+    }
+
+    // istanbul ignore next
+    protected getCrypto() {        
+        return this.injected['Crypto']?? crypto        
     }
 
     
