@@ -1,4 +1,5 @@
 import { Avatar } from "../../avatars";
+import { Observer } from "../../base/types";
 import { ActivityDetails, ActivityInfo, ActivitySearchCriteria, ActivityStats } from "../base";
 
 export type PastActivityLogEntry = {
@@ -27,17 +28,40 @@ export interface PrevRidesListDisplayProps extends PastActivityLogEntry {
 }
 
 export type ActivityListDisplayProperties = {
-    activities: Array<ActivityInfo>,
-    filter: ActivitySearchCriteria
+    activities?: Array<ActivityInfo>,
+    filter?: ActivitySearchCriteria,
+    loading?: boolean
+    observer?: Observer
+
 }
 
-export interface SelectedActivityDisplayProperties {
-    title: string,
+export interface SelectedActivityResponse {
+    title: string,     
 }
 
-export interface ActivityErrorDisplayProperties extends SelectedActivityDisplayProperties{ 
+export interface ActivityErrorDisplayProperties extends SelectedActivityResponse{ 
     error: string
 }
+
+export interface SelectedActivityDisplayProperties extends SelectedActivityResponse {
+     
+    distance: number,
+    duration: number,
+    elevation: number,
+    startPos?: number
+    segment?:  string
+    started: Date
+    showMap: boolean,
+    points?: Array<{lat:number,lng:number}>
+    activity: ActivityDetails
+    exports: Array<DisplayExportInfo>
+    canStart: boolean
+    canOpen: boolean,
+    uploads: Array<DisplayUploadInfo> 
+
+
+}
+
 
 export type DisplayExportInfo = {
     type: string,

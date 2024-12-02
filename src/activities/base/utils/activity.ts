@@ -7,6 +7,7 @@ import { getBindings } from "../../../api";
 import { RouteCard, RouteSettings } from "../../../routes/list/cards/RouteCard";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../../monitoring";
 import { useAppsService } from "../../../apps";
+import { Injectable } from "../../../base/decorators/Injection";
 
 export class Activity implements ActivityInfo{
     
@@ -49,7 +50,7 @@ export class Activity implements ActivityInfo{
     }
 
     isLoading() {
-        return this.loadingObserver!==null
+        return this.loadingObserver!==null && this.loadingObserver!==undefined
     }
 
     async load():Promise<void> {
@@ -113,7 +114,7 @@ export class Activity implements ActivityInfo{
 
             const file=details[`${type}FileName`] ?? fileName?.replace('.json','.tcx')
 
-            const fs = getBindings().fs
+            const fs = this.getBindings().fs
             if (fs.existsSync(file) )
                 exports.push({type,file})
             else 
@@ -130,7 +131,7 @@ export class Activity implements ActivityInfo{
         if (this.details.routeType==='Free-Ride')
             return false
 
-        return useRouteList().getRouteDescription(this.details.route.id)!==undefined
+        return this.getRouteList().getRouteDescription(this.details.route.id)!==undefined
     }
 
     getUploadStatus():Array<DisplayUploadInfo>  {
@@ -211,11 +212,23 @@ export class Activity implements ActivityInfo{
 
     // 
 
+    @Injectable
     protected getRepo():ActivitiesRepository {
         return new ActivitiesRepository()            
     }
+    @Injectable
     protected getAppsService() {
         return useAppsService()
     } 
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
+    }
+
+    @Injectable 
+    protected getRouteList() {
+        return useRouteList()
+    }
 
 }

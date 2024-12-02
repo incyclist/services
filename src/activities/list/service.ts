@@ -1,3 +1,4 @@
+import { Injectable } from "../../base/decorators/Injection";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer, PromiseObserver } from "../../base/types/observer";
@@ -5,14 +6,32 @@ import { RouteCard } from "../../routes/list/cards/RouteCard";
 import { waitNextTick } from "../../utils";
 import { ActivitiesRepository, Activity, ActivitySearchCriteria } from "../base";
 import { ActivityInfo } from "../base/model";
-import { ActivityDisplayProperties, ActivityErrorDisplayProperties, ActivityListDisplayProperties, SelectedActivityDisplayProperties } from "./types";
+import { ActivityErrorDisplayProperties, ActivityListDisplayProperties, SelectedActivityDisplayProperties, SelectedActivityResponse } from "./types";
 
 /**
  * This service is used by the Front-End to manage and query the current and past activities
+ * 
  * The service implements the business logic to display the content for 
  * - the list of activities ( incl. Search functionaly)
  * - an individual activity ( show details when finished)
  * 
+ * @example
+ * // start thee process to show the list of activities
+ * const service = useActivityList();
+ *
+ * useEffect(() => {
+ *    .... // ensure this is only called once 
+ *    const displayProps = service.openList()
+ *    setState(displayProps)
+ *    setLoading(false)
+ *    observerRef.current = service.getListObserver()        
+ *    observerRef.current.on('updated',(update) => setState(update))
+ * },[service])
+ * 
+ * 
+ * 
+ * @class
+ * @public 
  */
 
 
@@ -49,31 +68,38 @@ export class ActivityListService extends IncyclistService {
      * @emits loaded    loading has been completed, provides lists as parameter
      */
 
-    preload():PromiseObserver<void> {
+    preload(props?:{cntDetails?:number}):PromiseObserver<void> {
         try {
+            // avoid parallel preloads
             if (!this.preloadObserver) {
                 this.logEvent( {message:'preload activity list'})
+
+                // load the summary records
                 const promise = this.loadActivities()
                 this.preloadObserver = new PromiseObserver<void>( promise )
-                process.nextTick( ()=>{ if (this.observer) this.observer.emit('loading')})
+                if (this.observer) 
+                    this.observer.emit('loading')
     
                 this.preloadObserver.start()
                     .then( ()=> { 
-
-                        const getDetails = (this.getRepo().search({})??[]).filter( (a,i)=> i<20).map( a=>this.loadDetails(a))
-
-                        Promise.allSettled(getDetails).then( ()=>{
+                        // load the required detail records and inform the UI
+                        this.preloadDetails(props?.cntDetails).then( ()=>{
 
                             this.logEvent( {message:'preload activity list completed', cnt:this.activities?.length })
-    
+                            
                             this.initialized = true
                             this.emitLists('loaded')
+                                                        
                             process.nextTick( ()=>{delete this.preloadObserver})
     
                         })
                     })
                     .catch( (err)=> {
+                        console.log(new Date().toISOString() + ' - preload activity list error')
                         this.logError(err,'preload')
+
+                        this.initialized = false
+                        process.nextTick( ()=>{delete this.preloadObserver})
                     })
             }
             else {
@@ -82,23 +108,49 @@ export class ActivityListService extends IncyclistService {
     
     
         }
-        catch(err) {
+        
+        catch(err) /* istanbul ignore next */ {
             this.logError(err,'preload')
         }
         return this.preloadObserver
     }
 
-    openList() {
-        if (!this.observer)
-            this.observer = new Observer()
+    /**
+     * Opens the activity list and returns the properties to be used for the ActivityList component
+     * 
+     * This method initializes an observer (if it doesn't already exist) which can be used to 
+     * notify the UI about relevant changes in the list, which might require a (partial) re-render
+     * 
+     * @returns {ActivityListDisplayProperties} The display properties of the activity list.
+     */
+    openList():ActivityListDisplayProperties {
+
+        // ensure that the observer exists or is created
+        this.getListObserver()
+
+        if (!this.initialized)
+            this.preload()
+        
         return this.getListDisplayProperties()
 
     }
 
+    /**
+     * Stores the current top position of the ActivityList in the list component
+     * 
+     * This value is used to restore the position when the ActivityList is re-opened
+     * 
+     * @param top the current top position of the first item in the list
+     */
     setListTop(top:number) {
         this.listTop = top
     }
 
+    /**
+     * returns the current top position of the first item in the list
+     * 
+     * @returns the top position of the first item in the list
+     */
     getListTop() {
         return this.listTop
     }
@@ -147,33 +199,29 @@ export class ActivityListService extends IncyclistService {
         this.filter = filter
     }
 
-    protected getPastActivities(): Array<ActivityInfo> {
-        
 
-        try {
-            const activities  = this.getRepo().search(this.filter) ?? []
-            return activities.sort( (a,b) => b.summary?.startTime - a.summary?.startTime )
-        }
-        catch(err) {
-            this.logError(err,'getPastActivities')
-            return []
-        }
-
-    }
-
-
-
+    /**
+     * should be called to retrieve the details of an activity. Returns an observer that is used to signal changes to the UI.
+     * 
+     * @param id the id of the activity
+     * 
+     * @returns an observer that emits the following events
+     * 
+     * @emits loaded    the activity details have been loaded, provides the details as parameter
+     * @emits load-error an error has occurred while loading the details, provides the error message as parameter
+     */
     getActivityDetails(id:string): Observer {
         const observer = new Observer()
         try {
             const activity = this.getActivity(id)
             if (activity.details) {
                 waitNextTick().then( () => observer.emit('loaded', activity.details) )
-                return;
+                return observer;
             }
                 
 
             this.getRepo().getWithDetails(id).then(ai => {
+                // istanbul ignore if
                 if (!ai)
                     return;
     
@@ -184,10 +232,11 @@ export class ActivityListService extends IncyclistService {
     
             })
             .catch(err => {
+                observer.emit('load-error', err.message)
                 this.logError(err,'getActivityDetails#getWithDetails')
             })
         }
-        catch(err) {
+        catch(err) /* istanbul ignore next */ {
             this.logError(err,'getActivityDetails')
         }
         return observer
@@ -198,7 +247,10 @@ export class ActivityListService extends IncyclistService {
      * 
      * @param id The unique ID of the activity to be deleted.
      * 
+     * @emits updated  deletion has been completed, provides updated display properties
+
      * @returns A promise that resolves to true if the deletion was successful, false otherwise.
+     * 
      */
     async delete(id:string):Promise<boolean> {
 
@@ -214,6 +266,15 @@ export class ActivityListService extends IncyclistService {
         }
     }
 
+    /**
+     * Is used by the UI to mark and activity as selected 
+     * 
+     * If the activity is not complete yet (i.e. its details are not available yet), it will load the details from repo.
+     * 
+     * @param id The unique ID of the activity to be selected.
+     * 
+     * @returns true if the activity has been selected, false otherwise.
+     **/
     select (id:string):boolean {
         const selected = this.getActivity(id)
 
@@ -228,14 +289,42 @@ export class ActivityListService extends IncyclistService {
         return false
     }
 
+    /**
+     * @returns the currently selected activity. If no activity is selected, it returns undefined.
+     * 
+     */
     getSelected():Activity {
         return this.selected
     }
 
-    openSelected():SelectedActivityDisplayProperties { 
+    /**
+     * Retrieves the properties to be rendered when showing the currently selected activity.
+     * in the ActivityDetails dialog
+     * 
+     * If no activity is selected, it returns an object with title and error properties.
+     * If an activity is selected, it returns an object with the following properties:
+     * 
+     * @property title The title of the activity
+     * @property distance The distance of the activity
+     * @property duration The duration of the activity
+     * @property elevation The total elevation gain of the activity
+     * @property startPos The start position of the activity (only if no segment was selected)
+     * @property segment The selected route segment
+     * @property started The start time of the activity
+     * @property showMap Whether the map should be shown or not
+     * @property points The points of the activity
+     * @property activity The activity itself (details record)
+     * @property exports The export status of the activity
+     * @property canStart Whether the activity can be started
+     * @property canOpen Whether the activity can be opened (i.e. it is a route)
+     * @property uploads The upload status of the activity
+     * 
+     * @returns an object with the properties above
+     */
+    openSelected():SelectedActivityResponse { 
 
         if (!this.selected) {
-            const props:ActivityErrorDisplayProperties = {title:'Activity', error:'Activity not found'}
+            const props:ActivityErrorDisplayProperties = {title:'Activity', error:'No activity selected'}
             return props
         }
 
@@ -244,7 +333,7 @@ export class ActivityListService extends IncyclistService {
 
         const points = activity.logs.map( p => ({lat:p.lat,lng:p.lng??p.lon}) )
 
-        const props:ActivityDisplayProperties = {
+        const props:SelectedActivityDisplayProperties = {
             title: this.selected.getTitle(),
             distance: activity.distance,
             duration: activity.time,
@@ -255,7 +344,6 @@ export class ActivityListService extends IncyclistService {
             showMap: true,
             points,
             activity, 
-            stats: activity.stats,
             exports: this.selected.getExports(),
             canStart: this.selected.canStart(),
             canOpen: this.selected.isRouteAvailable(),
@@ -263,12 +351,20 @@ export class ActivityListService extends IncyclistService {
         }
 
         return props
-
-
     }
 
+    /**
+     * 
+     * Prepares an activity to be started again
+     * 
+     * This method should be called by the UI before switching to the ride page
+     * 
+     * The route and start settings will be copied from the currently selected activity
+     * 
+     * @returns true if the activity could be started, false otherwise
+     */
     rideAgain():boolean {
-        if (!this.selected?.canStart()) {
+        if (!this.getSelected()?.canStart()) {
             return false    
         }
 
@@ -281,52 +377,88 @@ export class ActivityListService extends IncyclistService {
         return true;
     }
 
+    /**
+     * Prepares an activity to be opened in the RouteDetailsDialog
+     * 
+     * get the details of the currently selected activity
+     * 
+     * The route and start settings will be copied from the currently selected activity
+     * 
+     * @returns the RouteCard that was prepared, or null if no activity was selected
+     */
     openRoute():RouteCard {
-        const startStettings = this.selected.createStartSettings()
-        const card = this.selected.getRouteCard()
+        if (!this.getSelected()) {
+            return null            
+        }
+
+        const startStettings = this.getSelected().createStartSettings()
+        const card = this.getSelected().getRouteCard()
         card.changeSettings(startStettings)
         return card
     }
 
+    /**
+     * Resets the selected activity to null
+     * 
+     * This method should be called by the UI when the ActivityDetailsDialog is closed
+     * 
+     * @param keepSelected if true, the selected activity will not be reset
+     */
     closeSelected(keepSelected?:boolean):void {
         if (!keepSelected)
             this.selected = null
     }
 
 
+    /**
+     * Searches the repository for activities that match the given search criteria.
+     * 
+     * For each activity that matches, it will also load the details of the activity.
+     * It will filter out all activities where the details could not be loaded
+     * 
+     * This method will primarily be called by the RideService to prepare the list of previous rides of the same route
+     * 
+     * @param filter The search criteria to search for
+     * 
+     * @returns an array of ActivityInfo objects, sorted by the start time of the activity in descending order
+     */
     async getPastActivitiesWithDetails( filter:ActivitySearchCriteria): Promise<Array<ActivityInfo>> {
         try {
             const activities  = this.getRepo().search(filter) ?? []
-            const promises = []
-            
+
+            const promises = []            
             activities.forEach( ai => {
-                promises.push(this.getRepo().getWithDetails(ai.summary.id))
-            })
-            
+                promises.push(this.loadDetails(ai))
+            })            
             await Promise.allSettled(promises)
-            
-            
-            const res = activities.filter( a => a.details!==undefined && a.details!==null )
-                    
-            return res
+                        
+            return activities.filter( a => a.details!==undefined && a.details!==null )
         }
-        catch(err) {
+        catch(err) /* istanbul ignore next */ {
             this.logError(err,'getPastActivitiesWithDetails')
             return []
         }
     }
 
+    protected getPastActivities(): Array<ActivityInfo> {       
+
+        try {
+            const activities  = this.getRepo().search(this.filter) ?? []
+            return activities.sort( (a,b) => b.summary?.startTime - a.summary?.startTime )
+        }
+        catch(err) {
+            this.logError(err,'getPastActivities')
+            return []
+        }
+
+    }
 
     protected async loadActivities():Promise<void> {
 
-        return new Promise<void> ( done => {
+        return new Promise<void> ( (done,reject) => {
             const observer = this.getRepo().load()
-            //const add = this.add.bind(this)
-            //const update = this.update.bind(this)
-    
-            //observer.on('added',add)
-            //observer.on('updated',update)
             observer.on('done',done)
+            observer.on('error',reject)
         })
     }
 
@@ -341,12 +473,17 @@ export class ActivityListService extends IncyclistService {
 
     }
 
+    protected async preloadDetails(cnt?:number):Promise<void> {
 
-    protected getRepo():ActivitiesRepository {
-        if (!this.repo)
-            this.repo = new ActivitiesRepository()
-        return this.repo            
+        if (!cnt)
+            return;
+
+        const promises = (this.getRepo().search({})??[]).filter( (a,i)=> i<cnt).map( a=>this.loadDetails(a))
+
+        await Promise.allSettled(promises)
     }
+
+
 
     protected get activities (): Array<ActivityInfo> {
         return this.getRepo().getAll()
@@ -359,16 +496,21 @@ export class ActivityListService extends IncyclistService {
 
     protected getListDisplayProperties():ActivityListDisplayProperties {
         
-        const activities = this.getPastActivities()
+        
+        const loading = this.isStillLoading()
+        const observer = loading ? this.observer : undefined
+        const activities = loading ? undefined : this.getPastActivities()
         const filter = this.filter
-        return {filter,activities}
+
+
+        return {filter,activities ,loading, observer}
     }
 
     protected emitLists( event:'loaded'|'updated') {
         try {
-            
-            if (this.observer)
+            if (this.observer) {
                 this.observer.emit(event,this.getListDisplayProperties())
+            }
     
         }
         catch(err) {
@@ -376,6 +518,15 @@ export class ActivityListService extends IncyclistService {
 
         }
     }
+
+
+    @Injectable
+    protected getRepo():ActivitiesRepository /* istanbul ignore next */{
+        if (!this.repo)
+            this.repo = new ActivitiesRepository()
+        return this.repo            
+    }
+
 
 }
 

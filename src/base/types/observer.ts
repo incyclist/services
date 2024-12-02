@@ -68,8 +68,7 @@ export class PromiseObserver<T> extends Observer {
     }
 
     async start():Promise<T> {
-        await waitNextTick()
-        
+       
         return new Promise(  (resolve,reject) => {
             this.emitter.emit('started')
 
@@ -90,10 +89,13 @@ export class PromiseObserver<T> extends Observer {
 
     async wait():Promise<T> {
         try {
-            return await this.promise
+            const res = await this.promise
+            await waitNextTick()
+            return res
         }
         catch {
             // ignore
+            await waitNextTick()
         }
     }
 
