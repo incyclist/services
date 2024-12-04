@@ -232,7 +232,7 @@ export class RouteListService extends IncyclistService {
 
     private applyTitleFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
         if (filters.title?.length) {
-            routes = routes.filter(r => r.title.toUpperCase().includes(filters.title.toUpperCase()));
+            routes = routes.filter(r => r.title?.toUpperCase()?.includes(filters.title.toUpperCase()));
         }
         return routes;
     }
