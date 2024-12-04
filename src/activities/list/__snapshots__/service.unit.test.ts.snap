@@ -1,0 +1,31 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`ActivityListService openSelected normal 1`] = `
+{
+  "canOpen": true,
+  "canStart": undefined,
+  "distance": 103.5223967660755,
+  "duration": 28.884,
+  "elevation": 5,
+  "exports": [
+    {
+      "file": "/mnt/c/temp/Incyclist/activities/Incyclist Ride-20241128153550.json",
+      "type": "json",
+    },
+    {
+      "file": "/mnt/c/temp/Incyclist/activities/Incyclist Ride-20241128153550.tcx",
+      "type": "tcx",
+    },
+    {
+      "file": "/mnt/c/temp/Incyclist/activities/Incyclist Ride-20241128153550.fit",
+      "type": "fit",
+    },
+  ],
+  "segment": undefined,
+  "showMap": true,
+  "startPos": 6900,
+  "started": 2024-11-28T14:35:50.612Z,
+  "title": "Menglonnais",
+  "uploads": [],
+}
+`;

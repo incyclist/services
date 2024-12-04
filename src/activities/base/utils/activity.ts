@@ -1,4 +1,4 @@
-import { PromiseObserver } from "../../../base/types";
+import { Observer, PromiseObserver } from "../../../base/types";
 import { useRouteList } from "../../../routes";
 import { DisplayExportInfo, DisplayUploadInfo, ActivityUploadStatus } from "../../list";
 import { ActivityInfo, DEFAULT_ACTIVITY_TITLE } from "../model";
@@ -7,14 +7,21 @@ import { getBindings } from "../../../api";
 import { RouteCard, RouteSettings } from "../../../routes/list/cards/RouteCard";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../../monitoring";
 import { useAppsService } from "../../../apps";
+import { Injectable } from "../../../base/decorators/Injection";
+import { ActivityConverter } from "../convert";
+import { ActivityUploadFactory } from "../../upload";
+import { EventLogger } from "gd-eventlog";
 
 export class Activity implements ActivityInfo{
     
     protected loadingObserver: PromiseObserver<void>
+    protected currentExports: Record<string,boolean>={}
+    protected currentUploads: Record<string,boolean>={}
+    protected logger:EventLogger
 
     constructor(protected info:ActivityInfo)  {
         this.info = info
-
+        this.logger = new EventLogger('Activity')
         const ver = Number(this.info?.details?.version??"0")
         if (ver<Number(DB_VERSION)) { 
             this.getRepo().migrate(this.info)
@@ -49,7 +56,7 @@ export class Activity implements ActivityInfo{
     }
 
     isLoading() {
-        return this.loadingObserver!==null
+        return this.loadingObserver!==null && this.loadingObserver!==undefined
     }
 
     async load():Promise<void> {
@@ -111,18 +118,116 @@ export class Activity implements ActivityInfo{
         formats.forEach( type => {
             const details = this.details??{}
 
-            const file=details[`${type}FileName`] ?? fileName?.replace('.json','.tcx')
+            const file=details[`${type}FileName`] ?? fileName?.replace('.json',`.${type}`)
 
-            const fs = getBindings().fs
+            const fs = this.getBindings().fs
+
             if (fs.existsSync(file) )
                 exports.push({type,file})
             else 
-                exports.push({type})
+                exports.push({type,creating:this.isExporting(type)})
         })
 
         return exports
 
     }
+
+    markExporting(type:string,exporting:boolean) {
+        this.currentExports[type] = exporting
+    }
+    isExporting(type:string):boolean {
+        return this.currentExports[type] 
+    }
+
+    async export(type:string,observer?:Observer):Promise<boolean> {
+
+        const format = type.toLowerCase()
+        const fs = this.getBindings().fs
+        let success = false;
+        let error
+
+        this.markExporting(format,true)
+        if (observer) {
+            observer.emit('export',{status:'started',format})
+        }
+
+        try {
+            let data
+            const converter = this.getActivityConverter()
+            data = await converter.convert(this.details,format)
+            
+            const fileName = this.details.fileName.replace('.json',`.${format}`)
+            await fs.writeFile(fileName, Buffer.from (data ))   
+            this.details[`${format}FileName`] = fileName
+
+            await this.save(true)
+            success = true
+        }
+        catch(err) {
+            this.logError(err,'export')
+            error = err.message
+        }
+
+
+        this.markExporting(format,false)
+        if (observer) {
+            observer.emit('export',{status:'done',format,success,error})
+        }
+        return success
+    }
+
+    async upload(connectedApp:string,observer?:Observer):Promise<boolean> {  
+        let success = false
+        let error
+        const factory =  this.getActivityUploadFactory()
+        let exports = this.getExports().filter( e => e.type !== 'json')
+        let format  = exports.find( e => e.file!==undefined)?.type
+        
+        this.markUploading(connectedApp,true)
+        if (observer) {
+            observer.emit('upload',{status:'started',connectedApp})
+        }
+        // we don't have yet an uploadable formart, so let's export some
+        if (!format) {
+            const exportPromises = []
+            exports.forEach( e => {
+                exportPromises.push( this.export(e.type,observer))
+            })
+            await Promise.allSettled(exportPromises)
+
+            // let's re-check if we now have an uploadable format
+            exports = this.getExports().filter( e => e.type !== 'json')
+            format  = exports.find( e => e.file!==undefined)?.type
+        }
+        
+        if (format) {
+            try {
+                const uploader = factory.get(connectedApp)
+
+                
+                success = await uploader.upload(this.details, format.toLowerCase())               
+
+                await this.save(true)
+            }
+            catch(err) {
+                this.logError(err,'upload')
+            }
+        }
+
+        this.markUploading(connectedApp,false)
+        if (observer) {
+            observer.emit('upload',{status:'done',connectedApp,success,error})
+        }
+        return success
+    }
+
+    markUploading(connectedApp:string,uploading:boolean) {
+        this.currentUploads[connectedApp] = uploading
+    }
+    isUploading(connectedApp:string):boolean {
+        return this.currentUploads[connectedApp] 
+    }
+
 
     isRouteAvailable() {
         if (!this.details?.route) return false
@@ -130,7 +235,7 @@ export class Activity implements ActivityInfo{
         if (this.details.routeType==='Free-Ride')
             return false
 
-        return useRouteList().getRouteDescription(this.details.route.id)!==undefined
+        return this.getRouteList().getRouteDescription(this.details.route.id)!==undefined
     }
 
     getUploadStatus():Array<DisplayUploadInfo>  {
@@ -148,7 +253,7 @@ export class Activity implements ActivityInfo{
             }            
 
             uploads.push({
-                type:service.key,status
+                type:service.key,status, url:info?.url,text:service.name, synchronizing:this.isUploading(service.key)
             })    
         })
 
@@ -205,17 +310,45 @@ export class Activity implements ActivityInfo{
         return useOnlineStatusMonitoring()
     }
 
-    protected save():Promise<void> {
-        return this.getRepo().save(this.info)        
+    protected save(withDetails?:boolean):Promise<void> {
+
+        console.log('~~~ SAVE REPO', this.info,withDetails)
+        return this.getRepo().save(this.info,withDetails)        
+    }
+
+    protected logError(err:Error, fn:string) {
+        this.logger.logEvent({message:'error', error:err.message, fn, stack:err.stack})
     }
 
     // 
 
+    @Injectable
     protected getRepo():ActivitiesRepository {
         return new ActivitiesRepository()            
     }
+    @Injectable
     protected getAppsService() {
         return useAppsService()
     } 
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
+    }
+
+    @Injectable 
+    protected getRouteList() {
+        return useRouteList()
+    }
+
+    @Injectable
+    protected getActivityConverter() {
+        return ActivityConverter
+    }
+
+    @Injectable
+    protected getActivityUploadFactory() /* istanbul ignore next */ {
+        return new ActivityUploadFactory()
+    }
 
 }

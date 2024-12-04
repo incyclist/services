@@ -12,6 +12,12 @@ export interface VeloHeroAuth extends Credentials {
     version?: string    
 }
 
+export interface StravaAuth  {
+    accesstoken?: string;
+    refreshtoken?: string;    
+    expiration?: string    
+}
+
 export type UploaderInfo = {
     service: string;
     uploader: IActivityUpload
