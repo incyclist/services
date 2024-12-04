@@ -573,7 +573,6 @@ export class ActivityListService extends IncyclistService {
     protected emitSelected(event:'loaded'|'updated') { 
         
         const displayProps =this.getSelectedActivityDisplayProps()
-        console.log('~~~~ emitSelected',event,displayProps)
         this.getObserver()?.emit(event, displayProps)                
     }
 
