@@ -154,7 +154,7 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
                 this.getApi().update(config)
             }
             else {
-                const observer = this.initApi(config)
+                this.initApi(config)
                 this.saveCredentials(config)
             }
 

@@ -1,9 +1,4 @@
 export const Injectable = (target:any, descriptor: any) =>{
-
-    //let set = descriptor.set!;
-
-    //console.log('Injectable before',target, descriptor);
-
     if (descriptor.kind==='method') {
 
         const original = target
@@ -16,9 +11,6 @@ export const Injectable = (target:any, descriptor: any) =>{
 
         }
     }
-
-    //console.log('Injectable after',target, descriptor);
-    
 }
 
 class Container{
