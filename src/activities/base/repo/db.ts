@@ -93,10 +93,12 @@ export class ActivitiesRepository {
         if (changed) {
             this.isDirty = true;
             this.write()
-            if (writeDetails) {
-                this.writeDetails(activity)
-            }    
         }
+
+        if (writeDetails) {
+            this.writeDetails(activity)
+        }    
+
 
     }
 

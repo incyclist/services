@@ -7,6 +7,7 @@ import { ActivityListService } from "./service"
 import { ActivityListDisplayProperties } from "./types"
 import SampleDetails from '../../../__tests__/data/activities/v3.json'
 import { sleep } from "../../utils/sleep"
+import { RouteInfo } from "../../routes/base/types"
 
 const MockActivitySummary = (id):ActivitySummary=> ({
     id,
@@ -296,7 +297,7 @@ describe('ActivityListService',()=>{
             const details = res.activities?.map( a => a.details ).filter( s => s!==undefined )??[]
             expect(details.length).toBe(0)
 
-            const observer = service.getListObserver()
+            const observer = service.getObserver()
             expect(res.observer).toBe(observer)
 
             const finalize = ():Promise<ActivityListDisplayProperties|undefined> => new Promise(done=>{
@@ -316,7 +317,7 @@ describe('ActivityListService',()=>{
             await service.preload().wait()
 
             service.openList()       
-            const observer1 = service.getListObserver()
+            const observer1 = service.getObserver()
             expect(service.getListTop()).toBeUndefined()
 
             service.setListTop(100)
@@ -324,7 +325,7 @@ describe('ActivityListService',()=>{
 
 
             service.openList()       
-            const observer2 = service.getListObserver()
+            const observer2 = service.getObserver()
             expect(service.getListTop()).toBeUndefined()
 
             expect(observer1).not.toBe(observer2)
@@ -345,7 +346,7 @@ describe('ActivityListService',()=>{
         test('details not yet loaded and available',async ()=>{
             const mocks = setupMocks({repo:RepoMock({cntEntries:5}),initialized:true,listOpened:true})
             
-            const listObserver = service.getListObserver()
+            const listObserver = service.getObserver()
             const listSpy = jest.fn()
             listObserver.on('loaded',listSpy)
             listObserver.on('updated',listSpy)
@@ -371,7 +372,7 @@ describe('ActivityListService',()=>{
             const mocks = setupMocks({repo:db.mock,initialized:true,listOpened:true})
             
 
-            const listObserver = service.getListObserver()
+            const listObserver = service.getObserver()
             const listSpy = jest.fn()
             listObserver.on('loaded',listSpy)
             listObserver.on('updated',listSpy)
@@ -396,7 +397,7 @@ describe('ActivityListService',()=>{
             setupMocks({repo:RepoMock({cntEntries:5,getDetailsError:'XXX'}),initialized:true,listOpened:true})
             
 
-            const listObserver = service.getListObserver()
+            const listObserver = service.getObserver()
             const listSpy = jest.fn()
             listObserver.on('loaded',listSpy)
             listObserver.on('updated',listSpy)
@@ -617,15 +618,21 @@ describe('ActivityListService',()=>{
 
         test('route can be started',async ()=>{
             const target = service.getSelected()
+            const route:Partial<RouteInfo> = {
+                title:'TITLE',
+                id:'123',
+                videoUrl:'some URL',
+            }
             target.canStart = jest.fn().mockReturnValue(true)
             target.getRouteCard = jest.fn().mockReturnValue({
                 changeSettings: jest.fn(),
                 start:jest.fn(),
-                getCardType:jest.fn().mockReturnValue('Video')
+                getCardType:jest.fn().mockReturnValue('Video'),
+                getRouteDescription:jest.fn().mockReturnValue(route)
             })
 
-            const started = service.rideAgain()
-            expect(started).toBe(true)
+            const {canStart} = service.rideAgain()
+            expect(canStart).toBe(true)
 
             const card = target.getRouteCard()
             expect(target.canStart).toHaveBeenCalledTimes(1)            
@@ -642,8 +649,8 @@ describe('ActivityListService',()=>{
                 getCardType:jest.fn().mockReturnValue('Video')
             })
 
-            const started = service.rideAgain()
-            expect(started).toBe(false)
+            const {canStart} = service.rideAgain()
+            expect(canStart).toBe(false)
 
             const card = target.getRouteCard()
             expect(target.canStart).toHaveBeenCalledTimes(1)            
@@ -654,11 +661,155 @@ describe('ActivityListService',()=>{
         test('no route selected',async ()=>{
 
             service.getSelected = jest.fn().mockReturnValue(null)
-            const started = service.rideAgain()
-            expect(started).toBe(false)
+            const {canStart} = service.rideAgain()
+            expect(canStart).toBe(false)
         })    
 
     })
+
+
+    describe('export',()=>{
+
+        const O = (o)=>expect.objectContaining(o)
+        const mockExport= (success,error?) =>{
+
+            return async (format,observer):Promise<boolean> => {
+                if (observer)
+                    observer.emit('export',{status:'started',format})
+    
+                await waitNextTick()
+                if (observer) {
+                    observer.emit('export',{status:'done',format,success,error})
+                }
+                return success                    
+            }
+            
+        }
+        
+        beforeEach( async ()=>{
+            service = new ActivityListService()
+
+            const db = new RepoMockClass({cntEntries:5,repoDelay:100})
+            db.activities[1].details = SampleDetails as unknown as ActivityDetails    
+            const selected = db.activities[1]
+            setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
+        })
+
+        afterEach( ()=>{
+            cleanupMocks()
+            service.reset()
+        })
+
+
+        test('successfull export',async ()=>{
+            const target = service.getSelected()
+            const route:Partial<RouteInfo> = {
+                title:'TITLE',
+                id:'123',
+            }
+            
+            target.export = jest.fn(mockExport(true) )
+            const observer = service.getObserver()
+            const updatedSpy = jest.fn()
+            observer.on('updated',updatedSpy)
+
+            const success = await service.export('tcx')
+            expect(success).toBe(true)
+            expect(target.export).toHaveBeenCalledWith('tcx',expect.any(Observer))
+            expect(updatedSpy).toHaveBeenCalledTimes(2)            
+        })    
+
+        test('export fails',async ()=>{
+            const target = service.getSelected()
+            const route:Partial<RouteInfo> = {
+                title:'TITLE',
+                id:'123',
+            }
+            
+            target.export = jest.fn(mockExport(false,'XXX') )
+            const observer = service.getObserver()
+            const updatedSpy = jest.fn()
+            observer.on('updated',updatedSpy)
+
+            const success = await service.export('fit')
+            expect(success).toBe(false)
+            expect(target.export).toHaveBeenCalledWith('fit',expect.any(Observer))
+            expect(updatedSpy).toHaveBeenCalledTimes(2)            
+        })    
+    })    
+
+    describe('upload',()=>{
+
+        const O = (o)=>expect.objectContaining(o)
+        const mockUpload= (success,error?) =>{
+
+            return async (connectedApp:string,observer:Observer):Promise<boolean> => {
+                if (observer)
+                    observer.emit('upload',{status:'started',connectedApp})
+    
+                await waitNextTick()
+                if (observer) {
+                    observer.emit('upload',{status:'done',connectedApp,success,error})
+                }
+                return success                    
+            }
+            
+        }
+        
+        beforeEach( async ()=>{
+            service = new ActivityListService()
+
+            const db = new RepoMockClass({cntEntries:5,repoDelay:100})
+            db.activities[1].details = SampleDetails as unknown as ActivityDetails    
+            const selected = db.activities[1]
+            setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
+        })
+
+        afterEach( ()=>{
+            cleanupMocks()
+            service.reset()            
+        })
+
+
+        test('successfull upload',async ()=>{
+            const target = service.getSelected()
+            const route:Partial<RouteInfo> = {
+                title:'TITLE',
+                id:'123',
+            }
+            
+            target.upload = jest.fn(mockUpload(true) )
+            const observer = service.getObserver()
+            const updatedSpy = jest.fn()
+            observer.on('updated',updatedSpy)
+
+            const success = await service.upload('strava')
+            expect(success).toBe(true)
+            expect(target.upload).toHaveBeenCalledWith('strava',expect.any(Observer))
+            expect(updatedSpy).toHaveBeenCalledTimes(2)            
+        })    
+
+        test('upload fails',async ()=>{
+            const target = service.getSelected()
+            const route:Partial<RouteInfo> = {
+                title:'TITLE',
+                id:'123',
+            }
+            
+            target.upload = jest.fn(mockUpload(false,'XXX') )
+            const observer = service.getObserver()
+            const updatedSpy = jest.fn()
+            observer.on('updated',updatedSpy)
+
+            const success = await service.upload('strava')
+            expect(success).toBe(false)
+            expect(target.upload).toHaveBeenCalledWith('strava',expect.any(Observer))
+            expect(updatedSpy).toHaveBeenCalledTimes(2)            
+        })    
+    })    
+
+
+
     describe('openRoute',()=>{
 
         const O = (o)=>expect.objectContaining(o)
@@ -715,9 +866,10 @@ describe('ActivityListService',()=>{
             service.reset()
         })
 
-        test('delete successfull',async ()=>{
+        test('delete from list successfull',async ()=>{
             const mocks = setupMocks({repo:RepoMock({cntEntries:5})})
             await service.preload().wait()
+            service.openList()
 
             let updated:ActivityListDisplayProperties = {}
 
@@ -726,7 +878,7 @@ describe('ActivityListService',()=>{
                 updated = data
             })
 
-            const observer = service.getListObserver()
+            const observer = service.getObserver()
             observer.on('updated',updatedSpy)
             const success =  await service.delete('activity-1')
             expect(success).toBe(true)
@@ -737,7 +889,28 @@ describe('ActivityListService',()=>{
             expect(updated.loading).toBe(false)
           
         })
+
+        test('delete successfull',async ()=>{
+            const mocks = setupMocks({repo:RepoMock({cntEntries:5})})
+            await service.preload().wait()
+            service.openSelected()
+            let updated:ActivityListDisplayProperties = {}
+
             
+            const updatedSpy = jest.fn( (data) => {
+                updated = data
+            })
+
+            const observer = service.getObserver()
+            observer.on('updated',updatedSpy)
+            const success =  await service.delete('activity-1')
+            expect(success).toBe(true)
+
+
+            expect(updatedSpy).not.toHaveBeenCalled()
+          
+        })
+
         test('delete error',async ()=>{
             const mocks = setupMocks({repo:RepoMock({cntEntries:5, deleteError:'XXX'})})
             await service.preload().wait()
@@ -749,7 +922,7 @@ describe('ActivityListService',()=>{
                 updated = data
             })
 
-            const observer = service.getListObserver()
+            const observer = service.getObserver()
             observer.on('updated',updatedSpy)
 
             const success =  await service.delete('activity-1')

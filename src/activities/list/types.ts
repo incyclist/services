@@ -1,5 +1,6 @@
 import { Avatar } from "../../avatars";
 import { Observer } from "../../base/types";
+import { RouteInfo } from "../../routes/base/types";
 import { ActivityDetails, ActivityInfo, ActivitySearchCriteria, ActivityStats } from "../base";
 
 export type PastActivityLogEntry = {
@@ -58,14 +59,13 @@ export interface SelectedActivityDisplayProperties extends SelectedActivityRespo
     canStart: boolean
     canOpen: boolean,
     uploads: Array<DisplayUploadInfo> 
-
-
 }
 
 
 export type DisplayExportInfo = {
     type: string,
     file?: string
+    creating?: boolean
 }
 
 export type ActivityUploadStatus  = 'success' | 'failed' | 'unknown'
@@ -73,6 +73,8 @@ export type DisplayUploadInfo = {
     type: string,
     url?: string,
     status: ActivityUploadStatus
+    text?: string
+    synchronizing?: boolean
 }
 
 export interface ActivityDisplayProperties extends SelectedActivityDisplayProperties {
@@ -91,4 +93,9 @@ export interface ActivityDisplayProperties extends SelectedActivityDisplayProper
     canStart: boolean
     canOpen: boolean
     
+}
+
+export type RideAgainResponse = {
+    canStart: boolean
+    route?:RouteInfo
 }

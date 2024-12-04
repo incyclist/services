@@ -6,7 +6,8 @@ import { RouteCard } from "../../routes/list/cards/RouteCard";
 import { waitNextTick } from "../../utils";
 import { ActivitiesRepository, Activity, ActivitySearchCriteria } from "../base";
 import { ActivityInfo } from "../base/model";
-import { ActivityErrorDisplayProperties, ActivityListDisplayProperties, SelectedActivityDisplayProperties, SelectedActivityResponse } from "./types";
+import { ActivityUploadFactory } from "../upload";
+import { ActivityErrorDisplayProperties, ActivityListDisplayProperties, RideAgainResponse, SelectedActivityDisplayProperties, SelectedActivityResponse } from "./types";
 
 /**
  * This service is used by the Front-End to manage and query the current and past activities
@@ -38,15 +39,15 @@ import { ActivityErrorDisplayProperties, ActivityListDisplayProperties, Selected
 @Singleton
 export class ActivityListService extends IncyclistService {
 
-    protected preloadObserver: PromiseObserver<void>;
     protected initialized: boolean
     protected repo:ActivitiesRepository 
 
-    protected observer: Observer
+    protected observers:Record<string,Observer>={}
     protected filter:ActivitySearchCriteria
 
     protected selected:Activity
     protected listTop:number
+    protected opened?:'list'|'selected'
 
     constructor() {
         super('ActivityList')
@@ -69,18 +70,20 @@ export class ActivityListService extends IncyclistService {
      */
 
     preload(props?:{cntDetails?:number}):PromiseObserver<void> {
+
+        let preloadObserver:PromiseObserver<void> = this.getPreloadObserver()
         try {
             // avoid parallel preloads
-            if (!this.preloadObserver) {
+            if (!preloadObserver) {
                 this.logEvent( {message:'preload activity list'})
 
                 // load the summary records
                 const promise = this.loadActivities()
-                this.preloadObserver = new PromiseObserver<void>( promise )
-                if (this.observer) 
-                    this.observer.emit('loading')
+                preloadObserver = this.observers.preload = new PromiseObserver<void>( promise )
+                if (this.getListObserver()) 
+                    this.getListObserver().emit('loading')
     
-                this.preloadObserver.start()
+                preloadObserver.start()
                     .then( ()=> { 
                         // load the required detail records and inform the UI
                         this.preloadDetails(props?.cntDetails).then( ()=>{
@@ -90,16 +93,15 @@ export class ActivityListService extends IncyclistService {
                             this.initialized = true
                             this.emitLists('loaded')
                                                         
-                            process.nextTick( ()=>{delete this.preloadObserver})
+                            process.nextTick( ()=>{delete this.observers.preload})
     
                         })
                     })
                     .catch( (err)=> {
-                        console.log(new Date().toISOString() + ' - preload activity list error')
                         this.logError(err,'preload')
 
                         this.initialized = false
-                        process.nextTick( ()=>{delete this.preloadObserver})
+                        process.nextTick( ()=>{delete this.observers.preload})
                     })
             }
             else {
@@ -112,7 +114,7 @@ export class ActivityListService extends IncyclistService {
         catch(err) /* istanbul ignore next */ {
             this.logError(err,'preload')
         }
-        return this.preloadObserver
+        return preloadObserver
     }
 
     /**
@@ -125,8 +127,10 @@ export class ActivityListService extends IncyclistService {
      */
     openList():ActivityListDisplayProperties {
 
+        this.opened = 'list'
+
         // ensure that the observer exists or is created
-        this.getListObserver()
+        this.getObserver()
 
         if (!this.initialized)
             this.preload()
@@ -165,10 +169,13 @@ export class ActivityListService extends IncyclistService {
      * @emits loaded    loading has been completed, provides lists as parameter
      * @emits updated   lists have been updated, provides lists as first parameter, provides a hash as 2nd paramter (allows UI to only refresh if hash has changed)
      */
-    getListObserver():Observer {
-        if (!this.observer)
-            this.observer = new Observer()
-        return this.observer        
+    getObserver():Observer {
+        const uiElement = this.opened
+        
+        if (!this.observers[uiElement])
+            this.observers[uiElement] = new Observer()
+            
+        return this.observers[uiElement]
     }
 
     /**
@@ -178,12 +185,12 @@ export class ActivityListService extends IncyclistService {
      * to ensure proper resource management.
      */
     closeList():void {
-        if (this.observer) {
-            this.observer.stop()
-            delete this.observer
+        if (this.getListObserver()) {
+            this.getListObserver().stop()
+            delete this.observers.list
         }
         delete this.listTop
-
+        delete this.opened
     }
 
     /**
@@ -294,7 +301,7 @@ export class ActivityListService extends IncyclistService {
      * 
      */
     getSelected():Activity {
-        return this.selected
+        return this.selected        
     }
 
     /**
@@ -328,29 +335,14 @@ export class ActivityListService extends IncyclistService {
             return props
         }
 
+        this.opened = 'selected'
+
+        // needs to be called to initialize the observer
+        this.getObserver()
+
+        return this.getSelectedActivityDisplayProps();
+
         
-        const activity = this.selected.details
-
-        const points = activity.logs.map( p => ({lat:p.lat,lng:p.lng??p.lon}) )
-
-        const props:SelectedActivityDisplayProperties = {
-            title: this.selected.getTitle(),
-            distance: activity.distance,
-            duration: activity.time,
-            elevation: this.selected.getElevation(),
-            startPos: activity.segment ? undefined : activity.startPos,
-            segment:  activity.segment,
-            started: new Date(activity.startTime),
-            showMap: true,
-            points,
-            activity, 
-            exports: this.selected.getExports(),
-            canStart: this.selected.canStart(),
-            canOpen: this.selected.isRouteAvailable(),
-            uploads: this.selected.getUploadStatus()
-        }
-
-        return props
     }
 
     /**
@@ -363,18 +355,49 @@ export class ActivityListService extends IncyclistService {
      * 
      * @returns true if the activity could be started, false otherwise
      */
-    rideAgain():boolean {
+    rideAgain():RideAgainResponse {
+
         if (!this.getSelected()?.canStart()) {
-            return false    
+            return {canStart:false}    
         }
 
         const startStettings = this.selected.createStartSettings()
-        const card = this.selected.getRouteCard()
+        const card = this.selected.getRouteCard() 
+
+        const route = card.getRouteDescription()
 
         
         card.changeSettings(startStettings)
         card.start()
-        return true;
+        return {canStart:true, route};
+    }
+
+    async export(format:string):Promise<boolean> {
+        const activity = this.getSelected()
+        if (!activity){
+            return false;
+        }
+
+        const emitUpdate = ()=>{this.emitSelected('updated')}
+        const observer = new Observer()
+        observer.on('export', emitUpdate)
+
+        return await activity.export(format,observer)
+
+    }
+
+    async upload(connectedApp:string):Promise<boolean> {  
+        const activity = this.getSelected()
+        if (!activity){
+            return false;
+        }
+
+        const emitUpdate = ()=>{this.emitSelected('updated')}
+        const observer = new Observer()
+        observer.on('upload', emitUpdate)
+        observer.on('export', emitUpdate)
+
+        return await activity.upload(connectedApp,observer)
     }
 
     /**
@@ -397,6 +420,8 @@ export class ActivityListService extends IncyclistService {
         return card
     }
 
+
+
     /**
      * Resets the selected activity to null
      * 
@@ -407,6 +432,14 @@ export class ActivityListService extends IncyclistService {
     closeSelected(keepSelected?:boolean):void {
         if (!keepSelected)
             this.selected = null
+        
+        const observer = this.getObserver()
+        if (observer) {
+            observer.stop()
+            this.observers.selected = null
+        }
+
+        delete this.opened 
     }
 
 
@@ -451,6 +484,13 @@ export class ActivityListService extends IncyclistService {
             return []
         }
 
+    }
+
+    protected getListObserver() {
+        return this.observers.list
+    }
+    protected getPreloadObserver():PromiseObserver<void> {
+        return this.observers.preload as PromiseObserver<void>
     }
 
     protected async loadActivities():Promise<void> {
@@ -498,7 +538,7 @@ export class ActivityListService extends IncyclistService {
         
         
         const loading = this.isStillLoading()
-        const observer = loading ? this.observer : undefined
+        const observer = loading ? this.getListObserver() : undefined
         const activities = loading ? undefined : this.getPastActivities()
         const filter = this.filter
 
@@ -506,10 +546,43 @@ export class ActivityListService extends IncyclistService {
         return {filter,activities ,loading, observer}
     }
 
+    private getSelectedActivityDisplayProps() {
+        const activity = this.selected.details;
+
+        const points = activity.logs.map(p => ({ lat: p.lat, lng: p.lng ?? p.lon }));
+
+        const props: SelectedActivityDisplayProperties = {
+            title: this.selected.getTitle(),
+            distance: activity.distance,
+            duration: activity.time,
+            elevation: this.selected.getElevation(),
+            startPos: activity.segment ? undefined : activity.startPos,
+            segment: activity.segment,
+            started: new Date(activity.startTime),
+            showMap: true,
+            points,
+            activity,
+            exports: this.selected.getExports(),
+            canStart: this.selected.canStart(),
+            canOpen: this.selected.isRouteAvailable(),
+            uploads: this.selected.getUploadStatus(),
+        };
+        return props;
+    }
+
+    protected emitSelected(event:'loaded'|'updated') { 
+        
+        const displayProps =this.getSelectedActivityDisplayProps()
+        console.log('~~~~ emitSelected',event,displayProps)
+        this.getObserver()?.emit(event, displayProps)                
+    }
+
+
     protected emitLists( event:'loaded'|'updated') {
         try {
-            if (this.observer) {
-                this.observer.emit(event,this.getListDisplayProperties())
+            const listObserver = this.getListObserver()
+            if (listObserver) {
+                listObserver.emit(event,this.getListDisplayProperties())
             }
     
         }
@@ -521,10 +594,15 @@ export class ActivityListService extends IncyclistService {
 
 
     @Injectable
-    protected getRepo():ActivitiesRepository /* istanbul ignore next */{
+    protected getRepo():ActivitiesRepository /* istanbul ignore next */ {
         if (!this.repo)
             this.repo = new ActivitiesRepository()
         return this.repo            
+    }
+
+    @Injectable
+    protected getActivityUploadFactory() /* istanbul ignore next */ {
+        return new ActivityUploadFactory()
     }
 
 
