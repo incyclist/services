@@ -150,7 +150,7 @@ export class DevicePairingService  extends IncyclistService{
     
             this.initConfigHandlers();  
             this.state.interfaces.forEach( i=> {
-                if (!this.isInterfaceEnabled(i.name))
+                if (!this.isInterfaceEnabled(i.name)  )
                     this.unselectOnInterface(i.name)
                     
             })
@@ -662,6 +662,8 @@ export class DevicePairingService  extends IncyclistService{
         delete state.deleted
         delete state.waiting
 
+        state.interfaces = state.interfaces?.filter( i=>!i.invisible)
+
         return state
     }
 
@@ -894,7 +896,7 @@ export class DevicePairingService  extends IncyclistService{
     protected isInterfaceEnabled(target:string|InterfaceSetting) {
         
         const name = (typeof target ==='string') ? target: target.name; 
-        if(name==='simulator')
+        if(name==='simulator' || name==='wifi')
             return true;
         const {interfaces } = this.state
         return interfaces.find( i=> i.name===name && i.enabled && i.state!=='unavailable')!==undefined

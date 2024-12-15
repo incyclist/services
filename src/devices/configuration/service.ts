@@ -113,6 +113,15 @@ export class DeviceConfigurationService  extends EventEmitter{
             }
         }
 
+        const wifi = this.settings?.interfaces?.find( i=> i.name === 'wifi')
+        if (!wifi)
+            this.settings.interfaces.push( {name:'wifi',enabled:true,invisible:true} )
+        else {
+            const idx = this.settings.interfaces.indexOf(wifi)
+            this.settings.interfaces[idx] = {name:'wifi',enabled:wifi.enabled,invisible:wifi.invisible}
+
+        }
+
         // first time initialization?
         let emptyConfig = false
         if (!this.settings)
@@ -210,6 +219,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         this.settings.interfaces.push( {name:'ant', enabled:true})
         this.settings.interfaces.push( {name:'ble', enabled:true})
+        this.settings.interfaces.push( {name:'wifi', enabled:true,invisible:true})
         this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
         this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
     }
@@ -240,6 +250,7 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         interfaces.push( {name:'ant', enabled:connections?.ant?.enabled||true})
         interfaces.push( {name:'ble', enabled:true})
+        interfaces.push( {name:'wifi', enabled:true, invisible:true})
         interfaces.push( {name:'serial', enabled:get(connections?.serial?.enabled,true),protocol:connections?.serial?.protocols?.find(p=>p.selected).name })
         interfaces.push( {name:'tcpip', enabled:get(connections?.tcpip?.enabled,false),protocol:'Daum Premium', port:51955})
 
