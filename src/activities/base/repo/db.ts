@@ -9,6 +9,7 @@ import { buildSummary } from "../utils";
 import { JSONObject } from "../../../utils/xml";
 import { useRouteList } from "../../../routes";
 import { ActivitiesDBMigratorFactory } from "./migration/factory";
+import { Injectable } from "../../../base/decorators/Injection";
 
 export const DB_VERSION = '4'
 export const DB_NAME = 'db'
@@ -194,7 +195,7 @@ export class ActivitiesRepository {
 
     getFilename(activityName:string):string {
         const baseDir = this.getRepo().getPath()
-        const path = getBindings().path
+        const path = this.getBindings().path
         return path.join(baseDir,`${activityName}.json`)
 
 
@@ -220,6 +221,14 @@ export class ActivitiesRepository {
             this.activities.splice( idx,1)
             this.write(true)
         }
+
+        const tcx = target.details?.tcxFileName
+        if (tcx) this.getBindings().fs.unlink(tcx)
+
+        const fit = target.details?.fitFileName
+        if (fit) this.getBindings().fs.unlink(fit)
+
+
 
         const name=target.summary.name
         await this.getRepo().delete(name)
@@ -687,6 +696,11 @@ export class ActivitiesRepository {
     protected getRouteList()
     {
         return useRouteList()
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 
 }
