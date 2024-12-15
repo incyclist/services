@@ -826,7 +826,7 @@ export class ActivityRideService extends IncyclistService {
             const {startPos,realityFactor} = settings
             const routeId = this.activity.route.id
             const routeHash = this.activity.route.hash
-            const filter = { routeId,routeHash,startPos,realityFactor,minTime:60, minDistance:500}
+            const filter = { routeId,routeHash,startPos,realityFactor,minTime:30, minDistance:500}
 
             useActivityList()
                 .getPastActivitiesWithDetails(filter)
