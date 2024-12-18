@@ -113,15 +113,6 @@ export class DeviceConfigurationService  extends EventEmitter{
             }
         }
 
-        const wifi = this.settings?.interfaces?.find( i=> i.name === 'wifi')
-        if (!wifi)
-            this.settings.interfaces.push( {name:'wifi',enabled:true,invisible:true} )
-        else {
-            const idx = this.settings.interfaces.indexOf(wifi)
-            this.settings.interfaces[idx] = {name:'wifi',enabled:wifi.enabled,invisible:wifi.invisible}
-
-        }
-
         // first time initialization?
         let emptyConfig = false
         if (!this.settings)
@@ -153,6 +144,17 @@ export class DeviceConfigurationService  extends EventEmitter{
                 
             }
         })
+
+        const wifi = this.settings?.interfaces?.find( i=> i.name === 'wifi')
+        if (!wifi) {
+            this.settings.interfaces.push( {name:'wifi',enabled:true,invisible:true} )
+        }
+        else {
+            const idx = this.settings.interfaces.indexOf(wifi)
+            this.settings.interfaces[idx] = {name:'wifi',enabled:wifi.enabled,invisible:wifi.invisible}
+
+        }
+
 
         this.verifyCapabilitySettings()
         this.removeLegacySettings() 

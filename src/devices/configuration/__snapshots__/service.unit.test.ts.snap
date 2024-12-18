@@ -46,6 +46,11 @@ exports[`DeviceConfigurationService init empty configuration 1`] = `
     },
     {
       "enabled": true,
+      "invisible": true,
+      "name": "wifi",
+    },
+    {
+      "enabled": true,
       "name": "serial",
       "protocol": "Daum Classic",
     },

@@ -235,7 +235,7 @@ describe( 'DeviceConfigurationService',()=>{
 
             expect(devices[0].settings.selected).toBeUndefined()
             expect(devices[0].settings.protocol).toBeUndefined()
-            expect(interfaces.length).toBe(4)
+            expect(interfaces.length).toBe(5)
 
             const keys = Object.keys(service.adapters)
             const emptyAdapters = keys.find( k=> service.adapters[k]===undefined)
@@ -294,7 +294,7 @@ describe( 'DeviceConfigurationService',()=>{
             const {devices,capabilities,interfaces} = service.settings
             expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
 
-            expect(interfaces.length).toBe(4)
+            expect(interfaces.length).toBe(5)
             expect(capabilities.length).toBe(5) //  Control, Heartrate, Power, Cadence, Speed
 
             const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
@@ -323,7 +323,7 @@ describe( 'DeviceConfigurationService',()=>{
             expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
 
             expect(devices.length).toBe(6)
-            expect(interfaces.length).toBe(4)
+            expect(interfaces.length).toBe(5)
             expect(capabilities.length).toBe(5) //  Control, Heartrate, Power, Cadence, Speed
 
             const daum = devices.find( d=>d.settings.name==='Daum8i')
@@ -365,7 +365,7 @@ describe( 'DeviceConfigurationService',()=>{
             
             expect(service.settings.devices.length).toBe(0)
             expect(service.settings.capabilities.length).toBe(5)
-            expect(service.settings.interfaces.length).toBe(4)
+            expect(service.settings.interfaces.length).toBe(5)
 
             expect(service.settings.interfaces.find(i=>i.name==='serial')).toEqual({enabled:false,name:'serial',protocol:'Daum Classic'})
             expect(service.settings.gearSelection).toBeUndefined()
