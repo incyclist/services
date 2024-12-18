@@ -502,6 +502,11 @@ export class DeviceAccessService  extends EventEmitter{
                     }
 
                     const adapter = AdapterFactory.create(deviceSettings)
+
+                    if (!adapter) {
+                        console.log('~~~ no adapter', deviceSettings)
+                        return
+                    }
                     if (filter.capabilities) {
                         let found = false;
 
