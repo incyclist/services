@@ -7,6 +7,7 @@ import clone from "../../utils/clone";
 import { sleep } from "incyclist-devices/lib/utils/utils";
 import { IncyclistService } from "../../base/service";
 import { EnrichedInterfaceSetting } from "../access";
+import { waitNextTick } from "../../utils";
 
 
 const Units = [
@@ -281,13 +282,13 @@ export class DevicePairingService  extends IncyclistService{
                 if( devices.length>0)
                     await this.stopAdaptersWithCapability(capability)
 
-                this.run({enforcedScan:true} )
+                await this.run({enforcedScan:true} )
             }
 
             this.deviceSelectState = {capability, devices:available}
 
-            if (devices.length===0) {
-                startScan()                
+            if (devices.length===0) {                
+                startScan()                    
             }
             else {              
 
@@ -668,7 +669,6 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected emitStateChange(newState?:PairingState) {
-
         const {onStateChanged,onDeviceSelectStateChanged} = this.settings||{}
 
         this.checkCanStart()
@@ -1339,6 +1339,10 @@ export class DevicePairingService  extends IncyclistService{
         this.logEvent({ message: 'Start Pairing', adapters, props });
         await this.state.check.promise;
 
+        // if pairing was interrupted and a scan was started we don't need to continue here
+        if (this.isScanning())
+            return;
+
         this.checkCanStart()
 
         //targetResume.forEach( ai=> {ai.adapter.resume()})
@@ -1419,6 +1423,7 @@ export class DevicePairingService  extends IncyclistService{
 
 
         this.emit('scanning-start')
+        this.emitStateChange({capabilities:this.state.capabilities})
 
         this.state.tsPrevStart = Date.now();
 
@@ -1453,6 +1458,7 @@ export class DevicePairingService  extends IncyclistService{
 
         
         this.emit('scanning-done')
+        this.emitStateChange({capabilities:this.state.capabilities})
         
 
         // after timeout, re-start to either trigger pairing or scan again
@@ -1462,6 +1468,9 @@ export class DevicePairingService  extends IncyclistService{
             await sleep(500)            
             this.run()
         }
+        
+
+        
 
     }
 
