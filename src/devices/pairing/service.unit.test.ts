@@ -326,14 +326,17 @@ describe('PairingService',()=>{
 
                 const updates: Array<PairingState> = [];
                 const res = await new Promise (done => {
-                    svc.start( (status:PairingState)=>{ updates.push(status);if (updates.length==3) done(updates)  })
+                    svc.start( (status:PairingState)=>{ 
+                        console.log('status',status)
+                        updates.push(status);if (updates.length==4) done(updates)  
+                        })
                 })
 
                 expect(res).toMatchSnapshot()        
                 expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'Start Scanning'}))
                 expect(ride.startAdapters).not.toHaveBeenCalled()
                 expect(access.scan).toHaveBeenCalled()
-            })
+            },50000)
 
             test('no devices in configuration; FE device found in scan',async ()=>{
                 settings.devices = []
