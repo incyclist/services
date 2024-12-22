@@ -97,7 +97,7 @@ export class DeviceRideService  extends IncyclistService{
         return [{adapter,udid:'Simulator'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false}]
     
     }
-    protected getAdapterList():AdapterRideInfo[] {
+    protected getAllAdapters():AdapterRideInfo[] {
             const config = this.getDeviceConfiguration()
             const adapters = config.getAllAdapters()?.map( ai=> ({...ai, isStarted:false}))
             if (this.simulatorEnforced && !adapters.find( a=>a.adapter.getName()==='Simulator' )) {
@@ -400,7 +400,7 @@ export class DeviceRideService  extends IncyclistService{
         const {udid,interface: ifName, interfaces} = filter      
 
         const onlySelected = !udid 
-        let adapters:AdapterRideInfo[] = this.getSelectedAdapters()
+        let adapters:AdapterRideInfo[] = onlySelected ? this.getSelectedAdapters() :this.getAllAdapters() 
         
 
         const getIf = (adapter) => {
@@ -730,7 +730,7 @@ export class DeviceRideService  extends IncyclistService{
       
         // are all adapters on the same interface down?
         const ifName = unhealthy.adapter.getInterface()
-        const adapters = this.getAdapterList().filter( ai=> ai.adapter.getInterface()===ifName)
+        const adapters = this.getAllAdapters().filter( ai=> ai.adapter.getInterface()===ifName)
         if (!adapters.find(ai=>ai.isHealthy)) {
             await this.reconnectInterface(ifName, adapters);
 
@@ -897,7 +897,7 @@ export class DeviceRideService  extends IncyclistService{
 
     async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
         await this.lazyInit();
-        const adapters = this.getAdapterList()
+        const adapters = this.getSelectedAdapters()
 
         this.emit('start-request', adapters?.map( this.getAdapterStateInfo.bind(this) ))
 
@@ -914,11 +914,11 @@ export class DeviceRideService  extends IncyclistService{
         await this.lazyInit();
 
         // notify the start of all adapters
-        const allAdapters = this.getAdapterList()
+        const allAdapters = this.getSelectedAdapters()
         this.emit('start-request', allAdapters?.map( this.getAdapterStateInfo ))
 
         // only try to start the adapters that are not already started
-        const adapters = this.getAdapterList().filter( ai=> !ai.adapter.isStarted())
+        const adapters = this.getSelectedAdapters().filter( ai=> !ai.adapter.isStarted())
 
         const goodToGo = await this.waitForPreviousStartToFinish()
         if (!goodToGo) 
@@ -935,7 +935,7 @@ export class DeviceRideService  extends IncyclistService{
 
         this.logEvent({message:'cancel start'})
 
-        const adapters = this.getAdapterList()
+        const adapters = this.getSelectedAdapters()
 
         const promises:Array<Promise<boolean>> = []
         adapters?.forEach(ai=> {
@@ -960,7 +960,7 @@ export class DeviceRideService  extends IncyclistService{
     // TODO: verify usage of props argument
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     startRide(_props) {
-        const adapters = this.getAdapterList()
+        const adapters = this.getSelectedAdapters()
         adapters?.forEach(ai=> {
             
 
@@ -984,7 +984,7 @@ export class DeviceRideService  extends IncyclistService{
 
 
 
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         this.emit('stop-ride')
 
@@ -1013,7 +1013,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     pause():void {
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         adapters?.forEach(ai=> {
             ai.tsLastData = Date.now()
@@ -1024,7 +1024,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     resume():void {
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         adapters?.forEach(ai=> {
             ai.tsLastData = Date.now()
@@ -1059,7 +1059,7 @@ export class DeviceRideService  extends IncyclistService{
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
 
         
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
         const config = this.getDeviceConfiguration()
 
         // get adapterinfo from the device that is sending data
@@ -1129,7 +1129,7 @@ export class DeviceRideService  extends IncyclistService{
 
     private getEnabledCapabilities(adapterInfo: AdapterRideInfo, selected?:Array<{capability:IncyclistCapability,selected?:string }> ) {
 
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
         const config = this.getDeviceConfiguration()
 
         const selectedDevices = selected ?? config.getSelectedDevices()
@@ -1186,7 +1186,7 @@ export class DeviceRideService  extends IncyclistService{
 
     async sendUpdate( request:UpdateRequest):Promise<void> {
         
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         this.promiseSendUpdate = []
         adapters?.forEach(ai=> {
@@ -1202,7 +1202,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     getCyclingMode(udid?:string):CyclingMode {
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         let adapter;
         if (udid) {
@@ -1286,7 +1286,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     private getControlAdapter() {
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         const adapterInfo = adapters?.find(ai => ai.adapter.hasCapability(IncyclistCapability.Control));
         return adapterInfo;
@@ -1294,7 +1294,7 @@ export class DeviceRideService  extends IncyclistService{
 
     async enforceERG():Promise<void> {
         try {
-            const adapters = this.getAdapterList();
+            const adapters = this.getSelectedAdapters();
 
             const adapterInfo = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control)) 
             if (!adapterInfo?.adapter)
@@ -1331,7 +1331,7 @@ export class DeviceRideService  extends IncyclistService{
         const currentMode = this.getCyclingMode(udid)
         if (!currentMode || currentMode.getName()!==mode) { // mode was changed
             
-            const adapters = this.getAdapterList()
+            const adapters = this.getSelectedAdapters()
             const adapter = adapters?.find( ai=> ai.udid===udid)?.adapter
             if (adapter && adapter.isControllable()) {
                 const device = adapter as IncyclistDeviceAdapter

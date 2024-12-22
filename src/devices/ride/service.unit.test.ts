@@ -9,7 +9,7 @@ describe('DeviceRideService',()=>{
         let service:DeviceRideService, s
         const data: Array<DeviceData> = []
         const setupMocks  = (s,adapters)=>{
-            s.getAdapterList = jest.fn().mockReturnValue( adapters)
+            s.getSelectedAdapters = jest.fn().mockReturnValue( adapters)
 
             const configurationService= { 
                 getSelectedDevices: jest.fn(()=>
@@ -73,7 +73,7 @@ describe('DeviceRideService',()=>{
         }
 
         const setupMocks = (s,a)=> {
-            s.getAdapterList = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
+            s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
             s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
             a.isStarted = jest.fn().mockReturnValue(true)
             a.start = jest.fn().mockResolvedValue(true)
