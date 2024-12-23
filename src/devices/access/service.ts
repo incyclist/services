@@ -2,7 +2,7 @@ import {AdapterFactory, AntDeviceSettings, DeviceSettings, IncyclistInterface, I
 import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
 import { sleep } from "../../utils/sleep";
-import { AdapterInfo, DeviceConfigurationService, InterfaceSetting, useDeviceConfiguration } from "../configuration";
+import { AdapterInfo, InterfaceSetting, useDeviceConfiguration } from "../configuration";
 import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState, ScanForNewFilter, EnrichedInterfaceSetting } from "./model";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
@@ -577,7 +577,7 @@ export class DeviceAccessService  extends IncyclistService{
     async scanForNew( filter: ScanForNewFilter={}, maxDevices=1, timeout=30000): Promise<DeviceSettings[]|DeviceSettings> {
         
         const devices:DeviceSettings[] = []
-        const configuration  = DeviceConfigurationService.getInstance()
+        const configuration  = this.getDeviceConfiguration()
         const knownAdapters = configuration.getAllAdapters()
 
         if (filter.blackList) {

@@ -1,12 +1,12 @@
 import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode } from "incyclist-devices"
-import { UserSettingsService, useUserSettings } from "../../settings"
+import { useUserSettings } from "../../settings"
 import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceModeInfo, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting, 
          LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"
 import { v4 as generateUdid } from 'uuid';
-import EventEmitter from "events";
 import { merge } from "../../utils/merge";
-import { EventLogger } from "gd-eventlog";
 import clone from "../../utils/clone";
+import { IncyclistService } from "../../base/service";
+import { Injectable,Singleton } from "../../base/decorators";
 
 
 interface DeviceAdapterList {[index: string]: IncyclistDeviceAdapter}
@@ -18,8 +18,6 @@ interface CapabilityListDetails {
     disabled?:boolean 
 }
 
-
-
 /**
  * Manages the user configuration of devices and interfaces
  *  - Detected Devices and Sensors
@@ -30,42 +28,17 @@ interface CapabilityListDetails {
  * @noInheritDoc
  * 
  */
-export class DeviceConfigurationService  extends EventEmitter{
+@Singleton
+export class DeviceConfigurationService  extends IncyclistService{
 
-    protected static _instance: DeviceConfigurationService
-
-    static getInstance():DeviceConfigurationService{
-        if (!DeviceConfigurationService._instance)
-            DeviceConfigurationService._instance = new DeviceConfigurationService()
-        return DeviceConfigurationService._instance
-    }
 
     settings: DeviceConfigurationSettings
-    userSettings:UserSettingsService
     adapters: DeviceAdapterList = {}
-    protected logger: EventLogger
     protected features: {[index:string]:boolean}
 
     constructor() {
-        super()
-        this.userSettings = useUserSettings();
-        this.logger = new EventLogger('DeviceConfig')     
+        super('DeviceConfig')
         this.features = {};
-    }
-
-    protected logEvent(e) {
-        this.logger?.logEvent(e)
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = global.window as any
-        if (w?.SERVICE_DEBUG || process.env.DEBUG) {
-            console.log('~~~ CONFIG-SVC', e)
-        }
-    
-    }
-
-    protected logError(err:Error, fn:string) {
-        this.logEvent( {message:'error',fn,error:err.message, stack:err.stack})
     }
 
     /**
@@ -79,37 +52,25 @@ export class DeviceConfigurationService  extends EventEmitter{
      * 
     */
     async init():Promise<void> {
-        
-        await this.userSettings.init()
+
+        const userSettings = this.getUserSettings()
+        await userSettings.init()
         if (this.isInitialized()) {
             this.emitInitialized()
             return;
         }
         this.logEvent({message:'DeviceConfig.init'})
 
-        if (  (this.userSettings.get('gearSelection','removed')!=='removed'|| this.userSettings.get('connections','removed')!=='removed')) {      
-
-            const settings: LegacySettings= {};
-
-            settings.connections = this.userSettings.get('connections',{}) as LegacyDeviceConnectionSettings
-            settings.gearSelection = this.userSettings.get('gearSelection',{}) as LegacyDeviceSelectionSettings
-            settings.modeSettings =  this.userSettings.get('preferences.gear',{}) as LegacyModeSettings
-            
-            try {
-                await this.initFromLegacy(settings)                
-            }
-            catch(err) {
-                this.logError(err,'init()')
-            }
-
+        if (  this.isLegacyConfiguration()) {      
+            this.initFromLegacy()                
         }
         else {        
-            await this.userSettings.init()
+            await this.getUserSettings().init()
 
             this.settings = {
-                devices: this.userSettings.get('devices',[]),
-                capabilities:this.userSettings.get('capabilities',[]),
-                interfaces: this.userSettings.get('interfaces',[])
+                devices: this.getUserSettings().get('devices',[]),
+                capabilities:this.getUserSettings().get('capabilities',[]),
+                interfaces: this.getUserSettings().get('interfaces',[])
             }
         }
 
@@ -135,7 +96,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.settings.devices.forEach( d=> {
             
             try {
-                this.adapters[d.udid] = AdapterFactory.create(d.settings)
+                this.adapters[d.udid] = this.getAdapterFromSetting(d.settings)
             }
             catch(err) {
                 this.logEvent({message:'error',fn:'init()->Adapterfactory.create()',error:err.message,udid:d.udid, settings:d.settings,  devices:this.settings.devices, stack:err.stack,})
@@ -160,71 +121,13 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.removeLegacySettings() 
 
         this.logEvent({message:'DeviceConfig.init done'})
-
         this.emitInitialized()
-        
     }
 
-    public setFeature( name:string, enabled:boolean) {
+    setFeature( name:string, enabled:boolean) {
         this.features[name] = enabled
     }
 
-
-    protected verifyCapabilityExists(capability) {
-        const {capabilities} = this.settings
-        const found = capabilities.find( c=>c.capability===capability)
-        if (!found) {
-            capabilities.push( {capability,devices:[],disabled:false,selected:undefined})
-        }
-    }
-
-    protected verifyCapabilitySettings() {
-        const {capabilities} = this.settings
-
-
-        const bikeCapIdx = capabilities.findIndex(c=>c.capability==='bike');
-
-        // remove bike capability - it's not used anymore
-        this.verifyCapabilityExists(IncyclistCapability.Control)
-        this.verifyCapabilityExists(IncyclistCapability.Power)
-        this.verifyCapabilityExists(IncyclistCapability.HeartRate)
-        this.verifyCapabilityExists(IncyclistCapability.Speed)
-        this.verifyCapabilityExists(IncyclistCapability.Cadence)
-        if (bikeCapIdx!==-1) {
-            capabilities.splice( bikeCapIdx,1)
-        }
-    }
-
-    protected initCapabilties():void {
-
-        const target:Array<ExtendedIncyclistCapability> = [IncyclistCapability.Control,IncyclistCapability.Power, IncyclistCapability.Cadence,IncyclistCapability.Speed, IncyclistCapability.HeartRate ];
-
-        if (!this.settings)
-            this.settings = {}
-
-        if (!this.settings.capabilities)
-            this.settings.capabilities = [];
-
-        target.forEach( capability => {
-            if (!this.settings.capabilities.find( c=> c.capability===capability ))
-                this.settings.capabilities.push({capability,devices:[],selected:undefined,disabled:false})
-        })
-    }
-
-    protected initInterfaces():void {
-        if (this.settings?.interfaces?.length>0)
-            return;
-
-        if (!this.settings)
-            this.settings = {}
-        this.settings.interfaces = [];
-
-        this.settings.interfaces.push( {name:'ant', enabled:true})
-        this.settings.interfaces.push( {name:'ble', enabled:true})
-        this.settings.interfaces.push( {name:'wifi', enabled:true,invisible:true})
-        this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
-        this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
-    }
 
     /** 
      * Provides the initialization state of the interface
@@ -233,242 +136,6 @@ export class DeviceConfigurationService  extends EventEmitter{
         return this.settings!==undefined
     }
 
-    initFromLegacy(settings:LegacySettings={}):void {
-        const {gearSelection,connections, modeSettings={}} = settings
-        this.logEvent({message:'converting settings.json', gearSelection,connections})
-
-        
-        const all:Array<ExtendedIncyclistCapability> = [IncyclistCapability.Control,IncyclistCapability.Power, IncyclistCapability.Cadence,IncyclistCapability.Speed, IncyclistCapability.HeartRate ];
-
-        const gears = clone(gearSelection||{});
-
-        const {bikes=[], hrms=[]} = gears
-        
-        this.settings= {interfaces:[], devices:[], capabilities:[]}
-        this.initCapabilties()
-        const {interfaces,devices,capabilities} = this.settings;
-
-        const get = ( (x,def) =>  x??def)
-
-        interfaces.push( {name:'ant', enabled:connections?.ant?.enabled||true})
-        interfaces.push( {name:'ble', enabled:true})
-        interfaces.push( {name:'wifi', enabled:true, invisible:true})
-        interfaces.push( {name:'serial', enabled:get(connections?.serial?.enabled,true),protocol:connections?.serial?.protocols?.find(p=>p.selected).name })
-        interfaces.push( {name:'tcpip', enabled:get(connections?.tcpip?.enabled,false),protocol:'Daum Premium', port:51955})
-
-        bikes.forEach( bike=> {
-            if (bike.protocol==='Simulator')
-                bike.interface='simulator'
-
-            // delete some legay properties
-            const isSelected = bike.selected
-            const legacyProtocol = bike.protocol
-            const legacyProfile = bike.profile
-
-            delete bike.selected
-            delete bike.displayName
-            // special case ANT - we need to remove name as all necessar information is in the DeviceId
-            if (bike.interface==='ant')
-                delete bike.name
-
-                
-            let adapter;
-            try {
-                adapter =AdapterFactory.create(bike);
-            }
-            catch (err) {
-                this.logEvent( {message:'error',fn:'initFromLegacy#bike',error:err.message,bike, stack:err.stack})
-                
-            }
-
-            if (!adapter) {
-                return;
-            }
-            const bikeSettings = adapter.getSettings()
-            // special case ANT - we need to remove legacy protocol information as otherwise profile would be incorrectly interpreted
-            if (bike.interface==='ant')
-                delete bikeSettings.protocol
-
-            const existing = devices.find( device=> adapter.isEqual(device.settings))
-            const sameNameIdx = devices.findIndex( device=> device.settings.interface===bikeSettings.interface && device.settings.name===bikeSettings.name && !adapter.isEqual(device.settings))
-            const sameNameDevice = sameNameIdx!==-1 ? devices[sameNameIdx] : undefined
-
-            let udid = existing?.udid
-            let deviceEntry;
-
-            if (!existing) {
-                udid=generateUdid()
-                if (!sameNameDevice) {
-                    deviceEntry = {udid, settings:bikeSettings}
-                    devices.push( deviceEntry)
-                }
-                else {
-                    deviceEntry = {udid, settings:bikeSettings,displayName:adapter.getUniqueName()}
-                    devices.push( deviceEntry)
-                    sameNameDevice.displayName = this.adapters[sameNameDevice.udid].getUniqueName()
-                }
-                
-                this.adapters[udid] = adapter
-            }
-
-            // ensure that devices is included in capability device list, also ensures that capabilty exists
-            const target = all.filter(c=> c!==IncyclistCapability.HeartRate)
-            target.forEach( (cc:ExtendedIncyclistCapability) => {            
-                
-                if (cc!==IncyclistCapability.Control || adapter.hasCapability(cc) )
-                    this.addToCapability(udid,cc)  
-
-                if (isSelected) {               
-                    const cap = cc as ExtendedIncyclistCapability
-                    if (adapter.hasCapability(cap)) {
-                        const selectedDevice = capabilities.find(c => c.capability===cap )
-                        
-                        selectedDevice.selected = udid
-                    }
-                }
-            })
-
-
-            const key = legacyProfile ? `${legacyProtocol}-${legacyProfile}`: legacyProtocol
-            const modeInfo = modeSettings[key]
-            if (modeInfo && deviceEntry) {
-                deviceEntry.modes={}
-                deviceEntry.modes[modeInfo.mode] = modeInfo.settings
-                deviceEntry.mode = modeInfo.mode
-            }
-            
-        })
-
-        hrms.forEach( hrm=> {
-            // delete some legay properties
-            const isSelected = hrm.selected
-            delete hrm.selected
-            delete hrm.displayName
-            // special case ANT - we need to remove name 
-            if (hrm.interface==='ant') 
-                delete hrm.name
-            
-            let adapter;
-            try {
-                adapter =AdapterFactory.create(hrm);
-            }
-            catch (err) {
-                this.logEvent( {message:'error',fn:'initFromLegacy#hrm',error:err.message,hrm, stack:err.stack})
-            }
-            if (!adapter) {
-                return;
-            }
-
-            const hrmSettings = adapter.getSettings()
-            // special case ANT - we need to remove legacy protocol information as otherwise profile would be incorrectly interpreted
-            if (hrm.interface==='ant')
-               delete hrmSettings.protocol
-
-            const existing = devices.find( device=> {
-                const equal = adapter.isEqual(device.settings)
-                return equal
-            })
-            let udid = existing?.udid
-            if (!existing) {
-                udid=generateUdid()
-                devices.push( {udid, settings:hrmSettings})
-                this.adapters[udid] = adapter
-            }
-            this.addToCapability(udid,IncyclistCapability.HeartRate)  
-            if (isSelected) {               
-                const cap = IncyclistCapability.HeartRate
-                if (adapter.hasCapability(cap)) {
-                    const selectedDevice = capabilities.find(c => c.capability===cap )
-                    selectedDevice.selected = udid
-                }
-                
-            }
-        })
-
-
-        if (gearSelection.disableHrm) {
-            const hrmCapability = capabilities.find( c=>c.capability===IncyclistCapability.HeartRate)
-            if (hrmCapability) {
-                hrmCapability.disabled=true
-            }
-            else 
-                capabilities.push( {capability:IncyclistCapability.HeartRate, devices:[], selected:undefined, disabled:true})
-        }
-
-        this.removeLegacySettings() 
-        
-        this.settings = { devices, capabilities, interfaces}
-
-        
-        this.updateUserSettings()
-    }
-
-    protected async removeLegacySettings() {
-
-        this.userSettings.set('connections', 'removed',false) // old app versions will not respect NULL and wil loverwrite with previous content
-        this.userSettings.set('gearSelection', 'removed',false) // old app versions will not respect NULL and wil loverwrite with previous content
-        this.userSettings.set('preferences.gear','removed',false)            
-        await this.userSettings.save()
-
-        this.userSettings.set('connections',null,false)
-        this.userSettings.set('gearSelection',null,false)
-        this.userSettings.set('preferences.gear',null,false)
-        await this.userSettings.save()
-
-    }
-
-
-    protected getDeviceConfigurationInfo():DeviceConfigurationInfo {
-        const configuration:DeviceConfigurationInfo = {}
-
-        try {
-            const {capabilities=[],devices=[]} = this.settings;
-            const {adapters} = this
-    
-            const info:CapabilityInformation[] = capabilities.map( c=> {
-    
-                const ci:CapabilityInformation = {
-    
-                    capability: c.capability,
-                    disabled: c.disabled||false,
-                    devices: (c.devices??[]).filter( udid => devices.find( d=> d.udid===udid)).map( udid=>  {
-                        const adapter = adapters[udid]                                   
-                        const device = devices.find( d=> d.udid===udid)
-                        const mode = device.mode
-                        const modeSetting = device.modes ? device.modes[mode] : undefined
-                        const interfaceName = device.settings.interface as string
-                        const name = device?.displayName||adapter?.getUniqueName()||adapter?.getName()
-                        return { udid, name,interface:interfaceName, selected:udid===c.selected, mode, modeSetting}
-                    })
-                }
-                return ci;
-            })
-            
-    
-    
-            info.forEach( ci =>{
-                const c:string = ci.capability.toString()
-                configuration[c] = ci
-            })
-    
-        }
-        catch(err) {
-            this.logError(err,'getDeviceConfigurationInfo')
-        }
-
-        return configuration;
-    }
-
-    protected emitCapabiltyChanged( capability?:ExtendedIncyclistCapability ) {
-        const configuration = this.getDeviceConfigurationInfo()
-        this.emit('capability-changed',configuration,capability)
-    }
-    
-    protected emitInitialized() {
-
-        const configuration = this.getDeviceConfigurationInfo()
-        this.emit('initialized',configuration, this.settings.interfaces)
-    }
 
     load():{capabilities:DeviceConfigurationInfo,interfaces:Array<InterfaceSetting>} {
         if (!this.isInitialized())
@@ -506,7 +173,7 @@ export class DeviceConfigurationService  extends EventEmitter{
         const deviceSettings:IncyclistDeviceSettings = this.settings.devices?.find(d=>d.udid===udid)?.settings
         if (!deviceSettings)
             return;
-        const adapter = this.adapters[udid] ||  AdapterFactory.create(deviceSettings)
+        const adapter = this.adapters[udid] ||  this.getAdapterFromSetting(deviceSettings)
         if (!adapter) {
             this.logEvent({message:'error: could not find adapter',fn:'select',  udid, capability, adapters: Object.keys(this.adapters)?.join(',')})
             return
@@ -522,20 +189,10 @@ export class DeviceConfigurationService  extends EventEmitter{
         this.updateUserSettings()
     }
 
-    private selectSingleDevice(udid: string, capability: ExtendedIncyclistCapability) {
-        this.addToCapability(udid, capability);
-
-        // mark device udid as selected in capability, remove disabled flag
-        const capSettings = this.settings.capabilities?.find(c => c.capability === capability);
-        capSettings.selected = udid;
-        if (capSettings.disabled)
-            delete capSettings.disabled;
-    }
-
     unselect( capability:ExtendedIncyclistCapability,shouldEmit:boolean=true):void {
         this.logEvent({message:'unselect device', capability})
 
-        if (!this.settings || !this.settings.capabilities)
+        if (!this.settings?.capabilities)
             return;
 
         const settings = this.settings.capabilities.find( c =>c.capability===capability)
@@ -563,7 +220,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             adapter = this.adapters[udid]
         }
         else {
-            adapter = AdapterFactory.create(deviceSettings)
+            adapter = this.getAdapterFromSetting(deviceSettings)
             if (!adapter) {
                 this.logEvent({message:'could not create adapter'})
                 return;
@@ -592,7 +249,6 @@ export class DeviceConfigurationService  extends EventEmitter{
             if ( adapter.hasCapability(c.capability) && c.capability!=='bike') {
                 c.devices.push(udid)
 
-                // TODO: Change once we have changed the UI
                 if (!c.selected && !c.disabled && (isBike || c.capability===IncyclistCapability.HeartRate))
                     c.selected = udid
             }
@@ -671,38 +327,6 @@ export class DeviceConfigurationService  extends EventEmitter{
 
     }
 
-    protected deleteFromDeviceList(udid:string) {
-        // delete from all capabilities and devices and adapters list
-        const {devices=[]} = this.settings||{}
-        delete this.adapters[udid]
-
-        const deviceIdx = devices.findIndex(d=>d.udid===udid)
-        if (deviceIdx!==-1)  {
-            devices.splice(deviceIdx,1)
-        }
-    }
-
-
-    protected addToCapability( udid:string, capability: ExtendedIncyclistCapability) {
-
-        if (capability==='bike')
-            return;
-
-        if (!this.settings)
-            this.settings = {}
-        if (!this.settings.capabilities)
-            this.settings.capabilities= []
-        
-        const {capabilities} = this.settings;
-        const record = capabilities.find(c=>c.capability===capability)
-        if (!record) {
-            capabilities.push( {capability, devices:[udid], selected:udid})
-        }
-        else if (!record.devices?.includes(udid)) {
-            record.devices.push(udid)
-        }            
-
-    }
 
     getUdid(deviceSettings:IncyclistDeviceSettings) {
         const udids = Object.keys(this.adapters)
@@ -728,15 +352,8 @@ export class DeviceConfigurationService  extends EventEmitter{
         
     }
 
-    // TODO: replace or make protected once Device Service is completed
     getAdapter( udid:string) {
         return this.adapters[udid]
-    }
-
-    updateUserSettings() {
-        this.userSettings.set('devices',this.settings.devices)
-        this.userSettings.set('capabilities',this.settings.capabilities)
-        this.userSettings.set('interfaces',this.settings.interfaces)
     }
 
     /**
@@ -781,22 +398,29 @@ export class DeviceConfigurationService  extends EventEmitter{
             if (!device)
                 return;
 
-            let mode:string,modes,settings, isERG, isSIM
+            let mode:string,settings, isERG, isSIM
             let modeObj:CyclingMode
+            let modes: typeof CyclingMode[] = []
 
-            const adapter = AdapterFactory.create(device.settings) 
+            const adapter = this.getAdapterFromSetting(device.settings) 
             if (!adapter) {
                 this.logEvent({message:'Error: could not find adapter', requestedUdid, requestedMode, devices, adapters:Object.keys(this.adapters)?.join(',')})
                 return;
             }
-            mode = requestedMode || device.mode 
+
+
             if (adapter.getSupportedCyclingModes) {
-                modes = adapter.getSupportedCyclingModes()
-                if (!mode) {
-                    modeObj = adapter.getDefaultCyclingMode()
-                    mode = modeObj?.getName()
-                }
-                
+                modes = adapter.getSupportedCyclingModes()               
+            }
+            const options = modes.map( M=> new M(adapter))
+
+            mode = requestedMode || device.mode 
+            if (!mode) {
+                modeObj = adapter.getDefaultCyclingMode()
+                mode = modeObj?.getName()
+            }
+            else {
+                modeObj = options.find( m=> m.getConfig().name===mode)
             }
 
 
@@ -805,13 +429,11 @@ export class DeviceConfigurationService  extends EventEmitter{
                 settings = modeObj.getSettings()
             }
 
-            const options = modes.map( M=> new M(adapter))
-            if (options?.length) {
-                isERG = options[0].isERG()
-                isSIM = options[0].isSIM()
-    
-            }
-            return {udid,mode,settings,isERG,isSIM,options}
+            
+            isERG = modeObj?.isERG()===true
+            isSIM = modeObj?.isSIM()===true
+
+            return {udid,mode,settings,isERG,isSIM,options:options.map( m=> m.getConfig().name)} 
 
         }
         catch(err) {
@@ -952,34 +574,6 @@ export class DeviceConfigurationService  extends EventEmitter{
         return this.adapters[udid]
     }
 
-    protected isDisabled(capability:ExtendedIncyclistCapability): boolean {
-        const info = this.getCapabilityInfo(capability)
-        if (!info)
-            return true;
-
-        return info.disabled
-    }
-
-    protected getCapabilityInfo(capability:ExtendedIncyclistCapability): CapabilityListDetails {
-        const {capabilities} = this.settings||{}
-        const adapters=[]
-        let selectedIdx
-
-        if ( !capabilities)
-            return {adapters,disabled:true};
-
-        const found = capabilities.find( c => c.capability===capability)
-        if (!found)
-            return {adapters,disabled:true}
-
-        const disabled = found.disabled
-        found.devices.forEach( (udid,idx)=> {
-            adapters.push( this.adapters[udid])
-            if (found.selected===udid)
-                selectedIdx=idx;
-        })
-        return {adapters,selectedIdx,disabled}
-    }
 
     getSelectedDevices(capability?:IncyclistCapability): Array<{capability:IncyclistCapability,selected?:string }>{
         let capabilites = this.settings?.capabilities
@@ -987,7 +581,7 @@ export class DeviceConfigurationService  extends EventEmitter{
             capabilites = this.settings?.capabilities.filter(c=>c.capability===capability)
         }
 
-        return capabilites.filter( c=>c.capability!=='bike' && !(c.disabled===true) && c.selected).map( c => {
+        return capabilites.filter( c=>c.capability!=='bike' && c.disabled!==true && c.selected).map( c => {
             const {capability,selected} = c
             return {capability: capability as IncyclistCapability,selected}
         })        
@@ -1018,8 +612,8 @@ export class DeviceConfigurationService  extends EventEmitter{
         else 
             this.settings.interfaces.push( {name:ifName, enabled:true})
 
-            this.updateUserSettings();
-            this.emitInterfaceChanged(ifName)
+        this.updateUserSettings();
+        this.emitInterfaceChanged(ifName)
         
     }
 
@@ -1050,23 +644,458 @@ export class DeviceConfigurationService  extends EventEmitter{
 
         this.updateUserSettings();
         this.emitInterfaceChanged(ifName)
-        return 
+    }
+
+    // -------------------------------------- Protected methods below
+
+    protected updateUserSettings() {
+        this.getUserSettings().set('devices',this.settings.devices)
+        this.getUserSettings().set('capabilities',this.settings.capabilities)
+        this.getUserSettings().set('interfaces',this.settings.interfaces)
     }
 
 
-    emitInterfaceChanged(ifName:string) {
+    protected  isLegacyConfiguration():boolean {
+        return this.getUserSettings().get('gearSelection', 'removed') !== 'removed' || this.getUserSettings().get('connections', 'removed') !== 'removed';
+    }
+
+
+    protected initFromLegacy():void {
+
+        try {
+            const userSettings = this.getUserSettings()
+            const legacy: LegacySettings= {};
+    
+            legacy.connections = userSettings.get('connections',{}) as LegacyDeviceConnectionSettings
+            legacy.gearSelection = userSettings.get('gearSelection',{}) as LegacyDeviceSelectionSettings
+            legacy.modeSettings =  userSettings.get('preferences.gear',{}) as LegacyModeSettings          
+            const {gearSelection,connections, modeSettings={}} = legacy
+            this.logEvent({message:'converting settings.json', gearSelection,connections})
+    
+            
+            const all:Array<ExtendedIncyclistCapability> = [IncyclistCapability.Control,IncyclistCapability.Power, IncyclistCapability.Cadence,IncyclistCapability.Speed, IncyclistCapability.HeartRate ];
+            const gears = clone(gearSelection||{});
+    
+            const {bikes=[], hrms=[]} = gears
+            
+            this.settings= {interfaces:[], devices:[], capabilities:[]}
+            this.initCapabilties()
+
+            this.buildInterfacesFromLegacy(legacy)
+            const {interfaces,devices,capabilities} = this.settings;
+    
+    
+            this.addBikesFromLegacy(bikes, devices, all, capabilities, modeSettings);
+            this.addHrmsFromLegacy(hrms, devices, capabilities);
+    
+    
+            if (gearSelection.disableHrm) {
+                const hrmCapability = capabilities.find( c=>c.capability===IncyclistCapability.HeartRate)
+                if (hrmCapability) {
+                    hrmCapability.disabled=true
+                }
+                else 
+                    capabilities.push( {capability:IncyclistCapability.HeartRate, devices:[], selected:undefined, disabled:true})
+            }
+    
+            this.removeLegacySettings() 
+            
+            this.settings = { devices, capabilities, interfaces}               
+            this.updateUserSettings()
+    
+    
+        }
+        catch(err) {
+            this.logError(err,'init()')
+        }
+
+
+
+    }
+
+    private addHrmsFromLegacy(hrms: any, devices: import("/mnt/c/linux-dev/incyclist/services/src/devices/configuration/model/index").DeviceListEntry[], capabilities: import("/mnt/c/linux-dev/incyclist/services/src/devices/configuration/model/index").CapabilitySetting[]) {
+        hrms.forEach(hrm => {
+            // delete some legay properties
+            const isSelected = hrm.selected;
+            delete hrm.selected;
+            delete hrm.displayName;
+            // special case ANT - we need to remove name 
+            if (hrm.interface === 'ant')
+                delete hrm.name;
+
+            let adapter;
+            try {
+                adapter = this.getAdapterFromSetting(hrm);
+            }
+            catch (err) {
+                this.logEvent({ message: 'error', fn: 'initFromLegacy#hrm', error: err.message, hrm, stack: err.stack });
+            }
+            if (!adapter) {
+                return;
+            }
+
+            const hrmSettings = adapter.getSettings();
+            // special case ANT - we need to remove legacy protocol information as otherwise profile would be incorrectly interpreted
+            if (hrm.interface === 'ant')
+                delete hrmSettings.protocol;
+
+            const existing = devices.find(device => {
+                const equal = adapter.isEqual(device.settings);
+                return equal;
+            });
+            let udid = existing?.udid;
+            if (!existing) {
+                udid = generateUdid();
+                devices.push({ udid, settings: hrmSettings });
+                this.adapters[udid] = adapter;
+            }
+            this.addToCapability(udid, IncyclistCapability.HeartRate);
+            if (isSelected) {
+                const cap = IncyclistCapability.HeartRate;
+                if (adapter.hasCapability(cap)) {
+                    const selectedDevice = capabilities.find(c => c.capability === cap);
+                    selectedDevice.selected = udid;
+                }
+
+            }
+        });
+    }
+
+    private addBikesFromLegacy(bikes: any, devices: import("/mnt/c/linux-dev/incyclist/services/src/devices/configuration/model/index").DeviceListEntry[], all: ExtendedIncyclistCapability[], capabilities: import("/mnt/c/linux-dev/incyclist/services/src/devices/configuration/model/index").CapabilitySetting[], modeSettings: LegacyModeSettings) {
+        bikes.forEach(bike => {
+            if (bike.protocol === 'Simulator')
+                bike.interface = 'simulator';
+
+            // delete some legay properties
+            const isSelected = bike.selected;
+            const legacyProtocol = bike.protocol;
+            const legacyProfile = bike.profile;
+
+            delete bike.selected;
+            delete bike.displayName;
+            // special case ANT - we need to remove name as all necessar information is in the DeviceId
+            if (bike.interface === 'ant')
+                delete bike.name;
+
+
+            let adapter;
+            try {
+                adapter = this.getAdapterFromSetting(bike);
+            }
+            catch (err) {
+                this.logEvent({ message: 'error', fn: 'initFromLegacy#bike', error: err.message, bike, stack: err.stack });
+
+            }
+
+            if (!adapter) {
+                return;
+            }
+            const bikeSettings = adapter.getSettings();
+            // special case ANT - we need to remove legacy protocol information as otherwise profile would be incorrectly interpreted
+            if (bike.interface === 'ant')
+                delete bikeSettings.protocol;
+
+            const existing = devices.find(device => adapter.isEqual(device.settings));
+            const sameNameIdx = devices.findIndex(device => device.settings.interface === bikeSettings.interface && device.settings.name === bikeSettings.name && !adapter.isEqual(device.settings));
+            const sameNameDevice = sameNameIdx !== -1 ? devices[sameNameIdx] : undefined;
+
+            let udid = existing?.udid;
+            let deviceEntry;
+
+            if (!existing) {
+                udid = generateUdid();
+                if (!sameNameDevice) {
+                    deviceEntry = { udid, settings: bikeSettings };
+                    devices.push(deviceEntry);
+                }
+                else {
+                    deviceEntry = { udid, settings: bikeSettings, displayName: adapter.getUniqueName() };
+                    devices.push(deviceEntry);
+                    sameNameDevice.displayName = this.adapters[sameNameDevice.udid].getUniqueName();
+                }
+
+                this.adapters[udid] = adapter;
+            }
+
+            // ensure that devices is included in capability device list, also ensures that capabilty exists
+            const target = all.filter(c => c !== IncyclistCapability.HeartRate);
+            target.forEach((cc: ExtendedIncyclistCapability) => {
+
+                if (cc !== IncyclistCapability.Control || adapter.hasCapability(cc))
+                    this.addToCapability(udid, cc);
+
+                if (isSelected) {
+                    const cap = cc;
+                    if (adapter.hasCapability(cap)) {
+                        const selectedDevice = capabilities.find(c => c.capability === cap);
+
+                        selectedDevice.selected = udid;
+                    }
+                }
+            });
+
+
+            const key = legacyProfile ? `${legacyProtocol}-${legacyProfile}` : legacyProtocol;
+            const modeInfo = modeSettings[key];
+            if (modeInfo && deviceEntry) {
+                deviceEntry.modes = {};
+                deviceEntry.modes[modeInfo.mode] = modeInfo.settings;
+                deviceEntry.mode = modeInfo.mode;
+            }
+
+        });
+    }
+
+    protected buildInterfacesFromLegacy(legacy:LegacySettings) {
+        const {connections} = legacy
+
+        if (!this.settings.interfaces) this.settings.interfaces=[]
+        const {interfaces} = this.settings;
+    
+        const get = ( (x,def) =>  x??def)
+
+        interfaces.push( {name:'ant', enabled:connections?.ant?.enabled||true})
+        interfaces.push( {name:'ble', enabled:true})
+        interfaces.push( {name:'wifi', enabled:true, invisible:true})
+        interfaces.push( {name:'serial', enabled:get(connections?.serial?.enabled,true),protocol:connections?.serial?.protocols?.find(p=>p.selected).name })
+        interfaces.push( {name:'tcpip', enabled:get(connections?.tcpip?.enabled,false),protocol:'Daum Premium', port:51955})
+
+    }
+
+    protected verifyCapabilityExists(capability) {
+        const {capabilities} = this.settings
+        const found = capabilities.find( c=>c.capability===capability)
+        if (!found) {
+            capabilities.push( {capability,devices:[],disabled:false,selected:undefined})
+        }
+    }
+
+    protected verifyCapabilitySettings() {
+        const {capabilities} = this.settings
+
+
+        const bikeCapIdx = capabilities.findIndex(c=>c.capability==='bike');
+
+        // remove bike capability - it's not used anymore
+        this.verifyCapabilityExists(IncyclistCapability.Control)
+        this.verifyCapabilityExists(IncyclistCapability.Power)
+        this.verifyCapabilityExists(IncyclistCapability.HeartRate)
+        this.verifyCapabilityExists(IncyclistCapability.Speed)
+        this.verifyCapabilityExists(IncyclistCapability.Cadence)
+        if (bikeCapIdx!==-1) {
+            capabilities.splice( bikeCapIdx,1)
+        }
+    }
+
+    protected initCapabilties():void {
+
+        const target:Array<ExtendedIncyclistCapability> = [IncyclistCapability.Control,IncyclistCapability.Power, IncyclistCapability.Cadence,IncyclistCapability.Speed, IncyclistCapability.HeartRate ];
+
+        if (!this.settings)
+            this.settings = {}
+
+        if (!this.settings.capabilities)
+            this.settings.capabilities = [];
+
+        target.forEach( capability => {
+            if (!this.settings.capabilities.find( c=> c.capability===capability ))
+                this.settings.capabilities.push({capability,devices:[],selected:undefined,disabled:false})
+        })
+    }
+
+    protected initInterfaces():void {
+        if (this.settings?.interfaces?.length>0)
+            return;
+
+        if (!this.settings)
+            this.settings = {}
+        this.settings.interfaces = [];
+
+        this.settings.interfaces.push( {name:'ant', enabled:true})
+        this.settings.interfaces.push( {name:'ble', enabled:true})
+        this.settings.interfaces.push( {name:'wifi', enabled:true,invisible:true})
+        this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
+        this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
+    }
+
+
+    protected async removeLegacySettings() {
+
+        this.getUserSettings().set('connections', 'removed',false) // old app versions will not respect NULL and wil loverwrite with previous content
+        this.getUserSettings().set('gearSelection', 'removed',false) // old app versions will not respect NULL and wil loverwrite with previous content
+        this.getUserSettings().set('preferences.gear','removed',false)            
+        await this.getUserSettings().save()
+
+        this.getUserSettings().set('connections',null,false)
+        this.getUserSettings().set('gearSelection',null,false)
+        this.getUserSettings().set('preferences.gear',null,false)
+        await this.getUserSettings().save()
+
+    }
+
+
+    protected getDeviceConfigurationInfo():DeviceConfigurationInfo {
+        const configuration:DeviceConfigurationInfo = {}
+
+        try {
+            const {capabilities=[],devices=[]} = this.settings;
+            const {adapters} = this
+    
+            const info:CapabilityInformation[] = capabilities.map( c=> {
+    
+                const ci:CapabilityInformation = {
+    
+                    capability: c.capability,
+                    disabled: c.disabled||false,
+                    devices: (c.devices??[]).filter( udid => devices.find( d=> d.udid===udid)).map( udid=>  {
+                        const adapter = adapters[udid]                                   
+                        const device = devices.find( d=> d.udid===udid)
+                        const mode = device.mode
+                        const modeSetting = device.modes ? device.modes[mode] : undefined
+                        const interfaceName = device.settings.interface as string
+                        const name = device?.displayName||adapter?.getUniqueName()||adapter?.getName()
+                        return { udid, name,interface:interfaceName, selected:udid===c.selected, mode, modeSetting}
+                    })
+                }
+                return ci;
+            })
+            
+    
+    
+            info.forEach( ci =>{
+                const c:string = ci.capability.toString()
+                configuration[c] = ci
+            })
+    
+        }
+        catch(err) {
+            this.logError(err,'getDeviceConfigurationInfo')
+        }
+
+        return configuration;
+    }
+
+    protected emitCapabiltyChanged( capability?:ExtendedIncyclistCapability ) {
+        const configuration = this.getDeviceConfigurationInfo()
+        this.emit('capability-changed',configuration,capability)
+    }
+    
+    protected emitInitialized() {
+
+        const configuration = this.getDeviceConfigurationInfo()
+        this.emit('initialized',configuration, this.settings.interfaces)
+    }
+
+
+    private selectSingleDevice(udid: string, capability: ExtendedIncyclistCapability) {
+        this.addToCapability(udid, capability);
+
+        // mark device udid as selected in capability, remove disabled flag
+        const capSettings = this.settings.capabilities?.find(c => c.capability === capability);
+        capSettings.selected = udid;
+        if (capSettings.disabled)
+            delete capSettings.disabled;
+    }
+
+
+    protected deleteFromDeviceList(udid:string) {
+        // delete from all capabilities and devices and adapters list
+        const {devices=[]} = this.settings||{}
+        delete this.adapters[udid]
+
+        const deviceIdx = devices.findIndex(d=>d.udid===udid)
+        if (deviceIdx!==-1)  {
+            devices.splice(deviceIdx,1)
+        }
+    }
+
+
+    protected addToCapability( udid:string, capability: ExtendedIncyclistCapability) {
+
+        if (capability==='bike')
+            return;
+
+        if (!this.settings)
+            this.settings = {}
+        if (!this.settings.capabilities)
+            this.settings.capabilities= []
+        
+        const {capabilities} = this.settings;
+        const record = capabilities.find(c=>c.capability===capability)
+        if (!record) {
+            capabilities.push( {capability, devices:[udid], selected:udid})
+        }
+        else if (!record.devices?.includes(udid)) {
+            record.devices.push(udid)
+        }            
+
+    }
+
+
+    protected isDisabled(capability:ExtendedIncyclistCapability): boolean {
+        const info = this.getCapabilityInfo(capability)
+        if (!info)
+            return true;
+
+        return info.disabled
+    }
+
+    protected getCapabilityInfo(capability:ExtendedIncyclistCapability): CapabilityListDetails {
+        const {capabilities} = this.settings||{}
+        const adapters=[]
+        let selectedIdx
+
+        if ( !capabilities)
+            return {adapters,disabled:true};
+
+        const found = capabilities.find( c => c.capability===capability)
+        if (!found)
+            return {adapters,disabled:true}
+
+        const disabled = found.disabled
+        found.devices.forEach( (udid,idx)=> {
+            adapters.push( this.adapters[udid])
+            if (found.selected===udid)
+                selectedIdx=idx;
+        })
+        return {adapters,selectedIdx,disabled}
+    }
+
+
+
+    protected emitInterfaceChanged(ifName:string) {
         const setting = this.getInterfaceSettings(ifName)
         if (setting) {
             this.emit('interface-changed', ifName, setting, this.settings.interfaces)
         }
     }
 
-    emitDeviceDeleted(settings:IncyclistDeviceSettings) {
+    protected emitDeviceDeleted(settings:IncyclistDeviceSettings) {
         this.emit('device-deleted', settings)
+    }
+
+    reset() {
+        super.reset()
+        this.settings = undefined
+    }
+
+    protected getAdapterFromSetting(settings) {
+        return this.getAdapterFactory().create(settings)
+    }
+
+
+    @Injectable
+    protected getUserSettings() {
+        return useUserSettings()
+    }
+
+    @Injectable
+    protected getAdapterFactory() {
+        return AdapterFactory
     }
 
 }
 
-export const useDeviceConfiguration = ()=>DeviceConfigurationService.getInstance()
+export const useDeviceConfiguration = ()=> new DeviceConfigurationService()
 
 

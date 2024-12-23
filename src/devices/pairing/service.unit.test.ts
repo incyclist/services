@@ -30,14 +30,13 @@ type DeviceList =  Array<{ udid:string, selected?:boolean,deleted?:boolean, c?:A
 
 class TestWrapper extends DevicePairingService {
 
-    static setupMocks  ( props:{forStart?:boolean}={}) {
+    static setupMocks  ( props:{forStart?:boolean, userSettings?:UserSettingsService}={}) {
         const {forStart=false} = props;
         ride = useDeviceRide()
         access = useDeviceAccess()
+        configuration = useDeviceConfiguration()
+
         if (!forStart) {
-            
-            configuration = useDeviceConfiguration()
-        
             configuration.add = jest.fn()
             configuration.canStartRide = jest.fn()
             configuration.getAdapter = jest.fn()  // (udid)=>IncyclistDeviceAdapter
@@ -68,13 +67,14 @@ class TestWrapper extends DevicePairingService {
     static resetMocks() {
         ride.removeAllListeners();
         access.removeAllListeners();
+        access.reset()
         configuration?.removeAllListeners();
+        configuration?.reset();
 
         (DeviceAccessService as any)._instance = undefined;
         (DeviceConfigurationService as any)._instance = undefined;
         (DeviceRideService as any)._instance = undefined;  
         (UserSettingsService as any)._instance = undefined              
-
     }
 
     setCanStartRide(enabled) {
@@ -198,8 +198,10 @@ class TestWrapper extends DevicePairingService {
     resetServices() {
         this.run = jest.fn();
 
+        configuration.reset()
+        this.configuration.reset();
+
         (DeviceAccessService as any)._instance = undefined;
-        (DeviceConfigurationService as any)._instance = undefined;
         (DeviceRideService as any)._instance = undefined;  
 
     }
@@ -294,10 +296,9 @@ describe('PairingService',()=>{
             let userSettings
 
             beforeEach( ()=>{
-                userSettings = new UserSettingsMock(settings)
+
+
                 TestWrapper.setupMocks({forStart:true})
-                const config = useDeviceConfiguration()
-                config.setFeature('NEW_UI',true)
 
                 settings.interfaces= [
                     { name:'ant', enabled:true },
@@ -305,6 +306,9 @@ describe('PairingService',()=>{
                     { name:'serial', enabled:false, protocol:'Daum Classic' },
                     { name:'tcpip', enabled:true },
                 ]
+                settings.devices = []
+                settings.capabilities= []
+
                 svc = new TestWrapper()
                 logEvent  = jest.spyOn(svc as any,'logEvent')
                 logCapabilities = svc.mock('logCapabilities')
@@ -321,15 +325,14 @@ describe('PairingService',()=>{
             })
 
             test('no devices in configuration will start scan',async ()=>{
-                settings.devices = []
-                settings.capabilities= []
+                configuration.inject('UserSettings',new UserSettingsMock(settings))
 
                 const updates: Array<PairingState> = [];
                 const res = await new Promise (done => {
                     svc.start( (status:PairingState)=>{ 
-                        console.log('status',status)
-                        updates.push(status);if (updates.length==4) done(updates)  
-                        })
+                        updates.push(status);
+                        if (updates.length==4) done(updates)  
+                    })
                 })
 
                 expect(res).toMatchSnapshot()        
@@ -341,10 +344,11 @@ describe('PairingService',()=>{
             test('no devices in configuration; FE device found in scan',async ()=>{
                 settings.devices = []
                 settings.capabilities= []
+                configuration.inject('UserSettings',new UserSettingsMock(settings))
                 
 
                 const device = {interface:'ant', profile: "FE", deviceID: 1234 }
-                userSettings.settings = {}
+                
                 access.scan = jest.fn( async ()=>{
                     access.emit('device', device)
                     
@@ -387,6 +391,8 @@ describe('PairingService',()=>{
                 const device = {interface:'ant', profile: "HR", deviceID: 1234 }
                 settings.devices = []
                 settings.capabilities =[]
+                configuration.inject('UserSettings',new UserSettingsMock(settings))
+
                 
                 access.scan = jest.fn( async ()=>{
                     access.emit('device', device)                    
@@ -405,6 +411,7 @@ describe('PairingService',()=>{
                         if (startCnt===2)
                             done(updates)
                     })                   
+
                     svc.start( (status:PairingState)=>{ 
                         updates.push(status)
                     })
@@ -439,7 +446,8 @@ describe('PairingService',()=>{
                         {capability: IncyclistCapability.Speed,devices: ["1"],selected: "1",disabled: false },
                         {capability: IncyclistCapability.HeartRate,devices: [],selected: undefined,disabled: false },
                     ]
-                
+                configuration.inject('UserSettings',new UserSettingsMock(settings))
+    
                 ride.startAdapters=jest.fn( async ()=> { 
                     ride.emit('pairing-start',)
                     return false

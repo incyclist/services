@@ -7,7 +7,6 @@ import clone from "../../utils/clone";
 import { sleep } from "incyclist-devices/lib/utils/utils";
 import { IncyclistService } from "../../base/service";
 import { EnrichedInterfaceSetting } from "../access";
-import { waitNextTick } from "../../utils";
 
 
 const Units = [
@@ -1078,7 +1077,6 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
-
         this.logEvent({message:'device detected',device:deviceSettings})
         
         const udid = this.configuration.add(deviceSettings,{legacy:false})
