@@ -949,7 +949,12 @@ describe( 'DeviceConfigurationService',()=>{
 
             
             const res = service.getModeSettings('1')
-            expect(res).toMatchObject({udid:'1',mode:'ERG',settings:{ startPower:"100" },isERG:true, isSIM:false, options:['PowerMeter','Smart Trainer','ERG'], })
+            const options = res.options?.map( o=>o.getName())
+            delete res.options
+            expect(options).toEqual(['PowerMeter','Smart Trainer','ERG'])
+
+
+            expect(res).toMatchObject({udid:'1',mode:'ERG',settings:{ startPower:"100" },isERG:true, isSIM:false})
         })
 
         test('no settings',async ()=>{
@@ -958,7 +963,11 @@ describe( 'DeviceConfigurationService',()=>{
             await service.init()
 
             const res = service.getModeSettings('2')
-            expect(res).toMatchObject({udid:'2',mode:'Smart Trainer',settings:{},isERG:false, isSIM:true, options:['PowerMeter','Smart Trainer','ERG'], })
+            const options = res.options?.map( o=>o.getName())
+            delete res.options
+            expect(options).toEqual(['PowerMeter','Smart Trainer','ERG'])
+
+            expect(res).toMatchObject({udid:'2',mode:'Smart Trainer',settings:{},isERG:false, isSIM:true})
         })
 
         test('mode selected',async ()=>{
@@ -968,7 +977,12 @@ describe( 'DeviceConfigurationService',()=>{
             await service.init()
 
             const res = service.getModeSettings('1')
-            expect(res).toMatchObject({udid:'1',mode:'ERG',settings:{},isERG:true, isSIM:false, options:['PowerMeter','Smart Trainer','ERG'], })
+
+            const options = res.options?.map( o=>o.getName())
+            delete res.options
+
+            expect(res).toMatchObject({udid:'1',mode:'ERG',settings:{},isERG:true, isSIM:false  })
+            expect(options).toEqual(['PowerMeter','Smart Trainer','ERG'])
         })
 
         

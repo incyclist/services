@@ -433,7 +433,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             isERG = modeObj?.isERG()===true
             isSIM = modeObj?.isSIM()===true
 
-            return {udid,mode,settings,isERG,isSIM,options:options.map( m=> m.getConfig().name)} 
+            return {udid,mode,settings,isERG,isSIM,options} 
 
         }
         catch(err) {
