@@ -1,15 +1,17 @@
-import EventEmitter from "events"
 import { sleep } from "../../utils/sleep";
-import { DeviceAccessService, useDeviceAccess } from "../access/service";
-import {AdapterInfo, DeviceConfigurationService, IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
+import { useDeviceAccess } from "../access/service";
+import {AdapterInfo,  IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
 import { AdapterRideInfo, AdapterStateInfo, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./model";
 import clone from "../../utils/clone";
-import { UserSettingsService, useUserSettings } from "../../settings";
+import { useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
 import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { setInterval } from "timers";
 import { getRouteList } from "../../routes";
+import { IncyclistService } from "../../base/service";
+import { Singleton } from "../../base/types";
+import { Injectable } from "../../base/decorators/Injection";
 
 
 const NO_DATA_THRESHOLD = 10000
@@ -24,59 +26,34 @@ const UNHEALTHY_THRESHOLD = 60000
  * @noInheritDoc
  * 
  */
-export class DeviceRideService  extends EventEmitter{
+@Singleton
+export class DeviceRideService  extends IncyclistService{
 
-    protected static _instance: DeviceRideService
-    protected configurationService: DeviceConfigurationService
-    protected userSettings: UserSettingsService
-    protected accessService: DeviceAccessService
     protected initizialized: boolean
     protected adapters:AdapterRideInfo[]
     protected startPromises: Promise<boolean>[]
     protected data:DeviceData  ={}
     protected simulatorEnforced:boolean
     protected logger: EventLogger
-    protected debug;
     protected promiseSendUpdate: Promise<UpdateRequest|void>[]
     protected originalMode: CyclingMode
     protected deviceDataHandler = this.onData.bind(this)
 
-    static getInstance():DeviceRideService{
-        if (!DeviceRideService._instance)
-        DeviceRideService._instance = new DeviceRideService()
-        return DeviceRideService._instance
-    }
 
     constructor() {
-        super()
+        super('DeviceRide')
         this.initizialized = false;
         this.simulatorEnforced = false
-        this.logger = new EventLogger('Ride')
         this.debug = false;   
-    }
-
-    logEvent(event) {
-        this.logger.logEvent(event)
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = global.window as any
-    
-        if (this.debug || w?.SERVICE_DEBUG) 
-            console.log('~~~ RIDE-SVC', event)
-    }
-
-    setDebug(enabled:boolean) {
-        this.debug = enabled
     }
 
     protected waitForInit():Promise<void> {
         return new Promise(done => {
-            this.accessService = useDeviceAccess();
-            this.configurationService  =useDeviceConfiguration();            
-            if (this.configurationService.isInitialized())
+            const config = this.getDeviceConfiguration()
+            if (config.isInitialized())
                 return done();
-            this.configurationService.once('initialized' ,done)
-            this.configurationService.init()
+            config.once('initialized' ,done)
+            config.init()
         })
     }
 
@@ -84,16 +61,14 @@ export class DeviceRideService  extends EventEmitter{
         if (!this.initizialized) {
             await this.waitForInit()
         }
-        
-        this.adapters = this.configurationService.getAdapters()?.map( ai=> Object.assign({}, {...ai, isStarted:false}))
+        const config = this.getDeviceConfiguration()
+        this.adapters = this.getConfiguredAdapters()
         const handleModeChange = this.onCyclingModeChanged.bind(this)
         const handleDeviceDeleted = this.onDeviceDeleted.bind(this)
 
         // TODO: add listeners to config changes
-        this.configurationService.on('mode-changed',handleModeChange)
-        this.configurationService.on('device-deleted',handleDeviceDeleted)
-        this.userSettings = useUserSettings()
-        
+        config.on('mode-changed',handleModeChange)
+        config.on('device-deleted',handleDeviceDeleted)       
     }
 
 
@@ -114,24 +89,28 @@ export class DeviceRideService  extends EventEmitter{
         return this.data
     }
 
-    protected getAdapterList(onlySelected=true):AdapterRideInfo[] {
+    protected getSelectedAdapters():AdapterRideInfo[] {
+        if (!this.simulatorEnforced)
+            return this.adapters
 
-        if (onlySelected) {
-            if (!this.simulatorEnforced)
-                return this.adapters
-
-            const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});
-            return [{adapter,udid:'Simulator'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false}]
-        }
-        else {
-            const adapters = this.configurationService.getAllAdapters()?.map( ai=> Object.assign({}, {...ai, isStarted:false}))
+        const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});
+        return [{adapter,udid:'Simulator'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false}]
+    
+    }
+    protected getAllAdapters():AdapterRideInfo[] {
+            const config = this.getDeviceConfiguration()
+            const adapters = config.getAllAdapters()?.map( ai=> ({...ai, isStarted:false}))
             if (this.simulatorEnforced && !adapters.find( a=>a.adapter.getName()==='Simulator' )) {
                 const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});
                 adapters.push({adapter,udid:'Simulator'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false})
             }
             return adapters
-        }
     } 
+    protected getConfiguredAdapters(onlySelected=true):AdapterRideInfo[] {
+        const config = this.getDeviceConfiguration()
+        const adapters = config.getAdapters(onlySelected)?.map( ai=> ({...ai, isStarted:false}))
+        return adapters
+} 
 
 
     prepareEppRoute(props:RideServiceDeviceProperties): PreparedRoute {
@@ -147,7 +126,8 @@ export class DeviceRideService  extends EventEmitter{
         this.logEvent( { message:'prepareRoute', route: route.getTitle() , start: startPos, reality: realityFactor})
         
         // TODO: should move into a User/AppState Service
-        const eppPreferences = clone(this.userSettings.get('eppPreferences',{}))
+        const userSettings = this.getUserSettings()
+        const eppPreferences = clone(userSettings.get('eppPreferences',{}))
         if (!eppPreferences.programId)  
             eppPreferences.programId = 1;
         else {
@@ -155,7 +135,7 @@ export class DeviceRideService  extends EventEmitter{
             if (eppPreferences.programId> 32767)
                 eppPreferences.programId = 1;
         }
-        this.userSettings.update({eppPreferences})            
+        userSettings.update({eppPreferences})            
 
         const routeData = route.get();
         if ( routeData.epp) {
@@ -420,7 +400,7 @@ export class DeviceRideService  extends EventEmitter{
         const {udid,interface: ifName, interfaces} = filter      
 
         const onlySelected = !udid 
-        let adapters:AdapterRideInfo[] = this.getAdapterList(onlySelected)
+        let adapters:AdapterRideInfo[] = onlySelected ? this.getSelectedAdapters() :this.getAllAdapters() 
         
 
         const getIf = (adapter) => {
@@ -513,6 +493,7 @@ export class DeviceRideService  extends EventEmitter{
         const { forceErgMode, startPos, realityFactor, rideMode, route} = props||{};
 
         const duplicates = this.checkAntSameDeviceID(adapters)
+        const config = this.getDeviceConfiguration()
 
 
         this.startPromises = adapters?.map( async ai=> {
@@ -525,7 +506,7 @@ export class DeviceRideService  extends EventEmitter{
             if (ai.adapter?.isControllable()) {
                 bike = ai.adapter
 
-                const modeInfo = this.configurationService.getModeSettings(ai.udid)
+                const modeInfo = config.getModeSettings(ai.udid)
                 mode = modeInfo?.mode
                 settings = modeInfo?.settings||{}
 
@@ -534,7 +515,7 @@ export class DeviceRideService  extends EventEmitter{
                     const modes = bike.getSupportedCyclingModes().filter( C => C.supportsERGMode())
                     if (modes.length>0)  {
                         mode = new modes[0](bike)
-                        const modeInfo = this.configurationService.getModeSettings(ai.udid,mode)
+                        const modeInfo = config.getModeSettings(ai.udid,mode)
                         settings = modeInfo.settings
                     }
                 }
@@ -749,7 +730,7 @@ export class DeviceRideService  extends EventEmitter{
       
         // are all adapters on the same interface down?
         const ifName = unhealthy.adapter.getInterface()
-        const adapters = this.getAdapterList().filter( ai=> ai.adapter.getInterface()===ifName)
+        const adapters = this.getAllAdapters().filter( ai=> ai.adapter.getInterface()===ifName)
         if (!adapters.find(ai=>ai.isHealthy)) {
             await this.reconnectInterface(ifName, adapters);
 
@@ -916,16 +897,15 @@ export class DeviceRideService  extends EventEmitter{
 
     async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
         await this.lazyInit();
-        const adapters = this.getAdapterList()
+        const adapters = this.getSelectedAdapters()
 
-        this.emit('start-request', adapters?.map( this.getAdapterStateInfo ))
+        this.emit('start-request', adapters?.map( this.getAdapterStateInfo.bind(this) ))
 
         const goodToGo = await this.waitForPreviousStartToFinish()
         if (!goodToGo) 
             return;
 
-        const {adapter} = this.getControlAdapter()??{}
-        this.originalMode = adapter.getCyclingMode() as CyclingMode
+        this.storeOriginalCyclingMode()
         
         return this.startAdapters( adapters,'start',props)
     }
@@ -934,11 +914,11 @@ export class DeviceRideService  extends EventEmitter{
         await this.lazyInit();
 
         // notify the start of all adapters
-        const allAdapters = this.getAdapterList()
+        const allAdapters = this.getSelectedAdapters()
         this.emit('start-request', allAdapters?.map( this.getAdapterStateInfo ))
 
         // only try to start the adapters that are not already started
-        const adapters = this.getAdapterList().filter( ai=> !ai.adapter.isStarted())
+        const adapters = this.getSelectedAdapters().filter( ai=> !ai.adapter.isStarted())
 
         const goodToGo = await this.waitForPreviousStartToFinish()
         if (!goodToGo) 
@@ -955,7 +935,7 @@ export class DeviceRideService  extends EventEmitter{
 
         this.logEvent({message:'cancel start'})
 
-        const adapters = this.getAdapterList()
+        const adapters = this.getSelectedAdapters()
 
         const promises:Array<Promise<boolean>> = []
         adapters?.forEach(ai=> {
@@ -980,7 +960,7 @@ export class DeviceRideService  extends EventEmitter{
     // TODO: verify usage of props argument
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     startRide(_props) {
-        const adapters = this.getAdapterList()
+        const adapters = this.getSelectedAdapters()
         adapters?.forEach(ai=> {
             
 
@@ -1004,7 +984,7 @@ export class DeviceRideService  extends EventEmitter{
 
 
 
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         this.emit('stop-ride')
 
@@ -1033,7 +1013,7 @@ export class DeviceRideService  extends EventEmitter{
     }
 
     pause():void {
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         adapters?.forEach(ai=> {
             ai.tsLastData = Date.now()
@@ -1044,7 +1024,7 @@ export class DeviceRideService  extends EventEmitter{
     }
 
     resume():void {
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         adapters?.forEach(ai=> {
             ai.tsLastData = Date.now()
@@ -1079,7 +1059,8 @@ export class DeviceRideService  extends EventEmitter{
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
 
         
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
+        const config = this.getDeviceConfiguration()
 
         // get adapterinfo from the device that is sending data
         const adapterInfo = adapters?.find( ai=>ai.adapter.isEqual(deviceSettings))
@@ -1092,8 +1073,9 @@ export class DeviceRideService  extends EventEmitter{
         // refresh capabilities from device (might have changed since original scan)
         adapters?.forEach( ai => ai.capabilities = ai.adapter.getCapabilities())
 
+
         // get selected devices for each of the capabilities
-        const selectedDevices = this.configurationService.getSelectedDevices()
+        const selectedDevices = config.getSelectedDevices()
 
         // If we are still using the legacy framework, then there will be no device selected
         // for capabilities Speed and Cadence
@@ -1147,8 +1129,10 @@ export class DeviceRideService  extends EventEmitter{
 
     private getEnabledCapabilities(adapterInfo: AdapterRideInfo, selected?:Array<{capability:IncyclistCapability,selected?:string }> ) {
 
-        const adapters = this.getAdapterList();
-        const selectedDevices = selected ?? this.configurationService.getSelectedDevices()
+        const adapters = this.getSelectedAdapters();
+        const config = this.getDeviceConfiguration()
+
+        const selectedDevices = selected ?? config.getSelectedDevices()
 
         let enabledCapabilities = [];
 
@@ -1202,7 +1186,7 @@ export class DeviceRideService  extends EventEmitter{
 
     async sendUpdate( request:UpdateRequest):Promise<void> {
         
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         this.promiseSendUpdate = []
         adapters?.forEach(ai=> {
@@ -1218,7 +1202,7 @@ export class DeviceRideService  extends EventEmitter{
     }
 
     getCyclingMode(udid?:string):CyclingMode {
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         let adapter;
         if (udid) {
@@ -1278,9 +1262,10 @@ export class DeviceRideService  extends EventEmitter{
             const adapterInfo = this.getControlAdapter(); 
             if (!adapterInfo?.adapter)
                 return
+            const config = this.getDeviceConfiguration()
 
             const {udid,adapter} = adapterInfo
-            const modeInfo = this.configurationService.getModeSettings(udid)
+            const modeInfo = config.getModeSettings(udid)
             const mode = modeInfo?.mode
             const settings = modeInfo.settings
             
@@ -1301,7 +1286,7 @@ export class DeviceRideService  extends EventEmitter{
     }
 
     private getControlAdapter() {
-        const adapters = this.getAdapterList();
+        const adapters = this.getSelectedAdapters();
 
         const adapterInfo = adapters?.find(ai => ai.adapter.hasCapability(IncyclistCapability.Control));
         return adapterInfo;
@@ -1309,12 +1294,13 @@ export class DeviceRideService  extends EventEmitter{
 
     async enforceERG():Promise<void> {
         try {
-            const adapters = this.getAdapterList();
+            const adapters = this.getSelectedAdapters();
 
             const adapterInfo = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control)) 
             if (!adapterInfo?.adapter)
                 return
             const {udid,adapter} = adapterInfo
+            const config = this.getDeviceConfiguration()
 
             // We can't switch back to DaumClassic mode on Daum Premium, we would have to sent the whole route mid ride
             if (adapter.getCyclingMode().getModeProperty('eppSupport'))
@@ -1323,7 +1309,7 @@ export class DeviceRideService  extends EventEmitter{
             const modes = adapter.getSupportedCyclingModes().filter( C => C.supportsERGMode())
             if (modes.length>0)  {
                 const mode = new modes[0](adapter)
-                const modeInfo = this.configurationService.getModeSettings(udid,mode.getName())
+                const modeInfo = config.getModeSettings(udid,mode.getName())
                 const settings = modeInfo.settings
 
                 const device = adapter
@@ -1344,8 +1330,8 @@ export class DeviceRideService  extends EventEmitter{
 
         const currentMode = this.getCyclingMode(udid)
         if (!currentMode || currentMode.getName()!==mode) { // mode was changed
-            // TODO
-            const adapters = this.getAdapterList();
+            
+            const adapters = this.getSelectedAdapters()
             const adapter = adapters?.find( ai=> ai.udid===udid)?.adapter
             if (adapter && adapter.isControllable()) {
                 const device = adapter as IncyclistDeviceAdapter
@@ -1382,12 +1368,33 @@ export class DeviceRideService  extends EventEmitter{
         
     }
 
+    protected storeOriginalCyclingMode() {
+        const {adapter} = this.getControlAdapter()??{}
+        if (adapter)
+            this.originalMode = adapter.getCyclingMode() as CyclingMode
+    }
+
+    @Injectable
+    protected getDeviceConfiguration() {
+        return useDeviceConfiguration()
+    }
+
+    @Injectable
+    protected getUserSettings() {
+        return useUserSettings()
+    }
+
+    @Injectable
+    protected getDeviceAccess() {        
+        return useDeviceAccess()
+    }
+
 
  
 }
 
 
-export const useDeviceRide = () => DeviceRideService.getInstance()
+export const useDeviceRide = () => new DeviceRideService()
 
 
 

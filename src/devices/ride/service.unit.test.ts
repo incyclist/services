@@ -1,17 +1,31 @@
-import { AntCadAdapter, AntDeviceSettings, AntPwrAdapter, DeviceData, DeviceSettings, IncyclistCapability } from 'incyclist-devices'
+import { AntCadAdapter, AntDeviceSettings, AntFEAdapter, AntPwrAdapter, DeviceData, DeviceSettings, IncyclistCapability } from 'incyclist-devices'
 import {DeviceRideService} from './service'
-import { AdapterRideInfo } from './model'
+import { AdapterRideInfo, RideServiceDeviceProperties } from './model'
+import { DeviceConfigurationService } from '../configuration'
+import { EventEmitter } from 'stream'
 
 describe('DeviceRideService',()=>{
     describe('onData',()=>{
         let service:DeviceRideService, s
-        beforeEach( ()=>{
-            s = service = new DeviceRideService()
+        const data: Array<DeviceData> = []
+        const setupMocks  = (s,adapters)=>{
+            s.getSelectedAdapters = jest.fn().mockReturnValue( adapters)
 
+            const configurationService= { 
+                getSelectedDevices: jest.fn(()=>
+                    [{capability:IncyclistCapability.Cadence,selected:'2'},
+                    {capability:IncyclistCapability.Power,selected:'1'}]
+            )}
+            s.emit = jest.fn( (e,d)=>{ data.push(d)} )
+            s.inject('DeviceConfiguration', configurationService)
+
+        }
+        beforeEach( ()=>{
+            service = new DeviceRideService()            
         })
 
         afterEach( ()=>{
-
+            service.reset()
         })
 
         test('bug: no progress at  ride with ANT+PWR+ anf ANT+CAD',()=>{
@@ -24,15 +38,7 @@ describe('DeviceRideService',()=>{
             adapters.push( { adapter:pwr,udid:'1', capabilities:[IncyclistCapability.Power, IncyclistCapability.Cadence, IncyclistCapability.Speed], isStarted:true })
             adapters.push( { adapter:cad,udid:'2', capabilities:[IncyclistCapability.Cadence], isStarted:true })
 
-            s.getAdapterList = jest.fn().mockReturnValue( adapters)
-            s.configurationService= { 
-                getSelectedDevices: jest.fn(()=>
-                    [{capability:IncyclistCapability.Cadence,selected:'2'},
-                    {capability:IncyclistCapability.Power,selected:'1'}]
-            )}
-            const data:Array<DeviceData> = []
-            s.emit = jest.fn( (e,d)=>{ data.push(d)} )
-            
+            setupMocks(service,adapters)            
 
 
             service.onData(d1,{power:0, speed:0, cadence:0})
@@ -49,6 +55,55 @@ describe('DeviceRideService',()=>{
             expect(currentData.power??0).not.toBe(0)
 
 
+        })
+
+    })
+
+    describe('start',()=>{
+
+        let service: DeviceRideService
+        let adapter
+        let mockConfig: Partial<DeviceConfigurationService> = {
+            isInitialized: jest.fn().mockReturnValue(true),
+            once:jest.fn(),
+            on:jest.fn(),
+            off:jest.fn(),
+            removeAllListeners:jest.fn(),
+            getModeSettings:jest.fn().mockReturnValue({}),
+        }
+
+        const setupMocks = (s,a)=> {
+            s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
+            s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
+            a.isStarted = jest.fn().mockReturnValue(true)
+            a.start = jest.fn().mockResolvedValue(true)
+        }
+        beforeEach( ()=>{
+            service = new DeviceRideService()
+            service.inject('DeviceConfiguration', mockConfig)
+        })
+
+        afterEach( ()=>{                
+            service.stop()
+            service.reset()            
+        })
+
+        test('only powermeter',async ()=>{
+            adapter = new AntPwrAdapter({deviceID: '2606',profile: 'PWR',interface: 'ant'})
+            setupMocks(service,adapter)
+
+            const props:Partial<RideServiceDeviceProperties> = {forceErgMode:false, user:{weight:70}}
+            const started = await service.start(props)
+            expect(started).toBe(true)
+        })
+
+        test('only smarttrainer',async ()=>{
+            adapter = new AntFEAdapter({deviceID: '2606',profile: 'FE',interface: 'ant'})
+            setupMocks(service,adapter)
+
+            const props:Partial<RideServiceDeviceProperties> = {forceErgMode:false, user:{weight:70}}
+            const started = await service.start(props)
+            expect(started).toBe(true)
         })
 
     })
