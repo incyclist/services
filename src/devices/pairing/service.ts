@@ -1066,6 +1066,7 @@ export class DevicePairingService  extends IncyclistService{
                 if (device) {
                     device.value = value
                     device.unit = unitInfo.unit
+                    device.connectState = 'connected'
                 }
             }
            
@@ -1077,9 +1078,9 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
-        this.logEvent({message:'device detected',device:deviceSettings})
         
         const udid = this.configuration.add(deviceSettings,{legacy:false})
+        this.logEvent({message:'device detected',device:deviceSettings,udid})
         
         if(!udid) {
             this.logEvent({message:'device could not be added', reason:'add() failed'})
@@ -1089,6 +1090,7 @@ export class DevicePairingService  extends IncyclistService{
         const adapter = this.configuration.getAdapter(udid)
         
         if (adapter) {
+            adapter.onScanStart()
             this.markConnected(adapter, udid);
 
             if (this.isScanning()) {
@@ -1097,13 +1099,11 @@ export class DevicePairingService  extends IncyclistService{
                     const handler = ( deviceSettings:DeviceSettings, data:DeviceData)=>{
                         this.onDeviceData(data,udid)
                     }
-        
                     adapter.on('data',handler)
                     this.state.scan.adapters.push( {udid,adapter, handler})
                 }
     
             }
-
 
             this.checkCanStart()
         }
@@ -1477,7 +1477,10 @@ export class DevicePairingService  extends IncyclistService{
         if (!ai)
             return;
 
-        ai.forEach( a=>a.adapter.off('data',a.handler))
+        ai.forEach( a=> {
+            a.adapter.onScanStop()
+            a.adapter.off('data',a.handler) 
+        })
         delete this.state.scan.adapters
     }
 

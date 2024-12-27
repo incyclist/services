@@ -99,6 +99,8 @@ class TestWrapper extends DevicePairingService {
 
             this.getState().adapters?.push( {udid,capabilities,
                 adapter:{                         
+                    onScanStart:jest.fn(),
+                    onScanStop:jest.fn(),
                     getCapabilities:jest.fn().mockReturnValue(capabilities),
                     hasCapability:jest.fn( (name) => capabilities.find(c =>c===name)),
                     pause:jest.fn().mockResolvedValue(true),
@@ -372,7 +374,7 @@ describe('PairingService',()=>{
                 
                 expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Stopping Adapters'}))
                 expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'Start Scanning'}))
-                expect(logEvent).toHaveBeenNthCalledWith( 3,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'FE'}}))
+                expect(logEvent).toHaveBeenNthCalledWith( 4,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'FE'}}))
                 expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'Pairing completed'}))
                 expect(access.scan).toHaveBeenCalled()
                 
@@ -419,7 +421,8 @@ describe('PairingService',()=>{
 
                 expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Stopping Adapters'}))
                 expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'Start Scanning'}))
-                expect(logEvent).toHaveBeenNthCalledWith( 3,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'HR'}}))
+                // message 3: connect state
+                expect(logEvent).toHaveBeenNthCalledWith( 4,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'HR'}}))
                 
                 expect(access.scan).toHaveBeenCalled()
                 expect(ride.startAdapters).not.toHaveBeenCalled()
@@ -1368,6 +1371,8 @@ describe('PairingService',()=>{
 
                     configuration.add = jest.fn( (d) =>  {
                         configuration.getAdapter = jest.fn().mockReturnValue( {
+                            onScanStart:jest.fn(),
+                            onScanStop:jest.fn(),
                             getCapabilities: jest.fn().mockReturnValue( [IncyclistCapability.Control]),
                             on:onData,
                             getUniqueName:jest.fn().mockReturnValue(d.name),
@@ -1405,6 +1410,8 @@ describe('PairingService',()=>{
 
                     configuration.add = jest.fn( (d) =>  {
                         configuration.getAdapter = jest.fn().mockReturnValue( {
+                            onScanStart:jest.fn(),
+                            onScanStop:jest.fn(),
                             getCapabilities: jest.fn().mockReturnValue( [IncyclistCapability.Control]),
                             on:onData,
                             getUniqueName:jest.fn().mockReturnValue(d.name),
@@ -1439,6 +1446,8 @@ describe('PairingService',()=>{
 
                     configuration.add = jest.fn( (d) =>  {
                         configuration.getAdapter = jest.fn().mockReturnValue( {
+                            onScanStart:jest.fn(),
+                            onScanStop:jest.fn(),
                             getCapabilities: jest.fn().mockReturnValue( [IncyclistCapability.Control]),
                             on:onData,
                             getUniqueName:jest.fn().mockReturnValue(d.name),
@@ -1486,6 +1495,8 @@ describe('PairingService',()=>{
 
                     configuration.add = jest.fn( (d) =>  {
                         configuration.getAdapter = jest.fn().mockReturnValue( {
+                            onScanStart:jest.fn(),
+                            onScanStop:jest.fn(),
                             getCapabilities: jest.fn().mockReturnValue( [IncyclistCapability.Control]),
                             on:onData,
                             getUniqueName:jest.fn().mockReturnValue(d.name),
