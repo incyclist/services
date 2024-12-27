@@ -420,7 +420,7 @@ export class DeviceConfigurationService  extends IncyclistService{
                 mode = modeObj?.getName()
             }
             else {
-                modeObj = options.find( m=> m.getConfig().name===mode)
+                modeObj = options.find( m=> m.getName()===mode)
             }
 
 
