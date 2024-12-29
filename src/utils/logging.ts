@@ -17,6 +17,8 @@ export function getLegacyInterface(d:IncyclistDeviceAdapter) {
             return "ANT-"+(settings as AntDeviceSettings).profile
         case 'ble':
             return "BLE-"+(settings as BleDeviceSettings).protocol
-    
+        case 'wifi':
+            return "Wifi-"+(settings as BleDeviceSettings).protocol
+        
     }
 }

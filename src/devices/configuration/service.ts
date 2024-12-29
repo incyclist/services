@@ -7,6 +7,7 @@ import { merge } from "../../utils/merge";
 import clone from "../../utils/clone";
 import { IncyclistService } from "../../base/service";
 import { Injectable,Singleton } from "../../base/decorators";
+import { getBindings } from "../../api";
 
 
 interface DeviceAdapterList {[index: string]: IncyclistDeviceAdapter}
@@ -35,6 +36,7 @@ export class DeviceConfigurationService  extends IncyclistService{
     settings: DeviceConfigurationSettings
     adapters: DeviceAdapterList = {}
     protected features: {[index:string]:boolean}
+    protected newInterfaces: string[] = []
 
     constructor() {
         super('DeviceConfig')
@@ -94,21 +96,19 @@ export class DeviceConfigurationService  extends IncyclistService{
             this.settings.devices = []
 
         this.settings.devices.forEach( d=> {
-            
+            if (!d?.udid)
+                return;
             try {
                 this.adapters[d.udid] = this.getAdapterFromSetting(d.settings)
             }
             catch(err) {
                 this.logEvent({message:'error',fn:'init()->Adapterfactory.create()',error:err.message,udid:d.udid, settings:d.settings,  devices:this.settings.devices, stack:err.stack,})
-                
-
-                
             }
         })
 
         const wifi = this.settings?.interfaces?.find( i=> i.name === 'wifi')
         if (!wifi) {
-            this.settings.interfaces.push( {name:'wifi',enabled:true,invisible:true} )
+            this.addWifiInterface()
         }
         else {
             const idx = this.settings.interfaces.indexOf(wifi)
@@ -589,6 +589,16 @@ export class DeviceConfigurationService  extends IncyclistService{
 
     //  Interface methods
 
+    getNewInterfaces():string[] {
+        return this.newInterfaces
+    }
+    confirmNewInterfaces(name:string):void {
+        this.logEvent({message:'interface confirmed',interface:name})
+        const confirmed =  this.newInterfaces.find( i => i===name)
+        if (confirmed)  
+            this.newInterfaces.splice(this.newInterfaces.indexOf(confirmed),1)
+    }
+
     getInterfaceSettings(ifName:string):InterfaceSetting {
         if (!this.settings) this.settings={interfaces:[]}
         if (!this.settings.interfaces) this.settings.interfaces=[]
@@ -856,9 +866,9 @@ export class DeviceConfigurationService  extends IncyclistService{
 
         interfaces.push( {name:'ant', enabled:connections?.ant?.enabled||true})
         interfaces.push( {name:'ble', enabled:true})
-        interfaces.push( {name:'wifi', enabled:true, invisible:true})
         interfaces.push( {name:'serial', enabled:get(connections?.serial?.enabled,true),protocol:connections?.serial?.protocols?.find(p=>p.selected).name })
         interfaces.push( {name:'tcpip', enabled:get(connections?.tcpip?.enabled,false),protocol:'Daum Premium', port:51955})
+        this.addWifiInterface()
 
     }
 
@@ -913,9 +923,33 @@ export class DeviceConfigurationService  extends IncyclistService{
 
         this.settings.interfaces.push( {name:'ant', enabled:true})
         this.settings.interfaces.push( {name:'ble', enabled:true})
-        this.settings.interfaces.push( {name:'wifi', enabled:true,invisible:true})
         this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
         this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
+
+        this.addWifiInterface()
+    }
+
+    protected isWindows():boolean {
+        const {appInfo} = getBindings()
+
+        // istanbul ignore next
+        if (!appInfo) {
+            return false
+        }
+        const os = appInfo.getOS()
+        return os.platform==='win32'
+    }
+
+    protected addWifiInterface():void {
+
+        const enabled = !this.isWindows()
+
+        this.settings.interfaces.push( {name:'wifi',enabled,invisible:true} )
+        this.logEvent({message:'interface added',interface:'wifi', enabled})
+
+        if (!enabled)
+            this.newInterfaces.push('wifi')
+    
     }
 
 

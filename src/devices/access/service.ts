@@ -291,7 +291,7 @@ export class DeviceAccessService  extends IncyclistService{
         if (!existing) {
             const properties = clone(this.defaultProps)            
             merge(properties, props)
-            const iface = this.getInterfaceFactory().create(ifaceName,{binding})
+            const iface = this.getInterfaceFactory().create(ifaceName,{binding,enabled:props.enabled??true})
             const info: InterfaceInfoInternal = { name:ifaceName,interface:iface, enabled:false, isScanning:false, properties,state: 'unknown'}
             this.interfaces[ifaceName]= info
             info.interface.setBinding(binding)

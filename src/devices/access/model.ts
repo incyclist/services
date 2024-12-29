@@ -47,6 +47,9 @@ export interface InterfaceAccessProps {
 
     /** If set to `true` the service will continously try to connect to this interface, otherwise [[connect]] needs to be explicitely called */
     autoConnect?: boolean
+
+    /** If set to `true` (which is the default) the interface is enabled and can be started upon initialization */
+    enabled?: boolean
 }
 
 
