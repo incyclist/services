@@ -905,5 +905,100 @@ describe( 'DeviceConfigurationService',()=>{
             expect(service.isInitialized()).toBe(false)
         })
     })
+
+    describe('getAdapters',()=>{
+
+        const A = (c) => ({ getCapabilities: jest.fn().mockReturnValue(c)})
+
+        let service;
+        beforeEach( ()=>{            
+            service = new DeviceConfigurationService()
+            service.updateUserSettings =jest.fn()
+            service.emitCapabiltyChanged = jest.fn()
+
+            SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue( {})
+
+        })
+
+        afterEach( ()=>{
+            AdapterFactory.reset()
+        })
+
+        afterAll( ()=>{
+            (SerialPortProvider as any)._instance = undefined
+        })
+
+        test('get all adapters',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}}
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2','3']},
+                    {capability:IncyclistCapability.Control, selected:'2', devices:['2']}
+                ]
+            }
+            service.adapters = {
+                "1" : A(['hearrate']),
+                "2" : A(['control','power','speed','cadence','hearrate']),
+            }
+            
+
+            const res = service.getAdapters(false)
+            expect(res.map(a=>a.udid)).toEqual(['1','2'])
+
+        })      
+
+        test('get only selected adapters',()=>{
+
+
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                    {udid:'3',settings:{interface:'serial',name:'Daum 8080',port:'COM5'}}
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2','3']},
+                    {capability:IncyclistCapability.Control, selected:'2', devices:['2','3']},
+                ]
+            }
+            service.adapters = {
+                "1" : A(['hearrate']),
+                "2" : A(['control','power','speed','cadence','hearrate']),
+                "3" : A(['control','power','speed','cadence','hearrate'])
+            }
+
+            const res = service.getAdapters(true)
+            expect(res.map(a=>a.udid)).toEqual(['1','2'])
+
+        })      
+
+
+        test('device with unsupported interface',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'hr'}},
+                    {udid:'2',settings:{interface:'serial',name:'Daum 8080',port:'COM4'}},
+                    {udid:'3',settings:{interface:'wifi',name:'234',protocol:'hr'}}
+                ], 
+                capabilities:[
+                    {capability:IncyclistCapability.HeartRate, selected:'1',devices:['1','2','3']},
+                    {capability:IncyclistCapability.Control, selected:'2', devices:['2']},
+                    {capability:'bike', selected:'2',devices:['2']}
+                ]
+            }
+            service.adapters = {
+                "1" : A(['hearrate']),
+                "2" : A(['control','power','speed','cadence','hearrate']),
+            }
+
+            const res = service.getAdapters(false)
+            expect(res.map(a=>a.udid)).toEqual(['1','2'])
+
+        })      
+
+    })
     
 })
