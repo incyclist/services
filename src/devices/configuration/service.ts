@@ -1,6 +1,6 @@
 import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
-import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceModeInfo, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting, 
+import { AdapterInfo, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting, 
          LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"
 import { v4 as generateUdid } from 'uuid';
 import { merge } from "../../utils/merge";
@@ -735,7 +735,7 @@ export class DeviceConfigurationService  extends IncyclistService{
 
     }
 
-    private addHrmsFromLegacy(hrms: any, devices: import("/mnt/c/linux-dev/incyclist/services/src/devices/configuration/model/index").DeviceListEntry[], capabilities: import("/mnt/c/linux-dev/incyclist/services/src/devices/configuration/model/index").CapabilitySetting[]) {
+    private addHrmsFromLegacy(hrms: any, devices: DeviceListEntry[], capabilities: CapabilitySetting[]) {
         hrms.forEach(hrm => {
             // delete some legay properties
             const isSelected = hrm.selected;
@@ -783,7 +783,7 @@ export class DeviceConfigurationService  extends IncyclistService{
         });
     }
 
-    private addBikesFromLegacy(bikes: any, devices: import("/mnt/c/linux-dev/incyclist/services/src/devices/configuration/model/index").DeviceListEntry[], all: ExtendedIncyclistCapability[], capabilities: import("/mnt/c/linux-dev/incyclist/services/src/devices/configuration/model/index").CapabilitySetting[], modeSettings: LegacyModeSettings) {
+    private addBikesFromLegacy(bikes: any, devices: DeviceListEntry[], all: ExtendedIncyclistCapability[], capabilities: CapabilitySetting[], modeSettings: LegacyModeSettings) {
         bikes.forEach(bike => {
             if (bike.protocol === 'Simulator')
                 bike.interface = 'simulator';
