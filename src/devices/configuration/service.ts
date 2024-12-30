@@ -8,6 +8,7 @@ import clone from "../../utils/clone";
 import { IncyclistService } from "../../base/service";
 import { Injectable,Singleton } from "../../base/decorators";
 import { getBindings } from "../../api";
+import semver from 'semver'
 
 
 interface DeviceAdapterList {[index: string]: IncyclistDeviceAdapter}
@@ -36,7 +37,6 @@ export class DeviceConfigurationService  extends IncyclistService{
     settings: DeviceConfigurationSettings
     adapters: DeviceAdapterList = {}
     protected features: {[index:string]:boolean}
-    protected newInterfaces: string[] = []
 
     constructor() {
         super('DeviceConfig')
@@ -106,16 +106,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             }
         })
 
-        const wifi = this.settings?.interfaces?.find( i=> i.name === 'wifi')
-        if (!wifi) {
-            this.addWifiInterface()
-        }
-        else {
-            const idx = this.settings.interfaces.indexOf(wifi)
-            this.settings.interfaces[idx] = {name:'wifi',enabled:wifi.enabled,invisible:wifi.invisible}
-
-        }
-
+        this.initWifiInterface()
 
         this.verifyCapabilitySettings()
         this.removeLegacySettings() 
@@ -589,14 +580,35 @@ export class DeviceConfigurationService  extends IncyclistService{
 
     //  Interface methods
 
-    getNewInterfaces():string[] {
-        return this.newInterfaces
+    initWifiInterface() {
+        const wifi = this.settings?.interfaces?.find( i=> i.name === 'wifi')
+
+        if (!this.doesAppSupportsWifi()) {
+            if (wifi) {
+                this.logEvent({message:'interface disabled',interface:'wifi'})
+                wifi.enabled = false
+                wifi.invisible = true;
+            }
+            return;
+        }
+
+        if (!wifi) {
+            this.addWifiInterface()
+        }
+        else {
+            const wifiEnforcedVisible = this.getUserSettings().get('wifiEnforcedVisible',false)
+
+            const invisible = wifiEnforcedVisible ? false : !this.isWindows()
+            const enabled = this.isWindows() ? (wifi.enabled??false) : true
+            const idx = this.settings.interfaces.indexOf(wifi)
+            this.settings.interfaces[idx] = {name:'wifi',enabled,invisible}
+
+        }
+
     }
-    confirmNewInterfaces(name:string):void {
-        this.logEvent({message:'interface confirmed',interface:name})
-        const confirmed =  this.newInterfaces.find( i => i===name)
-        if (confirmed)  
-            this.newInterfaces.splice(this.newInterfaces.indexOf(confirmed),1)
+
+    confirmWifiInterface():void {
+        this.getUserSettings().set('wifiConfirmed',true)
     }
 
     getInterfaceSettings(ifName:string):InterfaceSetting {
@@ -868,7 +880,7 @@ export class DeviceConfigurationService  extends IncyclistService{
         interfaces.push( {name:'ble', enabled:true})
         interfaces.push( {name:'serial', enabled:get(connections?.serial?.enabled,true),protocol:connections?.serial?.protocols?.find(p=>p.selected).name })
         interfaces.push( {name:'tcpip', enabled:get(connections?.tcpip?.enabled,false),protocol:'Daum Premium', port:51955})
-        this.addWifiInterface()
+        this.initWifiInterface()
 
     }
 
@@ -926,7 +938,17 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
         this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
 
-        this.addWifiInterface()
+        this.initWifiInterface()
+    }
+
+    protected doesAppSupportsWifi():boolean {
+        const version = this.getAppVersion()
+        return semver.gte(version,'0.9.10')
+    }
+
+    protected getAppVersion():string {
+        const {appInfo} = getBindings()
+        return appInfo.getAppVersion()
     }
 
     protected isWindows():boolean {
@@ -942,14 +964,13 @@ export class DeviceConfigurationService  extends IncyclistService{
 
     protected addWifiInterface():void {
 
+        const wifiEnforcedVisible = this.getUserSettings().get('wifiEnforcedVisible',false)
+
         const enabled = !this.isWindows()
+        const invisible = wifiEnforcedVisible ? false : !this.isWindows()
 
-        this.settings.interfaces.push( {name:'wifi',enabled,invisible:true} )
-        this.logEvent({message:'interface added',interface:'wifi', enabled})
-
-        if (!enabled)
-            this.newInterfaces.push('wifi')
-    
+        this.settings.interfaces.push( {name:'wifi',enabled,invisible} )
+        this.logEvent({message:'interface added',interface:'wifi', enabled})   
     }
 
 
