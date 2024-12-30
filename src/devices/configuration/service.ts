@@ -948,7 +948,7 @@ export class DeviceConfigurationService  extends IncyclistService{
 
     protected getAppVersion():string {
         const {appInfo} = getBindings()
-        return appInfo.getAppVersion()
+        return appInfo?.getAppVersion()??'0.0.0'
     }
 
     protected isWindows():boolean {

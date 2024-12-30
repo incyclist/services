@@ -47,6 +47,7 @@ class TestWrapper extends DevicePairingService {
             configuration.setInterfaceSettings=jest.fn()
             configuration.init=jest.fn()
         }
+        configuration.initWifiInterface=jest.fn()
 
         ride.startAdapters=jest.fn()
         ride.getAdapters=jest.fn().mockReturnValue([])

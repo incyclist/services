@@ -108,6 +108,8 @@ describe( 'DeviceConfigurationService',()=>{
             service = new DeviceConfigurationService()
             service.emit = jest.fn()
             service.initFromLegacy = jest.fn() //spyOn(service,'initFromLegacy')
+            service.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
+            service.isWindows = jest.fn().mockReturnValue(false)
 
             //service.initFromLegacy = jest.fn()
             service.inject('UserSettings', {
@@ -132,6 +134,24 @@ describe( 'DeviceConfigurationService',()=>{
 
             expect(service.settings).toMatchSnapshot()
             expect(service.initFromLegacy).not.toHaveBeenCalled()
+
+        })
+
+        test('empty configuration on windows',async ()=>{
+            testData= {}
+            service.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
+            service.isWindows = jest.fn().mockReturnValue(true)
+            
+            await service.init()
+
+            let wifi = service.settings.interfaces.find( i=> i.name === 'wifi')
+            expect(wifi).toMatchObject({name:'wifi',enabled:false,invisible:false})
+
+            service.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
+            
+            await service.init()
+            wifi = service.settings.interfaces.find( i=> i.name === 'wifi')
+            expect(wifi).toMatchObject({name:'wifi',enabled:false,invisible:false})
 
         })
 
@@ -204,6 +224,9 @@ describe( 'DeviceConfigurationService',()=>{
         let testData
         beforeEach( ()=>{            
             service = new DeviceConfigurationService()
+            service.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
+            service.isWindows = jest.fn().mockReturnValue(false)
+
             service.emit = jest.fn()
             service.inject('UserSettings', {
                 init: jest.fn(),
