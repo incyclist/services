@@ -495,6 +495,8 @@ export class DeviceConfigurationService  extends IncyclistService{
             const info = []
             udids.forEach( udid=> {
                 const adapter = this.adapters[udid]
+                if (!adapter)
+                    return;
                 info.push( {udid,adapter,capabilities:adapter.getCapabilities()})
             })
             
@@ -512,6 +514,8 @@ export class DeviceConfigurationService  extends IncyclistService{
                 return;
 
             const adapter = this.adapters[c.selected]            
+            if (!adapter)
+                return;
             const idx = adapters.findIndex( a => a.udid===c.selected)
 
             if (idx===-1) {

@@ -5,6 +5,7 @@ export interface IFileSystem {
     deleteFile(path)
     createWriteStream(...args)
     createReadStream(...args)
+    unlink(path)
 
     access(path:string,mode?:number):Promise<void>
     existsSync(path:string):boolean

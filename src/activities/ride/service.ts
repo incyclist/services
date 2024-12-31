@@ -291,6 +291,8 @@ export class ActivityRideService extends IncyclistService {
     }
 
     getDashboardDisplayProperties() {
+        if (!this.current)
+            return [];
 
         try {
             const currentValues = this.getCurrentValues();
@@ -340,20 +342,24 @@ export class ActivityRideService extends IncyclistService {
 
     protected getCurrentValues() {
         const distance = (this.activity?.distance ?? 0) / 1000;
-        const speed = (this.current.deviceData.speed ?? 0);
-        const power = (this.current.deviceData.power ?? 0);
+        const speed = (this.current.deviceData?.speed ?? 0);
+        const power = (this.current.deviceData?.power ?? 0);
         const slope = this.current.position?.slope;
-        const heartrate = this.current.deviceData.heartrate;
-        const cadence = (this.current.deviceData.cadence ?? 0);
+        const heartrate = this.current.deviceData?.heartrate;
+        const cadence = (this.current.deviceData?.cadence ?? 0);
         const time = this.activity?.time ?? 0;
 
         let distanceRemaining = (this.getTotalDistance()/1000-distance)
         if (isNaN(distanceRemaining)) distanceRemaining=undefined
         if (distanceRemaining<0) distanceRemaining=0
 
-        const timeRemaining = this.durationCalculator.getRemainingTime(
-            {route:this.current.route, speed:this.current.deviceData.speed,routePos:this.activity.distance+(this.activity.startPos??0), endPos:this.current.endPos}
-        )
+        let timeRemaining 
+        
+        if (speed>0)  {
+            timeRemaining = this.durationCalculator.getRemainingTime(
+                {route:this.current.route, speed:this.current.deviceData?.speed,routePos:this.activity.distance+(this.activity?.startPos??0), endPos:this.current?.endPos}
+            )    
+        }
 
         return { distance, time, speed, power, slope, heartrate, cadence, timeRemaining, distanceRemaining };
     }
@@ -826,7 +832,7 @@ export class ActivityRideService extends IncyclistService {
             const {startPos,realityFactor} = settings
             const routeId = this.activity.route.id
             const routeHash = this.activity.route.hash
-            const filter = { routeId,routeHash,startPos,realityFactor,minTime:60, minDistance:500}
+            const filter = { routeId,routeHash,startPos,realityFactor,minTime:30, minDistance:500}
 
             useActivityList()
                 .getPastActivitiesWithDetails(filter)
