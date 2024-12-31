@@ -1,11 +1,12 @@
-import EventEmitter from "events";
-import { EventLogger } from "gd-eventlog";
 import {AdapterFactory, AntDeviceSettings, DeviceSettings, IncyclistInterface, InterfaceFactory, SerialAdapterFactory, SerialPortProvider, SerialScannerProps} from "incyclist-devices";
 import clone from "../../utils/clone";
 import { merge } from "../../utils/merge";
 import { sleep } from "../../utils/sleep";
-import { AdapterInfo, DeviceConfigurationService, InterfaceSetting, useDeviceConfiguration } from "../configuration";
+import { AdapterInfo, InterfaceSetting, useDeviceConfiguration } from "../configuration";
 import { InterfaceList, ScanFilter, InterfaceState, InterfaceInfo, InterfaceAccessProps, ScanState, ScanForNewFilter, EnrichedInterfaceSetting } from "./model";
+import { IncyclistService } from "../../base/service";
+import { Singleton } from "../../base/types";
+import { Injectable } from "../../base/decorators/Injection";
 
 interface InternalScanState {
     promises: (Promise<DeviceSettings[]>)[]
@@ -17,7 +18,7 @@ interface InterfaceInfoInternal extends InterfaceInfo {
     unavailable?: boolean
 }
 
-interface onDataHandlersMap   {[index: string]: (...args)=>void}
+interface OnDataHandlersMap   {[index: string]: (...args)=>void}
 
 /**
  * This service is used by the Front-End to manage the access to devices and interfaces
@@ -75,34 +76,17 @@ interface onDataHandlersMap   {[index: string]: (...args)=>void}
  * @public
  * @noInheritDoc
  */
-export class DeviceAccessService  extends EventEmitter{
-    protected static _instance: DeviceAccessService
+@Singleton
+export class DeviceAccessService  extends IncyclistService{
     protected interfaces: InterfaceList = {}
     protected scanState: InternalScanState
-    protected logger:EventLogger
     protected defaultProps:InterfaceAccessProps
 
-    static getInstance() {
-        if (!DeviceAccessService._instance)
-            DeviceAccessService._instance = new DeviceAccessService()
-        return DeviceAccessService._instance;
-    }
-
     constructor() {
-        super()
+        super('DeviceAccess')
 
         this.scanState = null;
-        this.logger = new EventLogger('DeviceAccess')
         this.defaultProps = {}
-    }
-
-    protected logEvent(event) {
-        this.logger.logEvent(event)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const w = global.window as any
-        if (w?.SERVICE_DEBUG) {
-            console.log('~~~ ACCESS-SVC', event)
-        }
     }
 
     /**
@@ -149,7 +133,7 @@ export class DeviceAccessService  extends EventEmitter{
            
                 
             if (this.isScanning(ifaceName)) {
-                this.logEvent( {message:'Illegal State, enable Interface cannot be called during an ongoing scan'})
+                this.logEvent( {message:'Illegal State, enable Interface cannot be called during an ongoing scan',interface:ifaceName})
                 return;
             }
            
@@ -178,7 +162,7 @@ export class DeviceAccessService  extends EventEmitter{
     
         }
         catch(err) {
-            this.logEvent({message:'Error', fn:'enableInterface',error:err.message,stack:err.stack})
+            this.logEvent({message:'Error', fn:'enableInterface',interface:ifaceName, error:err.message,stack:err.stack})
         }
     }
 
@@ -286,7 +270,7 @@ export class DeviceAccessService  extends EventEmitter{
     enrichWithAccessState( interfaces:InterfaceSetting[] ) {
         return interfaces.map( i => {
             const info = this.interfaces[i.name]
-            const enriched=Object.assign({},i) as EnrichedInterfaceSetting
+            const enriched={...i} as EnrichedInterfaceSetting
 
             if(!info) {
                 enriched.state = 'unavailable'
@@ -307,7 +291,8 @@ export class DeviceAccessService  extends EventEmitter{
         if (!existing) {
             const properties = clone(this.defaultProps)            
             merge(properties, props)
-            const info: InterfaceInfoInternal = { name:ifaceName,interface:InterfaceFactory.create(ifaceName,{binding}), enabled:false, isScanning:false, properties,state: 'unknown'}
+            const iface = this.getInterfaceFactory().create(ifaceName,{binding,enabled:props.enabled??true})
+            const info: InterfaceInfoInternal = { name:ifaceName,interface:iface, enabled:false, isScanning:false, properties,state: 'unknown'}
             this.interfaces[ifaceName]= info
             info.interface.setBinding(binding)
 
@@ -445,7 +430,7 @@ export class DeviceAccessService  extends EventEmitter{
     async scan( filter:ScanFilter={},props:{timeout?:number,includeKnown?:boolean }={} ): Promise<DeviceSettings[]> {
         this.logEvent({message:'device scan start', filter,props} )
         const detected = [];
-        const onDataHandlers:onDataHandlersMap  = {}
+        const onDataHandlers:OnDataHandlersMap  = {}
         const {includeKnown=false} = props
 
     
@@ -502,6 +487,11 @@ export class DeviceAccessService  extends EventEmitter{
                     }
 
                     const adapter = AdapterFactory.create(deviceSettings)
+
+                    if (!adapter) {
+                        console.log('~~~ no adapter', deviceSettings)
+                        return
+                    }
                     if (filter.capabilities) {
                         let found = false;
 
@@ -587,7 +577,7 @@ export class DeviceAccessService  extends EventEmitter{
     async scanForNew( filter: ScanForNewFilter={}, maxDevices=1, timeout=30000): Promise<DeviceSettings[]|DeviceSettings> {
         
         const devices:DeviceSettings[] = []
-        const configuration  = DeviceConfigurationService.getInstance()
+        const configuration  = this.getDeviceConfiguration()
         const knownAdapters = configuration.getAllAdapters()
 
         if (filter.blackList) {
@@ -717,7 +707,7 @@ export class DeviceAccessService  extends EventEmitter{
         if (!this.scanState)
             return false;
         if (!ifaceName)
-            return this.scanState!==null && this.scanState.promises!==null && this.scanState.promises.length>0
+            return this.scanState?.promises?.length>0
         else return this.interfaces[ifaceName].isScanning;
     }
 
@@ -727,7 +717,7 @@ export class DeviceAccessService  extends EventEmitter{
         const {excludeDisabled} = filter||{}
         const keys = Object.keys(this.interfaces)
 
-        const config = useDeviceConfiguration()
+        const config = this.getDeviceConfiguration()
         
         
         const enabledInterfaces = keys.filter(i=> this.interfaces[i].enabled && config.isInterfaceEnabled(i) )
@@ -747,9 +737,19 @@ export class DeviceAccessService  extends EventEmitter{
         return interfaces
     }
 
+    @Injectable
+    protected getDeviceConfiguration() {
+        return useDeviceConfiguration()
+    }
+
+    @Injectable    
+    protected getInterfaceFactory() {
+        return InterfaceFactory
+    }
+
 
 }
 
-export const useDeviceAccess=() => DeviceAccessService.getInstance()
+export const useDeviceAccess=() => new DeviceAccessService()
 
 

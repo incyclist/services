@@ -20,6 +20,7 @@ export interface InterfaceSetting {
     enabled: boolean;
     port?: number|string;
     protocol?: string
+    invisible?: boolean
 }
 
 export interface ModeListEntry {

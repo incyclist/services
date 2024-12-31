@@ -1229,6 +1229,8 @@ export class DeviceRideService  extends IncyclistService{
 
 
     async toggleCyclingMode() {
+        console.log('~~~ toggle CyclingMode')
+
         if (!this.isToggleEnabled())
             return
         const {adapter} = this.getControlAdapter()??{}; 
@@ -1258,6 +1260,8 @@ export class DeviceRideService  extends IncyclistService{
 
 
     async resetCyclingMode(sendInit:boolean=false) {
+        console.log('~~~ reset CyclingMode')
+
         try {
             const adapterInfo = this.getControlAdapter(); 
             if (!adapterInfo?.adapter)
@@ -1293,6 +1297,8 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     async enforceERG():Promise<void> {
+        console.log('~~~ enforce ERG')
+
         try {
             const adapters = this.getSelectedAdapters();
 

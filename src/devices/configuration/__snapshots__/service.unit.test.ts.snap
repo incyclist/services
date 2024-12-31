@@ -55,6 +55,11 @@ exports[`DeviceConfigurationService init empty configuration 1`] = `
       "port": 51955,
       "protocol": "Daum Premium",
     },
+    {
+      "enabled": true,
+      "invisible": true,
+      "name": "wifi",
+    },
   ],
 }
 `;

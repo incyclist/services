@@ -1,4 +1,4 @@
-import { IncyclistDeviceAdapter } from "incyclist-devices";
+import { CyclingMode, IncyclistDeviceAdapter } from "incyclist-devices";
 import { ExtendedIncyclistCapability } from "../app";
 
 export interface AdapterInfo {
@@ -14,5 +14,5 @@ export interface DeviceModeInfo {
     isSIM?: boolean
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     settings: any
-    options?: string[]
+    options?: CyclingMode[]
 }

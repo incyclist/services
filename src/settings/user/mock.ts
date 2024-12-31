@@ -37,9 +37,13 @@ export default class UserSettingsMock extends UserSettingsService {
         
         const binding = new MockBinding(settings)
         this.setBinding(binding)
+        this.isInitialized = true
 
         UserSettingsService._instance = this
+        this.settings = settings
     }
+
+    
 
 
 

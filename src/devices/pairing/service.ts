@@ -150,7 +150,7 @@ export class DevicePairingService  extends IncyclistService{
     
             this.initConfigHandlers();  
             this.state.interfaces.forEach( i=> {
-                if (!this.isInterfaceEnabled(i.name))
+                if (!this.isInterfaceEnabled(i.name)  )
                     this.unselectOnInterface(i.name)
                     
             })
@@ -281,13 +281,13 @@ export class DevicePairingService  extends IncyclistService{
                 if( devices.length>0)
                     await this.stopAdaptersWithCapability(capability)
 
-                this.run({enforcedScan:true} )
+                await this.run({enforcedScan:true} )
             }
 
             this.deviceSelectState = {capability, devices:available}
 
-            if (devices.length===0) {
-                startScan()                
+            if (devices.length===0) {                
+                startScan()                    
             }
             else {              
 
@@ -662,11 +662,12 @@ export class DevicePairingService  extends IncyclistService{
         delete state.deleted
         delete state.waiting
 
+        state.interfaces = state.interfaces?.filter( i=>!i.invisible)
+
         return state
     }
 
     protected emitStateChange(newState?:PairingState) {
-
         const {onStateChanged,onDeviceSelectStateChanged} = this.settings||{}
 
         this.checkCanStart()
@@ -894,7 +895,7 @@ export class DevicePairingService  extends IncyclistService{
     protected isInterfaceEnabled(target:string|InterfaceSetting) {
         
         const name = (typeof target ==='string') ? target: target.name; 
-        if(name==='simulator')
+        if(name==='simulator' || name==='wifi')
             return true;
         const {interfaces } = this.state
         return interfaces.find( i=> i.name===name && i.enabled && i.state!=='unavailable')!==undefined
@@ -1065,6 +1066,7 @@ export class DevicePairingService  extends IncyclistService{
                 if (device) {
                     device.value = value
                     device.unit = unitInfo.unit
+                    device.connectState = 'connected'
                 }
             }
            
@@ -1076,10 +1078,9 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
-
-        this.logEvent({message:'device detected',device:deviceSettings})
         
         const udid = this.configuration.add(deviceSettings,{legacy:false})
+        this.logEvent({message:'device detected',device:deviceSettings,udid})
         
         if(!udid) {
             this.logEvent({message:'device could not be added', reason:'add() failed'})
@@ -1089,6 +1090,7 @@ export class DevicePairingService  extends IncyclistService{
         const adapter = this.configuration.getAdapter(udid)
         
         if (adapter) {
+            adapter.onScanStart()
             this.markConnected(adapter, udid);
 
             if (this.isScanning()) {
@@ -1097,13 +1099,11 @@ export class DevicePairingService  extends IncyclistService{
                     const handler = ( deviceSettings:DeviceSettings, data:DeviceData)=>{
                         this.onDeviceData(data,udid)
                     }
-        
                     adapter.on('data',handler)
                     this.state.scan.adapters.push( {udid,adapter, handler})
                 }
     
             }
-
 
             this.checkCanStart()
         }
@@ -1337,6 +1337,10 @@ export class DevicePairingService  extends IncyclistService{
         this.logEvent({ message: 'Start Pairing', adapters, props });
         await this.state.check.promise;
 
+        // if pairing was interrupted and a scan was started we don't need to continue here
+        if (this.isScanning())
+            return;
+
         this.checkCanStart()
 
         //targetResume.forEach( ai=> {ai.adapter.resume()})
@@ -1417,6 +1421,7 @@ export class DevicePairingService  extends IncyclistService{
 
 
         this.emit('scanning-start')
+        this.emitStateChange({capabilities:this.state.capabilities})
 
         this.state.tsPrevStart = Date.now();
 
@@ -1451,6 +1456,7 @@ export class DevicePairingService  extends IncyclistService{
 
         
         this.emit('scanning-done')
+        this.emitStateChange({capabilities:this.state.capabilities})
         
 
         // after timeout, re-start to either trigger pairing or scan again
@@ -1460,6 +1466,9 @@ export class DevicePairingService  extends IncyclistService{
             await sleep(500)            
             this.run()
         }
+        
+
+        
 
     }
 
@@ -1468,7 +1477,10 @@ export class DevicePairingService  extends IncyclistService{
         if (!ai)
             return;
 
-        ai.forEach( a=>a.adapter.off('data',a.handler))
+        ai.forEach( a=> {
+            a.adapter.onScanStop()
+            a.adapter.off('data',a.handler) 
+        })
         delete this.state.scan.adapters
     }
 

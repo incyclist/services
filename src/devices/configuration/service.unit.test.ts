@@ -108,20 +108,23 @@ describe( 'DeviceConfigurationService',()=>{
             service = new DeviceConfigurationService()
             service.emit = jest.fn()
             service.initFromLegacy = jest.fn() //spyOn(service,'initFromLegacy')
+            service.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
+            service.isWindows = jest.fn().mockReturnValue(false)
 
             //service.initFromLegacy = jest.fn()
-            service.userSettings= {
+            service.inject('UserSettings', {
                 init: jest.fn(),
                 set: jest.fn(),
                 get: jest.fn( (key,defVal) => testData[key]||defVal),
                 save: jest.fn()
-            }
+            })
             service.emitInitialized = jest.fn()
             SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue( {})
         })
 
         afterEach( ()=>{
             AdapterFactory.reset()
+            service.reset()
         })
 
         test('empty configuration',async ()=>{
@@ -131,6 +134,24 @@ describe( 'DeviceConfigurationService',()=>{
 
             expect(service.settings).toMatchSnapshot()
             expect(service.initFromLegacy).not.toHaveBeenCalled()
+
+        })
+
+        test('empty configuration on windows',async ()=>{
+            testData= {}
+            service.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
+            service.isWindows = jest.fn().mockReturnValue(true)
+            
+            await service.init()
+
+            let wifi = service.settings.interfaces.find( i=> i.name === 'wifi')
+            expect(wifi).toMatchObject({name:'wifi',enabled:false,invisible:false})
+
+            service.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
+            
+            await service.init()
+            wifi = service.settings.interfaces.find( i=> i.name === 'wifi')
+            expect(wifi).toMatchObject({name:'wifi',enabled:false,invisible:false})
 
         })
 
@@ -203,30 +224,33 @@ describe( 'DeviceConfigurationService',()=>{
         let testData
         beforeEach( ()=>{            
             service = new DeviceConfigurationService()
+            service.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
+            service.isWindows = jest.fn().mockReturnValue(false)
+
             service.emit = jest.fn()
-            service.userSettings= {
+            service.inject('UserSettings', {
                 init: jest.fn(),
                 set: jest.fn(),
                 get: jest.fn( (key,defVal) => testData[key]||defVal),
                 save: jest.fn(),
-            };
+            })
 
             SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue( {})
         })
 
         afterEach( ()=>{
             AdapterFactory.reset()
+            service.reset()
         })
 
         afterAll( ()=>{
             (SerialPortProvider as any)._instance = undefined
         })
 
-        test('normal legacy settings',()=>{
+        test('normal legacy settings',async ()=>{
             const settings = clone(SampleLegacySettings)            
-
             testData = settings
-            service.initFromLegacy(settings)
+            await service.init()
 
             //expect(service.settings).toMatchSnapshot()
             const {devices,capabilities,interfaces} = service.settings
@@ -235,7 +259,7 @@ describe( 'DeviceConfigurationService',()=>{
 
             expect(devices[0].settings.selected).toBeUndefined()
             expect(devices[0].settings.protocol).toBeUndefined()
-            expect(interfaces.length).toBe(4)
+            expect(interfaces.length).toBe(5)
 
             const keys = Object.keys(service.adapters)
             const emptyAdapters = keys.find( k=> service.adapters[k]===undefined)
@@ -257,11 +281,11 @@ describe( 'DeviceConfigurationService',()=>{
             expect(getCap(IncyclistCapability.HeartRate)?.selected).toBe(AntHrm3250.udid)            
         })
 
-        test('alternatve legacy settings',()=>{
+        test('alternatve legacy settings',async ()=>{
             const settings = clone(ErrorLegacySettings)            
 
             testData = settings
-            service.initFromLegacy(settings)
+            await service.init()
 
             const {devices,capabilities} = service.settings
             const getCap = (cap: IncyclistCapability|string) => capabilities.find( c=>c.capability===cap)
@@ -270,15 +294,16 @@ describe( 'DeviceConfigurationService',()=>{
 
         })
 
-        test('legacy settings with two devices having the same name',()=>{
+        test('legacy settings with two devices having the same name',async ()=>{
             const settings = clone(SampleLegacySettings)            
 
             const Daum2 = clone(settings.gearSelection.bikes[3])
             Daum2.host = '192.168.2.116'
             Daum2.displayName = 'Daum8i (192.168.2.116)'
             settings.gearSelection.bikes.push(Daum2)
+            testData = settings
 
-            service.initFromLegacy(settings)
+            await service.init()
 
             //expect(service.settings).toMatchSnapshot()
             const {devices} = service.settings
@@ -286,15 +311,17 @@ describe( 'DeviceConfigurationService',()=>{
             expect(devices.map(d=>d.displayName||'').join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,,Daum8i (192.168.2.115),Daum8i (192.168.2.116),,')
         })
 
-        test('legacy settings: Hrm disabled',()=>{
+        test('legacy settings: Hrm disabled',async ()=>{
             const settings = clone(SampleLegacySettings)
             settings.gearSelection.disableHrm = true;
-            service.initFromLegacy(settings)
+            testData = settings
+
+            await service.init()
 
             const {devices,capabilities,interfaces} = service.settings
             expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
 
-            expect(interfaces.length).toBe(4)
+            expect(interfaces.length).toBe(5)
             expect(capabilities.length).toBe(5) //  Control, Heartrate, Power, Cadence, Speed
 
             const AntFe2606 = devices.find(d=>d.settings.profile==='FE' && d.settings.deviceID==='2606')
@@ -309,21 +336,21 @@ describe( 'DeviceConfigurationService',()=>{
         })
 
 
-        test('legacy settings: Bike is also Hrm',()=>{
+        test('legacy settings: Bike is also Hrm',async ()=>{
             const settings = clone(SampleLegacySettings)
             settings.gearSelection.bikes[0].selected = false;
             settings.gearSelection.bikes[3].selected = true
             settings.gearSelection.hrms[1].selected = false;
             settings.gearSelection.hrms[2].selected = true
-            
-            service.initFromLegacy(settings)
+            testData = settings
+            await service.init()
 
             const {devices,capabilities,interfaces} = service.settings
 
             expect(devices.map(d=>service.adapters[d.udid].getName()).join(',')).toBe('Ant+FE 2606,Ant+PWR 2606,Simulator,Daum8i,HRM-Dual:068786,Ant+HR 3250')
 
             expect(devices.length).toBe(6)
-            expect(interfaces.length).toBe(4)
+            expect(interfaces.length).toBe(5)
             expect(capabilities.length).toBe(5) //  Control, Heartrate, Power, Cadence, Speed
 
             const daum = devices.find( d=>d.settings.name==='Daum8i')
@@ -343,7 +370,7 @@ describe( 'DeviceConfigurationService',()=>{
             service.adapters = {}
             AdapterFactory.reset()
             
-            service.initFromLegacy(settings)
+            await service.init()
             
 
             // now run with converted data
@@ -358,14 +385,15 @@ describe( 'DeviceConfigurationService',()=>{
 
         })
 
-        test('empty legacy', ()=>{
+        test('empty legacy', async ()=>{
             const settings = clone(EmptyLegacySettings)
             testData = settings
-            service.initFromLegacy(settings)
+
+            await service.init()
             
             expect(service.settings.devices.length).toBe(0)
             expect(service.settings.capabilities.length).toBe(5)
-            expect(service.settings.interfaces.length).toBe(4)
+            expect(service.settings.interfaces.length).toBe(5)
 
             expect(service.settings.interfaces.find(i=>i.name==='serial')).toEqual({enabled:false,name:'serial',protocol:'Daum Classic'})
             expect(service.settings.gearSelection).toBeUndefined()
@@ -391,6 +419,7 @@ describe( 'DeviceConfigurationService',()=>{
 
         afterEach( ()=>{
             AdapterFactory.reset()
+            service.reset()
         })
 
         afterAll( ()=>{
@@ -638,6 +667,10 @@ describe( 'DeviceConfigurationService',()=>{
             service.emitCapabiltyChanged = jest.fn()
         })
 
+        afterEach( ()=>{
+            service.reset()
+        })
+
         test('devices are undefined',()=>{
             service.settings={}
             service.select('1234','bike')
@@ -694,7 +727,10 @@ describe( 'DeviceConfigurationService',()=>{
         beforeEach( ()=>{            
             service = new DeviceConfigurationService()
             service.updateUserSettings =jest.fn()
+        })
 
+        afterEach( ()=>{
+            service.reset()
         })
 
         test('deleting selected control device in middle of category',()=>{
@@ -829,18 +865,24 @@ describe( 'DeviceConfigurationService',()=>{
 
 
         let service;
-        beforeEach( ()=>{            
+        beforeEach( async ()=>{            
             service = new DeviceConfigurationService()
             service.updateUserSettings =jest.fn()
 
-            service.settings ={
+            service.inject('UserSettings', new UserSettingsMock({
                 interfaces: [
                     {name:'ble', enabled:true},
                     {name:'ant', enabled:false},
                     {name:'serial', enabled:false}                              
                 ]
-            }
+            }))
 
+            await service.init()
+
+        })
+
+        afterEach( ()=>{
+            service.reset()
         })
 
         test('setting protocol',()=>{           
@@ -874,8 +916,12 @@ describe( 'DeviceConfigurationService',()=>{
                 const adapter = AdapterFactory.create(d.settings)
                 service.adapters[d.udid]=adapter
             })
-
         })
+
+        afterEach( ()=>{
+            service.reset()
+        })
+
         test('normal setup',()=>{
             const res = service.getDeviceConfigurationInfo()
             expect(res[IncyclistCapability.Control]).toBeDefined()
@@ -885,15 +931,33 @@ describe( 'DeviceConfigurationService',()=>{
 
     describe('waitForInit',()=>{
         let service:DeviceConfigurationService
-        let userSettings
         let testData
 
         beforeEach( ()=>{            
-            userSettings = new UserSettingsMock({})
-
             service = new DeviceConfigurationService()
+            service.inject('UserSettings', new UserSettingsMock({}))
             service.emit = jest.fn()
-            service.initFromLegacy = jest.fn() //spyOn(service,'initFromLegacy')
+            //service.initFromLegacy = jest.fn() //spyOn(service,'initFromLegacy')
+
+        })
+
+        afterEach( ()=>{
+            AdapterFactory.reset()
+            service.reset()
+        })
+
+        test('not initialized',()=>{
+            expect(service.isInitialized()).toBe(false)
+        })
+    })
+
+  
+    describe ('getModeSettings',()=>{
+
+        let service:DeviceConfigurationService
+        
+        beforeEach( ()=>{            
+            service = new DeviceConfigurationService()
 
         })
 
@@ -901,9 +965,50 @@ describe( 'DeviceConfigurationService',()=>{
             AdapterFactory.reset()
         })
 
-        test('not initialized',()=>{
-            expect(service.isInitialized()).toBe(false)
+        test('with settings',async ()=>{
+            const settings = clone(SampleSettings)
+            service.inject('UserSettings', new UserSettingsMock(settings))
+            await service.init()
+
+            
+            const res = service.getModeSettings('1')
+            const options = res.options?.map( o=>o.getName())
+            delete res.options
+            expect(options).toEqual(['PowerMeter','Smart Trainer','ERG'])
+
+
+            expect(res).toMatchObject({udid:'1',mode:'ERG',settings:{ startPower:"100" },isERG:true, isSIM:false})
         })
+
+        test('no settings',async ()=>{
+            const settings = clone(SampleSettings)
+            service.inject('UserSettings', new UserSettingsMock(settings))
+            await service.init()
+
+            const res = service.getModeSettings('2')
+            const options = res.options?.map( o=>o.getName())
+            delete res.options
+            expect(options).toEqual(['PowerMeter','Smart Trainer','ERG'])
+
+            expect(res).toMatchObject({udid:'2',mode:'Smart Trainer',settings:{},isERG:false, isSIM:true})
+        })
+
+        test('mode selected',async ()=>{
+            const settings = clone(SampleSettings)
+            delete settings.devices[0].modes
+            service.inject('UserSettings', new UserSettingsMock(settings))
+            await service.init()
+
+            const res = service.getModeSettings('1')
+
+            const options = res.options?.map( o=>o.getName())
+            delete res.options
+
+            expect(res).toMatchObject({udid:'1',mode:'ERG',settings:{},isERG:true, isSIM:false  })
+            expect(options).toEqual(['PowerMeter','Smart Trainer','ERG'])
+        })
+
+        
     })
 
     describe('getAdapters',()=>{
