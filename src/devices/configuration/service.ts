@@ -55,64 +55,74 @@ export class DeviceConfigurationService  extends IncyclistService{
     */
     async init():Promise<void> {
 
-        const userSettings = this.getUserSettings()
-        await userSettings.init()
-        if (this.isInitialized()) {
-            this.emitInitialized()
-            return;
-        }
-        this.logEvent({message:'DeviceConfig.init'})
-
-        if (  this.isLegacyConfiguration()) {      
-            this.initFromLegacy()                
-        }
-        else {        
-            await this.getUserSettings().init()
-
-            this.settings = {
-                devices: this.getUserSettings().get('devices',[]),
-                capabilities:this.getUserSettings().get('capabilities',[]),
-                interfaces: this.getUserSettings().get('interfaces',[])
-            }
-        }
-
-        // first time initialization?
-        let emptyConfig = false
-        if (!this.settings)
-            this.settings={}
-
-        if (!this.settings.capabilities || this.settings.capabilities?.length===0) {
-            this.initCapabilties()
-            emptyConfig = true
-        }
-        if (!this.settings.interfaces || this.settings.interfaces?.length===0) { 
-            this.initInterfaces()
-            emptyConfig = true
-        }
-        if (emptyConfig)
-            this.updateUserSettings()
-
-        if (!this.settings?.devices)
-            this.settings.devices = []
-
-        this.settings.devices.forEach( d=> {
-            if (!d?.udid)
+        try {
+            const userSettings = this.getUserSettings()
+            await userSettings.init()
+            if (this.isInitialized()) {
+                this.emitInitialized()
                 return;
-            try {
-                this.adapters[d.udid] = this.getAdapterFromSetting(d.settings)
             }
-            catch(err) {
-                this.logEvent({message:'error',fn:'init()->Adapterfactory.create()',error:err.message,udid:d.udid, settings:d.settings,  devices:this.settings.devices, stack:err.stack,})
+            this.logEvent({message:'DeviceConfig.init'})
+    
+            if (  this.isLegacyConfiguration()) {      
+                this.initFromLegacy()                
             }
-        })
+            else {        
+                await this.getUserSettings().init()
+    
+                this.settings = {
+                    devices: this.getUserSettings().get('devices',[]),
+                    capabilities:this.getUserSettings().get('capabilities',[]),
+                    interfaces: this.getUserSettings().get('interfaces',[])
+                }
+            }
+    
+            // first time initialization?
+            let emptyConfig = false
+            if (!this.settings)
+                this.settings={}
+    
+            if (!this.settings.capabilities || this.settings.capabilities?.length===0) {
+                this.initCapabilties()
+                emptyConfig = true
+            }
+            if (!this.settings.interfaces || this.settings.interfaces?.length===0) { 
+                this.initInterfaces()
+                emptyConfig = true
+            }
+            if (emptyConfig)
+                this.updateUserSettings()
+    
+            if (!this.settings?.devices)
+                this.settings.devices = []
+    
+            this.settings.devices.forEach( d=> {
+                if (!d?.udid)
+                    return;
+                try {
+                    this.adapters[d.udid] = this.getAdapterFromSetting(d.settings)
+                }
+                catch(err) {
+                    this.logEvent({message:'error',fn:'init()->Adapterfactory.create()',error:err.message,udid:d.udid, settings:d.settings,  devices:this.settings.devices, stack:err.stack,})
+                }
+            })
+    
+            this.initWifiInterface()
+    
+            this.verifyCapabilitySettings()
+            this.removeLegacySettings() 
+    
+            this.logEvent({message:'DeviceConfig.init done'})
+            this.emitInitialized()
+    
+        }
+        catch(err) {
+            
+            this.logEvent({message:'Error',fn:'init', error:err.message, stack:err.stack})
+            this.emitInitialized()
 
-        this.initWifiInterface()
+        }
 
-        this.verifyCapabilitySettings()
-        this.removeLegacySettings() 
-
-        this.logEvent({message:'DeviceConfig.init done'})
-        this.emitInitialized()
     }
 
     setFeature( name:string, enabled:boolean) {
@@ -946,8 +956,13 @@ export class DeviceConfigurationService  extends IncyclistService{
     }
 
     protected doesAppSupportsWifi():boolean {
-        const version = this.getAppVersion()
-        return semver.gte(version,'0.9.10')
+        try {
+            const version = this.getAppVersion()
+            return semver.gte(version,'0.9.10')    
+        }
+        catch {
+            return false
+        }
     }
 
     protected getAppVersion():string {
