@@ -38,12 +38,14 @@ export class DeviceRideService  extends IncyclistService{
     protected promiseSendUpdate: Promise<UpdateRequest|void>[]
     protected originalMode: CyclingMode
     protected deviceDataHandler = this.onData.bind(this)
+    protected lazyInitDone: boolean
 
 
     constructor() {
         super('DeviceRide')
         this.initizialized = false;
         this.simulatorEnforced = false
+        this.lazyInitDone = false
         this.debug = false;   
     }
 
@@ -58,6 +60,9 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     async lazyInit() {
+        if (this.lazyInitDone)
+            return;
+
         if (!this.initizialized) {
             await this.waitForInit()
         }
@@ -68,7 +73,8 @@ export class DeviceRideService  extends IncyclistService{
 
         // TODO: add listeners to config changes
         config.on('mode-changed',handleModeChange)
-        config.on('device-deleted',handleDeviceDeleted)       
+        config.on('device-deleted',handleDeviceDeleted)    
+        this.lazyInitDone = true
     }
 
 

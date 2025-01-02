@@ -211,7 +211,6 @@ export class DeviceConfigurationService  extends IncyclistService{
         let udid = this.getUdid(deviceSettings) 
 
         const {legacy=false} = props||{}
-        this.logEvent({message:'add device',udid,deviceSettings, legacy})
 
         const deviceAlreadyExists = udid!==undefined
 
@@ -221,6 +220,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             adapter = this.adapters[udid]
         }
         else {
+            this.logEvent({message:'add device',udid,deviceSettings, legacy})
             adapter = this.getAdapterFromSetting(deviceSettings)
             if (!adapter) {
                 this.logEvent({message:'could not create adapter'})

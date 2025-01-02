@@ -1435,6 +1435,7 @@ export class DevicePairingService  extends IncyclistService{
         const stopPromises = []
         interfaces.forEach( i=> stopPromises.push(this.stopAdaptersOnInterface(i)))
         await Promise.allSettled(stopPromises)
+        this.deregisterScanningDataHandlers()
 
         this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props})
         this.initScanningCallbacks()
