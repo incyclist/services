@@ -96,6 +96,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     protected getSelectedAdapters():AdapterRideInfo[] {
+        this.adapters = this.getConfiguredAdapters()
         if (!this.simulatorEnforced)
             return this.adapters
 

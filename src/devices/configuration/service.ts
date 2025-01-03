@@ -513,7 +513,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             return info;
         }
 
-        const {capabilities,devices} = this.settings||{}
+        const {capabilities=[],devices=[]} = this.settings||{}
         const adapters: AdapterInfo[] = []
 
         capabilities.forEach( c=> {
