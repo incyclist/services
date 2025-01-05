@@ -209,7 +209,7 @@ export class DevicePairingService  extends IncyclistService{
     */
 
    async stop(adapterFilter:Array<string>=[]):Promise<void> {
-        this.logEvent({message:'Stop Pairing'})
+        this.logEvent({message:'Stop Pairing (Skip)'})
         try {
             this.state.stopRequested = true;
             
@@ -228,6 +228,39 @@ export class DevicePairingService  extends IncyclistService{
         }
         catch (err) { // istanbul ignore next
             this.logError(err,'stop')
+        }          
+    }
+
+
+    async prepareStart(adapterFilter:Array<string>=[]):Promise<void> {
+        const stillPairing = this.isPairing()
+        const stillScanning = this.isScanning()
+
+        this.logEvent({message:'Stop Pairing (OK)', stillPairing,stillScanning})
+        try {
+            this.pauseAdapters(this.state.adapters.filter( a=> !adapterFilter.includes(a.udid)));
+
+            if (this.isPairing()) {
+                this.removePairingCallbacks()
+                
+            }
+            
+            if (this.isScanning()) {
+                this.state.stopRequested = true;
+                await this._stop();                
+            }
+
+            this.removeConfigHandlers()
+            this.settings = {}
+            this.state.initialized = false
+            this.state.waiting = false;
+            this.state.check = null;
+            this.state.scan = null;
+            this.state.stopRequested = false;
+            this.state.stopped = true
+        }
+        catch (err) { // istanbul ignore next
+            this.logError(err,'prepareStart')
         }          
     }
 
@@ -670,6 +703,7 @@ export class DevicePairingService  extends IncyclistService{
     protected emitStateChange(newState?:PairingState) {
         const {onStateChanged,onDeviceSelectStateChanged} = this.settings||{}
 
+        
         this.checkCanStart()
 
         // don't send any updates if we are stopping
@@ -688,7 +722,6 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected emitStartStatus() {
-        
         const {onStateChanged} = this.settings||{}
         const {canStartRide} = this.state
 
@@ -1176,6 +1209,7 @@ export class DevicePairingService  extends IncyclistService{
             const canStartRide = this.checkPairingSuccess()
 
             if (canStartRide!==prev) {
+                this.state.canStartRide = canStartRide
                 this.emitStartStatus()
             }
         }
@@ -1188,6 +1222,7 @@ export class DevicePairingService  extends IncyclistService{
     protected checkPairingSuccess():boolean {
 
         const configReadyToRide = this.configuration.canStartRide() // we either have a power or a conto
+
         if (!configReadyToRide)
             return false;
         

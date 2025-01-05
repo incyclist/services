@@ -362,8 +362,6 @@ export class DeviceConfigurationService  extends IncyclistService{
      * 
     */
     canStartRide():boolean {
-
-
         
         const {devices, capabilities} = this.settings||{}
         if (!devices || !capabilities)
