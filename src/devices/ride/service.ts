@@ -727,6 +727,8 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     async prepareReconnect(unhealthy:AdapterRideInfo) {
+
+        this.logEvent({message:'prepareReconnect', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData  })
         if (unhealthy.isRestarting)
             return;
 
@@ -754,6 +756,17 @@ export class DeviceRideService  extends IncyclistService{
         // simulator does not need to be restarted
         if (ifName==='simulator')
             return;
+
+
+        if (ifName==='ble') {            
+            try {
+                throw new Error('ble interface restart request')
+            }
+            catch(err) {
+                this.logError(err,'reconnectInterface')
+            }
+            return;
+        }
 
         // restart Interface and adapaters
         this.logger.logEvent({ message: 'restart interface', interface: ifName });
@@ -797,9 +810,14 @@ export class DeviceRideService  extends IncyclistService{
 
     private async performInterfaceReconnect(ifName: string) {
         const i = InterfaceFactory.create(ifName);
-        await i.disconnect();
-        await sleep(1000);
-        await i.connect();
+
+        if (ifName!=='ble') {
+            await i.disconnect();
+            await sleep(1000);
+            await i.connect();
+    
+        }
+    
     }
 
     private async stopAdapters(adapters: AdapterRideInfo[]) {
