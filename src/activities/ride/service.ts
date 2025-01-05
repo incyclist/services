@@ -370,7 +370,7 @@ export class ActivityRideService extends IncyclistService {
         const powerDetails = { value: formatNumber(stats?.power?.max, 0), label: 'max' };
         const heartrateDetails = { value: formatNumber(stats?.hrm?.max, 0), label: 'max' };
         const cadenceDetails = { value: formatNumber(stats?.cadence?.max, 0), label: 'max' };
-        const elevationGain = { value: formatNumber(this.current.elevationGainDisplay ?? 0, 0), label: 'elev gain', unit: 'm' };
+        const elevationGain = { value: formatNumber(this.current.elevationGainDisplay ?? 0, 0), label: 'elev. done', unit: 'm' };
         return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };
     }
 
@@ -384,9 +384,9 @@ export class ActivityRideService extends IncyclistService {
         let elevationGainRemaining = this.getTotalElevation() - (this.current.elevationGainDisplay ?? 0);
         if (isNaN(elevationGainRemaining)) elevationGainRemaining = undefined;
         if (elevationGainRemaining < 0) elevationGainRemaining = 0;
-        const value = elevationGainRemaining !== undefined ? `-${formatNumber(elevationGainRemaining, 0)}` : undefined;
+        const value = elevationGainRemaining !== undefined ? `${formatNumber(elevationGainRemaining, 0)}` : undefined;
 
-        const elevationGain = { value, label: 'elev gain', unit: 'm' };
+        const elevationGain = { value, label: 'elev. todo', unit: 'm' };
         return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };
     }
 

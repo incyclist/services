@@ -61,7 +61,7 @@ exports[`ActivityRideService getDashboardDisplayProperties directly after init, 
         "value": "0.7",
       },
       {
-        "label": "elev gain",
+        "label": "elev. done",
         "unit": "m",
         "value": "0",
       },
