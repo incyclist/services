@@ -39,6 +39,7 @@ export class DeviceRideService  extends IncyclistService{
     protected originalMode: CyclingMode
     protected deviceDataHandler = this.onData.bind(this)
     protected lazyInitDone: boolean
+    protected lastDataInfo: Record<string,number> = {}
 
 
     constructor() {
@@ -493,6 +494,8 @@ export class DeviceRideService  extends IncyclistService{
         }
 
     }
+
+
    
     async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check' | 'pair',props?:RideServiceDeviceProperties ):Promise<boolean> {
         
@@ -647,10 +650,7 @@ export class DeviceRideService  extends IncyclistService{
         if (ai.adapter.isControllable())
             this.setSerialPortInUse(ai.adapter);
 
-        if (startType === 'pair') {
-            ai.adapter.on('data', this.deviceDataHandler);
-        }
-        else if (startType === 'start') {
+        if (startType === 'start') {
             this.startHealthCheck(ai);
         }
 
@@ -658,25 +658,29 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     startHealthCheck(ai: AdapterRideInfo) {
+        
+        this.updateOnDatahandler(ai);
 
         const check = ()=> {
             if (!ai.ivToCheck) // I have no clue why this is needed, but removing it would cause the check() function to be executed after the interval has been cleared
                 return;
             
             const tsNow = Date.now()
+            const tsLastData =this.getLastDataTS(ai)
 
             const isPaused = ai.adapter.isPaused()
             const prevStatus = ai.dataStatus
 
             // paused or no data received yet => no need to check
-            if (isPaused || !ai.tsLastData) {
-                ai.tsLastData = tsNow
+            if (isPaused || !tsLastData) {
+                this.setLastDataTS(ai, tsNow)                
                 ai.dataStatus = 'green'
                 return;
             }
 
-            const isAmber = (tsNow-ai.tsLastData)>NO_DATA_THRESHOLD
-            const isRed = (tsNow-ai.tsLastData)>UNHEALTHY_THRESHOLD
+
+            const isAmber = (tsNow-tsLastData)>NO_DATA_THRESHOLD
+            const isRed = (tsNow-tsLastData)>UNHEALTHY_THRESHOLD
 
 
             ai.dataStatus = 'green'
@@ -688,7 +692,7 @@ export class DeviceRideService  extends IncyclistService{
 
             if (ai.isHealthy && (isAmber || isRed)) {                
                 ai.isHealthy = false;
-                this.logEvent({message:'device unhealthy', device:ai.adapter.getUniqueName(), udid:ai.udid, noDataSince: (tsNow-ai.tsLastData), tsLastData:ai.tsLastData  })
+                this.logEvent({message:'device unhealthy', device:ai.adapter.getUniqueName(), udid:ai.udid, noDataSince: (tsNow-tsLastData), tsLastData:new Date(tsLastData).toISOString()  })
 
 
                 this.prepareReconnect(ai)
@@ -717,14 +721,29 @@ export class DeviceRideService  extends IncyclistService{
         ai.isHealthy = true
     }
 
+    private updateOnDatahandler(ai: AdapterRideInfo) {
+        this.logEvent({message:'init health check',device:ai.adapter.getName(), udid:ai.udid })
+        ai.adapter.off('data', this.deviceDataHandler);
+        ai.adapter.on('data', this.deviceDataHandler);
+    }
+
+    private removeOnDatahandler(ai: AdapterRideInfo) {
+        this.logEvent({message:'cleanup health check', device:ai.adapter.getName(), udid:ai.udid })
+        ai.adapter.off('data', this.deviceDataHandler);
+    }
+
     stopHealthCheck(ai: AdapterRideInfo) {
         if (ai.ivToCheck) {
             clearInterval(ai.ivToCheck)
             delete ai.ivToCheck
             delete ai.isHealthy
+            this.removeOnDatahandler(ai)
+            this.lastDataInfo = {}
         }
         
     }
+
+
 
     async prepareReconnect(unhealthy:AdapterRideInfo) {
 
@@ -923,6 +942,7 @@ export class DeviceRideService  extends IncyclistService{
     async start( props:RideServiceDeviceProperties  ):Promise<boolean> {
         await this.lazyInit();
         const adapters = this.getSelectedAdapters()
+        
 
         this.emit('start-request', adapters?.map( this.getAdapterStateInfo.bind(this) ))
 
@@ -1083,7 +1103,7 @@ export class DeviceRideService  extends IncyclistService{
 
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
 
-        
+
         const adapters = this.getSelectedAdapters();
         const config = this.getDeviceConfiguration()
 
@@ -1093,7 +1113,7 @@ export class DeviceRideService  extends IncyclistService{
             return;
 
         // register data update for health check
-        adapterInfo.tsLastData = data.timestamp||Date.now()
+        this.registerData(adapterInfo,data)
 
         // refresh capabilities from device (might have changed since original scan)
         adapters?.forEach( ai => ai.capabilities = ai.adapter.getCapabilities())
@@ -1150,6 +1170,23 @@ export class DeviceRideService  extends IncyclistService{
 
 
 
+    }
+
+    protected registerData(adapterInfo: AdapterRideInfo,data:DeviceData) {
+        const udid = adapterInfo.udid
+        this.lastDataInfo[udid] = data.timestamp??Date.now()
+    }
+    protected getLastDataTS(adapterInfo: AdapterRideInfo) {
+        const udid = adapterInfo.udid
+        return this.lastDataInfo[udid] 
+    }
+    protected setLastDataTS(adapterInfo: AdapterRideInfo,ts:number) {        
+        const udid = adapterInfo.udid
+        return this.lastDataInfo[udid]  = ts
+    }
+    protected clearLastDataTS(adapterInfo: AdapterRideInfo) {        
+        const udid = adapterInfo.udid
+        delete this.lastDataInfo[udid]
     }
 
     private getEnabledCapabilities(adapterInfo: AdapterRideInfo, selected?:Array<{capability:IncyclistCapability,selected?:string }> ) {
@@ -1254,8 +1291,6 @@ export class DeviceRideService  extends IncyclistService{
 
 
     async toggleCyclingMode() {
-        console.log('~~~ toggle CyclingMode')
-
         if (!this.isToggleEnabled())
             return
         const {adapter} = this.getControlAdapter()??{}; 
@@ -1285,8 +1320,6 @@ export class DeviceRideService  extends IncyclistService{
 
 
     async resetCyclingMode(sendInit:boolean=false) {
-        console.log('~~~ reset CyclingMode')
-
         try {
             const adapterInfo = this.getControlAdapter(); 
             if (!adapterInfo?.adapter)
@@ -1322,8 +1355,6 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     async enforceERG():Promise<void> {
-        console.log('~~~ enforce ERG')
-
         try {
             const adapters = this.getSelectedAdapters();
 
