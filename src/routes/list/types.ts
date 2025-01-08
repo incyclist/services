@@ -5,6 +5,7 @@ export interface RouteStartSettings {
     type: RouteCardType,
 }
 
+export type DisplayType = 'list' | 'tiles'
 
 export interface FreeRidePoints extends LatLng {
     distance?: number;
