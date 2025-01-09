@@ -1112,39 +1112,46 @@ export class DevicePairingService  extends IncyclistService{
 
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
         
-        const udid = this.configuration.add(deviceSettings,{legacy:false})
-        this.logEvent({message:'device detected',device:deviceSettings,udid})
-        
-        if(!udid) {
-            this.logEvent({message:'device could not be added', reason:'add() failed'})
-            return;
-        }
-
-        const adapter = this.configuration.getAdapter(udid)
-        
-        if (adapter) {
-            adapter.onScanStart()
-            this.markConnected(adapter, udid);
-
-            if (this.isScanning()) {
-                
-                if ( this.state.scan.adapters.find( a=>a.udid===udid)===undefined  ) {
-                    const handler = ( deviceSettings:DeviceSettings, data:DeviceData)=>{
-                        this.onDeviceData(data,udid)
+        try {
+            const udid = this.configuration.add(deviceSettings,{legacy:false})
+            this.logEvent({message:'device detected',device:deviceSettings,udid})
+            
+            if(!udid) {
+                this.logEvent({message:'device could not be added', reason:'add() failed'})
+                return;
+            }
+    
+            const adapter = this.configuration.getAdapter(udid)
+            
+            if (adapter) {
+                adapter.onScanStart()
+                this.markConnected(adapter, udid);
+    
+                if (this.isScanning() && this.state.scan.adapters) {
+                    
+                    if ( this.state.scan.adapters.find( a=>a.udid===udid)===undefined  ) {
+                        const handler = ( deviceSettings:DeviceSettings, data:DeviceData)=>{
+                            this.onDeviceData(data,udid)
+                        }
+                        adapter.on('data',handler)
+                        this.state.scan.adapters.push( {udid,adapter, handler})
                     }
-                    adapter.on('data',handler)
-                    this.state.scan.adapters.push( {udid,adapter, handler})
+        
                 }
     
+                this.checkCanStart()
             }
+            else {
+                this.logEvent({message:'Could not get adapter', deviceSettings})
+            }
+            
+            this.onPairingSuccess(udid)       
+    
 
-            this.checkCanStart()
         }
-        else {
-            this.logEvent({message:'Could not get adapter', deviceSettings})
+        catch(err) {
+            this.logError(err,'onDeviceDetected')
         }
-        
-        this.onPairingSuccess(udid)       
     }
 
     private markConnected(adapter: IncyclistDeviceAdapter, udid: string) {
