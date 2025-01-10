@@ -6,7 +6,7 @@ import { AppStatus } from "../../../routes/base/types";
 import { useUserSettings } from "../../../settings";
 import { Workout } from "../../base/model/Workout";
 import { BaseCard } from "./base";
-import { DEFAULT_FILTERS,  WorkoutCardType, WorkoutCreateProps, WorkoutImportProps } from "./types";
+import { WorkoutCardType, WorkoutCreateProps } from "./types";
 
 const DEFAULT_TITLE = "Create Workout";
 const DEFAULT_LINK =  'https://zwofactory.com/' 
