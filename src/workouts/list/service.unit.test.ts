@@ -51,13 +51,13 @@ describe('WorkoutListService',()=>{
 
             expect(res).toEqual({observer:expect.any(Observer), lists:expect.any(Array<CardList<WP>>)})            
             expect(res.lists.map(l=>l.getTitle())).toEqual(['My Workouts'])
-            expect(res.lists.map(l=>l.getCards().map(c=>c.getTitle()).join(','))).toEqual(['Import Workout'])
+            expect(res.lists.map(l=>l.getCards().map(c=>c.getTitle()).join(','))).toEqual(['Import Workout,Create Workout'])
 
             await waitNextTick()
             expect(o.emit).toHaveBeenCalledWith('started')
 
             await waitNextTick()
-            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'})],'Import')
+            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'})],'Import,Create')
             expect(o.emit).not.toHaveBeenCalledWith('loaded')
             expect(o.emit).not.toHaveBeenCalledWith('loading')
         })
@@ -76,13 +76,13 @@ describe('WorkoutListService',()=>{
 
             expect(res).toEqual({observer:expect.any(Observer), lists:expect.any(Array<CardList<WP>>)})            
             expect(res.lists.map(l=>l.getTitle())).toEqual(['My Workouts'])
-            expect(res.lists.map( l=>l.getCards().map(c=>c.getTitle()).join(',')  )) .toEqual(['Import Workout,1,2'])
+            expect(res.lists.map( l=>l.getCards().map(c=>c.getTitle()).join(',')  )) .toEqual(['Import Workout,Create Workout,1,2'])
 
             await waitNextTick()
             expect(o.emit).toHaveBeenCalledWith('started')
 
             await waitNextTick()
-            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'})],'Import,1,2')
+            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'})],'Import,Create,1,2')
             expect(o.emit).not.toHaveBeenCalledWith('loaded')
             expect(o.emit).not.toHaveBeenCalledWith('loading')
         })
@@ -111,7 +111,7 @@ describe('WorkoutListService',()=>{
             await waitNextTick()
             expect(o.emit).not.toHaveBeenCalledWith('started')
             await waitNextTick()
-            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'})],'Import,1,2')
+            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'})],'Import,Create,1,2')
 
 
         })
@@ -133,13 +133,13 @@ describe('WorkoutListService',()=>{
 
             expect(res).toEqual({observer:expect.any(Observer), lists:expect.any(Array<CardList<WP>>)})            
             expect(res.lists.map(l=>l.getTitle())).toEqual(['My Workouts','List#1'])
-            expect(res.lists.map( l=>l.getCards().map(c=>c.getTitle()).join(',')  )) .toEqual(['Import Workout,1','2'])
+            expect(res.lists.map( l=>l.getCards().map(c=>c.getTitle()).join(',')  )) .toEqual(['Import Workout,Create Workout,1','2'])
 
             await waitNextTick()
             expect(o.emit).toHaveBeenCalledWith('started')
 
             await waitNextTick()
-            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'}),expect.objectContaining({id:'l1'}) ],'Import,1:2')
+            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'}),expect.objectContaining({id:'l1'}) ],'Import,Create,1:2')
             expect(o.emit).not.toHaveBeenCalledWith('loaded')
             expect(o.emit).not.toHaveBeenCalledWith('loading')
 
@@ -160,7 +160,7 @@ describe('WorkoutListService',()=>{
             await waitNextTick()
             expect(o.emit).not.toHaveBeenCalledWith('updated')
             expect(o.emit).toHaveBeenCalledWith('loading')
-            expect(o.emit).toHaveBeenCalledWith('loaded',s.lists,'Import')
+            expect(o.emit).toHaveBeenCalledWith('loaded',s.lists,'Import,Create')
 
         })
 
@@ -290,7 +290,7 @@ describe('WorkoutListService',()=>{
             await waitNextTick()
             expect(o.emit).not.toHaveBeenCalledWith('updated')
             expect(o.emit).toHaveBeenCalledWith('loading')
-            expect(o.emit).toHaveBeenCalledWith('loaded',s.lists,'Import')
+            expect(o.emit).toHaveBeenCalledWith('loaded',s.lists,'Import,Create')
 
         })
 
@@ -460,10 +460,11 @@ describe('WorkoutListService',()=>{
             const list = service.getLists(false)[0]
             service.onCarouselInitialized( list, 0,6)
 
-            // 11 cards ( Import card + 10)
-            // 8 Cards will be visible (6+2), i.e import card + card[0]...card[6]
+            // 21 cards ( Import card + Create Card + 10)
+            // 8 Cards will be visible (6+2), i.e import card + create card +card[0]...card[5]
             expect( cards[0].isVisible()).toBe(true)
-            expect( cards[6].isVisible()).toBe(true)
+            expect( cards[5].isVisible()).toBe(true)
+            expect( cards[6].isVisible()).toBe(false)
             expect( cards[7].isVisible()).toBe(false)
             expect( cards[8].isVisible()).toBe(false)
             expect( cards[9].isVisible()).toBe(false)
@@ -622,8 +623,8 @@ describe('WorkoutListService',()=>{
             service.import( fileInfo)
             await sleep(50)
 
-            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,/tmp/test.zwo')
-            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,3')
+            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo')
+            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,3')
         })
 
         test('single failed import',async ()=>{
@@ -634,9 +635,9 @@ describe('WorkoutListService',()=>{
             service.import( fileInfo)
             await sleep(50)
 
-            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,/tmp/test.zwo')
-            expect(eventSpy).not.toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import')
-            expect(s.myWorkouts.getCards()[1]).toMatchObject({error})
+            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo')
+            expect(eventSpy).not.toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create')
+            expect(s.myWorkouts.getCards()[2]).toMatchObject({error})
 
         })
 
@@ -656,10 +657,10 @@ describe('WorkoutListService',()=>{
             service.import( fileInfo)
             await sleep(50)
 
-            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,/tmp/test.zwo')
-            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,/tmp/test.zwo,file:////tmp/test2.zwo')
+            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo')
+            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo,file:////tmp/test2.zwo')
             // the exact torder of events is a bit unclear, therefore the 3rd event might vary
-            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,3,4')
+            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,3,4')
 
         })
 
@@ -677,12 +678,12 @@ describe('WorkoutListService',()=>{
             service.import( fileInfo)
             await sleep(50)
 
-            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,/tmp/test.zwo')
-            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,/tmp/test.zwo,file:////tmp/test2.zwo')            
-            expect(eventSpy).not.toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,3,4')
+            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo')
+            expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo,file:////tmp/test2.zwo')            
+            expect(eventSpy).not.toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,3,4')
 
-            expect(s.myWorkouts.getCards()[1]).toMatchObject({error:e1})
-            expect(s.myWorkouts.getCards()[2]).toMatchObject({error:e2})
+            expect(s.myWorkouts.getCards()[2]).toMatchObject({error:e1})
+            expect(s.myWorkouts.getCards()[3]).toMatchObject({error:e2})
         })
 
         test('no importcard - single failed import',async ()=>{
@@ -777,19 +778,19 @@ describe('WorkoutListService',()=>{
 
             expect(list).toBe(l2)
             expect(list.getCards().length).toBe(1)
-            expect(s.myWorkouts.getCards().length).toBe(10)
+            expect(s.myWorkouts.getCards().length).toBe(11)
             expect(s.observer.emit).toHaveBeenCalledWith('updated',
                 expect.arrayContaining( [ 
                     expect.objectContaining({id:'myWorkouts'}) ,
                     expect.objectContaining({id:'2'}) 
                     // list 3 is not emmitted, as it is empty
                 ]),
-                'Import,2,3,4,5,6,7,8,9,10:1'
+                'Import,Create,2,3,4,5,6,7,8,9,10:1'
                 )
 
             service.moveCard( cards[1], s.myWorkouts, '2' )
             expect(list.getCards().length).toBe(2)
-            expect(s.myWorkouts.getCards().length).toBe(9)
+            expect(s.myWorkouts.getCards().length).toBe(10)
 
         })
 
@@ -798,18 +799,18 @@ describe('WorkoutListService',()=>{
 
             expect(list).toBe(l2)
             expect(list.getCards().length).toBe(1)
-            expect(s.myWorkouts.getCards().length).toBe(10)
+            expect(s.myWorkouts.getCards().length).toBe(11)
 
             service.moveCard( cards[1], s.myWorkouts, l3)
             expect(list.getCards().length).toBe(1)
             expect(l3.getCards().length).toBe(1)
-            expect(s.myWorkouts.getCards().length).toBe(9)
+            expect(s.myWorkouts.getCards().length).toBe(10)
 
         })
         test('move into non-existing <identified as string>',()=>{
             const list = service.moveCard( cards[0], s.myWorkouts, '4' )
             expect(list).toBeUndefined()
-            expect(s.myWorkouts.getCards().length).toBe(11)
+            expect(s.myWorkouts.getCards().length).toBe(12)
 
         })
 

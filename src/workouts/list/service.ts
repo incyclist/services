@@ -11,7 +11,7 @@ import { Plan, Workout } from "../base/model/Workout";
 import { WorkoutParser } from "../base/parsers";
 import { ActiveImportCard } from "./cards/ActiveImportCard";
 import { WorkoutCard } from "./cards/WorkoutCard";
-import { WorkoutImportCard } from './cards/WorkoutImportCard'
+import { WorkoutImportCard,WorkoutCreateCard } from './cards'
 import { WorkoutSettings } from "./cards/types";
 import { WorkoutsDbLoader } from "./loaders/db";
 import { WP,WorkoutSettingsDisplayProps } from "./types";
@@ -62,6 +62,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         this.language = 'en'
 
         this.myWorkouts.add( new WorkoutImportCard() )
+        this.myWorkouts.add( new WorkoutCreateCard() )
 
 
         this.registerUserChangeHandler();
@@ -379,6 +380,10 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             this.logError(err,'preload')
         }
         return this.preloadObserver
+    }
+
+    isStillLoading():boolean {
+        return this.preloadObserver!==undefined && !this.initialized
     }
 
 
