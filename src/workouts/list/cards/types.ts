@@ -2,7 +2,7 @@ import { ImportFilter } from "../../../base/cardlist/types";
 import { Observer } from "../../../base/types/observer";
 import { Workout } from "../../base/model";
 
-export type WorkoutCardType = 'WorkoutImport' | 'Workout' | 'ActiveWorkoutImport' ;
+export type WorkoutCardType = 'WorkoutImport' | 'Workout' | 'ActiveWorkoutImport' | 'WorkoutCreate' ;
 
 export const DEFAULT_TITLE = 'Import Workout';
 export const DEFAULT_FILTERS = [
@@ -17,6 +17,21 @@ export interface WorkoutImportProps {
     filters: Array<ImportFilter>;
     /** identifies if the card is visible(true) or hidden(false) */
     visible: boolean;
+}
+
+export interface WorkoutCreateProps {
+    /** name of the card */
+    title: string;    
+    
+    /** identifies if the card is visible(true) or hidden(false) */
+    visible: boolean;
+
+    /** link to an external page to create a new workout */
+    link?: string
+
+    /** set to boolean if the card would be used for the first time  */
+    firstTime?: boolean
+
 }
 
 export interface ActiveImportProps {
