@@ -12,7 +12,7 @@ import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard, SummaryCardDisplayProps } from "./cards/RouteCard";
-import { RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
+import { DisplayType, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
@@ -23,6 +23,8 @@ import { SelectedRoutes } from "./lists/selected";
 import { AlternativeRoutes } from "./lists/alternatives";
 import { getRepoUpdates, updateRepoStats } from "./utils";
 import { sleep } from "incyclist-devices/lib/utils/utils";
+import { useUserSettings } from "../../settings";
+import { Injectable } from "../../base/decorators";
 
 
 @Singleton
@@ -46,6 +48,8 @@ export class RouteListService extends IncyclistService {
     protected createPreviewQueue: Array< {descr:RouteInfo,done:(file:string)=>void}>
     protected previewProcessing: PromiseObserver<void>
     protected filters: SearchFilter
+    protected listTop: Record<DisplayType,number> = { list:undefined, tiles:undefined }
+    protected displayType: DisplayType
 
     constructor () {
         super('RouteList')
@@ -112,8 +116,9 @@ export class RouteListService extends IncyclistService {
             }        
     
             // if preload has not been started yet, load data
-            if (!this.initialized && !this.preloadObserver) {
-                this.preload()
+            if (this.isStillLoading()) {
+                const preload = this.preload()
+                preload.start().then( emitLoadedEvent )
             }
             // if we are re-opening the page, ensure that no route is selected
             else if (this.initialized ) {
@@ -175,8 +180,9 @@ export class RouteListService extends IncyclistService {
             routes = this.applyContentTypeFilter(filters, routes);
             routes = this.applyRouteTypeFilter(filters, routes);
 
-            
-            return {routes,filters,observer:this.observer}
+            const cards = routes.map( r => this.getCard(r.id))
+          
+            return {routes,cards,filters,observer:this.observer}
     
         }
         catch(err) {
@@ -185,6 +191,73 @@ export class RouteListService extends IncyclistService {
 
         }
     }
+
+    
+    /**
+     * Stores the current top position of the RouteList in the list component for a specified display type.
+     * 
+     * This value is used to restore the position when the RouteList is re-opened
+     * 
+     * If the first parameter is a number, it is interpreted as the top position and the current display type is used.
+     * If the first parameter is a string (DisplayType), the top position is expected as the second parameter.
+     * 
+     * @param display The display type for which the top position is requested, or the top position itself.
+     * @param [top] The top position of the first item in the list, if display is a DisplayType.
+     * 
+     * 
+     * @example
+     * // Set the top position for the "list" display type
+     * routeListService.setListTop('list', 100);
+     * 
+     * // Set the top position for the currently selected display type
+     * routeListService.setListTop(200);
+     */
+    setListTop(display: number|DisplayType, top?:number) {
+        const displayType = typeof display === 'number' ? this.displayType : display 
+        const topValue = typeof display === 'number' ? display : top
+        
+        this.listTop[displayType] = topValue
+    }
+
+    /**
+     * Retrieves the current top position of the RouteList for a specified display type.
+     *
+     * This value is used to restore the position when the RouteList is re-opened
+     *
+     * @param display The display type for which the top position is requested.
+     * @returns The top position of the first item in the list for the specified display type.
+     */
+    getListTop(display: DisplayType = this.displayType) {
+        return this.listTop[display]
+    }
+
+    /**
+     * Sets the display type for the RouteList.
+     * 
+     * This method updates the current display type, which determines how the list is presented.
+     * 
+     * @param displayType The display type to be set.
+     */
+
+    setDisplayType(displayType:DisplayType) {
+        this.displayType = displayType
+        this.getUserSettings().set('preferences.routeListDisplayType', displayType)        
+    }
+
+    getDisplayType():DisplayType {
+        return this.displayType ??  this.getUserSettings().get('preferences.routeListDisplayType', 'list')        
+    }
+    
+
+    /**
+     * checks if the preload is still ongoing
+     * 
+     * @returns true, if the preload is still ongoing, false otherwise
+     */
+    isStillLoading():boolean { 
+        return !this.initialized && !this.preloadObserver
+    }
+
 
     private applyRouteTypeFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
         if (filters.routeType) {
@@ -277,11 +350,16 @@ export class RouteListService extends IncyclistService {
         try {
             list.getCards().forEach( (card,idx) => {
                 card.setInitialized(true)
-                if (idx<item+itemsInSlide+2) {
-
-                    card.setVisible(true)
-                }
             })
+
+            process.nextTick( ()=>{ 
+                list.getCards().forEach( (card,idx) => {
+                    if (idx<item+itemsInSlide) {                    
+                        card.setVisible(true)
+                    }
+                })
+            })
+
             setTimeout( ()=>{ this.onCarouselUpdated(list,item,itemsInSlide)}, 1000)
         }
         catch(err) {
@@ -307,6 +385,19 @@ export class RouteListService extends IncyclistService {
     }
 
 
+    /**
+     * triggers the loading of the routes from local repo
+     * 
+     * This method should be called by the UI as soon as possible to reduce loading time for the user
+     * 
+     * @returns observer that indicates an ongoing preload
+     * 
+     * Besides the events signalled by the returned Observer, the following events are signalled
+     * on the service observer:
+     * 
+     * @emits loading   list is being loaded
+     * @emits loaded    loading has been completed, provides lists as parameter
+     */
     preload():PromiseObserver<void> {
         try {
             this.logEvent( {message:'preload route list'})
@@ -923,6 +1014,11 @@ export class RouteListService extends IncyclistService {
         })
         return cards;
 
+    }
+
+    @Injectable
+    protected getUserSettings () {
+        return useUserSettings()
     }
 
 

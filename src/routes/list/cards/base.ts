@@ -23,6 +23,9 @@ export class BaseCard implements Card<Route> {
         throw new Error("Method not implemented.");
     }
 
+    get id():string {
+        return this.getId()
+    }
     getId(): string {
         throw new Error("Method not implemented.");
     }
