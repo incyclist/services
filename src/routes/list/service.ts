@@ -23,6 +23,8 @@ import { SelectedRoutes } from "./lists/selected";
 import { AlternativeRoutes } from "./lists/alternatives";
 import { getRepoUpdates, updateRepoStats } from "./utils";
 import { sleep } from "incyclist-devices/lib/utils/utils";
+import { useUserSettings } from "../../settings";
+import { Injectable } from "../../base/decorators";
 
 
 @Singleton
@@ -114,8 +116,9 @@ export class RouteListService extends IncyclistService {
             }        
     
             // if preload has not been started yet, load data
-            if (!this.initialized && !this.preloadObserver) {
-                this.preload()
+            if (this.isStillLoading()) {
+                const preload = this.preload()
+                preload.start().then( emitLoadedEvent )
             }
             // if we are re-opening the page, ensure that no route is selected
             else if (this.initialized ) {
@@ -238,8 +241,13 @@ export class RouteListService extends IncyclistService {
 
     setDisplayType(displayType:DisplayType) {
         this.displayType = displayType
+        this.getUserSettings().set('preferences.routeListDisplayType', displayType)        
     }
 
+    getDisplayType():DisplayType {
+        return this.displayType ??  this.getUserSettings().get('preferences.routeListDisplayType', 'list')        
+    }
+    
 
     /**
      * checks if the preload is still ongoing
@@ -247,7 +255,7 @@ export class RouteListService extends IncyclistService {
      * @returns true, if the preload is still ongoing, false otherwise
      */
     isStillLoading():boolean { 
-        return !this.initialized 
+        return !this.initialized && !this.preloadObserver
     }
 
 
@@ -342,11 +350,16 @@ export class RouteListService extends IncyclistService {
         try {
             list.getCards().forEach( (card,idx) => {
                 card.setInitialized(true)
-                if (idx<item+itemsInSlide+2) {
-
-                    card.setVisible(true)
-                }
             })
+
+            process.nextTick( ()=>{ 
+                list.getCards().forEach( (card,idx) => {
+                    if (idx<item+itemsInSlide) {                    
+                        card.setVisible(true)
+                    }
+                })
+            })
+
             setTimeout( ()=>{ this.onCarouselUpdated(list,item,itemsInSlide)}, 1000)
         }
         catch(err) {
@@ -1001,6 +1014,11 @@ export class RouteListService extends IncyclistService {
         })
         return cards;
 
+    }
+
+    @Injectable
+    protected getUserSettings () {
+        return useUserSettings()
     }
 
 
