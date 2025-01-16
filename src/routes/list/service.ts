@@ -163,7 +163,7 @@ export class RouteListService extends IncyclistService {
                 this.filters = requestedFilters
             const filters = requestedFilters || this.filters
 
-            let routes:Array<SummaryCardDisplayProps> = Array.from(this.getAllCards().map( c=> c.getDisplayProperties()))
+            let routes:Array<SummaryCardDisplayProps> = Array.from(this.getAllSearchCards().map( c=> c.getDisplayProperties()))
             routes.sort( (a,b) => a.title>b.title? 1 : -1)
 
             if (!filters) {                
@@ -1001,13 +1001,13 @@ export class RouteListService extends IncyclistService {
 
     }
 
-    protected getAllCards() {
+    protected getAllSearchCards() {
         const cards:Array<RouteCard> = []
         
         this.getLists(false)?.forEach( list=> {
             list.getCards().forEach( (card) => {
                 // filter out special cards
-                if (card.getCardType()==='Import'||card.getCardType()==='Free-Ride'  )
+                if (card.getCardType()==='Import'||card.getCardType()==='Free-Ride'||card.getCardType()==='ActiveImport'  )
                     return;
                 cards.push(card as RouteCard)
             })

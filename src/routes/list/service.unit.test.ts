@@ -320,6 +320,33 @@ describe('RouteListService',()=>{
 
         })
 
+        test('failed import, check that search still works',async ()=>{
+            const data: RouteInfo = {  id:'test', title:'test'}
+            const details: RouteApiDetail= {  id:'test', title:'test'}
+            const result: ParseResult<RouteApiDetail> = { data,details}
+
+            
+            RouteParser.parse = jest.fn()
+            .mockResolvedValueOnce( result)
+            .mockRejectedValueOnce( new Error('Some Error'))
+
+            service.cardObserver = new Observer()
+            service.cardObserver.emit = jest.fn()
+
+            // onse successfull import to populate the list
+            await service.import( {type:'file', name:'test1.xml',filename:'/test1',dir:'/',ext:'xml', delimiter:'/'})
+
+            // one failed import (2nd response to RouteParser.parse is configured to fail (see above) )
+            await service.import( {type:'file', name:'test1.xml',filename:'/test1',dir:'/',ext:'xml', delimiter:'/'})
+
+            const res = service.search()
+            expect(res?.routes.length).toBeGreaterThan(0)
+
+
+
+        })
+
+
     })
 
 })
