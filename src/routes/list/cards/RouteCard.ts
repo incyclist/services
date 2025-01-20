@@ -185,7 +185,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         if (!fs) return true
         
         try {
-            await fs.access(path)
+            await fs.access( this.cleanupEncoding(path))
             return true
         }
         catch(err) {
@@ -193,6 +193,15 @@ export class RouteCard extends BaseCard implements Card<Route> {
             return false
         }
     }
+
+    cleanupEncoding(path:string):string {
+        try {
+            path = decodeURIComponent(path)
+        }
+        catch {}
+        return path
+    }
+
     previewMissing() {
         try {
             const descr = this.getRouteDescription()
