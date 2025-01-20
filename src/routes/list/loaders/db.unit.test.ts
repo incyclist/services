@@ -279,6 +279,11 @@ describe('RoutesDbLoader',()=>{
         })
 
         test('repo with gpx and videos',async ()=>{
+            // disable verification of descr vs. details - as MockData does not fit to descriptions in this test data se
+            // verification would lead to additional saves
+            loaderObj.verifyVideoUrl = jest.fn().mockReturnValue(false)
+            loaderObj.verifyRouteHash = jest.fn().mockReturnValue(false)
+
             const routes:Array<Route> = []
 
             const write = loaderObj.write = jest.fn( ()=>{ 
@@ -415,7 +420,7 @@ describe('RoutesDbLoader',()=>{
             expect(log).toHaveBeenCalledWith(expect.objectContaining({message, reason, ...additional}))
         }
 
-        beforeEach( ()=>{
+        beforeEach( ()=>{            
             loader = loaderObj = new RoutesDbLoader()                    
             legacy = new RoutesLegacyDbLoader()
 
