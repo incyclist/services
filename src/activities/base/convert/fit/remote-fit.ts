@@ -72,9 +72,15 @@ export class RemoteFitConverter {
    }
 
     protected mapLogToFit(log:ActivityLogRecord): FitLogEntry {
-        const {time,speed, slope, cadence, heartrate, distance, power, lat, lng,elevation} = log
+        const {time,speed, slope, cadence: cadenceOrg, heartrate:heartrateOrg, distance, power:powerOrg, lat, lng,elevation} = log
 
-        return {time,speed, slope, cadence, heartrate, distance, power, lat, lon:lng,elevation}
+        // FIT converter expects cadence, heartrate and power to be integer
+        const cadence = Math.round(cadenceOrg)
+        const heartrate = Math.round(heartrateOrg)
+        const power = Math.round(powerOrg)
+
+
+        return {time,speed, slope, cadence: cadence, heartrate, distance, power, lat, lon:lng,elevation}
 
     }
 

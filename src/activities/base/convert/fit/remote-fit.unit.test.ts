@@ -36,4 +36,27 @@ describe('FITConverter',()=> {
         await expect( async ()=> {await converter.convert(activity)}).rejects.toThrow('XX');
     })
 
+
+    test('non integer cadence',async ()=>{        
+
+        const activity = testData as unknown as ActivityDetails
+        const logEntry = testData.logs[0]
+        logEntry.cadence = 90.1
+        logEntry.power = 123.456
+        logEntry.heartrate = 145.678
+        testData.logs = [logEntry]
+        
+        c.getApi().convertToFit = jest.fn().mockResolvedValue(fit)
+
+        
+        await converter.convert(activity);        
+
+        // define const to make it easier to read the assertion
+        const OC = (x)=>expect.objectContaining(x)
+
+        expect(c.getApi().convertToFit).toHaveBeenCalledWith( 
+            OC({logs: [ OC({cadence:90, heartrate:146, power:123}) ]} ))
+    })
+
+
 })
