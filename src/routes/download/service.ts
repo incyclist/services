@@ -104,7 +104,7 @@ export class RouteDownloadService extends IncyclistService {
             url = route?.description?.downloadUrl || route?.description?.videoUrl
 
             if (!url) {
-                url = this.restoreFromRepo(route)
+                url = await this.restoreFromRepo(route)
             }
             if (!url) {
                 observer.emit('error', new Error('download not supported'))

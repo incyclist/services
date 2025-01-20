@@ -282,14 +282,20 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
     protected async loadDetails(route:Route, alreadyAdded?:boolean): Promise<void> {
         const details = await this.loadDetailRecord(route)
+        let updated = false
+
         addDetails(route,details)
-        this.verifyRouteHash(route)
+        updated ||= this.verifyRouteHash(route)
+        updated ||= this.verifyVideoUrl(route)
         
         if (alreadyAdded)
             this.emitRouteUpdate(route)
         this.emitRouteAdded(route)
 
         this.verifyCountry(route)
+
+        if (updated)
+            this.save(route)
 
 
     } 

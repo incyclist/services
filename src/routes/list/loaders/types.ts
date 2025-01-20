@@ -43,19 +43,47 @@ export abstract class Loader<T extends MinimalDescription> {
         return true;
     }
 
-    protected verifyRouteHash(route:Route) {
+    protected verifyRouteHash(route:Route):boolean {
         const {description,details} = route
+
+        const prev = description.routeHash
 
         if (description.points && !description.routeHash) {
             if (details?.routeHash) {
                 description.routeHash = details.routeHash
-                return;
+                return true;
             }
 
             const data:RouteApiDetail = details || { id:description.id,title:description.title,points:description.points}
             description.routeHash = getRouteHash( data) 
+            return description.routeHash!==prev
         }
 
+    }
+
+    protected verifyVideoUrl(route:Route):boolean {
+        const descr = route.description
+        let updated = false
+        
+        if (!descr.hasVideo)
+            return;
+
+        if (descr.videoUrl) {
+            const details = route.details
+
+            if (details.video.url.startsWith('video:') && !descr.isDownloaded && !descr.isLocal) {
+                descr.isDownloaded = true;
+                updated = true;
+            }
+
+    
+            if (details.video.url && descr.videoUrl!==details.video.url) {                
+                descr.videoUrl=details.video.url
+                return true;
+            }
+        }
+            
+        return updated;
     }
 
     protected async verifyCountry(route:Route) {

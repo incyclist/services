@@ -160,6 +160,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
             return false
 
         const videoUrl = descr.videoUrl
+
+        if (!descr.videoUrl)
+            return true
+
         let path = undefined
         if ( videoUrl.startsWith('file:///') )
             path = videoUrl.replace('file:///','')            
@@ -346,6 +350,21 @@ export class RouteCard extends BaseCard implements Card<Route> {
             canStart = false            
             videoChecking = true
             videoMissing = this.isVideoMissing()
+        }
+
+        if (descr?.hasVideo && !descr.videoUrl) {
+            const details = this.getRouteData()
+            if (details.video.url) {
+                canStart = false            
+                videoChecking = true
+                videoMissing = this.isVideoMissing()
+    
+            }
+            else {
+                canStart = false            
+                videoMissing = true;
+            }
+            
         }
 
         let showLoopOverwrite, showNextOverwrite;
