@@ -883,7 +883,10 @@ export class DeviceRideService  extends IncyclistService{
 
     private async reconnectAdapters(adapters: AdapterRideInfo[], ifName: string) {
         const promisesStart = [];
-        adapters.forEach(ai => { promisesStart.push(ai.adapter.start()); });
+        adapters.forEach(ai => { 
+            this.stopHealthCheck(ai)           
+            promisesStart.push(ai.adapter.start()); 
+        });
 
         if (promisesStart.length > 0) {
             // to avoid channel collisions, start ant adapters in sequence
@@ -901,6 +904,14 @@ export class DeviceRideService  extends IncyclistService{
             else {
                 await Promise.allSettled(promisesStart);
             }
+
+
+            adapters.forEach( ai=> {
+                if (ai.adapter.isStarted()) {
+                    this.logEvent({message:'device healthy', device:ai.adapter.getUniqueName(), udid:ai.udid })                
+                    this.startHealthCheck(ai)
+                }
+            })
         }
     }
 
@@ -953,6 +964,7 @@ export class DeviceRideService  extends IncyclistService{
             try {
                 const started = await adapter.restart();
                 if (started) {
+                    this.logEvent({message:'device healthy', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid })                
                     unhealthy.tsLastData = Date.now()
                     success = true;
                 }
