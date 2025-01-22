@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<gpx-import>
+	<name>Test</name>
+	<id>e106d4b6b06e22d91fff110f29a1c0a0</id>
+	<country>DE</country>
+	<title>Triathlon Wörrstadt</title>
+	<smooth repeat="3">10</smooth>
+	<smooth>20</smooth>
+
+	<video-file-path>XXXX.mp4</video-file-path>
+	<framerate>29.97</framerate>
+	<start-frame>0</start-frame>
+	<end-frame>131658</end-frame>
+</gpx-import>

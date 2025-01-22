@@ -24,15 +24,6 @@ export class IncyclistBindings {
 }
 
 export const getBindings  = ()=> {
-    /*
-    try {
-        throw new Error()
-    } 
-    catch(err)
-    {
-        console.log('~~~ BINDING_GET ',err.stack)    
-    }
-    */
     return new IncyclistBindings() 
 }
 

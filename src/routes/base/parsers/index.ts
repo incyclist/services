@@ -48,8 +48,16 @@ export class RouteParser {
 
         if (matching)
             return await matching.parser.import(info,matching.data)
-        else 
+        
+        if (formatParsers.length===0)            
             throw new Error('no matching parser found')
+        else  {
+            const result = res[0] as  PromiseRejectedResult
+            const reason = result.reason.message??result.reason?.toString()
+
+            throw new Error('Could not parse file: \n '+ reason?.replace('Error:',''))
+        }
+        
         
     }
     

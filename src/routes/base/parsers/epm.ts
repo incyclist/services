@@ -4,6 +4,7 @@ import { DaumEpp, DaumEppProgramEntry, RouteInfo, RoutePoint} from '../types';
 import { JSONObject } from '../../../utils/xml';
 import { BinaryReader } from './utils';
 import { XMLParser, XmlParserContext } from './xml';
+import { getFileName } from '../../../utils';
 
 export interface EpmParserContext extends XmlParserContext {
     noPositions?:boolean
@@ -60,6 +61,7 @@ export class EPMParser extends XMLParser{
     protected async loadEpp(context:EpmParserContext):Promise<Buffer> {
         const {fileInfo} = context
         
+
         const file:FileInfo = {...fileInfo,ext:'epp',encoding:'binary'}
     
         const fileName = fileInfo.name.replace('epm','epp')
@@ -76,13 +78,22 @@ export class EPMParser extends XMLParser{
 
         }
 
-        const loader = getBindings().loader
-        const res = await loader.open(file)
-        if (res.error) {
-            throw new Error('Missing EPP File')
-        }
-        return res.data
 
+        const onError = ()=> {
+            throw new Error('Could not open EPP file: '+ getFileName(file))
+        }
+
+        const loader = getBindings().loader
+        try {
+            const res = await loader.open(file)
+            if (res.error) {
+                onError()
+            }
+            return res.data
+        }
+        catch {
+            onError()
+        }
     }
 
     protected getV7Program(reader:BinaryReader,json):DaumEpp {

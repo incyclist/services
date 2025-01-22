@@ -4,6 +4,7 @@ import { IncyclistXMLParser } from './incyclist'
 import path from 'path'
 import { IFileSystem } from '../../../api/fs'
 import { RoutePoint } from '../types'
+import exp from 'constants'
 
 describe('IncyclistParser',()=>{
     let parser:IncyclistXMLParser
@@ -72,6 +73,14 @@ describe('IncyclistParser',()=>{
 
                 expect( {data,details}).toMatchSnapshot()
 
+            })
+
+
+            test('GPX file missing',async ()=>{
+                await expect( async ()=>{await run('missing_gpx.xml')}).rejects.toThrow('Could not open file: ./__tests__/data/rlv/__missing__.gpx')
+            })
+            test('GPX tag missing',async ()=>{
+                await expect( async ()=>{await run('missing_gpx_tag.xml')}).rejects.toThrow('<gpx-file-path> missing in XML')
             })
 
             test('file with preview',async ()=>{

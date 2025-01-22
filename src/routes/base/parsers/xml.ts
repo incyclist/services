@@ -6,6 +6,7 @@ import { FileInfo, getBindings } from '../../../api';
 import { checkIsLoop, getRouteHash, getTotalElevation,getTotalDistance, updateSlopes, validateRoute } from '../utils/route'
 import { Position, Altitude } from './types';
 import { getReferencedFileInfo, parseInformations } from './utils';
+import { getFileName } from '../../../utils';
 
 let _logger;
 
@@ -46,14 +47,22 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         if (data)
             return data
 
-        const loader = getBindings().loader
-        const res = await loader.open(file)
-        if (res.error) {
-            throw new Error('Could not open file')
+        const onError = ()=> {
+            throw new Error('Could not open file: '+ getFileName(file))
         }
-        const xml = await parseXml(res.data)
-        return xml
 
+        const loader = getBindings().loader
+        try {
+            const res = await loader.open(file)
+            if (res.error) {
+                onError()                
+            }
+            const xml = await parseXml(res.data)
+            return xml
+        }
+        catch {
+            onError()
+        }
     }
 
     protected getCountryPrefix(title?:string):string|undefined {

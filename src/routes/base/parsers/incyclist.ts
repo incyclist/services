@@ -51,8 +51,15 @@ export class IncyclistXMLParser extends XMLParser{
 
         }
 
-        const gpx = await new GPXParser({addTime:true}).import(gpxFile)
-        route.points = gpx.details.points
+        try {
+            const gpx = await new GPXParser({addTime:true}).import(gpxFile)
+            route.points = gpx.details.points
+        }
+        catch(err) {            
+            if (!data['gpx-file-path'])
+                throw new Error('<gpx-file-path> missing in XML')    
+            throw err
+        }
 
     }
 

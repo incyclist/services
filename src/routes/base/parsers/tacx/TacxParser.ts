@@ -1,4 +1,5 @@
 import { FileInfo, getBindings } from "../../../../api";
+import { getFileName } from "../../../../utils";
 import clone from "../../../../utils/clone";
 import { RouteApiDetail } from "../../api/types";
 import { DISTANCE_PROGRAM, PgmfFile, RlvCourseInfo, RlvFile, SLOPE_PROGRAM } from "../../model/tacx";
@@ -32,11 +33,21 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         const {loader} = getBindings()
         info.encoding = 'binary'
 
-        const res = await loader.open(info)
-        if (res.error) {
-            throw new Error(`Could not open ${info.ext} File`)
+        const onError = ()=> {
+            throw new Error(`Could not open file: ${getFileName(info)}` )
         }
-        return res.data  as ArrayBuffer
+
+
+        try {
+            const res = await loader.open(info)
+            if (res.error) {
+                onError()
+            }
+            return res.data  as ArrayBuffer
+        }
+        catch {
+            onError()
+        }
     }
 
     supportsContent(data: ArrayBuffer): boolean {

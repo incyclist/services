@@ -48,9 +48,3 @@ export interface FileInfo {
 export interface IFileLoader {
     open(file:FileInfo):Promise<FileLoaderResult>
 }
-
-
-
-
-/*
-*/
