@@ -925,7 +925,7 @@ export class RouteListService extends IncyclistService {
                 if (err.message==='not supported')
                     return;
 
-                this.logError(err,'createPreview')
+                this.logEvent({message:'creating preview failed', title:descr.title, id:descr.id, video:videoUrl, reason:err.message })
             }
         }
 
