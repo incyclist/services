@@ -549,6 +549,25 @@ describe('ActivityListService',()=>{
 
         })
 
+        test('seleced items does not have logs',()=>{
+            const db = new RepoMockClass({cntEntries:5,repoDelay:100})
+
+            const activity = clone(SampleDetails)
+            delete activity.logs
+            db.activities[1].details = activity as unknown as ActivityDetails    
+           
+            const selected = db.activities[1]
+            setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
+            
+            
+            let res
+            res = service.openSelected()
+            
+            expect(res.title).toBe('Menglonnais')
+            expect(res.points).toHaveLength(0)
+
+        })
+
 
     })
 

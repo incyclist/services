@@ -549,7 +549,8 @@ export class ActivityListService extends IncyclistService {
     private getSelectedActivityDisplayProps() {
         const activity = this.selected.details;
 
-        const points = activity.logs.map(p => ({ lat: p.lat, lng: p.lng ?? p.lon }));
+        const logs = activity?.logs??[]
+        const points = logs.map(p => ({ lat: p.lat, lng: p.lng ?? p.lon }));
 
         const props: SelectedActivityDisplayProperties = {
             title: this.selected.getTitle(),
