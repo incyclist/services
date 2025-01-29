@@ -554,12 +554,12 @@ export class ActivityListService extends IncyclistService {
 
         const props: SelectedActivityDisplayProperties = {
             title: this.selected.getTitle(),
-            distance: activity.distance,
-            duration: activity.time,
+            distance: activity?.distance,
+            duration: activity?.time,
             elevation: this.selected.getElevation(),
-            startPos: activity.segment ? undefined : activity.startPos,
-            segment: activity.segment,
-            started: new Date(activity.startTime),
+            startPos: activity?.segment ? undefined : activity.startPos,
+            segment: activity?.segment,
+            started: activity? new Date(activity.startTime) : undefined,
             showMap: true,
             points,
             activity,

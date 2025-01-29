@@ -74,13 +74,13 @@ export class Activity implements ActivityInfo{
     getTitle():string {
         let title = this.info.summary.title
         if (title===DEFAULT_ACTIVITY_TITLE) {
-            if (this.details.route?.title) {
-                title = this.details.route.title
+            if (this.details?.route?.title) {
+                title = this.details?.route.title
             }
             else {
-                title = this.details.route.name
+                title = this.details?.route.name
 
-                const route = useRouteList().getRouteDescription(this.details.route.id)
+                const route = useRouteList().getRouteDescription(this.details?.route?.id)
                 if (route) {
                     title = route.title
                 }
