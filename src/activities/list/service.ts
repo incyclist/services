@@ -557,7 +557,7 @@ export class ActivityListService extends IncyclistService {
             distance: activity?.distance,
             duration: activity?.time,
             elevation: this.selected.getElevation(),
-            startPos: activity?.segment ? undefined : activity.startPos,
+            startPos: activity?.segment ? undefined : activity?.startPos,
             segment: activity?.segment,
             started: activity? new Date(activity.startTime) : undefined,
             showMap: true,
