@@ -733,9 +733,9 @@ export class DeviceRideService  extends IncyclistService{
 
 
         ai.ivToCheck = setInterval( ()=>{check()}, 1000)
-
-
         ai.isHealthy = true
+        ai.isRestarting = false;
+
         if (ai.dataStatus!==undefined && ai.dataStatus!=='green') {
             ai.dataStatus = 'green'
             const {enabledCapabilities} = this.getEnabledCapabilities(ai)
@@ -770,10 +770,13 @@ export class DeviceRideService  extends IncyclistService{
 
     async prepareReconnect(unhealthy:AdapterRideInfo) {
 
-        this.logEvent({message:'prepareReconnect', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData  })
-        this.reconnectBusy = true
-        if (unhealthy.isRestarting)
+
+        this.logEvent({message:'prepareReconnect', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData, isRestarting: unhealthy.isRestarting  })
+
+        if (unhealthy.isRestarting) {
+            this.logEvent({message:'skipped reconnect - device already restarting', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData  })
             return;
+        }
 
         await sleep( 1000)
 
@@ -783,11 +786,13 @@ export class DeviceRideService  extends IncyclistService{
         }       
       
         // are all adapters on the same interface down?
-        this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData  })
         const ifName = unhealthy.adapter.getInterface()
         const adapters = this.rideAdapters?.filter( ai=> ai.adapter.getInterface()===ifName)
+        const stillHealthy = adapters.filter(ai=>ai.isHealthy)
 
-        if ( !adapters.find(ai=>ai.isHealthy) && adapters.length>1)  {
+        this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData, stillHealthy:stillHealthy?.length, onSameInterface:adapters.length  })
+
+        if ( !stillHealthy?.length && adapters.length>1)  {
             await this.reconnectInterface(ifName, adapters);
 
         }
@@ -975,7 +980,6 @@ export class DeviceRideService  extends IncyclistService{
 
             if (success) {
                 this.startHealthCheck(unhealthy)
-                unhealthy.isRestarting = false;
                 unhealthy.isStarted = true;
             }
 
@@ -988,6 +992,7 @@ export class DeviceRideService  extends IncyclistService{
         }
         while (!stopRequested && !success)
 
+        unhealthy.isRestarting = false;
         this.emit('stop-adapter-confirmed', unhealthy.udid)
     }
 
