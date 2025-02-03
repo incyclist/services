@@ -17,10 +17,11 @@ import { DownloadObserver } from "../../download/types";
 import { RouteDownloadService } from "../../download/service";
 import { getLocalizedData } from "../../base/utils/localization";
 import { EventLogger } from "gd-eventlog";
-import { getPosition} from "../../base/utils/route";
+import { checkIsLoop, getPosition, updateSlopes} from "../../base/utils/route";
 import { getWorkoutList } from "../../../workouts";
 import { checkIsNew } from "../utils";
 import { useOnlineStatusMonitoring } from "../../../monitoring";
+import { distanceBetween } from "../../../utils/geo";
 
 export interface SummaryCardDisplayProps extends RouteInfo{
     loaded:boolean
@@ -249,7 +250,14 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
-    getData(): Route { return this.route}
+    getData(): Route { 
+
+        this.verifyRoute(this.route)
+
+        return this.route
+    }
+
+
     setData(data: Route) { 
         try {
             const old = this.route
@@ -955,6 +963,25 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.logError(err, 'getSettings');
         }
         return this.startSettings
+    }
+
+    protected verifyRoute(route:Route) {
+        if ( checkIsLoop(route) ) {
+            const points = route.details?.points??[]
+            if (!points.length)
+                return;
+
+            const p0 = points[0]
+            const pN = points[points.length-1]
+            const distance = Math.abs(distanceBetween(p0,pN))
+            const slope = (points[0].elevation-points[points.length-1].elevation)/ distance * 100
+
+            if (Math.abs(slope)>1){
+                this.logger.logEvent({message:'Loop elevation profile adjusted', route: route.description.title})
+                updateSlopes(route.details.points)
+            }
+
+        }
     }
 
 }

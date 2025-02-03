@@ -70,8 +70,8 @@ export const updateSlopes = (points: Array<RoutePoint>, validateOnly=false):void
             else {
                 const distanceLast = geo.distanceBetween(points[points.length-2], points[points.length-1]);
                 const slopeLast = (points[points.length-1].elevation - points[points.length-2].elevation) / distanceLast * 100;
-                const elevationLast = points[0].elevation - slopeLast * distance/100;
-                elevationShift = points[0].elevation - elevationLast;
+                const targetElevationLast = points[0].elevation - slopeLast * distance/100;
+                elevationShift = targetElevationLast-points[points.length-1].elevation;
             }
     
             validateDistance(points)
