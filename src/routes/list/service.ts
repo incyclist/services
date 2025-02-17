@@ -717,7 +717,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 this.observer.emit(event,d)
                 return;
             }
-            if (props.log) {
+            const {log} = props??{}
+            if (log) {
                 const logs = this.createRoutesLogEntry(true)??{}
                 this.logEvent({message:`RoutesList ${event}`, ...logs})
         
