@@ -16,7 +16,7 @@ export interface RouteDBApiDescription extends RouteApiDescription {
     originalName?:string
 }
 
-interface MinimalDescription {
+export interface MinimalDescription {
     country?: string
     title?:string
 }

@@ -15,6 +15,7 @@ import { RouteApiDetail } from "../base/api/types";
 import { ParseResult, RouteInfo } from "../base/types";
 import { Observer } from "../../base/types/observer";
 import { useUserSettings } from "../../settings";
+import { Card } from "../../base/cardlist";
 
 let cnt = 0
 
@@ -30,7 +31,7 @@ class MockeableService extends RouteListService {
                 const route = new Route( ri)
                 const list = this.selectList(route)
                 const card = new RouteCard(route,{list})
-                list.add( card)
+                list.add( card as Card<Route>)
                 if ( list.getId()==='myRoutes')
                     card.enableDelete(true)    
                         
@@ -263,7 +264,7 @@ describe('RouteListService',()=>{
         test('no filters - after previous search',()=>{
             service.search({routeType:'Loop',elevation:{min:100}, contentType:'GPX'})
             const {routes} = service.search()
-            expect(routes.length).toBe(1)
+            expect(routes.length).toBe(34)
         })
 
     })

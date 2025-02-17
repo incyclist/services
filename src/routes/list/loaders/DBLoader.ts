@@ -5,6 +5,7 @@ import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
 import { Loader } from "./types";
 
+const DETAILS_PRELOAD_CNT = 20;
 
 export abstract class DBLoader<T> extends Loader<T> {
 
@@ -37,26 +38,18 @@ export abstract class DBLoader<T> extends Loader<T> {
         delete this.loadObserver;
     }
 
+
     protected async _load() {
         this.routeDescriptions = await this.loadDescriptions();
         this.verifyImportDate(this.routeDescriptions)
 
-
-        const promises:Array<Promise<void>> = []
         this.routeDescriptions?.forEach(descr => {
 
             const route = new Route(this.buildRouteInfo(descr));
-            const isComplete = this.isCompleted(route);
-            
-            
-            if (isComplete) {
-                this.emitRouteAdded(route);
-            }
-            else { 
-                promises.push(this.loadDetails(route,isComplete))
-            }
+           
+            this.emitRouteAdded(route);
+
         });
-        await Promise.allSettled(promises)
         this.emitDone()
         
     }

@@ -13,7 +13,7 @@ export class BaseCard implements Card<Route> {
         this.initialized = val
     }
 
-    reset() {        
+    reset(onlyObserver:boolean=false) {        
         this.setInitialized(false)
         this.setVisible(false)
     }

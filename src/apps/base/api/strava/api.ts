@@ -2,7 +2,7 @@ import { sleep } from "incyclist-devices/lib/utils/utils"
 import { Observer } from "../../../../base/types/observer"
 import { valid } from "../../../../utils/valid"
 import { AppApiBase } from "../base"
-import { DuplicateError, StravaConfig, StravaRefreshTokenResponse, StravaUploadProps, StravaUploadRequest, StravaUploadResponse, StravaUploadResult } from "./types"
+import { ActivityStreamEntry, DetailedActivity, DuplicateError, getLoggedInAthleteActivitiesProps, StravaConfig, StravaRefreshTokenResponse, StravaStreamType, StravaUploadProps, StravaUploadRequest, StravaUploadResponse, StravaUploadResult, SummaryActivity } from "./types"
 import { EventLogger} from 'gd-eventlog'
 import { AxiosResponse } from "axios"
 
@@ -89,10 +89,7 @@ export class StravaApi extends AppApiBase{
      */
     async upload(fileName:string, props?:StravaUploadProps):Promise<StravaUploadResult> { 
 
-        if (!this.isAuthenticated())
-            throw new Error('not authenticated')
-
-        await this.verifyToken()
+        await this.verifyAuthentication()
 
         const request: StravaUploadRequest = {
             file: { type:'file', fileName},
@@ -108,6 +105,45 @@ export class StravaApi extends AppApiBase{
         const response = await this.createUpload(request)
 
         return await this.waitForUploadResponse(response)
+    }
+
+
+    async getLoggedInAthleteActivities(props:getLoggedInAthleteActivitiesProps={}) {
+        await this.verifyAuthentication()
+
+        try {
+            const params = Object.keys(props).map( k => `${k}=${props[k]}`).join('&')
+            const response =  await this.get( '/activities?'+params )
+            return response.data as Array<SummaryActivity>
+        }
+        catch(err) {
+            return {props, error:'getLoggedInAthleteActivities failed: '+err.message}
+        }
+    }
+
+    async getActivityById(id:number, include_all_efforts=false) {
+        await this.verifyAuthentication()
+
+        try {
+            const response =  await this.get( `/activities/${id}?include_all_efforts=${include_all_efforts}` )
+            return response.data as DetailedActivity
+        }
+        catch(err) {
+            return {id, error:'getActivityById failed: '+err.message}
+        }
+    }
+
+    async getActivityStream(id:number, keys:Array<StravaStreamType>=[]) {
+        await this.verifyAuthentication()
+
+        try {
+            const params =keys.length>0 ? '?keys='+keys.join(',') : ''
+            const response =  await this.get( `/activities/${id}/streams`+params )
+            return response.data as Array<ActivityStreamEntry>
+        }
+        catch(err) {
+            return {id, error:'getActivityStream failed: '+err.message}
+        }
     }
 
 
@@ -136,6 +172,15 @@ export class StravaApi extends AppApiBase{
         const expiration = this.config.expiration
         return (Date.now()<expiration.valueOf())
     }
+
+    protected async verifyAuthentication() {
+        if (!this.isAuthenticated())
+            throw new Error('not authenticated')
+
+        await this.verifyToken()
+    }
+
+
 
     protected async waitForUploadResponse(response: StravaUploadResponse):Promise<StravaUploadResult> {
         let data = response

@@ -1,3 +1,5 @@
+import { LatLng } from "../../../../utils/geo"
+
 export type StravaConfig = {
     /** access token */
     accessToken:string,  
@@ -102,6 +104,74 @@ export type StravaUploadResult  = {
 }
 
 export type StravaFormat = 'fit' | 'fit.gz' | 'tcx'  | 'tcx.gz' | 'gpx' | 'gpx.gz'
+
+
+export type getLoggedInAthleteActivitiesProps = {
+    before?: number,     /** An epoch timestamp to use for filtering activities that have taken place before a certain time. */
+    after?: number,      /** An epoch timestamp to use for filtering activities that have taken place after a certain time. */
+    page?: number,       /** Page number. Defaults to 1. */
+    per_page?: number    /** Number of items per page. Defaults to 30. */
+}
+
+export interface SummaryActivity  {
+    id: number,
+    external_id: number,
+    upload_id: number,
+    athlete,
+    name: string,
+    distance: number,
+    moving_time: number,
+    elapsed_time: number,
+    total_elevation_gain: number,
+    elev_high: number, 
+    elev_low: number,
+    sport_type: StravaActivityType,
+    start_date: string, // ISO time
+    start_date_local : string,
+    timezone: string,
+    utc_offset: number,
+    start_latlng: Array<number>,
+    end_latlng: Array<number>,
+    location_city: string,
+    location_state: string,
+    location_country: string,
+    achievement_count: number,
+    kudos_count: number,
+    comment_count: number,
+    athlete_count: number,
+    photo_count: number,
+    map: { id: string, summary_polyline: string, resource_state: number },
+    trainer: boolean,
+    commute: boolean,
+    manual: boolean,
+    private: boolean,
+    visibility: string,
+    flagged: boolean,
+    gear_id: null,
+    average_speed: number,
+    max_speed: number,
+    has_heartrate: boolean,
+    heartrate_opt_out: boolean,
+    display_hide_heartrate_option: boolean,
+    upload_id_str: string,
+    from_accepted_tag: boolean,
+    pr_count: number,
+    total_photo_count: number,
+    has_kudoed: boolean
+}
+
+export interface DetailedActivity extends SummaryActivity { 
+    descrciption: string,
+    photos
+
+}
+
+export type StravaStreamType = 'time' | 'distance' | 'latlng' |'altitude'| 'velocity_smooth' | 'heartrate' | 'cadence' | 'watts' | 'temp' | 'moving' | 'grade_smooth'
+
+export interface ActivityStreamEntry {
+    type: StravaStreamType
+    data
+}
 
 export type StravaUploadProps = {
     /** file format ( TCX,FIT,...), needs to be supproted by VeloHero */

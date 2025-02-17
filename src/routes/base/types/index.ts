@@ -2,7 +2,7 @@ import { FileInfo } from "../../../api";
 import { LatLng } from "../../../utils/geo";
 
 export type RouteType = 'gpx' | 'video';
-export type RouteCategory = 'Imported' | 'Free' | 'Demo' | 'personal' | 'alternatives' | 'selected';
+export type RouteCategory = 'Imported' | 'Free' | 'Demo' | 'personal' | 'alternatives' | 'selected' | 'external' ;
 export type RouteState = 'prepared' | 'loading' | 'loaded' | 'error';
 
 export type RouteProvider = {
@@ -116,6 +116,7 @@ export interface    RouteInfo extends RouteBase{
     points?: Array<RoutePoint>,
     segments?:Array<RouteSegment>,
     tsImported?: number,
+    tsLastChange?:number,
     tsLastStart?: number,
     tsReleased?:number,
     next?:string,
@@ -124,6 +125,7 @@ export interface    RouteInfo extends RouteBase{
     isDeleted?:boolean  
     originalName?:string 
     version?:number,    
+    source?:string
 }
 
 export type LocalizedText = { [index: string]: string; };

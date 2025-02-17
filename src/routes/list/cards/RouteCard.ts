@@ -213,6 +213,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     setVisible(visible: boolean): void {
+
         try {
             const prev = this.visible
             this.visible = visible
@@ -225,9 +226,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
     
     }
 
-    reset() {
+    reset(onlyObserver:boolean = false) {
         try {
-            super.reset()
+            if (!onlyObserver)
+                super.reset()
             this.cardObserver.reset()
         }
         catch(err) {
@@ -257,6 +259,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     getRouteData(): RouteApiDetail {return this.route?.details}
 
+    setRouteData(details:RouteApiDetail ): void {
+        this.route?.addDetails(details)
+    }
+
     getCardType(): RouteCardType {
         return 'Route';
     }
@@ -275,6 +281,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     getDisplayProperties(): SummaryCardDisplayProps {
         try {
             const descr = this.getRouteDescription()
+            const details = this.getRouteData()
 
             // bugfix: some legacy routes had localizedTitle as String
             if ( typeof(descr.localizedTitle)==='string') {
@@ -282,15 +289,17 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 this.save()
             }
 
-            let {points} = descr
+            let points = details?.points ?? descr.points
             if (points && !Array.isArray(points)) {
                 points = undefined
             }
 
             let isNew = checkIsNew(descr);
+            const loaded = details!==undefined
 
             const loading = this.deleteObserver!==undefined
-            return {...descr, initialized:this.initialized, loaded:true,ready:true,state:'loaded',visible:this.visible,isNew,
+
+            return {...descr, initialized:this.initialized, loaded,ready:true,state:'loaded',visible:this.visible,isNew,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
                     observer:this.cardObserver}
         }
@@ -339,6 +348,14 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const isOnline = useOnlineStatusMonitoring().onlineStatus
         let canStart = this.canStart( {isOnline})
         const descr  = this.getRouteDescription()
+        let loading = false
+
+        if (!descr) {
+            loading = true
+           
+            // TODO
+        }
+
         let videoMissing;
         let videoChecking = false
 
@@ -371,7 +388,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
         catch(err) {
             this.logError(err,'openSettings')
         }
-        return {settings,showLoopOverwrite,showNextOverwrite,hasWorkout,canStart, videoChecking, videoMissing}
+
+        return {settings,showLoopOverwrite,showNextOverwrite,hasWorkout,canStart, videoChecking, videoMissing }
 
     }
 
@@ -422,9 +440,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
         
     }
 
-    delete():PromiseObserver<boolean> {
+    delete(enforced?:boolean):PromiseObserver<boolean> {
         try {
-
+           
             this.logger.logEvent({message: 'delete card',card:this.getTitle()})
             const service = getRouteList()
             service.unselectCard(this)
@@ -433,7 +451,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (this.deleteObserver)
                 return this.deleteObserver
 
-            this.deleteObserver = new PromiseObserver< boolean> ( this._delete() )
+            this.deleteObserver = new PromiseObserver< boolean> ( this._delete(enforced) )
             return this.deleteObserver
         }
         catch(err) {
@@ -442,18 +460,24 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
-    protected async _delete():Promise<boolean> {
+    protected async _delete(enforced?:boolean):Promise<boolean> {
 
         // let the caller of delete() consume an intialize the observer first
         await waitNextTick()
         let deleted:boolean = false
+        let operation = 'none'
 
         try {
 
             this.deleteObserver.emit('started')
             this.emitUpdate()
 
-            if ( this.list.getId()==='myRoutes') {
+            if (enforced) {
+                await this.deleteRoute()
+                operation = 'deleted-enforced'
+            }
+
+            else if ( this.list.getId()==='myRoutes') {
 
                 const route:RouteInfo = this.getRouteDescription()
 
@@ -463,19 +487,25 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     this.deleteFromUIList()
                     this.enableDelete(false)
                     getRouteList().addCardAgain(this)
+                    operation = 'recreated'
                     return true
                 }
                 else if (!route.isLocal) {
                     await this.markDeleted()    
+                    operation = 'marked'
+
                 }
                 else {
                     await this.deleteRoute()
+                    operation = 'deleted'
                 } 
                     
 
             }
             else {
                 await this.markDeleted()
+                operation = 'marked'
+
             }
 
             
@@ -484,10 +514,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
     
             // delete route related user settings
             this.deleteRouteUserSettings();
-
             this.logger.logEvent({message: 'card deleted',card:this.getTitle()})
 
-            getRouteList().emitLists('updated',true);
+            getRouteList().emitLists('updated',{log:true,enforced:true});
             deleted =true;   
         }
         catch(err) {
@@ -816,6 +845,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected emitUpdate() {
         if (this.cardObserver)
             this.cardObserver.emit('update', this.getDisplayProperties())
+
     }
 
     updateRoute(route:Route) {

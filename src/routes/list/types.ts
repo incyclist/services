@@ -1,4 +1,5 @@
 import { LatLng } from "../../utils/geo"
+import { SummaryCardDisplayProps } from "./cards/RouteCard";
 import { RouteCardType } from "./cards/types";
 
 export interface RouteStartSettings {
@@ -44,6 +45,8 @@ export interface SearchFilter {
     country?: string,
     contentType?:string,
     routeType?:string
+    source?:string
+    includeDeleted?:boolean
 }
 
 export interface SearchFilterOptions {
@@ -61,4 +64,8 @@ export interface RoutesRepoUpdates {
 export interface RouteListLog {
     counts: Record<string,number>,
     titles?: Record<string,string>
+}
+
+export interface IRouteList {
+    searchRepo( requestedFilters?:SearchFilter ): { routes: Array<SummaryCardDisplayProps>}
 }

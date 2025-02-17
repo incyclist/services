@@ -6,12 +6,6 @@ export interface Credentials {
 }
 
 
-export interface VeloHeroAuth extends Credentials {
-    id?: string;
-    authKey?: string;    
-    version?: string    
-}
-
 export interface StravaAuth  {
     accesstoken?: string;
     refreshtoken?: string;    
@@ -32,8 +26,6 @@ export type ActivityUploadResult = {
 export interface IActivityUpload {
     init():boolean;
     isConnected():boolean
-    isConnecting():boolean
-    disconnect():void
     upload(activity: ActivityDetails, format?:string):Promise<boolean>
     getUrl(id:string):string
 }

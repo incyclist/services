@@ -20,6 +20,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
     protected videosRepo: JsonRepository
     protected routesRepo: JsonRepository
     protected routeDescriptions: Array<RouteInfoDBEntry>
+    protected routeHashes: Record<string,string>
     protected tsLastWrite:number
     protected isDirty:boolean
     protected routesSaveObserver:{ [index:string]:PromiseObserver<void>} = {}
@@ -27,12 +28,13 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
     constructor () {
         super()
-        this.routeDescriptions = []     
+        this.routeDescriptions = []   
+        this.routeHashes = {}
         this.isDirty = true;
     }
 
     async save(route:Route, enforcedWriteDetails:boolean = false):Promise<void> {
-        const stringify = (json) => { try {return JSON.stringify(json)} catch {/* */}}
+        const stringify = (json) => { try {return JSON.stringify(json)} catch (err) {/* */ console.log('# error',err)} }
 
         const updatedDescr = this.buildRouteDBInfo(route.description)
         const idx = this.routeDescriptions.findIndex( d=> d.id===route.description.id)
@@ -40,14 +42,17 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         let changed = false
         if (idx===-1) {
             this.routeDescriptions.push( clone(updatedDescr) )
+            this.routeHashes[route.description.id] = stringify(updatedDescr)
             changed = true;
         }
         else { 
-            const prev = stringify(this.routeDescriptions[idx])
+            const prev = this.routeHashes[route.description.id]??''
             const updated = stringify(updatedDescr)
             changed = (prev!==updated)
-            if (changed)
+            if (changed) {
                 this.routeDescriptions[idx] = clone(updatedDescr)
+                this.routeHashes[route.description.id] = updated
+            }
             
         }
 
@@ -155,18 +160,26 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         return new Promise( done => {
             const observer = this.getLegacyLoader().load();
             const descriptions: Array<RouteInfoDBEntry> = []
-            observer.on('route.added',(r)=>{descriptions.push(r.description)})
+            observer.on('route.added',(r)=>{
+                
+                this.loadDetails(r,false).then( ()=>descriptions.push(r.description))
+            })
             observer.on('done',()=>done(descriptions))
         })
     }
 
     protected async loadDescriptions():Promise<Array<RouteInfoDBEntry>> {
+        const stringify = (json) => { try {return JSON.stringify(json)} catch (err) {/* */ console.log('# error',err)} }
 
         const descriptions = await this.getRoutesRepo().read('db') 
         if (descriptions) {
         
             const routes = descriptions as unknown as Array<RouteInfoDBEntry>
             const cleaned = this.removeDuplicates(routes)
+
+            cleaned.forEach( r=> {
+                this.routeHashes[r.id] = stringify(r)
+            })
             return cleaned
         }
 
@@ -220,6 +233,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
                 const res = await repo.read(id) as undefined as RouteApiDetail                
                 if (res) {
+
                     description.originalName = res.title
 
                     if (description.hasVideo && !description.segments) {
@@ -227,7 +241,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
                     }
         
                 }
-                else if (logErrors)
+                else if (logErrors) 
                     this.logger.logEvent({ message: 'could not load route details', id, title: description?.title, reason: 'no data received' })
                 return res
             }
