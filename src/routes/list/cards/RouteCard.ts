@@ -105,6 +105,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
         this.deleteable = false;
 
         const descr = this.getRouteDescription()
+        if (descr.source || descr.isLocal)
+            this.deleteable = true;
 
         this.ready = !descr.hasVideo || (descr.hasVideo && descr.previewUrl!==undefined)
         this.initialized = false;
@@ -689,12 +691,17 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     
 
-    stopDownload() {
+    stopDownload(immediate:boolean = false) {
         try {
             getRouteList().logEvent({message:'download stopped', route:this.route?.description?.title})
             this.getCurrentDownload()?.stop()
             
-            waitNextTick().then( ()=>{ delete this.downloadObserver})
+            if (immediate) {
+                delete this.downloadObserver
+            }
+            else {
+                waitNextTick().then( ()=>{ delete this.downloadObserver})
+            }
         }
         catch(err) {
             this.logError(err,'stopDownload')

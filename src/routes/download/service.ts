@@ -46,8 +46,22 @@ export class RouteDownloadService extends IncyclistService {
 
         const info = this.downloads[idx]
         info.observer.stop()
-
         this.downloads.splice(idx,1)
+            
+    }
+
+    protected async deleteIncompleteFile(route:Route, videoDir:string) {
+        const {file} = await this.getDownloadFileName(route,videoDir)
+        if (file) {
+            try {
+                const fs = getBindings().fs
+                fs.unlink(file)
+            }
+            catch(err) {
+                this.logError(err, 'deleteIncompleteFile')
+            }
+
+        }
     }
 
     protected getObserver(route:Route) {
@@ -60,9 +74,18 @@ export class RouteDownloadService extends IncyclistService {
         await waitNextTick()
 
         const observer = this.getObserver(route)
+
+
+        
+            
         
         try {
             const videoDir = await this.waitForVideoDir(observer)
+            observer.once( 'stopped',()=>{
+
+                this.deleteIncompleteFile(route,videoDir)
+            })
+    
             this.downloadRoute(route,videoDir,observer)
         }
         catch(err) {
@@ -97,37 +120,54 @@ export class RouteDownloadService extends IncyclistService {
         return videoDir
     }
 
-    protected async downloadRoute(route:Route, targetDir:string, observer:DownloadObserver):Promise<void> {
-
-        let url;
+    protected async getDownloadFileName(route:Route,targetDir:string): Promise<{file?:string, url?:string,error?:string}> {
+        let url:string, file:string, error
         try {
+            const {path} = getBindings()
             url = route?.description?.downloadUrl || route?.description?.videoUrl
 
             if (!url) {
                 url = await this.restoreFromRepo(route)
             }
-            if (!url) {
-                observer.emit('error', new Error('download not supported'))
-                return;
-            }
-            
-            const {id,title} = route.description;
-
-            const {path,downloadManager} = getBindings()
-            if (!path || !downloadManager) {
-                observer.emit('error', new Error('download not supported'))
-                return;
+            if (!url || !path) {
+                return {error:'download not supported'};
             }
 
             const info = path.parse( url)
             if (!info) {
                 const logInfo = {...route.description}
                 delete logInfo.points
-                this.logEvent({message:'no URL specified',logInfo})
-                observer.emit('error', new Error('no URL specified'))
+                this.logEvent({message:'no URL specified',logInfo})                
+                return {error:'no URL specified'};
+            }
+            file = path.join( targetDir, info.base)
+        }
+        catch(err) {
+            return {}
+        }
+        return {file,url}
+
+    }
+ 
+    protected async downloadRoute(route:Route, targetDir:string, observer:DownloadObserver):Promise<void> {
+
+        let urlLog
+        try {
+
+            const {file,url,error} = await this.getDownloadFileName(route,targetDir)
+            urlLog =url;
+            if (!file||error) {
+                observer.emit('error', new Error(error??'download not supported'))
                 return;
             }
-            const file = path.join( targetDir, info.base)
+            
+            const {id,title} = route.description;
+
+            const {downloadManager} = getBindings()
+            if (!downloadManager) {
+                observer.emit('error', new Error('download not supported'))
+                return;
+            }
             const session = downloadManager.createSession(url,file)
 
             observer.setSession(session)
@@ -150,7 +190,7 @@ export class RouteDownloadService extends IncyclistService {
             session.start()
         }
         catch(err) {
-            this.logError(err,'downloadRoute',{url})
+            this.logError(err,'downloadRoute',{url:urlLog})
             observer.emit('error',err)
         }        
 
