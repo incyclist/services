@@ -1,5 +1,3 @@
-import { LatLng } from "../../../../utils/geo"
-
 export type StravaConfig = {
     /** access token */
     accessToken:string,  

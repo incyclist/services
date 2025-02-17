@@ -97,7 +97,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     open():{observer:RouteListObserver,lists:Array<CardList<Route>>} {
 
         this.currentView = 'routes'
-        const cardInfo = (l) => l.getCards().map(c => `${c.isVisible()?'x':'_'}`).join('')
 
         try {
             this.logEvent( {message:'open route list'})
@@ -571,58 +570,25 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     async getRouteDetails(id:string, expectLocal=false):Promise<RouteApiDetail> {
         try {
             const route = this.routes.find( r => r.description.id===id)
-            if (route) {
+            if (!route) 
+                return;
 
-                if (expectLocal && route.description.requiresDownload && !route.description.isDownloaded) {
-                    return;
-                }
-
-                if (!route.details) {
-                   
-                    route.details = await this.db.getDetails(id)
-
-                    // not in DB yet? must come from API
-                    if (!route.details) {
-
-                        if (route.description.source) {
-                            await this.loadSyncedRouteDetails(route)
-                        }
-                        else {
-                            // TODO....
-                        }
-    
-                    }
-
-                    // fix: legacy items might have selectableSegments in root instead of in video
-                    if (route.description.hasVideo) {
-                        if (!route.details.video.selectableSegments && route.details.selectableSegments) {
-                            route.details.video.selectableSegments = route.details.selectableSegments
-                            delete route.details.selectableSegments                                        
-                        }
-                    }
-
-                }
-
-                if (route.details && !route.description.country) {
-                        route.updateCountryFromPoints()
-                            .then( ()=> {
-                                this.db.save(route,false)
-                            })
-                            .catch(err => {
-                                console.log('# error', route.description.id, route.description.title, err)
-                            })   
-                }
-
-
-
-                return route.details
+            if (expectLocal && route.description.requiresDownload && !route.description.isDownloaded) {
+                return;
             }
-    
+
+            if (!route.details) {
+                await this.loadRouteDetails(route, id);
+            }
+
+            this.verifyRouteCountry(route);
+            return route.details
         }
         catch(err) {
             this.logError(err,'getRouteDetails',id)
         }
     }
+
 
     getRouteDescription(id:string) {
         try {
@@ -742,14 +708,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    emitLists( event:'loaded'|'updated',props?:{log?:boolean, enforced?:boolean}) {
-        const {enforced=false,log=false} = props??{}
-
-        /*
-        if (event==='updated' && !enforced &&  (this.syncInfo.observer || this.preloadObserver) ) {
-            return;
-        }
-            */
+    emitLists( event:'loaded'|'updated',props?:{log?:boolean}) {
 
         try {
 
@@ -758,7 +717,12 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 this.observer.emit(event,d)
                 return;
             }
-            
+            if (props.log) {
+                const logs = this.createRoutesLogEntry(true)??{}
+                this.logEvent({message:`RoutesList ${event}`, ...logs})
+        
+            }
+
 
             const lists = this.getLists()
             
@@ -907,8 +871,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         const promises = []
 
-        const loadDetails = (card) => {
-            this.db.getDetails( card.getId() )
+        const loadDetails = (card):Promise<void> => {
+            return this.db.getDetails( card.getId() )
             .then( details => { 
                 card.setRouteData(details)
 
@@ -921,7 +885,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 }
 
             }) 
-            .catch( err=>{this.logEvent( {message:'could not load route details',reason:err.message})  }) 
+            .catch( err=>{
+                this.logEvent( {message:'could not load route details',reason:err.message})  
+            }) 
 
         }
         
@@ -1083,6 +1049,44 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         })
 
     }
+
+
+    protected async loadRouteDetails(route: Route, id: string) {
+        route.details = await this.db.getDetails(id);
+
+        // not in DB yet? must come from external app or API 
+        if (!route.details) {
+
+            if (route.description.source) {
+                await this.loadSyncedRouteDetails(route);
+            }
+            else {
+                // TODO.... load from API
+            }
+
+        }
+
+        // fix: legacy items might have selectableSegments in root instead of in video
+        if (route.description.hasVideo) {
+            if (!route.details.video.selectableSegments && route.details.selectableSegments) {
+                route.details.video.selectableSegments = route.details.selectableSegments;
+                delete route.details.selectableSegments;
+            }
+        }
+    }
+
+    protected verifyRouteCountry(route: Route) {
+        if (route.details && !route.description.country) {
+            route.updateCountryFromPoints()
+                .then(() => {
+                    this.db.save(route, false);
+                })
+                .catch(err => {
+                    console.log('# error', route.description.id, route.description.title, err);
+                });
+        }
+    }
+
 
 
     protected selectList(route:Route):CardList<Route> {

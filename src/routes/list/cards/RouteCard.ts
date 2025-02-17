@@ -348,13 +348,6 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const isOnline = useOnlineStatusMonitoring().onlineStatus
         let canStart = this.canStart( {isOnline})
         const descr  = this.getRouteDescription()
-        let loading = false
-
-        if (!descr) {
-            loading = true
-           
-            // TODO
-        }
 
         let videoMissing;
         let videoChecking = false
@@ -465,7 +458,6 @@ export class RouteCard extends BaseCard implements Card<Route> {
         // let the caller of delete() consume an intialize the observer first
         await waitNextTick()
         let deleted:boolean = false
-        let operation = 'none'
 
         try {
 
@@ -474,7 +466,6 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             if (enforced) {
                 await this.deleteRoute()
-                operation = 'deleted-enforced'
             }
 
             else if ( this.list.getId()==='myRoutes') {
@@ -487,25 +478,20 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     this.deleteFromUIList()
                     this.enableDelete(false)
                     getRouteList().addCardAgain(this)
-                    operation = 'recreated'
                     return true
                 }
                 else if (!route.isLocal) {
                     await this.markDeleted()    
-                    operation = 'marked'
 
                 }
                 else {
                     await this.deleteRoute()
-                    operation = 'deleted'
                 } 
                     
 
             }
             else {
                 await this.markDeleted()
-                operation = 'marked'
-
             }
 
             
@@ -516,7 +502,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.deleteRouteUserSettings();
             this.logger.logEvent({message: 'card deleted',card:this.getTitle()})
 
-            getRouteList().emitLists('updated',{log:true,enforced:true});
+            getRouteList().emitLists('updated',{log:true});
             deleted =true;   
         }
         catch(err) {

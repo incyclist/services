@@ -33,7 +33,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
                 this.credentials = credentials            
                 this.isInitialized = true;
                 
-                const auth = await this.saveCredentials()
+                const auth = this.saveCredentials()
                 this.emit('login-success', auth)
                 return true           
     

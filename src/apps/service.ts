@@ -17,7 +17,7 @@ export class AppsService extends IncyclistService   {
         WorkoutUpload: [],
         WorkoutDownload: [],
         ActivityDownload: [/*'strava','komoot'   */ ],
-        RouteDownload: [/*'strava'*/,'komoot']
+        RouteDownload: [/*'strava' ,*/'komoot']
     }
 
     protected readonly serviceMap: Array<AppDefinition> = [

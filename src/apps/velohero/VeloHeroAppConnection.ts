@@ -32,7 +32,7 @@ export class VeloHeroAppConnection extends ConnectedAppService<VeloHeroCredentia
             this.credentials = credentials            
             this.isInitialized = true;
             
-            const auth = await this.saveCredentials()
+            const auth = this.saveCredentials()
             this.emit('login-success', auth)
             return true           
         }

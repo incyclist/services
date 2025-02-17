@@ -1,8 +1,8 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { ActivityDetails } from "../base";
-import { DuplicateError, StravaApi, StravaConfig, StravaFormat } from "../../apps/base/api/strava";
-import { IActivityUpload, StravaAuth } from "./types";
+import { DuplicateError, StravaFormat } from "../../apps/base/api/strava";
+import { IActivityUpload } from "./types";
 import { Injectable } from "../../base/decorators/Injection";
 import { ActivityUploadFactory } from "./factory";
 import { StravaAppConnection } from "../../apps/strava/StravaAppConnection";

@@ -77,8 +77,8 @@ export class Route {
                 }
                 
             }
-            catch(err) { // ignore errors  
-                console.log(err)              
+            catch {  
+                // ignore errors 
             }
         }    
         return updated
