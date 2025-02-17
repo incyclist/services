@@ -52,7 +52,7 @@ export class Countries extends IncyclistService {
     async getIsoFromLatLng(point:LatLng):Promise<string> {
         const {lat,lng}=point
         const query = `[out:json][timeout:25];way['addr:country'](around:20000,${lat},${lng});out tags;`
-
+        
         try {
             const result = await useOverpassApi().query(query) as unknown as CountryOverpassResult
             if (!result?.elements)

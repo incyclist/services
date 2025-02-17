@@ -1,7 +1,7 @@
 import { FileInfo, getBindings} from "../../api";
 import { Card, CardList } from "../../base/cardlist";
 import { IncyclistService } from "../../base/service";
-import { Singleton } from "../../base/types";
+import { Observer, Singleton } from "../../base/types";
 import { PromiseObserver } from "../../base/types/observer";
 import { RouteApiDetail } from "../base/api/types";
 import { Route } from "../base/model/route";
@@ -12,7 +12,7 @@ import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard, SummaryCardDisplayProps } from "./cards/RouteCard";
-import { DisplayType, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
+import { DisplayType, IRouteList, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
@@ -22,18 +22,23 @@ import { ActiveImportCard } from "./cards/ActiveImportCard";
 import { SelectedRoutes } from "./lists/selected";
 import { AlternativeRoutes } from "./lists/alternatives";
 import { getRepoUpdates, updateRepoStats } from "./utils";
-import { sleep } from "incyclist-devices/lib/utils/utils";
 import { useUserSettings } from "../../settings";
 import { Injectable } from "../../base/decorators";
+import { RouteSyncFactory } from "../sync/factory";
+import { sleep } from "../../utils/sleep";
+import { useAppsService } from "../../apps";
 
+
+const SYNC_INTERVAL = 5* 60*1000
 
 @Singleton
-export class RouteListService extends IncyclistService {
+export class RouteListService  extends IncyclistService implements IRouteList {
 
     protected myRoutes: MyRoutes
     protected selectedRoutes: CardList<Route> 
     protected alternatives: CardList<Route> 
     protected routes: Array<Route>
+    protected custom: Array<CardList<Route>>
 
     protected preloadObserver: PromiseObserver<void>
     protected observer: RouteListObserver
@@ -48,8 +53,11 @@ export class RouteListService extends IncyclistService {
     protected createPreviewQueue: Array< {descr:RouteInfo,done:(file:string)=>void}>
     protected previewProcessing: PromiseObserver<void>
     protected filters: SearchFilter
+    protected prevFilters: SearchFilter
     protected listTop: Record<DisplayType,number> = { list:undefined, tiles:undefined }
     protected displayType: DisplayType
+    protected syncInfo:  {iv?: NodeJS.Timeout, observer?: Observer} 
+    protected currentView: 'list'|'grid'|'routes'
 
     constructor () {
         super('RouteList')
@@ -67,6 +75,12 @@ export class RouteListService extends IncyclistService {
         this.createPreviewQueue = []
         this.routes = []
         this.filters = {}
+
+        this.syncInfo = {}
+
+        this.getRouteSyncFactory().setRouteList(this)
+        this.handleConfigChanges()
+        this.custom = []
     }
 
 
@@ -81,33 +95,28 @@ export class RouteListService extends IncyclistService {
     
 
     open():{observer:RouteListObserver,lists:Array<CardList<Route>>} {
+
+        this.currentView = 'routes'
+
         try {
             this.logEvent( {message:'open route list'})
-
             const hasLists = this.getLists()?.length>0
+
             const emitStartEvent = async()=> {
-                process.nextTick( ()=>{
-    
+                process.nextTick( ()=>{   
                     this.observer?.emit('started')
                 })
                 
             }
             const emitLoadedEvent = async()=> {
+                this.resetLists()
                 process.nextTick( ()=>{
                     this.emitLists('loaded')
                 })
             }
 
             this.myRoutes.removeActiveImports()
-
-            this.getLists(false)?.forEach( list=> {
-                list.getCards()?.forEach( (card,idx) => {
-                    card.setInitialized(false)
-                    if (idx>0)
-                        card.setVisible(false)
-                })
-            })
-    
+  
     
             // selection already ongoing, return existing observer
             if (!this.observer) {
@@ -133,10 +142,26 @@ export class RouteListService extends IncyclistService {
         catch (err) {
             this.logError(err,'open')
         }
+
+        this.resetLists()
         return {observer: this.observer, lists:this.getLists() }
     }
 
 
+
+    private resetLists() {
+
+        const screenProps = this.getScreenProps()??{}
+        let maxVisible = screenProps.itemsFit? screenProps.itemsFit+1:0
+        
+
+        this.getLists(false)?.forEach(list => {
+            list.getCards()?.forEach((card, idx) => {
+                card.setInitialized(false)
+                card.setVisible(idx<maxVisible);
+            });
+        });
+    }
 
     close():void {
         try {
@@ -150,17 +175,49 @@ export class RouteListService extends IncyclistService {
             this.logError(err, 'close')
         }
     }
- 
+
+    saveFilters(requestedFilters?:SearchFilter) {        
+        this.filters = requestedFilters
+
+        const settings = this.getUserSettings()
+        settings.set('preferencs.search.filter',requestedFilters??null)
+    }
+
+    getFilters():SearchFilter {
+        if (!this.filters) {
+            const settings = this.getUserSettings()
+            this.filters = settings.get('preferencs.search.filter',undefined)
+        }
+
+        return this.filters
+
+    }
+
+    protected searchAgain() {
+        return this.searchRepo(this.prevFilters)
+    }
+
     search( requestedFilters?:SearchFilter ) {
+        this.currentView = 'list'
         if (!this.initialized)
             this.preload();
+
+
+        const filters = requestedFilters || this.filters
+        this.prevFilters = filters
+
+        return this.searchRepo(requestedFilters)
+
+    }
+
+ 
+    searchRepo( requestedFilters?:SearchFilter ) {
 
         if (!this.observer)
             this.observer = new RouteListObserver(this)
 
         try {
-            if (requestedFilters)
-                this.filters = requestedFilters
+
             const filters = requestedFilters || this.filters
 
             let routes:Array<SummaryCardDisplayProps> = Array.from(this.getAllSearchCards().map( c=> c.getDisplayProperties()))
@@ -171,7 +228,7 @@ export class RouteListService extends IncyclistService {
             }
 
 
-            routes = routes.filter( r => !r?.isDeleted)
+            routes = routes.filter( r => filters.includeDeleted || !r?.isDeleted)
 
             routes = this.applyTitleFilter(filters, routes);
             routes = this.applyDistanceFilter(filters, routes);
@@ -180,7 +237,13 @@ export class RouteListService extends IncyclistService {
             routes = this.applyContentTypeFilter(filters, routes);
             routes = this.applyRouteTypeFilter(filters, routes);
 
+            if ( this.checkKomootFeatureEnabled())
+                routes = this.applySourceFilter(filters,routes)
+
             const cards = routes.map( r => this.getCard(r.id))
+
+            this.setListTop('list',0)
+            this.setListTop('tiles',0)
           
             return {routes,cards,filters,observer:this.observer}
     
@@ -255,7 +318,7 @@ export class RouteListService extends IncyclistService {
      * @returns true, if the preload is still ongoing, false otherwise
      */
     isStillLoading():boolean { 
-        return !this.initialized && !this.preloadObserver
+        return !!this.preloadObserver
     }
 
 
@@ -264,6 +327,23 @@ export class RouteListService extends IncyclistService {
             const loop = filters.routeType === undefined || filters.routeType === 'Loop';
             const p2p = filters.routeType === undefined || filters.routeType === 'Point to Point';
             routes = routes.filter(r => (loop && r.isLoop) || (p2p && !r.isLoop));
+        }
+        return routes;
+    }
+
+    private applySourceFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+
+        routes = routes.filter( r=> r.source===undefined || this.getAppsService().isEnabled(r.source,'RouteDownload') )
+
+        if (filters.source) {
+            const internal = filters.source==='none';
+            const sources = filters.source.split('|')
+            
+            routes = routes.filter(r => 
+                (r.source===undefined && internal) ||  
+                (r.source===undefined && sources.includes('incyclist')) ||  
+                (r.source && !internal && sources.includes(r.source))
+            );
         }
         return routes;
     }
@@ -349,18 +429,17 @@ export class RouteListService extends IncyclistService {
     onCarouselInitialized(list:CardList<Route>, item,itemsInSlide) {
         try {
             list.getCards().forEach( (card,idx) => {
+                card.setVisible(idx<item+itemsInSlide)
                 card.setInitialized(true)
             })
 
-            process.nextTick( ()=>{ 
-                list.getCards().forEach( (card,idx) => {
-                    if (idx<item+itemsInSlide) {                    
-                        card.setVisible(true)
-                    }
+            // after 100ms set next items to visible
+            setTimeout ( ()=>{ 
+                list.getCards().forEach( (card,idx) => { 
+                    card.setVisible(true)
                 })
-            })
+            },100)
 
-            setTimeout( ()=>{ this.onCarouselUpdated(list,item,itemsInSlide)}, 1000)
         }
         catch(err) {
             this.logError(err,'onCarouselInitialized')
@@ -369,14 +448,16 @@ export class RouteListService extends IncyclistService {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    onCarouselUpdated(list,item,itemsInSlide) {
-        try {
-            list.getCards().forEach( (card,idx) => {
-                if (idx>=item && idx<item+itemsInSlide+10 && !card.isVisible()) {
+    onCarouselUpdated(list) {
 
-                    card.setVisible(true)
-                }
+        try {
+
+            list.getCards().forEach( (card) => {          
+                card.setVisible(true)
             })
+
+
+
         }
         catch(err) {
             this.logError(err,'onCarouselUpdated')
@@ -401,7 +482,7 @@ export class RouteListService extends IncyclistService {
     preload():PromiseObserver<void> {
         try {
             this.logEvent( {message:'preload route list'})
-            if (!this.preloadObserver) {
+            if (!this.isStillLoading()) {
                 const promise = this.loadRoutes()
                 this.preloadObserver = new PromiseObserver<void>( promise )
     
@@ -411,11 +492,13 @@ export class RouteListService extends IncyclistService {
                         
                         this.logEvent( {message:'preload route list completed'})
                         updateRepoStats()
-                        this.emitLists('loaded',true)
+                        this.emitLists('loaded',{log:true})
                         process.nextTick( ()=>{delete this.preloadObserver})
                     })
                     .catch( (err)=> {
                         this.logError(err,'preload')
+                        this.preloadObserver?.stop()
+                        process.nextTick( ()=>{delete this.preloadObserver})
                     })
             }
     
@@ -423,6 +506,8 @@ export class RouteListService extends IncyclistService {
         }
         catch(err) {
             this.logError(err,'preload')
+            this.preloadObserver?.stop()
+            process.nextTick( ()=>{delete this.preloadObserver})
         }
         return this.preloadObserver
     }
@@ -462,6 +547,10 @@ export class RouteListService extends IncyclistService {
             const lists:Array<CardList<Route>> = [ this.myRoutes ]
             if ( this.selectedRoutes?.length>0) 
                 lists.push(this.selectedRoutes)
+            this.custom.forEach( (l)=>{
+                if ( this.getAppsService().isEnabled(l.getId(),'RouteDownload') &&  l.length>0)
+                    lists.push(l)
+            })
             if ( this.alternatives?.length>0) 
                 lists.push(this.alternatives)
 
@@ -476,33 +565,30 @@ export class RouteListService extends IncyclistService {
     }
 
 
+
+
     async getRouteDetails(id:string, expectLocal=false):Promise<RouteApiDetail> {
         try {
             const route = this.routes.find( r => r.description.id===id)
-            if (route) {
+            if (!route) 
+                return;
 
-                if (expectLocal && route.description.requiresDownload && !route.description.isDownloaded)
-                    return;
-
-                if (route.details)
-                    return route.details
-                
-                route.details = await this.db.getDetails(id)
-
-                // fix: legacy items might have selectableSegments in root instead of in video
-                if (!route.details.video.selectableSegments && route.details.selectableSegments) {
-                    route.details.video.selectableSegments = route.details.selectableSegments
-                    delete route.details.selectableSegments                                        
-                }
-
-                return route.details
+            if (expectLocal && route.description.requiresDownload && !route.description.isDownloaded) {
+                return;
             }
-    
+
+            if (!route.details) {
+                await this.loadRouteDetails(route, id);
+            }
+
+            this.verifyRouteCountry(route);
+            return route.details
         }
         catch(err) {
             this.logError(err,'getRouteDetails',id)
         }
     }
+
 
     getRouteDescription(id:string) {
         try {
@@ -601,7 +687,7 @@ export class RouteListService extends IncyclistService {
 
                     this.myRoutes.remove(importCard)
                     card.enableDelete(true)              
-                    this.emitLists('updated',true)     
+                    this.emitLists('updated',{log:true})     
     
                     this.verifyPoints(card,route)
     
@@ -622,19 +708,27 @@ export class RouteListService extends IncyclistService {
         }
     }
 
-    emitLists( event:'loaded'|'updated',log=false) {
+    emitLists( event:'loaded'|'updated',props?:{log?:boolean}) {
+
         try {
+
+            if (this.currentView === 'grid'||this.currentView ==='list') {
+                const d = this.searchAgain()
+                this.observer.emit(event,d)
+                return;
+            }
+            if (props.log) {
+                const logs = this.createRoutesLogEntry(true)??{}
+                this.logEvent({message:`RoutesList ${event}`, ...logs})
+        
+            }
+
+
             const lists = this.getLists()
             
             const hash = lists ? lists.map( l=> l.getCards().map(c=>c.getId()).join(',')).join(':') : ''
             if (this.observer)
                 this.observer.emit(event,lists,hash)
-
-            if (log) {
-                const logs = this.createRoutesLogEntry(true)??{}
-                this.logEvent({message:`RoutesList ${event}`, ...logs})
-        
-            }
     
         }
         catch(err) {
@@ -656,7 +750,7 @@ export class RouteListService extends IncyclistService {
         list.add( card)
         card.enableDelete(list.getId()==='myRoutes')
         card.setList(list)
-        this.emitLists('updated',true)                
+        this.emitLists('updated',{log:true})                
 
     }
 
@@ -713,9 +807,19 @@ export class RouteListService extends IncyclistService {
 
     protected addRoute(route:Route):void {
 
-        if (route.description.isDeleted)
+        this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
+        if (route.description?.isDeleted)
             return;
+
         
+        if (!route.description.country) {
+            route.updateCountryFromPoints()
+                .then( ()=> {
+                    this.db.save(route,false)
+                })
+        }
+        
+
         const list = this.selectList(route)
 
         const card = new RouteCard(route,{list})
@@ -754,8 +858,150 @@ export class RouteListService extends IncyclistService {
     protected async loadRoutes():Promise<void> {
         await this.loadRoutesFromRepo()
         await this.checkUIUpdateWithNoRepoStats();
+
         await this.loadRoutesFromApi()
+
+        
+        this.preloadDetails().then( ()=>{this.emitLists('loaded')})
+        this.startSync()
     }
+
+    protected async preloadDetails() {
+        const {cards=[]} = this.searchRepo()
+
+        const promises = []
+
+        const loadDetails = (card):Promise<void> => {
+            return this.db.getDetails( card.getId() )
+            .then( details => { 
+                card.setRouteData(details)
+
+                const route = card.getData()
+                if (!route.description.country) {
+                    route.updateCountryFromPoints()
+                        .then( ()=> {
+                            this.db.save(route,false)
+                        })
+                }
+
+            }) 
+            .catch( err=>{
+                this.logEvent( {message:'could not load route details',reason:err.message})  
+            }) 
+
+        }
+        
+        cards.forEach( card => {
+            if (!card || promises.length>19)
+                return;
+            
+            if (!card.getRouteData() ) {
+                promises.push( loadDetails(card) )
+            }
+        })
+        
+        await Promise.allSettled( promises)
+
+
+    }
+
+    protected startSync() { 
+        if ( !this.checkKomootFeatureEnabled())
+            return;
+
+        try {
+            if (!this.syncInfo.iv) {
+                // run sync every 5 minutes
+                this.syncInfo.iv = setInterval( () => this.performSync(), this.getSyncFrequency())
+                this.performSync()
+            }
+        }
+        catch(err) {
+            this.logError(err,'startSync')
+        }
+    }
+
+    protected getSyncFrequency() {
+        return this.getUserSettings().get('syncFrequency',SYNC_INTERVAL)
+    }
+    protected checkKomootFeatureEnabled() {
+        const settings = useUserSettings()
+        return settings.get('KOMOOT',false)        
+    }
+
+
+    protected stopSync() { 
+        if (!this.syncInfo.iv) 
+            return;
+    
+        this.syncInfo.observer?.emit('stop')
+        this.syncInfo.observer.stop()
+
+        clearInterval(this.syncInfo.iv)
+        this.syncInfo={}
+
+    }
+
+    protected async performSync(service?:string) {
+
+        return new Promise<void>( done =>{
+            const observer = this.getRouteSyncFactory().sync(service)
+            if (!observer)
+                done()
+
+            this.observer.emit('sync-start')
+            this.syncInfo.observer = observer
+            const onAdded = this.onSyncRouteAdded.bind(this)
+            const onUpdated = this.onSyncRouteUpdated.bind(this)
+
+            observer.on('added',onAdded)
+            observer.on('updated',onUpdated)    
+            observer.once('done',()=>{
+                delete this.syncInfo.observer
+                this.observer.emit('sync-done')
+                done()
+            })
+
+        })
+    }
+
+    protected async loadSyncedRouteDetails(route:Route):Promise<Route> {
+        const syncProdider = this.getRouteSyncFactory().get(route.description.source)
+        if (!syncProdider)
+            return route
+        
+        try {
+            const updated = await syncProdider?.loadDetails(route)
+            this.db.save(updated,true)
+            return updated
+        }
+        catch( err) {
+            this.logError(err,'loadSyncedRouteDetails')
+            return route
+        }
+
+    }
+
+    protected onSyncRouteAdded( source:string, descriptions: Array<RouteInfo>) {
+        descriptions.forEach( descr => {
+            const route = new Route(descr)
+            this.db.save(route) 
+            this.addRoute(route)
+        })
+    }
+
+    protected onSyncRouteUpdated( source:string, routes: Array<Route>) {
+        const descriptions = routes.map( r=>r.description)
+
+        descriptions.forEach( descr => {
+            const route = new Route(descr)
+            this.loadSyncedRouteDetails(route)
+            this.update(route)
+        })
+
+    }
+    
+
 
     // In case a user already had  aprevious version of the UI installed and routes were in the DB, we need to initialize the "tsImported" field
     // with the current timestamp minus one minute. 
@@ -791,18 +1037,64 @@ export class RouteListService extends IncyclistService {
     }
     protected async loadRoutesFromApi():Promise<void> {
 
-        
-        const observer = this.api.load()
-        const add = this.addFromApi.bind(this)
-        const update = this.update.bind(this)
+        return new Promise<void> ( done => {
+            const observer = this.api.load()
+            const add = this.addFromApi.bind(this)
+            const update = this.update.bind(this)
 
-        observer.on('route.added',add)
-        observer.on('route.updated',update)
+            observer.on('route.added',add)
+            observer.on('route.updated',update)
+            observer.on('done',done)
+    
+        })
 
     }
 
+
+    protected async loadRouteDetails(route: Route, id: string) {
+        route.details = await this.db.getDetails(id);
+
+        // not in DB yet? must come from external app or API 
+        if (!route.details) {
+
+            if (route.description.source) {
+                await this.loadSyncedRouteDetails(route);
+            }
+            else {
+                // TODO.... load from API
+            }
+
+        }
+
+        // fix: legacy items might have selectableSegments in root instead of in video
+        if (route.description.hasVideo) {
+            if (!route.details.video.selectableSegments && route.details.selectableSegments) {
+                route.details.video.selectableSegments = route.details.selectableSegments;
+                delete route.details.selectableSegments;
+            }
+        }
+    }
+
+    protected verifyRouteCountry(route: Route) {
+        if (route.details && !route.description.country) {
+            route.updateCountryFromPoints()
+                .then(() => {
+                    this.db.save(route, false);
+                })
+                .catch(err => {
+                    console.log('# error', route.description.id, route.description.title, err);
+                });
+        }
+    }
+
+
+
     protected selectList(route:Route):CardList<Route> {
         const description = route.description
+
+        if (description.source) {
+            return this.selectListForSource(route)
+        }
 
         if (!description.hasVideo) {
             return this.selectListForGPX(route)
@@ -841,11 +1133,27 @@ export class RouteListService extends IncyclistService {
             return this.myRoutes
         
         return this.selectedRoutes
-        
+      
 
+    }
+    private selectListForSource(route:Route):CardList<Route> {
+        const description = route.description
+        const {source} = description
+        const name = this.getAppsService().getName(source)
+        const existing = this.custom.find( l=>l.getTitle()===name)
+        if (existing)
+            return existing
+        else {
+            return this.addCustomList(source, name)
+        }
     }
 
 
+    private addCustomList(source:string,name:string) {
+        const customList = new AlternativeRoutes(source,name)
+        this.custom.push( customList)
+        return customList
+    }
 
 
     async createPreview( descr:RouteInfo) {
@@ -982,20 +1290,20 @@ export class RouteListService extends IncyclistService {
             }
         }
     
-            
-        card = this.selectedRoutes.getCards().find(c=>c.getData()?.description?.id===id)  as RouteCard
-        if (card)
-            return {card,list:this.selectedRoutes}
+        const lists = [this.selectedRoutes,this.alternatives, ...this.custom??[] ]         
+        for (let list of lists) {
+            card = list.getCards().find(c=>c.getData()?.description?.id===id) as RouteCard
+            if (card)
+                return {card,list}
+        }
 
-        card = this.alternatives.getCards().find(c=>c.getData()?.description?.id===id) as RouteCard
-        if (card)
-            return {card,list:this.alternatives}
     }
 
     protected resetCards() {
         this.getLists().forEach( list=> {
             list.getCards().forEach( (card) => {
-                card.reset()
+                card.reset(true)
+               
             })
         })
 
@@ -1006,6 +1314,8 @@ export class RouteListService extends IncyclistService {
         
         this.getLists(false)?.forEach( list=> {
             list.getCards().forEach( (card) => {
+                if(!card)
+                    return
                 // filter out special cards
                 if (card.getCardType()==='Import'||card.getCardType()==='Free-Ride'||card.getCardType()==='ActiveImport'  )
                     return;
@@ -1016,9 +1326,37 @@ export class RouteListService extends IncyclistService {
 
     }
 
+    protected handleConfigChanges() {
+        
+        this.getAppsService().on('operation-enabled', (app,operation)=>{
+
+            if (operation==='RouteDownload')
+                this.performSync(app).then( ()=>{ 
+                    this.emitLists('updated')
+            })
+        })
+        this.getAppsService().on('operation-disabled', (app,operation)=>{
+            if (operation==='RouteDownload')
+                this.emitLists('updated')
+        })
+
+        
+
+
+    }
+
     @Injectable
     protected getUserSettings () {
         return useUserSettings()
+    }
+
+    @Injectable
+    protected getRouteSyncFactory() {
+        return new RouteSyncFactory()
+    }
+
+    @Injectable getAppsService() {
+        return useAppsService()
     }
 
 

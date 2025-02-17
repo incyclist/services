@@ -3,7 +3,7 @@ import { Observer } from "../../base/types/observer";
 import { Route } from "../base/model/route";
 import { RouteListService } from "./service";
 
-type RouteListEvent = 'started' | 'stopped' | 'loaded' | 'updated' | 'selected';
+type RouteListEvent = 'started' | 'stopped' | 'loaded' | 'updated' | 'selected' | 'sync-start' | 'sync-done';
 export class RouteListObserver extends Observer {
 
     constructor(protected service: RouteListService) {

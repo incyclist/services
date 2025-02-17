@@ -6,13 +6,20 @@ import { checkIsNew } from "../utils";
 
 const score = (r:RouteInfo):number =>{
     let val = 0;
-    const tsAction = (Date.now()-Math.max(r.tsImported||0,r.tsLastStart||0))/1000/3600/24      // days since last action
+
+    const recentlyImported = r.tsImported && (Date.now()-(r.tsImported??0))/1000/3600/24<1
+    const daysSinceLastStart = (Date.now()-(r.tsLastStart??0))/1000/3600/24
+    const isStarted = r.tsLastStart && daysSinceLastStart<1
     const isNew = checkIsNew(r)
 
     if (r.hasVideo) val+=1
-    if ((1-tsAction)>0) val+=1
+    if (recentlyImported) val+=1
+    if (isStarted) val+=(1-daysSinceLastStart)
+    if (daysSinceLastStart<7) val+=0.1
+
     if (!r.isDemo) val+=0.1
-    if (isNew) val++
+    if (isNew||isStarted) val++
+
     return val
 }
 
@@ -21,8 +28,9 @@ const sortFn = (a:RouteCard,b:RouteCard):number=> {
     const routeB = b.getRouteDescription()
 
     const scores = score(routeB)-score(routeA)    
-    if (scores!==0)
+    if (scores!==0) {
         return scores
+    }
     return b.getTitle()>a.getTitle() ? -1 : 1
        
 

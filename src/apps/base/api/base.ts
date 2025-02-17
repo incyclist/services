@@ -22,6 +22,23 @@ export class AppApiBase {
             },
             ...props            
         }
+
+        return await this.getApi().request(request )  
+    }
+
+    protected async post(url:string, data?:object, config?:object):Promise<AxiosResponse> {
+
+        const props = config??{}
+        
+        const request = {
+            method:'post',
+            url: this.getBaseUrl()+url,
+            data,
+            validateStatus: (status) => {
+                return (status >= 200 && status < 300) || status===403;
+            },
+            ...props            
+        }
         return await this.getApi().request(request )  
     }
 
@@ -39,6 +56,7 @@ export class AppApiBase {
     protected async createForm(url:string,uploadInfo:object, requestOpts={}):Promise<Form> {
         const fp = this.getFormBinding()        
         const form =  await fp.createForm({url:this.getBaseUrl()+url, ...requestOpts},uploadInfo);
+
         return form
     }
     

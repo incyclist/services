@@ -1,7 +1,7 @@
 import {StravaApi} from "./api";
 import dotenv from 'dotenv';
 import { AxiosFormPost } from "../../../../../__tests__/utils/formPost";
-import { DuplicateError, StravaUploadProps } from "./types";
+import { DuplicateError, StravaUploadProps, SummaryActivity } from "./types";
 
 dotenv.config();
 
@@ -81,5 +81,84 @@ describe ('Strava API',()=> {
         })
     })
 
+    describe( 'getLoggedInAthleteActivities',()=>{
+        let api;
+        let refresh
+
+        beforeEach( ()=>{
+            api = new StravaApi()           
+            api.init( { clientId,clientSecret,accessToken, refreshToken})
+        })
+
+        test('normal use',async ()=>{
+            const res = await api.getLoggedInAthleteActivities()
+            expect(Array.isArray(res)).toBe(true)
+            res.forEach( e => console.log(e))
+        })
+        test('pagination',async ()=>{
+            let page = 1;
+            let done = false
+            const res:Array<SummaryActivity> = []
+
+            while (!done) {
+                const activities = await api.getLoggedInAthleteActivities({page})
+                if (Array.isArray(activities) && activities.length>0) {   
+                    console.log('page', page, 'records', activities.length )                 
+                    res.push(...activities)
+                    page++
+
+                }
+                else {
+                    console.log('page', page, 'result', activities )                 
+                    done = true;
+                }
+            }
+            
+            console.log(res.length)
+            
+        })
+    })
+
+    describe( 'getActivityById',()=>{
+        let api;
+        let refresh
+
+        beforeEach( ()=>{
+            api = new StravaApi()           
+            api.init( { clientId,clientSecret,accessToken, refreshToken})
+        })
+
+        test('normal use',async ()=>{
+            /*
+            const activities = await api.getLoggedInAthleteActivities()
+            const id = activities[0].id
+            */
+           const id = 13438210563
+
+            const res = await api.getActivityById(id)
+            expect(res.id).toEqual(id)
+            console.log(res)
+            
+        })
+    })
+
+
+    describe( 'exportActivcityGPX',()=>{
+        let api;
+        let refresh
+
+        beforeEach( ()=>{
+            api = new StravaApi()           
+            api.init( { clientId,clientSecret,accessToken, refreshToken})
+        })
+
+        test('normal use',async ()=>{
+            const id = 111
+            const res = await api.getActivityStream(id,['latlng,altidue,grade_smooth'])
+            
+            console.log( JSON.stringify(res) )
+            
+        })
+    })
 
 })

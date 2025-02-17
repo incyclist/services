@@ -1,13 +1,11 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
-import { useUserSettings } from "../../settings";
 import { ActivityDetails } from "../base";
-import crypto from 'crypto'
-import { IActivityUpload, VeloHeroAuth } from "./types";
-import { valid } from "../../utils/valid";
-import { VeloHeroApi } from "../../apps/base/api";
+import { IActivityUpload } from "./types";
+import { ActivityUploadFactory } from "./factory";
+import { VeloHeroAppConnection } from "../../apps/velohero/VeloHeroAppConnection";
+import { Injectable } from "../../base/decorators";
 
-const CRYPT_ALGO = 'aes256'
 
 /**
  * Service for uploading activities to VeloHero.
@@ -15,16 +13,12 @@ const CRYPT_ALGO = 'aes256'
 @Singleton
 export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
 
+    protected connection = new VeloHeroAppConnection()
     protected isInitialized
-    protected username
-    protected password
-    protected api: VeloHeroApi
-    protected _isConnecting
 
     constructor() {
         super('VeloHeroUpload')
         this.isInitialized = false
-
         this.init()
     }
 
@@ -36,106 +30,22 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
      * @returns true if the initialization is successful
      */
     init():boolean {
-
         if (this.isInitialized)
             return true
-
-        if (!this.getUserSettings().isInitialized) {
-            return false
-        }
-
-        try {
-            const auth = this.getCredentials()
-
-            if (auth) {
-            
-                if (auth.username && auth.password) {
-                    this.username = auth.username
-                    this.password = auth.password    
-
-                }
-                else {            
-                    const user = this.decrypt(CRYPT_ALGO,auth)
-                    this.username = user.username;
-                    this.password = user.password
-                }   
-            
-            }
-
-            this.logEvent( {message:'VeloHero init done', hasCredentials:(valid(this.username)&& valid(this.password))})
-            this.isInitialized = true;           
-
-        }
-        catch(err) {
-            this.logEvent({message:'error', error:err.message, fn:'init',stack:err.stack})
-            this.isInitialized = false;
-        }
-
-        this.setupEventListeners()
-
-    
+        this.isInitialized =  this.getVeloHeroAppConnection().init()        
         return this.isInitialized
     }
 
     /**
-     * Checks if the connection is established by ensuring the initialization
-     * process is complete and validating the presence of username and password.
+     * Indicates whether the user has connected his Incyclist account to Strava API 
      *
-     * @returns {boolean} True if both username and password are valid, false otherwise.
+     *
+     * @returns {boolean} True if the user has stored a connection to Strava API.
      */
     isConnected():boolean {
-        this.ensureInitialized()
-        return (valid(this.username) && valid(this.password))
+        return this.getVeloHeroAppConnection().isConnected()
     }
 
-    /**
-     * Indicates whether the login process is currently running.
-     * @returns {boolean} True if login is in progress, false otherwise.
-     */
-    isConnecting():boolean {
-        return this._isConnecting;
-    }
-
-    async login(username:string,password:string):Promise<boolean> {
-        this.ensureInitialized()
-
-        this.logEvent({message:'VeloHero Login'})
-
-        this.emit('login-start')
-
-        try {
-            await this.getApi().login(username,password)
-
-            this.logEvent({message:'VeloHero Login success'})
-
-            this.username = username;
-            this.password = password
-            this.isInitialized = true;
-            
-            const auth = await this.saveCredentials()
-            this.emit('login-success', auth)
-
-            return true
-            
-        }
-        catch(err) {
-            this.logEvent({message:'VeloHero Login failed',error: err.message})
-            this.emit('login-failure',err.message)
-            throw err
-        }
-
-
-
-    }
-
-    /**
-     * Disconnects from VeloHero by deleting the stored credentials.
-     */
-    disconnect():void {
-        this.username =undefined
-        this.password = undefined
-        this.getUserSettings().set('user.auth.velohero',null)           
-    }
 
     /**
      * Uploads the activity to VeloHero.
@@ -173,8 +83,7 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
                 activity.links  = {}
 
 
-            const username = this.username
-            const password = this.password
+            const {username,password} = this.getVeloHeroAppConnection().getCredentials()            
             const fileName =  activity[`${lcFormat}FileName`];
             const res = await this.getApi().upload(fileName,{username,password})
 
@@ -215,141 +124,19 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
         return this.isInitialized
     }
 
-    protected getUuid() {
-        const userSettings = this.getUserSettings()
-        try {
-            const uuid = userSettings.get('uuid',null)
-            return uuid;
-        }
-        catch{
-            return null
-        }
-    }
-
-    protected getCredentials() {
-        const userSettings = this.getUserSettings()
-        try {
-            return userSettings.get('user.auth.velohero',null)        
-        }
-        catch {
-            return null
-        }
-    }
-
-    protected saveCredentials() {
-        this.logger.logEvent({message:'VeloHero Save Credentials'})
-
-        let auth
-        try {
-            auth = this.encrypt(CRYPT_ALGO);
-            this.getUserSettings().set('user.auth.velohero',auth)
-
-        }
-        catch(err) {
-            this.logEvent( {message: 'error', fn:'saveCredentials', error:err.message, stack:err.stack})
-        }
-
-        this.logEvent({message:'VeloHero Save Credentials done'})
-        return auth
-
-    }
-
-
-    protected encrypt(algo:string):VeloHeroAuth {
-        const iv = crypto.randomBytes(16)
-        
-        const uuid = this.getUuid()
-        const key = `${uuid.substring(0,32)}`
-        
-        const cipher = crypto.createCipheriv(algo,key,iv);
-        
-        const text = JSON.stringify({username:this.username, password:this.password})
-
-        let ciphered
-
-
-
-        ciphered = cipher.update(text, 'utf8', 'hex');        
-        ciphered += cipher.final('hex');
-
-        const auth =  {
-            id: iv.toString('hex'),
-            authKey: ciphered,
-        }
-
-        return auth
-    }
-
-
-    protected decrypt(algo:string, auth:VeloHeroAuth) {
-        const {id,authKey,version} = auth
-
-        const iv = Buffer.from(id,'hex')
-        const uuid = this.getUuid()
-        const key = `${uuid.substring(0,32)}`
-
-        try {
-            
-            let text;
-
-            if (algo==='aes-256-gcm') {
-                const cipher = crypto.createDecipheriv(algo,key,iv);
-                const raw = Buffer.from(authKey, "hex"); 
-
-                const authTagBuff = raw.subarray(raw.length - 16); // Returns a new Buffer that references the same memory as the original, but offset and cropped by the start and end indices.
-                const encTextBuff = raw.subarray(0, raw.length - 16); // Returns a new Buffer that references the same memory as the original, but offset and cropped by the start and end indices.
-        
-                cipher.setAuthTag(authTagBuff);
-        
-                // Decrypting
-                text = cipher.update(encTextBuff);
-                text += cipher.final('utf8');
-            }
-            else {
-                const cipher = crypto.createDecipheriv(algo,key,iv);
-                text = cipher.update(authKey, 'hex','utf8');                
-                text += cipher.final('utf8');    
-            }
-            
-            const user = JSON.parse(text)                        
-            return user
-        }
-        catch(err) {
-            // istanbul ignore next
-            this.logError(err,'decrypt',{algo,id,authKey})
-            return null
-        }
-
-    }
-
-    protected setupEventListeners() {
-        this.on('login-start',()=>{this._isConnecting = true})
-        this.on('login-success',()=>{this._isConnecting = false})
-        this.on('login-failure',()=>{this._isConnecting = false})
-
-    }
-
-
+    @Injectable
     // istanbul ignore next
-    protected getUserSettings() {
-        return this.injected['UserSettings'] ?? useUserSettings()
+    protected getVeloHeroAppConnection() {
+        return this.connection
     }
 
-    // istanbul ignore next
     protected getApi() {
-
-        if (this.injected['Api'])
-            return this.injected['Api']
-
-        if (!this.api)
-            this.api = new VeloHeroApi()
-        return this.api
+        return this.getVeloHeroAppConnection().getApi()
     }
-
-    // istanbul ignore next
-    protected getCrypto() {        
-        return this.injected['Crypto']?? crypto        
-    }
+    
 
     
 }
+
+const factory = new ActivityUploadFactory()
+factory.add('velohero',new VeloHeroUpload())

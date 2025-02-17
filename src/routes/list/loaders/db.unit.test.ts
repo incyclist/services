@@ -192,6 +192,7 @@ describe('RoutesDbLoader',()=>{
 
             expect(routes[0].description.tsImported).toBeDefined()
             delete routes[0].description.tsImported
+            expect(routes[0].details).not.toBeDefined()
             expect(routes[0]).toMatchSnapshot()
 
             loaderObj = {...loader}
@@ -225,7 +226,7 @@ describe('RoutesDbLoader',()=>{
             expect(routes.length).toBe(1)
             
             const descr = routes[0].description
-            expect(descr.points).toBeDefined()
+            expect(descr.points).not.toBeDefined()
 
             if (!before.points)
                 delete descr.points
@@ -273,7 +274,7 @@ describe('RoutesDbLoader',()=>{
             expect(routes.length).toBe(1)
             
             const descr = routes[0].description
-            expect(descr.points).toBeDefined()
+            expect(descr.points).not.toBeDefined()
 
           
         })
@@ -381,7 +382,6 @@ describe('RoutesDbLoader',()=>{
             // modify route
             const route = routes.find( r=>r.description.hasVideo) as Route
 
-            console.log(route.description.title)
             await loader.delete( route)
             
             expect(routesRepo.write).toHaveBeenCalledTimes(1)   // update routes DB
@@ -396,7 +396,6 @@ describe('RoutesDbLoader',()=>{
             // modify route
             const route = routes.find( r=>!r.description.hasVideo) as Route
 
-            console.log(route.description.title)
             await loader.delete( route)
             
             expect(routesRepo.write).toHaveBeenCalledTimes(1)   // update routes DB

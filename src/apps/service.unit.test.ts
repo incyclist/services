@@ -1,6 +1,7 @@
-import { ActivityDetails } from "../activities"
 import { IActivityUpload } from "../activities/upload"
 import { AppsService, useAppsService } from "./service"
+
+const OC = (x) => expect.objectContaining(x)
 
 describe ('AppService',()=>{
 
@@ -40,7 +41,7 @@ describe ('AppService',()=>{
                 setupMocks( {strava:connectedApp, velohero:connectedApp})
     
                 const res = service.getConnectedServices('ActivityUpload')
-                expect(res).toEqual([{name:'Strava', key:'strava'},{name:'VeloHero', key:'velohero'}])
+                expect(res).toEqual([OC({name:'Strava', key:'strava'}),OC({name:'VeloHero', key:'velohero'})])
             })
     
     
@@ -49,7 +50,7 @@ describe ('AppService',()=>{
                 setupMocks( {strava:notConnectedApp, velohero:connectedApp})
     
                 const res = service.getConnectedServices('ActivityUpload')
-                expect(res).toEqual([{name:'VeloHero', key:'velohero'}])
+                expect(res).toEqual([OC({name:'VeloHero', key:'velohero'})])
     
     
             })

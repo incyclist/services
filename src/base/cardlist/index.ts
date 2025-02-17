@@ -9,7 +9,7 @@ export interface Card<T>{
     getTitle():string
     getDisplayProperties()
     setInitialized(val:boolean):void
-    reset():void
+    reset(onlyObserver?:boolean):void
     delete():PromiseObserver<boolean>
 
     isVisible():boolean

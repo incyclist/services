@@ -1,3 +1,4 @@
+import { Injectable } from "../../../base/decorators";
 import { Countries } from "../../../i18n/countries";
 import clone from "../../../utils/clone";
 import { RouteApiDetail } from "../api/types";
@@ -51,7 +52,8 @@ export class Route {
         this._details.distance =distance
     }
 
-    protected getCountiesApi() {
+    @Injectable
+    protected getCountries() {
         return new Countries()
     }
 
@@ -68,14 +70,15 @@ export class Route {
         if (!this._description.country && this._description.hasGpx) {
             
             try {
-                const iso =  await this.getCountiesApi().getIsoFromLatLng(this._details.points[0])
+                const iso =  await this.getCountries().getIsoFromLatLng(this._description?.points?.[0]??this._details?.points?.[0])
                 if (iso) {
                     updated = true;
                     this._description.country = iso
                 }
                 
             }
-            catch { // ignore errors
+            catch {  
+                // ignore errors 
             }
         }    
         return updated
