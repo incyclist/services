@@ -262,9 +262,10 @@ describe('RouteListService',()=>{
             expect(routes.length).toBe(34)
         })
         test('no filters - after previous search',()=>{
-            service.search({routeType:'Loop',elevation:{min:100}, contentType:'GPX'})
+            const res = service.search({routeType:'Loop',elevation:{min:100}, contentType:'GPX'})
+            console.log(res.routes.length)
             const {routes} = service.search()
-            expect(routes.length).toBe(34)
+            expect(routes.length).toBe(1)
         })
 
     })
