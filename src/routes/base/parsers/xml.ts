@@ -270,7 +270,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                     initMapping(mapping)
         
                     const distance = getDistance(mapping, prev, idx);
-                    //if (idx===1) console.log(distance,prev,mapping)
+                    
                     route.distance = mapping.distance = distance;
         
                     const frames = mapping.frame - (prev.frame || startFrame);
@@ -278,7 +278,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                     const time = prevTime + frames / route.video.framerate;
         
                     route.video.mappings.push({ videoSpeed, time: prevTime, ...prev });
-                    //if (idx<10) console.log(frames,prev, { videoSpeed,time,endFrame:mapping.frame, ...prev})
+                    
                     if (idx === mappings.length - 1) {
                         route.video.mappings.push({ videoSpeed, time, ...mapping });
                     }

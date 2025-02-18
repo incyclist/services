@@ -104,12 +104,6 @@ export class EPMParser extends XMLParser{
         json.min = reader.ReadUint32();
         json.max = reader.ReadUint32();
         json.cnt =  reader.ReadUint32();
-        
-        if (json.cnt!==num) {
-
-            //throw new Error('Invalid program event count ('+json.cnt+' != '+num+')');
-        }
-        
         json.sampleRate =  reader.ReadUint32();
         json.validFor = reader.ReadUint32();  //BITs: 1: bike, 2: lyps, 4: run
         json.elevationStart = reader.ReadFloat();

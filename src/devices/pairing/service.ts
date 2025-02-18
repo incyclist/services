@@ -1362,7 +1362,6 @@ export class DevicePairingService  extends IncyclistService{
         const selected = this.state.capabilities.map( c=>c.selected)
 
         const target = adapters.filter(ai => /*!ai.adapter.isStarted() &&*/ selected.includes(ai.udid));
-        //const targetResume = adapters.filter(ai => ai.adapter.isStarted() && ai.adapter.isPaused() && selected.includes(ai.udid));
 
         if ( (this.isPairing() && this.state.check.preparing!==preparing) ){
             return;

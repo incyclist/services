@@ -5,7 +5,6 @@ import { IActivityUpload } from "./types";
 import { ActivityUploadFactory } from "./factory";
 import { VeloHeroAppConnection } from "../../apps/velohero/VeloHeroAppConnection";
 import { Injectable } from "../../base/decorators";
-import { deprecate } from "util";
 
 
 /**

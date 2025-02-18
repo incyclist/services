@@ -19,7 +19,7 @@ export const toXml = (obj:JSONObject):string =>{
 }
 
 export const removeUTFBom = (str:string) => {
-    //str = str.replace(/^\uFEFF/, '');
+    
 
     while (str.charCodeAt(0)===0 || str.charCodeAt(0)===0xFEFF || str.charCodeAt(0)===0xFFFD)
         str = str.substring(1);

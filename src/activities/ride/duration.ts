@@ -158,16 +158,7 @@ export class ActivityDuration {
                     
                     if (speed===0 || distance===0) {
                         throw new InfinityError()
-                    }
-                    
-                    /*
-                    // we need to protect the nodejs timers. If the code here takes longer than a given timeout, then we need to 
-                    // throw an exception otherwise, the thread would be blocked
-                    const calcTimedOut = (Date.now()-tsCalcStart)>5 //DEFAULT_TIMEOUT_CALC
-                    if (calcTimedOut) {
-                        throw new TimeoutError(`calc timeout at ${progress} of ${segmentDistance}`)                            
-                    }
-                    */
+                    }                   
 
                     vPrev = speed/3.6;
                     const prevProgress = progress
