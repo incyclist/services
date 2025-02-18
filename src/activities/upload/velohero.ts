@@ -5,6 +5,7 @@ import { IActivityUpload } from "./types";
 import { ActivityUploadFactory } from "./factory";
 import { VeloHeroAppConnection } from "../../apps/velohero/VeloHeroAppConnection";
 import { Injectable } from "../../base/decorators";
+import { deprecate } from "util";
 
 
 /**
@@ -44,6 +45,20 @@ export class VeloHeroUpload extends IncyclistService implements IActivityUpload{
      */
     isConnected():boolean {
         return this.getVeloHeroAppConnection().isConnected()
+    }
+
+    /**
+     * @deprecate
+     */   
+    isConnecting():boolean {
+        return this.getVeloHeroAppConnection().isConnecting()
+    }
+
+    /**
+     * @deprecate
+     */   
+    disconnect() {
+        return this.getVeloHeroAppConnection().disconnect()
     }
 
 
