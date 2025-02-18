@@ -121,6 +121,10 @@ export class AppsService extends IncyclistService   {
         const found = this.serviceMap.find( r=>r.key===key )
         return found ? found.name : key
     }
+    getKey( name:string ) {
+        const found = this.serviceMap.find( r=>r.name===name )
+        return found ? found.key : name
+    }
 
 
 

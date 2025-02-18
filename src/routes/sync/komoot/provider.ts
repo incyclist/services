@@ -158,7 +158,7 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
     protected checkTours( tours:Array<KomootTourSummary> )
         : { added: Array<KomootTourSummary>, updated:Array<Route> } {
 
-        const routes = this.getRouteListService()?.searchRepo( {source:'komoot' } )?.routes??[]
+        const routes = this.getRouteListService()?.searchRepo( {routeSource:'komoot' } )?.routes??[]
 
         const added:Array<KomootTourSummary> = []
         const updated:Array<Route> = []

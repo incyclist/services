@@ -74,7 +74,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         this.db = new RoutesDbLoader()
         this.createPreviewQueue = []
         this.routes = []
-        this.filters = {}
+        this.filters = this.getFilters()
 
         this.syncInfo = {}
 
@@ -180,14 +180,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         this.filters = requestedFilters
 
         const settings = this.getUserSettings()
-        settings.set('preferencs.search.filter',requestedFilters??null)
+        settings.set('preferences.search.filter',requestedFilters??null)
     }
 
     getFilters():SearchFilter {
-        if (!this.filters) {
-            const settings = this.getUserSettings()
-            this.filters = settings.get('preferencs.search.filter',undefined)
+        try {
+            if (!this.filters) {
+                const settings = this.getUserSettings()
+                this.filters = settings.get('preferences.search.filter',undefined)
+            }
         }
+        catch {}
 
         return this.filters
 
@@ -204,21 +207,24 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
         const filters = requestedFilters || this.filters
-        this.prevFilters = filters
 
-        return this.searchRepo(requestedFilters)
+        if (filters!==this.prevFilters) {
+            this.prevFilters = filters
+            this.saveFilters(filters)
+        }
+
+        return this.searchRepo(filters)
 
     }
 
  
     searchRepo( requestedFilters?:SearchFilter ) {
-
         if (!this.observer)
             this.observer = new RouteListObserver(this)
 
         try {
 
-            const filters = requestedFilters || this.filters
+            const filters = requestedFilters ?? this.filters
 
             let routes:Array<SummaryCardDisplayProps> = Array.from(this.getAllSearchCards().map( c=> c.getDisplayProperties()))
             routes.sort( (a,b) => a.title>b.title? 1 : -1)
@@ -236,9 +242,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             routes = this.applyCountryFilter(filters, routes);
             routes = this.applyContentTypeFilter(filters, routes);
             routes = this.applyRouteTypeFilter(filters, routes);
-
-            if ( this.checkKomootFeatureEnabled())
-                routes = this.applySourceFilter(filters,routes)
+            routes = this.applySourceFilter(filters,routes)
 
             const cards = routes.map( r => this.getCard(r.id))
 
@@ -332,16 +336,19 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     private applySourceFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
-
-        routes = routes.filter( r=> r.source===undefined || this.getAppsService().isEnabled(r.source,'RouteDownload') )
-
-        if (filters.source) {
-            const internal = filters.source==='none';
-            const sources = filters.source.split('|')
+        if ( this.checkKomootFeatureEnabled())
+            routes = routes.filter( r=> r.source===undefined || this.getAppsService().isEnabled(r.source,'RouteDownload') )
+        else 
+            routes = routes.filter( r=> r.source===undefined  )
+        
+        if (filters.routeSource) {
+            const local = filters.routeSource==='Local'
+            const internal = filters.routeSource==='Incyclist';
+            const sources = filters.routeSource.split('|').map( s=> this.getAppsService().getKey(s))
             
             routes = routes.filter(r => 
-                (r.source===undefined && internal) ||  
-                (r.source===undefined && sources.includes('incyclist')) ||  
+                (r.source===undefined && !r.isLocal && internal) ||  
+                (r.source===undefined && r.isLocal && local) ||                  
                 (r.source && !internal && sources.includes(r.source))
             );
         }
@@ -404,16 +411,18 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         let countries = []
         let contentTypes = []
         let routeTypes = []
+        let routeSources = []
 
         try {
             countries = this.getFilterCountries();
             contentTypes = this.getFilterContentTypes();
             routeTypes = this.getFilterRouteTypes()
+            routeSources = this.getFilterRouteSources()
         }
         catch (err) {
             this.logError(err,'getFilterOption')
         }
-        return {countries,contentTypes,routeTypes}
+        return {countries,contentTypes,routeTypes,routeSources}
     }
 
     onResize() {
@@ -771,6 +780,24 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return ['Loop','Point to Point']
     }
 
+    protected getFilterRouteSources():Array<string> { 
+        const options = ['Local','Incyclist']
+        if (this.checkKomootFeatureEnabled()) {
+            this.routes.forEach(r=> {
+                const source = r.description.source  
+                if (!source) 
+                    return;
+                
+                const option = this.getAppsService().getName(source)
+                if (option && !options.includes(option)) {
+                    options.push(option)
+                }
+
+            })
+        }
+        return options
+    }
+
     protected getFilterCountries():Array<string> {
         try {
             const countries = []
@@ -807,6 +834,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
     protected addRoute(route:Route):void {
+
+        if (!this.checkKomootFeatureEnabled() && route.description.source)
+            return;
 
         this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
         if (route.description?.isDeleted)
@@ -1083,7 +1113,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                     this.db.save(route, false);
                 })
                 .catch(err => {
-                    console.log('# error', route.description.id, route.description.title, err);
+                    this.logError(err,'verifyRouteCountry',{id:route.description.id, title:route.description.title})                    
                 });
         }
     }

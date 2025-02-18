@@ -38,6 +38,7 @@ export interface MinMax {
     max?: number
 }
 
+
 export interface SearchFilter {
     title?: string,
     distance? : MinMax,
@@ -45,7 +46,7 @@ export interface SearchFilter {
     country?: string,
     contentType?:string,
     routeType?:string
-    source?:string
+    routeSource?:string
     includeDeleted?:boolean
 }
 
@@ -53,6 +54,7 @@ export interface SearchFilterOptions {
     countries: Array<string>
     contentTypes: Array<string>
     routeTypes: Array<string>
+    routeSources: Array<string>
 }
 
 export interface RoutesRepoUpdates {
