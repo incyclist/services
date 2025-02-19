@@ -7,6 +7,7 @@ import { useRouteList } from "../service";
 import { BaseCard } from "./base";
 import { RouteCardType, DEFAULT_FILTERS, DEFAULT_TITLE, ActiveImportProps } from "./types";
 import { AppStatus } from "../../base/types";
+import { EventLogger } from "gd-eventlog";
 
 
 export class ActiveImportCard extends BaseCard implements Card<Route> {
@@ -15,12 +16,14 @@ export class ActiveImportCard extends BaseCard implements Card<Route> {
     protected error:Error
     protected cardObserver 
     protected deleteObserver: PromiseObserver<void>
+    protected logger:EventLogger
 
     constructor( file:FileInfo) {
         super()
         this.file = file;
         this.error = null
         this.cardObserver = new Observer()
+        this.logger = new EventLogger('ActiveImportCard')
     }
 
     setVisible(): void {
@@ -41,13 +44,24 @@ export class ActiveImportCard extends BaseCard implements Card<Route> {
         
     }
 
+    setInitialized(init:boolean) {
+    
+        try {
+            const prev=this.initialized
+            this.initialized= init
+            if (init && !prev)
+                this.emitUpdate()
+        }
+        catch(err) {
+            this.logError(err,'setInitialized')
+        }
+    
+    }
+
 
     setError(error:Error) {
         this.error = error
-        process.nextTick( ()=>{
-            this.emitUpdate()
-        })
-        
+        process.nextTick( ()=>{this.emitUpdate()})       
     }
 
     setData() {
@@ -56,7 +70,7 @@ export class ActiveImportCard extends BaseCard implements Card<Route> {
 
     emitUpdate() {
         const props = this.getDisplayProperties()
-        this.cardObserver.emit('update',props)
+        this.cardObserver.emit('update',{...props})
     }
 
 
@@ -94,5 +108,10 @@ export class ActiveImportCard extends BaseCard implements Card<Route> {
         
         useRouteList().import( this.file, this)
     }
+
+    protected logError( err:Error, fn:string) {
+        this.logger.logEvent({message:'error', error:err.message, fn, stack:err.stack})
+    }
+
 
 }
