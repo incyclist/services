@@ -125,7 +125,8 @@ export interface    RouteInfo extends RouteBase{
     isDeleted?:boolean  
     originalName?:string 
     version?:number,    
-    source?:string
+    source?:string,
+    isLoopVerified?:boolean
 }
 
 export type LocalizedText = { [index: string]: string; };

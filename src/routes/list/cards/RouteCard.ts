@@ -989,6 +989,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     protected verifyRoute(route:Route) {
+        if (route.description.isLoopVerified)
+            return;
+        
         if ( checkIsLoop(route) ) {
             const points = route.details?.points??[]
             if (!points.length)
@@ -1002,6 +1005,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (Math.abs(slope)>1){
                 this.logger.logEvent({message:'Loop elevation profile adjusted', route: route.description.title})
                 updateSlopes(route.details.points)
+                route.description.isLoopVerified = true
             }
 
         }
