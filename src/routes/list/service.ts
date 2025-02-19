@@ -347,10 +347,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     private applySourceFilter(filters: SearchFilter, routes: RouteInfo[]) {
-        if ( this.checkKomootFeatureEnabled())
-            routes = routes.filter( r=> r.source===undefined || this.getAppsService().isEnabled(r.source,'RouteDownload') )
-        else 
-            routes = routes.filter( r=> r.source===undefined  )
+        routes = routes.filter( r=> r.source===undefined || this.getAppsService().isEnabled(r.source,'RouteDownload') )
         
         if (filters.routeSource) {
             const local = filters.routeSource==='Local'
@@ -793,19 +790,19 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     protected getFilterRouteSources():Array<string> { 
         const options = ['Local','Incyclist']
-        if (this.checkKomootFeatureEnabled()) {
-            this.getVisibleRoutes().forEach(r=> {
-                const source = r.description.source  
-                if (!source) 
-                    return;
-                
-                const option = this.getAppsService().getName(source)
-                if (option && !options.includes(option)) {
-                    options.push(option)
-                }
+        
+        this.getVisibleRoutes().forEach(r=> {
+            const source = r.description.source  
+            if (!source) 
+                return;
+            
+            const option = this.getAppsService().getName(source)
+            if (option && !options.includes(option)) {
+                options.push(option)
+            }
 
-            })
-        }
+        })
+        
         return options
     }
 
@@ -845,9 +842,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
     protected addRoute(route:Route):void {
-
-        if (!this.checkKomootFeatureEnabled() && route.description.source)
-            return;
 
         this.routes.push(route)
         if (route.description?.isDeleted)
@@ -952,9 +946,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     protected startSync() { 
-        if ( !this.checkKomootFeatureEnabled())
-            return;
-
         try {
             if (!this.syncInfo.iv) {
                 // run sync every 5 minutes
@@ -970,11 +961,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected getSyncFrequency() {
         return this.getUserSettings().get('syncFrequency',SYNC_INTERVAL)
     }
-    protected checkKomootFeatureEnabled() {
-        const settings = useUserSettings()
-        return settings.get('KOMOOT',false)        
-    }
-
 
     protected stopSync() { 
         if (!this.syncInfo.iv) 
