@@ -1,11 +1,10 @@
+import { EventLogger } from 'gd-eventlog';
 import { valid } from '../../../../utils/valid';
 import { AppApiBase } from '../base';
 import { KomootAuthConfig, KomootCoordinate, KomootGetTourRequestFilters, KomootGetTourRequestParams, KomootLoginResponse, KomootTourSummary } from './types';
 
 
 const API_BASE_URL = 'https://api.komoot.de/v007'
-
-let IID = 0;
 
 /**
  * Represents a client implementation of the  Komoot API. 
@@ -37,11 +36,11 @@ export class KomootApi  extends AppApiBase{
     protected username: string
     protected password: string
     protected userid: string
-    protected iid:number
+    protected logger: EventLogger
 
     constructor() {
         super()
-        this.iid = IID++;
+        this.logger = new EventLogger('KomootAPI')
     }
 
     /**
@@ -120,32 +119,37 @@ export class KomootApi  extends AppApiBase{
      */
     async getTours( params:KomootGetTourRequestParams={}, filters?:KomootGetTourRequestFilters):Promise<Array<KomootTourSummary>> {
 
-        const auth = this.getBasicAuthCredentials()
+        const tsStart = Date.now()
+        let args
+        try {
+        
+            const auth = this.getBasicAuthCredentials()
 
-        if (!this.userid)
-            throw new Error('invalid credentials')
+            if (!this.userid) {
+                this.logger.logEvent({message:'getTours failed', reason:'invalid credentials' })
+                throw new Error('invalid credentials')
+            }
 
-        const keys = Object.keys(params??{})
-        const args = keys.map(key=>`${key}=${params[key]}`).join('&')
-        const url = keys.length>0 ? `/users/${this.userid}/tours/?`+args : `/users/${this.userid}/tours/`
-       
-        const response = await this.get(url,{auth} )
-        if (response.status>=400 && response.status<500) {
-            throw new Error('invalid credentials')
+            const keys = Object.keys(params??{})
+            args = keys.map(key=>`${key}=${params[key]}`).join('&')
+            const url = keys.length>0 ? `/users/${this.userid}/tours/?`+args : `/users/${this.userid}/tours/`
+        
+            const response = await this.get(url,{auth} )
+            if (response.status>=400 && response.status<500) {
+                this.logger.logEvent({message:'getTours failed',args, reason:'invalid credentials',duration: Date.now()-tsStart  })
+                throw new Error('invalid credentials')
+            }
+
+            const tours = response.data?._embedded?.tours??[]
+            
+            const result = this.applyFilter(tours,filters)
+            this.logger.logEvent({message:'getTours result', args, tours:result.length,duration: Date.now()-tsStart  })
+            return result
         }
-        const tours = response.data?._embedded?.tours??[]
-
-        return tours.filter( tour => {
-            let valid = true
-            if (filters?.sport)
-                valid = valid && (tour.sport === filters.sport)
-            if (filters?.after)
-                valid = valid && (new Date(tour.date).valueOf()>filters.after.valueOf())
-            if (filters?.lastUpdateAfter)
-                valid = valid && (new Date(tour.changed_at).valueOf()>filters.lastUpdateAfter.valueOf())
-
-            return valid                
-        })
+        catch(err) {
+            this.logger.logEvent({message:'getTours failed', args, reason:err.message,duration: Date.now()-tsStart  })
+            throw(err)
+        }
     }
 
     /**
@@ -154,23 +158,55 @@ export class KomootApi  extends AppApiBase{
      * @returns {Promise<Array<KomootCoordinate>>} The coordinates of the tour.
      */
     async getTourCoordinates( id:number):Promise<Array<KomootCoordinate>> {
+        const tsStart = Date.now()
+        try {
 
 
-        const url = `/tours/${id}/coordinates`
-        const auth = this.getBasicAuthCredentials()
-       
-        const response = await this.get(url,{auth} )
-        if (response.status===404) {
-            throw new Error('not found')
-        }
-        else if (response.status>=400 && response.status<500) {
-            throw new Error('invalid credentials')
-        }
+            const url = `/tours/${id}/coordinates`
+            const auth = this.getBasicAuthCredentials()
         
-        const points = response.data?.items??[]
-        return points
+            const response = await this.get(url,{auth} )
+            if (response.status===404) {
+                this.logger.logEvent({message:'getTourCoordinates failed', id, reason:'not found',duration: Date.now()-tsStart  })
+                throw new Error('not found')
+            }
+            else if (response.status>=400 && response.status<500) {
+                this.logger.logEvent({message:'getTourCoordinates failed', id, reason:'invalid credentials',duration: Date.now()-tsStart  })
+                throw new Error('invalid credentials')
+            }
+            
+            const points = response.data?.items??[]
+            this.logger.logEvent({message:'getTourCoordinates result', id, points:points.length,duration: Date.now()-tsStart  })
+            return points
+        }
+        catch(err) {
+            this.logger.logEvent({message:'getTourCoordinates failed', id, reason:err.message,duration: Date.now()-tsStart  })
+            throw(err)
+        }
 
     }
+
+    protected applyFilter(tours:Array<KomootTourSummary>, filters?:KomootGetTourRequestFilters) {
+        if (!filters)
+            return tours;
+
+        const sportTypeFilter = filters.sport?.split(',')??[]
+
+        return tours.filter( tour => {
+            let valid = true
+            if (filters?.sport)
+                valid = valid && (sportTypeFilter.includes(tour.sport))
+            if (filters?.after)
+                valid = valid && (new Date(tour.date).valueOf()>filters.after.valueOf())
+            if (filters?.lastUpdateAfter)
+                valid = valid && (new Date(tour.changed_at).valueOf()>filters.lastUpdateAfter.valueOf())
+
+            return valid                
+        })
+
+    }
+
+
 
     protected getBasicAuthCredentials():{username:string,password:string} {
         const {username,password} = this
