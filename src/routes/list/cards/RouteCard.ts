@@ -471,7 +471,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
         
     }
 
-    delete(enforced?:boolean):PromiseObserver<boolean> {
+    delete(props?:{enforced?:boolean,source:'user'|'system'}):PromiseObserver<boolean> {
+        const {enforced,source='user'} = props??{}
+
         try {
            
             this.logger.logEvent({message: 'delete card',card:this.getTitle()})
@@ -482,7 +484,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (this.deleteObserver)
                 return this.deleteObserver
 
-            this.deleteObserver = new PromiseObserver< boolean> ( this._delete(enforced) )
+            this.deleteObserver = new PromiseObserver< boolean> ( this._delete(enforced,source) )
             return this.deleteObserver
         }
         catch(err) {
@@ -491,7 +493,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
-    protected async _delete(enforced?:boolean):Promise<boolean> {
+    protected async _delete(enforced?:boolean,source:'user'|'system'='user'):Promise<boolean> {
 
         // let the caller of delete() consume an intialize the observer first
         await waitNextTick()
@@ -540,7 +542,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.deleteRouteUserSettings();
             this.logger.logEvent({message: 'card deleted',card:this.getTitle()})
 
-            getRouteList().emitLists('updated',{log:true});
+            getRouteList().emitLists('updated',{log:true,source});
             deleted =true;   
         }
         catch(err) {

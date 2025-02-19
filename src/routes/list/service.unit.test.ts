@@ -263,7 +263,6 @@ describe('RouteListService',()=>{
         })
         test('no filters - after previous search',()=>{
             const res = service.search({routeType:'Loop',elevation:{min:100}, contentType:'GPX'})
-            console.log(res.routes.length)
             const {routes} = service.search()
             expect(routes.length).toBe(1)
         })

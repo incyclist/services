@@ -725,16 +725,18 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    emitLists( event:'loaded'|'updated',props?:{log?:boolean}) {
+    emitLists( event:'loaded'|'updated',props?:{log?:boolean, source?:'user'|'system'}) {
 
         try {
 
+            const {log,source='user'} = props??{}
+
             if (this.currentView === 'grid'||this.currentView ==='list') {
                 const d = this.searchAgain()
-                this.observer.emit(event,d)
+                this.observer.emit(event,d,source)
                 return;
             }
-            const {log} = props??{}
+
             if (log) {
                 const logs = this.createRoutesLogEntry(true)??{}
                 this.logEvent({message:`RoutesList ${event}`, ...logs})
@@ -746,7 +748,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             
             const hash = lists ? lists.map( l=> l.getCards().map(c=>c.getId()).join(',')).join(':') : ''
             if (this.observer)
-                this.observer.emit(event,lists,hash)
+                this.observer.emit(event,lists,hash,source)
     
         }
         catch(err) {
@@ -841,17 +843,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
 
-    protected addRoute(route:Route):void {
+    protected addRoute(route:Route,source:'user'|'system'='system'):void {
 
         this.routes.push(route)
         if (route.description?.isDeleted)
             return;
 
         if (!route.description?.isDeleted) {
-            this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
+            if (source==='user') {
+                this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
+            }
 
-
-        
             if (!route.description.country) {
                 route.updateCountryFromPoints()
                     .then( ()=> {
@@ -869,7 +871,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if ( list.getId()==='myRoutes')
             card.enableDelete(true)    
         
-        this.emitLists('updated')                
+        this.emitLists('updated',{source})                
 
     }
 
@@ -886,10 +888,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const existing = this.findCard(route)
         if (existing) 
             return;
-        this.addRoute(route)
+        this.addRoute(route,'system')
     }
 
-    protected async update(route:Route):Promise<void> { 
+    protected async update(route:Route,source:'user'|'system'='user'):Promise<void> { 
         const existing = this.findCard(route)
         if (existing)        
             existing.card.updateRoute(route)
@@ -1020,7 +1022,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         descriptions.forEach( descr => {
             const route = new Route(descr)
             this.db.save(route) 
-            this.addRoute(route)
+            this.addRoute(route,'system')
+            this.logEvent({message:'route added', route:route.description.title, source})
         })
     }
 
@@ -1030,14 +1033,19 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         descriptions.forEach( descr => {
             const route = new Route(descr)
             this.loadSyncedRouteDetails(route)
-            this.update(route)
+            this.update(route,'system')
+            this.logEvent({message:'route updated', route:route.description.title, source})
         })
 
     }
     protected onSyncRouteDeleted( source:string, routes: Array<string>) {
         routes.forEach( id=> {
             const card = this.getCard(id)
-            card.delete(true)
+            if (card) {
+                card.delete({source:'system'})
+                const description = card.getRouteDescription()
+                this.logEvent({message:'route deleted', route:description?.title, source})
+            }
         })
 
     }
@@ -1101,8 +1109,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             if (route.description.source) {
                 await this.loadSyncedRouteDetails(route);
             }
-            else {
-                // TODO.... load from API
+            else {                
+                const target = [{route,added:false}]
+                await this.api.loadDetails(target)
             }
 
         }
