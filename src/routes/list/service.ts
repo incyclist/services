@@ -745,10 +745,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
             const lists = this.getLists()
-            
-            const hash = lists ? lists.map( l=> l.getCards().map(c=>c.getId()).join(',')).join(':') : ''
+           
             if (this.observer)
-                this.observer.emit(event,lists,hash,source)
+                this.observer.emit(event,lists,source)
     
         }
         catch(err) {
