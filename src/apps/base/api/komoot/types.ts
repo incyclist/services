@@ -93,5 +93,6 @@ export interface KomootCoordinate extends KomootPoint {
 }
 
 export type KomootTourType = 'tour_planned' | 'tour_recorded'
-export type KomootSportType = 'hike'| 'touringbicycle' |'racebike' | 'mtb' | 'jogging' | 'mtb_easy' | 'mtb_advancde' | 'mountaineering'
+export type KomootSportType = 'hike'| 'touringbicycle'| 'mtb' |'racebike'  | 'jogging' | 'mtb_easy' | 'mtb_advancde' | 'mountaineering'
+export type KomootSportTypeNames = 'Hiking' |'Cycling' | 'Mountain biking' | 'Road cycling' | 'Running' | 'Gravel riding' | 'Enduro mountain biking' | 'Mountaineering'
 

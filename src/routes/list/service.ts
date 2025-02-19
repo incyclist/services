@@ -217,7 +217,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     }
 
- 
+    getVisibleRoutes():Array<Route> {
+        return this.routes.filter( r=>r.description && !r.description.isDeleted)
+    }
+
+    getAllAppRoutes( source:string ):Array<RouteInfo> {
+        let routes = this.routes.map(r=>r.description)
+        routes = this.applySourceFilter({routeSource:source},routes)
+        return routes
+
+    }
+
     searchRepo( requestedFilters?:SearchFilter ) {
         if (!this.observer)
             this.observer = new RouteListObserver(this)
@@ -234,7 +244,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             }
 
 
-            routes = routes.filter( r => filters.includeDeleted || !r?.isDeleted)
+            if (!filters.includeDeleted)
+                routes = routes.filter( r =>  !r?.isDeleted)
 
             routes = this.applyTitleFilter(filters, routes);
             routes = this.applyDistanceFilter(filters, routes);
@@ -242,7 +253,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             routes = this.applyCountryFilter(filters, routes);
             routes = this.applyContentTypeFilter(filters, routes);
             routes = this.applyRouteTypeFilter(filters, routes);
-            routes = this.applySourceFilter(filters,routes)
+            routes = this.applySourceFilter(filters,routes) as SummaryCardDisplayProps[]
 
             const cards = routes.map( r => this.getCard(r.id))
 
@@ -335,7 +346,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return routes;
     }
 
-    private applySourceFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+    private applySourceFilter(filters: SearchFilter, routes: RouteInfo[]) {
         if ( this.checkKomootFeatureEnabled())
             routes = routes.filter( r=> r.source===undefined || this.getAppsService().isEnabled(r.source,'RouteDownload') )
         else 
@@ -578,7 +589,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     async getRouteDetails(id:string, expectLocal=false):Promise<RouteApiDetail> {
         try {
-            const route = this.routes.find( r => r.description.id===id)
+            const route = this.getVisibleRoutes().find( r => r.description.id===id)
             if (!route) 
                 return;
 
@@ -601,7 +612,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     getRouteDescription(id:string) {
         try {
-            return this.routes.find( r => r.description.id===id)?.description
+            return this.getVisibleRoutes().find( r => r.description.id===id)?.description
         }
         catch(err) {
             this.logError(err,'getRouteDescription',id)
@@ -783,7 +794,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected getFilterRouteSources():Array<string> { 
         const options = ['Local','Incyclist']
         if (this.checkKomootFeatureEnabled()) {
-            this.routes.forEach(r=> {
+            this.getVisibleRoutes().forEach(r=> {
                 const source = r.description.source  
                 if (!source) 
                     return;
@@ -802,7 +813,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         try {
             const countries = []
 
-            this.routes.forEach(r=> {
+            this.getVisibleRoutes().forEach(r=> {
                 const iso = r.description.country 
                 let country = 'Unknown'
                 if (iso)
@@ -838,16 +849,21 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (!this.checkKomootFeatureEnabled() && route.description.source)
             return;
 
-        this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
+        this.routes.push(route)
         if (route.description?.isDeleted)
             return;
 
+        if (!route.description?.isDeleted) {
+            this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
+
+
         
-        if (!route.description.country) {
-            route.updateCountryFromPoints()
-                .then( ()=> {
-                    this.db.save(route,false)
-                })
+            if (!route.description.country) {
+                route.updateCountryFromPoints()
+                    .then( ()=> {
+                        this.db.save(route,false)
+                    })
+            }
         }
         
 
@@ -858,7 +874,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         list.add( card)
         if ( list.getId()==='myRoutes')
             card.enableDelete(true)    
-        this.routes.push(route)
         
         this.emitLists('updated')                
 
@@ -984,9 +999,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.syncInfo.observer = observer
             const onAdded = this.onSyncRouteAdded.bind(this)
             const onUpdated = this.onSyncRouteUpdated.bind(this)
+            const onDeleted = this.onSyncRouteDeleted.bind(this)
 
             observer.on('added',onAdded)
             observer.on('updated',onUpdated)    
+            observer.on('deleted',onDeleted)    
             observer.once('done',()=>{
                 delete this.syncInfo.observer
                 this.observer.emit('sync-done')
@@ -1028,6 +1045,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const route = new Route(descr)
             this.loadSyncedRouteDetails(route)
             this.update(route)
+        })
+
+    }
+    protected onSyncRouteDeleted( source:string, routes: Array<string>) {
+        routes.forEach( id=> {
+            const card = this.getCard(id)
+            card.delete(true)
         })
 
     }
@@ -1313,7 +1337,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const legacyCard =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===legacyId ) as RouteCard
             if (legacyCard) {
                 this.myRoutes.remove(legacyCard)
-                const idx = this.routes.findIndex( r => r.description.id===legacyId)
+                const idx = this.routes.findIndex( r => r.description.id===legacyId && !r.description.isDeleted)
                 if (idx!==-1) {
                     this.routes.splice(idx,1)
                 }

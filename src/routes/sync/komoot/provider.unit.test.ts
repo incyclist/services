@@ -20,7 +20,7 @@ describe( 'Komoot Route Sync Provider ',()=>{
         set: userSettingsSet
     })
 
-    const setupMocks = (sp, mocks:Record<string,any>, props:{userSettings?,enabled?}={}) => {
+    const setupMocks = (sp, mocks:Record<string,any>, props:{userSettings?,enabled?,routes?}={}) => {
        
         Object.keys(mocks).forEach( key => {
             if (key!=='api')
@@ -31,6 +31,9 @@ describe( 'Komoot Route Sync Provider ',()=>{
         Inject('UserSettings', UserSettingsMock(props.userSettings!==undefined, props.userSettings))
         Inject('AppsService',{
             isEnabled: jest.fn().mockReturnValue( props.enabled??true)
+        })
+        Inject('RouteListService',{
+            getAllAppRoutes: jest.fn().mockReturnValue( props?.routes??[])
         })
 
         if (mocks.connection)
@@ -44,7 +47,8 @@ describe( 'Komoot Route Sync Provider ',()=>{
     const cleanupMocks = ()=>{
         Inject('Countries', null)
         Inject('UserSettings', null)
-        Inject('AppsService',null)      
+        Inject('AppsService',null)    
+        Inject('RouteListService',null)  
         jest.clearAllMocks()  
     }
 

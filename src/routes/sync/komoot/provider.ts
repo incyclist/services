@@ -1,6 +1,6 @@
 import { sleep } from "incyclist-devices/lib/utils/utils";
 import { useAppsService } from "../../../apps";
-import { KomootCoordinate, KomootTourSummary } from "../../../apps/base/api/komoot/types";
+import { KomootCoordinate, KomootSportTypeNames, KomootTourSummary } from "../../../apps/base/api/komoot/types";
 import { KomootAppConnection } from "../../../apps/komoot";
 import { Injectable } from "../../../base/decorators";
 import { IncyclistService } from "../../../base/service";
@@ -15,6 +15,22 @@ import { RouteSyncFactory } from "../factory";
 import { IRouteSyncProvider } from "../types";
 
 const PAGE_LIMIT = 50
+const SPORTS_FILTER = 'racebike'
+
+const sportsOptions: Record<string,KomootSportTypeNames> ={
+    touringbicycle: 'Cycling',
+    mtb: 'Mountain biking',
+    racebike: 'Road cycling',
+    mtb_easy: 'Gravel riding',
+    mtb_advancde: 'Enduro mountain biking'
+}
+
+
+interface SyncModifications {
+    added: Array<KomootTourSummary>;
+    updated: Array<Route>;
+    deleted: Array<string>;
+}
 
 export class KomootSyncProvider extends IncyclistService  implements IRouteSyncProvider  {
 
@@ -88,6 +104,8 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
     }
 
 
+    // ------  PROTECTED MEMBERS ----------
+
     protected stopSync() {
         this.stopRequested = true
     }
@@ -102,38 +120,54 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
         }
         this.logEvent({message:'start komoot route sync'})
 
-        const api = this.getKomootApi()
+        const {tours,done} = await this.loadToursFromApi()
+
+        if (done) {
+            const {added,updated,deleted} = this.checkTours(tours)
+            this.updateLastSyncTime()
+
+            this.observer.emit('done')
+            this.logEvent({message:'komoot route sync finished', added:added?.length, updated:updated?.length,deleted:deleted.length})
+            return added
+
+        }
+        else {
+            this.observer.emit('done')
+            this.logEvent({message:'komoot route sync stopped'})
+            return []
+        }
+    }
+
+    protected emitUpdates(added: KomootTourSummary[], updated: Route[], deleted: string[]) {
+        if (added.length > 0) {
+            this.emitAdded(added);
+        }
+        if (updated.length > 0) {
+            this.emitUpdated(updated);
+        }
+        if (deleted.length > 0) {
+            this.emitDeleted(deleted);
+        }
+    }
+
+    protected async loadToursFromApi(): Promise<{tours:Array<KomootTourSummary>,done:boolean}> { 
+        const api = this.getKomootApi()      
         let page = 0
         let done = false
         const tours: Array<KomootTourSummary> = []
 
-        let cntAdded = 0;
-        let cntUpdated = 0;
 
         while (!done && !this.stopRequested) {
             try {
-                const filters = {lastUpdateAfter: this.getLastSyncTime(), sport:this.getSportFilter(), after:this.getCreatedFilter()}
-
-                
+                const filters = {/*lastUpdateAfter: this.getLastSyncTime(), */sport:this.getSportFilter() , after:this.getCreatedFilter()}
                 const pageTours = await api.getTours({type:'tour_planned',page,limit:PAGE_LIMIT},filters)
-                                    
-                if (pageTours?.length>0) {
-                    const {added,updated} = this.checkTours(pageTours)
-                    if (added.length>0) {
-                        cntAdded+=added.length
-                        this.emitAdded(added)
-                        tours.push(...added)   
-                    }
-                    if (updated.length>0) {
-                        cntUpdated+=updated.length
-                        this.emitUpdated(updated)   
-                    }
-
+                if (pageTours.length>0)  {
+                    tours.push(...pageTours)
                     page++
                 }
-                else {
+                else 
                     done = true
-                }
+
                 await sleep(100)
 
             }
@@ -141,24 +175,14 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
                 this.logEvent( {message:'could not load tours', reason:err.message})
                 done = true}
         }
-
-        if (done) {
-            this.lastSyncTS = Date.now()
-            this.saveLastSyncTime()
-        }
-
-        this.logEvent({message:'komoot route sync finished', added:cntAdded, updated: cntUpdated})
-
-        this.observer.emit('done')
-
-        return tours
-
+        return {tours,done}
     }
 
-    protected checkTours( tours:Array<KomootTourSummary> )
-        : { added: Array<KomootTourSummary>, updated:Array<Route> } {
 
-        const routes = this.getRouteListService()?.searchRepo( {routeSource:'komoot' } )?.routes??[]
+    protected checkTours( tours:Array<KomootTourSummary> ): SyncModifications {
+
+        const routes = this.getRouteListService()?.getAllAppRoutes('komoot')??[]
+        const matched = routes.map( r => ({id:r.id, matched:false}))
 
         const added:Array<KomootTourSummary> = []
         const updated:Array<Route> = []
@@ -169,7 +193,15 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
             if (!route) {
                 added.push(tour)
             }
+            else if (route.isDeleted) {
+                const matchRecord = matched.find( r=> r.id===id)
+                if (matchRecord)
+                    matchRecord.matched = true
+            }
             else {
+                const matchRecord = matched.find( r=> r.id===id)
+                if (matchRecord)
+                    matchRecord.matched = true
                 const routeTS = route.tsLastChange??0
                 const tourTS  =  (new Date(tour.changed_at)).valueOf()
                 if (tourTS>routeTS) {
@@ -180,7 +212,12 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
             }
         })
 
-        return { added, updated }
+
+        const unmatched = matched.filter(r=>!r.matched)
+        const deleted = unmatched.map( r=> r.id)
+        this.emitUpdates(added, updated, deleted);
+
+        return { added, updated,deleted }
     }
 
     protected buildRouteInfo( tour:KomootTourSummary ): RouteInfo {
@@ -193,7 +230,8 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
             distance: tour.distance, 
             category: 'external',
             source: 'komoot',
-            previewUrl: tour.map_image_preview?.src,
+            //previewUrl: tour.map_image_preview?.src,
+            previewUrl: tour.vector_map_image_preview?.src,
             tsLastChange: (new Date(tour.changed_at)).valueOf()
         }
         return info
@@ -293,8 +331,10 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
     }
 
     protected emitUpdated(routes:Array<Route>) {
-
         this.observer.emit('updated',routes)
+    }
+    protected emitDeleted(routes:Array<string>) {
+        this.observer.emit('deleted',routes)
     }
 
     protected getLastSyncTime(): Date {
@@ -308,11 +348,21 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
     }
 
     protected getSportFilter():string { 
-        return 'racebike'
+        return SPORTS_FILTER
+    }
+
+    protected getAvailableSports():Array<string> {
+        const keys = Object.keys(sportsOptions)
+        return keys.map( sport=> sportsOptions[sport])
     }
 
     protected getCreatedFilter(days:number=365):Date {
         return new Date(Date.now()-days*24*60*60*1000)
+    }
+
+    protected updateLastSyncTime(): void { 
+        this.lastSyncTS = Date.now()
+        this.saveLastSyncTime()
     }
 
     protected saveLastSyncTime(): void {
@@ -322,6 +372,7 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
         this.getUserSettings().set('apps.komoot.lastSync',this.lastSyncTS)
     }
     
+    // ------  EXTERNAL DEPENDENCIES (Injectable)  ----------
 
     @Injectable
     protected getUserSettings() {

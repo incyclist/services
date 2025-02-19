@@ -1,4 +1,5 @@
 import { LatLng } from "../../utils/geo"
+import { RouteInfo } from "../base/types";
 import { SummaryCardDisplayProps } from "./cards/RouteCard";
 import { RouteCardType } from "./cards/types";
 
@@ -70,4 +71,5 @@ export interface RouteListLog {
 
 export interface IRouteList {
     searchRepo( requestedFilters?:SearchFilter ): { routes: Array<SummaryCardDisplayProps>}
+    getAllAppRoutes(source:string):Array<RouteInfo>
 }

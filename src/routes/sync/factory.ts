@@ -61,6 +61,7 @@ export class RouteSyncFactory {
                 syncs[service] = so
                 so.on( 'added', (info: Array<RouteInfo>)=> observer.emit('added', service,info))
                 so.on( 'updated', (routes: Array<Route>)=> observer.emit('updated', service,routes))
+                so.on( 'deleted', (routes: Array<string>)=> observer.emit('deleted', service,routes))
 
                 so.on( 'details', (route:Route)=> observer.emit('details', service,route))
                 so.on( 'done',()=>{ 
