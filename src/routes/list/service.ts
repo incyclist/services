@@ -926,8 +926,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 }
 
             }) 
-            .catch( err=>{
-                this.logEvent( {message:'could not load route details',reason:err.message})  
+            .catch( ()=>{
+                // ignore
             }) 
 
         }

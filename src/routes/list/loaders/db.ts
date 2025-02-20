@@ -63,7 +63,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             this.writeDetails(route)
         }
         else {
-            const details = await this.loadDetailRecord(route)
+            const details = await this.loadDetailRecord(route,false)
 
             if (!details || enforcedWriteDetails)
                 this.writeDetails(route)
@@ -222,7 +222,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         
     }
 
-    protected async loadDetailRecord(target:Route|RouteInfo):Promise<RouteApiDetail> {
+    protected async loadDetailRecord(target:Route|RouteInfo, log:boolean=true):Promise<RouteApiDetail> {
         
         const description = ((target as Route).description || target) as RouteInfo
         const repo = description?.hasVideo ? this.getVideosRepo() : this.getRoutesRepo()
@@ -246,8 +246,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
                 return res
             }
             catch (err) {
-                if (logErrors)
-                    this.logger.logEvent({ message: 'could not load route details', id, title: description?.title, reason: err.message, stack: err.stack })
+                this.logger.logEvent({ message: 'could not load route details', id, title: description?.title, reason: err.message, stack: err.stack })
                 return null
             }
         }
@@ -258,7 +257,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             details = await loadFromRepo(description.legacyId,false) 
         }
         if (!details) {
-            details = await loadFromRepo(description.id) 
+            details = await loadFromRepo(description.id,log) 
         }
 
 

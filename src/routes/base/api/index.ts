@@ -91,7 +91,6 @@ export default class IncyclistRoutesApi {
             return res.data;           
         }
         catch(err) {
-            this.logError(err,'getRouteDetails', {routeId})
             return undefined
         }
     }
