@@ -167,7 +167,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         try {
             this.logEvent( {message:'close route list'})
             this.observer?.emit('stopped')
-            this.observer.reset()
+            this.observer?.reset()
    
             this.resetCards()   
         }
