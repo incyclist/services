@@ -5,6 +5,7 @@ import { Singleton } from "../base/types";
 import { useUserSettings } from "../settings";
 import { StravaAppConnection } from "./base";
 import { AppCredentials } from "./base/types";
+import { IntervalsAppConnection } from "./intervals/IntervalsAppConnection";
 import { KomootAppConnection } from "./komoot";
 import { AppDefinition, AppsIntergationSpec, AppsOperation } from "./types";
 import { VeloHeroAppConnection } from "./velohero/VeloHeroAppConnection";
@@ -13,7 +14,7 @@ import { VeloHeroAppConnection } from "./velohero/VeloHeroAppConnection";
 export class AppsService extends IncyclistService   {
 
     protected readonly services:AppsIntergationSpec = {
-        ActivityUpload: ['strava', 'velohero','intervals.icu'],
+        ActivityUpload: ['strava', 'velohero','intervals'],
         WorkoutUpload: [],
         WorkoutDownload: [],
         ActivityDownload: [/*'strava','komoot'   */ ],
@@ -24,7 +25,7 @@ export class AppsService extends IncyclistService   {
         { name:'Strava', key:'strava', iconUrl: 'https://static.cdnlogo.com/logos/s/42/strava-wordmark.svg', connection: new StravaAppConnection()},
         { name:'VeloHero', key:'velohero', iconUrl: 'images/velo-white.png', connection: new VeloHeroAppConnection() },
         { name:'Komoot', key:'komoot', iconUrl:'https://www.komoot.com/assets/4d8ae313eec53e6e.svg', connection: new KomootAppConnection() },
-        /*{ name:'Intervals.icu', key:'intervals.icu' },*/
+        { name:'Intervals.icu', key:'intervals',iconUrl: 'images/intervals.png', connection:new IntervalsAppConnection() },
     ]
 
     constructor() {

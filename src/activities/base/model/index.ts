@@ -48,6 +48,7 @@ export interface ActivityAppLink  {
 export type ActivityAppLinks = {
     strava? : ActivityAppLink
     velohero?: ActivityAppLink
+    intervals?: ActivityAppLink
 }
 
 
