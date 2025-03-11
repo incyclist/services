@@ -113,7 +113,6 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
 
     protected async parse(file: FileInfo, xmljson:XmlJSON ):Promise<ParseResult<RouteApiDetail>> {
-   
         const data = xmljson.json 
     
         const context:XmlParserContext = { fileInfo:file, data}
@@ -293,6 +292,10 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                         prevTime = 0;
                     }
                     else {
+
+                        if (mapping.frame == prev.frame || mapping.distance===prev.distance)
+                            return;
+
                         const time = addMapping(mapping, prev, idx, startFrame, prevTime);
                         prevTime = time;
                     }
@@ -330,6 +333,13 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             elevation: Number(a.height),
         }));
     
+        
+        route.points = route.points.filter( (p,idx) => {
+            if (idx===0)
+                return true
+            return (p.routeDistance!==route.points[idx-1].routeDistance)
+        })
+
         const points = route.points
         if (points?.length>0) {
             route.distance = points[points.length-1].routeDistance
@@ -355,6 +365,15 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         const points = []
     
         positions.forEach( (pos,i) => {
+            
+            if (i>0) {
+                const prev = positions[i-1]
+                if (prev.distance===pos.distance) {
+                    console.log('# found duplicate position')
+                    return
+                }
+            }
+            
             const altitude = getAltitude(altitudes,positions,i,prevAltitude);
             const elevationGain = altitude-prevAltitude
     

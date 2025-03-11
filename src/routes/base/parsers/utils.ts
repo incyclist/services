@@ -128,7 +128,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
 
 const buildFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}, scheme:string='file') => { 
     if (referenced.file) {
-        const fileName = info.filename.replace(info.name,referenced.file)
+        const fileName = info.filename?.replace(info.name,referenced.file)
         return `file:///${fileName}`;
     }
     return referenced.url;
