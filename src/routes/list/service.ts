@@ -1349,7 +1349,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     protected resetCards() {
-        this.getLists().forEach( list=> {
+        const lists = this.getLists()??[]
+
+        lists.forEach( list=> {
             list.getCards().forEach( (card) => {
                 card.reset(true)
                
