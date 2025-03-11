@@ -688,10 +688,12 @@ export class WorkoutRide extends IncyclistService{
         const wo = this.workout;
         const limits = wo.getLimits(time,true);
 
-        this.currentStep = limits.step
-        const request:ActiveWorkoutLimit = {time:0, duration:0, remaining:0} 
         
         if ( limits!==undefined) {
+
+            this.currentStep = limits.step
+            const request:ActiveWorkoutLimit = {time:0, duration:0, remaining:0} 
+    
             request.time = Math.round(time);
             request.minPower = this.getPowerVal(limits.power,'min')
             request.maxPower = this.getPowerVal(limits.power,'max')
@@ -702,7 +704,7 @@ export class WorkoutRide extends IncyclistService{
             this.currentLimits = { ...request, duration: limits.duration, remaining:limits.remaining };                 
         }
 
-        this.isFreeRide = limits.power===undefined || limits.power===null
+        this.isFreeRide = limits?.power===undefined || limits?.power===null
         
 
         this.logger.logEvent( {message: 'workout requests', ...this.currentLimits,ftp})
