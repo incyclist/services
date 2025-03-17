@@ -11,7 +11,6 @@ import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/typ
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
-import { sleep } from "incyclist-devices/lib/utils/utils";
 import { ActivityState, ActivitySummaryDisplayProperties } from "./types";
 import { addDetails, checkIsLoop, getElevationGainAt, getNextPosition, getPosition, validateRoute } from "../../routes/base/utils/route";
 import { Route } from "../../routes/base/model/route";
@@ -135,6 +134,7 @@ export class ActivityRideService extends IncyclistService {
         dataState: Record<string,HealthStatus>
         prevRides?: Array<ActivityInfo>
         prevRidesLogs?: PastActivityInfo
+        lap?:number
     }
 
     constructor() {
@@ -144,49 +144,48 @@ export class ActivityRideService extends IncyclistService {
 
 
     init(id?:string): Observer { 
-        let isClean = true
-
-        if (this.observer) {
-            isClean = false;
-            this.stop()
-        }
-        
-
-        this.current = {
-            deviceData:{},
-            dataState:{}
-        }
 
         const observer = this.createObserver()
 
-        if (isClean) {
+        const doInit = ()=> {
+            this.current = {
+                deviceData:{},
+                dataState:{}
+            }
+    
+    
             this.observer = observer
             this.state = 'ininitalized'
+   
+            this.activity = this.createActivity(id)
+    
+            const settings = useRouteList().getStartSettings()
+            if (settings?.type==='Route') {
+                const rs = settings as RouteSettings
+                if (rs.showPrev) {
+                    this.initPrevActivities(rs)                
+                }
+                
+            }
+    
+            this.durationCalculator = new ActivityDuration(this.activity)
+    
+            this.getDeviceRide().on('data',this.deviceDataHandler)
+    
+            waitNextTick().then( ()=>{
+                this.emit('initialized')
+            })
+  
+        }
+
+        if (this.observer) {
+            this.stop().then(doInit )
         }
         else {
-            
-            waitNextTick().then( async ()=>{                
-                await sleep(10)
-                this.observer = observer
-                this.state = 'ininitalized'
-            })
-            
+            doInit()
         }
+      
 
-        this.activity = this.createActivity(id)
-
-        const settings = useRouteList().getStartSettings()
-        if (settings?.type==='Route') {
-            const rs = settings as RouteSettings
-            if (rs.showPrev) {
-                this.initPrevActivities(rs)                
-            }
-            
-        }
-
-        this.durationCalculator = new ActivityDuration(this.activity)
-
-        this.getDeviceRide().on('data',this.deviceDataHandler)
 
         return observer
     }
@@ -220,7 +219,7 @@ export class ActivityRideService extends IncyclistService {
     /** 
      * Stops the current activity and finally saves it into the JSON  file
     */
-    stop() {
+    async stop() {
         
         this.stopWorker()
         if (!this.observer || !this.activity)
@@ -247,7 +246,8 @@ export class ActivityRideService extends IncyclistService {
         delete this.tsStart
         
 
-        waitNextTick().then( ()=> {delete this.observer})
+        await waitNextTick()
+        delete this.observer
     }
 
     pause(autoResume:boolean=false) {
@@ -340,7 +340,7 @@ export class ActivityRideService extends IncyclistService {
         return info;
     }
 
-    protected getCurrentValues() {
+    getCurrentValues() {
         const distance = (this.activity?.distance ?? 0) / 1000;
         const speed = (this.current.deviceData?.speed ?? 0);
         const power = (this.current.deviceData?.power ?? 0);
@@ -348,6 +348,10 @@ export class ActivityRideService extends IncyclistService {
         const heartrate = this.current.deviceData?.heartrate;
         const cadence = (this.current.deviceData?.cadence ?? 0);
         const time = this.activity?.time ?? 0;
+        const position = this.current.position??{}
+        const lap = this.current.lap
+        const routeDistance = this.current.routeDistance
+        
 
         let distanceRemaining = (this.getTotalDistance()/1000-distance)
         if (isNaN(distanceRemaining)) distanceRemaining=undefined
@@ -361,7 +365,7 @@ export class ActivityRideService extends IncyclistService {
             )    
         }
 
-        return { distance, time, speed, power, slope, heartrate, cadence, timeRemaining, distanceRemaining };
+        return { position, distance, routeDistance, time, speed, power, slope, heartrate, cadence, timeRemaining, distanceRemaining,lap };
     }
 
     protected getAverageValues() {
@@ -1210,6 +1214,11 @@ export class ActivityRideService extends IncyclistService {
                 
                 this.activity.distance  = this.current.routeDistance-this.activity.startPos
                 this.activity.totalElevation =  this.current.elevationGain
+
+                if (this.current.route.description.isLoop) {
+                    this.current.lap = Math.floor( this.current.routeDistance/this.current.route.distance)+1
+                }
+
                 let list
                 
                 if (this.current.showPrev) {

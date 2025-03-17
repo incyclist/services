@@ -424,8 +424,9 @@ export const getPosition = (route:Route,  props:GetPositionProps) => {
     if (props.latlng!==undefined) {
         return getPointAtLatLng(route, latlng, nearest)
     }
- 
 }
+
+
 
 
 /**
@@ -455,7 +456,7 @@ const getPointAtIndex = (route:Route,idx:number):RoutePoint => {
  * @param nearest  if set to true, it will deliver the point nearest to the routeDistance, otherwise it will only return a point if the point's routeDistance matches exactly the requested one 
  * @returns a copy of the RoutePoint at the given position
  */
-const getPointAtDistance = (route:Route,routeDistance:number, nearest:boolean=true):RoutePoint => {
+export const getPointAtDistance = (route:Route|RouteApiDetail,routeDistance:number, nearest:boolean=true):RoutePoint => {
     const points = route.points
     if (!points)
         return;
