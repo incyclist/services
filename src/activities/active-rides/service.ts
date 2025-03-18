@@ -52,6 +52,7 @@ export class ActiveRidesService extends IncyclistService {
     protected isOnline: boolean
     protected apiState: {busy:boolean, promise?: Promise<ActiveRideEntry[]>} = {busy:false}
     protected mq: ActiveRideListMessageQueue
+    protected prevLogTS:number = 0 
 
     protected readonly activityEventHandlers = {
         update: this.onActivityUpdateEvent.bind(this),
@@ -86,40 +87,6 @@ export class ActiveRidesService extends IncyclistService {
         }
     }
 
-    protected updateCoaches(){
-
-        if (!this.current)
-            return
-
-        const coachesService = this.getCoachesService()
-        const coaches = coachesService.getCoaches()
-
-        if (!coaches?.length) {
-            this.coaches = undefined
-            return
-        }
-            
-
-        this.coaches = coaches.map(c=>{
-            const props = c.getDisplayProperties()
-            const rideEntry:ActiveRideEntry = {
-                id: `coach:${props.name}`,
-                user: {
-                    name:props.name,
-                    id: `coach:${props.name}`,
-                },
-                ride: this.current?.ride,
-                tsLastUpdate: Date.now(),
-                currentRideDistance: c.getProgess(),
-                currentPosition: c.getPosition(),
-                isCoach:true
-            }
-            return rideEntry
-        }) 
-            
-
-    }
-
     get():ActiveRideEntry[] {
 
         this.updateCoaches()
@@ -151,7 +118,8 @@ export class ActiveRidesService extends IncyclistService {
             return
 
         try {
-            this.logEvent({message:'group ride finished', reason:'activity stopped', routeHash:this.getRouteHash()})
+            
+            this.logEvent({message:'group ride finished', reason:'activity stopped', activityId:this.activity?.id,routeHash:this.getRouteHash()})
             this.publishStopEvent()
             this.cleanup()    
         }
@@ -203,7 +171,7 @@ export class ActiveRidesService extends IncyclistService {
                 this.others = this.current ? others.filter( e=> e.sessionId!==this.current.sessionId && e.user?.id!==this.current.user?.id) : others
 
                 if (this.current && this.others?.length>0) {
-                    this.logEvent({message:'group ride started', active:this.others.length+1, routeHash:this.getRouteHash()})                    
+                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash()})                    
                 }
             }
         }
@@ -240,11 +208,35 @@ export class ActiveRidesService extends IncyclistService {
         this.current.tsLastUpdate = Date.now()
         this.current.currentLap = lap
 
-        this.observer.emit('update', this.getDisplayProps() )
+        const displayProps = this.getDisplayProps()
+        this.observer.emit('update', displayProps)
+
+
         this.publishUpdateEvent(payload)
+        this.logNearbyRiders(displayProps)
 
 
     }
+
+    protected  logNearbyRiders(displayProps:ActiveRideListDisplayItem[]) {
+    
+        if (!this.current || !this.others?.length)
+            return
+
+        if (Date.now()-this.prevLogTS<1000)
+            return
+
+        const all = displayProps
+        const logInfo = all.map(r => `${r.name}${r.isUser?'(*)':''}:${r.avatar?.shirt ?? ''}-${((r.distance??0)/1000).toFixed(1)}km-${r.lap ?? ''}-${r.power ?? '?'}W`)
+            .join('|');
+        
+        const cnt = (this.others?.length??0) + 1
+        const event = { message: 'NearbyRiders', activityId:this.activity?.id, title:this.activity?.route?.title, cnt , nearbyRiders: logInfo }               
+        this.logEvent(event);
+        this.prevLogTS = Date.now()
+        
+    }
+    
 
     protected onActivityPaused() {
         try {
@@ -381,13 +373,13 @@ export class ActiveRidesService extends IncyclistService {
 
     }
 
-    getRelativePower  (r:ActiveRideEntry):number { 
+    protected getRelativePower  (r:ActiveRideEntry):number { 
         if ( r.user?.weight && r.currentPower)
             return r.currentPower / r.user.weight;
     }
 
 
-    getLap (r:ActiveRideEntry, overwrite:boolean=false):number { 
+    protected getLap (r:ActiveRideEntry, overwrite:boolean=false):number { 
         const isLap = this.current?.ride?.isLap;
 
         if (!overwrite && r.currentLap)
@@ -401,7 +393,7 @@ export class ActiveRidesService extends IncyclistService {
     }
 
 
-    getDistance (r:ActiveRideEntry):number  {
+    protected getDistance (r:ActiveRideEntry):number  {
 
         const lap = this.getLap(r);
         const route = this.current ? this.current.ride : r.ride;
@@ -605,10 +597,10 @@ export class ActiveRidesService extends IncyclistService {
             this.addActiveRide( entry)
 
             if ( prevActive===0) {
-                this.logEvent({message:'group ride started', active:this.others.length+1, routeHash:this.getRouteHash()})
+                this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash()})
             }
             else {
-                this.logEvent({message:'group ride user joined', active: this.others.length+1 } )
+                this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash() } )
 
             }
 
@@ -695,10 +687,10 @@ export class ActiveRidesService extends IncyclistService {
                 }
 
                 if ( prevActive===0) {
-                    this.logEvent({message:'group ride started', active:this.others.length+1, routeHash:this.getRouteHash()})
+                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash()})
                 }
                 else {
-                    this.logEvent({message:'group ride user joined', active: this.others.length+1 } )
+                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash() } )
     
                 }
 
@@ -744,25 +736,48 @@ export class ActiveRidesService extends IncyclistService {
             this.others.splice(idx,1)
 
         if (this.others.length===0) {
-            this.logEvent({message:'group ride finished', reason:'all riders left', routeHash:this.getRouteHash()})
+            this.logEvent({message:'group ride finished', reason:'all riders left', activityId:this.activity?.id, routeHash:this.getRouteHash()})
         } 
         else {
-            this.logEvent({message:'group ride user left', active: this.others.length+1 } )
+            this.logEvent({message:'group ride user left', active: this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash() } )
         }
 
 
     }
 
+    protected updateCoaches(){
 
+        if (!this.current)
+            return
 
-    onSessionEvent(topic:string, payload) {
+        const coachesService = this.getCoachesService()
+        const coaches = coachesService.getCoaches()
+
+        if (!coaches?.length) {
+            this.coaches = undefined
+            return
+        }
+            
+
+        this.coaches = coaches.map(c=>{
+            const props = c.getDisplayProperties()
+            const rideEntry:ActiveRideEntry = {
+                id: `coach:${props.name}`,
+                user: {
+                    name:props.name,
+                    id: `coach:${props.name}`,
+                },
+                ride: this.current?.ride,
+                tsLastUpdate: Date.now(),
+                currentRideDistance: c.getProgess(),
+                currentPosition: c.getPosition(),
+                isCoach:true
+            }
+            return rideEntry
+        }) 
+            
 
     }
-
-    onGroupRideEvent(topic:string, payload) {
-
-    }
-
 
 
     protected cleanup()  {
@@ -772,6 +787,7 @@ export class ActiveRidesService extends IncyclistService {
         delete this.session
         this.getMessageQueue().unsubscribeAll()
         this.isSubscribed = false
+        this.observer.stop()
 
     }
 
