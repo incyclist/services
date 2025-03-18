@@ -563,8 +563,6 @@ export class ActiveRidesService extends IncyclistService {
         if (session===this.current.sessionId)
             return;
 
-
-        const routeHash = keys[3];       
         const event = keys[4];
 
         const handler = this.activityEventHandlers[event]
