@@ -4,6 +4,7 @@ export type Color = 'yellow' |'red' |'blue' | 'green' | 'purple'| 'orange'| 'hot
 export type Avatar  = {
     helmet: Color,
     shirt:Color,
+    type?: string
 }
 
 export type AvatarOption = {

@@ -1,9 +1,9 @@
 import { AxiosInstance } from "axios";
-import { FitExportActivity } from "../model";
-import { useUserSettings } from "../../../settings";
+import { FitExportActivity } from "../../model";
+import { useUserSettings } from "../../../../settings";
 import { DEFAULT_FIT_API, FITCONVERT_API } from "./consts";
-import { trimTrailingChars } from "../../../utils";
-import { IncyclistRestApiClient } from "../../../api";
+import { trimTrailingChars } from "../../../../utils";
+import { IncyclistRestApiClient } from "../../../../api";
 
 export class IncyclistFitConvertApi { 
 

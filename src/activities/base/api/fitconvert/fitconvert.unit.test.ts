@@ -1,6 +1,6 @@
 import { IncyclistFitConvertApi } from "./fitconvert"
-import { FitExportActivity } from "../model"
-import fitData from '../../../../__tests__/data/activities/fittest.json'
+import { FitExportActivity } from "../../model"
+import fitData from '../../../../../__tests__/data/activities/fittest.json'
 
 const testData:FitExportActivity = fitData 
 

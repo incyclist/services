@@ -45,7 +45,7 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
 }
 
 
-export const getTotalElevation = (activity:ActivityDetails):number => {
+export const getActivityTotalElevation = (activity:ActivityDetails):number => {
     const{logs=[]} = activity
 
     let elevation = 0

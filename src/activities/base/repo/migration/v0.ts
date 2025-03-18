@@ -1,5 +1,5 @@
 import { ActivityInfo } from "../../model";
-import { getTotalElevation } from "../../utils";
+import { getActivityTotalElevation } from "../../utils";
 import { ActivitiesDBMigrator, MigrationResult } from "./types";
 
 export class MigrationV0 extends ActivitiesDBMigrator{
@@ -12,7 +12,7 @@ export class MigrationV0 extends ActivitiesDBMigrator{
         })
         details.name = summary.name
 
-        details.totalElevation = summary.totalElevation = getTotalElevation(details)
+        details.totalElevation = summary.totalElevation = getActivityTotalElevation(details)
         return {summaryChanged: true}
 
     }

@@ -1,5 +1,5 @@
 import { EventLogger } from 'gd-eventlog';
-import { IncyclistFitConvertApi } from '../../api/fitconvert';
+import { IncyclistFitConvertApi } from '../../api/fitconvert/fitconvert';
 import { ActivityDetails, ActivityLogRecord, FitExportActivity, FitLogEntry } from '../../model';
 import { useUserSettings } from '../../../../settings';
 

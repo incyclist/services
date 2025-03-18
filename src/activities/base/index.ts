@@ -1,5 +1,5 @@
 export * from './repo'
 export * from './model'
 export * from './convert'
-export * from './api/fitconvert'
+export * from './api/fitconvert/fitconvert'
 export * from './utils'

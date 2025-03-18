@@ -69,60 +69,81 @@ export class IncyclistUpdatesApi extends IncyclistService{
 
 
     protected async getLatestMacAppVersion():Promise<VersionInfo>{
-        const res = await this._get('/download/app/latest/mac/latest-mac' )
+        try {
+            const res = await this._get('/download/app/latest/mac/latest-mac' )
         
-        // istanbul ignore next
-        if (!res)
-            return;
+            // istanbul ignore next
+            if (!res)
+                return;
 
-        const version = res.data?.version
-        const path = res.data?.path
-        const downloadUrl = `${this.getBaseUrl()}/download/app/latest/mac/${path}`
-        const url = INCYCLIST_URL
+            const version = res.data?.version
+            const path = res.data?.path
+            const downloadUrl = `${this.getBaseUrl()}/download/app/latest/mac/${path}`
+            const url = INCYCLIST_URL
 
-        return {version,path,url,downloadUrl}
+            return {version,path,url,downloadUrl}
+        }
+        catch (err) {
+            if (err.message!=='Network Error') {
+                this.logError(err,'getLatestMacAppVersion')
+            }
+        }
 
     }
 
     protected async getLatestLinuxAppVersion():Promise<VersionInfo>{
+        try {
         
-        const res = await this._get('/download/app/latest/linux/x64/latest-linux.yml' ) 
-        // istanbul ignore next
-        if (!res)
-            return;
+            const res = await this._get('/download/app/latest/linux/x64/latest-linux.yml' ) 
+            // istanbul ignore next
+            if (!res)
+                return;
 
-        const versionMatch = /version: (.*)/.exec(res.data)
-        const version = versionMatch?.length===2 ? versionMatch[1] : undefined
+            const versionMatch = /version: (.*)/.exec(res.data)
+            const version = versionMatch?.length===2 ? versionMatch[1] : undefined
 
-        const pathMatch = /path: (.*)/.exec(res.data)
-        const path = pathMatch?.length===2 ? pathMatch[1] : undefined
-        const downloadUrl = `${this.getBaseUrl()}/download/app/latest/linux/x64/${path}`
-        const url = INCYCLIST_URL
+            const pathMatch = /path: (.*)/.exec(res.data)
+            const path = pathMatch?.length===2 ? pathMatch[1] : undefined
+            const downloadUrl = `${this.getBaseUrl()}/download/app/latest/linux/x64/${path}`
+            const url = INCYCLIST_URL
 
-        return {version,path,url,downloadUrl}
+            return {version,path,url,downloadUrl}
+        }
+        catch (err) {
+            if (err.message!=='Network Error') {
+                this.logError(err,'getLatestLinuxAppVersion')
+            }
+        }
 
 
     }
     protected async getLatestWindowsAppVersion():Promise<VersionInfo>{
-        const res = await this._get('/download/app/latest/win64/RELEASE' ) 
-        // istanbul ignore next
-        if (!res)
-            return;
+        try {
+            const res = await this._get('/download/app/latest/win64/RELEASE' ) 
+            // istanbul ignore next
+            if (!res)
+                return;
 
-    
-        const lines = res.data.split('\n')
-        if (!lines?.length)
-            return;
         
-        const final = lines[lines.length-1]
-        const versionMatch = /.* incyclist-(.*)-full.nupkg/.exec(final)
-        const version = versionMatch?.length===2 ? versionMatch[1] : undefined
+            const lines = res.data.split('\n')
+            if (!lines?.length)
+                return;
+            
+            const final = lines[lines.length-1]
+            const versionMatch = /.* incyclist-(.*)-full.nupkg/.exec(final)
+            const version = versionMatch?.length===2 ? versionMatch[1] : undefined
 
-        const path = `incyclist-${version}-setup.exe`
-        const downloadUrl = `${this.getBaseUrl()}/download/app/latest/win64/${path}`
-        const url = INCYCLIST_URL
+            const path = `incyclist-${version}-setup.exe`
+            const downloadUrl = `${this.getBaseUrl()}/download/app/latest/win64/${path}`
+            const url = INCYCLIST_URL
 
-        return {version,path,url,downloadUrl}
+            return {version,path,url,downloadUrl}
+        }
+        catch (err) {
+            if (err.message!=='Network Error') {
+                this.logError(err,'getLatestWindowsAppVersion')
+            }
+        }
     }
 
 
