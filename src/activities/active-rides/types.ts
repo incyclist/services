@@ -28,8 +28,8 @@ export type ActiveRideBike = {
 export interface ActiveRidePosition {
     lat?: number,
     lng?:number,
-    elevation: number,
-    slope: number
+    elevation?: number,
+    slope?: number
 }
 
 export type ActiveRideEntry = {
@@ -45,7 +45,8 @@ export type ActiveRideEntry = {
     currentSpeed?: number,
     currentPosition?: ActiveRidePosition
     currentLap?: number,
-    isPaused?: boolean
+    isPaused?: boolean,
+    isCoach?: boolean,
 }
 
 export type ActiveRideListMessageHandler = (topic:string, message:ActiveRideListMessage) => void

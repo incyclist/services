@@ -10,12 +10,13 @@ import { waitNextTick } from "../utils";
 import { Coach } from "./coach";
 import { IncyclistAdapterData } from "incyclist-devices/lib/types";
 import { getNextPosition } from "../routes/base/utils/route";
+import { useActivityRide } from "../activities";
 
 @Singleton
 export class CoachesService extends IncyclistService {
 
     protected coaches: Array<Coach> = []
-    protected activeRide: Observer    
+    protected observer: Observer    
     protected isPaused: boolean
 
     constructor() {
@@ -54,7 +55,7 @@ export class CoachesService extends IncyclistService {
         try {
             const idx = this.coaches.findIndex( c => c.id===coach.id)
             if (idx!==-1) {
-                if (this.activeRide) {
+                if (this.observer) {
                     coach.stop()
                 }
                 this.coaches.splice(idx,1)    
@@ -67,16 +68,17 @@ export class CoachesService extends IncyclistService {
 
 
     async startRide():Promise<Observer|null> {
+
         
         try {
-            if (this.activeRide) {
+            if (this.observer) {
                 await this.stopRide()
             }
 
             if (!this.coaches)
                 return null;
 
-            this.activeRide = new Observer()
+            this.observer = new Observer()
             this.isPaused = false
 
             const onDataUpdate = this.onCoachDataUpdate.bind(this)
@@ -86,10 +88,11 @@ export class CoachesService extends IncyclistService {
                 if ( startSettings.type==='Route') {
                     pos = startSettings.startPos
                 }           
-    
-                c.setProgress(c.settings.lead+pos)
+
+                const lead = (isNaN(c.settings?.lead) ? 0 : c.settings?.lead)??0
+                c.setProgress(lead+pos)
                 c.setRiderPosition(pos)
-                this.setCoachPosition(c,c.settings.lead+pos)
+                this.setCoachPosition(c,lead+pos)
     
                 const user = this.userService.get('user',{})
                 
@@ -99,21 +102,28 @@ export class CoachesService extends IncyclistService {
                 c.start(onDataUpdate)
             })        
 
-            waitNextTick().then( ()=>{this.activeRide.emit('started') })            
+            const userRide = useActivityRide().getObserver()
+            userRide.on('data',this.onUserDataUpdate.bind(this))
+            userRide.on('paused',this.pauseRide.bind(this))
+            userRide.on('resumed',this.resumeRide.bind(this))
+            userRide.once('completed',this.stopRide.bind(this))
+
+
+            waitNextTick().then( ()=>{this.observer.emit('started') })            
     
         }
         catch(err) {
             this.logError(err,'startRide')            
         }
 
-        return this.activeRide
+        return this.observer
     }
 
     async stopRide():Promise<void> {
         try {
             this.coaches.forEach( c=> {c.stop()})
             this.isPaused = false;
-            delete this.activeRide
+            delete this.observer
         }
         catch(err) {
             this.logError(err,'stopRide')            
@@ -152,6 +162,15 @@ export class CoachesService extends IncyclistService {
 
     }
 
+    getObserver() {
+        return this.observer
+    }
+
+    protected onUserDataUpdate(data) {
+        this.updateRiderPosition(data.routeDistance)
+    }
+
+
     protected onCoachDataUpdate(coach:Coach, data:IncyclistAdapterData) {
 
         if (this.isPaused)
@@ -179,7 +198,7 @@ export class CoachesService extends IncyclistService {
 
 
     protected setCoachPosition(coach: Coach, distance: number) {
-        if (!this.activeRide)
+        if (!this.observer)
             return;
 
         const startSettings = this.routesService.getStartSettings() as RouteSettings

@@ -2,6 +2,7 @@ import { useAvatars } from "../../avatars";
 import { Injectable } from "../../base/decorators";
 import { IncyclistService } from "../../base/service";
 import { Observer, Singleton } from "../../base/types";
+import { CoachesService, getCoachesService } from "../../coaches";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../monitoring";
 import { RouteListService, useRouteList } from "../../routes";
 import { UserSettingsService, useUserSettings } from "../../settings";
@@ -85,7 +86,43 @@ export class ActiveRidesService extends IncyclistService {
         }
     }
 
+    protected updateCoaches(){
+
+        if (!this.current)
+            return
+
+        const coachesService = this.getCoachesService()
+        const coaches = coachesService.getCoaches()
+
+        if (!coaches?.length) {
+            this.coaches = undefined
+            return
+        }
+            
+
+        this.coaches = coaches.map(c=>{
+            const props = c.getDisplayProperties()
+            const rideEntry:ActiveRideEntry = {
+                id: `coach:${props.name}`,
+                user: {
+                    name:props.name,
+                    id: `coach:${props.name}`,
+                },
+                ride: this.current?.ride,
+                tsLastUpdate: Date.now(),
+                currentRideDistance: c.getProgess(),
+                currentPosition: c.getPosition(),
+                isCoach:true
+            }
+            return rideEntry
+        }) 
+            
+
+    }
+
     get():ActiveRideEntry[] {
+
+        this.updateCoaches()
         try {
             if ( !this.current || (!this.others && !this.coaches))
                 return []
@@ -257,7 +294,7 @@ export class ActiveRidesService extends IncyclistService {
 
     protected getDisplayProps():ActiveRideListDisplayItem[] {
 
-        // TODO: add sorting, avatar info, .....
+        
         const items =  this.get()
         if (!items.length)
             return []
@@ -336,7 +373,11 @@ export class ActiveRidesService extends IncyclistService {
         const avatars = useAvatars()
 
         const id = item.sessionId===this.session ? 'current' : item.user?.id??item.sessionId
-        return avatars.get(id)        
+        const avatar =  avatars.get(id)        
+        if (item.isCoach)
+             avatar.type='coach'
+        return avatar
+        
 
     }
 
@@ -757,6 +798,10 @@ export class ActiveRidesService extends IncyclistService {
     @Injectable
     protected getRouteList ():RouteListService {
         return useRouteList()
+    }
+
+    @Injectable getCoachesService(): CoachesService {
+        return getCoachesService()
     }
 
     protected getMessageQueue ():ActiveRideListMessageQueue {
