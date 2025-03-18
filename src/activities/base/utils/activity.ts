@@ -146,6 +146,11 @@ export class Activity implements ActivityInfo{
         let success = false;
         let error
 
+        if (!this.details) {
+            this.logger.logEvent({message:'trying to export activity with no details', activity:this.id})
+            return false
+        }
+
         this.markExporting(format,true)
         if (observer) {
             observer.emit('export',{status:'started',format})
@@ -164,7 +169,7 @@ export class Activity implements ActivityInfo{
             success = true
         }
         catch(err) {
-            this.logError(err,'export')
+            this.logError(err,'export',{activity:this.id,format})
             error = err.message
         }
 
@@ -316,8 +321,8 @@ export class Activity implements ActivityInfo{
         return this.getRepo().save(this.info,withDetails)        
     }
 
-    protected logError(err:Error, fn:string) {
-        this.logger.logEvent({message:'error', error:err.message, fn, stack:err.stack})
+    protected logError(err:Error, fn:string,context?:object) {
+        this.logger.logEvent({message:'error', error:err.message, fn, stack:err.stack,...(context??{})})
     }
 
     // 
