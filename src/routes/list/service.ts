@@ -1112,7 +1112,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 const target = [{route,added:false}]
                 await this.api.loadDetails(target)
             }
+        }
 
+        // we could not load details, so just return
+        if (!route.details) {
+            return;
         }
 
         // fix: legacy items might have selectableSegments in root instead of in video
@@ -1125,7 +1129,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     protected verifyRouteCountry(route: Route) {
-        if (route.details && !route.description.country) {
+        if (route.details && route.description && !route.description.country) {
             route.updateCountryFromPoints()
                 .then(() => {
                     this.db.save(route, false);
