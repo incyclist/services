@@ -354,7 +354,7 @@ export class WorkoutRide extends IncyclistService{
             const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts,true);
-            
+
             const completed = limits.duration-limits.remaining
 
             const stepBusyLmit = Math.min( 15, limits.duration/2)
@@ -386,7 +386,6 @@ export class WorkoutRide extends IncyclistService{
                 }    
             }
 
-            console.log('~~~ backward',ts,diff,jumpType,limits?.step, target)
             this.update()
             this.observer.emit('backward',ts,diff,jumpType,limits?.step, target )
 
