@@ -9,3 +9,10 @@ export type ActivitySummaryDisplayProperties = {
     showMap?: boolean
     preview?: string
 }
+
+export type ActivityUpdate = {
+    time: number, 
+    speed: number, 
+    routeDistance: number, 
+    distance: number
+}

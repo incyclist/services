@@ -99,10 +99,11 @@ export class Segment extends Step implements SegmentDefinition {
     }
 
     getLimits(ts,includeStepInfo=false):CurrentStep {
+
         const step = this.getStep(ts);
         if ( step===undefined) 
             return undefined;
-        
+
         const segTime = ts-this.getStart();
         const stepDuration = this.getSingleDuration();
 
@@ -115,7 +116,12 @@ export class Segment extends Step implements SegmentDefinition {
             part+=stepDuration;
         
         
-        return step.getLimits(part,includeStepInfo);
+        const res = step.getLimits(part,includeStepInfo);
+        const stepStart = res.start
+        res.start = Math.floor(segTime/stepDuration)*stepDuration+stepStart;
+
+        return res
+
     }
 
     protected prepareNext(json:StepDefinition|SegmentDefinition) {

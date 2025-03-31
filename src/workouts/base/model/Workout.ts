@@ -92,6 +92,7 @@ export class Workout extends Segment implements WorkoutDefinition {
             }
         }
     }
+
 }
 
 export class Plan implements PlanDefinition {

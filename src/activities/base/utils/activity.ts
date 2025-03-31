@@ -146,11 +146,6 @@ export class Activity implements ActivityInfo{
         let success = false;
         let error
 
-        if (!this.details) {
-            this.logger.logEvent({message:'trying to export activity with no details', activity:this.id})
-            return false
-        }
-
         this.markExporting(format,true)
         if (observer) {
             observer.emit('export',{status:'started',format})
@@ -169,7 +164,7 @@ export class Activity implements ActivityInfo{
             success = true
         }
         catch(err) {
-            this.logError(err,'export',{activity:this.id,format})
+            this.logError(err,'export',{activity:this.id,hasDetails:!!this.details,format})
             error = err.message
         }
 

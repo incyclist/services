@@ -208,6 +208,7 @@ export class EPMParser extends XMLParser{
         let prevSpeed ;
         let prevTime ;
         let videoIdx = 0;
+
         route.points.forEach ( (p,idx) => {
             if (idx===0) {
                 p.videoSpeed = route.video.mappings[0].videoSpeed;

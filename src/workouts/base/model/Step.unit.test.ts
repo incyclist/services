@@ -294,8 +294,8 @@ describe ( 'Step' ,() => {
             const r4 = step.getLimits( 31);
 
             expect(r1).toBeUndefined();
-            expect(r2).toEqual({power: {min:0,max:100,type:'watt'}, cadence:{min:0, max:90}, hrm:{max:130},text:'',work:false,duration:20,remaining:20});
-            expect(r3).toEqual({power: {min:0,max:100,type:'watt'}, cadence:{min:0, max:90}, hrm:{max:130},text:'',work:false,duration:20,remaining:0});
+            expect(r2).toEqual({start:10, power: {min:0,max:100,type:'watt'}, cadence:{min:0, max:90}, hrm:{max:130},text:'',work:false,duration:20,remaining:20});
+            expect(r3).toEqual({start:10, power: {min:0,max:100,type:'watt'}, cadence:{min:0, max:90}, hrm:{max:130},text:'',work:false,duration:20,remaining:0});
             expect(r4).toBeUndefined();
         })
 
@@ -308,10 +308,10 @@ describe ( 'Step' ,() => {
             const r5 = step.getLimits( 15);
 
             expect(r1).toBeUndefined();
-            expect(r2).toEqual({power: {min:0,max:0,type:'watt'}, cadence:{min:0, max:0}, hrm:{min:30,max:30},text:'',work:false,duration:20,remaining:20});
-            expect(r3).toEqual({power: {min:100,max:100,type:'watt'}, cadence:{min:0, max:90}, hrm:{min:30,max:130},text:'',work:false,duration:20,remaining:0});
+            expect(r2).toEqual({start:10, power: {min:0,max:0,type:'watt'}, cadence:{min:0, max:0}, hrm:{min:30,max:30},text:'',work:false,duration:20,remaining:20});
+            expect(r3).toEqual({start:10, power: {min:100,max:100,type:'watt'}, cadence:{min:0, max:90}, hrm:{min:30,max:130},text:'',work:false,duration:20,remaining:0});
             expect(r4).toBeUndefined();
-            expect(r5).toEqual({power: {min:25,max:25,type:'watt'}, cadence:{min:0, max:90/4}, hrm:{min:30, max:55},text:'',work:false,duration:20,remaining:15});
+            expect(r5).toEqual({start:10, power: {min:25,max:25,type:'watt'}, cadence:{min:0, max:90/4}, hrm:{min:30, max:55},text:'',work:false,duration:20,remaining:15});
         })
 
         test( 'incremental: min-only Power + Cadence + Hrm', ()=> {
@@ -323,10 +323,10 @@ describe ( 'Step' ,() => {
             const r5 = step.getLimits( 15);
 
             expect(r1).toBeUndefined();
-            expect(r2).toEqual({power: {min:11,type:'watt'}, cadence:{min:12}, hrm:{min:130},text:'',work:false,duration:20, remaining:20});
-            expect(r3).toEqual({power: {min:11,type:'watt'}, cadence:{min:12}, hrm:{min:130},text:'',work:false,duration:20, remaining:0});
+            expect(r2).toEqual({start:10, power: {min:11,type:'watt'}, cadence:{min:12}, hrm:{min:130},text:'',work:false,duration:20, remaining:20});
+            expect(r3).toEqual({start:10, power: {min:11,type:'watt'}, cadence:{min:12}, hrm:{min:130},text:'',work:false,duration:20, remaining:0});
             expect(r4).toBeUndefined();
-            expect(r5).toEqual({power: {min:11,type:'watt'}, cadence:{min:12}, hrm:{min:130},text:'',work:false,duration:20, remaining:15});
+            expect(r5).toEqual({start:10,power: {min:11,type:'watt'}, cadence:{min:12}, hrm:{min:130},text:'',work:false,duration:20, remaining:15});
         })
 
         test( 'incremental: max-only Power + Cadence + Hrm', ()=> {
@@ -338,19 +338,19 @@ describe ( 'Step' ,() => {
             const r5 = step.getLimits( 15);
 
             expect(r1).toBeUndefined();
-            expect(r2).toEqual({power: {max:11,type:'watt'}, cadence:{max:12}, hrm:{max:130},text:'',work:false,duration:20, remaining:20});
-            expect(r3).toEqual({power: {max:11,type:'watt'}, cadence:{max:12}, hrm:{max:130},text:'',work:false,duration:20, remaining:0});
+            expect(r2).toEqual({start:10,power: {max:11,type:'watt'}, cadence:{max:12}, hrm:{max:130},text:'',work:false,duration:20, remaining:20});
+            expect(r3).toEqual({start:10,power: {max:11,type:'watt'}, cadence:{max:12}, hrm:{max:130},text:'',work:false,duration:20, remaining:0});
             expect(r4).toBeUndefined();
-            expect(r5).toEqual({power: {max:11,type:'watt'}, cadence:{max:12}, hrm:{max:130},text:'',work:false,duration:20, remaining:15});
+            expect(r5).toEqual({start:10,power: {max:11,type:'watt'}, cadence:{max:12}, hrm:{max:130},text:'',work:false,duration:20, remaining:15});
         })
 
         test( 'cooldown: power,cadence,hrm', ()=> {
             const step = new Step( {steady:false, cooldown:true, start:10, end:30, power: {min:0, max:100}, cadence:{min:50,max: 150}, hrm: {min:100, max:200}})
 
             expect(step.getLimits( 9)).toBeUndefined();
-            expect(step.getLimits( 10)).toEqual({power: {min:100,max:100,type:'watt'}, cadence:{min:50,max:150}, hrm:{min:100,max:200},text:'',work:false,duration:20, remaining:20});
-            expect(step.getLimits( 20)).toEqual({power: {min:50,max:50,type:'watt'}, cadence:{min:50,max:100}, hrm:{min:100,max:150},text:'',work:false,duration:20, remaining:10});
-            expect(step.getLimits( 30)).toEqual({power: {min:0,max:0,type:'watt'}, cadence:{min:50,max:50}, hrm:{min:100,max:100},text:'',work:false,duration:20, remaining:0});
+            expect(step.getLimits( 10)).toEqual({start:10,power: {min:100,max:100,type:'watt'}, cadence:{min:50,max:150}, hrm:{min:100,max:200},text:'',work:false,duration:20, remaining:20});
+            expect(step.getLimits( 20)).toEqual({start:10,power: {min:50,max:50,type:'watt'}, cadence:{min:50,max:100}, hrm:{min:100,max:150},text:'',work:false,duration:20, remaining:10});
+            expect(step.getLimits( 30)).toEqual({start:10,power: {min:0,max:0,type:'watt'}, cadence:{min:50,max:50}, hrm:{min:100,max:100},text:'',work:false,duration:20, remaining:0});
             expect(step.getLimits( 31)).toBeUndefined();
         })
 
@@ -358,9 +358,9 @@ describe ( 'Step' ,() => {
             const step = new Step( {steady:false, cooldown:true, start:10, end:30, power: {min:20}, cadence:{min:50}, hrm: {min:100}})
 
             expect(step.getLimits( 9)).toBeUndefined();
-            expect(step.getLimits( 10)).toEqual({power: {min:20,type:'watt'}, cadence:{min:50}, hrm:{min:100},text:'',work:false,duration:20, remaining:20});
-            expect(step.getLimits( 20)).toEqual({power: {min:20,type:'watt'}, cadence:{min:50}, hrm:{min:100},text:'',work:false,duration:20, remaining:10});
-            expect(step.getLimits( 30)).toEqual({power: {min:20,type:'watt'}, cadence:{min:50}, hrm:{min:100},text:'',work:false,duration:20, remaining:0});
+            expect(step.getLimits( 10)).toEqual({start:10,power: {min:20,type:'watt'}, cadence:{min:50}, hrm:{min:100},text:'',work:false,duration:20, remaining:20});
+            expect(step.getLimits( 20)).toEqual({start:10,power: {min:20,type:'watt'}, cadence:{min:50}, hrm:{min:100},text:'',work:false,duration:20, remaining:10});
+            expect(step.getLimits( 30)).toEqual({start:10,power: {min:20,type:'watt'}, cadence:{min:50}, hrm:{min:100},text:'',work:false,duration:20, remaining:0});
             expect(step.getLimits( 31)).toBeUndefined();
         })
 

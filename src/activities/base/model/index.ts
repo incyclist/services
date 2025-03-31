@@ -1,4 +1,5 @@
 import { RoutePoint } from "../../../routes/base/types"
+import { Workout } from "../../../workouts"
 
 export const DEFAULT_ACTIVITY_TITLE = 'Incyclist Ride'
 
@@ -55,7 +56,8 @@ export type ActivityAppLinks = {
 
 export type ScreenShotInfo = {
     fileName: string;
-    position: RoutePoint;
+    position?: RoutePoint;
+    time?:number,
     isHighlight?: boolean
 }
 
@@ -120,7 +122,7 @@ export type LapSummary  ={
     rideTime: number
 }
 
-export type ActivityRouteType = 'Free-Ride'|'GPX'|'Video'
+export type ActivityRouteType = 'Free-Ride'|'GPX'|'Video'|'None'
 
 export type FitLogEntry = {
     time?: number
@@ -257,6 +259,8 @@ export interface ActivityDetails  {
 
     /** information about synchronizations to connected apps */
     links?: ActivityAppLinks
+
+    workout?: Workout
 }
 
 export type ActivityLogRecord = {

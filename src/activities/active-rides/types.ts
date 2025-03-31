@@ -1,5 +1,5 @@
 export type Gender = 'M' | 'F' | 'X'
-export type RideType = 'follow route' |  'video' | 'free ride'
+export type ActiveRideRouteType = 'follow route' |  'video' | 'free ride'
 
 export type ActiveRideUser = {
     id: string,
@@ -12,7 +12,7 @@ export type ActiveRideUser = {
 export type ActiveRideRoute = {
     title: string,
     activityId?: string,
-    type: RideType
+    type: ActiveRideRouteType
     startPos: number,
     realityFactor: number
     isLap: boolean,

@@ -600,7 +600,6 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     private initCyclingMode(ai: AdapterRideInfo, forceErgMode: any) {
-        
         let bike,mode,settings;
 
         if (ai.adapter?.isControllable()) {
@@ -1321,6 +1320,7 @@ export class DeviceRideService  extends IncyclistService{
         else {
             adapter = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control))?.adapter
         }
+
         if (adapter)
             return adapter.getCyclingMode()
     }
@@ -1339,6 +1339,7 @@ export class DeviceRideService  extends IncyclistService{
 
 
     async toggleCyclingMode() {
+
         if (!this.isToggleEnabled())
             return
         const {adapter} = this.getControlAdapter()??{}; 
@@ -1351,18 +1352,25 @@ export class DeviceRideService  extends IncyclistService{
         if (!currentMode)
             return
 
+        let mode
+        let request
         if (!currentMode.isERG())  {
             const power = adapter.getData().power
             this.enforceERG()
-            adapter.sendUpdate({targetPower:power})
+            request = {targetPower:power}
+            adapter.sendUpdate(request)
+            mode  = 'ERG'
         }
         else  {
             const slope = adapter.getData().slope
             adapter.setCyclingMode(targetMode)
             this.resetCyclingMode(false) 
-            adapter.sendUpdate({slope})
-
+            request = {slope}
+            adapter.sendUpdate(request)
+            mode='SIM'
         }
+
+        this.emit('cycling-mode-toggle',mode,request)
         
     }
 

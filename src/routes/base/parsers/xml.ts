@@ -293,7 +293,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                     }
                     else {
 
-                        if (mapping.frame == prev.frame || mapping.distance===prev.distance)
+                        if (mapping.frame == prev.frame || (mapping.distance !== undefined && mapping.distance===prev.distance))
                             return;
 
                         const time = addMapping(mapping, prev, idx, startFrame, prevTime);
@@ -369,7 +369,6 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             if (i>0) {
                 const prev = positions[i-1]
                 if (prev.distance===pos.distance) {
-                    console.log('# found duplicate position')
                     return
                 }
             }

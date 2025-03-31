@@ -103,7 +103,11 @@ export class Step implements StepDefinition {
     */
     getLimits( ts:number,includeStepInfo:boolean=false):CurrentStep {
         
-        const rv = (limits) => this.getRemainder(limits, includeStepInfo)
+        const rv = (limits) => {
+            const l = this.getRemainder(limits, includeStepInfo)
+            l.start = this.start
+            return l
+        }
 
         if  (ts>=this.start && ts<=this.end) {
             const duration = this.duration;
