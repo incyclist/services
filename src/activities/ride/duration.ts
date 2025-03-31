@@ -108,6 +108,8 @@ export class ActivityDuration {
     }
 
     private checkIfCacheIsInvalid(routePos: number, route: Route) {
+        if (!route)
+            return true
         if ((routePos > route.distance /* new lap  */) ||
             (this.cache && this.cache.totalDistance !== route.distance /* route has changed*/)) {
             delete this.cache;
