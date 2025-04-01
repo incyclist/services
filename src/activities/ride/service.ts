@@ -533,7 +533,7 @@ export class ActivityRideService extends IncyclistService {
 
 
 
-    addSceenshot( screenshot: ScreenShotInfo) {
+    addScreenshot( screenshot: ScreenShotInfo) {
         if (!this.activity)
             return;
 

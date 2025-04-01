@@ -867,7 +867,7 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
         // TODO: move to mode specifc function ( for GPX we should also add position)
         const time = this.activity.time 
-        this.getActivityRide().addSceenshot({fileName,time})
+        this.getActivityRide().addScreenshot({fileName,time})
         
     }
 
