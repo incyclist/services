@@ -3,6 +3,8 @@ import {Activity, ActivityList, TrainingCenterDatabase, TrackPoint,ActivityLap,H
 import { IActivityConverter } from '../types'
 import { ActivityDetails } from '../../model'
 import { useActivityRide } from '../../../ride'
+import { TcxLapMarker } from './types'
+import { Step } from '../../../../workouts'
 
 /**
  * Class responsible for converting activity data into TCX (Training Center XML) format.
@@ -49,7 +51,46 @@ export class TcxConverter implements IActivityConverter{
         }
     }
 
-    protected createLaps(startTime: Date, activity: ActivityDetails, trackPoints: TrackPoint[]) {
+    protected createLaps(startTime: Date, activity: ActivityDetails, trackPoints: TrackPoint[]):ActivityLap[] {
+
+        if (!activity.workout && !activity.laps)
+            return this.createActivityLap(startTime, activity, trackPoints)
+
+        // activity has workout
+        if (activity.workout) {
+            const lapMarkers = this.getWorkoutLapMarkers(activity)
+            const laps = []
+            lapMarkers.forEach( marker => {
+                const {start,end,intensity} = marker
+                const lapStart = new Date(startTime.valueOf()+start*1000)
+                const lapEnd   = new Date(startTime.valueOf()+end*1000)
+
+                const points = trackPoints.filter( p=> p.Time>=lapStart && p.Time<lapEnd)
+
+                // @build sum of points[].distance
+                const DistanceMeters = points.reduce((acc, current) => acc + current.DistanceMeters, 0);
+                const lap:ActivityLap = new ActivityLap( lapStart, {
+                    Calories:0,
+                    DistanceMeters,
+                    Intensity:intensity??'Active',
+                    TotalTimeSeconds: end-start,
+                    TriggerMethod:'Time',                   
+                    Track: new Track({trackPoints:points})
+                })
+                laps.push(lap)
+            })
+            return laps
+        }
+
+
+        // activity has laps
+        
+
+        return []
+    }
+
+    protected createActivityLap(startTime: Date, activity: ActivityDetails, trackPoints: TrackPoint[]) {
+        
         const lap = new ActivityLap(startTime, {
             Calories: 0,
             DistanceMeters: activity.distance,
@@ -64,6 +105,34 @@ export class TcxConverter implements IActivityConverter{
             Track: new Track({ trackPoints })
         })
         return [lap]
+    }
+
+    protected getWorkoutLapMarkers(activity:ActivityDetails):Array<TcxLapMarker> {
+        const activityDuration = activity.time
+        const steps = (activity.workout?.steps??[]).filter( s=>s.start<activityDuration)
+
+
+        const markers =  steps.map(s=> this.createLapMarkerFromStep(s, activityDuration))
+        if (!markers.length) {
+            return [{start:0,end:activityDuration}]
+        }
+        const final = steps[steps.length-1]
+        if (final.end<activityDuration) {
+            markers.push( {start:final.end, end:activityDuration})
+        }
+        return markers        
+    }
+
+
+    protected createLapMarkerFromStep(s: Step, activityDuration: number) {
+        const marker: TcxLapMarker = { start: s.start, end: Math.min(s.end, activityDuration) }
+        if (s.work)
+            marker.intensity = 'Active'
+        if (s.steady && !s.work)
+            marker.intensity = 'Resting'
+        if (s.cooldown)
+            marker.intensity = 'Resting'
+        return marker
     }
 
     protected creatTrackPoints(activity: ActivityDetails, startTime: Date) {

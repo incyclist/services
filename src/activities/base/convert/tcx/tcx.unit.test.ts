@@ -3,6 +3,7 @@ import { ActivityDetails } from '../../model';
 import {TcxConverter} from './tcx';
 
 import testData from '../../../.././../__tests__/data/activities/vancouver.json'
+import workoutData from '../../../.././../__tests__/data/activities/with_workout.json'
 import clone from '../../../../utils/clone';
 import { parseXml } from '../../../../utils/xml';
 
@@ -82,6 +83,14 @@ describe('TCXConverter',()=> {
 
         // all records have a position
         expect(points.find(p=>p.Position===undefined)).toBeUndefined()
+    })
+
+    test('activity with workout, should add workout steps as laps',async ()=>{
+        const activity = workoutData as unknown as ActivityDetails
+        const converter = new TcxConverter()
+        
+        const result = await converter.convert(activity);
+        expect(result).toMatchSnapshot();        
     })
 
 
