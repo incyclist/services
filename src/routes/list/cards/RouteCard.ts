@@ -538,7 +538,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             getRouteList().emitLists('updated',{log:true,source});
             deleted =true;   
         }
-        catch(err) {
+        catch {
             deleted =  false
         }
         finally {
@@ -816,7 +816,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         observer.on('conversion.progress', (progress) => {
             getRouteList().logEvent({ message: 'video conversion progress', progress });
-            this.convertObserver.emit('progress', progress.percent || progress.completed);
+            this.convertObserver.emit('progress', progress.percent ?? progress.completed);
         });
 
         observer.on('conversion.done', (url: string) => {

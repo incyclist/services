@@ -1218,7 +1218,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 routesApi.getRoutePreview(descr.originalName||descr.title)
             ])
 
-            const previewUrl = (res[0].status==='fulfilled' ? res[0].value:undefined) || 
+            const previewUrl = (res[0].status==='fulfilled' ? res[0].value:undefined) ?? 
                                (res[1].status==='fulfilled' ? res[1].value:undefined)
             if (previewUrl) {
                 descr.previewUrl = previewUrl

@@ -101,9 +101,9 @@ export const updateSlopes = (points: Array<RoutePoint>, validateOnly=false):void
 
 const updateSlopePrevPoint = (point: RoutePoint, prevPoint: any, points: RoutePoint[]) => {
     
-    if (point.distance === undefined) {
-        point.distance = geo.distanceBetween(prevPoint, point);
-    }
+    
+    point.distance = point.distance ?? geo.distanceBetween(prevPoint, point);
+    
     if (!point.isCut)
         prevPoint.slope = (point.elevation - prevPoint.elevation) / point.distance * 100;
     else if (prevPoint.slope === undefined || prevPoint.slope > 50) {
@@ -472,13 +472,13 @@ export const getHeading  = ( route:Route, point: RoutePoint) => {
 
         const points = route.points
         
-        if (point.cnt===undefined)
-            point.cnt = points.indexOf(point)
+        
+        point.cnt = point.cnt??points.indexOf(point)
         
         if (point.cnt===undefined || points.length<2)
             return 180;
         
-        var p1,p2;
+        let p1,p2;
 
         if ( point.cnt===points.length-1) {
             p1 = points[point.cnt-1];
@@ -717,9 +717,8 @@ export const createFromJson = (r:LegacyRouteApiDetail) => {
 }
 
 const addMissingIndexes =(points:Array<RoutePoint>) => {
-    points.forEach( (p,idx) =>{
-        if (p.cnt===undefined)
-            p.cnt=idx    
+    points.forEach( (p,idx) =>{        
+        p.cnt=p.cnt??idx    
     })
 
 }

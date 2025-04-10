@@ -8,7 +8,6 @@ import { Position, Altitude } from './types';
 import { getReferencedFileInfo, parseInformations } from './utils';
 import { getFileName } from '../../../utils';
 
-let _logger;
 
 export type  XmlParserContext = {
    fileInfo: FileInfo,
@@ -19,6 +18,7 @@ export type  XmlParserContext = {
 
 export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
+    protected logger?: EventLogger
 
     async import(file: FileInfo, data?: XmlJSON): Promise<ParseResult<RouteApiDetail>> {       
         const xml = await this.getData(file,data)
@@ -42,6 +42,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         const scheme = this.getSupportedSheme()
         return json[scheme]!==undefined && json[scheme]!==null
     }
+
 
     async getData(file:FileInfo, data?:XmlJSON):Promise<XmlJSON> {
         if (data)
@@ -84,7 +85,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         const countryPrefix = this.getCountryPrefix(name)
         if (countryPrefix) {
             name = name.substring(3)
-            country = country || countryPrefix
+            country = country??countryPrefix
         }
 
         let previewUrl = data['previewURL']
@@ -94,7 +95,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         context.route= {
             title: name,
             originalName,
-            localizedTitle: data['title'] || name,
+            localizedTitle: data['title']??name,
             country: country,
             id: data['id'],
             previewUrl,
@@ -242,7 +243,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
         if (mappings) {
 
-            const startFrame = parseInt(data['start-frame'] || 0);
+            const startFrame = parseInt(data['start-frame'] ?? 0);
             const endFrame = data['end-frame'] ? parseInt(data['end-frame']) : undefined;
 
             try {
@@ -250,13 +251,13 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                 let prevTime = 0;
     
                 const getDistance = (mapping, prevMapping, idx?) => {
-                    const prevDist = prevMapping.distance || 0;
-                    const prevFrame = prevMapping.frame || startFrame;
+                    const prevDist = prevMapping.distance ?? 0;
+                    const prevFrame = prevMapping.frame ?? startFrame;
                     if (mapping.distance !== undefined)
                         return mapping.distance;
                     if (prev.dpf !== undefined && mapping.frame !== undefined)
                         return prev.dpf * (mapping.frame - prevFrame) + prevDist;
-                    throw new Error(`mapping #${idx || 'total'}: one of [distance], [dpf or frame] is missing: <mapping ${toXml(mapping)}/>`);
+                    throw new Error(`mapping #${idx ?? 'total'}: one of [distance], [dpf or frame] is missing: <mapping ${toXml(mapping)}/>`);
                 };
 
                 const initMapping =(mapping) =>{
@@ -272,7 +273,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                     
                     route.distance = mapping.distance = distance;
         
-                    const frames = mapping.frame - (prev.frame || startFrame);
+                    const frames = mapping.frame - (prev.frame ?? startFrame);
                     const videoSpeed = (prev.distance === undefined && mapping.dpf !== undefined) ? 3.6 * mapping.dpf * route.video.framerate : 3.6 * (distance - prev.distance) / frames * route.video.framerate;
                     const time = prevTime + frames / route.video.framerate;
         
@@ -312,8 +313,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
             }
             catch (err) {
-                if (!_logger) _logger = new EventLogger('XmlParser');
-                _logger.logEvent({ message: 'xml details', error: err.message, mappings });
+                this.getLogger().logEvent({ message: 'xml details', error: err.message, mappings });
                 throw new Error('Could not parse XML File');
             }
 
@@ -394,6 +394,13 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
       
     }    
     
+    protected getLogger():EventLogger {
+        if (!this.logger)
+            this.logger = new EventLogger('XML Parser')
+        return this.logger
+
+    }
+
 
 
 }

@@ -315,7 +315,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
             
             deleted =true;   
         }
-        catch(err) {
+        catch {
             deleted =  false
         }
         finally {

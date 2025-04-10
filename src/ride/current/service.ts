@@ -6,7 +6,7 @@ import { Segment, Step, useWorkoutList, useWorkoutRide, Workout } from "../../wo
 import { useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { CurrentRideDeviceInfo, CurrentRideState, IRideModeService, RideType } from "../base";
-import { AdapterStateInfo, ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
+import { AdapterStateInfo, useDeviceConfiguration, useDeviceRide } from "../../devices";
 import { useUserSettings } from "../../settings";
 import { CyclingMode, DeviceData, IncyclistCapability, UpdateRequest } from "incyclist-devices";
 import { formatDateTime, getLegacyInterface, waitNextTick } from "../../utils";
@@ -57,9 +57,11 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
                 this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
                 this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
-                // this.displayService.on('prepare-next-video',this.onPrepareNextVideo.bind(this))
-                // this.displayService.on('next-video',this.onNextVideo.bind(this))
-                // this.displayService.on('route-changed',this.onPrepareNextVideo.bind(this))
+                /* TODO:
+                this.displayService.on('prepare-next-video',this.onPrepareNextVideo.bind(this))
+                this.displayService.on('next-video',this.onNextVideo.bind(this))
+                this.displayService.on('route-changed',this.onPrepareNextVideo.bind(this))
+                */
 
 
             }
@@ -559,7 +561,6 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
     protected onWorkoutStopped() {
 
-        const currentStep = this.getWorkoutRide().getCurrentLimits()
         const time = this.activity.time
 
         this.actualWorkout?.steps?.forEach( s=> {
@@ -717,7 +718,7 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
     }
 
     protected createActualWorkout() {
-        const {type,id,name,steps,repeat} = this.plannedWorkout
+        const {type,id,name} = this.plannedWorkout
         
         const workout = new Workout({type,id,name})
 
