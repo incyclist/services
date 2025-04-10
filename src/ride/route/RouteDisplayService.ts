@@ -159,9 +159,9 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected fromLapPoint(position:LapPoint):CurrentPosition {
-        const totalDistance = position.routeDistance
-        const routeDistance = position.totalDistance??0
+        const routeDistance = position.totalDistance??0       
         const lapDistance = position.routeDistance ?? (position.totalDistance??0)%this.route.description.distance
+
         const lap = position.lap??1
 
         const currentPosition =  { ...position, lap,routeDistance,lapDistance}

@@ -58,9 +58,12 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
                 this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
                 this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
                 /* TODO:
-                this.displayService.on('prepare-next-video',this.onPrepareNextVideo.bind(this))
-                this.displayService.on('next-video',this.onNextVideo.bind(this))
-                this.displayService.on('route-changed',this.onPrepareNextVideo.bind(this))
+
+                    this.displayService.on('prepare-next-video',this.onPrepareNextVideo.bind(this))
+                    this.displayService.on('next-video',this.onNextVideo.bind(this))
+                    this.displayService.on('route-changed',this.onPrepareNextVideo.bind(this))
+
+                    
                 */
 
 
@@ -299,26 +302,31 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
     }
 
     hideAllOverlays() {
-
+        // TODO
     }
 
     hideUpcomingElevation() {
+        // TODO
 
     }
 
     hideTotalElevation() {
+        // TODO
 
     }
 
     hideMap() {
+        // TODO
         
     }
 
     hideLeftSideView() {
+        // TODO
 
     }
     
     hideRightSideView() {
+        // TODO
         
     }
 
