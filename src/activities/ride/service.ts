@@ -322,7 +322,7 @@ export class ActivityRideService extends IncyclistService {
     
             const info = this.buildDashboardInfo(currentValues, avgMaxStats, display);
             
-            this.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value||''}:${i.data[1]?.value||''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
+            this.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value??''}:${i.data[1]?.value??''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
             return info
     
         }
@@ -517,7 +517,7 @@ export class ActivityRideService extends IncyclistService {
                 this.isSaveDone = true;
 
             }
-            catch(err) {
+            catch {
     
                 success = false
             }
@@ -1155,7 +1155,7 @@ export class ActivityRideService extends IncyclistService {
         try {
 
             // calculate distance since last update
-            const speed = this.current.deviceData?.speed || 0;
+            const speed = this.current.deviceData?.speed ?? 0;
             const v = speed / 3.6;
             const distance = v*t;
             
@@ -1383,13 +1383,13 @@ export class ActivityRideService extends IncyclistService {
 
     getBikeInterface() {        
         const devices = this.getDeviceConfiguration()
-        const adapter = devices.getSelected(IncyclistCapability.Control) || devices.getSelected(IncyclistCapability.Power) || devices.getSelected(IncyclistCapability.Speed) 
+        const adapter = devices.getSelected(IncyclistCapability.Control) ?? devices.getSelected(IncyclistCapability.Power) ?? devices.getSelected(IncyclistCapability.Speed) 
         return getLegacyInterface(adapter)                
     }
 
     getBike() {        
         const devices = this.getDeviceConfiguration()
-        const adapter = devices.getSelected(IncyclistCapability.Control) || devices.getSelected(IncyclistCapability.Power) || devices.getSelected(IncyclistCapability.Speed) 
+        const adapter = devices.getSelected(IncyclistCapability.Control) ?? devices.getSelected(IncyclistCapability.Power) ?? devices.getSelected(IncyclistCapability.Speed) 
         return adapter?.getUniqueName()
     }
 

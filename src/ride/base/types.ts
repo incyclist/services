@@ -6,7 +6,6 @@ import { RoutePoint } from "../../routes/base/types"
 import { Route } from "../../routes/base/model/route"
 import EventEmitter from "events"
 import { ActivityDetails, PrevRidesListDisplayProps, ScreenShotInfo } from "../../activities"
-import { RouteSettings } from "../../routes/list/cards/RouteCard"
 import { Workout } from "../../workouts"
 
 export type RideType = 'Free-Ride' | 'GPX' | 'Video' | 'Workout'

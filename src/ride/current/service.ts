@@ -63,7 +63,7 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
                     this.displayService.on('next-video',this.onNextVideo.bind(this))
                     this.displayService.on('route-changed',this.onPrepareNextVideo.bind(this))
 
-                    
+
                 */
 
 
@@ -776,14 +776,6 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         return def
         
     }
-
-
-    protected insertStep(target, time, step) { 
-
-    }
-
-        
-
 
     protected initWorkout() {
         try {

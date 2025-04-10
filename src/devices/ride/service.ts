@@ -489,7 +489,7 @@ export class DeviceRideService  extends IncyclistService{
             })
             return duplicateAdapters
         }
-        catch(err) {
+        catch {
             return []
         }
 
@@ -528,8 +528,8 @@ export class DeviceRideService  extends IncyclistService{
         if (duplicates.find(dai=>dai.info.udid===ai.udid))
             return;
 
-        const startProps = clone(props||{})
-        const { forceErgMode, startPos, realityFactor, rideMode, route} = props||{};
+        const startProps = clone(props??{})
+        const { forceErgMode, startPos, realityFactor, rideMode, route} = props??{};
 
 
         this.initCyclingMode(ai, forceErgMode);
@@ -619,11 +619,8 @@ export class DeviceRideService  extends IncyclistService{
                     settings = modeInfo.settings;
                 }
             }
-
-            if (!mode)
-                mode = bike.getDefaultCyclingMode();
-
-
+            
+            mode = mode??bike.getDefaultCyclingMode();
             bike.setCyclingMode(mode, settings);
         }
     }

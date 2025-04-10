@@ -44,9 +44,8 @@ export class RideModeService extends IncyclistService implements IRideModeServic
     resume(): void {
         return
     }
-    stop(): Promise<void> {
+    async stop(): Promise<void> {
         this.removeAllListeners()
-        return
     }
 
     getDisplayProperties() {

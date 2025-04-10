@@ -116,8 +116,8 @@ export class Activity implements ActivityInfo{
 
         const formats = ['tcx','fit']
 
-        for (let i = 0; i< formats.length; i++) {
-            const type = formats[i]
+        for (let type of formats) {
+            
             const details = this.details??{}
 
             const file=details[`${type}FileName`] ?? fileName?.replace('.json',`.${type}`)
