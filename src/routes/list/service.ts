@@ -1256,7 +1256,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const fs = getBindings().fs
         
         const outDir = path.join( appInfo.getAppDir(),'previewImg')
-        fs.checkDir(outDir)
+        await fs.ensureDir(outDir)
 
         
 

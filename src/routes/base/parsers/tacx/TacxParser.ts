@@ -113,7 +113,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
     }
 
 
-    protected buildResult(context: TacxParserContext): ParseResult<RouteApiDetail> { 
+    protected async buildResult(context: TacxParserContext): Promise<ParseResult<RouteApiDetail>> { 
 
         if (!context.rlvData || !context.pgmfData) {
             throw new Error(`Could not parse ${context.pgmfFile.name} or ${context.rlvFile.name}`)
@@ -128,7 +128,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
 
         const data: RouteInfo = this.buildGeneralInfo(context);
-        this.buildVideoFileInfo(context, data); 
+        await this.buildVideoFileInfo(context, data); 
         this.buildTrackInfo(context, data);
         this.buildSegments(context.rlvData.courseInfo,data)       
 
@@ -215,7 +215,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         return points
     }
 
-    protected buildVideoFileInfo(context: TacxParserContext, data: RouteInfo ) {
+    protected async buildVideoFileInfo(context: TacxParserContext, data: RouteInfo ):Promise<void> {
         const fileName = context.rlvData.rlvInfo.videoFile
         if (!fileName) 
             return
@@ -240,9 +240,13 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
         }
 
+        data.videoUrl = `video:///${fileName}` 
+        const exists = await fs.existsFile(fileName)
+        if (!exists)
+            data.videoUrl = `video:///${path.join(context.pgmfFile.dir, name)}`
+        
+        
 
-        const exists = fs.existsSync(fileName);
-        data.videoUrl = exists ? `video:///${fileName}` : `video:///${path.join(context.pgmfFile.dir, name)}`;
     }
 
     protected buildSegments(courseInfo:RlvCourseInfo, data: RouteInfo) { 

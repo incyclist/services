@@ -712,6 +712,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
     protected addImportCard(file:FileInfo):ActiveImportCard {
+
         const card = new ActiveImportCard(file)
 
 

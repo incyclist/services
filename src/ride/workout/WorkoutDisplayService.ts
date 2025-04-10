@@ -47,6 +47,7 @@ export class WorkoutDisplayService extends RideModeService {
         
     }
 
+    @Injectable
     protected getWorkoutList() {
         return useWorkoutList()
     }

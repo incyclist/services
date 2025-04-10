@@ -827,7 +827,7 @@ export class DeviceRideService  extends IncyclistService{
         }
 
         // restart Interface and adapaters
-        this.logger.logEvent({ message: 'restart interface', interface: ifName });
+        this.logEvent({ message: 'restart interface', interface: ifName });
 
         let stopRequested = false;
         this.once('stop-ride',()=>{ stopRequested= true;})
@@ -846,7 +846,7 @@ export class DeviceRideService  extends IncyclistService{
             await this.reconnectAdapters(adapters, ifName);   
         }
         catch (err) {
-            this.logger.logEvent({ message: 'restart interface failed', interface: ifName, reason: err.message });
+            this.logEvent({ message: 'restart interface failed', interface: ifName, reason: err.message });
         }
 
         this.reconnectBusy = false;
@@ -962,7 +962,7 @@ export class DeviceRideService  extends IncyclistService{
 
         let success = false;
         do {
-            this.logger.logEvent({ message: 'restart adapter', device: unhealthy.udid });
+            this.logEvent({ message: 'restart adapter', device: unhealthy.udid });
             
             const adapter = unhealthy.adapter;
             try {
@@ -974,7 +974,7 @@ export class DeviceRideService  extends IncyclistService{
                 }
             }
             catch (err) {
-                this.logger.logEvent({ message: 'restart adapter failed', device: unhealthy.udid, reason: err.message });
+                this.logEvent({ message: 'restart adapter failed', device: unhealthy.udid, reason: err.message });
             }
 
             if (success) {

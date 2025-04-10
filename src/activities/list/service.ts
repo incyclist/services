@@ -7,7 +7,7 @@ import { waitNextTick } from "../../utils";
 import { ActivitiesRepository, Activity, ActivitySearchCriteria } from "../base";
 import { ActivityInfo } from "../base/model";
 import { ActivityUploadFactory } from "../upload";
-import { ActivityErrorDisplayProperties, ActivityListDisplayProperties, RideAgainResponse, SelectedActivityDisplayProperties, SelectedActivityResponse } from "./types";
+import { ActivityErrorDisplayProperties, ActivityListDisplayProperties, DisplayExportInfo, RideAgainResponse, SelectedActivityDisplayProperties, SelectedActivityResponse } from "./types";
 
 /**
  * This service is used by the Front-End to manage and query the current and past activities
@@ -48,6 +48,7 @@ export class ActivityListService extends IncyclistService {
     protected selected:Activity
     protected listTop:number
     protected opened?:'list'|'selected'
+    protected exports: Array<DisplayExportInfo> = []
 
     constructor() {
         super('ActivityList')
@@ -336,6 +337,10 @@ export class ActivityListService extends IncyclistService {
         }
 
         this.opened = 'selected'
+        this.selected.getExports().then( exports => { 
+            this.exports = exports 
+            this.emitSelected('updated')
+        })
 
         // needs to be called to initialize the observer
         this.getObserver()
@@ -563,7 +568,7 @@ export class ActivityListService extends IncyclistService {
             showMap: true,
             points,
             activity,
-            exports: this.selected.getExports(),
+            exports: this.exports,
             canStart: this.selected.canStart(),
             canOpen: this.selected.isRouteAvailable(),
             uploads: this.selected.getUploadStatus(),

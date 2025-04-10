@@ -4,7 +4,6 @@ import { IncyclistXMLParser } from './incyclist'
 import path from 'path'
 import { IFileSystem } from '../../../api/fs'
 import { RoutePoint } from '../types'
-import exp from 'constants'
 
 describe('IncyclistParser',()=>{
     let parser:IncyclistXMLParser
@@ -39,15 +38,15 @@ describe('IncyclistParser',()=>{
             beforeEach( ()=>{
                 parser = new IncyclistXMLParser()
                 getBindings().path = path;
-                fs = getBindings().fs = { existsSync:jest.fn().mockReturnValue(true)} as unknown as IFileSystem
+                fs = getBindings().fs = { existsFile:jest.fn().mockResolvedValue(true)} as unknown as IFileSystem
     
             })
     
             const run = async  (name,mocks?) => {
                 const dir = './__tests__/data/rlv'
                 const filename = `${dir}/${name}`
-                getBindings().loader = { open: load}
-                fs.existsSync = mocks?.existsSync ?? jest.fn().mockReturnValue(false)
+                getBindings().loader = { open: load}                
+                fs.existsFile =  jest.fn().mockResolvedValue(mocks?.existsFile??false)
                 const fileInfo:FileInfo = {type:'file', filename, name, ext:'xml',dir,url:undefined, delimiter:'/'}
                 return await parser.import(fileInfo)
     
@@ -85,7 +84,7 @@ describe('IncyclistParser',()=>{
 
             test('file with preview',async ()=>{
                
-                const {data,details} = await run('FR_Source_Drome_Part_1.xml',{existsSync: jest.fn().mockReturnValue(true)})
+                const {data,details} = await run('FR_Source_Drome_Part_1.xml',{existsFile: true})
                     
                 expect(data.title).toBe('Source Drôme 1 - Col de Prémol')
                 expect(data.country).toBe('FR')
@@ -104,7 +103,7 @@ describe('IncyclistParser',()=>{
             })
 
             test('file with non-existing preview',async ()=>{
-                const {data,details} = await run('FR_Source_Drome_Part_1.xml',{existsSync: jest.fn().mockReturnValue(false)})
+                const {data,details} = await run('FR_Source_Drome_Part_1.xml',{existsFile: false})
                     
                 expect(data.title).toBe('Source Drôme 1 - Col de Prémol')
                 expect(data.country).toBe('FR')
@@ -128,7 +127,7 @@ describe('IncyclistParser',()=>{
                     return data.replace(regex, "<title de='DE Title' en='EN Title'/>")
                 }
 
-                const {data,details} = await run('FR_Source_Drome_Part_1.xml',{existsSync: jest.fn().mockReturnValue(false)})
+                const {data,details} = await run('FR_Source_Drome_Part_1.xml',{existsFile: false})
                 expect(data.title).toBe('DE Title')
 
             })

@@ -7,7 +7,7 @@ import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
 import { PowerLimit,  StepDefinition, Workout } from "../base/model";
-import { WorkoutListService, getWorkoutList, useWorkoutList } from "../list";
+import { WorkoutListService, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
 import { ActiveWorkoutLimit, WorkoutDisplayProperties } from "./types";
 import { Injectable } from "../../base/decorators";
@@ -123,7 +123,7 @@ export class WorkoutRide extends IncyclistService{
     init():Observer {
         try {
 
-            this.workoutList = getWorkoutList()
+            this.workoutList = this.getWorkoutList()
             this.workout = this.workoutList.getSelected()
 
             if (!this.workout)
@@ -858,6 +858,11 @@ export class WorkoutRide extends IncyclistService{
     @Injectable
     protected getUserSettings() {
         return useUserSettings()
+    }
+
+    @Injectable
+    protected getWorkoutList() {
+        return useWorkoutList()
     }
 
 }

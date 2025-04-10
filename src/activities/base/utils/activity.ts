@@ -106,7 +106,7 @@ export class Activity implements ActivityInfo{
         return elevation
     }
 
-    getExports():Array<DisplayExportInfo> {
+    async getExports():Promise<Array<DisplayExportInfo>> {
 
         const {fileName} = this.details??{}
         const exports:Array<DisplayExportInfo> = []
@@ -115,18 +115,21 @@ export class Activity implements ActivityInfo{
             exports.push({type:'json',file:fileName})
 
         const formats = ['tcx','fit']
-        formats.forEach( type => {
+
+        for (let i = 0; i< formats.length; i++) {
+            const type = formats[i]
             const details = this.details??{}
 
             const file=details[`${type}FileName`] ?? fileName?.replace('.json',`.${type}`)
 
             const fs = this.getBindings().fs
 
-            if (fs.existsSync(file) )
+            if (await fs.existsFile(file) )
                 exports.push({type,file})
             else 
                 exports.push({type,creating:this.isExporting(type)})
-        })
+   
+        }
 
         return exports
 
@@ -180,7 +183,7 @@ export class Activity implements ActivityInfo{
         let success = false
         let error
         const factory =  this.getActivityUploadFactory()
-        let exports = this.getExports().filter( e => e.type !== 'json')
+        let exports = (await this.getExports()).filter( e => e.type !== 'json')
         let format  = exports.find( e => e.file!==undefined)?.type
         
         this.markUploading(connectedApp,true)
@@ -196,7 +199,7 @@ export class Activity implements ActivityInfo{
             await Promise.allSettled(exportPromises)
 
             // let's re-check if we now have an uploadable format
-            exports = this.getExports().filter( e => e.type !== 'json')
+            exports = (await this.getExports()).filter( e => e.type !== 'json')
             format  = exports.find( e => e.file!==undefined)?.type
         }
         

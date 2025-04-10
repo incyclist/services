@@ -12,7 +12,7 @@ import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
 import { ActivityState, ActivitySummaryDisplayProperties } from "./types";
-import { addDetails, checkIsLoop, getElevationGainAt, getNextPosition, getPosition, validateRoute } from "../../routes/base/utils/route";
+import { addDetails, checkIsLoop, getElevationGainAt, getNextPosition, getPosition, getRouteHash, validateRoute } from "../../routes/base/utils/route";
 import { Route } from "../../routes/base/model/route";
 import { RouteApiDetail } from "../../routes/base/api/types";
 import { ActivityStatsCalculator } from "./stats";
@@ -146,38 +146,48 @@ export class ActivityRideService extends IncyclistService {
         const observer = this.createObserver()
 
         const doInit = ()=> {
-            this.current = {
-                deviceData:{},
-                dataState:{}
-            }
-    
-    
-            this.observer = observer
-            this.state = 'ininitalized'
-   
-            this.activity = this.createActivity(id)
-    
-            const settings = useRouteList().getStartSettings()
-            if (settings?.type==='Route') {
-                const rs = settings as RouteSettings
-                if (rs.showPrev) {
-                    this.initPrevActivities(rs)                
+
+
+            try {
+                delete this.activity
+            
+                this.current = {
+                    deviceData:{},
+                    dataState:{}
                 }
-                
+        
+        
+                this.observer = observer
+                this.state = 'ininitalized'
+    
+                this.activity = this.createActivity(id)
+        
+                const settings = useRouteList().getStartSettings()
+                if (settings?.type==='Route') {
+                    const rs = settings as RouteSettings
+                    if (rs.showPrev) {
+                        this.initPrevActivities(rs)                
+                    }
+                    
+                }
+        
+                this.durationCalculator = new ActivityDuration(this.activity)
+        
+                this.getDeviceRide().on('data',this.deviceDataHandler)
+        
+                waitNextTick().then( ()=>{
+                    this.emit('initialized')
+                })
             }
-    
-            this.durationCalculator = new ActivityDuration(this.activity)
-    
-            this.getDeviceRide().on('data',this.deviceDataHandler)
-    
-            waitNextTick().then( ()=>{
-                this.emit('initialized')
-            })
+            catch(err) {
+                this.logError(err,'init')
+            }
   
         }
 
         if (this.observer) {
             this.stop().then(doInit )
+
         }
         else {
             doInit()
@@ -192,27 +202,34 @@ export class ActivityRideService extends IncyclistService {
      * Starts a new activity, should be called once initial pedalling was detected
     */
     start() {
+        this.logEvent({message:'start activity'})   
         
-        if (!this.observer)
-            this.init()
-        if (this.state==='active')
-            return;
-
-        this.tsStart= Date.now()
-        this.activity.startTime = new Date(this.tsStart).toISOString()
-
-        this.statsCalculator = new ActivityStatsCalculator(this.activity,this.logger)
-        this._save()
-        this.state = 'active'
-        this.tsStart = Date.now()
-        this.tsPauseStart = undefined
-        this.isSaveDone = false
-
-        this.logEvent({message:'activity started' })
-        this.startWorker()
-        this.enableDeviceHealthCheck()
-
-        this.emit('started')
+        try {
+            if (!this.observer)
+                this.init()
+            if (this.state==='active')
+                return;
+    
+            this.tsStart= Date.now()
+            this.activity.startTime = new Date(this.tsStart).toISOString()
+    
+            this.statsCalculator = new ActivityStatsCalculator(this.activity,this.logger)
+            this._save()
+            this.state = 'active'
+            this.tsStart = Date.now()
+            this.tsPauseStart = undefined
+            this.isSaveDone = false
+    
+            this.logEvent({message:'activity started' })
+            this.startWorker()
+            this.enableDeviceHealthCheck()
+    
+            this.emit('started')
+    
+        }
+        catch(err) {
+            this.logError(err,'start')
+        }
     }
 
     /** 
@@ -305,7 +322,7 @@ export class ActivityRideService extends IncyclistService {
     
             const info = this.buildDashboardInfo(currentValues, avgMaxStats, display);
             
-            this.logger.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value||''}:${i.data[1]?.value||''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
+            this.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value||''}:${i.data[1]?.value||''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
             return info
     
         }
@@ -1065,7 +1082,7 @@ export class ActivityRideService extends IncyclistService {
                     this.current.endPos = s.endPos
                     realityFactor = s.realityFactor
                     routeId = selectedRoute.description.id
-                    routeHash = selectedRoute.description.routeHash
+                    routeHash = selectedRoute.description.routeHash?? getRouteHash(selectedRoute.details)
                     routeName = selectedRoute.description.originalName??selectedRoute.description.title
                     routeTitle = selectedRoute.description.title
                     routeType = selectedRoute.description.hasVideo ? 'Video':'GPX'
@@ -1086,6 +1103,7 @@ export class ActivityRideService extends IncyclistService {
         const name = `${title}-${date}`
         const fileName = this.getRepo().getFilename(name)
         const route:ActivityRoute = {name:routeName, hash:routeHash, title:routeTitle}
+
         if (routeId)
             route.id = routeId
 

@@ -182,7 +182,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             isLoop: checkIsLoop(route.points),
             videoFormat: route.video.format,
             videoUrl: this.getVideoUrl(fileInfo,route),
-            previewUrl: getPreviewUrl(fileInfo,route),
+            previewUrl: await getPreviewUrl(fileInfo,route),
             routeHash:route.routeHash
     
         }
@@ -404,7 +404,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
 
 
-const getPreviewUrl = (info:FileInfo,route: RouteApiDetail):string => {
+const  getPreviewUrl = async (info:FileInfo,route: RouteApiDetail):Promise<string> => {
     const url = route?.previewUrl 
     let file = route?.previewUrlLocal
 
@@ -412,7 +412,8 @@ const getPreviewUrl = (info:FileInfo,route: RouteApiDetail):string => {
         const path= getBindings().path
         const fs = getBindings().fs
         const filename = file.startsWith(info.ext) || (/[A-Za-z]:.*/).exec(file) ? file : path.join(info.dir,file)
-        if (!fs.existsSync(filename))
+        const exists = await fs.existsFile(filename)
+        if (!exists)
             file=undefined
 
     }

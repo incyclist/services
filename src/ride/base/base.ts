@@ -7,6 +7,7 @@ import { useDeviceRide } from "../../devices";
 import { Injectable } from "../../base/decorators";
 import { ActivityUpdate } from "../../activities/ride/types";
 import { sleep } from "incyclist-devices/lib/utils/utils";
+import { ScreenShotInfo } from "../../activities";
 
 export class RideModeService extends IncyclistService implements IRideModeService {
 
@@ -18,6 +19,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
     protected queued: Array<UpdateRequest> = []
     protected service: ICurrentRideService
 
+    
     constructor() {
         super('Ride')
     }
@@ -43,6 +45,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         return
     }
     stop(): Promise<void> {
+        this.removeAllListeners()
         return
     }
 
@@ -61,7 +64,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         return request
     }
 
-    onDeviceData(data:DeviceData,udid:number) {
+    onDeviceData(data:DeviceData,udid:string) {
         this.logEvent({ message: "Bike Update:", data, udid });
 
 
@@ -72,6 +75,11 @@ export class RideModeService extends IncyclistService implements IRideModeServic
     getLogProps(): object {
         return {}
     }
+
+    getScreenshotInfo(fileName: string, time: number):ScreenShotInfo {
+        return {fileName, time}        
+    }
+
 
     protected getWorkoutLimits() {
         return this.getWorkoutRide().getCurrentLimits()
