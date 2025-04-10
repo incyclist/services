@@ -163,7 +163,6 @@ export class ActiveRidesService extends IncyclistService {
 
                 const routeHash = this.getRouteHash()
 
-                console.log('# get active rides', routeHash)
                 const promise = this.getApi().getByRouteHash(routeHash)
                 this.apiState = { busy: true, promise }
                 
@@ -452,12 +451,10 @@ export class ActiveRidesService extends IncyclistService {
     }
 
     protected getRouteHash():string {
-        console.log('# route hash',this.activity)
         if (this.activity?.routeType==='Free-Ride') {
             return ('free:'+Date.now())
         }
         return this.activity?.route?.hash
-
     }
 
     protected getUser():ActiveRideUser {

@@ -211,15 +211,11 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
     }
 
     async stop(exit:boolean = false) {
-        console.log('# stop ride requested')
         this.stopRide({exit,noStateUpdates:true})
         
     }
 
     protected async stopRide( props:{exit?:boolean, noStateUpdates?:boolean}={} ):Promise<void> {
-
-        console.log('# stop ride')
-
         try {
             if ( this.state !== 'Starting' && this.state !=='Idle') {
                 this.logEvent({ message: "activity stopped",activity: this.activity?.id});                   
@@ -258,12 +254,8 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
             delete this.type
             delete this.displayService
             this.state = 'Idle'
-
-            console.log('# stop ride completed')
-
         }
         catch(err) {
-            console.log('# error',err)
             this.logError(err,'stop')
         }
     }
@@ -403,7 +395,6 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
             const startOverlayProps = this.state==='Starting' ? this.getStartOverlayProps() : undefined
 
-            console.log('# get dispaly props', showPrevRides, prevRidesList)
             return { workout: this.actualWorkout, route: this.route, activity: this.activity,  state:this.state,startOverlayProps,
                 showPrevRides, prevRidesList,
                 ...serviceProps }
@@ -610,7 +601,6 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         if (this.state!=='Active' && this.state!=='Paused')
             return
 
-        console.log('# servcie got route completed')
         this.stopRide()
     }
 

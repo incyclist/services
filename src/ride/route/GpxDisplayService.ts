@@ -28,7 +28,6 @@ export class GpxDisplayService extends RouteDisplayService {
             props = {...props, ...this.getSatteliteViewProps()}
         }
 
-        console.log('# route display props', props)
         return {
             mode: this.mode,
             ...props
