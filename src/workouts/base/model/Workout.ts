@@ -60,7 +60,7 @@ export class Workout extends Segment implements WorkoutDefinition {
 
     getSegment(time:number):Segment {
         const s = this.steps.find( s=> s.getStart()<=time && s.getEnd()>time)
-        if (s.type==='segment')
+        if (s?.type==='segment')
             return s as Segment;
     }
 
