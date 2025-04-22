@@ -19,7 +19,6 @@ import { INativeUI } from "../../api/ui";
 import { getBindings } from "../../api";
 import { CurrentRideDisplayProps, ICurrentRideService, StartOverlayProps } from "../base/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
-import clone from "../../utils/clone";
 
 @Singleton
 export class CurrentRideService extends IncyclistService implements ICurrentRideService {
@@ -83,8 +82,13 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         }
     }
 
-    start():void { 
+    start(simulate?:boolean):void { 
         try {
+
+            if(simulate)
+                this.enforceSimulator()
+
+
             const rideProps =  this.getRideModeService().getLogProps()
             this.logEvent({ message: 'Start ride', ...rideProps, 
                 bike: this.getBike(),
@@ -870,6 +874,7 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         const logProps = this.getRideModeService().getLogProps()
         this.logEvent({ message: 'Start success',  ...logProps })
 
+        this.disableScreensaver();
         this.createActivity()
         this.initWorkout()
         this.updateActivityWorkout()
@@ -1033,10 +1038,13 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         if (!startDevice)
             return;
 
-        this.disableScreensaver();
-
         startDevice.status = 'Started'
         this.checkStartStatus()
+    }
+
+    protected enforceSimulator() {
+        this.getDeviceRide().enforceSimulator()
+        
     }
 
     protected getScreenshotName():string {
@@ -1198,7 +1206,6 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
             case 'GPX': return 'follow-route';
         }
     }
-
 
 
     

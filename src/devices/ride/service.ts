@@ -1440,7 +1440,7 @@ export class DeviceRideService  extends IncyclistService{
     getControlAdapter() {
         const adapters = this.getSelectedAdapters();
 
-        const adapterInfo = adapters?.find(ai => ai.adapter.hasCapability(IncyclistCapability.Control));
+        const adapterInfo = adapters?.find(ai => ai.isControl) ?? adapters?.find(ai => ai.adapter.hasCapability(IncyclistCapability.Control));
         return adapterInfo;
     }
 

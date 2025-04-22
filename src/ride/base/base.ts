@@ -163,16 +163,16 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         if (!device ) 
             return { };
 
-        const mode = this.getDeviceRide().getCyclingMode(device.udid);
+        const mode = this.getDeviceRide().getCyclingMode();
 
-        if (mode.getName()==='Simulator') {
+        if (mode?.getName()==='Simulator') {
             return { bike: 'Simulator', interface: 'Simulator',mode: 'Simulator' }  
         }
 
         return {
-            bike: device.adapter.getDisplayName(),
-            interface: device.adapter.getInterface(),
-            mode: mode.getName()
+            bike: device.adapter?.getDisplayName(),
+            interface: device.adapter?.getInterface(),
+            mode: mode?.getName()
         }
     }
 
