@@ -12,7 +12,7 @@ export function getLegacyInterface(d:IncyclistDeviceAdapter) {
         case 'tcpip':
             return (settings as SerialDeviceSettings).protocol
         case 'simulator':
-            return 
+            return 'Simulator'
         case 'ant':
             return "ANT-"+(settings as AntDeviceSettings).profile
         case 'ble':

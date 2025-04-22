@@ -1,20 +1,29 @@
 import {  DeviceData, UpdateRequest } from "incyclist-devices";
 import { ActiveWorkoutLimit } from "../../workouts";
 import { RideModeService } from "../base/base";
-import { CurrentPosition, ICurrentRideService, RouteDisplayProps, SideViewsShown } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, ICurrentRideService, RouteDisplayProps, SideViewsShown } from "../base";
 import { Injectable } from "../../base/decorators";
 import { useUserSettings } from "../../settings";
-import { getHeading, getNextPosition, GetNextPositionProps, getPosition, GetPositionProps, LapPoint, useRouteList } from "../../routes";
+import { getHeading, getNextPosition, getPosition, GetPositionProps, LapPoint, useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
-import { ScreenShotInfo } from "../../activities";
+import { ScreenShotInfo, useActiveRides } from "../../activities";
+import { getBindings } from "../../api";
+import { ActivityUpdate } from "../../activities/ride/types";
+import clone from "../../utils/clone";
+import { useDeviceRide } from "../../devices";
+
+const MAX_INACTIVITY = 5000
 
 export class RouteDisplayService extends RideModeService {
     protected prevRequestSlope: number
 
     protected position: CurrentPosition    
     protected sideViews: SideViewsShown
-    
+
+    protected hasNearbyRides: boolean  = false 
+    protected prevRequestedSlope:undefined = undefined
+    protected prevPowerTs: number
 
 
     init(service: ICurrentRideService) {
@@ -22,31 +31,34 @@ export class RouteDisplayService extends RideModeService {
             super.init(service)
 
             this.position =  this.setInitialPosition()
+            
         }
         catch(err) {
             this.logError(err,'init')
         }
     }
 
-    onActivityUpdate(data: any, request?: ActiveWorkoutLimit): UpdateRequest {
-        try {
-            const newSlope = this.position?.slope ?? undefined; // should convert null to undefined
+    getDeviceStartSettings() {
+        const startSettings:RouteSettings = this.getRouteList().getStartSettings() as RouteSettings
+        const route = this.getRouteList().getSelected() 
+        const {realityFactor,startPos} = startSettings
 
-            const update:UpdateRequest = {...(request??{})}
-            if (newSlope !== undefined && newSlope !== this.prevRequestSlope) {
-                update.slope = newSlope;
-            }
-            this.prevRequestSlope = this.position?.slope
-            return update
-        }
-        catch(err) {
-            this.logError(err,'onActivityUpdate')
-        }
+        return {realityFactor,startPos,route}
     }
 
-    onDeviceData(data: DeviceData, udid: string): void {
+    
+    onActivityUpdate(activityPos:ActivityUpdate,data):void { 
+        
+        if (data.power>0)
+            this.prevPowerTs = Date.now()
+
+        if (data.power===0 && (data.speed===0 ||  data.speed<5 && (Date.now()-(this.prevPowerTs??0))>MAX_INACTIVITY)) {
+            this.service.pause('device')
+            return
+        }
+
         try {
-            const newPosition = this.updatePosition(data);
+            const newPosition = this.updatePosition(activityPos);
 
             const isCompleted = this.checkFinishOptions(newPosition)
             if (!isCompleted) {
@@ -58,28 +70,90 @@ export class RouteDisplayService extends RideModeService {
                 if (this.position.lap !== prevPosition.lap) {
                     this.emit('lap-completed',prevPosition.lap,this.position.lap)
                 }        
+                this.savePosition()
             }
+
     
         }
         catch(err) {
             this.logError(err,'onDeviceData')
         }
 
+
+
+        super.onActivityUpdate(activityPos,data)
+    }
+
+    onRideSettingsChanged(settings) {
+        try {
+            const {reality} = settings
+
+            this.startSettings.realityFactor = reality
+           
+
+        }
+        catch(err) {
+            this.logError(err,'onRideSettingsChanged')
+        }
+    }
+
+    onStarted() {
+        try {
+            this.prepareActiveRides()
+            this.sendUpdate(this.buildRequest())
+            
+        }
+        catch(err) {
+            this.logError(err,'onStarted')
+        }
+
+    }
+
+    onStopped() {
+        try {
+            this.cleanupActiveRides()
+        }
+        catch(err) {
+            this.logError(err,'onStopped')
+        }
     }
 
 
-    getDisplayProperties():RouteDisplayProps {
+    getDisplayProperties(props: CurrentRideDisplayProps):RouteDisplayProps {
 
-        const {realityFactor,startPos,endPos} = this.startSettings as RouteSettings
         
+        const {realityFactor,startPos,endPos} = this.startSettings
+        
+        const hasNearbyRides  = this.getActiveRides().get()?.length > 0
+        const showNearbyRides = hasNearbyRides && this.getUserSettings().get('preferences.sideViews.nearby-rides',true)
+        const nearbyRides = this.getActiveRides().getObserver()
+
+        if (this.hasNearbyRides !== hasNearbyRides) {
+            this.hasNearbyRides = hasNearbyRides
+            this.service.getObserver().emit('nearby-rides-update', {showNearbyRides, nearbyRides})
+        }
+        const showMapEnabled = this.getUserSettings().get('preferences.sideViews.map',true)
+        const showMap = !props.hideAll 
+        const minimizeMap = showMap && !showMapEnabled
+
+        const showUpcomingElevationEnabled = this.getUserSettings().get('preferences.sideViews.slope',true)
+        const showUpcomingElevation = !props.hideAll 
+        const minimizeUpcomingElevation = showUpcomingElevation && !showUpcomingElevationEnabled
+
+        const showTotalElevationEnabled = this.getUserSettings().get('preferences.sideViews.elevation',true)
+        const showTotalElevation = !props.hideAll 
+        const minimizeTotalElevation = showTotalElevation && !showTotalElevationEnabled
+
         return {
             position: this.position,
             sideViews: this.sideViews,
             route: this.route,
             realityFactor,
             startPos,endPos,
-            
-            
+            showNearbyRides,nearbyRides,
+            showMap,minimizeMap,
+            showUpcomingElevation,minimizeUpcomingElevation,
+            showTotalElevation,minimizeTotalElevation,
         }    
     }
 
@@ -126,19 +200,56 @@ export class RouteDisplayService extends RideModeService {
         return this.getRouteList().getStartSettings() as RouteSettings
     }
 
+    protected buildRequest(props:{limits?: ActiveWorkoutLimit, reset?:boolean}={}): UpdateRequest { 
+        const request = this._buildRequest(props)
+        return request
+
+    }
+    protected _buildRequest(props:{limits?: ActiveWorkoutLimit, reset?:boolean}={}): UpdateRequest {
+
+
+        try {
+            const mode = this.getDeviceRide().getCyclingMode()
+            const isSIM = mode?.isSIM()
+
+            const realityFactor = this.startSettings.realityFactor ?? 100
+            const targetSlope = (this.position.slope ?? 0) * realityFactor / 100
+
+            if (props?.limits && !isSIM) {
+                delete this.prevRequestSlope
+                return {...props?.limits, slope:targetSlope}
+            }
+
+            else {
+
+                const hasSlopeChanged = this.prevRequestSlope===undefined || (this.prevRequestSlope !== this.position.slope)
+                const request:UpdateRequest = (hasSlopeChanged||props?.reset) ? {slope:targetSlope} : {}
+
+                this.prevRequestSlope = targetSlope
+                return request
+            }
+        }
+        catch(err) {
+            this.logError(err,'buildRequest')        
+            return {}
+        }
+
+    }
+
+
     protected setInitialPosition():CurrentPosition {
         const lapPoint =  getNextPosition (this.route, {routeDistance:this.startSettings.startPos??0})
         return this.fromLapPoint(lapPoint)
     }
 
-    protected  updatePosition(data: DeviceData): CurrentPosition {
+    protected  updatePosition(activityPos:ActivityUpdate): CurrentPosition {
         try {
             const currentRouteDistance = this.position.routeDistance ?? 0;
-            const newRouteDistance = currentRouteDistance + (data.distance??0);
+            const newRouteDistance = activityPos.routeDistance ?? 0;
 
             if (newRouteDistance !== currentRouteDistance) {
                 const prev = this.toLapPoint(this.position)
-                return  this.fromLapPoint(getNextPosition(this.route,{distance:data.distance,prev}))                
+                return  this.fromLapPoint(getNextPosition(this.route,{routeDistance:activityPos.routeDistance,prev}))                
             }
 
             return this.position        
@@ -153,7 +264,8 @@ export class RouteDisplayService extends RideModeService {
         const totalDistance = position.routeDistance
         const routeDistance = position.lapDistance??position.routeDistance%this.route.description.distance
 
-        const lapPoint =  {...position, totalDistance, routeDistance}
+        // point needs to be cloned otherwise the route points are modified
+        const lapPoint =  clone({...position, totalDistance, routeDistance})
         delete lapPoint.lapDistance
         return lapPoint
     }
@@ -164,7 +276,8 @@ export class RouteDisplayService extends RideModeService {
 
         const lap = position.lap??1
 
-        const currentPosition =  { ...position, lap,routeDistance,lapDistance}
+        // point needs to be cloned otherwise the route points are modified
+        const currentPosition =  clone({ ...position, lap,routeDistance,lapDistance})
         delete currentPosition.totalDistance
         return currentPosition
     }
@@ -177,12 +290,18 @@ export class RouteDisplayService extends RideModeService {
         if (this.isLoop() && !this.startSettings?.loopOverwrite) 
             return false
         
-        return position.routeDistance >= this.route.description.distance        
+        const finished =  position.routeDistance >= this.route.description.distance        
+        return finished
     }
 
     protected onRideFinished() {
+
+        this.logEvent({message: 'Route completed'})
+        this.savePosition(0)
         this.emit('route-completed')
     }
+
+    
 
     protected checkFinishOptions(position:CurrentPosition):boolean {
 
@@ -194,6 +313,37 @@ export class RouteDisplayService extends RideModeService {
         return finished
     }
 
+    protected prepareActiveRides() {
+        const session = this.getAppInfo().session
+
+        try {
+            this.getActiveRides().init( session)
+
+            // TODO: update map markers
+            // ar.getObserver().on('update',(data)=>{
+            //     this.state.activeRidesMapMarkers = data.filter( ar=>!ar.isUser)
+
+            // })
+        }
+        catch(err) {
+            this.logError(err,'prepareActiveRides')
+        }
+    }
+
+    cleanupActiveRides() {
+        try {
+            this.getActiveRides().stop()
+        }
+        catch(err) {
+            this.logError(err,'cleanupActiveRides')
+        }
+
+    }
+
+    protected savePosition(startPos?:number) {
+
+    }
+
 
     @Injectable
     protected getUserSettings() {
@@ -203,6 +353,21 @@ export class RouteDisplayService extends RideModeService {
     @Injectable
     protected getRouteList() {
         return useRouteList()
+    }
+
+    @Injectable
+    protected getActiveRides() {
+        return useActiveRides()
+    }
+
+    @Injectable
+    protected getDeviceRide() {
+        return useDeviceRide() 
+    }
+
+
+    protected getAppInfo() {
+        return getBindings().appInfo    
     }
 
 

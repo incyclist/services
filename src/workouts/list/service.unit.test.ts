@@ -620,8 +620,8 @@ describe('WorkoutListService',()=>{
             const wo = new Workout({type:'workout',id:'3',name:'3',category:{name:'Test'}})                
             s.parse = jest.fn( ).mockResolvedValue(wo)
 
-            service.import( fileInfo)
-            await sleep(50)
+            const workouts  = await service.import( fileInfo)
+            expect(workouts).toHaveLength(1)
 
             expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo')
             expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,3')
@@ -632,8 +632,8 @@ describe('WorkoutListService',()=>{
             const error = new Error('XYZ')
             s.parse = jest.fn( ).mockRejectedValue( error)
 
-            service.import( fileInfo)
-            await sleep(50)
+            const workouts  = await service.import( fileInfo)
+            expect(workouts).toHaveLength(0)
 
             expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo')
             expect(eventSpy).not.toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create')
@@ -654,9 +654,9 @@ describe('WorkoutListService',()=>{
                 .mockResolvedValueOnce(wo1)
                 .mockResolvedValueOnce(wo2)
 
-            service.import( fileInfo)
-            await sleep(50)
-
+            const workouts  = await service.import( fileInfo)
+            expect(workouts).toHaveLength(2)
+    
             expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo')
             expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo,file:////tmp/test2.zwo')
             // the exact torder of events is a bit unclear, therefore the 3rd event might vary
@@ -675,15 +675,31 @@ describe('WorkoutListService',()=>{
                 .mockRejectedValueOnce(e1)
                 .mockRejectedValueOnce(e2)
 
-            service.import( fileInfo)
-            await sleep(50)
-
+            const workouts  = await service.import( fileInfo)
+            expect(workouts).toHaveLength(0)
+    
             expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo')
             expect(eventSpy).toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,/tmp/test.zwo,file:////tmp/test2.zwo')            
             expect(eventSpy).not.toHaveBeenCalledWith('updated',expect.any(Array<CardList<WP>>),'Import,Create,3,4')
 
             expect(s.myWorkouts.getCards()[2]).toMatchObject({error:e1})
             expect(s.myWorkouts.getCards()[3]).toMatchObject({error:e2})
+        })
+
+        test('combination of successfull and failed imports',async ()=>{
+            const fileInfo:FileInfo[] = [
+                { type:'file', name:'test.zwo', ext:'zwo', filename:'/tmp/test.zwo', delimiter:'/', dir:'/tmp', url:undefined},
+                { type:'url', name:'test2.zwo', ext:'zwo', filename:undefined, delimiter:'/', dir:'/tmp', url:'file:////tmp/test2.zwo'}
+            ]
+            const wo1 = new Workout({type:'workout',id:'3',name:'3',category:{name:'Test'}})                
+            const e2 = new Error('2')
+            s.parse = jest.fn()
+                .mockResolvedValueOnce(wo1)
+                .mockRejectedValueOnce(e2)
+
+            const workouts  = await service.import( fileInfo)
+            expect(workouts).toHaveLength(1)
+   
         })
 
         test('no importcard - single failed import',async ()=>{

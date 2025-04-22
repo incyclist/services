@@ -616,7 +616,7 @@ function getNextPositionSearchTarget(route: Route, pPrev:LapPoint,props:GetNextP
     }
     else {
         lap = 1;
-        targetRouteInLap = targetRouteDistance;
+        targetRouteInLap = Math.min(targetRouteDistance, route.description.distance);
     }
     return {lap,targetRouteInLap,searchStart,distance}
 }

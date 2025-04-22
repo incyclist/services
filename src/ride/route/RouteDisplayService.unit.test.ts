@@ -65,7 +65,7 @@ describe( 'RouteDisplayService', () => {
         jest.clearAllMocks()
     }
 
-    describe('onDeviceData',()=>{
+    describe('onActivityUpdate',()=>{
         let service: RouteDisplayService
 
 
@@ -81,7 +81,7 @@ describe( 'RouteDisplayService', () => {
         test('at start of route',async ()=>{
             const startSettings = { ...defaultStartSettings}
             setupMocks(service,{mockRideService:true,startSettings})
-            service.onDeviceData({distance:10}, '1234')
+            service.onActivityUpdate({time:1, speed:36, routeDistance:10,distance:10},{distance:10})
             expect(mockObserver.emit).toHaveBeenCalledWith('position-update',OC({position:OC({lap:1,routeDistance:10})}))
             
 
@@ -90,7 +90,8 @@ describe( 'RouteDisplayService', () => {
             const startSettings = { ...defaultStartSettings, startPos: 1826}
             setupMocks(service,{mockRideService:true,startSettings})
 
-            service.onDeviceData({distance:10}, '1234')
+            service.onActivityUpdate({time:1, speed:36, routeDistance:1836,distance:10},{distance:10})
+            expect(mockObserver.emit).toHaveBeenCalledWith('position-update',OC({position:OC({lap:1,routeDistance:1836})}))
 
         })
 
@@ -98,7 +99,7 @@ describe( 'RouteDisplayService', () => {
             const startSettings = { ...defaultStartSettings, startPos: 3800}
             setupMocks(service,{mockRideService:true,startSettings})
 
-            service.onDeviceData({distance:10}, '1234')
+            service.onActivityUpdate({time:1, speed:36, routeDistance:3810,distance:10},{distance:10})
             expect(mockObserver.emit).toHaveBeenCalledWith('position-update',OC({position:OC({lap:2,routeDistance:3810, lapDistance:CT(8.5,1)})}))
             expect(service.emit).toHaveBeenCalledWith('lap-completed',1,2)
         })
@@ -107,7 +108,7 @@ describe( 'RouteDisplayService', () => {
             const startSettings = { ...defaultStartSettings, startPos: 3800, loopOverwrite: true}
             setupMocks(service,{mockRideService:true,startSettings})
 
-            service.onDeviceData({distance:10}, '1234')
+            service.onActivityUpdate({time:1, speed:36, routeDistance:3810,distance:10},{distance:10})
             expect(service.emit).toHaveBeenCalledWith('route-completed')
         })
 
@@ -115,7 +116,8 @@ describe( 'RouteDisplayService', () => {
             const startSettings = { ...defaultStartSettings}
             setupMocks(service,{mockRideService:true,startSettings})
             for (let i=0; i<10; i++) {
-                service.onDeviceData({distance:10}, '1234')
+                service.onActivityUpdate({time:i+1, speed:36, routeDistance:(i+1)*10,distance:10},{distance:10})
+
             }
             expect(mockObserver.emit).toHaveBeenCalledTimes(10)
             expect(getPosition(service)).toMatchObject({lap:1,routeDistance:CT(100,1)})
@@ -139,7 +141,7 @@ describe( 'RouteDisplayService', () => {
                 "lap": 1,
                 "lapDistance": 3790
             }
-            service.onDeviceData({distance:6}, '1234')
+            service.onActivityUpdate({time:1, speed:36, routeDistance:3796,distance:6},{distance:10})
 
             
             expect(getPosition(service)).toMatchObject({lap:1,routeDistance:CT(3796,0)})

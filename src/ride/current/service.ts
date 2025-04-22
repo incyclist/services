@@ -19,6 +19,7 @@ import { INativeUI } from "../../api/ui";
 import { getBindings } from "../../api";
 import { CurrentRideDisplayProps, ICurrentRideService, StartOverlayProps } from "../base/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
+import clone from "../../utils/clone";
 
 @Singleton
 export class CurrentRideService extends IncyclistService implements ICurrentRideService {
@@ -32,6 +33,7 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
     protected displayService: IRideModeService
     protected deviceData: DeviceData
     protected actualWorkout: Workout
+    protected hideAll: boolean = false
 
     protected readonly onChangeState = this.setState.bind(this)
     protected startDeviceHandlers
@@ -65,7 +67,8 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
 
                 */
-
+                this.hideAll = false
+                
 
             }
             catch(err) {
@@ -93,15 +96,14 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
                 this.setState('Error')
             }
 
-            // Trigger showing the start overlay
-            this.setState('Starting')
-            this.logEvent({message:'overlay shown',overlay:'start overlay' })
-
 
             // start devices and prepare ride ( load video/map/....)
             this.startDevices()
-
             this.startRide()
+
+            this.setState('Starting')
+            this.logEvent({message:'overlay shown',overlay:'start overlay' })
+
         }
         catch(err) {
             this.logError(err,'stop')
@@ -211,6 +213,13 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
     }
 
     async stop(exit:boolean = false) {
+        try {
+            this.getRideModeService()?.onStopped()
+        }
+        catch(err) {
+            this.logError(err,'stop')
+        }
+
         this.stopRide({exit,noStateUpdates:true})
         
     }
@@ -293,22 +302,31 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         }
     }
 
-    hideAllOverlays() {
-        // TODO
+    toggleAllOverlays() {
+        this.hideAll = !this.hideAll
+        this.observer?.emit('overlay-update',this.getDisplayProperties())
+                
     }
 
-    hideUpcomingElevation() {
-        // TODO
+    toggleUpcomingElevation() {
+        // state is managed in user settings
+        const showUpcomingElevation = this.getUserSettings().get('preferences.sideViews.slope',true)
+        this.getUserSettings().set('preferences.sideViews.slope',!showUpcomingElevation)
+        this.observer?.emit('overlay-update', this.getDisplayProperties());
 
     }
 
-    hideTotalElevation() {
-        // TODO
-
+    toggleTotalElevation() {
+        const showTotalElevation = this.getUserSettings().get('preferences.sideViews.elevation',true)
+        this.getUserSettings().set('preferences.sideViews.elevation',!showTotalElevation)
+        this.observer?.emit('overlay-update', this.getDisplayProperties());
     }
 
-    hideMap() {
-        // TODO
+    toggleMap() {
+        const showMap = this.getUserSettings().get('preferences.sideViews.map',true)
+
+        this.getUserSettings().set('preferences.sideViews.map',!showMap)
+        this.observer?.emit('overlay-update', this.getDisplayProperties());
         
     }
 
@@ -343,6 +361,15 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         catch(err) {
             this.logError(err,'onHotKey')
         }
+    }
+
+    onSettingsChanged(area, settings) {
+        console.log('# onSettingsChanged', area, settings);
+
+        if (area==='Ride' || area==='route') {
+            this.getRideModeService().onRideSettingsChanged(settings)
+        }
+
     }
 
 
@@ -386,7 +413,6 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
     getDisplayProperties():CurrentRideDisplayProps {
         try {
-            const serviceProps = this.displayService?.getDisplayProperties()??{}
 
 
             const startSettings = this.getRouteList().getStartSettings() as RouteSettings
@@ -395,9 +421,15 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
             const startOverlayProps = this.state==='Starting' ? this.getStartOverlayProps() : undefined
 
-            return { workout: this.actualWorkout, route: this.route, activity: this.activity,  state:this.state,startOverlayProps,
+
+            const props = { workout: this.actualWorkout, route: this.route, activity: this.activity,  state:this.state,startOverlayProps,
                 showPrevRides, prevRidesList,
-                ...serviceProps }
+                hideAll: this.hideAll,
+                }
+
+            const childProps = this.displayService?.getDisplayProperties(props)??{}
+
+            return { ...props, ...childProps }
         }
         catch(err) {
             this.logError(err,'getDisplayProperties')
@@ -411,7 +443,10 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
     getRideType():RideType {
         if (!this.type) {
-            this.type = this.detectRideType()
+            try {
+                this.type = this.detectRideType()
+            }
+            catch { /* ignore error*/ }
         }
         return this.type
     }
@@ -473,24 +508,29 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         if (this.displayService && !overwrite)    
             return this.displayService
 
-        const type = this.getRideType()
-
-        switch(type) {
-            case 'Free-Ride': return new FreeRideDisplayService()
-            case 'GPX':return new FollowRouteDisplayService()
-            case 'Video': return new VideoDisplayService()
-            case 'Workout': return new WorkoutDisplayService()
-            default:
-                return new RideModeService()
+        const createService = ()=> {
+            const type = this.getRideType()
+            switch(type) {
+                case 'Free-Ride': return new FreeRideDisplayService()
+                case 'GPX':return new FollowRouteDisplayService()
+                case 'Video': return new VideoDisplayService()
+                case 'Workout': return new WorkoutDisplayService()
+                default:
+                    return new RideModeService()
+            }
         }
 
+        this.displayService = createService();
+        return this.displayService
     }
 
     protected checkStartStatus() {
-        const devices = this.isStartDeviceCompleted()
-        const ride = this.displayService.isStartRideCompleted()
+        const devices = this.isStartDeviceReadyToStart()
+        const sensors = this.isSensorsReadyToStart()
+        const ride = this.getRideModeService().isStartRideCompleted()
 
-        if (devices && ride) {
+        console.log('# check start status',{devices, sensors, ride})
+        if (devices && sensors && ride) {
             this.onStartCompleted()
         }
         else {
@@ -538,7 +578,6 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
     protected onActivityUpdate(data) {
         
-
         if (this.state==='Active') {
             const currentValues = this.getActivityRide().getCurrentValues()
             if (!currentValues)
@@ -559,6 +598,7 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
     }
 
     protected onWorkoutStopped() {
+        this.logEvent({message: 'Workout stopped by user', activity:this.activity?.id });
 
         const time = this.activity.time
 
@@ -575,9 +615,11 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
             }
         })
         this.updateActivityWorkout()
+        this.checkCyclingModeToggle()
     }
 
     protected onWorkoutCompleted() {
+        this.logEvent({message: 'Workout completed', activity:this.activity?.id });
 
         if (this.state!=='Active' && this.state!=='Paused')
             return
@@ -585,21 +627,48 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         if (this.getRideType()==='Workout') {
             this.stopRide()
         }
-        else {
-            // TODO: switch to normal ride, might require to to toggle CyclingMode from ERG to SIM
+        this.checkCyclingModeToggle()
+       
+    }
+
+    protected checkCyclingModeToggle() { 
+        if (this.getRideType()!=='Workout') {
+
+            this.getDeviceRide().resetCyclingMode(false).then( res=> {
+                if (res?.changed) {
+                    this.getRideModeService().sendUpdate()
+                }
+                    
+            })
         }
     }
 
 
+
     protected onLapCompleted(oldLap:number, newLap:number):void {
+        console.log('# lap completed', oldLap, newLap)
         // TODO:
-        // add lap to activity
+        // add lap to activityn
         // emit lap update to UI, so that Ui can display lap totals/stats
     }
 
     protected onRouteCompleted() {
         if (this.state!=='Active' && this.state!=='Paused')
             return
+
+        // workout is not completed yet, continue in workout display mode
+        if (this.getWorkoutRide().inUse()) { 
+
+            this.getRouteList().unselect()
+
+            this.type  = 'Workout'
+            this.displayService = new WorkoutDisplayService()
+            this.observer?.emit('view-changed')  
+            
+            return
+        }
+
+
 
         this.stopRide()
     }
@@ -758,8 +827,8 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
     protected cloneStep(step) {
         const def = {...step}
-        if (!def.duration)
-            def.duration = def.end-def.start
+        
+        def.duration = def.duration ?? (def.end-def.start)
         delete def.start
         delete def.end
         delete def.repeat
@@ -798,13 +867,14 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
     }
 
     protected onStartCompleted() {
-        const logProps = this.getRideModeService().getLogProps
-        this.logEvent({ message: 'Start success', ...logProps })
+        const logProps = this.getRideModeService().getLogProps()
+        this.logEvent({ message: 'Start success',  ...logProps })
 
         this.createActivity()
         this.initWorkout()
         this.updateActivityWorkout()
         this.startListeningForDeviceData()
+        this.getRideModeService().onStarted()
         this.setState('Started')
 
         this.logEvent({ message: 'Start activity', activityId: this.activity?.id, ...logProps,interface: this.getBikeInterface()});   
@@ -812,6 +882,11 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
     protected startRide(retry?:boolean) { 
         this.displayService.start(retry)
+
+        this.displayService.on('state-update',()=>{
+            this.checkStartStatus()
+            this.updateStartOverlay()            
+        })
 
     }
 
@@ -855,7 +930,7 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
     protected initDeviceHandlers() {
         if (this.startDeviceHandlers)
             return;
-        
+
         this.startDeviceHandlers = {
             deviceStartHandler: this.onDeviceStartRequest.bind(this),
             deviceStartUpdateHandler: this.onDeviceStartStatusUpdate.bind(this),
@@ -894,7 +969,7 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
     protected devicePowerUp(inc:number) {
 
-        const device = this.getControlDevice()
+        const device = this.getDeviceRide().getControlAdapter()
         if (!device ) 
             return;
 
@@ -931,25 +1006,26 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
     }
 
-    getControlDevice() {
-        return  this.deviceInfo?.find( di=> di.capabilities.includes(IncyclistCapability.Control))
-    }
-
-
 
     protected onDeviceStartRequest(devices:AdapterStateInfo[]) {
 
         this.deviceInfo = devices.map( d=> ({
             name: d.name,
             udid: d.udid,
-            isMandatory: d.isControl,
-            isControl: d.isControl,            
+            isControl: d.isControl,
             capabilities: d.capabilities,
             status: d.isStarted ? 'Started' : 'Starting'
         }))
+
+        this.updateStartOverlay()
     }   
+
+    protected updateStartOverlay() {
+        this.observer?.emit('state-update',this.state)
+
+    }
     
-    protected onDeviceStartOK(device:AdapterStateInfo) {
+    protected async onDeviceStartOK(device:AdapterStateInfo) {
         if (this.state!=='Starting')
             return
 
@@ -1007,7 +1083,7 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
             return;
 
         if (startDevice.status!=='Error') { 
-            const key = startDevice.isMandatory ? 'Device' : 'Sensor'
+            const key = startDevice.isControl ? 'Device' : 'Sensor'
             this.logEvent({ message: `${key} start error shown`, overlay: 'start overlay', device: startDevice.name, });
         }
 
@@ -1060,19 +1136,38 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         return !starting.length
     }
 
+    protected isStartDeviceReadyToStart() {
+        const devices = this.deviceInfo??[]
+
+        const mandatory = devices?.filter( d=>d.isControl)??[]
+
+        return !mandatory?.length || mandatory.filter(d=>d.status==='Started').length == mandatory.length
+    }
+    protected isSensorsReadyToStart() {
+        const devices = this.deviceInfo??[]
+
+        const mandatory = devices?.filter( d=>!d.isControl)??[]
+        if (!mandatory.length)
+            return true
+
+        return mandatory.filter(d=>d.status==='Started').length == mandatory.length
+    }
+
     protected getStartOverlayProps = ():StartOverlayProps =>{
         const mode = this.getRideType()
-        const devices = this.deviceInfo
+        const readyToStart = this.isStartDeviceReadyToStart() && this.getRideModeService().isStartRideCompleted()
+        const devices = this.deviceInfo??[]
 
-        const mandatory = devices?.filter( d=>d.isMandatory)??[]
-        const readyToStart = !mandatory?.length || mandatory.filter(d=>d.status==='Started').length == mandatory.length
-
-        return {mode, rideState:this.state, devices, readyToStart}
+        const displayOverlayProps = this.getRideModeService().getStartOverlayProps()??{}
+        return {mode, rideState:this.state, devices, readyToStart, ...displayOverlayProps}
     }
 
     protected getDeviceStartSettings() {
-        const forceErgMode = this.getWorkoutList().getStartSettings()?.useErgMode
-        const settings =  this.displayService.getDeviceStartSettings()??{}        
+        let forceErgMode = false
+        if (this.getWorkoutList().getSelected()) {
+             forceErgMode = this.getWorkoutList().getStartSettings()?.useErgMode
+        }
+        const settings =  this.getRideModeService().getDeviceStartSettings()??{}        
         return {...settings, forceErgMode}
     }                        
 

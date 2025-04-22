@@ -1,4 +1,5 @@
 export * from './base'
+export * from './googleMaps'
 export * from './service'
 export * from './strava'
 export * from './velohero'

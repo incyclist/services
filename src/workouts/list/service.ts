@@ -403,7 +403,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
      * @emits updated   list has been updated
      */
 
-    async import( info:FileInfo|Array<FileInfo>, props:{ card?:ActiveImportCard, showImportCards?:boolean}):Promise<void> {
+    async import( info:FileInfo|Array<FileInfo>, props:{ card?:ActiveImportCard, showImportCards?:boolean}):Promise<WorkoutCard[]> {
         
         try {
             const {card,showImportCards=true} = props??{}
@@ -419,10 +419,11 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
                 const importCard = showImportCards ? importCards[idx] : null
                 try {
-                    await this._import(file)                                
+                    const imported = await this._import(file)                                
                     this.myWorkouts.remove(importCard)
                     this.emitLists('updated')     
                    
+                    return imported;
                 }
                 catch(err) {
                     if (importCard)
@@ -446,6 +447,16 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                     throw (rejected[0].reason)                    
                 }
             }
+
+            return res.map( pr => {
+                if (pr.status==='fulfilled') {
+                    return pr.value
+                }
+                else {
+                    return null
+                }
+            }
+            ).filter( r=>!!r) as Array<WorkoutCard>
     
 
         }
@@ -454,6 +465,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                 throw err
 
             this.logError(err,'import',info)
+            return []
         }
     }
 

@@ -157,7 +157,7 @@ export class ActiveRideListMessageQueue extends IncyclistService{
         })
 
         if (!handled) {
-            this.logEvent({message:'# unknown topic message', topic, payload:message})            
+            this.logEvent({message:'unknown topic message', topic, payload:message})            
         }
     }
 

@@ -1,5 +1,7 @@
 import { DeviceProperties } from "incyclist-devices/lib/types/device";
 import { AdapterInfo, ExtendedIncyclistCapability } from "../configuration";
+import { Route } from "../../routes/base/model/route";
+import { RouteApiDetail } from "../../routes/base/api/types";
 
 export type HealthStatus = 'green' | 'amber' | 'red'
 
@@ -10,6 +12,8 @@ export interface AdapterRideInfo extends AdapterInfo {
     isRestarting?: boolean
     dataStatus?: HealthStatus
     ivToCheck?: NodeJS.Timeout
+    isControl?: boolean
+
 
 }
 
@@ -21,14 +25,17 @@ export interface AdapterStateInfo {
     isStarted:boolean
 }
 
-
-
+export interface LegacyRoute {
+    get():RouteApiDetail
+    isLap():boolean
+    getTitle():string
+}
 export interface RideServiceDeviceProperties extends DeviceProperties {
     forceErgMode?: boolean
     startPos?: number,
     realityFactor?:number,
     rideMode?:string
-    route?
+    route?: Route|LegacyRoute
 }
 
 export interface RideServiceCheckFilter {

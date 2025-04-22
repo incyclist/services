@@ -1,7 +1,7 @@
 import { DeviceData, UpdateRequest } from "incyclist-devices";
 import { Observer } from "../../base/types";
 import { ActiveWorkoutLimit, useWorkoutRide } from "../../workouts";
-import { ICurrentRideService, IRideModeService } from "./types";
+import { CurrentRideDisplayProps, ICurrentRideService, IRideModeService } from "./types";
 import { IncyclistService } from "../../base/service";
 import { useDeviceRide } from "../../devices";
 import { Injectable } from "../../base/decorators";
@@ -48,19 +48,22 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         this.removeAllListeners()
     }
 
-    getDisplayProperties() {
+    getStartOverlayProps() {
+        return {}
+    }
+    getDisplayProperties(props: CurrentRideDisplayProps) {
         return {}
     }
 
-    onActivityUpdate(activityPos:ActivityUpdate,data):UpdateRequest {
+    onActivityUpdate(activityPos:ActivityUpdate,data):void {
 
         const limits = this.getWorkoutLimits()
 
-        const request = this.buildRequest(limits)
+        const request = this.buildRequest({limits})
+    
         this.sendUpdate(request)
 
         this.prevLimits = limits
-        return request
     }
 
     onDeviceData(data:DeviceData,udid:string) {
@@ -70,6 +73,15 @@ export class RideModeService extends IncyclistService implements IRideModeServic
 
         this.prevData = data
     }
+
+    onRideSettingsChanged(settings:object): void {
+
+    }
+
+
+    onStarted(): void { }
+        
+    onStopped(): void { }
 
     getLogProps(): object {
         return {}
@@ -84,17 +96,26 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         return this.getWorkoutRide().getCurrentLimits()
     }
 
-    protected buildRequest(limits: ActiveWorkoutLimit):UpdateRequest {
+    protected buildRequest(props:{limits?: ActiveWorkoutLimit, reset?:boolean}={}):UpdateRequest {
         return {}
     }
 
-    async sendUpdate(request:UpdateRequest) {  
-        if (request.targetPowerDelta) {
-            this.processPowerDeltaRequest(request)
+    async sendUpdate(request?:UpdateRequest) {  
+
+        let update = request
+        if ( !request) { 
+            update = this.buildRequest({reset:true})
+            if (!update||Object.keys(update).length===0) {
+                return
+            }
+        }
+
+        if (update.targetPowerDelta) {
+            this.processPowerDeltaRequest(update)
 
         }
         else {
-            this.getDeviceRide().sendUpdate(request)
+            this.getDeviceRide().sendUpdate(update)
         }
     }
 
@@ -134,6 +155,25 @@ export class RideModeService extends IncyclistService implements IRideModeServic
 
         send(request)
         
+    }
+
+    protected getBikeLogProps(): object {
+
+        const device = this.getDeviceRide().getControlAdapter()
+        if (!device ) 
+            return { };
+
+        const mode = this.getDeviceRide().getCyclingMode(device.udid);
+
+        if (mode.getName()==='Simulator') {
+            return { bike: 'Simulator', interface: 'Simulator',mode: 'Simulator' }  
+        }
+
+        return {
+            bike: device.adapter.getDisplayName(),
+            interface: device.adapter.getInterface(),
+            mode: mode.getName()
+        }
     }
 
     @Injectable
