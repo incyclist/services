@@ -65,9 +65,13 @@ export class RouteDisplayService extends RideModeService {
                 const prevPosition = this.position
     
                 this.position = newPosition
+
+                const {lat,lng,routeDistance,lap} = newPosition
+                this.logEvent({message:'position update', lat,lng,routeDistance,lap  })
                 this.observer.emit('position-update', this.service.getDisplayProperties())           
     
                 if (this.position.lap !== prevPosition.lap) {
+                    this.logEvent({message:'lap completed update', lap:prevPosition.lap  })
                     this.emit('lap-completed',prevPosition.lap,this.position.lap)
                 }        
                 this.savePosition()
@@ -341,7 +345,7 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected savePosition(startPos?:number) {
-
+        // should be implemented by sub classes, as location is ride mode specifc
     }
 
 

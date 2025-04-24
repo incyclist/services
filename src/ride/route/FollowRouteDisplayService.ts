@@ -1,12 +1,12 @@
 import { GpxDisplayService } from "./GpxDisplayService";
 
 export class FollowRouteDisplayService extends GpxDisplayService {
-
+    
     getLogProps(): object {
 
         const route = this.route
         const settings  = this.startSettings
-        const rideView = this.getUserSettings().get('preferences.rideView',undefined)
+        const rideView = this.getUserSettings().get('preferences.rideView',undefined)??'sv(default)'
         const bikeProps = this.getBikeLogProps()
 
         const props =  {
