@@ -40,7 +40,7 @@ export type VideoDescription = {
 
 export type DaumEppProgramEntry = {
     elevation:number,
-    x: number,
+    x?: number,
     distance:number
 }
 
@@ -61,6 +61,8 @@ export type DaumEpp = {
     hrmLimit: number,
     speedLimit:number
     programData: Array<DaumEppProgramEntry>
+    minElevation?:number,
+    maxElevation?:number,
 }
 
 

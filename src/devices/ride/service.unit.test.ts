@@ -107,4 +107,62 @@ describe('DeviceRideService',()=>{
         })
 
     })
+
+    describe('resetCyclingMode',()=>{
+        let service: DeviceRideService
+        let adapter
+        let mockConfig: Partial<DeviceConfigurationService> = {
+            isInitialized: jest.fn().mockReturnValue(true),
+            once:jest.fn(),
+            on:jest.fn(),
+            off:jest.fn(),
+            removeAllListeners:jest.fn(),
+            getModeSettings:jest.fn().mockReturnValue({}),
+        }
+
+        const setupMocks = (s,a, props:{mode?:string}={})=> {
+            s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
+            s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
+            a.isStarted = jest.fn().mockReturnValue(true)
+            a.start = jest.fn().mockResolvedValue(true)
+            s.getConfiguredModeInfo = jest.fn().mockReturnValue({ mode: props?.mode??a.getDefaultCyclingMode().getName(), settings: {} });
+            s.isToggleEnabled = jest.fn().mockReturnValue(true)
+        }
+        beforeEach( ()=>{
+            service = new DeviceRideService()
+            service.inject('DeviceConfiguration', mockConfig)
+        })
+
+        afterEach( ()=>{                
+            service.stop()
+            service.reset()            
+        })
+
+        test('still in same mode as start',async ()=>{
+            adapter = new AntFEAdapter({deviceID: '2606',profile: 'FE',interface: 'ant'})
+            setupMocks(service,adapter)
+
+            const originalMode = service.getCyclingMode()
+            const res = await service.resetCyclingMode()
+
+            expect(res.changed).toBe(false)
+            expect (res.mode?.getName()).toEqual(originalMode.getName())
+        })
+
+        test('after toggling cycling mode once',async ()=>{
+            adapter = new AntFEAdapter({deviceID: '2606',profile: 'FE',interface: 'ant'})
+            setupMocks(service,adapter)
+
+            const originalMode = service.getCyclingMode()
+
+            service.toggleCyclingMode()
+            const res = await service.resetCyclingMode()
+
+            expect(res.changed).toBe(true)
+            expect (res.mode?.getName()).toEqual(originalMode.getName())
+        })
+
+
+
+    })
 })

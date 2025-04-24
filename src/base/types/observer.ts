@@ -34,11 +34,17 @@ export class Observer   implements IObserver  {
         return this;
     }
 
-    stop() {
+    stop( props:{immediately?:boolean}={}) {
         this.emitter.emit('stopped')
-        setTimeout( ()=>{
-            this.emitter.removeAllListeners()               
-        }, 1000)
+        if (props.immediately) {
+            this.emitter.removeAllListeners()
+        }
+        else {
+            setTimeout( ()=>{
+                this.emitter.removeAllListeners()               
+            }, 1000)
+   
+        }
         
     }
 

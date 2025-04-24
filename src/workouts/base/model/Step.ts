@@ -52,17 +52,17 @@ export class Step implements StepDefinition {
 
     constructor( opts?, ignoreValidate?:boolean) {
 
-        const {type,start,end,duration, power,cadence,hrm, text, work, steady, cooldown} = opts||{}
+        const {type,start,end,duration, power,cadence,hrm, text, work, steady, cooldown} = opts??{}
         const numVal = (s) => typeof(s)==='string' ? Number(s) : s
 
-        this.type = type ||'step';
+        this.type = type ??'step';
         this.start = (valid(start)) ? numVal(start) : undefined;
         this.end = (valid(end)) ? numVal(end) : undefined;
         this.duration = (valid(duration)) ? numVal(duration) :0;
         this.cadence = valid(cadence) ? clone(cadence) : undefined
         this.power = valid(power) ? clone(power) : undefined
         this.hrm = valid(hrm) ? clone(hrm) : undefined
-        this.text = text || '';
+        this.text = text ?? '';
         this.work = valid(work) ? work : false;
         this.steady = valid(steady) ? steady : true;
         this.cooldown = valid(cooldown) ? cooldown: false;
@@ -103,7 +103,11 @@ export class Step implements StepDefinition {
     */
     getLimits( ts:number,includeStepInfo:boolean=false):CurrentStep {
         
-        const rv = (limits) => this.getRemainder(limits, includeStepInfo)
+        const rv = (limits) => {
+            const l = this.getRemainder(limits, includeStepInfo)
+            l.start = this.start
+            return l
+        }
 
         if  (ts>=this.start && ts<=this.end) {
             const duration = this.duration;
@@ -176,9 +180,7 @@ export class Step implements StepDefinition {
     protected validatePower():boolean {
         if ( valid(this.power)) {
             const p = this.power;
-            if (p.type===undefined) 
-                p.type= 'watt';
-
+            p.type = p.type??'watt'
             return this.validateLimit(p, 'power')
         }
         return true;

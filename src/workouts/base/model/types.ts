@@ -42,6 +42,9 @@ export interface StepDefinition {
 /** @public Provides information on the current limits, step defintion (optional) and remainder of a workout step for a given time during the workout*/
 export interface CurrentStep extends StepDefinition{
 
+    /** @public start time (in sec) of the current step*/
+    start?: number
+
     /** @public duration (in sec) of the current step*/
     duration: number
     /** @public the limits (max,min) set for power */    

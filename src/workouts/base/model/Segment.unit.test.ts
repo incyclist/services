@@ -335,10 +335,29 @@ describe ( 'Segment' ,() => {
             const s5 = s.getLimits(30);
 
             expect(s1).toBeUndefined();
+            expect(s2.start).toBe(10);
             expect(s2.hrm).toEqual( {min:10,max:110});
+            expect(s3.start).toBe(10);
             expect(s3.hrm).toEqual( {min:10,max:110});
+
+            expect(s4.start).toBe(20);
             expect(s4.hrm).toEqual( {min:30,max:130});
             expect(s5).toBeUndefined();
+        });    
+
+        test ( 'segment starting at 0, multiple repetitions' ,() => {
+            const steps = [ { duration:10,text:'a', hrm:{min:10, max:110}}, {duration:10, text:'b', hrm:{min:30, max:130}} ]
+            s = new Segment( {start:0,steps, repeat:10} )
+
+            const s1 = s.getLimits(0);
+            const s2 = s.getLimits(9);
+            const s3 = s.getLimits(95);
+            const s4 = s.getLimits(210);
+
+            expect(s1.start).toBe(0);
+            expect(s2.start).toBe(0);
+            expect(s3.start).toBe(90);
+            expect(s4).toBeUndefined();
         });    
 
         test ( 'segent starting at 10, incremental' ,() => {

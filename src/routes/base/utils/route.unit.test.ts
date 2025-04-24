@@ -1,6 +1,7 @@
 import path from "path";
 import { FileInfo, getBindings } from "../../../api";
 import { IFileSystem } from "../../../api/fs";
+import heidweiher from '../../../../__tests__/data/routes/heidweiher.json'
 import { loadFile } from "../../../../__tests__/utils/loadFile";
 import { Route } from "../model/route";
 import { createFromJson, getElevationGainAt, getNextPosition, getTotalElevation, validateRoute,getRouteHash,updateSlopes, validateSlopes } from "./route";
@@ -8,6 +9,7 @@ import fs from 'fs'
 import { KWTParser } from "../parsers/kwt";
 import { parseXml } from "../../../utils";
 import clone from "../../../utils/clone";
+import { RouteApiDetail } from "../api/types";
 
 describe( 'Route Utils',()=>{
 
@@ -173,6 +175,21 @@ describe( 'Route Utils',()=>{
             expect(res.lap).toBe(2)
             expect(res.cnt).toBe(4)
             expect(res.routeDistance).toBe(78)
+        })
+
+        test('beyond end of ride',()=>{
+
+            const testRoute  = createFromJson(heidweiher as unknown as RouteApiDetail)
+            
+            // total distance is 17317.535352055507
+            const routeDistance = 17320
+
+            console.log(testRoute.points[testRoute.points.length-1])
+            const prev = clone(testRoute.points[testRoute.points.length-1])
+            prev.routeDistance = 17312
+
+            const res = getNextPosition(testRoute,{routeDistance,prev} )
+            expect(res.routeDistance).toEqual(testRoute.description.distance)
         })
 
     })

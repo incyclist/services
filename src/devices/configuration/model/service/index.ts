@@ -5,6 +5,7 @@ export interface AdapterInfo {
     udid: string
     adapter: IncyclistDeviceAdapter
     capabilities: ExtendedIncyclistCapability[]
+    isControl?: boolean
 }
 
 export interface DeviceModeInfo {

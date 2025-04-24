@@ -11,7 +11,7 @@ import { ActivityRouteType } from "../base";
 import { IncyclistActiveRidesApi } from "../base/api/active-rides";
 import { ActivityRideService, useActivityRide } from "../ride";
 import { ActiveRideListMessageQueue } from "./mq";
-import { ActiveRideBike, ActiveRideEntry, ActiveRideListDisplayItem, ActiveRideListMessage, ActiveRidePosition, ActiveRideRoute, ActiveRideUser, ActivityStartMessage, ActivityUpdateMessage, RideType } from "./types";
+import { ActiveRideBike, ActiveRideEntry, ActiveRideListDisplayItem, ActiveRideListMessage, ActiveRidePosition, ActiveRideRoute, ActiveRideUser, ActivityStartMessage, ActivityUpdateMessage, ActiveRideRouteType } from "./types";
 
 
 /**
@@ -440,7 +440,7 @@ export class ActiveRidesService extends IncyclistService {
 
     }
 
-    protected getType(type:ActivityRouteType): RideType {
+    protected getType(type:ActivityRouteType): ActiveRideRouteType {
         if (type==='Free-Ride') return 'free ride'
         if (type==='GPX') return 'follow route'
         if (type==='Video') return 'video'
@@ -451,12 +451,10 @@ export class ActiveRidesService extends IncyclistService {
     }
 
     protected getRouteHash():string {
-
         if (this.activity?.routeType==='Free-Ride') {
             return ('free:'+Date.now())
         }
         return this.activity?.route?.hash
-
     }
 
     protected getUser():ActiveRideUser {

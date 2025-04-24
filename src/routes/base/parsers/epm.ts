@@ -21,7 +21,7 @@ export class EPMParser extends XMLParser{
         const {data,route} = context
 
         route.points=[]
-        const positions = data['positions']||[]
+        const positions = data['positions']?.length ? data['positions'] : []
 
         let prevDistance=undefined
         positions.forEach( (pos,idx)=> {
@@ -208,6 +208,7 @@ export class EPMParser extends XMLParser{
         let prevSpeed ;
         let prevTime ;
         let videoIdx = 0;
+
         route.points.forEach ( (p,idx) => {
             if (idx===0) {
                 p.videoSpeed = route.video.mappings[0].videoSpeed;

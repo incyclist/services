@@ -7,9 +7,10 @@ import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
 import { PowerLimit,  StepDefinition, Workout } from "../base/model";
-import { WorkoutListService, getWorkoutList, useWorkoutList } from "../list";
+import { WorkoutListService, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
 import { ActiveWorkoutLimit, WorkoutDisplayProperties } from "./types";
+import { Injectable } from "../../base/decorators";
 
 const DEFAULT_FTP = 200;
 const WORKOUT_ZOOM = 1200;
@@ -122,7 +123,7 @@ export class WorkoutRide extends IncyclistService{
     init():Observer {
         try {
 
-            this.workoutList = getWorkoutList()
+            this.workoutList = this.getWorkoutList()
             this.workout = this.workoutList.getSelected()
 
             if (!this.workout)
@@ -269,23 +270,33 @@ export class WorkoutRide extends IncyclistService{
 
     }
 
+
     /**
      * stops the current workout
      * 
      * This method needs to be called whenever a workout is either completed or a user wants to manually stop it.
      * 
-     * @param clearFromList if set, will also unselect the workout from the list 
-     * 
-     * @emits   __completed__
+     * @param props - optional properties to be passed 
+     * @param props.clearFromList - if set to true, the workout will be removed from the list after stopping
+     * @param props.completed - if set to true, the workout will be marked as completed
+     * @emits   __completed__  or __stopped__     depending on the value of `completed`
      */
-    stop( clearFromList?:boolean):void {
+    stop( props?:{clearFromList?:boolean, completed?:boolean}):void {
+        const {clearFromList,completed} = props??{}
+
         try {
-            if (!this.workout || this.state==='idle')
+            if (!this.workout || this.state==='idle' || this.state==='completed') {
+                if (clearFromList) {
+                    useWorkoutList().unselect()
+                }
                 return;
+            }
 
             this.state = 'completed'
-            this.logger.logEvent( {message: 'workout completed'})
-            this.emit('completed')
+
+            const stateEvent = completed ? 'completed':'stopped'
+            this.logger.logEvent( {message: `workout ${stateEvent}`})
+            this.emit(stateEvent)
 
             this.stopWorker();
     
@@ -319,6 +330,7 @@ export class WorkoutRide extends IncyclistService{
             
             this.manualTimeOffset += limits.remaining   
             this.update()
+            this.observer.emit('forward',ts,limits.remaining )
         }
         catch(err) {
             this.logError(err,'forward')
@@ -341,31 +353,42 @@ export class WorkoutRide extends IncyclistService{
         try {
             const ts = this.trainingTime
             const wo = this.workout;
-            const limits = wo.getLimits(ts);
+            const limits = wo.getLimits(ts,true);
 
             const completed = limits.duration-limits.remaining
 
             const stepBusyLmit = Math.min( 15, limits.duration/2)
-            if (completed>=stepBusyLmit) {
+            let diff = completed;
+            let jumpType = 'current'
+            let target
+
+            
+            if (completed>=stepBusyLmit || limits.start===0) {
                 // jump to start of current step
                 this.manualTimeOffset -= completed;
+                target = limits?.step
             }
             else {
                 // jump to start of prev step
+                jumpType = 'previous'
                 const timePrev = ts-completed-0.1;
                 if (timePrev<0) {
                     this.manualTimeOffset -= completed
                 }
                 else {
-                    const prevLimits = wo.getLimits(timePrev);
+                    const prevLimits = wo.getLimits(timePrev,true);
         
                     if (prevLimits ) {
                         this.manualTimeOffset -= (completed+prevLimits.duration)      
+                        diff = completed+prevLimits.duration
+                        target = prevLimits.step
                     }
                 }    
             }
 
             this.update()
+            this.observer.emit('backward',ts,diff,jumpType,limits?.step, target )
+
 
         }
         catch(err) {
@@ -615,7 +638,7 @@ export class WorkoutRide extends IncyclistService{
         const end = this.workout.getEnd();
 
         if ( time>=end) {
-            this.stop()
+            this.stop({completed:true})
             return null;
         }
         return time
@@ -783,7 +806,7 @@ export class WorkoutRide extends IncyclistService{
 
     protected getFtpFromUserSettings() {
         try {
-            const userSettings = useUserSettings()
+            const userSettings = this.getUserSettings()
             const user = userSettings.get('user',{})    
             return user.ftp
         }
@@ -830,6 +853,16 @@ export class WorkoutRide extends IncyclistService{
             return 'SIM'
         if (mode.isSIM()) 
             return  'ERG'
+    }
+
+    @Injectable
+    protected getUserSettings() {
+        return useUserSettings()
+    }
+
+    @Injectable
+    protected getWorkoutList() {
+        return useWorkoutList()
     }
 
 }

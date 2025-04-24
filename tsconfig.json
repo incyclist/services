@@ -16,6 +16,7 @@
       ],
     "exclude": [
       "src/**/*.spec.*",
+      "tools/**",
       "__tests__/**/*.ts",
       "src/**/*.test.*",
         "src/**/*.tests.*",

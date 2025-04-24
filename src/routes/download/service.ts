@@ -142,7 +142,7 @@ export class RouteDownloadService extends IncyclistService {
             }
             file = path.join( targetDir, info.base)
         }
-        catch(err) {
+        catch {
             return {}
         }
         return {file,url}
@@ -169,6 +169,10 @@ export class RouteDownloadService extends IncyclistService {
                 return;
             }
             const session = downloadManager.createSession(url,file)
+            if (!session) {
+                observer.emit('error', new Error(error??'download not supported'))
+                return;
+            }  
 
             observer.setSession(session)
             const onError = (err) => { 

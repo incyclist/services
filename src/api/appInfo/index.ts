@@ -18,4 +18,5 @@ export interface IAppInfo {
     getTempDir():string
     isApp():boolean
     getChannel():AppChannel
+    session:string
 }

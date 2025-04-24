@@ -1,7 +1,7 @@
 import { sleep } from "../../utils/sleep";
 import { useDeviceAccess } from "../access/service";
 import {AdapterInfo,  IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
-import { AdapterRideInfo, AdapterStateInfo, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./model";
+import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./model";
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
@@ -12,10 +12,17 @@ import { getRouteList } from "../../routes";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Injectable } from "../../base/decorators/Injection";
+import { Route } from "../../routes/base/model/route";
+import { useGoogleMaps } from "../../apps";
 
 
 const NO_DATA_THRESHOLD = 10000
 const UNHEALTHY_THRESHOLD = 60000
+
+type DuplicateInfo = {
+    udid: string;
+    info: AdapterRideInfo;
+};
 
 /**
  * Provides method to consume a devcie
@@ -80,12 +87,11 @@ export class DeviceRideService  extends IncyclistService{
 
 
 
-    getAdapterStateInfo(adapterInfo:AdapterInfo):AdapterStateInfo {
+    getAdapterStateInfo(adapterInfo:AdapterRideInfo):AdapterStateInfo {
 
-        const {udid,adapter,capabilities} = adapterInfo
+        const {udid,adapter,capabilities,isControl} = adapterInfo
 
         const name = adapter.getUniqueName()
-        const isControl = adapter.hasCapability(IncyclistCapability.Control)
         const isStarted = adapter.isStarted()
 
         return {udid, name,isControl,capabilities,isStarted}
@@ -101,11 +107,19 @@ export class DeviceRideService  extends IncyclistService{
             return this.rideAdapters
 
         this.rideAdapters = this.adapters = this.getConfiguredAdapters(true)
+        const controlDevice = this.adapters.find ( d => d.capabilities.includes('control')) 
+            ?? this.adapters.find ( d => d.capabilities.includes('power')) 
+            ?? this.adapters.find ( d => d.capabilities.includes('speed')) 
+
+        this.rideAdapters.forEach( ai => {
+            ai.isControl = (ai.udid===controlDevice.udid)
+        })
+
         if (!this.simulatorEnforced)
             return this.adapters
 
-        const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});
-        this.rideAdapters =  [{adapter,udid:'Simulator'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false}]
+        const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});        
+        this.rideAdapters =  [{adapter,udid:'Simulator'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false, isControl:true}]
         return this.rideAdapters
     
     }
@@ -126,15 +140,29 @@ export class DeviceRideService  extends IncyclistService{
 
 
     prepareEppRoute(props:RideServiceDeviceProperties): PreparedRoute {
-        
+       
+
         const { route, startPos, realityFactor,rideMode} = props;
-        if (!route?.get()) {
+
+        if ( !route)
+            return
+
+        const isLegacy = () => {
+            const r = route as LegacyRoute
+            return r.get && r.getTitle && r.isLap
+        }
+
+        const routeData = isLegacy() ? (route as LegacyRoute).get() : (route as Route).details
+        if (!routeData) {
             return null;
         }
+        const title = isLegacy() ? (route as LegacyRoute).getTitle() : (route as Route).description.title
+        const isLap = isLegacy() ? (route as LegacyRoute).isLap() : (route as Route).description.isLoop
+
 
         let res:PreparedRoute
 
-        this.logEvent( { message:'prepareRoute', route: route.getTitle() , start: startPos, reality: realityFactor})
+        this.logEvent( { message:'prepareRoute', route: title , start: startPos, reality: realityFactor})
         
         const userSettings = this.getUserSettings()
         const eppPreferences = clone(userSettings.get('eppPreferences',{}))
@@ -147,7 +175,7 @@ export class DeviceRideService  extends IncyclistService{
         }
         userSettings.update({eppPreferences})            
 
-        const routeData = route.get();
+        
         if ( routeData.epp) {
             const eppData = routeData.epp;
             let points = eppData.programData
@@ -177,7 +205,7 @@ export class DeviceRideService  extends IncyclistService{
                     points.push ( { distance: offset, elevation: originalPoints[idxBefore].elevation+elevationGain*distance/distanceGain } )
                     points = points.concat(originalPoints.slice(idxAfter));
 
-                    if (route.isLap()) {
+                    if (isLap) {
                         points = points.concat( originalPoints.slice(1,idxBefore+1).map( p=> { p.distance+=routeData.distance; return p;}));
                         points.push ( { distance: routeData.distance+offset, elevation: originalPoints[idxBefore].elevation+elevationGain*distance/distanceGain } )
                     }
@@ -186,7 +214,7 @@ export class DeviceRideService  extends IncyclistService{
                 else {
                     const originalPoints = points;
                     points = originalPoints.slice(idxAfter);
-                    if (route.isLap()) {
+                    if (isLap) {
                         points = points.concat( originalPoints.slice(1,idxBefore+1).map( p=> { p.distance+=routeData.distance; return p;}));
                     }
                 }
@@ -195,7 +223,7 @@ export class DeviceRideService  extends IncyclistService{
             
             const pStart = points[0];
             const elevationStart = pStart.elevation;
-            const totalDistance = route.isLap() ? routeData.distance : Math.ceil( routeData.distance-(startPos||0));
+            const totalDistance = isLap ? routeData.distance : Math.ceil( routeData.distance-(startPos||0));
 
             res = {
                 name: eppData.name,
@@ -203,7 +231,7 @@ export class DeviceRideService  extends IncyclistService{
                 programId: eppPreferences.programId,
                 type:  rideMode || 'free ride',
                 totalDistance,
-                lapMode: route.isLap(),
+                lapMode: isLap,
                 minElevation: eppData.minElevation,
                 maxElevation: eppData.maxElevation,
                 sampleRate: eppData.sampleRate,
@@ -221,7 +249,7 @@ export class DeviceRideService  extends IncyclistService{
         else {
             const sampleRate = 10; 
 
-            let points = routeData.decoded;
+            let points = routeData.points ?? routeData['decoded'];
             let totalDistance = Math.ceil(routeData.distance);
 
             if (startPos!==undefined && startPos!==0) {
@@ -247,7 +275,7 @@ export class DeviceRideService  extends IncyclistService{
                     points = [];
                     points.push ( { routeDistance: startPos, elevation: originalPoints[idxBefore].elevation+elevationGain*distance/distanceGain } )
                     points = points.concat(originalPoints.slice(idxAfter));
-                    if (route.isLap()) {
+                    if (isLap) {
                         points = points.concat( originalPoints.slice(1,idxBefore+1).map( p=> { p.routeDistance+=routeData.distance; return p;}));
                         points.push ( { routeDistance: routeData.distance, elevation: originalPoints[idxBefore].elevation+elevationGain*distance/distanceGain } )
                     }
@@ -257,13 +285,13 @@ export class DeviceRideService  extends IncyclistService{
                 else {
                     const originalPoints = points;
                     points = originalPoints.slice(idxAfter);
-                    if (route.isLap()) {
+                    if (isLap) {
                         points = originalPoints.slice(1,idxBefore+1).map( p=> { p.routeDistance+=routeData.distance; return p;});
                     }
                     
                 }
 
-                totalDistance = route.isLap() ? routeData.distance : Math.ceil( routeData.distance-(startPos||0));
+                totalDistance = isLap ? routeData.distance : Math.ceil( routeData.distance-(startPos||0));
             }
 
             
@@ -273,7 +301,7 @@ export class DeviceRideService  extends IncyclistService{
                 programId: eppPreferences.programId,
                 type:  rideMode || 'free ride',
                 totalDistance,
-                lapMode: route.isLap(),
+                lapMode: isLap,
                 minElevation: 0,
                 maxElevation: Math.ceil( Math.max ( ...points.map(p => p.elevation)) /1000) *1000,
                 sampleRate,
@@ -454,7 +482,7 @@ export class DeviceRideService  extends IncyclistService{
      * @returns An array, where every record contains the udid of the "most powerful" adapter and the AdapterInfo of the duplicates
      */
 
-    protected checkAntSameDeviceID(adapters:AdapterRideInfo[]):Array<{udid:string,info:AdapterInfo}> {
+    protected checkAntSameDeviceID(adapters:AdapterRideInfo[]):Array<DuplicateInfo> {
 
         try {
 
@@ -489,7 +517,7 @@ export class DeviceRideService  extends IncyclistService{
             })
             return duplicateAdapters
         }
-        catch(err) {
+        catch {
             return []
         }
 
@@ -524,12 +552,12 @@ export class DeviceRideService  extends IncyclistService{
         
     }
 
-    protected async startSingleAdapter(ai: AdapterRideInfo,duplicates,props,startType: 'start' | 'check' | 'pair' ) {
+    protected async startSingleAdapter(ai: AdapterRideInfo,duplicates:Array<DuplicateInfo>,props,startType: 'start' | 'check' | 'pair' ) {
         if (duplicates.find(dai=>dai.info.udid===ai.udid))
             return;
 
-        const startProps = clone(props||{})
-        const { forceErgMode, startPos, realityFactor, rideMode, route} = props||{};
+        const startProps = clone(props??{})
+        const { forceErgMode, startPos, realityFactor, rideMode, route} = props??{};
 
 
         this.initCyclingMode(ai, forceErgMode);
@@ -542,7 +570,7 @@ export class DeviceRideService  extends IncyclistService{
             this.initForStart(ai, startProps, route, startPos, realityFactor, rideMode);
         }
 
-        const sType = ai.adapter.hasCapability(IncyclistCapability.Control) ? 'bike' : 'sensor'
+        const sType = (ai.isControl ?? ai.adapter.hasCapability(IncyclistCapability.Control)) ? 'bike' : 'sensor'
         
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const logProps = {} as any
@@ -552,7 +580,7 @@ export class DeviceRideService  extends IncyclistService{
         if (sType==='bike'){
             const bike = ai.adapter
             logProps.cyclingMode = bike.getCyclingMode()?.getName()
-            logProps.bikeType = bike.getCyclingMode().getSetting('bikeType') 
+            logProps.bikeType = bike.getCyclingMode()?.getSetting('bikeType') 
         }
 
 
@@ -600,7 +628,6 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     private initCyclingMode(ai: AdapterRideInfo, forceErgMode: any) {
-        
         let bike,mode,settings;
 
         if (ai.adapter?.isControllable()) {
@@ -609,7 +636,7 @@ export class DeviceRideService  extends IncyclistService{
 
             const modeInfo = config.getModeSettings(ai.udid);
             mode = modeInfo?.mode;
-            settings = modeInfo?.settings || {};
+            settings = modeInfo?.settings ?? {};
 
 
             if (!this.simulatorEnforced && forceErgMode) {
@@ -620,16 +647,13 @@ export class DeviceRideService  extends IncyclistService{
                     settings = modeInfo.settings;
                 }
             }
-
-            if (!mode)
-                mode = bike.getDefaultCyclingMode();
-
-
+            
+            mode = mode??bike.getDefaultCyclingMode();
             bike.setCyclingMode(mode, settings);
         }
     }
 
-    private async handleStartRejection(startType: string, sType: string, logProps: any, err: any, ai: AdapterRideInfo, duplicates: { udid: string; info: AdapterInfo; }[]) {
+    private async handleStartRejection(startType: string, sType: string, logProps: any, err: any, ai: AdapterRideInfo, duplicates: DuplicateInfo[]) {
         this.logEvent({ message: `${startType} ${sType} request failed`, ...logProps, reason: err.message });
 
         this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err);
@@ -643,7 +667,7 @@ export class DeviceRideService  extends IncyclistService{
         ai.isStarted = false;
     }
 
-    private async handleStartFailure(startType: string, ai: AdapterRideInfo, duplicates: { udid: string; info: AdapterInfo; }[], sType: string, logProps: any) {
+    private async handleStartFailure(startType: string, ai: AdapterRideInfo, duplicates: DuplicateInfo[], sType: string, logProps: any) {
         this.emit(`${startType}-error`, this.getAdapterStateInfo(ai));
         if (duplicates.find(dai => dai.udid === ai.udid)) {
             duplicates.forEach(dai => { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info)); });
@@ -656,7 +680,7 @@ export class DeviceRideService  extends IncyclistService{
         ai.isStarted = false;
     }
 
-    private async handleStartSuccess(startType: string, ai: AdapterRideInfo, duplicates: { udid: string; info: AdapterInfo; }[], sType: string, logProps: any) {
+    private async handleStartSuccess(startType: string, ai: AdapterRideInfo, duplicates: DuplicateInfo[], sType: string, logProps: any) {
         this.emit(`${startType}-success`, this.getAdapterStateInfo(ai));
         if (duplicates.find(dai => dai.udid === ai.udid)) {
             duplicates.forEach(dai => { this.emit(`${startType}-success`, this.getAdapterStateInfo(dai.info)); });
@@ -828,7 +852,7 @@ export class DeviceRideService  extends IncyclistService{
         }
 
         // restart Interface and adapaters
-        this.logger.logEvent({ message: 'restart interface', interface: ifName });
+        this.logEvent({ message: 'restart interface', interface: ifName });
 
         let stopRequested = false;
         this.once('stop-ride',()=>{ stopRequested= true;})
@@ -847,7 +871,7 @@ export class DeviceRideService  extends IncyclistService{
             await this.reconnectAdapters(adapters, ifName);   
         }
         catch (err) {
-            this.logger.logEvent({ message: 'restart interface failed', interface: ifName, reason: err.message });
+            this.logEvent({ message: 'restart interface failed', interface: ifName, reason: err.message });
         }
 
         this.reconnectBusy = false;
@@ -963,7 +987,7 @@ export class DeviceRideService  extends IncyclistService{
 
         let success = false;
         do {
-            this.logger.logEvent({ message: 'restart adapter', device: unhealthy.udid });
+            this.logEvent({ message: 'restart adapter', device: unhealthy.udid });
             
             const adapter = unhealthy.adapter;
             try {
@@ -975,7 +999,7 @@ export class DeviceRideService  extends IncyclistService{
                 }
             }
             catch (err) {
-                this.logger.logEvent({ message: 'restart adapter failed', device: unhealthy.udid, reason: err.message });
+                this.logEvent({ message: 'restart adapter failed', device: unhealthy.udid, reason: err.message });
             }
 
             if (success) {
@@ -1296,15 +1320,16 @@ export class DeviceRideService  extends IncyclistService{
 
 
     async sendUpdate( request:UpdateRequest):Promise<void> {
+
         
-        const adapters = this.getSelectedAdapters();
+        const adapters = this.getSelectedAdapters()??[];
+        const targets = adapters.filter( ai =>  ai?.adapter?.isControllable() && ai?.adapter?.isStarted() &&  !ai.adapter?.isStopped())
 
         this.promiseSendUpdate = []
-        adapters?.forEach(ai=> {
-            if ( ai?.adapter?.isControllable() && ai?.adapter?.isStarted() &&  !ai.adapter?.isStopped() ) {                  
-                this.promiseSendUpdate.push( ai.adapter.sendUpdate(request) )
-            }
+        targets?.forEach(ai=> {
+            this.promiseSendUpdate.push( ai.adapter.sendUpdate(request) )
         })
+
 
         await this.waitForUpdateFinish()
 
@@ -1319,8 +1344,9 @@ export class DeviceRideService  extends IncyclistService{
             adapter = adapters?.find( ai=> ai.udid===udid)?.adapter
         }
         else {
-            adapter = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control))?.adapter
+            adapter = this.getControlAdapter()?.adapter
         }
+
         if (adapter)
             return adapter.getCyclingMode()
     }
@@ -1351,54 +1377,70 @@ export class DeviceRideService  extends IncyclistService{
         if (!currentMode)
             return
 
+        let mode
+        let request
         if (!currentMode.isERG())  {
             const power = adapter.getData().power
             this.enforceERG()
-            adapter.sendUpdate({targetPower:power})
+            request = {targetPower:power}
+            adapter.sendUpdate(request)
+            mode  = 'ERG'
         }
         else  {
             const slope = adapter.getData().slope
             adapter.setCyclingMode(targetMode)
             this.resetCyclingMode(false) 
-            adapter.sendUpdate({slope})
-
+            request = {slope}
+            adapter.sendUpdate(request)
+            mode='SIM'
         }
+
+        this.emit('cycling-mode-toggle',mode,request)
         
     }
 
 
-    async resetCyclingMode(sendInit:boolean=false) {
+    async resetCyclingMode(sendInit:boolean=false):Promise<{changed:boolean, mode?:CyclingMode}> {
         try {
             const adapterInfo = this.getControlAdapter(); 
             if (!adapterInfo?.adapter)
-                return
-            const config = this.getDeviceConfiguration()
+                return {changed:false}
 
             const {udid,adapter} = adapterInfo
-            const modeInfo = config.getModeSettings(udid)
-            const mode = modeInfo?.mode
-            const settings = modeInfo.settings
+            const { mode, settings } = this.getConfiguredModeInfo(udid);
+
+            if (mode===adapter.getCyclingMode().getName())
+                return {changed:false, mode:adapter.getCyclingMode() as CyclingMode};
             
             // We can't switch back to DaumClassic mode on Daum Premium, we would have to sent the whole route mid ride
             if (adapter.getCyclingMode().getModeProperty('eppSupport'))
-                return;
+                return {changed:false};
 
 
-            const device = adapter
-            device.setCyclingMode(mode,settings)
+            adapter.setCyclingMode(mode,settings)
             if (sendInit)
-                await device.sendInitCommands()
+                await adapter.sendInitCommands()
+            return {changed:true, mode:adapter.getCyclingMode() as CyclingMode}
         }
         catch(err) {
             this.logEvent({message:'error', error:err.message,fn:'resetCyclingMode'})
+            return {changed:false};
         }
 
     }
 
-    private getControlAdapter() {
+    private getConfiguredModeInfo(udid: string) {
+        const config = this.getDeviceConfiguration();
+        const modeInfo = config.getModeSettings(udid);
+        const mode = modeInfo?.mode;
+        const settings = modeInfo.settings;
+        return { mode, settings };
+    }
+
+    getControlAdapter() {
         const adapters = this.getSelectedAdapters();
 
-        const adapterInfo = adapters?.find(ai => ai.adapter.hasCapability(IncyclistCapability.Control));
+        const adapterInfo = adapters?.find(ai => ai.isControl) ?? adapters?.find(ai => ai.adapter.hasCapability(IncyclistCapability.Control));
         return adapterInfo;
     }
 
@@ -1467,7 +1509,9 @@ export class DeviceRideService  extends IncyclistService{
 
     canEnforceSimulator():boolean {
         const selected = getRouteList().getSelected()
-        if (selected?.description?.hasVideo)
+        const personalApiKey = this.getGoogleMaps().hasPersonalApiKey()
+
+        if (selected?.description?.hasVideo || personalApiKey)
             return true
 
         return useUserSettings().isNewUser()
@@ -1493,6 +1537,11 @@ export class DeviceRideService  extends IncyclistService{
     @Injectable
     protected getDeviceAccess() {        
         return useDeviceAccess()
+    }
+
+    @Injectable
+    protected getGoogleMaps() {
+        return useGoogleMaps()
     }
 
 

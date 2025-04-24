@@ -187,14 +187,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const fs = getBindings().fs
         if (!fs) return true
         
-        try {
-            await fs.access( this.cleanupEncoding(path))
-            return true
-        }
-        catch(err) {
-            this.logger.logEvent({message:'file does not exist', path, reason:err.message})
-            return false
-        }
+        return fs.existsFile(path)
     }
 
     cleanupEncoding(path:string):string {
@@ -545,7 +538,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             getRouteList().emitLists('updated',{log:true,source});
             deleted =true;   
         }
-        catch(err) {
+        catch {
             deleted =  false
         }
         finally {
@@ -823,7 +816,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         observer.on('conversion.progress', (progress) => {
             getRouteList().logEvent({ message: 'video conversion progress', progress });
-            this.convertObserver.emit('progress', progress.percent || progress.completed);
+            this.convertObserver.emit('progress', progress.percent ?? progress.completed);
         });
 
         observer.on('conversion.done', (url: string) => {

@@ -1,6 +1,5 @@
-import {IncyclistCapability} from 'incyclist-devices'
 
-export type ExtendedIncyclistCapability = IncyclistCapability|'bike'
+export type ExtendedIncyclistCapability = 'control' |'power'| 'speed' | 'cadence' |'heartrate'|  'bike'
 
 export interface DeviceInformation {
     udid: string;

@@ -70,7 +70,7 @@ export class StravaActivityLoader extends Loader< Activity >  {
             }
             this.isInitialized = true
         }
-        catch(err) {
+        catch {
             delete this.config
         }
     }    
@@ -117,8 +117,6 @@ export class StravaActivityLoader extends Loader< Activity >  {
 
                 const res = await this.getApi().getLoggedInAthleteActivities( {page,per_page:50, ...filters})
                 done = (!Array.isArray(res) || res.length===0)
-
-                console.log('#Strava loaded',res)
 
                 if (Array.isArray(res)) {                        
                     const filtered= res.filter( a=> a.sport_type==='Ride'||a.sport_type==='VirtualRide'|| a.sport_type==='EBikeRide' || a.sport_type==='MountainBikeRide' )
@@ -172,8 +170,6 @@ export class StravaActivityLoader extends Loader< Activity >  {
         if (!points?.length)
             return;
 
-        console.log('# strava: udapte Route',points)
-        
         const last = points[points.length - 1];
         const first = points[0];
         const totalDistance = last.routeDistance;
@@ -216,9 +212,6 @@ export class StravaActivityLoader extends Loader< Activity >  {
         const latlng = stravaDetail.find(sd => sd.type === 'latlng')?.data
         const altitudes = stravaDetail.find(sd => sd.type === 'altitude')?.data
         const slopes = stravaDetail.find(sd => sd.type === 'grade_smooth')?.data
-
-
-        console.log('# strava: build Points', JSON.stringify(stravaDetail),  distances,latlng, altitudes, slopes)
 
         const num = latlng?.length;
         if (!num)
@@ -288,8 +281,8 @@ export class StravaActivityLoader extends Loader< Activity >  {
             })
 
         }
-        catch(err) {
-            //this.logEvent( {message: 'error', fn:'saveCredentials', error:err.message, stack:err.stack})
+        catch (err){
+            this.logger.logEvent( {message: 'warning', fn:'saveCredentials', error:err.message, stack:err.stack})
         }
 
     }

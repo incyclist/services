@@ -15,7 +15,7 @@ class InfinityError extends Error {
 class TimeoutError extends Error {
     constructor(message) {
         super(message);
-        this.message = message || 'timeout'
+        this.message = message ?? 'timeout'
     }
 }
 
@@ -108,6 +108,8 @@ export class ActivityDuration {
     }
 
     private checkIfCacheIsInvalid(routePos: number, route: Route) {
+        if (!route)
+            return true
         if ((routePos > route.distance /* new lap  */) ||
             (this.cache && this.cache.totalDistance !== route.distance /* route has changed*/)) {
             delete this.cache;
@@ -228,7 +230,7 @@ export class ActivityDuration {
             
     
         }
-        catch(err) {
+        catch {
             return undefined
         }
 

@@ -54,12 +54,13 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
      */
     openSettings():WorkoutSettingsDisplayProps {
 
-        let settings,canStart,duration,ftpRequired,categories=[],category
+        let settings,canStart,duration,ftpRequired,categories=[],category,canStartWorkoutOnly
 
         try {
             const service = useWorkoutList()
 
             canStart = service.canDisplayStart()
+            canStartWorkoutOnly = !canStart 
             duration = this.calculateDuration()
 
             ftpRequired = valid(this.workout.steps.find( s=> 
@@ -78,7 +79,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         catch(err) {
             this.logError(err,'openSettings')
         }
-        return {settings, ftpRequired, canStart,duration,categories,category} 
+        return {settings, ftpRequired, canStart,canStartWorkoutOnly,duration,categories,category} 
     }
 
 
@@ -314,7 +315,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
             
             deleted =true;   
         }
-        catch(err) {
+        catch {
             deleted =  false
         }
         finally {

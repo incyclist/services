@@ -1,6 +1,6 @@
 import { geo } from "../../../utils";
 import clone from "../../../utils/clone";
-import { LatLng, calculateDistance } from "../../../utils/geo";
+import { LatLng, calculateDistance, calculateHeaderFromPoints } from "../../../utils/geo";
 import { valid } from "../../../utils/valid";
 import { RouteApiDetail } from "../api/types";
 import { Route } from "../model/route";
@@ -101,9 +101,9 @@ export const updateSlopes = (points: Array<RoutePoint>, validateOnly=false):void
 
 const updateSlopePrevPoint = (point: RoutePoint, prevPoint: any, points: RoutePoint[]) => {
     
-    if (point.distance === undefined) {
-        point.distance = geo.distanceBetween(prevPoint, point);
-    }
+    
+    point.distance = point.distance ?? geo.distanceBetween(prevPoint, point);
+    
     if (!point.isCut)
         prevPoint.slope = (point.elevation - prevPoint.elevation) / point.distance * 100;
     else if (prevPoint.slope === undefined || prevPoint.slope > 50) {
@@ -390,17 +390,28 @@ export const getNextPosition = ( route:Route, props:GetNextPositionProps ):LapPo
         return;
     }
         
-    let pPrev={...(props.prev || { ...points[0],lap:1,cnt:0})};        
+    let pPrev={...(props.prev || { ...points[0],lap:1,cnt:0})};       
 
+    if (props.routeDistance===0 && !props.prev) {
+        return {...points[0],lap:1,cnt:0, totalDistance:0}
+        
+    }
+    
     const searchTarget = getNextPositionSearchTarget(route, pPrev,props);
 
     const {pSearchStart,point}  = searchNextPoint(route,pPrev,props,searchTarget)
     pPrev = pSearchStart
 
-    return point??pPrev
+    const lapPoint =  point??pPrev
+    lapPoint.lap = searchTarget.lap
+    lapPoint.totalDistance = getLapTotalDistance(route,lapPoint)
+    return lapPoint
+        
+    
+
 }
 
-interface GetPositionProps {
+export interface GetPositionProps {
     cnt?: number        // index in Array
     distance?: number
 
@@ -408,6 +419,20 @@ interface GetPositionProps {
     latlng?: LatLng
 }
 
+    /**
+     * Returns a point from the route
+     * 
+     * @param route The route Object
+     * @param props Object with parameters
+     * 
+     * @returns a RoutePoint
+     * 
+     * @example
+     * 
+     * const point = route.getPosition({cnt:3}) // returns the point at index 3
+     * const point = route.getPosition({distance:300}) // returns the point at distance 300
+     * const point = route.getPosition({latlng: {lat:12.3, lng:45.6}}) // returns the point at the given latlng
+     */
 export const getPosition = (route:Route,  props:GetPositionProps) => {
     if (props===undefined || route.points===undefined)
         return;
@@ -426,6 +451,45 @@ export const getPosition = (route:Route,  props:GetPositionProps) => {
     }
 }
 
+    /**
+     * Calculates the heading (initial bearing) at a given point on the route
+     * 
+     * @param route The route Object
+     * @param props Object with parameters
+     * 
+     * @returns the heading in degrees
+     * 
+     * @example
+     * 
+     * const heading = route.getHeading({cnt:3}) // returns the heading at the point at index 3
+     * const heading = route.getHeading({distance:300}) // returns the heading at the point at distance 300
+     * const heading = route.getHeading({latlng: {lat:12.3, lng:45.6}}) // returns the heading at the point at the given latlng
+     */
+export const getHeading  = ( route:Route, point: RoutePoint) => {
+
+        if (!route.description.hasGpx || !route.points?.length  )
+            return;
+
+        const points = route.points
+        
+        
+        point.cnt = point.cnt??points.indexOf(point)
+        
+        if (point.cnt===undefined || points.length<2)
+            return 180;
+        
+        let p1,p2;
+
+        if ( point.cnt===points.length-1) {
+            p1 = points[point.cnt-1];
+            p2 = point;
+        }
+        else {
+            p1 = point;
+            p2 = points[point.cnt+1];
+        }
+        return calculateHeaderFromPoints( p1,p2);        
+}
 
 
 
@@ -552,7 +616,7 @@ function getNextPositionSearchTarget(route: Route, pPrev:LapPoint,props:GetNextP
     }
     else {
         lap = 1;
-        targetRouteInLap = targetRouteDistance;
+        targetRouteInLap = Math.min(targetRouteDistance, route.description.distance);
     }
     return {lap,targetRouteInLap,searchStart,distance}
 }
@@ -572,6 +636,11 @@ function searchNextPoint(route:Route,pPrev:LapPoint,props:GetNextPositionProps,s
         pPrev = p;
     }
 
+    if (route.description.isLoop) {
+        const point = updatePoint(points[0], pPrev, props,  distance, targetRouteInLap, route, lap);
+        return {pSearchStart,point}
+        
+    }
     return {pSearchStart}
 
 }
@@ -648,9 +717,8 @@ export const createFromJson = (r:LegacyRouteApiDetail) => {
 }
 
 const addMissingIndexes =(points:Array<RoutePoint>) => {
-    points.forEach( (p,idx) =>{
-        if (p.cnt===undefined)
-            p.cnt=idx    
+    points.forEach( (p,idx) =>{        
+        p.cnt=p.cnt??idx    
     })
 
 }

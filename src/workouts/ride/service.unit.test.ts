@@ -226,7 +226,7 @@ describe('WorkoutRide',()=>{
         })
 
         test('active',async ()=>{
-            service.stop()
+            service.stop({completed:true})
 
             expect(emit).toHaveBeenCalledWith('completed')
             expect(s.state).toBe('completed')
@@ -242,7 +242,7 @@ describe('WorkoutRide',()=>{
             s.state = 'paused'
             service.stop()
 
-            expect(emit).toHaveBeenCalledWith('completed')
+            expect(emit).toHaveBeenCalledWith('stopped')
             expect(s.state).toBe('completed')
             
             await waitNextTick()

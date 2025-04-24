@@ -4,7 +4,7 @@ import {KWTParser} from './kwt'
 import { XMLParser } from './xml'
 
 import path from 'path'
-import fs from 'fs'
+import fs from 'fs/promises'
 import { IFileSystem } from '../../../api/fs'
 import { parseXml } from '../../../utils'
 
@@ -18,7 +18,10 @@ describe('XMLParsers',()=>{
         beforeEach( ()=>{
             parser = new KWTParser()
             getBindings().path = path
-            getBindings().fs = fs as unknown as IFileSystem
+            const mockFS = fs as unknown as IFileSystem
+            mockFS.existsFile = async (path)=> { try { await fs.stat(path); return true} catch { return false}}
+            mockFS.existsDir = async (path)=> { try { await fs.stat(path); return true} catch { return false}}
+            getBindings().fs = mockFS
 
         })
 

@@ -166,7 +166,7 @@ describe('ActivityListService',()=>{
         Inject('Repo', mocks.repo)
         Inject('Bindings', {
             fs: {
-                existsSync:jest.fn().mockReturnValue(true),
+                existsFile:jest.fn().mockResolvedValue(true)
             }
         })
         Inject('RouteList', {
@@ -528,6 +528,29 @@ describe('ActivityListService',()=>{
             
             let res
             res = service.openSelected()
+
+            const waitForFinalResult = (to:number)=> {
+                return new Promise<void>(resolve => {
+                    let isDone = false
+
+                    const done = ()=> {
+                        if (isDone)
+                            return
+                        isDone = true
+                        resolve()
+
+                    }
+                    setTimeout(done,to)
+                    service.getObserver().once('updated',(update)=>{
+                        res = update
+                        done()
+                    })
+                })
+
+            }
+
+            await waitForFinalResult(500)
+
             
             delete res.points   
             delete res.activity 

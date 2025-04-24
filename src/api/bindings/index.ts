@@ -6,6 +6,7 @@ import { IFileSystem } from '../fs'
 import { IMessageQueueBinding } from '../mq'
 import { IPathBinding } from '../path'
 import { IFileLoader, IJsonRepositoryBinding } from '../repository'
+import { INativeUI } from '../ui'
 import { IVideoProcessor } from '../video'
 import { ISecretBinding } from './secret'
 
@@ -21,6 +22,7 @@ export class IncyclistBindings {
     public form?:IFormPostBinding;
     public secret?:ISecretBinding
     public mq: IMessageQueueBinding
+    public ui: INativeUI
 
 
 }

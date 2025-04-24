@@ -19,7 +19,6 @@ export class ActiveRideListMessageQueue extends IncyclistService{
 
 
     onDisconnect() {
-        console.log('# disconnect from ')
         const mq = this.getMessageQueue();
         if (!mq?.enabled())
             return
@@ -158,7 +157,7 @@ export class ActiveRideListMessageQueue extends IncyclistService{
         })
 
         if (!handled) {
-            this.logEvent({message:'# unknown topic message', topic, payload:message})            
+            this.logEvent({message:'unknown topic message', topic, payload:message})            
         }
     }
 

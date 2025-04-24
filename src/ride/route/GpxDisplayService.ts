@@ -1,0 +1,218 @@
+import { Injectable } from "../../base/decorators";
+import { Observer } from "../../base/types";
+import { getHeading } from "../../routes";
+import { UserSettingsService, useUserSettings } from "../../settings";
+import { CurrentRideDisplayProps, GpxDisplayProps, ICurrentRideService, RouteDisplayProps } from "../base";
+import { RouteDisplayService } from "./RouteDisplayService";
+import { SatelliteViewEvent, StreetViewEvent } from "./types";
+
+const SV_UPDATE_FREQ = 3000
+const SV_MIN_READY = 1500
+const SV_MIN_DELAY = 1000
+
+export class GpxDisplayService extends RouteDisplayService {
+
+    protected mapLoaded:boolean = false
+    protected mapError:string
+    protected svObserver: Observer;
+    protected svPosition: {lat:number, lng:number, heading:number}
+    protected tsPrevSVUpdate: number
+    protected tsLastSVEvent: number
+    protected tsPositionUpdateConfirmed: number
+    
+    
+
+    constructor() {
+        super()
+
+    }
+
+    init(service: ICurrentRideService) {
+        try {
+            super.init(service)
+
+            const rideView = this.getUserSettings().get('preferences.rideView','sv')
+            if ( rideView==='sv') {
+                const updateFreq = this.getDefaultUpdateFrequency();
+                const minimalPause = this.getMinimalPause()
+                const bestFreq = this.getBestCaseUpdateFrequency()
+                this.logEvent({message:'init streetview', updateFreq, minimalPause, bestFreq})                
+            }
+            this.logEvent({message:''})
+            this.observer.on('position-update',this.onPositionUpdate.bind(this))
+
+            
+        }
+        catch(err) {
+            this.logError(err,'init')
+        }
+    }
+    
+
+    // for StreetView we can't update the position more frequently than every 3 seconds
+    // also: we need to provide heading for StreetView
+    getStreetViewProps(rideProps: CurrentRideDisplayProps) {
+        const sideViews = {
+            show: !rideProps.hideAll,
+            left: this.getUserSettings().get('preferences.sideViews.sv-left',true),
+            right: this.getUserSettings().get('preferences.sideViews.sv-right',true),
+        }
+
+        const props:any =  {
+            onDisplayEvent: this.onStreetViewEvent.bind(this),
+            displayObserver: this.mapLoaded  ? this.getStreetViewObserver() : undefined,            
+            displayPosition: this.mapLoaded  ? null : this.position,
+            sideViews
+        }
+
+        return props
+    }
+
+    // We might need to restrict the position update frequency, similar to StreetView
+    // {position,googleMaps,visible,options,onEvent}
+    getSateliteViewProps() {
+        return {
+            onDisplayEvent: this.onSatelliteViewEvent.bind(this)
+        }
+    }
+    
+
+    getStartOverlayProps() {
+        const rideView = this.getUserSettings().get('preferences.rideView','sv')
+        if (rideView === 'map') {
+            return {}
+        }
+
+        return {
+            mapType: rideView==='sv' ? 'StreetView' : 'SatelliteView',
+            mapState: this.mapLoaded ? 'Loaded' : 'Loading'
+        }
+    }
+
+    isStartRideCompleted(): boolean {
+        return this.mapLoaded
+    }
+
+
+
+    getDisplayProperties(props:CurrentRideDisplayProps):GpxDisplayProps {
+        let routeProps:RouteDisplayProps = super.getDisplayProperties(props)
+        const rideView = this.getUserSettings().get('preferences.rideView','sv')
+
+        if (rideView==='sv') {
+            routeProps = {...routeProps, ...this.getStreetViewProps(props)}
+        }
+        else if (rideView==='sat') {
+            routeProps = {...routeProps, ...this.getSateliteViewProps()}
+        }
+        else {
+            routeProps = {...routeProps,  showMap:false}
+        }
+
+        return {
+           rideView,
+            ...routeProps            
+        }    
+    }
+
+    protected onSatelliteViewEvent(state:SatelliteViewEvent,error?:string) {
+        if (state==='Loaded') {
+            this.mapLoaded = true
+        }
+        else if (state==='Error') {
+            this.mapError = error
+        }
+        this.emit('state-update')
+
+    }
+
+    protected onStreetViewEvent(event:StreetViewEvent,data:any) {
+        //console.log('# streetview event', event, data)
+
+        
+        if (event==='Loaded') {
+            this.mapLoaded = true
+            this.emit('state-update')
+        }
+        else if (event==='Error') {
+            this.mapError = data as string
+            this.emit('state-update')
+        }
+        if ( event==='position_changed') {
+            this.tsPositionUpdateConfirmed = Date.now()
+        }
+        this.tsLastSVEvent = Date.now()
+
+    }
+
+    protected getStreetViewObserver () {
+        this.svObserver = this.svObserver??new Observer()
+        return this.svObserver
+    }
+
+    protected onPositionUpdate( state) {
+
+        const {route,position} = state??{}
+
+        const updatePending = (Date.now()-(this.tsPrevSVUpdate??0))> this.getDefaultUpdateFrequency()
+        const stillBusy = !this.tsPositionUpdateConfirmed || (Date.now()-this.tsLastSVEvent)<this.getMinimalPause()
+        const updatePossible = this.tsPositionUpdateConfirmed && (Date.now()-this.tsLastSVEvent)>this.getBestCaseUpdateFrequency()
+
+        console.log( '# service.onPositionUpdate', this.tsLastSVEvent - this.tsPrevSVUpdate, {stillBusy, updatePossible, updatePending, ...state})
+
+        if ( !stillBusy && (updatePending || updatePossible) ){
+            if (position) {
+
+                const freq = this.tsPrevSVUpdate ? Date.now()-this.tsPrevSVUpdate : undefined
+                const duration = this.tsPrevSVUpdate ? (this.tsLastSVEvent??Date.now())-this.tsPrevSVUpdate : undefined
+               
+                const {lat,lng,routeDistance} = position
+                const heading = getHeading(route,position )
+                this.getStreetViewObserver()?.emit('position-update',{lat,lng,heading})
+
+                this.logEvent({message:'street view position update', lat,lng, routeDistance, heading, freq, duration})
+
+                this.tsPrevSVUpdate = Date.now()
+                delete this.tsPositionUpdateConfirmed
+                delete this.tsLastSVEvent
+
+
+            }
+        }
+    }
+
+    protected getDefaultUpdateFrequency() {
+        return this.getNumSetting('SV_UPDATE_FREQ') ?? SV_UPDATE_FREQ
+    }
+
+    protected getMinimalPause() {
+        return this.getNumSetting('SV_MIN_READY') ?? SV_MIN_READY
+    }
+
+    protected getBestCaseUpdateFrequency() {
+        return this.getNumSetting('SV_MIN_DELAY') ?? SV_MIN_DELAY
+    }
+
+    protected getNumSetting(key:string):number {
+        try {
+            const ret = this.getUserSettings().get(key,undefined)
+            if (!ret)
+                return
+            const val = Number(ret)
+            if (isNaN(val)) {
+                this.logEvent({message:'inalid setting', key,ret})
+                return
+            }
+            return val
+
+        }
+        catch {}
+    }
+
+    @Injectable
+    protected getUserSettings(): UserSettingsService {
+        return useUserSettings()
+    }
+
+    
+}

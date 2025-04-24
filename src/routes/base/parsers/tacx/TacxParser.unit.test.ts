@@ -2,7 +2,7 @@
 import {TacxParser} from './TacxParser'
 import { FileInfo, getBindings } from '../../../../api'
 import path from 'path'
-import fs from 'fs'
+import fs from 'fs/promises'
 import { IFileSystem } from '../../../../api/fs'
 import { loadFile } from '../../../../../__tests__/utils/loadFile'
 
@@ -20,14 +20,21 @@ const load =  async (file) => {
 
 }
 
+const mockFS:IFileSystem = fs as unknown as IFileSystem
+mockFS.existsFile = async (path)=> { try { await fs.stat(path); return true} catch { return false}}
+mockFS.existsDir = async (path)=> { try { await fs.stat(path); return true} catch { return false}}
+
+
 describe('TacxParser',()=>{
     let parser:TacxParser
     
     beforeEach( ()=>{
 
         parser = new TacxParser()
+
+
         getBindings().path = path
-        getBindings().fs = fs as unknown as IFileSystem
+        getBindings().fs = mockFS
         getBindings().loader = { open: load}
 
     })
@@ -99,8 +106,7 @@ describe('TacxParser',()=>{
 
     test('existing absolute video file path in rlv',async ()=>{        
 
-        const fsb = getBindings().fs ?? fs
-        fsb.existsSync = jest.fn().mockReturnValue(true)
+        mockFS.existsFile = jest.fn().mockResolvedValue(true)
         const name = 'ES_Andalusia-1'
         const ext = 'rlv'
         const dir = './__tests__/data/rlv'
@@ -124,8 +130,7 @@ describe('TacxParser',()=>{
 
     test('non-existing absolute video file path in rlv',async ()=>{        
 
-        const fsb = getBindings().fs ?? fs
-        fsb.existsSync = jest.fn().mockReturnValue(false)
+        mockFS.existsFile = jest.fn().mockResolvedValue(false)
         
         const name = 'ES_Andalusia-1'
         const ext = 'rlv'
@@ -134,6 +139,7 @@ describe('TacxParser',()=>{
         const fileInfo:FileInfo = {type:'file', filename:file, name:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
 
         const {details} = await parser.import(fileInfo)
+        
 
         expect(details.video?.file).toBe(`video:///__tests__/data/rlv/ES_Andalusia-1.avi`)    
 

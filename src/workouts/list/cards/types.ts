@@ -59,6 +59,8 @@ export interface WorkoutSettingsDisplayProps {
     ftpRequired: boolean;
     /** identifies if the start button should be rendered (i.e. if there is a route selected) */
     canStart: boolean
+    /** identifies if the "start without route" button should be rendered (i.e. if there is a route selected) */
+    canStartWorkoutOnly
     /** The duration of the workout */
     duration: string
     /** The list of available categories */
