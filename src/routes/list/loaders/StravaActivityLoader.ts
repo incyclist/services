@@ -70,7 +70,7 @@ export class StravaActivityLoader extends Loader< Activity >  {
             }
             this.isInitialized = true
         }
-        catch(err) {
+        catch {
             delete this.config
         }
     }    
@@ -281,8 +281,8 @@ export class StravaActivityLoader extends Loader< Activity >  {
             })
 
         }
-        catch(err) {
-            //this.logEvent( {message: 'error', fn:'saveCredentials', error:err.message, stack:err.stack})
+        catch (err){
+            this.logger.logEvent( {message: 'warning', fn:'saveCredentials', error:err.message, stack:err.stack})
         }
 
     }

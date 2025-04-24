@@ -37,9 +37,7 @@ export class Segment extends Step implements SegmentDefinition {
         else if (opts.steps !== undefined) {
             if (Array.isArray(opts.steps)) {
                 opts.steps.forEach(step => {
-                    if (step.start === undefined) {
-                        step.start = stepStart;
-                    }
+                    step.start = step.start ?? stepStart
                     const s = new Step(step);
                     stepStart = s.end;
                     this.steps.push(s);

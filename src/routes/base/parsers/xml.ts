@@ -394,11 +394,9 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
       
     }    
     
-    protected getLogger():EventLogger {
-        if (!this.logger)
-            this.logger = new EventLogger('XML Parser')
+    protected getLogger():EventLogger {        
+        this.logger = this.logger ?? new EventLogger('XML Parser')
         return this.logger
-
     }
 
 

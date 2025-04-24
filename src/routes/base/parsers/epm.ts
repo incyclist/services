@@ -21,7 +21,7 @@ export class EPMParser extends XMLParser{
         const {data,route} = context
 
         route.points=[]
-        const positions = data['positions']||[]
+        const positions = data['positions']?.length ? data['positions'] : []
 
         let prevDistance=undefined
         positions.forEach( (pos,idx)=> {

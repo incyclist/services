@@ -5,7 +5,7 @@ import { createFromJson } from '../../routes'
 import { RouteApiDetail } from '../../routes/base/api/types'
 import { RouteSettings } from '../../routes/list/cards/RouteCard'
 import { RouteDisplayService } from './RouteDisplayService'
-import { CurrentRideService} from '../current/service'
+import { RideDisplayService} from '../display/service'
 import { Observer } from '../../base/types'
 
 const OC = expect.objectContaining
@@ -42,7 +42,7 @@ describe( 'RouteDisplayService', () => {
             getStartSettings: jest.fn().mockReturnValue(options.startSettings??defaultStartSettings)
         })
 
-        mockRideService = new CurrentRideService()
+        mockRideService = new RideDisplayService()
         mockRideService.getObserver= jest.fn().mockReturnValue(mockObserver)
         mockRideService.displayService = s
                     

@@ -1,4 +1,4 @@
-import {  DeviceData, UpdateRequest } from "incyclist-devices";
+import { UpdateRequest } from "incyclist-devices";
 import { ActiveWorkoutLimit } from "../../workouts";
 import { RideModeService } from "../base/base";
 import { CurrentPosition, CurrentRideDisplayProps, ICurrentRideService, RouteDisplayProps, SideViewsShown } from "../base";

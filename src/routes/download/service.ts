@@ -142,7 +142,7 @@ export class RouteDownloadService extends IncyclistService {
             }
             file = path.join( targetDir, info.base)
         }
-        catch(err) {
+        catch {
             return {}
         }
         return {file,url}

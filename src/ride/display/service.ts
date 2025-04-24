@@ -59,12 +59,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
                 this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
                 /* TODO:
-
-                    this.displayService.on('prepare-next-video',this.onPrepareNextVideo.bind(this))
-                    this.displayService.on('next-video',this.onNextVideo.bind(this))
-                    this.displayService.on('route-changed',this.onPrepareNextVideo.bind(this))
-
-
+                    'prepare-next-video' event
+                    'next-video' event
+                    'route-changed' event
                 */
                 this.hideAll = false
                 
@@ -1200,13 +1197,13 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected getBike() {
         const devices = this.getDeviceConfiguration()
-        let adapter = devices.getSelected(IncyclistCapability.Control) || devices.getSelected(IncyclistCapability.Power) || devices.getSelected(IncyclistCapability.Speed) 
+        let adapter = devices.getSelected(IncyclistCapability.Control) ?? devices.getSelected(IncyclistCapability.Power) ?? devices.getSelected(IncyclistCapability.Speed) 
         return adapter?.getUniqueName()
     }
 
     protected getBikeInterface() {        
         const devices = useDeviceConfiguration()
-        const adapter = devices.getSelected(IncyclistCapability.Control) || devices.getSelected(IncyclistCapability.Power) || devices.getSelected(IncyclistCapability.Speed) 
+        const adapter = devices.getSelected(IncyclistCapability.Control) ?? devices.getSelected(IncyclistCapability.Power) ?? devices.getSelected(IncyclistCapability.Speed) 
         return getLegacyInterface(adapter)                
     }
 
@@ -1267,6 +1264,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 }
 
-export const useRideDisplay = () => {
+export const useCurrentRide = () => {
     return new RideDisplayService()
 }
