@@ -208,11 +208,25 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
     }
 
     backward() {
-        this.getWorkoutRide().backward()
+        try {
+            if (this.getWorkoutRide().inUse()) { 
+                this.getWorkoutRide()?.backward()
+            }
+        }
+        catch(err) {
+            this.logError(err,'forward')
+        }
     }
 
     forward() {
-        this.getWorkoutRide().forward()
+        try {
+            if (this.getWorkoutRide().inUse()) { 
+                this.getWorkoutRide()?.forward()
+            }
+        }
+        catch(err) {
+            this.logError(err,'backward')
+        }
 
     }
 
@@ -533,7 +547,6 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
         const sensors = this.isSensorsReadyToStart()
         const ride = this.getRideModeService().isStartRideCompleted()
 
-        console.log('# check start status',{devices, sensors, ride})
         if (devices && sensors && ride) {
             this.onStartCompleted()
         }
