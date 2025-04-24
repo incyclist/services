@@ -636,7 +636,7 @@ export class DeviceRideService  extends IncyclistService{
 
             const modeInfo = config.getModeSettings(ai.udid);
             mode = modeInfo?.mode;
-            settings = modeInfo?.settings || {};
+            settings = modeInfo?.settings ?? {};
 
 
             if (!this.simulatorEnforced && forceErgMode) {

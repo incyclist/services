@@ -2,7 +2,7 @@
 import { Device } from 'tcx-builder'
 import { Inject } from '../../base/decorators'
 import { Workout } from '../../workouts'
-import {CurrentRideService} from './service'
+import {RideDisplayService} from './service'
 import { Observer } from '../../base/types'
 import { send } from 'node:process'
 
@@ -10,7 +10,7 @@ describe('CurrentRideService',()=>{
 
     describe('powerUp',()=>{
 
-        let service: CurrentRideService
+        let service: RideDisplayService
         let activityValues = {}
         let limits = {}
         let devicePowerUp = jest.fn()
@@ -57,7 +57,7 @@ describe('CurrentRideService',()=>{
                 get: jest.fn().mockReturnValue({debug:true})
             })
 
-            service = new CurrentRideService()
+            service = new RideDisplayService()
         })
 
         afterEach( ()=>{

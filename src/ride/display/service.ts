@@ -21,7 +21,7 @@ import { CurrentRideDisplayProps, ICurrentRideService, StartOverlayProps } from 
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 
 @Singleton
-export class CurrentRideService extends IncyclistService implements ICurrentRideService {
+export class RideDisplayService extends IncyclistService implements ICurrentRideService {
 
     protected observer: Observer
     protected type: RideType
@@ -1267,6 +1267,6 @@ export class CurrentRideService extends IncyclistService implements ICurrentRide
 
 }
 
-export const useCurrentRide = () => {
-    return new CurrentRideService()
+export const useRideDisplay = () => {
+    return new RideDisplayService()
 }
