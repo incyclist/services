@@ -1264,6 +1264,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 }
 
-export const useCurrentRide = () => {
+export const useRideDisplay= () => {
     return new RideDisplayService()
 }
