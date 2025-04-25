@@ -16,7 +16,7 @@ export class TacxFileReader<X extends TacxFile> {
             this.parseFileType(fp)
             return true;
         }
-        catch(err) {
+        catch {
             return false
         }
     }

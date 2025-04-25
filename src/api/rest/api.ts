@@ -73,7 +73,7 @@ export class ApiClient {
 
         }
         catch (err) {
-            this.logger.logEvent({ message: 'error', fn: 'onRequest()', error: err.message || err, stack: err.stack });
+            this.logger.logEvent({ message: 'error', fn: 'onRequest()', error: err.message, stack: err.stack });
         }
         return req;
 
@@ -83,7 +83,7 @@ export class ApiClient {
         if (!res)
             return;
         
-        const { config, status } = res || {};
+        const { config, status } = res ?? {};
         const { headers = {}, url, method, params } = config;
         const tid = headers['x-transaction-id'];
         if (!tid)
@@ -100,7 +100,7 @@ export class ApiClient {
             }
         }
         catch (err) {
-            this.logger.logEvent({ message: 'error', fn: 'onResponse', error: err.message || err, tid, stack: err.stack });
+            this.logger.logEvent({ message: 'error', fn: 'onResponse', error: err.message , tid, stack: err.stack });
         }
 
         return res;

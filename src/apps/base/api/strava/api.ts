@@ -159,7 +159,7 @@ export class StravaApi extends AppApiBase{
             try {
                 await this.refreshToken()
             }
-            catch (err) {
+            catch  {
                 throw new Error('token refresh failed')
             }
         }
@@ -221,7 +221,7 @@ export class StravaApi extends AppApiBase{
             return response.data;
         }
         else {            
-            throw new Error( response.error?.response?.data?.error|| response.error?.response?.message || response.error.message||`HTTP error ${response.status}`)
+            throw new Error( response.error?.response?.data?.error?? response.error?.response?.message ?? response.error.message??`HTTP error ${response.status}`)
         }
 
     }

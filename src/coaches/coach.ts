@@ -102,9 +102,8 @@ export class Coach {
 
         const deviceSettings:DeviceSettings = {name:this.settings.name,interface:INTERFACE.SIMULATOR}        
         const props:SimulatorProperties = {port:'',isBot:true,user, settings:{bikeType,mode,power,speed}}
-
-        if (!this.simulator)
-            this.simulator = AdapterFactory.create(deviceSettings,props)
+        
+        this.simulator = this.simulator ?? AdapterFactory.create(deviceSettings,props)
     }
 
     async start( onData) {
@@ -120,7 +119,7 @@ export class Coach {
                             
             
         } catch (err) {
-            this.logger.logEvent({message:'error', fn:'startCoach()', coach:this.settings.name, error:err.message||err});                
+            this.logger.logEvent({message:'error', fn:'startCoach()', coach:this.settings.name, error:err.message});                
         }        
 
     }

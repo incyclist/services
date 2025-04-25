@@ -53,7 +53,7 @@ export class JsonRepository {
             if (str === '{}' || str.length<2)
                 return null
         }
-        catch(err) {
+        catch {
             return null
         }
         return data
@@ -87,7 +87,7 @@ export class JsonRepository {
             return true;
 
         }
-        catch(err) {
+        catch {
             return false
         }
 

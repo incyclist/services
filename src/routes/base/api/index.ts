@@ -10,10 +10,8 @@ export default class IncyclistRoutesApi {
 
     protected static _instance
 
-    static getInstance():IncyclistRoutesApi{
-        if (!IncyclistRoutesApi._instance) 
-        IncyclistRoutesApi._instance = new IncyclistRoutesApi()
-        
+    static getInstance():IncyclistRoutesApi{        
+        IncyclistRoutesApi._instance = IncyclistRoutesApi._instance ??new IncyclistRoutesApi()        
         return IncyclistRoutesApi._instance
     }
 
@@ -25,7 +23,7 @@ export default class IncyclistRoutesApi {
     }
 
     protected logError( err:Error, fn:string, logInfo?) {
-        const args = logInfo || {}
+        const args = logInfo ?? {}
         this.logger.logEvent( {message:'Error', error:err.message, fn, ...args})
     }
 
@@ -90,7 +88,7 @@ export default class IncyclistRoutesApi {
             IncyclistRoutesApi.verify(res.data)
             return res.data;           
         }
-        catch(err) {
+        catch {
             return undefined
         }
     }
@@ -101,7 +99,7 @@ export default class IncyclistRoutesApi {
             const res = await this._get( `/${routeId}/preview` )              
             return res.data?.url;           
         }
-        catch(err) {
+        catch {
             return undefined
         }
     }

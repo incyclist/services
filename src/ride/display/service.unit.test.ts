@@ -4,7 +4,6 @@ import { Inject } from '../../base/decorators'
 import { Workout } from '../../workouts'
 import {RideDisplayService} from './service'
 import { Observer } from '../../base/types'
-import { send } from 'node:process'
 
 describe('CurrentRideService',()=>{
 
@@ -36,7 +35,13 @@ describe('CurrentRideService',()=>{
                 getStartSettings: jest.fn().mockReturnValue({})
             })
             Inject('DeviceRide',{
-                sendUpdate: jest.fn()
+                sendUpdate: jest.fn(),
+                getControlAdapter: jest.fn(),
+                getCyclingMode: jest.fn()
+            })
+            Inject('UIBinding', {
+                enableScreensaver: jest.fn(),
+                disableScreensaver: jest.fn(),
             })
 
             s.startDevices = jest.fn( ()=>{ 
@@ -54,7 +59,7 @@ describe('CurrentRideService',()=>{
 
         beforeEach( ()=>{
             Inject('UserSettings',{
-                get: jest.fn().mockReturnValue({debug:true})
+                get: jest.fn().mockReturnValue(process.env.DEBUG)
             })
 
             service = new RideDisplayService()

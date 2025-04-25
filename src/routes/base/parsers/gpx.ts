@@ -34,15 +34,15 @@ export class GPXParser extends XMLParser {
     protected async loadDescription(context:XmlParserContext) {
         const data = context.data 
 
-        const metadata = data['metadata'] || {}
+        const metadata = data['metadata'] ?? {}
         const track = Array.isArray(data['trk']) ? data['trk'][0] : data['trk']
         if (!track)  {
             throw new Error('no track found')
         }
 
         context.route= {
-            title: metadata['name'] || context.fileInfo.name,
-            localizedTitle: track['title'] || track['name'],
+            title: metadata['name'] ?? context.fileInfo.name,
+            localizedTitle: track['title'] ?? track['name'],
             country: undefined,
             id: undefined,
             previewUrl: undefined,

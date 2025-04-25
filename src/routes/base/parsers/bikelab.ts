@@ -63,8 +63,8 @@ export class BikeLabParser extends XMLParser{
         
 
         context.route= {
-            title: value('Description') || value('Name'),
-            localizedTitle: value('Description') || value('Name'),
+            title: value('Description') ?? value('Name'),
+            localizedTitle: value('Description') ?? value('Name'),
             country: value('CountryCode'),
             id: value('id'),
             previewUrl: value('previewURL'),
@@ -87,7 +87,7 @@ export class BikeLabParser extends XMLParser{
     protected async loadPoints(context: XmlParserContext): Promise<void> {
         const {data,route} = context
 
-        const positions = data['AltitudePoints']||[]
+        const positions = data['AltitudePoints']??[]
         route.points = positions.map( p=> ({
             lat:Number(p.Lat),
             lng:Number(p.Lng),
@@ -114,7 +114,7 @@ export class BikeLabParser extends XMLParser{
         const extension = fileParts[fileParts.length-1];            
         route.video.format = extension.toLowerCase()
 
-        const videoPoints = data['VideoPoints']||[]
+        const videoPoints = data['VideoPoints']??[]
 
         let prev=undefined;
         route.video.mappings = videoPoints.map( m => {

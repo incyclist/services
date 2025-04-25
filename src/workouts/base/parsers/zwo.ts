@@ -5,6 +5,7 @@ import { Workout } from '../model/Workout';
 import xml2js from 'xml2js';
 import { Limit, PowerLimit, SegmentDefinition, StepDefinition } from '../model/types';
 import { parseXml } from '../../../utils/xml';
+import { ignoreEmpty } from '../../../utils';
 
 const parser = new xml2js.Parser({explicitChildren :true,preserveChildrenOrder :true,mergeAttrs :false} );
 
@@ -53,8 +54,8 @@ export class ZwoParser implements WorkoutParser<string>{
         const xml = await parseXml(str)
         xml.expectScheme('workout_file')   
 
-        const name = xml.json['name'] || file.name
-        const description = xml.json['description']
+        const name = ignoreEmpty(xml.json['name']) ?? file.name        
+        const description = ignoreEmpty(xml.json['description'])
         const workout = new Workout( {type:'workout',name,description});
         return this.parse(str,workout)
     }
@@ -274,7 +275,7 @@ export class ZwoParser implements WorkoutParser<string>{
                 }
 
                 try {
-                    const zwoSteps = result.workout_file.workout[0].$$ || []
+                    const zwoSteps = result.workout_file.workout[0].$$ ?? []
                     zwoSteps.forEach( step => {
                         const tagName = step['#name'];
                         const tagValue = step.$;

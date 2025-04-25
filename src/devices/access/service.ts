@@ -434,6 +434,24 @@ export class DeviceAccessService  extends IncyclistService{
         const {includeKnown=false} = props
 
     
+        const isKnown = (adapters, deviceSettings)=> {
+            if (adapters.find(a=> a.isEqual(deviceSettings))) {
+                return true;
+            }
+
+            if (filter.profile && deviceSettings.profile!==filter.profile) {
+                return true;
+            }
+            if (filter.protocol && deviceSettings.protocol!==filter.protocol) {
+                return true;
+            }
+
+            if (filter.protocols && !filter.protocols.includes(deviceSettings.protocol)) {
+                return true
+            }
+
+            return false
+        }
 
         if (!this.isScanning()) {
             this.emitScanStateChange('start-requested')
@@ -469,27 +487,14 @@ export class DeviceAccessService  extends IncyclistService{
 
                     // already found during this scan? ignore
                     if (!includeKnown) {
-                        if (adapters.find(a=> a.isEqual(deviceSettings))) {
-                            return;
-                        }
-    
-                        if (filter.profile && deviceSettings.profile!==filter.profile) {
-                            return;
-                        }
-                        if (filter.protocol && deviceSettings.protocol!==filter.protocol) {
-                            return;
-                        }
-    
-                        if (filter.protocols && !filter.protocols.includes(deviceSettings.protocol)) {
+                        if (isKnown(adapters, deviceSettings))
                             return
-                        }
     
                     }
 
                     const adapter = AdapterFactory.create(deviceSettings)
 
                     if (!adapter) {
-                        console.log('~~~ no adapter', deviceSettings)
                         return
                     }
                     if (filter.capabilities) {
@@ -590,14 +595,20 @@ export class DeviceAccessService  extends IncyclistService{
 
         let onDeviceHandler
 
+        const checkIsNew = (detectedAdapters: AdapterInfo[], deviceSettings: DeviceSettings): boolean => {
+            const isKnown = knownAdapters.some(ai => ai.adapter.isEqual(deviceSettings));
+            const isAlreadyDetected = detectedAdapters.some( ai => ai.adapter.isEqual(deviceSettings))
+            return !isKnown && !isAlreadyDetected;
+        };
+
+
         const waitForMaxDevices = ():Promise<DeviceSettings[]> => {
             const detectedAdapters: AdapterInfo[] = []
 
             return new Promise (resolve => {
                 onDeviceHandler = (deviceSettings)=> {
 
-                    const isNew  = knownAdapters.find( ai => ai.adapter.isEqual(deviceSettings))===undefined &&
-                                   detectedAdapters.find( ai => ai.adapter.isEqual(deviceSettings))===undefined
+                    const isNew  = checkIsNew(detectedAdapters, deviceSettings)
 
                     if (isNew) {
                         const adapter = AdapterFactory.create(deviceSettings)

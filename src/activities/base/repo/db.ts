@@ -664,7 +664,7 @@ export class ActivitiesRepository {
             names = names.filter( name=> !known.includes(name))
             return names;
         }
-        catch(err) {
+        catch {
             return null;
         }
     }
