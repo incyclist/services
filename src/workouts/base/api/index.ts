@@ -17,7 +17,7 @@ export class IncyclistWorkoutsApi {
     }
 
     protected logError( err:Error, fn:string, logInfo?) {
-        const args = logInfo || {}
+        const args = logInfo ?? {}
         this.logger.logEvent( {message:'Error', error:err.message, fn, ...args})
     }
 
@@ -41,7 +41,7 @@ export class IncyclistWorkoutsApi {
             const res = await this._get( '/' )              
             return res.data;           
         }
-        catch(err) {
+        catch {
             return undefined
         }
 
@@ -52,7 +52,7 @@ export class IncyclistWorkoutsApi {
             const res = await this._get( `/${id}` )              
             return res.data;           
         }
-        catch(err) {
+        catch {
             return undefined
         }
         

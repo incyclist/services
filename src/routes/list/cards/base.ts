@@ -59,7 +59,7 @@ export class BaseCard implements Card<Route> {
         try {
             return card.getCardType()===this.getCardType() && card.getId()===this.getId()
         }
-        catch(err) {
+        catch {
             return false
         }
 
@@ -76,7 +76,7 @@ export class BaseCard implements Card<Route> {
             const res = userSettings.get(key,defValue)
             return res
         }
-        catch (err) {
+        catch  {
             return defValue
         }
     }

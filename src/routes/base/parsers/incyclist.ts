@@ -33,7 +33,7 @@ export class IncyclistXMLParser extends XMLParser{
         const gpxFile = {...fileInfo}
 
         const xmlName = fileInfo.name
-        const fileName = data['gpx-file-path']|| xmlName.replace('xml','gpx')
+        const fileName = data['gpx-file-path']?? xmlName.replace('xml','gpx')
 
         if (fileName.startsWith('file')||fileName.startsWith('/')||fileName.startsWith('\\')||fileName.startsWith('.')) {
             gpxFile.type = 'file'

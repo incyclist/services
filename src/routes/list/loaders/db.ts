@@ -256,11 +256,8 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         if (description.legacyId) {
             details = await loadFromRepo(description.legacyId,false) 
         }
-        if (!details) {
-            details = await loadFromRepo(description.id,log) 
-        }
-
-
+        
+        details = details ?? await loadFromRepo(description.id,log) 
         if (!details) {
             return;
         }
@@ -347,8 +344,8 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             try {
                 await repo.write(id,route.details as undefined as JSONObject)
             }
-            catch(err) {
-                //console.log(err)
+            catch {
+                //ignore
             }
         }
        

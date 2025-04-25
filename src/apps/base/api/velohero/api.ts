@@ -147,8 +147,8 @@ export class VeloHeroApi  extends AppApiBase{
             return response.data;
         }
         else {
-            const errMessage =  response.error?.response?.data?.error|| response.error?.response?.message ||  response.error.message
-            throw new Error( errMessage || `HTTP error ${response.status}`)
+            const errMessage =  response.error?.response?.data?.error?? response.error?.response?.message ??  response.error.message
+            throw new Error( errMessage ?? `HTTP error ${response.status}`)
         }
 
     }

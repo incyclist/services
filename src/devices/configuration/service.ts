@@ -170,11 +170,11 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.logEvent({message:'select device', udid, capability, props})
 
 
-        const {emit=true} = props||{};
+        const {emit=true} = props??{};
         const deviceSettings:IncyclistDeviceSettings = this.settings.devices?.find(d=>d.udid===udid)?.settings
         if (!deviceSettings)
             return;
-        const adapter = this.adapters[udid] ||  this.getAdapterFromSetting(deviceSettings)
+        const adapter = this.adapters[udid] ??  this.getAdapterFromSetting(deviceSettings)
         if (!adapter) {
             this.logEvent({message:'error: could not find adapter',fn:'select',  udid, capability, adapters: Object.keys(this.adapters)?.join(',')})
             return
@@ -423,7 +423,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             }
 
 
-            settings = (device.modes ? device.modes[mode]: undefined) || {}
+            settings = (device.modes ? device.modes[mode]: undefined) ?? {}
             if (!settings && modeObj) {
                 settings = modeObj.getSettings()
             }

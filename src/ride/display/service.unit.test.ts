@@ -4,7 +4,6 @@ import { Inject } from '../../base/decorators'
 import { Workout } from '../../workouts'
 import {RideDisplayService} from './service'
 import { Observer } from '../../base/types'
-import { send } from 'node:process'
 
 describe('CurrentRideService',()=>{
 

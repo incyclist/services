@@ -57,7 +57,7 @@ export class BaseCard implements Card<Workout> {
         try {
             return card.getCardType()===this.getCardType() && card.getId()===this.getId()
         }
-        catch(err) {
+        catch {
             return false
         }
 

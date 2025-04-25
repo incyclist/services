@@ -15,7 +15,7 @@ export class OverpassApi {
     protected url:string
 
     constructor(props?) {
-        this.url = props?.url||  mirrors[0];
+        this.url = props?.url??  mirrors[0];
     }
 
     async bulkQuery( queryOL:string ):Promise<JSON|string> {

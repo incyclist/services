@@ -45,38 +45,30 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     
     async init() :Promise<Observer>{
-        try {
-            if (this.observer || (this.state!=='Idle')) {
-                await this.stopRide({noStateUpdates:true})
-            }
 
+        await this.closePrevRide();
             
-            this.observer = new Observer()
-            try {
-                this.displayService = this.getRideModeService(true)
-                this.displayService.init(this)
+        this.observer = new Observer()
+        try {
+            this.displayService = this.getRideModeService(true)
+            this.displayService.init(this)
 
-                this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
-                this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
-                /* TODO:
-                    'prepare-next-video' event
-                    'next-video' event
-                    'route-changed' event
-                */
-                this.hideAll = false
-                
+            this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
+            this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
+            /* TODO:
+                'prepare-next-video' event
+                'next-video' event
+                'route-changed' event
+            */
+            this.hideAll = false
+            
 
-            }
-            catch(err) {
-                this.logError(err,'init')    
-                delete this.observer
-            }
-
-            return this.observer 
         }
         catch(err) {
-            this.logError(err,'init')
+            this.logError(err,'init')    
+            delete this.observer
         }
+        return this.observer 
     }
 
     start(simulate?:boolean):void { 
@@ -239,51 +231,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         
     }
 
-    protected async stopRide( props:{exit?:boolean, noStateUpdates?:boolean}={} ):Promise<void> {
-        try {
-            if ( this.state !== 'Starting' && this.state !=='Idle') {
-                this.logEvent({ message: "activity stopped",activity: this.activity?.id});                   
-            }
-
-            const prevState = this.state
-                this.state = 'Finished' // only update state internally, don't yet emit to UI
-
-            this.observer?.stop({immediately:props.noStateUpdates})
-            if (props.noStateUpdates)
-                delete this.observer
-            else 
-                waitNextTick().then( ()=>delete this.observer)
-
-            if (prevState==='Finished' || prevState==='Idle') {
-                this.state = 'Idle'
-                return;    
-            }
-
-            this.stopDevices(props.exit)
-            this.displayService.stop()
-
-            this.getActivityRide().stop()
-            this.observer?.emit('state-update',this.state)         // emit fnished state to UI
-
-            const workoutService = this.getWorkoutRide()
-            workoutService.stop({clearFromList:true, completed:true})
-
-            if (this.route) {
-                this.getRouteList().unselect()
-            }
-
-            if (prevState!=='Starting')
-                this.enableScreensaver()
-
-            delete this.type
-            delete this.displayService
-            this.state = 'Idle'
-        }
-        catch(err) {
-            this.logError(err,'stop')
-        }
-    }
-
     toggleCyclingMode() {
         try {
             if (!this.actualWorkout) {
@@ -406,26 +353,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }       
     }
 
-    protected adjustPower( increase:boolean, large:boolean ) {
-        try {
-
-            const sgn = increase ? 1:-1
-            
-
-            if (this.getWorkoutRide().inUse()) {
-                const inc = large ? sgn*5:sgn*1
-                this.getWorkoutRide().powerUp(inc)    
-            }
-            else {
-                const inc = large ? sgn*50:sgn*5
-                this.devicePowerUp(inc)
-            }
-        }
-        catch(err) {
-            this.logError(err,'adjustPower')
-        }        
-    }
-
     getDisplayProperties():CurrentRideDisplayProps {
         try {
 
@@ -493,6 +420,66 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 
     // Protected
+
+    protected async stopRide( props:{exit?:boolean, noStateUpdates?:boolean}={} ):Promise<void> {
+        try {
+            if ( this.state !== 'Starting' && this.state !=='Idle') {
+                this.logEvent({ message: "activity stopped",activity: this.activity?.id});                   
+            }
+
+            const prevState = this.state
+                this.state = 'Finished' // only update state internally, don't yet emit to UI
+
+            this.observer?.stop({immediately:props.noStateUpdates})
+            if (props.noStateUpdates)
+                delete this.observer
+            else 
+                waitNextTick().then( ()=>delete this.observer)
+
+            if (prevState==='Finished' || prevState==='Idle') {
+                this.state = 'Idle'
+                return;    
+            }
+
+            this.stopDevices(props.exit)
+            this.displayService.stop()
+
+            this.getActivityRide().stop()
+            this.observer?.emit('state-update',this.state)         // emit fnished state to UI
+
+            const workoutService = this.getWorkoutRide()
+            workoutService.stop({clearFromList:true, completed:true})
+
+            if (this.route) {
+                this.getRouteList().unselect()
+            }
+
+            if (prevState!=='Starting')
+                this.enableScreensaver()
+
+            delete this.type
+            delete this.displayService
+            this.state = 'Idle'
+        }
+        catch(err) {
+            this.logError(err,'stop')
+        }
+    }
+
+    protected async closePrevRide() {
+        try {
+            if (this.observer || (this.state !== 'Idle')) {
+                await this.stopRide({ noStateUpdates: true });
+            }
+
+        }
+        catch (err) {
+            this.logError(err, 'init');
+        }
+    }
+
+
+
 
     protected setState(state:CurrentRideState) {        
         this.state = state
@@ -700,6 +687,28 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.updateActivityWorkout()
 
     }
+
+    protected adjustPower( increase:boolean, large:boolean ) {
+        try {
+
+            const sgn = increase ? 1:-1
+            
+
+            if (this.getWorkoutRide().inUse()) {
+                const inc = large ? sgn*5:sgn*1
+                this.getWorkoutRide().powerUp(inc)    
+            }
+            else {
+                const inc = large ? sgn*50:sgn*5
+                this.devicePowerUp(inc)
+            }
+        }
+        catch(err) {
+            this.logError(err,'adjustPower')
+        }        
+    }
+
+
 
     protected adjustCurrentStepDuration(time: number, newDuration: number) {
 

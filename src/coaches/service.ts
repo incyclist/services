@@ -97,7 +97,7 @@ export class CoachesService extends IncyclistService {
                 const user = this.userService.get('user',{})
                 
                 const adapter= this.deviceConfig.getSelected(IncyclistCapability.Control)
-                const bikeType = adapter.getCyclingMode().getSetting('bikeType')||'Race'
+                const bikeType = adapter.getCyclingMode().getSetting('bikeType')??'Race'
                 c.initSimulator(user,bikeType)
                 c.start(onDataUpdate)
             })        
