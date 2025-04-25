@@ -254,7 +254,7 @@ describe('DeviceRideService',()=>{
                 setupMocks(service,{programId:32767})
                 route.description.isLoop = true
                 const res = service.prepareEppRoute({route, startPos:3750})
-                console.log(res)
+                expect(res).toMatchSnapshot()
                 expect(settings.update).toHaveBeenCalledWith({"eppPreferences": {"programId": 1}})
 
             })
