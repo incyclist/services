@@ -20,5 +20,3 @@ export interface CapabilityInformation{
 
 
 export interface DeviceConfigurationInfo {[index: string]: CapabilityInformation}
-
-//export interface InterfaceInfo { }

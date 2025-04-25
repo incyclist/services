@@ -54,11 +54,9 @@ export class ApiClient {
      *
      * @returns client object
      */
-    client(): AxiosInstance {
-        if (!this.axios)
-            this.axios = axios;
+    client(): AxiosInstance {        
+        this.axios = this.axios ?? axios;
         return this.axios;
-
     }
 
     protected onRequest(req) {

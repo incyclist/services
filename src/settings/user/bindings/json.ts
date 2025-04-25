@@ -5,15 +5,14 @@ import fs from 'fs/promises'
 const DEFAULT_PATH = './settings.json'
 
 export default class JSONFileBindig extends UserSettingsBinding{
-    static _instance: UserSettingsBinding;
+    protected static _instance: UserSettingsBinding;
     path: string
     settings: any
     savePromise: Promise<boolean> | null
     
 
-    static getInstance(path?:string): UserSettingsBinding {
-        if (!JSONFileBindig._instance)
-            JSONFileBindig._instance = new JSONFileBindig(path)
+    static getInstance(path?:string): UserSettingsBinding {        
+        JSONFileBindig._instance = JSONFileBindig._instance ??new JSONFileBindig(path)
         return JSONFileBindig._instance
     }
 
@@ -35,15 +34,22 @@ export default class JSONFileBindig extends UserSettingsBinding{
         if (value===null) {
             delete this.settings[key]
         }
+        else if (Array.isArray(value)) {
+            this.settings[key] = [...value]
+            
+        }
+        else if (typeof(value)==='object') {
+            this.settings[key] = {...value};
+        }
         else {
-            this.settings[key] = Object.assign( {},value);
+            this.settings[key] = value;
         }
 
         try {
             await this.save()
             return true
         }
-        catch(err) {
+        catch {
             return false
         }
 
@@ -70,7 +76,7 @@ export default class JSONFileBindig extends UserSettingsBinding{
             return true;
 
         }
-        catch(err) {
+        catch {
             this.savePromise = null
             return false;
         }

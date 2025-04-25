@@ -1025,7 +1025,7 @@ export class DeviceConfigurationService  extends IncyclistService{
                         const mode = device.mode
                         const modeSetting = device.modes ? device.modes[mode] : undefined
                         const interfaceName = device.settings.interface as string
-                        const name = device?.displayName||adapter?.getUniqueName()||adapter?.getName()
+                        const name = device?.displayName??adapter?.getUniqueName()??adapter?.getName()
                         return { udid, name,interface:interfaceName, selected:udid===c.selected, mode, modeSetting}
                     })
                 }
