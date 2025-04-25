@@ -2,7 +2,11 @@ import { AntCadAdapter, AntDeviceSettings, AntFEAdapter, AntPwrAdapter, DeviceDa
 import {DeviceRideService} from './service'
 import { AdapterRideInfo, RideServiceDeviceProperties } from './model'
 import { DeviceConfigurationService } from '../configuration'
-import { EventEmitter } from 'stream'
+import { Inject } from '../../base/decorators'
+import { createFromJson } from '../../routes'
+import sydney from '../../../__tests__/data/routes/sydney.json'
+import tryvann from '../../../__tests__/data/rlv/Tryvann.json'
+import { RouteApiDetail } from '../../routes/base/api/types'
 
 describe('DeviceRideService',()=>{
     describe('onData',()=>{
@@ -163,6 +167,99 @@ describe('DeviceRideService',()=>{
         })
 
 
+
+    })
+
+
+    describe('prepareEppRoute',()=>{
+
+        let service:DeviceRideService
+        let settings
+
+        const setupMocks = ( s, props?:{programId?:number, routeInfo?} )=> {
+            const {programId,routeInfo} = props??{}
+            settings = {
+                get: jest.fn( (key,def)=> key === 'eppPreferences' ? {programId} : def ),
+                update: jest.fn()
+            }
+    
+            Inject('UserSettings',settings)
+            if (routeInfo) {
+                s.getRouteInfo = jest.fn().mockReturnValue(routeInfo)
+            }
+        }
+
+        beforeEach( ()=> {
+            service = new DeviceRideService()            
+
+        })
+
+        afterEach( ()=> {
+            service.reset()
+            Inject('UserSettings',null)
+            jest.resetAllMocks()
+
+        })
+
+
+        describe('with EPP',()=>{
+            const route = createFromJson(tryvann as unknown as RouteApiDetail)
+            
+
+            test('no startPos',()=>{
+                setupMocks(service)
+                const res = service.prepareEppRoute({route, rideMode:'video'})
+                expect(res).toMatchSnapshot()
+            })
+            test('with startPos',()=>{
+                setupMocks(service)
+                const res = service.prepareEppRoute({route, startPos:5611, rideMode:'video'})                
+                expect(res).toMatchSnapshot()
+            })
+            test('with RealityFactor',()=>{
+                setupMocks(service)
+                const res = service.prepareEppRoute({route, startPos:5611, realityFactor:10})         
+                expect(res).toMatchSnapshot()
+            })
+
+        })
+
+        describe('no EPP',()=>{
+            const route = createFromJson(sydney as unknown as RouteApiDetail)
+
+            test('no startPos',()=>{
+                setupMocks(service,{programId:10})
+                route.description.isLoop = true
+                const res = service.prepareEppRoute({route})                
+                expect(res).toMatchSnapshot()
+                expect(settings.update).toHaveBeenCalledWith({"eppPreferences": {"programId": 11}})
+
+            })
+
+            test('with startPos',()=>{
+                setupMocks(service,{programId:10})
+                route.description.isLoop = false
+                const res = service.prepareEppRoute({route, startPos:3750})
+                expect(res).toMatchSnapshot()
+            })
+            test('with realityFactor',()=>{
+                setupMocks(service,{programId:10})
+                route.description.isLoop = false
+                const res = service.prepareEppRoute({route, startPos:3750, realityFactor:10})
+                expect(res).toMatchSnapshot()
+            })
+
+
+            test('loop with startPos',()=>{
+                setupMocks(service,{programId:32767})
+                route.description.isLoop = true
+                const res = service.prepareEppRoute({route, startPos:3750})
+                console.log(res)
+                expect(settings.update).toHaveBeenCalledWith({"eppPreferences": {"programId": 1}})
+
+            })
+
+        })
 
     })
 })

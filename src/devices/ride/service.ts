@@ -14,6 +14,8 @@ import { Singleton } from "../../base/types";
 import { Injectable } from "../../base/decorators/Injection";
 import { Route } from "../../routes/base/model/route";
 import { useGoogleMaps } from "../../apps";
+import { RouteApiDetail } from "../../routes/base/api/types";
+import { DaumEppProgramEntry, RoutePoint } from "../../routes/base/types";
 
 
 const NO_DATA_THRESHOLD = 10000
@@ -140,13 +142,30 @@ export class DeviceRideService  extends IncyclistService{
 
 
     prepareEppRoute(props:RideServiceDeviceProperties): PreparedRoute {
-       
 
         const { route, startPos, realityFactor,rideMode} = props;
-
         if ( !route)
             return
 
+        const {routeData, title,isLap} = this.getRouteInfo(route)
+
+        this.logEvent( { message:'prepareRoute', route: title , start: startPos, reality: realityFactor})
+        
+        // As every EPP sent to a device  needs to have a unique programId, we need to increment and use while creating the EPP Data
+        const eppPreferences = this.incrementEppProgramId();         
+
+
+        if ( routeData.epp) {   // route already has EPP data
+            return this.parseEppData(routeData, startPos, isLap,  eppPreferences, rideMode, realityFactor);           
+        }
+        else {     // route does not have EPP data ( e.g. GPX track or Incyclist XML)
+            return this.createEppDataFromPoints(routeData, startPos, isLap,  eppPreferences, rideMode, realityFactor);
+        }
+
+    }
+
+
+    protected getRouteInfo(route:Route|LegacyRoute) {
         const isLegacy = () => {
             const r = route as LegacyRoute
             return r.get && r.getTitle && r.isLap
@@ -157,236 +176,259 @@ export class DeviceRideService  extends IncyclistService{
             return null;
         }
         const title = isLegacy() ? (route as LegacyRoute).getTitle() : (route as Route).description.title
-        const isLap = isLegacy() ? (route as LegacyRoute).isLap() : (route as Route).description.isLoop
+        const isLap = (isLegacy() ? (route as LegacyRoute).isLap() : (route as Route).description.isLoop)??false
 
+        return {routeData, title, isLap}
+    }
 
-        let res:PreparedRoute
-
-        this.logEvent( { message:'prepareRoute', route: title , start: startPos, reality: realityFactor})
-        
-        const userSettings = this.getUserSettings()
-        const eppPreferences = clone(userSettings.get('eppPreferences',{}))
-        if (!eppPreferences.programId)  
+    protected incrementEppProgramId() {
+        const userSettings = this.getUserSettings();
+        const eppPreferences = clone(userSettings.get('eppPreferences', {}));
+        if (!eppPreferences.programId)
             eppPreferences.programId = 1;
         else {
             eppPreferences.programId++;
-            if (eppPreferences.programId> 32767)
+            if (eppPreferences.programId > 32767)
                 eppPreferences.programId = 1;
         }
-        userSettings.update({eppPreferences})            
+        userSettings.update({ eppPreferences });
+        return eppPreferences;
+    }
 
-        
-        if ( routeData.epp) {
-            const eppData = routeData.epp;
-            let points = eppData.programData
-            const offset = startPos || 0;
-            
-            if (startPos!==undefined && startPos!==0) {
-                let idxBefore = 0;
-                let idxAfter = points.length-1;                
-                let done = false;
-                for (let i=0; i<points.length && !done; i++) {
-                    const p = points[i];
-                    if (p.distance<=startPos) idxBefore =i;
-                    if (p.distance>=startPos) {
-                        idxAfter =i;
-                        done =true;
-                    }
-                }
 
-                if ( idxAfter>idxBefore) { 
-                    const originalPoints = points;
-                    const distance = startPos - originalPoints[idxBefore].distance;
-                    const distanceGain =  originalPoints[idxAfter].distance - originalPoints[idxBefore].distance;
-                    const elevationGain = originalPoints[idxAfter].elevation-originalPoints[idxBefore].elevation;
+    protected parseEppData(routeData: RouteApiDetail, startPos: number, isLap: boolean,  eppPreferences: any, rideMode: string, realityFactor: number) {
+        const eppData = routeData.epp;
+        let points:DaumEppProgramEntry[] = eppData.programData;
+        const offset = startPos ?? 0;
 
-                    // overwrite points array
-                    points = [];
-                    points.push ( { distance: offset, elevation: originalPoints[idxBefore].elevation+elevationGain*distance/distanceGain } )
-                    points = points.concat(originalPoints.slice(idxAfter));
+        if ( offset !== 0) {
+            points = this.updateEppFromStartPoint(points, startPos, offset, isLap, routeData);
+        }
 
-                    if (isLap) {
-                        points = points.concat( originalPoints.slice(1,idxBefore+1).map( p=> { p.distance+=routeData.distance; return p;}));
-                        points.push ( { distance: routeData.distance+offset, elevation: originalPoints[idxBefore].elevation+elevationGain*distance/distanceGain } )
-                    }
+        const pStart = points[0];
+        const elevationStart = pStart.elevation;
+        const totalDistance = isLap ? routeData.distance : Math.ceil(routeData.distance - offset);
 
-                }
-                else {
-                    const originalPoints = points;
-                    points = originalPoints.slice(idxAfter);
-                    if (isLap) {
-                        points = points.concat( originalPoints.slice(1,idxBefore+1).map( p=> { p.distance+=routeData.distance; return p;}));
-                    }
-                }
+        const res = {
+            name: eppData.name,
+            description: eppData.description,
+            programId: eppPreferences.programId,
+            type: rideMode ?? 'free ride',
+            totalDistance,
+            lapMode: isLap,
+            minElevation: eppData.minElevation,
+            maxElevation: eppData.maxElevation,
+            sampleRate: eppData.sampleRate,
+            points: points.map(p => {
+                const adjustedElevation = realityFactor === undefined ? p.elevation : elevationStart + (p.elevation - elevationStart) * realityFactor / 100;
+                return {
+                    elevation: adjustedElevation, //Math.round(adjustedElevation*10)/10,
+                    distance: p.distance,
+                };
+            })
+        };
+        return res;
+    }
 
+    protected updateEppFromStartPoint(originalPoints: DaumEppProgramEntry[], startPos: number, offset: number, isLap: boolean, routeData: RouteApiDetail) : DaumEppProgramEntry[]{
+        let points = originalPoints
+        let idxBefore = 0;
+        let idxAfter = points.length - 1;
+        let done = false;
+        for (let i = 0; i < points.length && !done; i++) {
+            const p = points[i];
+            if (p.distance <= startPos) idxBefore = i;
+            if (p.distance >= startPos) {
+                idxAfter = i;
+                done = true;
             }
-            
-            const pStart = points[0];
-            const elevationStart = pStart.elevation;
-            const totalDistance = isLap ? routeData.distance : Math.ceil( routeData.distance-(startPos||0));
+        }
 
-            res = {
-                name: eppData.name,
-                description: eppData.description,
-                programId: eppPreferences.programId,
-                type:  rideMode || 'free ride',
-                totalDistance,
-                lapMode: isLap,
-                minElevation: eppData.minElevation,
-                maxElevation: eppData.maxElevation,
-                sampleRate: eppData.sampleRate,
-                points: points.map ( p => {
-                    const adjustedElevation = realityFactor===undefined ? p.elevation : elevationStart + (p.elevation-elevationStart)*realityFactor/100
-                    return {
-                        elevation: adjustedElevation , //Math.round(adjustedElevation*10)/10,
-                        distance: p.distance,
-                    }
-                })
+        if (idxAfter > idxBefore) {
+            const originalPoints = points;
+            const distance = startPos - originalPoints[idxBefore].distance;
+            const distanceGain = originalPoints[idxAfter].distance - originalPoints[idxBefore].distance;
+            const elevationGain = originalPoints[idxAfter].elevation - originalPoints[idxBefore].elevation;
+
+            // overwrite points array
+            points = [];
+            points.push({ distance: offset, elevation: originalPoints[idxBefore].elevation + elevationGain * distance / distanceGain });
+            points = points.concat(originalPoints.slice(idxAfter));
+
+            if (isLap) {
+                points = points.concat(originalPoints.slice(1, idxBefore + 1).map(p => { p.distance += routeData.distance; return p; }));
+                points.push({ distance: routeData.distance + offset, elevation: originalPoints[idxBefore].elevation + elevationGain * distance / distanceGain });
             }
 
-            
         }
         else {
-            const sampleRate = 10; 
-
-            let points = routeData.points ?? routeData['decoded'];
-            let totalDistance = Math.ceil(routeData.distance);
-
-            if (startPos!==undefined && startPos!==0) {
-                let idxBefore = 0;
-                let idxAfter = points.length-1;                
-                let done = false;
-                for (let i=0; i<points.length && !done; i++) {
-                    const p = points[i];
-                    if (p.routeDistance<=startPos) idxBefore =i;
-                    if (p.routeDistance>=startPos) {
-                        idxAfter =i;
-                        done =true;
-                    }
-                }
-
-                if ( idxAfter>idxBefore) { 
-                    const originalPoints = points;
-                    const distance = startPos - originalPoints[idxBefore].routeDistance;
-                    const distanceGain =  originalPoints[idxAfter].routeDistance - originalPoints[idxBefore].routeDistance;
-                    const elevationGain = originalPoints[idxAfter].elevation-originalPoints[idxBefore].elevation;
-
-                    // overwrite points array
-                    points = [];
-                    points.push ( { routeDistance: startPos, elevation: originalPoints[idxBefore].elevation+elevationGain*distance/distanceGain } )
-                    points = points.concat(originalPoints.slice(idxAfter));
-                    if (isLap) {
-                        points = points.concat( originalPoints.slice(1,idxBefore+1).map( p=> { p.routeDistance+=routeData.distance; return p;}));
-                        points.push ( { routeDistance: routeData.distance, elevation: originalPoints[idxBefore].elevation+elevationGain*distance/distanceGain } )
-                    }
+            const originalPoints = points;
+            points = originalPoints.slice(idxAfter);
+            if (isLap) {
+                points = points.concat(originalPoints.slice(1, idxBefore + 1).map(p => { p.distance += routeData.distance; return p; }));
+            }
+        }
+        return points;
+    }
 
 
-                }
-                else {
-                    const originalPoints = points;
-                    points = originalPoints.slice(idxAfter);
-                    if (isLap) {
-                        points = originalPoints.slice(1,idxBefore+1).map( p=> { p.routeDistance+=routeData.distance; return p;});
-                    }
-                    
-                }
 
-                totalDistance = isLap ? routeData.distance : Math.ceil( routeData.distance-(startPos||0));
+    protected createEppDataFromPoints(routeData: RouteApiDetail, startPos: number, isLap: boolean,  eppPreferences: any, rideMode: string, realityFactor: number) {
+
+        const sampleRate = 10; 
+        const { points, totalDistance } = this.updatePointsFromStartPos(routeData,startPos, isLap );
+
+        
+        let eppRoute:PreparedRoute = {
+            name: routeData.title,
+            description: '',
+            programId: eppPreferences.programId,
+            type:  rideMode || 'free ride',
+            totalDistance,
+            lapMode: isLap,
+            minElevation: 0,
+            maxElevation: Math.ceil( Math.max ( ...points.map(p => p.elevation)) /1000) *1000,
+            sampleRate,
+            points: []
+        }
+
+
+        this.addEppPoints(routeData,points, eppRoute, startPos, realityFactor);
+
+        return eppRoute
+    }
+
+    protected  addEppPoints(routeData: RouteApiDetail,points: RoutePoint[],eppRoute: PreparedRoute,startPos: number, realityFactor: number) {
+
+        const {sampleRate,lapMode} = eppRoute
+        const offset = startPos ?? 0;
+
+        const totalDistance = lapMode ? routeData.distance + offset : routeData.distance
+
+        let d = offset;
+        let i = 0;
+        let pStart = points[0];
+
+        const elevationStart = pStart.elevation ? Math.round(pStart.elevation * 10) / 10 : 0;
+
+        const addPoint = (distanceValue, elevationValue, inc = true) => {
+            const distance = Math.round(distanceValue);
+            let elevation = elevationValue >= 0 ? Math.round(elevationValue * 10) / 10 : 0;
+            if (realityFactor !== undefined) {
+                elevation = elevationStart + (elevation - elevationStart) * realityFactor / 100;
+            }
+            eppRoute.points.push({
+                elevation,
+                distance
+            });
+            if (inc) d += sampleRate;
+        };
+
+        const createPoint = (p: RoutePoint, start:RoutePoint) => {
+
+            let e,dT
+
+            do {
+
+                const d1 = start.routeDistance;
+                const d2 = p.routeDistance;
+                const e1 = start.elevation;
+                const e2 = p.elevation;
+                dT = d + sampleRate;
+                e = e1 + (e2 - e1) * (dT - d1) / (d2 - d1);
+                addPoint(dT - offset, e);
+            }
+            while (p.routeDistance > d + sampleRate);
+
+            // did we reach the end of the route?
+            if (p.routeDistance >= totalDistance || i === points.length - 1) {
+                addPoint(p.routeDistance - offset, p.elevation);
+
+            }
+            else {
+                pStart = {...p};
+                pStart.elevation = e ?? pStart.elevation
+                pStart.routeDistance = dT  ?? pStart.routeDistance
+            }
+        }
+
+        while (d <= routeData.distance + offset && i < points.length) {
+            const p = points[i];
+
+            if (i === 0) {
+                addPoint(0, p.elevation, false);
+                i++;
+            }
+            else if (p.routeDistance < d + sampleRate) {
+                pStart = p;
+                i++;
+            }
+            else if (p.routeDistance === d + sampleRate) {
+                addPoint(p.routeDistance - offset, p.elevation);
+                i++;
+
+            }
+            else if (p.routeDistance > d + sampleRate) {
+                createPoint(p,pStart);
+                i++;
+            }
+            else {
+                i++;
             }
 
-            
-            res = {
-                name: routeData.title,
-                description: '',
-                programId: eppPreferences.programId,
-                type:  rideMode || 'free ride',
-                totalDistance,
-                lapMode: isLap,
-                minElevation: 0,
-                maxElevation: Math.ceil( Math.max ( ...points.map(p => p.elevation)) /1000) *1000,
-                sampleRate,
-                points: []
+        }
+
+    }
+
+    protected updatePointsFromStartPos(routeData: RouteApiDetail,startPos: number, isLap: boolean) {
+
+        let points = routeData.points ?? routeData['decoded'];
+        let totalDistance = Math.ceil(routeData.distance);
+        const offset = startPos??0
+
+        if ( offset===0 )
+            return {points,totalDistance}
+
+        let idxBefore = 0;
+        let idxAfter = points.length - 1;
+        let done = false;
+        for (let i = 0; i < points.length && !done; i++) {
+            const p = points[i];
+            if (p.routeDistance <= startPos) idxBefore = i;
+            if (p.routeDistance >= startPos) {
+                idxAfter = i;
+                done = true;
             }
+        }
 
-            const offset = startPos || 0;
-            let d = offset; 
-            let i = 0;
-            let pStart = points[0];
+        if (idxAfter > idxBefore) {
+            const originalPoints = points;
+            const distance = startPos - originalPoints[idxBefore].routeDistance;
+            const distanceGain = originalPoints[idxAfter].routeDistance - originalPoints[idxBefore].routeDistance;
+            const elevationGain = originalPoints[idxAfter].elevation - originalPoints[idxBefore].elevation;
 
-            const elevationStart = pStart.elevation? Math.round(pStart.elevation*10)/10 : 0;
-
-            const addPoint = (distanceValue, elevationValue, inc=true) => { 
-                const distance = Math.round(distanceValue)
-                let elevation = elevationValue>=0 ? Math.round(elevationValue*10)/10 : 0;
-                if (realityFactor!==undefined) {
-                        elevation = elevationStart + (elevation-elevationStart)*realityFactor/100;
-                }
-                res.points.push( {
-                    elevation,
-                    distance
-                })
-                if (inc) d+=sampleRate
-            }
-
-
-            while (d <= routeData.distance+offset && i<points.length) {
-                const p = points[i];
-                
-                if (i===0) {
-                    addPoint( 0, p.elevation,false);
-                    i++;
-                }
-                else {
-
-                    if (p.routeDistance<d) {
-                        pStart = p;
-                        i++;
-                    }
-                    else if (p.routeDistance===d+sampleRate) { 
-                        addPoint( p.routeDistance-offset, p.elevation);
-                        i++;
-
-                    }
-                    else if (p.routeDistance>d+sampleRate)  {
-
-                        do {
-
-                            const d1 = pStart.routeDistance
-                            const d2 = p.routeDistance
-                            const e1 = pStart.elevation;
-                            const e2 = p.elevation
-                            const dT = d+sampleRate;
-                            const e = e1 + (e2-e1)*(dT-d1)/(d2-d1);
-                            addPoint( dT-offset, e );
-                        }
-                        while (p.routeDistance>d+sampleRate);
-
-                        // did we reach the end of the route?
-                        if (p.routeDistance>=routeData.distance  || i===points.length-1) {
-                            addPoint( p.routeDistance-offset, p.elevation);
-                            i++;
-    
-                        }
-                        else {
-                            i++;
-                            pStart = p;
-                        }
-                        
-                    }   
-                    else {
-                        i++;                        
-                    }                     
-                }
-
-
-
+            // overwrite points array
+            points = [];
+            points.push({ routeDistance: startPos, elevation: originalPoints[idxBefore].elevation + elevationGain * distance / distanceGain });
+            points = points.concat(originalPoints.slice(idxAfter));
+            if (isLap) {
+                points = points.concat(originalPoints.slice(1, idxBefore + 1).map(p => { p.routeDistance += routeData.distance; return p; }));
+                points.push({ routeDistance: routeData.distance, elevation: originalPoints[idxBefore].elevation + elevationGain * distance / distanceGain });
             }
 
 
         }
+        else {
+            const originalPoints = points;
+            points = originalPoints.slice(idxAfter);
+            if (isLap) {
+                points = originalPoints.slice(1, idxBefore + 1).map(p => { p.routeDistance += routeData.distance; return p; });
+            }
 
-        return res;
+        }
 
+        totalDistance = isLap ? routeData.distance : Math.ceil(routeData.distance - offset);
+        return { points, totalDistance };
     }
 
 
