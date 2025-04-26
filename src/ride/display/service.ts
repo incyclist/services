@@ -446,13 +446,15 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             if (prevState!=='Starting')
                 this.enableScreensaver()
 
-            delete this.type
-            delete this.displayService
             this.state = 'Idle'
         }
         catch(err) {
             this.logError(err,'stop')
         }
+        
+        delete this.type
+        delete this.displayService
+
     }
 
     protected async closePrevRide() {
