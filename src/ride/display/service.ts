@@ -39,8 +39,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected isResuming: boolean
 
     constructor() {
-        super('Ride')
-        this.debug = this.getUserSettings().get('debug',false)
+        super('RideDisplay')
+        this.debug = this.isDebug()
     }
 
     
@@ -271,34 +271,23 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     toggleUpcomingElevation() {
-        // state is managed in user settings
-        const showUpcomingElevation = this.getUserSettings().get('preferences.sideViews.slope',true)
-        this.getUserSettings().set('preferences.sideViews.slope',!showUpcomingElevation)
-        this.observer?.emit('overlay-update', this.getDisplayProperties());
-
+        this.toggleOverlay('slope')
     }
 
     toggleTotalElevation() {
-        const showTotalElevation = this.getUserSettings().get('preferences.sideViews.elevation',true)
-        this.getUserSettings().set('preferences.sideViews.elevation',!showTotalElevation)
-        this.observer?.emit('overlay-update', this.getDisplayProperties());
+        this.toggleOverlay('elevation')
     }
 
     toggleMap() {
-        const showMap = this.getUserSettings().get('preferences.sideViews.map',true)
-
-        this.getUserSettings().set('preferences.sideViews.map',!showMap)
-        this.observer?.emit('overlay-update', this.getDisplayProperties());
-        
+        this.toggleOverlay('map')
     }
 
-    hideLeftSideView() {
-        // TODO
-
+    toggleLeftSideView() {
+        this.toggleOverlay('sv-left')
     }
     
     hideRightSideView() {
-        // TODO
+        this.toggleOverlay('sv-right')
         
     }
 
@@ -369,7 +358,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 hideAll: this.hideAll,
                 }
 
-            const childProps = this.displayService?.getDisplayProperties(props)??{}
+            const childProps = this.getRideModeService()?.getDisplayProperties(props)??{}
 
             return { ...props, ...childProps }
         }
@@ -997,7 +986,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         if (!device ) 
             return;
 
-        const mode = this.getDeviceRide().getCyclingMode(device.udid);
+        const mode = this.getDeviceRide().getCyclingMode(device.udid) as CyclingMode;
 
         if (mode.getName()==='Simulator') {
             this.simulatorPowerUp(mode,inc)
@@ -1071,6 +1060,20 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         const fileName = `screenshot-${date}.jpg`;
         return fileName
     }
+
+    protected toggleOverlay(overlay:string) {   
+        // state is managed in user settings
+        try {     
+            const show = this.getUserSettings().get(`preferences.sideViews.${overlay}`,true)
+
+            this.getUserSettings().set(`preferences.sideViews.${overlay}`,!show)
+            this.observer?.emit('overlay-update', this.getDisplayProperties());
+        }
+        catch(err) {
+            this.logError(err,'toggleOverlay')
+        }
+    }
+
 
     protected addScreenshot(fileName:string) {   
         
@@ -1226,7 +1229,14 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
     }
 
-
+    protected isDebug() {
+        try {
+            this.getUserSettings().get('debug',false)        
+        }
+        catch {
+            return false
+        }
+    }
     
     
 

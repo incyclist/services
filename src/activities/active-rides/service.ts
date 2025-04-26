@@ -53,6 +53,7 @@ export class ActiveRidesService extends IncyclistService {
     protected apiState: {busy:boolean, promise?: Promise<ActiveRideEntry[]>} = {busy:false}
     protected mq: ActiveRideListMessageQueue
     protected prevLogTS:number = 0 
+    protected isStarted = false
 
     protected readonly activityEventHandlers = {
         update: this.onActivityUpdateEvent.bind(this),
@@ -171,6 +172,7 @@ export class ActiveRidesService extends IncyclistService {
                 this.others = this.current ? others.filter( e=> e.sessionId!==this.current.sessionId && e.user?.id!==this.current.user?.id) : others
 
                 if (this.current && this.others?.length>0) {
+                    this.isStarted = true
                     this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash()})                    
                 }
             }
@@ -239,6 +241,9 @@ export class ActiveRidesService extends IncyclistService {
     
 
     protected onActivityPaused() {
+        if (!this.current)
+            return
+
         try {
             this.current.currentSpeed = 0
             this.current.currentPower = 0
@@ -595,9 +600,11 @@ export class ActiveRidesService extends IncyclistService {
             this.addActiveRide( entry)
 
             if ( prevActive===0) {
+                this.isStarted = true
                 this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash()})
             }
             else {
+                this.isStarted = true
                 this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash() } )
 
             }
@@ -685,9 +692,11 @@ export class ActiveRidesService extends IncyclistService {
                 }
 
                 if ( prevActive===0) {
+                    this.isStarted = true
                     this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash()})
                 }
                 else {
+                    this.isStarted = true
                     this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash() } )
     
                 }
@@ -732,6 +741,9 @@ export class ActiveRidesService extends IncyclistService {
         const idx = this.others.findIndex( ar=> ar.sessionId===session)
         if (idx!==-1) 
             this.others.splice(idx,1)
+
+        if (!this.isStarted)
+            return
 
         if (this.others.length===0) {
             this.logEvent({message:'group ride finished', reason:'all riders left', activityId:this.activity?.id, routeHash:this.getRouteHash()})
@@ -783,6 +795,8 @@ export class ActiveRidesService extends IncyclistService {
         delete this.others
         delete this.coaches
         delete this.session
+        this.isStarted = false
+
         this.getMessageQueue().unsubscribeAll()
         this.isSubscribed = false
         this.observer.stop()

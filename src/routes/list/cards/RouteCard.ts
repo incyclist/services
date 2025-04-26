@@ -284,13 +284,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     getTitle() {
-        try {
-            const descr = this.getRouteDescription()|| {}
-            return getLocalizedData(descr)?.title
-        }
-        catch(err) {
-            this.logError(err,'getTitle')
-        }
+        return this.route.title
 
     }
 

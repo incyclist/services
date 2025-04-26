@@ -1,4 +1,4 @@
-import { RouteInfo } from "../types";
+import { LocalizedText, RouteInfo } from "../types";
 
 export const getLocalizedData = (data:RouteInfo , language:string='en'):RouteInfo => {
     
@@ -18,5 +18,33 @@ export const getLocalizedData = (data:RouteInfo , language:string='en'):RouteInf
     }
 
     return updated;
+
+}
+
+export const getLocalizedText = ( data:LocalizedText|string,  language:string='en') => {
+
+    if (typeof(data)==='string')
+        return data
+    
+    try {
+        if (data[language])
+            return data[language]
+
+        let keys=[];
+        try {
+            keys = Object.keys(data)
+        }
+        catch { 
+            // ignore
+        }
+        if (!keys.length)
+            return
+
+        const first = keys[0] 
+        return data[first]
+    }
+    catch {
+        return
+    }
 
 }

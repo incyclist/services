@@ -3,6 +3,7 @@ import { Countries } from "../../../i18n/countries";
 import clone from "../../../utils/clone";
 import { RouteApiDetail } from "../api/types";
 import { RouteInfo, RoutePoint } from "../types";
+import { getLocalizedText } from "../utils/localization";
 
 export class Route {
 
@@ -52,9 +53,19 @@ export class Route {
         this._details.distance =distance
     }
 
-    @Injectable
-    protected getCountries() {
-        return new Countries()
+    get title():string {
+        // TODO: detect language
+        const language = 'en'
+
+        return this.getLocalizedTitle(language)
+
+    }
+
+    getLocalizedTitle(language:string) {
+        if (this._details)
+            return getLocalizedText(this._details.localizedTitle,language)??this._details.title
+        else 
+            return getLocalizedText(this._description.localizedTitle,language)??this._description.title
     }
 
     clone() {
@@ -84,6 +95,11 @@ export class Route {
         return updated
     } 
     
+
+    @Injectable
+    protected getCountries() {
+        return new Countries()
+    }
 
 
 }

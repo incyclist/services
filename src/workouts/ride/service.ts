@@ -842,7 +842,7 @@ export class WorkoutRide extends IncyclistService{
 
     protected getCyclingModeText():string {
         const deviceRide = useDeviceRide()
-        const mode = deviceRide.getCyclingMode()
+        const mode = deviceRide.getCyclingMode() as CyclingMode
 
         const enabled = deviceRide.isToggleEnabled()
 

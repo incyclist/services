@@ -363,6 +363,7 @@ export const getRouteHash = (route:RouteApiDetail):string => {
     return routeHash;
 }
 
+
 export interface LapPoint extends RoutePoint {
     lap?:number
     totalDistance?: number

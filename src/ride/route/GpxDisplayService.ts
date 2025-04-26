@@ -53,7 +53,8 @@ export class GpxDisplayService extends RouteDisplayService {
     // also: we need to provide heading for StreetView
     getStreetViewProps(rideProps: CurrentRideDisplayProps) {
         const sideViews = {
-            show: !rideProps.hideAll,
+            enabled: true,
+            hide: rideProps.hideAll,
             left: this.getUserSettings().get('preferences.sideViews.sv-left',true),
             right: this.getUserSettings().get('preferences.sideViews.sv-right',true),
         }

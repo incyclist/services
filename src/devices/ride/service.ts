@@ -6,7 +6,7 @@ import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
-import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { setInterval } from "timers";
 import { getRouteList } from "../../routes";
 import { IncyclistService } from "../../base/service";
@@ -1378,7 +1378,7 @@ export class DeviceRideService  extends IncyclistService{
         this.promiseSendUpdate = undefined        
     }
 
-    getCyclingMode(udid?:string):CyclingMode {
+    getCyclingMode(udid?:string):ICyclingMode {
         const adapters = this.getSelectedAdapters();
 
         let adapter;

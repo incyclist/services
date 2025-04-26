@@ -1337,8 +1337,7 @@ export class ActivityRideService extends IncyclistService {
 
     getRideProps() {
         const {startPos,realityFactor,routeType} = this.activity
-        const {title} = this.current.route?.description??{} 
-                
+        const title = this.current.route?.getLocalizedTitle('en')
 
 
         let rideProps;

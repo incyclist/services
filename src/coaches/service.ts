@@ -11,6 +11,7 @@ import { Coach } from "./coach";
 import { IncyclistAdapterData } from "incyclist-devices/lib/types";
 import { getNextPosition } from "../routes/base/utils/route";
 import { useActivityRide } from "../activities";
+import { Injectable } from "../base/decorators";
 
 @Singleton
 export class CoachesService extends IncyclistService {
@@ -96,8 +97,8 @@ export class CoachesService extends IncyclistService {
     
                 const user = this.userService.get('user',{})
                 
-                const adapter= this.deviceConfig.getSelected(IncyclistCapability.Control)
-                const bikeType = adapter.getCyclingMode().getSetting('bikeType')??'Race'
+                const mode= this.getDeviceRide().getCyclingMode()
+                const bikeType = mode?.getSetting('bikeType')??'Race'
                 c.initSimulator(user,bikeType)
                 c.start(onDataUpdate)
             })        
@@ -222,7 +223,8 @@ export class CoachesService extends IncyclistService {
         return useRouteList()
     }
 
-    protected get rideService():DeviceRideService {
+    @Injectable
+    protected getDeviceRide():DeviceRideService {
         return useDeviceRide()
     }
     protected get deviceConfig():DeviceConfigurationService {

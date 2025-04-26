@@ -1,4 +1,4 @@
-import { UpdateRequest } from "incyclist-devices";
+import { CyclingMode, UpdateRequest } from "incyclist-devices";
 import { ActiveWorkoutLimit } from "../../workouts";
 import { RideModeService } from "../base/base";
 import { CurrentPosition, CurrentRideDisplayProps, ICurrentRideService, RouteDisplayProps, SideViewsShown } from "../base";
@@ -213,8 +213,8 @@ export class RouteDisplayService extends RideModeService {
 
 
         try {
-            const mode = this.getDeviceRide().getCyclingMode()
-            const isSIM = mode?.isSIM()
+            const mode = this.getDeviceRide().getCyclingMode() as CyclingMode
+            const isSIM = mode?.isSIM() 
 
             const realityFactor = this.startSettings.realityFactor ?? 100
             const targetSlope = (this.position.slope ?? 0) * realityFactor / 100
