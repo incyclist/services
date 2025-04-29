@@ -104,12 +104,12 @@ const simulate = async (activity: ActivityDetails): Promise<void> => {
     let prevTime = 0;
     const update:ActivityUpdateMessage = {
         position: {
-            lat: activity.startPos,
-            lng: activity.startPos,
+            lat: activity?.logs?.[0].lat,
+            lng: activity?.logs?.[0].lng,
             elevation: 0,
             slope: 0,
         },
-        rideDistance: 0,
+        rideDistance: activity.startPos,
         speed: 0,
         power: 0,
         cadence: 0,
@@ -123,12 +123,12 @@ const simulate = async (activity: ActivityDetails): Promise<void> => {
 
         // build 
 
-        console.log(`Speed: ${log.speed}, Power: ${log.power}, Heartrate: ${log.heartrate}, Cadence: ${log.cadence}, Slope: ${log.slope}, Time: ${log.time}`);
+        console.log(`Lat:${log.lat}, Lng:${log.lng}, Speed: ${log.speed}, Power: ${log.power}, Heartrate: ${log.heartrate}, Cadence: ${log.cadence}, Slope: ${log.slope}, Time: ${log.time}`);
         update.position.lat = log.lat;
-        update.position.lng = log.lon;
+        update.position.lng = log.lng;
         update.position.elevation = log.elevation;
         update.position.slope = log.slope;
-        update.rideDistance = log.distance;
+        update.rideDistance = log.distance+activity.startPos;
         update.speed = log.speed;
         update.power = log.power;
         update.cadence = log.cadence;
