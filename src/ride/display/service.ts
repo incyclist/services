@@ -17,7 +17,7 @@ import { VideoDisplayService } from "../route/VideoDisplayService";
 import { WorkoutDisplayService } from "../workout/WorkoutDisplayService";
 import { INativeUI } from "../../api/ui";
 import { getBindings } from "../../api";
-import { CurrentRideDisplayProps, ICurrentRideService, StartOverlayProps } from "../base/types";
+import { CurrentRideDisplayProps, ICurrentRideService, PrevRidesDisplayProps, StartOverlayProps } from "../base/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 
 @Singleton
@@ -37,6 +37,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected readonly onChangeState = this.setState.bind(this)
     protected startDeviceHandlers
     protected isResuming: boolean
+    //protected prevRides: PrevRidesListDisplayProps
 
     constructor() {
         super('RideDisplay')
@@ -342,19 +343,23 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }       
     }
 
+    getPrevRidesProps():PrevRidesDisplayProps {
+        const startSettings = this.getRouteList().getStartSettings() as RouteSettings
+        const list = this.getActivityRide().getPrevRidesListDisplay()??[]
+        const show = !!this.route && startSettings?.showPrev && list.length>0 && !this.hideAll 
+        const showOverlay = this.getUserSettings().get('preferences.sideViews.prev-rides',true)
+        return {show, minimized:!showOverlay, list}
+    }
+
     getDisplayProperties():CurrentRideDisplayProps {
         try {
-
-
-            const startSettings = this.getRouteList().getStartSettings() as RouteSettings
-            const showPrevRides = !!this.route && startSettings.showPrev
-            const prevRidesList = this.getActivityRide().getPrevRidesListDisplay()??[]
-
             const startOverlayProps = this.state==='Starting' ? this.getStartOverlayProps() : undefined
 
 
-            const props = { workout: this.actualWorkout, route: this.route, activity: this.activity,  state:this.state,startOverlayProps,
-                showPrevRides, prevRidesList,
+            const props = { 
+                workout: this.actualWorkout, route: this.route, activity: this.activity,  state:this.state,
+                startOverlayProps,
+                prevRides: this.getPrevRidesProps(),
                 hideAll: this.hideAll,
                 }
 
@@ -364,7 +369,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
         catch(err) {
             this.logError(err,'getDisplayProperties')
-            return {state:this.state,showPrevRides:false}
+            return {state:this.state}
         }
     }
 
@@ -451,7 +456,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         catch(err) {
             this.logError(err,'stop')
         }
-        
+
         delete this.type
         delete this.displayService
 
@@ -538,7 +543,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         observer.on('paused', (autoResume)=>{ this.onActivityPaused(autoResume)} )
         observer.on('resumed', ()=>{ this.onActivityResumed()} )       
         observer.on('data',this.onActivityUpdate.bind(this) )   
-        observer.on('prevRides', this.onPrevRidesUpdate.bind(this))
+//        observer.on('prevRides', this.onPrevRidesUpdate.bind(this))
     }
 
     protected updateActivityWorkout() {
@@ -584,10 +589,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
     }
 
-    protected onPrevRidesUpdate(list: PrevRidesListDisplayProps) {
-        this.observer.emit( 'prev-rides-update', this.getDisplayProperties())
+    // protected onPrevRidesUpdate(list: PrevRidesListDisplayProps) {
+    //     this.prevRides = list
+    //     this.observer.emit( 'prev-rides-update', this.getDisplayProperties())
 
-    }
+    // }
 
     protected onWorkoutStopped() {
         this.logEvent({message: 'Workout stopped by user', activity:this.activity?.id });
@@ -640,7 +646,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected onLapCompleted(oldLap:number, newLap:number):void {
         console.log('# lap completed', oldLap, newLap)
         // TODO:
-        // add lap to activityn
+        // add lap to activity
         // emit lap update to UI, so that Ui can display lap totals/stats
     }
 
@@ -863,17 +869,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 .on( 'forward', this.onForward.bind(this) )
                 .on( 'backward', this.onBackward.bind(this) )
                 .on( 'stopped', this.onWorkoutStopped.bind(this) )
-                .once( 'completed', this.onWorkoutCompleted.bind(this) )
-
-            // TODO:
-            // observer
-            //     .on('request-update',(limits)=>{
-            //         this.onWorkoutUpdates(limits)
-            //     })
-            //     .on('completed',()=>{
-            //         this.onWorkoutUpdates(undefined)
-            //     })
-    
+                .once( 'completed', this.onWorkoutCompleted.bind(this) )    
         }
         catch(err) {
             this.logError(err,'initWorkouts')

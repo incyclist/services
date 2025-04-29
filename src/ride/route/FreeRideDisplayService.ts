@@ -8,8 +8,8 @@ export class FreeRideDisplayService extends GpxDisplayService {
     
             return {
                 ...routeProps,
-                showUpcomingElevation: false,
-                showTotalElevation: false
+                upcomingElevation: {show:false},
+                totalElevation: {show:false},
             }    
         }
     

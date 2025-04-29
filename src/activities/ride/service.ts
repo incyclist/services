@@ -599,6 +599,7 @@ export class ActivityRideService extends IncyclistService {
 
     getPrevRidesListDisplay( maxEntries:number=12):Array<PrevRidesListDisplayProps> {
 
+        
         const prevRides = this.current.prevRidesLogs
         if (!prevRides?.length)
             return []

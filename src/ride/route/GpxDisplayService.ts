@@ -15,6 +15,7 @@ export class GpxDisplayService extends RouteDisplayService {
     protected mapLoaded:boolean = false
     protected mapError:string
     protected svObserver: Observer;
+    protected mapObserver: Observer;
     protected svPosition: {lat:number, lng:number, heading:number}
     protected tsPrevSVUpdate: number
     protected tsLastSVEvent: number
@@ -39,7 +40,7 @@ export class GpxDisplayService extends RouteDisplayService {
                 this.logEvent({message:'init streetview', updateFreq, minimalPause, bestFreq})                
             }
             this.logEvent({message:''})
-            this.observer.on('position-update',this.onPositionUpdate.bind(this))
+            //this.observer.on('position-update',this.onPositionUpdate.bind(this))
 
             
         }
@@ -73,9 +74,21 @@ export class GpxDisplayService extends RouteDisplayService {
     // {position,googleMaps,visible,options,onEvent}
     getSateliteViewProps() {
         return {
-            onDisplayEvent: this.onSatelliteViewEvent.bind(this)
+            onDisplayEvent: this.onSatelliteViewEvent.bind(this),
+            displayPosition: this.position
+
+            
         }
     }
+
+    getMapViewProps() {
+        return {
+            onDisplayEvent: this.onMapViewEvent.bind(this),
+            showMap:false,
+            displayPosition: this.position
+        }
+    }
+    
     
 
     getStartOverlayProps() {
@@ -107,9 +120,10 @@ export class GpxDisplayService extends RouteDisplayService {
             routeProps = {...routeProps, ...this.getSateliteViewProps()}
         }
         else {
-            routeProps = {...routeProps,  showMap:false}
+            routeProps = {...routeProps, ...this.getMapViewProps()}
         }
 
+        console.log('# get display props', routeProps)
         return {
            rideView,
             ...routeProps            
@@ -122,6 +136,13 @@ export class GpxDisplayService extends RouteDisplayService {
         }
         else if (state==='Error') {
             this.mapError = error
+        }
+        this.emit('state-update')
+
+    }
+    protected onMapViewEvent(state:SatelliteViewEvent,error?:string) {
+        if (state==='Loaded') {
+            this.mapLoaded = true
         }
         this.emit('state-update')
 
@@ -154,32 +175,38 @@ export class GpxDisplayService extends RouteDisplayService {
     protected onPositionUpdate( state) {
 
         const {route,position} = state??{}
+        const rideView = this.getUserSettings().get('preferences.rideView','sv')
 
-        const updatePending = (Date.now()-(this.tsPrevSVUpdate??0))> this.getDefaultUpdateFrequency()
-        const stillBusy = !this.tsPositionUpdateConfirmed || (Date.now()-this.tsLastSVEvent)<this.getMinimalPause()
-        const updatePossible = this.tsPositionUpdateConfirmed && (Date.now()-this.tsLastSVEvent)>this.getBestCaseUpdateFrequency()
-
-        console.log( '# service.onPositionUpdate', this.tsLastSVEvent - this.tsPrevSVUpdate, {stillBusy, updatePossible, updatePending, ...state})
-
-        if ( !stillBusy && (updatePending || updatePossible) ){
-            if (position) {
-
-                const freq = this.tsPrevSVUpdate ? Date.now()-this.tsPrevSVUpdate : undefined
-                const duration = this.tsPrevSVUpdate ? (this.tsLastSVEvent??Date.now())-this.tsPrevSVUpdate : undefined
-               
-                const {lat,lng,routeDistance} = position
-                const heading = getHeading(route,position )
-                this.getStreetViewObserver()?.emit('position-update',{lat,lng,heading})
-
-                this.logEvent({message:'street view position update', lat,lng, routeDistance, heading, freq, duration})
-
-                this.tsPrevSVUpdate = Date.now()
-                delete this.tsPositionUpdateConfirmed
-                delete this.tsLastSVEvent
-
-
-            }
+        if (rideView==='sv') {
+            const updatePending = (Date.now()-(this.tsPrevSVUpdate??0))> this.getDefaultUpdateFrequency()
+            const stillBusy =  (!this.tsPositionUpdateConfirmed  && (Date.now()-(this.tsPrevSVUpdate??0))<500) || (Date.now()-this.tsLastSVEvent)<this.getMinimalPause()
+            const updatePossible = this.tsPositionUpdateConfirmed && (Date.now()-this.tsLastSVEvent)>this.getBestCaseUpdateFrequency()
+    
+            console.log( '# service.onPositionUpdate', rideView,  this.tsLastSVEvent - (this.tsPrevSVUpdate??0), {stillBusy, updatePossible, updatePending, ...state})
+    
+            if ( (!stillBusy||!this.tsPrevSVUpdate) && (updatePending || updatePossible) ){
+                if (position) {
+    
+                    const freq = this.tsPrevSVUpdate ? Date.now()-this.tsPrevSVUpdate : undefined
+                    const duration = this.tsPrevSVUpdate ? (this.tsLastSVEvent??Date.now())-this.tsPrevSVUpdate : undefined
+                   
+                    const {lat,lng,routeDistance} = position
+                    const heading = getHeading(route,position )
+                    this.getStreetViewObserver()?.emit('position-update',{lat,lng,heading})
+    
+                    this.logEvent({message:'street view position update', lat,lng, routeDistance, heading, freq, duration})
+    
+                    this.tsPrevSVUpdate = Date.now()
+                    delete this.tsPositionUpdateConfirmed
+                    delete this.tsLastSVEvent
+                }
+            }    
         }
+        else {
+            //
+            console.log('# position update', this.position)
+        }
+
     }
 
     protected getDefaultUpdateFrequency() {

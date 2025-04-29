@@ -5,8 +5,9 @@ import { Observer } from "../../base/types"
 import { RoutePoint } from "../../routes/base/types"
 import { Route } from "../../routes/base/model/route"
 import EventEmitter from "events"
-import { ActivityDetails, PrevRidesListDisplayProps, ScreenShotInfo } from "../../activities"
+import { ActiveRideListAvatar, ActivityDetails, PrevRidesListDisplayProps, ScreenShotInfo } from "../../activities"
 import { Workout } from "../../workouts"
+import { Avatar } from "../../avatars"
 
 export type RideType = 'Free-Ride' | 'GPX' | 'Video' | 'Workout'
 
@@ -36,23 +37,30 @@ export interface CurrentPosition extends RoutePoint {
     heading?: number
 }
 
+export type RouteMarker = {
+    lat?:number, 
+    lng?:number,
+    routeDistance: number,
+    avatar:ActiveRideListAvatar
+}
+
+export interface NearbyDisplayProps extends OverlayDisplayProps {
+    observer: Observer
+
+}
+
 export interface RouteDisplayProps extends IRideModeServiceDisplayProps {
     position: RoutePoint
+    markers?: RouteMarker[],
     sideViews: SideViewsShown
     route: Route
     startPos: number,
     endPos: number,
     realityFactor: number
-    showNearbyRides: boolean
-    nearbyRides: Observer
-    showMap?: boolean
-    minimizeMap?: boolean
-    showUpcomingElevation?: boolean
-    minimizeUpcomingElevation?: boolean
-    showTotalElevation?: boolean
-    minimizeTotalElevation?: boolean
-
-
+    nearbyRides: NearbyDisplayProps
+    map?: OverlayDisplayProps    
+    upcomingElevation?: OverlayDisplayProps
+    totalElevation?: OverlayDisplayProps
 }
 
 
@@ -70,14 +78,22 @@ export interface StartOverlayProps {
     readyToStart: boolean
 }
 
+export interface OverlayDisplayProps {
+    show: boolean,
+    minimized?: boolean
+}
+
+export interface PrevRidesDisplayProps extends OverlayDisplayProps{
+    list: Array<PrevRidesListDisplayProps>
+}
+
 export interface CurrentRideDisplayProps extends IRideModeServiceDisplayProps {
     workout?: Workout,
     route?: Route,
     activity?: ActivityDetails,
     state: CurrentRideState,
     startOverlayProps?:StartOverlayProps,
-    showPrevRides: boolean
-    prevRidesList?: Array<PrevRidesListDisplayProps>
+    prevRides?: PrevRidesDisplayProps
     hideAll?: boolean
 }
 

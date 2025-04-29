@@ -5,8 +5,10 @@ import { Observer, Singleton } from "../../base/types";
 import { CoachesService, getCoachesService } from "../../coaches";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../monitoring";
 import { RouteListService, useRouteList } from "../../routes";
+import { RoutePoint } from "../../routes/base/types";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
+import clone from "../../utils/clone";
 import { ActivityRouteType } from "../base";
 import { IncyclistActiveRidesApi } from "../base/api/active-rides";
 import { ActivityRideService, useActivityRide } from "../ride";
@@ -119,8 +121,9 @@ export class ActiveRidesService extends IncyclistService {
             return
 
         try {
-            
-            this.logEvent({message:'group ride finished', reason:'activity stopped', activityId:this.activity?.id,routeHash:this.getRouteHash()})
+            if (this.isStarted) {   
+                this.logEvent({message:'group ride finished', reason:'activity stopped', activityId:this.activity?.id,route:this.activity.route?.title, routeHash:this.getRouteHash()})
+            }
             this.publishStopEvent()
             this.cleanup()    
         }
@@ -173,14 +176,14 @@ export class ActiveRidesService extends IncyclistService {
 
                 if (this.current && this.others?.length>0) {
                     this.isStarted = true
-                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash()})                    
+                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash()})                    
                 }
             }
         }
         catch(err) {
             this.logError(err,'initList')
-            this.apiState = {busy:false}
         }
+        this.apiState = {busy:false}
 
     }
 
@@ -193,7 +196,7 @@ export class ActiveRidesService extends IncyclistService {
         return 
         
         const {position={},power,speed,cadence,heartrate,routeDistance,time,lap} = this.getActivityRide().getCurrentValues()
-        const {lat,lng,elevation,slope} = position as ActiveRidePosition
+        const {lat,lng,elevation,slope} = position as RoutePoint
 
         const payload = {
             position:{lat,lng,elevation,slope},
@@ -211,6 +214,7 @@ export class ActiveRidesService extends IncyclistService {
         this.current.currentLap = lap
 
         const displayProps = this.getDisplayProps()
+
         this.observer.emit('update', displayProps)
 
 
@@ -308,6 +312,8 @@ export class ActiveRidesService extends IncyclistService {
                 power: item.currentPower,
                 mpower: this.getRelativePower(item),
                 speed: item.currentSpeed,
+                lat: item.currentPosition?.lat,
+                lng: item.currentPosition?.lng,
             }
             displayProps.push(displayItem )
         })
@@ -601,11 +607,11 @@ export class ActiveRidesService extends IncyclistService {
 
             if ( prevActive===0) {
                 this.isStarted = true
-                this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash()})
+                this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash()})
             }
             else {
                 this.isStarted = true
-                this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash() } )
+                this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash() } )
 
             }
 
@@ -669,6 +675,9 @@ export class ActiveRidesService extends IncyclistService {
                 existing.currentSpeed = payload.speed
                 existing.currentLap = payload.lap
                 existing.tsLastUpdate = Date.now()
+
+                console.log('# got remote activity update',clone(existing), clone(this.getDisplayProps()))
+
             }
             else {
 
@@ -688,16 +697,17 @@ export class ActiveRidesService extends IncyclistService {
         
                     }
 
+
                     this.addActiveRide(entry as ActiveRideEntry )
                 }
 
                 if ( prevActive===0) {
                     this.isStarted = true
-                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash()})
+                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash()})
                 }
                 else {
                     this.isStarted = true
-                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash() } )
+                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash() } )
     
                 }
 
@@ -746,10 +756,10 @@ export class ActiveRidesService extends IncyclistService {
             return
 
         if (this.others.length===0) {
-            this.logEvent({message:'group ride finished', reason:'all riders left', activityId:this.activity?.id, routeHash:this.getRouteHash()})
+            this.logEvent({message:'group ride finished', reason:'all riders left', activityId:this.activity?.id, route: this.activity.route?.title, routeHash:this.getRouteHash()})
         } 
         else {
-            this.logEvent({message:'group ride user left', active: this.others.length+1, activityId:this.activity?.id, routeHash:this.getRouteHash() } )
+            this.logEvent({message:'group ride user left', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash() } )
         }
 
 

@@ -1,13 +1,13 @@
 import { CyclingMode, UpdateRequest } from "incyclist-devices";
 import { ActiveWorkoutLimit } from "../../workouts";
 import { RideModeService } from "../base/base";
-import { CurrentPosition, CurrentRideDisplayProps, ICurrentRideService, RouteDisplayProps, SideViewsShown } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, ICurrentRideService, NearbyDisplayProps, OverlayDisplayProps, RouteDisplayProps, RouteMarker, SideViewsShown } from "../base";
 import { Injectable } from "../../base/decorators";
 import { useUserSettings } from "../../settings";
 import { getHeading, getNextPosition, getPosition, GetPositionProps, LapPoint, useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
-import { ScreenShotInfo, useActiveRides } from "../../activities";
+import { ActiveRideListDisplayItem, ScreenShotInfo, useActiveRides } from "../../activities";
 import { getBindings } from "../../api";
 import { ActivityUpdate } from "../../activities/ride/types";
 import clone from "../../utils/clone";
@@ -24,6 +24,9 @@ export class RouteDisplayService extends RideModeService {
     protected hasNearbyRides: boolean  = false 
     protected prevRequestedSlope:undefined = undefined
     protected prevPowerTs: number
+
+    protected nearbyRiders: ActiveRideListDisplayItem[]
+
 
 
     init(service: ICurrentRideService) {
@@ -64,9 +67,10 @@ export class RouteDisplayService extends RideModeService {
             if (!isCompleted) {
                 const prevPosition = this.position
     
-                this.position = newPosition
-
+                this.position = {...newPosition}
                 const {lat,lng,routeDistance,lap} = newPosition
+
+                this.onPositionUpdate({route:this.route,position:this.position})
                 this.logEvent({message:'position update', lat,lng,routeDistance,lap  })
                 this.observer.emit('position-update', this.service.getDisplayProperties())           
     
@@ -86,6 +90,10 @@ export class RouteDisplayService extends RideModeService {
 
 
         super.onActivityUpdate(activityPos,data)
+    }
+
+    protected onPositionUpdate(state) {
+
     }
 
     onRideSettingsChanged(settings) {
@@ -122,42 +130,68 @@ export class RouteDisplayService extends RideModeService {
         }
     }
 
+    getMarkers(props: CurrentRideDisplayProps):Array<RouteMarker> {
+
+        const nearby:ActiveRideListDisplayItem[] = this.nearbyRiders??[]
+        
+        const nearbyMarkers = nearby.map( m=> {
+            const {lat,lng,lapDistance: routeDistance,avatar} = m
+            return {lat,lng,routeDistance,avatar}
+        })
+
+        const prevRides = props.prevRides?.list??[]
+        const prevRidesMarkers = prevRides.map ( pri => {
+            const {lat,lng,routeDistance,avatar} = pri
+            return {lat,lng,routeDistance,avatar}
+
+        })
+
+        const markers = [...nearbyMarkers, ...prevRidesMarkers]
+        return markers
+    }
+
+    getOverlayProps(overlay, props: CurrentRideDisplayProps):OverlayDisplayProps {
+        const showMapEnabled = this.getUserSettings().get(`preferences.sideViews.${overlay}` ,true)
+        const show = !props.hideAll 
+        const minimized = !showMapEnabled
+        return {show,minimized}
+    }
+
+    getNearbyRidesProps(props: CurrentRideDisplayProps):NearbyDisplayProps { 
+        const {minimized} = this.getOverlayProps('',props)
+        const hasNearbyRides  = this.getActiveRides().get()?.length > 0
+        const show = hasNearbyRides && !props.hideAll
+        const observer = this.getActiveRides().getObserver()??null
+
+        const nearbyRides = {show,minimized,observer}
+
+        if (this.hasNearbyRides !== hasNearbyRides) {
+            this.hasNearbyRides = hasNearbyRides
+            this.service.getObserver().emit('overlay-update', {nearbyRides})
+        }
+
+        return nearbyRides
+    }
+
 
     getDisplayProperties(props: CurrentRideDisplayProps):RouteDisplayProps {
 
         
         const {realityFactor,startPos,endPos} = this.startSettings
         
-        const hasNearbyRides  = this.getActiveRides().get()?.length > 0
-        const showNearbyRides = hasNearbyRides && this.getUserSettings().get('preferences.sideViews.nearby-rides',true)
-        const nearbyRides = this.getActiveRides().getObserver()
-
-        if (this.hasNearbyRides !== hasNearbyRides) {
-            this.hasNearbyRides = hasNearbyRides
-            this.service.getObserver().emit('nearby-rides-update', {showNearbyRides, nearbyRides})
-        }
-        const showMapEnabled = this.getUserSettings().get('preferences.sideViews.map',true)
-        const showMap = !props.hideAll 
-        const minimizeMap = showMap && !showMapEnabled
-
-        const showUpcomingElevationEnabled = this.getUserSettings().get('preferences.sideViews.slope',true)
-        const showUpcomingElevation = !props.hideAll 
-        const minimizeUpcomingElevation = showUpcomingElevation && !showUpcomingElevationEnabled
-
-        const showTotalElevationEnabled = this.getUserSettings().get('preferences.sideViews.elevation',true)
-        const showTotalElevation = !props.hideAll 
-        const minimizeTotalElevation = showTotalElevation && !showTotalElevationEnabled
-
+        const map = this.getOverlayProps('map',props)
+        const upcomingElevation = this.getOverlayProps('slope',props)
+        const totalElevation = this.getOverlayProps('elevation',props)
+        const nearbyRides = this.getNearbyRidesProps(props)
+        
         return {
-            position: this.position,
+            position: this.position,markers: this.getMarkers(props),
             sideViews: this.sideViews,
             route: this.route,
             realityFactor,
             startPos,endPos,
-            showNearbyRides,nearbyRides,
-            showMap,minimizeMap,
-            showUpcomingElevation,minimizeUpcomingElevation,
-            showTotalElevation,minimizeTotalElevation,
+            nearbyRides,
+            map,upcomingElevation, totalElevation
         }    
     }
 
@@ -321,13 +355,14 @@ export class RouteDisplayService extends RideModeService {
         const session = this.getAppInfo().session
 
         try {
-            this.getActiveRides().init( session)
+            const observer = this.getActiveRides().init( session)
 
-            // TODO: update map markers
-            // ar.getObserver().on('update',(data)=>{
-            //     this.state.activeRidesMapMarkers = data.filter( ar=>!ar.isUser)
+            observer.on('update',(data)=>{
+                 this.nearbyRiders = data.filter( ar=>!ar.isUser)
 
-            // })
+                 console.log('# nearby riders', this.nearbyRiders)
+
+            })
         }
         catch(err) {
             this.logError(err,'prepareActiveRides')
