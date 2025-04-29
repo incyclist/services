@@ -1,6 +1,8 @@
 import { JSONObject, parseTime } from '../../../utils';
 import { RouteApiDetail } from '../api/types';
 import { RoutePoint } from '../types';
+import { validateRoute } from '../utils';
+import { fixAnomalies } from '../utils/points';
 import { EnhancedRoutePoint, GPXParser } from './gpx';
 import { CutInfo } from './types';
 import { XMLParser, XmlParserContext } from './xml';
@@ -52,8 +54,18 @@ export class IncyclistXMLParser extends XMLParser{
         }
 
         try {
-            const gpx = await new GPXParser({addTime:true}).import(gpxFile)
-            route.points = gpx.details.points
+            if (context.data['autoCorrect']) {
+                const gpx = await new GPXParser({addTime:true, keepZero:true}).import(gpxFile)
+                route.points = gpx.details.points
+    
+                fixAnomalies(route.points)    
+                validateRoute(route)
+            }
+            else {
+                const gpx = await new GPXParser({addTime:true}).import(gpxFile)
+                route.points = gpx.details.points
+                    
+            }
         }
         catch(err) {            
             if (!data['gpx-file-path'])

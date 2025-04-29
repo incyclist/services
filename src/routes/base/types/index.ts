@@ -67,6 +67,8 @@ export type DaumEpp = {
 
 
 export interface RoutePoint extends LatLng {
+    time?:number,       // time since start 
+    segment?:string,
     cnt?: number,
     heading?: number,
     routeDistance: number;

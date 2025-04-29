@@ -13,6 +13,7 @@ export interface EnhancedRoutePoint extends RoutePoint {
 
 interface GPXParserProps {
     addTime?: boolean;
+    keepZero?: boolean
 }
 
 export class GPXParser extends XMLParser { 
@@ -96,7 +97,7 @@ export class GPXParser extends XMLParser {
                 
                 if (prev) {
                     const ignore = this.caclulateDistance(point,prev)
-                    if (ignore) {
+                    if (ignore && !this.props.keepZero) {
                         return
                     }
                 }
