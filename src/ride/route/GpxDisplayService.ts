@@ -123,7 +123,6 @@ export class GpxDisplayService extends RouteDisplayService {
             routeProps = {...routeProps, ...this.getMapViewProps()}
         }
 
-        console.log('# get display props', routeProps)
         return {
            rideView,
             ...routeProps            
