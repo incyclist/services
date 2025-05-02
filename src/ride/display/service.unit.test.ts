@@ -177,10 +177,10 @@ describe('RideDisplayService', () => {
 
                 expect(emit).toHaveBeenCalledWith('overlay-update', OC( {
                     hideAll: true,
-                    showMap: false,
+                    map:OC({show: false}),
                     sideViews: OC({enabled:true, hide:true, left:true, right:true}),
-                    showUpcomingElevation: false,
-                    showTotalElevation: false,
+                    upcomingElevation: OC({show:false}),
+                    totalElevation: OC({show:false}),
                 }))
                 expect(setFn).not.toHaveBeenCalled()
                 jest.clearAllMocks()
@@ -190,10 +190,10 @@ describe('RideDisplayService', () => {
 
                 expect(emit).toHaveBeenCalledWith('overlay-update', OC( {
                     hideAll: false,
-                    showMap: true,
+                    map: {show:true, minimized:false},
                     sideViews: OC({enabled:true, hide:false, left:true, right:true}),
-                    showUpcomingElevation: true,
-                    showTotalElevation: true,
+                    upcomingElevation: {show:true, minimized:false},
+                    totalElevation: {show:true, minimized:false},
                 }))
                 expect(setFn).not.toHaveBeenCalled()
 
