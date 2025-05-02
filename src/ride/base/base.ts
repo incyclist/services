@@ -172,7 +172,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         return {
             bike: device.adapter?.getDisplayName(),
             interface: device.adapter?.getInterface(),
-            mode: mode?.getName()
+            bikeMode: mode?.getName()
         }
     }
 

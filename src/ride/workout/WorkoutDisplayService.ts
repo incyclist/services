@@ -36,7 +36,7 @@ export class WorkoutDisplayService extends RideModeService {
         const bikeProps = this.getBikeLogProps()
 
         return {
-            rideMode:'workout',
+            mode:'workout',
             workout: workout.name,
             ...settings,
             ...bikeProps

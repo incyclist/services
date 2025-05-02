@@ -10,7 +10,7 @@ export class FollowRouteDisplayService extends GpxDisplayService {
         const bikeProps = this.getBikeLogProps()
 
         const props =  {
-            rideMode:'follow route',
+            mode:'follow route',
             rideView,
             route: route.description.title,
             start: settings.startPos,
