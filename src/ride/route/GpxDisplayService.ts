@@ -178,10 +178,8 @@ export class GpxDisplayService extends RouteDisplayService {
 
         if (rideView==='sv') {
             const updatePending = (Date.now()-(this.tsPrevSVUpdate??0))> this.getDefaultUpdateFrequency()
-            const stillBusy =  (!this.tsPositionUpdateConfirmed  && (Date.now()-(this.tsPrevSVUpdate??0))<500) || (Date.now()-this.tsLastSVEvent)<this.getMinimalPause()
+            const stillBusy =  (!this.tsPositionUpdateConfirmed  && (Date.now()-(this.tsPrevSVUpdate??0))<500) || (Date.now()-(this.tsLastSVEvent??0))<this.getMinimalPause()
             const updatePossible = this.tsPositionUpdateConfirmed && (Date.now()-this.tsLastSVEvent)>this.getBestCaseUpdateFrequency()
-    
-            console.log( '# service.onPositionUpdate', rideView,  this.tsLastSVEvent - (this.tsPrevSVUpdate??0), {stillBusy, updatePossible, updatePending, ...state})
     
             if ( (!stillBusy||!this.tsPrevSVUpdate) && (updatePending || updatePossible) ){
                 if (position) {
@@ -200,6 +198,18 @@ export class GpxDisplayService extends RouteDisplayService {
                     delete this.tsLastSVEvent
                 }
             }    
+            else {
+                const duration = this.tsPrevSVUpdate ? Date.now()-this.tsPrevSVUpdate : undefined
+                if (stillBusy) {                    
+                    this.logEvent({message:'street view position update skipped', reason:'busy', duration})
+                    // enforce next update after 10s
+                    if (duration>10000) {
+                        delete this.tsPrevSVUpdate
+                        delete this.tsPositionUpdateConfirmed
+                        delete this.tsLastSVEvent                            
+                    }
+                }
+            }
         }
         else {
             //
