@@ -10,6 +10,8 @@ import { getWorkoutList, useWorkoutList } from '../service'
 import { waitNextTick } from "../../../utils";
 import { Segment} from "../../base/model/Segment";
 import { valid } from "../../../utils/valid";
+import { useRouteList } from "../../../routes";
+import { Injectable } from "../../../base/decorators";
 
 /**
  * [WorkoutCard](WorkoutCard.md) objects are used to represent a single workout in the workout list
@@ -96,6 +98,9 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         service.selectCard(this)
         if (settings)
             service.setStartSettings(settings)
+        if (settings.noRoute) {
+            this.getRouteList().unselect()
+        }
 
         this.emitUpdate()
     }
@@ -381,6 +386,11 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         if (selectedWorkout?.id===this.workout.id)
             return true;
         return false
+    }
+
+    @Injectable
+    protected getRouteList() {
+        return useRouteList()
     }
 
 

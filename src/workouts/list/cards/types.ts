@@ -50,6 +50,8 @@ export interface WorkoutSettings {
     ftp?: number;
     /** identifies if ERG Mode should be used during the workout (default:true) */
     useErgMode?: boolean;
+    /** user wants to ride the workout without a route ("workout only mode") (default:false) */
+    noRoute?: boolean
 }
 
 export interface WorkoutSettingsDisplayProps {
