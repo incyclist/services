@@ -113,10 +113,12 @@ export class DeviceRideService  extends IncyclistService{
             ?? this.adapters.find ( d => d.capabilities.includes('power')) 
             ?? this.adapters.find ( d => d.capabilities.includes('speed')) 
 
-        this.rideAdapters.forEach( ai => {
-            ai.isControl = (ai.udid===controlDevice.udid)
-        })
-
+        if (controlDevice) {
+            this.rideAdapters.forEach( ai => {
+                ai.isControl = (ai.udid===controlDevice.udid)
+            })
+        }
+        
         if (!this.simulatorEnforced)
             return this.adapters
 
