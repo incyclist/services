@@ -70,6 +70,9 @@ export class IncyclistXMLParser extends XMLParser{
                 if (error) {
                     route.points = gpx.details.points
                 }
+                else {
+                    route.points = points
+                }
 
                 route.points = route.points.filter( p=>p.distance!==0)
                 route.points.forEach( (p,idx)=> { p.cnt=idx })
