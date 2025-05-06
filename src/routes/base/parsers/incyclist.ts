@@ -1,3 +1,4 @@
+import { EventLogger } from 'gd-eventlog';
 import { JSONObject, parseTime } from '../../../utils';
 import { RouteApiDetail } from '../api/types';
 import { RoutePoint } from '../types';
@@ -10,6 +11,11 @@ import { XMLParser, XmlParserContext } from './xml';
 
 export class IncyclistXMLParser extends XMLParser{
     static readonly SCHEME = 'gpx-import'
+
+    constructor() {
+        super();
+        this.logger = new EventLogger('IncyclistParser')
+    }
 
     
     protected async loadDescription(context: XmlParserContext): Promise<void> {
