@@ -1,4 +1,4 @@
-import { ActivityDetails, ActivityUser, PrevRidesListDisplayProps, useActivityRide } from "../../activities";
+import { ActivityDetails, ActivityUser, useActivityRide } from "../../activities";
 import { IncyclistService } from "../../base/service";
 import { Observer, Singleton } from "../../base/types";
 import { Injectable } from "../../base/decorators";
@@ -100,7 +100,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
         }
         catch(err) {
-            this.logError(err,'stop')
+            this.logError(err,'start')
         }
 
     }
@@ -454,7 +454,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.state = 'Idle'
         }
         catch(err) {
-            this.logError(err,'stop')
+            this.logError(err,'stopRide')
         }
 
         delete this.type
