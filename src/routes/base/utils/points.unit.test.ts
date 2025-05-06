@@ -21,22 +21,28 @@ describe.skip('Point Utils',()=>{
     describe('fixAnomalies',()=>{
 
         test('DK',()=>{
-            const points = createFromJson(rlv as unknown as RouteApiDetail)?.points
-            const target = [...points]
-            
-            const {fixed,time,fixedRecords,error} = fixAnomalies(target,1000)
-
-
-
-            const lock = fixedRecords.find( (r,idx) => idx>0 && r.idx===fixedRecords[idx-1].idx)
-
-            console.log( fixed, time,  points.length,'->',target.length, lock??fixedRecords)
-
-            if (error)
-                console.log(error)
-
-            //console.log(target.map((d,idx)=>`${idx}(${d.cnt}):${d.routeDistance},${d.lat},${d.lng},${d.distance}`))
+            try {
+                console.log('starting')
+                const points = createFromJson(rlv as unknown as RouteApiDetail)?.points
+                const target = [...points]
+                
+                const {fixed,time,fixedRecords,error} = fixAnomalies(target,1000)
     
+    
+    
+                const lock = fixedRecords.find( (r,idx) => idx>0 && r.idx===fixedRecords[idx-1].idx)
+    
+                console.log( fixed, time,  points.length,'->',target.length, lock??fixedRecords)
+    
+                if (error)
+                    console.log(error)
+    
+                console.log(target.map((d,idx)=>`${idx}(${d.cnt}):${d.routeDistance},${d.lat},${d.lng},${d.distance}`))
+    
+            }
+            catch(err) {
+                console.log(err)
+            }
         })
 
     })

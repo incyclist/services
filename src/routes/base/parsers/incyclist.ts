@@ -56,9 +56,17 @@ export class IncyclistXMLParser extends XMLParser{
         try {
             if (context.data['autoCorrect']) {
                 const gpx = await new GPXParser({addTime:true, keepZero:true}).import(gpxFile)
-                route.points = gpx.details.points
+                const points = [...gpx.details.points]
     
-                fixAnomalies(route.points)    
+                const {fixed,time,error} = fixAnomalies(points)  
+                this.logger.logEvent({message: 'gpx file autocorrect',cntFixed:fixed,duration:time, error:error?.message})
+
+                if (error) {
+                    route.points = gpx.details.points
+                }
+
+                route.points = route.points.filter( p=>p.distance!==0)
+                route.points.forEach( (p,idx)=> { p.cnt=idx })
                 validateRoute(route)
             }
             else {
