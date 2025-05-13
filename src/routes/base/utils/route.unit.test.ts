@@ -184,7 +184,6 @@ describe( 'Route Utils',()=>{
             // total distance is 17317.535352055507
             const routeDistance = 17320
 
-            console.log(testRoute.points[testRoute.points.length-1])
             const prev = clone(testRoute.points[testRoute.points.length-1])
             prev.routeDistance = 17312
 

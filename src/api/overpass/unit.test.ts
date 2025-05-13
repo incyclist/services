@@ -1,6 +1,6 @@
 import {OverpassApi} from '.';
 import  axios from 'axios';
-
+import fs from 'fs/promises'
 
 describe ('OverpassClient Unit Test' ,() => {
     
@@ -23,13 +23,21 @@ describe ('OverpassClient Unit Test' ,() => {
             expect(result).toBe('success');
         } );
 
-        test.skip ( 'real api - manual test only',async  () => {
-            const query = "[out:json][timeout:25];way['addr:country'](around:20000,40.0748576503,23.9807375427);(._;>;);out tags;"
-            
+        test.skip ( 'real api - test to explore the data - manual test only',async  () => {
+
+            console.log('-------------------- TEST CASE SHOULD NOT BE PART OF A SUITE RUN')            
+            expect(process.env.CI).toBeUndefined()  
+            // const query = "[out:json];way[highway](26.67639646112859,-80.04487372469582,26.69436287103533,-80.02476550851868);(._;>;);out geom;"
+            // const fileName = './__tests__/data/overpass/default-location.json'
+
+            const query = "[out:json];way[highway](26.68453889504663,-80.04377872640234,26.70250530495337,-80.02366907359766);(._;>;);out geom;"
+            const fileName = './__tests__/data/overpass/default-3.json'
+
             const result = await client.query(query) as JSON       
             console.log(result)
-            const str = JSON.stringify(result)
-            expect(str).toContain('addr:country')
+            const str = JSON.stringify(result,null,2)
+            fs.writeFile(fileName,str)            
+            
         } );
 
         

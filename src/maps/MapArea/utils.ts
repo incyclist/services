@@ -1,8 +1,9 @@
+import { EventLogger } from "gd-eventlog";
 import { Vector, geo } from "../../utils";
 import { LatLng, crossing } from "../../utils/geo";
 import { abs, cos, degrees, rad, sin } from "../../utils/math";
 import { GET_WAYS_IN_AREA, MAX_DISTANCE_FROM_PATH, RADIUS_EARTH } from "./consts";
-import { Boundary, CrossingInfo, IncyclistNode, OverpassResult, OverpassWay, IncyclistWay, FreeRideDataSet, SplitPointInfo, WaySplitInfo } from "./types";
+import { Boundary, CrossingInfo, IncyclistNode, OverpassResult, OverpassWay, IncyclistWay, FreeRideDataSet, SplitPointInfo, PathCrossingInfo, WayInfo } from "./types";
 
 
 export function addNode(node:number,nodesLookup:Record<string,IncyclistNode>,id:number,path:Array<IncyclistNode>):void {
@@ -12,7 +13,7 @@ export function addNode(node:number,nodesLookup:Record<string,IncyclistNode>,id:
         path.push ( point)
 
     
-    if (point.ways===undefined) point.ways=[];
+    point.ways= point.ways??[];
     let found = point.ways.find ( e=> (e.toString()===id.toString()) );
 
     if (found===undefined) nodesLookup[node].ways.push(id.toString());
@@ -28,7 +29,7 @@ export function addWay(w:IncyclistWay,ways:Array<IncyclistWay>,waysLookup:Record
 }
 
 export function updateTypeStats(types:Record<string,number>,type:string):void {
-    let t = (type===undefined ? '-' : type);
+    let t = (type ?? '-');
     if (types[t]!==undefined)   
         types[t]++;
     else   
@@ -48,7 +49,8 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
             data = JSON.parse(str);
         }
         catch (error) {
-//                this.logger.logEvent({message:"_parse: parsing error:",error})
+            const logger = new EventLogger('MapArea')
+            logger.logEvent({message:"_parse: parsing error:",error})
             return;
         }    
     }
@@ -68,7 +70,7 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
     // 1st pass search all nodes
     data.elements.forEach(element => {
         if (element.type==='node') {
-            id =  ( element.id!==undefined && typeof  element.id ==='number' )  ? id =  element.id.toString() : '_INT_'+idx;
+            id =  ( element.id!==undefined && typeof  element.id ==='number' )  ? element.id.toString() : '_INT_'+idx;
             nodesLookup[element.id.toString()] = {  id, lat:element.lat, lng:element.lon, tags: element.tags} ;
             idx++;
         }
@@ -81,7 +83,7 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
         if (element.type==='way') {
 
             const way = element as OverpassWay
-            id =  ( element.id!==undefined && typeof  element.id ==='number' )  ? id =  element.id.toString() : '_INT_'+idx;
+            id =  ( element.id!==undefined && typeof  element.id ==='number' )  ? element.id.toString() : '_INT_'+idx;
             const name = element.tags?.name;
             const type = element.tags?.highway;
         
@@ -103,25 +105,71 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
     return {ways,nodesLookup,waysLookup,typeStats:types}
 }
 
+export function splitAtIndex(way, idxSplit) {
+    let path=way.path;
+    let result= [ [],[]]
+    path.forEach( (p,idx)=> {
+
+        if ( idx<=idxSplit) result[0].push(p);
+        if ( idx>=idxSplit) result[1].push(p);
+    });
+    return result;
+}
 
 
-export function splitAtPointInfo(way:IncyclistWay,pointInfo:SplitPointInfo):Array< Array<IncyclistNode> > {
+/**
+ * Concatenates two paths.
+ * @param path the first path
+ * @param path2 the second path
+ * @param position 'before' or 'after'. If 'before', the second path will be inserted before the first node of the original path. If 'after', the second path will be appended after the last node of the original path.
+ * @returns nothing, the path is updated in place.
+ */
+export function concatPaths(path:IncyclistNode[],path2:IncyclistNode[],position:'before'|'after'):void {  
+    const append = [...path2];        
+    
+    if ( position==='after') {
+        append.shift();
+        path.push(...append)
+    }
+    else { // before
+        path.shift();               // remove first element from original array
+        path.unshift(...append);    // insert new elements to the beginning
+    }
+}
+
+
+
+
+
+/**
+ * Splits a path at a split point, which is a point with more than two ways.
+ * The function returns an array of two paths.
+ * 
+ * The first path is the part of the way up to the split point.
+ * The second path is the remaining part of the way from the split point up to the next branch (if any), 
+ * 
+ * @param way - The way to split, which can be of type IncyclistWay or WaySplitInfo.
+ * @param split - The split info. This object must contain the index of the split point in the path.
+ * @returns An array of two paths. The first path is the part of the way up to the split point,
+ *          and the second path is the part of the way from the split point, plus any additional branches of the split point.
+ */
+export function splitAtPointInfo(way:WayInfo,split:SplitPointInfo):Array< Array<IncyclistNode> > {
     if (!way)
         return;
 
     let path=way.path;
     let result= [ [],[]]
-    let foundBranch2=false;
+    let hasNextBranch=false;
     path.forEach( (node,idx)=> {
 
-        if ( idx<=pointInfo.idx) result[0].push(node)
-        if ( idx===pointInfo.idx) {
+        if ( idx<=split.idx) result[0].push(node)
+        if ( idx===split.idx) {
             result[1].push(node)
         } 
-        if ( !foundBranch2 && idx>pointInfo.idx && node.ways.length===1) result[1].push(node)
-        if ( !foundBranch2 && idx>pointInfo.idx && node.ways.length>1) {
-            if ( findAdditional( pointInfo.branches, node.ways,way.id, (id1,id2)=>(id1===id2) )!==undefined) 
-                foundBranch2 = true;
+        if ( !hasNextBranch && idx>split.idx && node.ways.length===1) result[1].push(node)
+        if ( !hasNextBranch && idx>split.idx && node.ways.length>1) {
+            if ( findAdditional( split.branches, node.ways,way.id, (id1,id2)=>(id1===id2) )!==undefined) 
+                hasNextBranch = true;
             result[1].push(node);
 
         } 
@@ -130,37 +178,20 @@ export function splitAtPointInfo(way:IncyclistWay,pointInfo:SplitPointInfo):Arra
 }
 
 
-export function getUntilFirstBranch(w:WaySplitInfo, props?:{reverse?:boolean, ignore?:string}):WaySplitInfo {
-    if (!w)
-        return;
-
-    const reverse = (props!==undefined) ? props.reverse : false;
-    const ignore = (props!==undefined) ? props.ignore : undefined;
-    let branch;
-
-    let path = w.path;
-    if (reverse) {
-        w.path = [...path];
-        w.path.reverse();
-        path = w.path;
-    }
-
-    let piBranch = getFirstBranch(w as IncyclistWay,ignore);
 
 
-    if (piBranch!== undefined) {
-        branch={id:w.id,path:[]};
-        path.forEach( (p,idx)=> {
-            if ( idx<=piBranch.idx) branch.path.push(p)
-        }); 
-    }
-    else {
-        branch ={id:w.id,path:w.path}
-    }
-    return branch;
-}
-
-export function isRoundabout(w, strictCheck=false) {
+/**
+ * Determines if a given WaySplitInfo represents a roundabout.
+ * A roundabout is determined by the following criteria in order of preference:
+ * 1. `roundabout` or `junction` tag is set to "roundabout"
+ * 2. The first and last nodes in the path match (i.e. the roundabout is a loop)
+ * If strictCheck is true, then the function will return false if the first
+ * criteria is not met.
+ * @param {WaySplitInfo} w - WaySplitInfo object to check
+ * @param {boolean} [strictCheck=false] - Whether to check the presence of the roundabout tag
+ * @returns {boolean} Whether the WaySplitInfo represents a roundabout
+ */
+export function isRoundabout(w:IncyclistWay, strictCheck=false) {
     if (!w)
         return;
 
@@ -177,22 +208,22 @@ export function isRoundabout(w, strictCheck=false) {
 }
 
 
-export function splitAtIndex(way, idxSplit) {
-    let path=way.path;
-    let result= [ [],[]]
-    path.forEach( (p,idx)=> {
-
-        if ( idx<=idxSplit) result[0].push(p);
-        if ( idx>=idxSplit) result[1].push(p);
-    });
-    return result;
-}
-
+/**
+ * Remove duplicates from an array of path options.
+ * A path option is considered a duplicate if it has the same end node ID as a previous option.
+ * Only the first occurrence of a path option is kept.
+ * The function returns a new array with the duplicates removed.
+ * @param options The array of path options to remove duplicates from.
+ * @returns A new array with the duplicates removed.
+ */
 export function removeDuplicates(options) {
-    const endPoints = []; 
     const unique = [];
     const uniqueUsed = []
-    options.forEach( (o) => { endPoints.push(o.path[ o.path.length-1].id) })
+
+    const endPoints = options
+        .filter(o=>o.path?.length>0)
+        .map( (o) => o.path[ o.path.length-1].id) 
+
     endPoints.forEach( (id) => {
         if ( unique.indexOf(id)<0 ) {
             unique.push(id);
@@ -201,6 +232,8 @@ export function removeDuplicates(options) {
     })
 
     return options.filter( (o) => {
+        if (o.path?.length===0) return false;
+        
         const id = o.path[ o.path.length-1].id;
         const idx = unique.indexOf(id);
         if (idx>=0 && !uniqueUsed[idx]) {
@@ -215,62 +248,99 @@ export function removeDuplicates(options) {
 
 
 
-export function splitAtPoint(way:IncyclistWay, point:IncyclistNode):Array<WaySplitInfo> {
+/**
+ * Splits a way into two parts at the given point.
+ * 
+ * If the way is a roundabout, this function returns two parts
+ *    The first part is the part of the path from the beginning up to the given point,
+ *    and the second part is the part of the path from the given point to the end.
+ * 
+ * Otherwise, it loops through the path of the way, and when it finds the given point,
+ * it splits the path into two parts.
+ *    The first part is the part of the path from the beginning up to the given point,
+ *    and the second part is the part of the path from the given point to the end.
+ * 
+ * The two parts are then returned as an array of two WaySplitInfo objects.
+ * 
+ * @param way the way to split
+ * @param point the point to split at
+ * @returns an array of two WaySplitInfo objects, each containing a part of the way
+ */
+export function splitAtPoint(way:IncyclistWay, point:IncyclistNode):Array<WayInfo> {
+
+    if (isRoundabout(way))
+        return splitRoundabout(way,point);        
+
+    const path=way.path;
+    const result= [ {id:way.id,path:[],onewayReverse:false},{id:way.id,path:[],onewayReverse:false}]
+    let found = false;
+        
+    path.forEach( (p,idx)=> {
+        if ( !found) result[0].path.push(p);
+        if (!found)
+            found =  pointEquals(p,point) ;
+        if ( found) result[1].path.push(p);
+    });
+
+    result[0].path.reverse();    
+    if ( isOneWay(way))
+        result[0].onewayReverse = true;
+
+    return result;
+}
+
+/**
+ * Splits a roundabout into two parts at the given point.
+ * 
+ * Loops through the path of the roundabout, and when it finds the given point,
+ * it splits the path into two parts.
+ * The first part is the part of the path from the beginning up to the given point,
+ * and the second part is the part of the path from the given point to the end.
+ * The two parts are then returned as an array of two WaySplitInfo objects.
+ * 
+ * @param way the roundabout to split
+ * @param point the point to split at
+ * @returns an array of two WaySplitInfo objects, each containing a part of the roundabout
+ */
+function splitRoundabout(way:IncyclistWay, point:IncyclistNode):Array<WayInfo> {
     let path=way.path;
     let result= [ {id:way.id,path:[],onewayReverse:false},{id:way.id,path:[],onewayReverse:false}]
     let found = false;
 
+    // loop until point
+    let idx = undefined;
+    
+    path.forEach( (p,i)=> {
+        if (!found) {
+            found =  pointEquals(p,point) ;
+            if (found)
+                idx = i;
+        }
+    });
+    if (idx!==undefined) {
+        let i;
+        for (i=0;i<path.length;i++) {
+            let len = path.length;
+            let p = path[(idx+i)%len];
+            let q = path[(idx-i+len)%len];
+            if ( result[0].path.length===0 || 
+                    (p.id!==result[0].path[result[0].path.length-1].id && p.id!==result[0].path[0].id) )
+                result[0].path.push(p);
+            if ( result[1].path.length===0 || 
+                    (q.id!==result[1].path[result[1].path.length-1].id && q.id!==result[1].path[0].id) )
+                result[1].path.push(q);
+        }
 
-    let roundabout = isRoundabout(way)
+        if ( isOneWay(way)) {
+            result[1].onewayReverse = true;
+        }
 
-    if ( !roundabout) {
-        path.forEach( (p,idx)=> {
-            if ( !found) result[0].path.push(p);
-            if (!found)
-                found =  pointEquals(p,point) ;
-            if ( found) result[1].path.push(p);
-        });
-        result[0].path.reverse();    
-        if ( isOneWay(way))
-            result[0].onewayReverse = true;
     }
     else {
-        
-        // loop until point
-        let idx = undefined;
-        
-        path.forEach( (p,i)=> {
-            if (!found) {
-                found =  pointEquals(p,point) ;
-                if (found)
-                    idx = i;
-            }
-        });
-        if (idx!==undefined) {
-            let i;
-            for (i=0;i<path.length;i++) {
-                let len = path.length;
-                let p = path[(idx+i)%len];
-                let q = path[(idx-i+len)%len];
-                if ( result[0].path.length===0 || 
-                     (p.id!==result[0].path[result[0].path.length-1].id && p.id!==result[0].path[0].id) )
-                    result[0].path.push(p);
-                if ( result[1].path.length===0 || 
-                     (q.id!==result[1].path[result[1].path.length-1].id && q.id!==result[1].path[0].id) )
-                    result[1].path.push(q);
-            }
-
-            if ( isOneWay(way)) {
-                result[1].onewayReverse = true;
-            }
-
-        }
-        else {
-            return ([])
-        }
-
+        return ([])
     }
-    return result;
+
+    return result
 }
 
 
@@ -279,10 +349,12 @@ export function splitAtPoint(way:IncyclistWay, point:IncyclistNode):Array<WaySpl
 * @returns {String} Unique ID
 */
 export function  generateID   (ways)  {
-    if (ways===undefined || ways.length===0) return;
+    if (ways?.length===0) return;
     if (ways.length<2) return ways[0];
+
     let w = [...ways];
-    let widStr = 'R:'+w.sort( ).join(',');
+    w.sort((a, b) => a.localeCompare(b))
+    const widStr = 'R:'+w.join(',');
 
     return widStr;
 };
@@ -313,13 +385,13 @@ export function boundaryToString(boundary:Boundary) {
     if (sw!==undefined && (sw.lat===undefined || sw.lng===undefined))
         return 'error: southwest incorrect' 
 
-    if (ne === undefined) ne = sw;
-    if (sw === undefined) sw = ne;
+    ne = ne??sw;
+    sw = sw??ne;
 
     if (sw===undefined)
         return'undefined';
-    let str = sw.lat + ',' + sw.lng +','+ ne.lat + ',' + ne.lng;
-    return str;
+
+    return  sw.lat + ',' + sw.lng +','+ ne.lat + ',' + ne.lng;    
 }
 
 
@@ -343,80 +415,100 @@ export function isNode(p) {
     return true;
 }
 
-export function isAllowed( way, from, to ) {
+/**
+ * Returns true if the path defined by way can be traversed from from to to.
+ * 
+ * The function works as follows:
+ * 
+ * 1. If from is a node on the path, and it's not a one-way, then the path can be traversed in both directions.
+ * 2. If from is the first node of the path, or if from is the last node of the path and the way is not a one-way, then the path can be traversed.
+ * 3. If to is a node on the path, and it's the last node of the path, then the path can be traversed.
+ * 4. If to is a node on the path, and from is a node on the path, and the way is not a one-way, then the path can be traversed in both directions.
+ * 5. If none of the above conditions apply, then the path can be traversed if the way is not a one-way and fromIdx<toIdx.
+ * 
+ * If none of the above conditions apply, the function returns undefined.
+ * 
+ * @param way the way to be evaluated
+ * @param from the node where the evaluation starts
+ * @param to the node where the evaluation ends
+ * @returns true if the path can be traversed, false if not, undefined if the result is unknown
+ */
+export function isAllowed( way:IncyclistWay, from:IncyclistNode, to?:IncyclistNode ) {
 
-    if (isNode(from) && isWay(way)) {
-        const fromIdx = way.path.findIndex( p => p.id===from.id);
-        // point is on the path - if it's not a one way, that's all we need to know
-        if (fromIdx!==-1 && !isOneWay(way))
-            return true;
+    if (!isNode(from) || !isWay(way)) 
+        return undefined;
 
-        let p0 = way.path[0];
-        let pN = way.path[way.path.length-1];
-        if (from.id===p0.id)
-            return true;
+    const fromIdx = way.path.findIndex( p => p.id===from.id);
+    // point is on the path - if it's not a one way, that's all we need to know
+    if (fromIdx!==-1 && !isOneWay(way))
+        return true;
 
-        if ( from.id!==p0.id && from.id===pN.id)
-            return !isOneWay(way);
-        
-        
-        if ( isNode(to) && to.id === pN.id)
-            return true;
+    const pWayStart = way.path[0];
+    const pWayEnd = way.path[way.path.length-1];
 
-        if ( isNode(from) && isNode(to )) {
-            const toId   = way.path.findIndex( p => p.id===to.id);
-            if ( fromIdx===-1 || toId===-1)
-                return;
-            return !isOneWay(way) || fromIdx<toId;
-        }
+    // FROM is the first point of the way -> can be traversed (as this would be the last )
+    if (from.id===pWayStart.id)
+        return true;
 
+    // FROM is a the the last point of the way -> can be traversed only if the way is not one way
+    if ( from.id!==pWayStart.id && from.id===pWayEnd.id)
+        return !isOneWay(way);
+    
+    
+    if ( isNode(to) && to.id === pWayEnd.id)
+        return true;
+
+    if ( isNode(from) && isNode(to )) {
+        const toId   = way.path.findIndex( p => p.id===to.id);
+        if ( fromIdx===-1 || toId===-1)
+            return;
+        return !isOneWay(way) || fromIdx<toId;
     }
+
 
 
     return undefined;
 } 
 
+/**
+ * Determines if a given way is a one-way street.
+ *
+ * @param way - The way to be evaluated, which includes a set of tags.
+ * @returns True if the way is marked as one-way ('true' or 'yes'), false otherwise.
+ */
+
 export function isOneWay(way:IncyclistWay):boolean {
-    if ( !way || !way.tags || !way.tags.oneway)
+    if ( !way?.tags?.oneway)
         return false; 
     let ow = way.tags.oneway; 
     return (ow.toString()==='true' || ow==='yes')
 }
 
-export function getFirstBranch(way:IncyclistWay,ignore?:string):SplitPointInfo {
-    if (way===undefined || way.path===undefined)
-        return;
 
-    let pFound = undefined
-    way.path.forEach( (node,idx)=> {
-
-        if (idx===0)
-            return
-
-        let ways = [];
-        
-        node.ways.forEach( (w) => {
-            if (ignore===undefined || w!==ignore) ways.push(w) 
-        })
-
-        if (!pFound && node.ways!==undefined && ways.length>1 ) {
-            let branches = [];
-            ways.forEach( pw => {
-                if ( pw!==way.id) branches.push(pw);
-            }) 
-            pFound =  {point:node,idx,branches};
-        }
-    }); 
-
-    return pFound;
-}
-
-export function findAdditional( a1, a2, id3, fn) {
+/**
+ * Finds additional elements in a2 that are not in a1 and not equal to id3.
+ * 
+ * The function takes two arrays of strings, a3, and a callback function that takes two strings and returns a boolean.
+ * The callback function is used to compare elements of the two arrays and determine if they are equal.
+ * 
+ * The function iterates over each element of a1 and a2 and checks if the element is not equal to id3 and
+ * if the callback function returns false when comparing the element with any element of a1.
+ * If the element is not equal and the callback function returns false, the element is added to the result array.
+ * If the result array is empty at the end of the iteration, the function returns undefined.
+ * Otherwise, the function returns the result array.
+ * 
+ * @param {Array<string>} a1 - The first array of strings
+ * @param {Array<string>} a2 - The second array of strings
+ * @param {string} id3 - The string to ignore
+ * @param {Function} fnCompare - The callback function to compare elements of the two arrays
+ * @returns {Array<string>|undefined} - The array of additional elements or undefined if no additional elements are found.
+ */
+export function findAdditional( a1:Array<string>, a2:Array<string>, id3:string, fnCompare) {
     let res= [];
 
     a1.forEach ( e1 => {
         a2.forEach( e2 => {
-            if ( !fn(e1,e2) && !fn(e1,id3) && !fn(e2,id3))
+            if ( !fnCompare(e1,e2) && !fnCompare(e1,id3) && !fnCompare(e2,id3))
                 res.push(e2)
         })
     })
@@ -425,7 +517,15 @@ export function findAdditional( a1, a2, id3, fn) {
     return res;
 }
 
-export function _getPointOnLine(point:LatLng,p1:LatLng,p2:LatLng) {
+/**
+ * Finds the point on a line between two points that is closest to the given point.
+ * 
+ * @param {LatLng} point The point to find the closest point on the line for
+ * @param {LatLng} p1 The first point of the line
+ * @param {LatLng} p2 The second point of the line
+ * @returns {LatLng} The point on the line closest to the given point
+ */
+export function getPointOnLine(point:LatLng,p1:LatLng,p2:LatLng):LatLng {
     let bL = initialBearingTo(p1,p2);
     let bP = bL+90;
     let p3 = destinationPoint(point,100,bP);
@@ -433,7 +533,17 @@ export function _getPointOnLine(point:LatLng,p1:LatLng,p2:LatLng) {
     return getCrossing( p1,p2,point,p3,false)
 }
 
-export function isBetween(point:LatLng,p1:LatLng,p2:LatLng) {
+    /**
+     * Tests if a point is on a path between two points.
+     * The point is considered to be on the path if it is within MAX_DISTANCE_FROM_PATH of the path
+     * and the angle between the path and the point is less than 30 degrees.
+     * 
+     * @param {LatLng} point The point to be tested
+     * @param {LatLng} p1 The first point of the path
+     * @param {LatLng} p2 The second point of the path
+     * @returns {{between:boolean, offset:number}} The result of the test, with a boolean indicating if the point is on the path and the distance from the start of the path to the point.
+     */
+export function isBetween(point:LatLng,p1:LatLng,p2:LatLng):{between:boolean, offset:number} {
     if (point===undefined|| p1===undefined || p2===undefined || 
         point.lat===undefined|| point.lng===undefined ||
         p1.lat===undefined|| p1.lng===undefined ||
@@ -458,49 +568,55 @@ export function isBetween(point:LatLng,p1:LatLng,p2:LatLng) {
 
 
 
-export function distanceToPath(point:LatLng,way) {
-    if (point===undefined|| point.lat===undefined|| point.lng===undefined 
-        || way===undefined || way.path===undefined || way.path.length===0) return undefined;
+/**
+ * Calculate the shortest distance between a point and a way.
+ * It returns the distance in meters.
+ * 
+ * @param point The point to calculate the distance from.
+ * @param way The way to calculate the distance to.
+ * @return The shortest distance in meters.
+ */
+export function distanceToPath(point:LatLng,way:IncyclistWay) {
+    if (point?.lat===undefined|| point?.lng===undefined || !way?.path?.length) 
+        return undefined;
 
     let minDistance;
     let minIdx = -1;
     let prev;
     let foundExact = false;
 
-    way.path.forEach ( (element,idx) => {
-        // exact match
-        if (element.lat===point.lat && element.lng===point.lng) {
-            minDistance = 0;
-            foundExact = true;
-            return;
-        }
-
-        if ( foundExact)
-            return;
-
-        if (prev!==undefined) {
-            let res = isBetween(point,prev,element);
-            if (res&&res.between)  {
-                minDistance = res.offset;
+    const analyzeData = () => {
+        way.path.forEach ( (element,idx) => {
+            // exact match
+            if (element.lat===point.lat && element.lng===point.lng) {
+                minDistance = 0;
                 foundExact = true;
                 return;
             }
-        }
-
-        let distance = geo.distanceBetween(element,point);  
-        if (minDistance===undefined || distance<minDistance) {
-            minDistance = distance;
-            minIdx = idx;
-        }
-
-        prev = element;
-    });
-
-    if ( foundExact)
-        return minDistance;
-
     
-    if ( minIdx>0) {
+            if ( foundExact)
+                return;
+    
+            if (prev!==undefined) {
+                let res = isBetween(point,prev,element);
+                if (res?.between)  {
+                    minDistance = res.offset;
+                    foundExact = true;
+                    return;
+                }
+            }
+    
+            let distance = geo.distanceBetween(element,point);  
+            if (minDistance===undefined || distance<minDistance) {
+                minDistance = distance;
+                minIdx = idx;
+            }
+    
+            prev = element;
+        });           
+    }
+
+    const calculateDistanceWithinPath = () => {
         const alpha = initialBearingTo(way.path[minIdx-1],way.path[minIdx]);
         const alpha2 = initialBearingTo(way.path[minIdx-1],point)
         let beta  =  alpha2- alpha;
@@ -512,9 +628,10 @@ export function distanceToPath(point:LatLng,way) {
             if ( dist<minDistance && distPath>0 && distPath <geo.distanceBetween(way.path[minIdx-1],way.path[minIdx]))
                 minDistance = dist;
         }
+
     }
 
-    if ( minIdx<way.path.length-2) {
+    const calculateDistanceAtStart = ()=>{
         const alpha = initialBearingTo(way.path[minIdx],way.path[minIdx+1]);
         let beta  = initialBearingTo(way.path[minIdx],point) - alpha;
         if ( beta>270 ) beta -=360;
@@ -526,27 +643,21 @@ export function distanceToPath(point:LatLng,way) {
         }
     }
 
+    analyzeData()
+
+    if ( foundExact)
+        return minDistance;
+    
+    if ( minIdx>0) {
+        calculateDistanceWithinPath();        
+    }
+    else if ( minIdx<way.path.length-2) {
+        calculateDistanceAtStart()
+    }
+
     return minDistance;
 }
 
-export function getNearestPath(point,ways) {
-
-    if (ways===undefined || point===undefined)
-        return;
-    let w;
-    let min = { path:undefined, distance:undefined, way:undefined  };
-    
-    for ( w of ways) {
-        let distance = distanceToPath(point,w)
-        if (distance!==undefined && (min.distance===undefined || distance<min.distance))  {
-            min.distance = distance; 
-            min.path = w.path
-            min.way = w;
-        }
-    }
-
-    return min;
-}
 
 
 export function  isWithinRange(distance) {        
@@ -602,9 +713,17 @@ export function getCrossing( A:LatLng,B:LatLng,C:LatLng,D:LatLng,exact=true):Cro
 
 
 
-export function getPointCrossingPath( point,path,closest=false) {
+/**
+ * Returns the point on the path that is crossed by the perpendicular drawn from the given point
+ * 
+ * @param point - Point to be tested
+ * @param path - Path of points to be tested against
+ * @param closest - If true, returns the closest point of the path to the point, even if there is no crossing
+ * @returns The point and distance on the path that is crossed
+ */
+export function getPointCrossingPath( point:LatLng,path:IncyclistNode[],closest=false):PathCrossingInfo {
     let pPrev=undefined;
-    let X = undefined;
+    let pCrossing = undefined;
     let pClosest = undefined
 
     if (path===undefined)
@@ -616,22 +735,21 @@ export function getPointCrossingPath( point,path,closest=false) {
             pClosest= { distance:pDist, point:p, idx:i}
         }
         if (pPrev!==undefined) {
-            let pX = _getPointOnLine(point,pPrev,p);
+            let pX = getPointOnLine(point,pPrev,p);
             if (pX!==undefined) {
                 let dist = abs(geo.distanceBetween(pX,point))
-                if ( X===undefined || (X.distance>dist) ) {
-                    X = { point:pX, distance:dist,idx:i}
+                if ( pCrossing===undefined || (pCrossing.distance>dist) ) {
+                    pCrossing = { point:pX, distance:dist,idx:i}
                 }
             }   
         }
         pPrev =p;
     });
-    if ( X!==undefined) {
-        return X
+    if ( pCrossing!==undefined) {
+        return pCrossing
     }
-    else {
-        if (closest)
-            return pClosest;
+    else if (closest) {
+        return pClosest
     }
 }
 
@@ -677,7 +795,7 @@ export function getVector( p1:LatLng, p2:LatLng) {
 }
 
 
-export function getBounds( lat:number, lng:number, offset:number ) {
+export function getBounds( lat:number, lng:number, offset:number ):Boundary {
     const pi = Math.PI;
     const m =  (1 / ((2 * pi / 360) * RADIUS_EARTH)) / 1000;  //1 meter in degree;
     
@@ -694,7 +812,7 @@ export function getBounds( lat:number, lng:number, offset:number ) {
 }
 
 export function isWithinBoundary( location:LatLng, boundary:Boundary) {
-    if (location===undefined || location.lat===undefined || location.lng===undefined)
+    if (location?.lat===undefined || location?.lng===undefined)
         return false;
     
     const lat = location.lat;

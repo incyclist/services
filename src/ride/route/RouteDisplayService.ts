@@ -20,6 +20,7 @@ export class RouteDisplayService extends RideModeService {
 
     protected position: CurrentPosition    
     protected sideViews: SideViewsShown
+    protected currentRoute: Route
 
     protected hasNearbyRides: boolean  = false 
     protected prevRequestedSlope:undefined = undefined
@@ -33,6 +34,10 @@ export class RouteDisplayService extends RideModeService {
         try {
             super.init(service)
 
+            this.initRoute()
+            this.initView()
+
+
             this.position =  this.setInitialPosition()
             
         }
@@ -40,6 +45,8 @@ export class RouteDisplayService extends RideModeService {
             this.logError(err,'init')
         }
     }
+
+
 
     getDeviceStartSettings() {
         const startSettings:RouteSettings = this.getRouteList().getStartSettings() as RouteSettings
@@ -200,7 +207,11 @@ export class RouteDisplayService extends RideModeService {
         const position = {lat,lng,routeDistance,elevation}
         return {fileName, position, time}        
     }
-    
+
+    getCurrentRoute():Route {
+        return this.currentRoute
+    }
+
 
     getRoutePosition(distance:number):CurrentPosition {
 
@@ -229,6 +240,13 @@ export class RouteDisplayService extends RideModeService {
             this.logger.logEvent({ message: 'Error', fn: 'setRoutePosition', args: { distance }, error })
         }
     }
+
+    protected initRoute() { 
+        this.currentRoute = this.route  
+    }
+
+    protected initView() { /* logic can be defined by subclasses */ }
+
 
     protected get route():Route {
         return this.getRouteList().getSelected()

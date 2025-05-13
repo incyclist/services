@@ -8,6 +8,7 @@ import { Injectable } from "../../base/decorators";
 import { ActivityUpdate } from "../../activities/ride/types";
 import { sleep } from "incyclist-devices/lib/utils/utils";
 import { ScreenShotInfo } from "../../activities";
+import { Route } from "../../routes/base/model/route";
 
 export class RideModeService extends IncyclistService implements IRideModeService {
 
@@ -89,6 +90,10 @@ export class RideModeService extends IncyclistService implements IRideModeServic
 
     getScreenshotInfo(fileName: string, time: number):ScreenShotInfo {
         return {fileName, time}        
+    }
+
+    getCurrentRoute():Route {
+        return undefined
     }
 
 

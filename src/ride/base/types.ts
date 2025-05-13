@@ -123,6 +123,8 @@ export interface IRideModeService<T extends IRideModeServiceDisplayProps = IRide
     getScreenshotInfo(fileName:string, time:number):ScreenShotInfo
     sendUpdate(request?:UpdateRequest)
     getLogProps():object
+
+    getCurrentRoute():Route
 }
 export interface ICurrentRideService {
     start(): void;

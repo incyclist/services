@@ -28,9 +28,8 @@ export class GpxDisplayService extends RouteDisplayService {
 
     }
 
-    init(service: ICurrentRideService) {
+    protected initView() {
         try {
-            super.init(service)
 
             const rideView = this.getUserSettings().get('preferences.rideView','sv')
             if ( rideView==='sv') {
@@ -39,13 +38,11 @@ export class GpxDisplayService extends RouteDisplayService {
                 const bestFreq = this.getBestCaseUpdateFrequency()
                 this.logEvent({message:'init streetview', updateFreq, minimalPause, bestFreq})                
             }
-            this.logEvent({message:''})
-            //this.observer.on('position-update',this.onPositionUpdate.bind(this))
 
             
         }
         catch(err) {
-            this.logError(err,'init')
+            this.logError(err,'initView')
         }
     }
     
@@ -173,7 +170,11 @@ export class GpxDisplayService extends RouteDisplayService {
 
     protected onPositionUpdate( state) {
 
+
         const {route,position} = state??{}
+
+        console.log('# on position update',{route,position} )
+
         const rideView = this.getUserSettings().get('preferences.rideView','sv')
 
         if (rideView==='sv') {
