@@ -1,5 +1,9 @@
+import { FreeRideOption } from "../../routes/list/types"
 import { LatLng } from "../../utils/geo"
 
+export interface GetNextOptionProps  {
+    minDistance?:number
+}
 
 export interface IMapArea {
     getQueryLocation():IncyclistNode 
@@ -14,6 +18,7 @@ export interface IMapArea {
     splitAtFirstBranch(way:WayInfo):IncyclistWaySplit
     splitAtCrossingPoint(way:WayInfo,split:PathCrossingInfo):Array<IncyclistWaySplit>
     buildSegmentInfo(from:IncyclistWay, parts:Array<IncyclistWaySplit>):SegmentInfo
+    getHeading(way:WayInfo, position?:'start'|'end'):number
 }
 
 export type MapAreaOpenProps = {
@@ -33,7 +38,10 @@ export type FreeRideContinuation = {
     id?: string,
     path: Array<IncyclistNode>
     onewayReverse?:boolean
+    direction?:number
     options?: Array<FreeRideContinuation>
+    map?: IMapArea
+    ui?:FreeRideOption
 }
 
 export interface IMapAreaService  {

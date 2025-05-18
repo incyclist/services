@@ -377,9 +377,6 @@ export class RouteDisplayService extends RideModeService {
 
             observer.on('update',(data)=>{
                  this.nearbyRiders = data.filter( ar=>!ar.isUser)
-
-                 console.log('# nearby riders', this.nearbyRiders)
-
             })
         }
         catch(err) {

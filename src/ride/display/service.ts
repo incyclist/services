@@ -316,8 +316,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     onSettingsChanged(area, settings) {
-        console.log('# onSettingsChanged', area, settings);
-
         if (area==='Ride' || area==='route') {
             this.getRideModeService().onRideSettingsChanged(settings)
         }
@@ -539,6 +537,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         const sensors = this.isSensorsReadyToStart()
         const ride = this.getRideModeService().isStartRideCompleted()
 
+        console.log('# check start status', devices, sensors, ride)
         if (devices && sensors && ride) {
             this.onStartCompleted()
         }
@@ -660,6 +659,12 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         // TODO:
         // add lap to activity
         // emit lap update to UI, so that Ui can display lap totals/stats
+    }
+
+    onRouteUpdated( route: Route ) {
+        console.log('# route updated',this.route.points)
+
+        this.getActivityRide().onRouteUpdate(route.points)
     }
 
     protected onRouteCompleted() {

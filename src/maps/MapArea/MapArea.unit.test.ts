@@ -340,6 +340,7 @@ describe( 'MapArea', () => {
             const last = way.path[way.path.length-1]    // see https://www.openstreetmap.org/node/99649684
 
             const crossing = getPointCrossingPath(last, way.path,true)  
+            crossing.distance = 10
             const result = area.splitAtCrossingPoint(way, crossing);
 
             // Expected: 3 results (as there are two streets crossing at the last point of the way)
@@ -355,7 +356,7 @@ describe( 'MapArea', () => {
             expect(result[2].wayId).toBe('47346032')
         })
 
-        test(('crossing is at first point, street crosses another street in the middle'),()=>{
+        test(('crossing is exactly at first point, street crosses another street in the middle'),()=>{
             data = useMapArea().createMapData(defaultData);
             area = new MapArea(data, location,boundary );            
 
@@ -379,6 +380,26 @@ describe( 'MapArea', () => {
             expect(result[2].path?.[0]?.id).toEqual(first.id)
             expect(result[2].path?.[result[2].path?.length-1]?.id).toEqual(last.id)
 
+
+        })
+
+        test('crossing is exactly a point in the path of the one way street',()=>{ 
+            
+            useMapArea().setFilter(null)
+            data = useMapArea().createMapData(defaultData);
+            area = new MapArea(data, location,boundary );            
+            
+            const way = area.getWay('907331966')
+            const {lat,lng,id:nodeId} = way.path[3]
+            const last = way.path[way.path.length-1]
+
+            const crossing = getPointCrossingPath({lat,lng}, way.path,true)  
+            const result = area.splitAtCrossingPoint(way, crossing);
+            
+            expect(result).toHaveLength(1)
+            expect(result[0].wayId).toBe('907331966')
+            expect(result[0].path?.[0].id).toEqual(nodeId)
+            expect(result[0].path?.[result[0].path?.length-1]?.id).toEqual(last.id)
 
         })
 
@@ -433,6 +454,9 @@ describe( 'MapArea', () => {
             expect(result[0].path?.[0]).toMatchObject(crossing.point)
             expect(result[1].path?.[result[1].path?.length-1]?.id).toEqual(first.id)            
         })
+
+
+        // {lat:51.18043270952056,lng:6.40791009405025}
 
         
 

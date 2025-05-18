@@ -1,7 +1,9 @@
 import { EventLogger } from "gd-eventlog";
 import clone from "../../utils/clone";
-import { FreeRideContinuation, IMapArea, IMapAreaService, IncyclistNode, IncyclistWay, IncyclistWaySplit, PathCrossingInfo, WayInfo } from "./types";
+import { FreeRideContinuation, GetNextOptionProps, IMapArea, IMapAreaService, IncyclistNode, IncyclistWay, PathCrossingInfo, WayInfo } from "./types";
 import { concatPaths, isAllowed, isOneWay, isRoundabout, pointEquals, removeDuplicates, splitAtIndex, splitAtPoint  } from "./utils";
+import { calculateDistance } from "../../utils/geo";
+import { waitNextTick } from "../../utils";
 
 export class OptionManager {
     
@@ -47,8 +49,9 @@ export class OptionManager {
                         }
                     }
                 }
-                const option = {id:segment.id,path}
+                const option = {id:segment.id,path,map:this.map}
                 options.push(option);
+                await waitNextTick()
     
             }
             catch(err) {
@@ -68,10 +71,12 @@ export class OptionManager {
         
     }
 
-    async getNextOptions( from?:WayInfo|FreeRideContinuation ): Promise<Array<FreeRideContinuation>> {
+    async getNextOptions( from:WayInfo|FreeRideContinuation, props?:GetNextOptionProps ): Promise<Array<FreeRideContinuation>> {
+
     
-        if (from?.id===undefined || from?.path===undefined || from?.path.length<1) 
+        if (from?.id===undefined || from?.path===undefined || from?.path.length<1)  {
             return []
+        }
 
         // ensure we have a proper way object (not just the WayInfo)
         const way = {...this.getWay(from.id),path:from.path}
@@ -88,6 +93,7 @@ export class OptionManager {
 
         // get updated map (if required)
         const map = await this.service.load(location)
+
         if (!map)  {
             if (!this.map)
                 return []
@@ -117,10 +123,73 @@ export class OptionManager {
                 
         }
 
+        const currentDirection = this.map.getHeading(way, 'end');
+        options.forEach( (option) => {
+            const direction = this.map.getHeading(option as WayInfo, 'start');
+            option.direction = direction-currentDirection
+            if (option.direction>180) 
+                option.direction = option.direction-360;
+        })
+
+        this.sortOptions(options)
+
+        if (props?.minDistance) {
+            await this.checkMinDistance(options,props.minDistance)
+        }
+
+
         return options;        
     }
 
+    protected sortOptions(options:Array<FreeRideContinuation>) {
 
+        //TODO
+/*
+            options.sort((a, b) => {
+                let dA = a.direction;
+                let dB = b.direction;
+    
+                if (dA > 180) dA = dA - 360;
+                if (dB > 180) dB = dB - 360;
+                if (dA > dB) return 1
+                if (dA < dB) return -1;
+                return 0;
+            })
+*/
+    }
+
+
+    protected async checkMinDistance(options:Array<FreeRideContinuation>,minDistance:number) {
+        // TODO: if any of the options is less than minDistance( in meters), add branches to these options
+
+        for (const option of options) {
+            if (option?.path?.length > 0) {
+                const distance = this.getDistance(option.path);
+                if (distance < minDistance) {
+                    const branches = await this.getNextOptions(option,{minDistance:minDistance-distance});
+                    option.options = branches??[]
+                    
+                }
+            }
+        };
+    }
+
+
+
+    protected getDistance(path:IncyclistNode[]):number {
+        if (!path || path.length<2)
+            return 0;
+        let distance = 0;
+
+        for (let i = 0; i < path.length - 1; i++) {
+            const p1 = path[i];
+            const p2 = path[i + 1];
+            const s = calculateDistance(p1.lat,p1.lng,p2.lat,p2.lng);
+            if (s!==undefined && !isNaN(s)) 
+                distance += s;
+        }
+        return distance;
+    }
 
     protected checkOptionsOnDifferentWay(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ):FreeRideContinuation[]{
         if (!w?.path || !location) return;
@@ -129,7 +198,6 @@ export class OptionManager {
         if (roundabout)
             return this.getOptionsRoundabout(location,w,options);
         
-        let result;
         if (w.path[0].id===location.id ) {
             this.getOptionsFirstPoint(location,w,options);
         }
@@ -165,7 +233,8 @@ export class OptionManager {
                         const segment = this.map.splitAtFirstBranch(wNext)
                         const combined  = { 
                             id: segment.wayId,
-                            path: w.path.concat( segment.path.slice(1) )
+                            path: w.path.concat( segment.path.slice(1) ),
+                            map:this.map
                         }
                         options.push(combined)
                     }
@@ -176,7 +245,8 @@ export class OptionManager {
                             const segment = this.map.splitAtFirstBranch(wNext)
                             const combined  = { 
                                 id: segment.wayId,
-                                path: w.path.concat( segment.path.slice(1) )
+                                path: w.path.concat( segment.path.slice(1) ),
+                                map:this.map
                             }
                             options.push(combined)
                         }
@@ -198,7 +268,8 @@ export class OptionManager {
                                     const segment = this.map.splitAtFirstBranch(wFull);
                                     const combined  = {
                                         id: segment.wayId,
-                                        path: w.path.concat( segment.path.slice(1) )                                                
+                                        path: w.path.concat( segment.path.slice(1) ),
+                                        map:this.map
                                     }
 
                                     options.push(combined)
@@ -211,7 +282,8 @@ export class OptionManager {
 
                                     const combined  = {
                                         id: segment.wayId,
-                                        path: w.path.concat( segment.path.slice(1) )                                                
+                                        path: w.path.concat( segment.path.slice(1) ),
+                                        map:this.map
                                     }
                                     options.push(combined)
                                 }
@@ -228,7 +300,7 @@ export class OptionManager {
         }
 
         if (!expand)
-            options.push({id:result.wayId,path:result.path});
+            options.push({id:result.wayId,path:result.path,map:this.map});
         
 
     }
@@ -238,7 +310,7 @@ export class OptionManager {
         w.path.reverse();
         const result = this.map.splitAtFirstBranch(w);
         const onewayReverse = isOneWay(w)        
-        options.push({id:result.wayId, path:result.path, onewayReverse});
+        options.push({id:result.wayId, path:result.path, onewayReverse,map:this.map});
 
     }
 
@@ -246,11 +318,11 @@ export class OptionManager {
         let ways = splitAtPoint(w,location);
         if ( !ways[0].onewayReverse ) {
             const result = this.map.splitAtFirstBranch( ways[0]);
-            options.push({id:result.wayId, path:result.path});
+            options.push({id:result.wayId, path:result.path,map:this.map});
         }
         if ( !ways[1].onewayReverse ) {
             const result = this.map.splitAtFirstBranch(ways[1]);
-            options.push({id:result.wayId, path:result.path});
+            options.push({id:result.wayId, path:result.path,map:this.map});
         }
 
     }
@@ -285,7 +357,8 @@ export class OptionManager {
                             let o = {
                                 roundabout:w.id,
                                 id: ow.id,
-                                path: optPath
+                                path: optPath,
+                                map: this.map
                             }
                                 options.push(o);    
                         }
@@ -368,11 +441,13 @@ export class OptionManager {
         const prev = partial.path[partial.path.length-2];
 
         const idxLast = path.findIndex( (p) => pointEquals(p,last) )
-        const idxPrev = path.findIndex( (p) => pointEquals(p,prev) )
+        let idxPrev = path.findIndex( (p) => pointEquals(p,prev) )
+        if (idxPrev===-1) idxPrev = this.findClosestPoint(path,prev, last);
+
 
         // check if we are already at the end
         let lastOriginal;
-        if (!prev.id || idxPrev>idxLast) {
+        if (idxPrev>idxLast) {
             lastOriginal = originalWay.path[0];
         }
         else  {
@@ -394,6 +469,21 @@ export class OptionManager {
     
         return {...originalWay,path:newPath,roundabout};
     }
+
+    protected findClosestPoint(path:IncyclistNode[],point:IncyclistNode,exclude:IncyclistNode) {
+        let found=-1;
+        let minDistance = Number.MAX_VALUE;
+        path.forEach( (p,i) => {
+            if (p.id!==exclude.id) {
+                const d = calculateDistance(p.lat, p.lng,point.lat,point.lng);
+                if (d<minDistance) {
+                    minDistance = d;
+                    found = i;
+                }
+            }
+        })
+        return found        
+    }
     
     getOptionsOnCurrentWay (location:IncyclistNode,way:IncyclistWay,options:Array<FreeRideContinuation>):Array<FreeRideContinuation> {
 
@@ -406,13 +496,13 @@ export class OptionManager {
                     branches.forEach ( b => {
                         if (b.path.length>1 && b.path[1].id !== prev.id) {
                             const {id,path} = b
-                            options.push({id,path})
+                            options.push({id,path,map:this.map})
                         }
                     })    
                 }
                 else if ( w.path.length>1) {
-                    let result = this.map.splitAtFirstBranch(w);
-                    options.push({id:result.wayId, path:result.path});
+                    let result = this.map.splitAtFirstBranch(way);
+                    options.push({id:result.wayId, path:result.path,map:this.map});
                 }
                 // don't add a single node way as option
                 

@@ -1,5 +1,5 @@
 import { EventLogger } from "gd-eventlog";
-import { LatLng } from "../../utils/geo";
+import { calculateHeaderFromPoints, LatLng } from "../../utils/geo";
 import { Boundary, FreeRideDataSet, IMapArea, IncyclistNode, IncyclistWay, IncyclistWaySplit, NearestPathInfo, PathCrossingInfo, SegmentInfo, SplitPointInfo, WayInfo } from "./types";
 import { distanceToPath, generateID, isOneWay, isRoundabout, isWithinBoundary, splitAtPoint, splitAtPointInfo } from "./utils";
 import clone from "../../utils/clone";
@@ -254,7 +254,7 @@ export class MapArea implements IMapArea{
         if ( way?.path===undefined || crossing?.idx===undefined || crossing?.point===undefined)
             return;
 
-        const {point,idx: crossingIdx} = crossing
+        const {point,idx: crossingIdx,distance} = crossing
 
         const addWaysCrossing = (res:Array<IncyclistWaySplit>) =>{
             let optWay = way;
@@ -287,14 +287,23 @@ export class MapArea implements IMapArea{
 
             // in case the crossing point is exactly at the beginning or end of a way ( i.e. street)
             // we need to add the streets crossing at that point as options
-            if (newPath.length===1) {
+            if (newPath.length===1 ) {
                 addWaysCrossing(res);                
             }
             else if (newPath.length>1) {
+                if (newPath.length===way.path.length && newPath[0].id===crossing.point.id && crossing.distance===0 &&
+                    (newPath[0].id===way.path[0].id || 
+                    newPath[0].id===way.path[way.path.length-1].id)) {
+                        addWaysCrossing(res);                
+                    }
+
+
                 path = newPath
                 if (reverse)
                     path.reverse();
                 res.push({wayId:optWay.id,path})
+
+
             }
         }
 
@@ -367,6 +376,36 @@ export class MapArea implements IMapArea{
         })
         
         return {segments,points}
+
+    }
+
+
+    /**
+     * Returns the direction (heading) of a street.
+     * @param way    the way as returned by the MapArea
+     * @param position  'start' (default) returns the direction when entering the street
+     *                  'end'     returns the direction when leaving the street
+     * @returns the direction in degrees as a number
+     */
+    getHeading(way:WayInfo, position:'start'|'end'='start'):number {
+        if ( way?.path?.length<2)
+            return;
+        let fullWay = this.getWay(way.id);
+        
+        if (!fullWay.roundabout && position==='start' )  // entering normal street
+            return calculateHeaderFromPoints(way.path[0],way.path[1]);
+        else if (position==='end') // leaving street
+            return calculateHeaderFromPoints(way.path[way.path.length-2],way.path[way.path.length-1]);
+        else {  // enteriong roundabout
+            let heading = calculateHeaderFromPoints(way.path[0],way.path[1]);
+
+            
+            if ( fullWay.path.length>1){
+                heading = calculateHeaderFromPoints(fullWay.path[0],fullWay.path[1]);
+            }
+        return heading
+
+        }
 
     }
 
@@ -607,7 +646,6 @@ export class MapArea implements IMapArea{
 
         this.logger.logEvent({message:'Error', fn, ...logInfo, error:err.message, stack:err.stack})
     }
-
 
 
 }

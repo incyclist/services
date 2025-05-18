@@ -1,5 +1,6 @@
-import { LatLng } from "../../utils/geo"
-import { RouteInfo } from "../base/types";
+import { FreeRideContinuation, IncyclistNode } from "../../maps/MapArea/types";
+import { distanceBetween, LatLng } from "../../utils/geo"
+import { RouteInfo, RoutePoint } from "../base/types";
 import { SummaryCardDisplayProps } from "./cards/RouteCard";
 import { RouteCardType } from "./cards/types";
 
@@ -20,18 +21,26 @@ export interface FreeRideSegment {
     path: Array<FreeRidePoints>
 }
 
-export interface FreeRideOption {
+export type FreeRidePoint = IncyclistNode & RoutePoint
+
+export interface FreeRideOption  {
+    id:string;
     color:string;
-    path: Array<FreeRidePoints>;
-    polyline: Array< Array<number> >;
-    segments:Array<FreeRideSegment>
-    way: FreeRideSegment
+    text:string;
+    path: Array<FreeRidePoint> 
+    selected?: boolean
+    direction?: number
+    next?: {
+        distance: number,
+        direction: number
+    }
+    
 }
 
 export interface FreeRideStartSettings  {
     position:LatLng,
     option:FreeRideOption
-    type: RouteCardType,
+    type: RouteCardType,    
 }
 
 export interface MinMax {

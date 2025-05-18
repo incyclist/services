@@ -85,8 +85,10 @@ export const updateSlopes = (points: Array<RoutePoint>, validateOnly=false):void
 
     points.forEach( (point) => {
         const i = point.cnt
-        if (validateOnly && point.slope!==undefined)
+        if (validateOnly && point.slope!==undefined) {
+            prevPoint = point;
             return;
+        }
 
         if ( i>0) {
             updateSlopePrevPoint(point, prevPoint, points);
@@ -226,6 +228,7 @@ export const validateRoute = (route:Route|RouteApiDetail):void =>{
     validateDistance(route.points)    
     validateSlopes(route.points)
     updateElevationGain(route.points)
+    updateCnt(route.points)
 
     route.distance = route.points[ route.points.length-1].routeDistance
 }
@@ -330,6 +333,12 @@ export const updateElevationGain = (points:Array<RoutePoint>):void =>{
         }
         prev = p;
     })    
+}
+
+export const updateCnt = (points:Array<RoutePoint>):void => {
+    points.forEach( (p,idx) => {
+        p.cnt = idx
+    })
 }
 
 export const getTotalDistance = (route:RouteApiDetail):number =>{

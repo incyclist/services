@@ -676,8 +676,6 @@ export class ActiveRidesService extends IncyclistService {
                 existing.currentLap = payload.lap
                 existing.tsLastUpdate = Date.now()
 
-                console.log('# got remote activity update',clone(existing), clone(this.getDisplayProps()))
-
             }
             else {
 

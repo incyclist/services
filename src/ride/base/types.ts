@@ -8,6 +8,7 @@ import EventEmitter from "events"
 import { ActiveRideListAvatar, ActivityDetails, PrevRidesListDisplayProps, ScreenShotInfo } from "../../activities"
 import { Workout } from "../../workouts"
 import { Avatar } from "../../avatars"
+import { FreeRideOption } from "../../routes/list/types"
 
 export type RideType = 'Free-Ride' | 'GPX' | 'Video' | 'Workout'
 
@@ -66,6 +67,9 @@ export interface RouteDisplayProps extends IRideModeServiceDisplayProps {
 
 export interface GpxDisplayProps extends RouteDisplayProps {
     rideView: 'sv' | 'map' | 'sat',
+}
+export interface FreeRideDisplayProps extends GpxDisplayProps {
+    options?: FreeRideOption[]
 }
 
 export interface VideoDisplayProps extends RouteDisplayProps {
@@ -140,5 +144,6 @@ export interface ICurrentRideService {
     getObserver(): Observer;
     getRideType(): RideType;
     getState(): CurrentRideState;
+    onRouteUpdated(route:Route): void
 }
 

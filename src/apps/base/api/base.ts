@@ -26,7 +26,7 @@ export class AppApiBase {
         return await this.getApi().request(request )  
     }
 
-    protected async post(url:string, data?:object, config?:object):Promise<AxiosResponse> {
+    protected async post(url:string, data?:object|string, config?:object):Promise<AxiosResponse> {
 
         const props = config??{}
         

@@ -116,17 +116,20 @@ export class FreeRideCard extends BaseCard implements Card<Route> {
 
     }
 
-    accept(option: FreeRideOption) {
+    accept(option: FreeRideOption, position?: LatLng): FreeRideStartSettings {
         try {
             // delete all distances from option
-            option.path = option.path.map(p => ({ lat: p.lat, lng: p.lng, ways: p.ways, tag: p.tag }));
+
+            // TODO: make backward compatible
+            //option.path = option.path.map(p => ({ lat: p.lat, lng: p.lng, ways: p.ways, tag: p.tag }));
 
             const settings: FreeRideStartSettings = {
                 type: this.getCardType(),
-                position: this.position,
+                position: position??this.position,
                 option
             };
             getRouteList().setStartSettings(settings);
+            return settings;
 
         }
         catch(err) {

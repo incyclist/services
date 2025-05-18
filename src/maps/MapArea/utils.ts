@@ -731,6 +731,10 @@ export function getPointCrossingPath( point:LatLng,path:IncyclistNode[],closest=
 
     path.forEach ( ( p,i ) =>{
         let pDist =  abs(geo.distanceBetween(p,point));
+        if (pDist===0) {
+            pCrossing  = pClosest = { distance:0, point:p, idx:i}
+            return 
+        }
         if ( pClosest===undefined || pClosest.distance>pDist) {
             pClosest= { distance:pDist, point:p, idx:i}
         }

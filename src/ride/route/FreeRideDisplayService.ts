@@ -1,16 +1,22 @@
+import { ActiveRidesService, ActivityRideService, useActivityRide } from "../../activities";
+import { Injectable } from "../../base/decorators";
+import { FreeRideService, useFreeRideService } from "../../routes/free-ride";
+import { concatPaths } from "../../maps/MapArea/utils";
 import { getTotalDistance, validateRoute } from "../../routes";
 import { RouteApiDetail } from "../../routes/base/api/types";
 import { Route } from "../../routes/base/model/route";
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
-import { FreeRideOption, FreeRideStartSettings } from "../../routes/list/types";
+import {  FreeRideOption, FreeRideStartSettings } from "../../routes/list/types";
 import { distanceBetween, LatLng } from "../../utils/geo";
-import { CurrentRideDisplayProps, GpxDisplayProps } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, FreeRideDisplayProps, GpxDisplayProps } from "../base";
 import { GpxDisplayService } from "./GpxDisplayService";
 
 export class FreeRideDisplayService extends GpxDisplayService {
 
     protected currentOptions: FreeRideOption[]
     protected initialPosition: LatLng
+    protected isStarting: boolean = false
+    protected isUpdating: boolean = false
 
 
     protected get route():Route {
@@ -18,12 +24,14 @@ export class FreeRideDisplayService extends GpxDisplayService {
     }
 
 
-    getDisplayProperties(props:CurrentRideDisplayProps):GpxDisplayProps {
+    getDisplayProperties(props:CurrentRideDisplayProps):FreeRideDisplayProps {
         let routeProps:GpxDisplayProps = super.getDisplayProperties(props)
 
 
         return {
             ...routeProps,
+            route:this.currentRoute,
+            options: this.currentOptions,
             upcomingElevation: {show:false},
             totalElevation: {show:false},
         }    
@@ -46,13 +54,57 @@ export class FreeRideDisplayService extends GpxDisplayService {
     }
 
 
+    start() {
+        super.start()
+
+        console.log('# FreeRideDisplayService start')
+
+        this.isStarting = true
+        const startSettings = this.getRouteList().getStartSettings() as FreeRideStartSettings
+        this.getFreeRideService().applyOption(startSettings.option)
+
+        this.getNextOptions(true)
+    }
+
+    isStartRideCompleted(): boolean {
+        return this.currentOptions!==undefined
+    }
+
+    continueWithSelectedOption():boolean { 
+        if (this.isUpdating)
+            return;
+
+        
+        const freeRide = this.getFreeRideService()
+        const selectedOption = freeRide.getSelectedOption()
+
+        // no option available
+        if (!selectedOption?.path?.length) {
+            this.turnAround()
+            return;
+        }
+    
+        const finished = this.updateRouteWithSelectedOption()
+        freeRide.applyOption(selectedOption)
+
+        this.currentOptions = undefined
+
+        if (!finished)
+            this.getNextOptions()
+        return finished
+    }
+
+
+
     protected initRoute() {
         try {
+            console.log('# Display: initRoute',this.getRouteList().getStartSettings() )
+
             const {position,option} = this.getRouteList().getStartSettings() as FreeRideStartSettings
 
             this.currentRoute = this.createRoute(position,option)
             this.initialPosition = position
-            this.currentOptions = []
+            this.currentOptions = undefined
 
             
         }
@@ -60,6 +112,22 @@ export class FreeRideDisplayService extends GpxDisplayService {
             this.logError(err,'init')
         }
     }
+
+    protected checkFinishOptions(position:CurrentPosition):boolean {
+
+        let finished = false
+        const segmentCompleted = this.checkIsRouteFinished(position)
+        if (segmentCompleted) {
+
+            console.log('#  Display: segment finsished' )
+
+            finished = this.continueWithSelectedOption()
+        }
+        
+        // free rides never finish
+        return finished
+    }
+
 
     protected createRoute( position:LatLng,option:FreeRideOption):Route {
         try{
@@ -99,7 +167,6 @@ export class FreeRideDisplayService extends GpxDisplayService {
             route.description.distance = route.details.distance = getTotalDistance(details)
             route.updateCountryFromPoints()
 
-            console.log('# create route', position, option.path, route)
             return route
         }
         catch(err) {
@@ -108,29 +175,76 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
     }
 
-    prepareOptions(opts) {
-        /*
-        let options = opts;
-        if (options === undefined)
-            options = this.state.options;
-
-        if (options === undefined)
-            return;
-
-        options.sort((a, b) => {
-            let dA = a.direction;
-            let dB = b.direction;
-
-            if (dA > 180) dA = dA - 360;
-            if (dB > 180) dB = dB - 360;
-            if (dA > dB) return 1
-            if (dA < dB) return -1;
-            return 0;
-        })
-        options.forEach((opt, i) => opt.color = OPTION_COLOR[i % OPTION_COLOR.length])
-        */
-
+    protected turnAround() {
+        // TODO: implement
     }
+
+    protected updateRouteWithSelectedOption ():boolean {
+        
+        try {
+            this.isUpdating = true
+
+            console.log(new Date().toISOString(),'# Display:  update route')
+            const selected = this.getFreeRideService().getSelectedOption()       
+            
+            concatPaths( this.currentRoute.points, selected.path,'after' )
+
+            // enforce re-calculation of route distance and verify new path
+            this.currentRoute.points.forEach( p => {delete p.routeDistance} )
+            validateRoute(this.currentRoute)
+
+            this.service.onRouteUpdated(this.currentRoute)
+            console.log(new Date().toISOString(),'# Display:  update route done')
+        }
+        catch(err) {
+            console.log(new Date().toISOString(),'# error',err)  
+            this.logError(err,'updateRouteWithSelectedOption')
+        }
+        this.isUpdating = false
+        return false
+    }
+
+    protected selectOption(option:FreeRideOption) { 
+        this.getFreeRideService().selectOption(option)
+    }
+
+    protected getNextOptions(forStart?:boolean) {
+
+        console.log(new Date().toISOString(),'# Display: looking for next options')
+
+        const freeRide = this.getFreeRideService()
+
+        freeRide.getNextOptions(forStart).then( (options) => { 
+
+            console.log(new Date().toISOString(),'# Display:  got options',options)    
+            this.currentOptions = options
+
+
+            if (this.isStarting) {
+                this.emit('state-update')
+                this.isStarting = false    
+            }
+            else {
+                console.log( new Date().toISOString(),'# Display emitting route update')
+                this.service.getObserver().emit('route-update',{route:this.currentRoute,options})
+            }
+
+            
+        }) 
+    }
+
+
+
+    @Injectable
+    getFreeRideService(): FreeRideService { 
+        return useFreeRideService()
+    }
+
+    @Injectable
+    getActivityRide(): ActivityRideService {
+        return useActivityRide()
+    }
+    
 
 
 

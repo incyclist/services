@@ -4,6 +4,8 @@ import {DEFAULT_POSITION, DEFAULT_RADIUS} from './consts'
 import defaultData from '../../../__tests__/data/overpass/default-location.json'
 import defaultData2 from '../../../__tests__/data/overpass/default-2.json'
 import defaultData3 from '../../../__tests__/data/overpass/default-3.json'
+import miamiData from '../../../__tests__/data/overpass/miami.json'
+
 import { MapArea } from "./MapArea";
 import { getBounds, getPointCrossingPath } from "./utils";
 
@@ -81,6 +83,35 @@ describe('OptionManager',()=>{
 
     describe ('getNextOptions',()=>{
 
+        let manager: OptionManager
+        let map
+
+        const setup  = async (data,location,maps?:Record<string,object>)=> {
+            const mapData = useMapArea().createMapData(data)
+            const boundary = getBounds(location.lat,location.lng,DEFAULT_RADIUS)
+
+            useMapArea().load = jest.fn( async (location) =>  {
+                if (maps?.[location.id??'']) {
+                    const d = maps[location.id??'']
+                    return new MapArea(useMapArea().createMapData(d),location,boundary)                    
+                }
+                return new MapArea(mapData,location,boundary)
+            })
+
+            map = new MapArea(mapData,location,boundary)
+            manager = new OptionManager(useMapArea(), map)            
+        }
+
+        afterEach( () => {
+            useMapArea().reset()
+            jest.restoreAllMocks()
+        })
+
+
+
+
+
+
         // already covered in getStartOptions:
         // - test('options on same way - source is not a roundabout',async ()=>{})
         // - test('options on different way - final point crosses another way at its first point',async ()=>{})
@@ -95,6 +126,47 @@ describe('OptionManager',()=>{
 
         test('exceptional: no way specified',async ()=>{})
         test('exceptional: no map available',async ()=>{})
+
+
+        // test: ID = 11131747 [2909525041...99155348]
+        // map: 25.7780433,-80.2247692:804.9522744528823,[25.78527435125909,-80.21673903037001,25.77081224874091,-80.23279936962999]
+        test('miami area',async ()=>{
+
+
+            // TEST 1: incorrect options - shoould remain on street, but prefers to turn left
+            // way: 398329013
+            // path: 99163486...99155346
+            // map: 25.778108,-80.2227711:804.9522744528823,[25.78533905125909,-80.2147409259907,25.77087694874091,-80.23080127400931]
+
+
+            // TEST 2: incorrect options - shou
+            // way: 11131747
+            // path: {lat:25.777968763775107,lng:-80.22714213059686}...99155350
+            // map: 25.77796876376968,-80.22714213073402:1000,[25.786951968723052,-80.21716617956304,25.76898555881631,-80.23711808190501]
+
+
+
+            
+            setup(miamiData,{lat:25.7780433,lng:-80.2247692})
+
+            const way = map.getWay('11131747')
+            const node = map.getNode('99155350')
+            const path = [  {lat:25.777968763775107,lng:-80.22714213059686},node]
+            const option = {id:'11131747',path,color:'green', text:'West'}
+
+            const res = await manager.getNextOptions(option)
+            
+
+
+            // const crossing = getPointCrossingPath(location, way.path,true)
+            
+            // const res = await manager.getStartOptions(way,crossing)
+
+            // expect(pathInfo(res[0].path)).toEqual('[{lat:26.6854,lng:-80.0348},7539895026,8498961197,8498961210,99836339]') 
+            // expect(pathInfo(res[1].path)).toEqual('[{lat:26.6854,lng:-80.0348},99887563,99887565,99887567]')
+
+        })
+
 
     })
 

@@ -3,7 +3,7 @@ import { Singleton } from "../../base/types";
 import { CountryList, CountryOverpassResult } from "./model";
 import defaultList from './countries.json'
 import { LatLng } from "../../utils/geo";
-import { useOverpassApi } from "../../api";
+import { useOverpassApi } from "../../services";
 
 @Singleton 
 export class Countries extends IncyclistService {

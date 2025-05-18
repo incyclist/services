@@ -1,14 +1,16 @@
-import { OverpassApi } from "../../api";
 import { distanceBetween } from "../../utils/geo";
 import { Observer, Singleton } from "../../base/types";
 import { IncyclistService } from "../../base/service";
-import { FreeRideDataSet,  IncyclistNode, FreeRidePosition, IMapAreaService, IMapArea } from "./types";
+import { FreeRideDataSet,  IncyclistNode, IMapAreaService, IMapArea } from "./types";
 import { DEFAULT_MIN_WAYS, DEFAULT_MAX_WAYS, DEFAULT_RADIUS, GET_WAYS_IN_AREA, MAX_DISTANCE_FROM_PATH, DEFAULT_FILTER} from "./consts";
 import { buildQuery,getBounds, parseMapData } from "./utils";
 import { Injectable } from "../../base/decorators";
 import { MapArea } from "./MapArea";
 import { OptionManager } from "./options";
+import { OverpassApi } from "../../services/overpass";
+import { waitNextTick } from "../../utils";
 
+const DEFAULT_TIMEOUT = 10000
 
 type MapAreaRecord = {
     map: MapArea
@@ -16,6 +18,32 @@ type MapAreaRecord = {
     radius: number
 }
 const MAX_MAPS = 5
+
+export const getMapInfo = (m ) => {
+    if (!m)
+        return 'no map'
+    try {
+        const boundary = m.map.getBoundary()
+        const bInfo = `${boundary.northeast.lat},${boundary.northeast.lng},${boundary.southwest.lat},${boundary.southwest.lng}`
+
+        return `${m.radius},[${bInfo}]`
+    }
+    catch {
+        return ''
+    }
+}
+
+export const getMapsInfo = (maps, key:string) => {
+    try {
+        const m = maps[key]
+        return `${key}:${getMapInfo(m)}`
+    
+    }
+    catch {
+        return ''
+    }
+}
+
 
 @Singleton
 export class MapAreaService extends IncyclistService implements IMapAreaService {
@@ -54,25 +82,83 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
      */
     async load( location: IncyclistNode):Promise<IMapArea> {
 
-        const reloadRequires = this.requiresReload(location)
-        if (!reloadRequires) {
-            this.getMapForLocation(location).lastUsed = Date.now()
-            return this.getMap(location)
-        }
-        
+        const map = await this.findBestMap(location)
+        if (map) {
+            return map
+        }        
 
+        return this.loadMap(location)
+    }
+
+    getMap(location:IncyclistNode):MapArea {
+        const maps = this.getAllMaps()??[]
+        return maps.find(m=>m.isWithinBoundary(location))        
+    }
+
+    getOptionManager():OptionManager {
+        this.optionManager = this.optionManager ?? new OptionManager(this)
+        return this.optionManager
+    }
+
+    setFilter(filter:Array<string>|null) {
+        this.filter = filter??undefined
+    }
+
+
+    protected async findBestMap(location:IncyclistNode):Promise<IMapArea|undefined> {
+        if (!this.hasLocationCovered(location))
+            return undefined
+
+        const records = this.getMapsForLocation(location)
+
+        let updateRequired = true
+        let minDist = Number.MAX_VALUE
+        let minPct
+        let best:MapAreaRecord|undefined
+        do {
+            if (records.length===0)
+                break
+
+            const record = records.pop()
+            const {map,radius} = record
+            if (!map)
+                continue
+    
+            const dist = distanceBetween(location,map.getQueryLocation())
+            updateRequired = dist>(radius/5); // 20%
+
+            if (!updateRequired) { 
+                minDist = dist
+                minPct = minDist/radius*100
+                best = record
+            }
+
+            else if (dist<minDist) {
+                minDist = dist
+                minPct = minDist/radius*100
+            }   
+
+            await waitNextTick()
+        } while (records.length>0 && updateRequired)    
+
+        const {lat,lng,id} = location
+        this.logEvent( {message:'distance between previous overpass request',location:{lat,lng,id},dist:minDist,pct:minPct,updateRequired, map:getMapInfo(best?.map)});
+
+        return best?.map
+    }
+
+    async loadMap( location: IncyclistNode):Promise<IMapArea> {
         let ts
         try {                       
             const bounds = getBounds(location?.lat,location?.lng,this.radius)
             const query = buildQuery(GET_WAYS_IN_AREA,bounds);
-            const {id,lat,lng} = location;
 
 
-            this.logEvent({message:'overpass query',query,location:{id,lat,lng}, radius:this.radius});
-            console.log('load map',location,query, this.radius)
-            ts = Date.now();
-            const openmapData = await this.getOverpassAPI().query(query);                  
-            this.logEvent({message:'overpass query result',status:'success',duration:(Date.now()-ts)});
+            const openmapData = await this.getOverpassAPI().query(query,DEFAULT_TIMEOUT);                  
+            if (!openmapData){
+                // TODO: offer retry
+                return
+            }
 
             const data = this.createMapData(openmapData);    
             const map = new MapArea(data,location,bounds)
@@ -92,36 +178,6 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
 
     }
 
-    getMap(location:IncyclistNode):MapArea {
-        const maps = this.getAllMaps()??[]
-        return maps.find(m=>m.isWithinBoundary(location))        
-    }
-
-    getOptionManager():OptionManager {
-        this.optionManager = this.optionManager ?? new OptionManager(this)
-        return this.optionManager
-    }
-
-    setFilter(filter:Array<string>|null) {
-        this.filter = filter??undefined
-    }
-
-
-    protected requiresReload(location:IncyclistNode):boolean {
-        if (!this.hasLocationCovered(location))
-            return true
-
-        const record = this.getMapForLocation(location)
-        const {map,radius} = record
-        if (!map)
-            return true
-
-        const dist = distanceBetween(location,map.getQueryLocation())
-        const updateRequired = dist>(radius/5); // 20%
-        this.logEvent( {message:'distance between previous overpass request',dist,updateRequired, pct:dist/radius*100});
-
-        return updateRequired
-    }
 
    
 
@@ -140,23 +196,15 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     }
 
     protected addMap(map:MapArea,location:IncyclistNode) {
-
         this.current = map
 
-        // replace existing map if it exisst
-        const existing = Object.values(this.maps).findIndex(m=>m.map.isWithinBoundary(location))        
-        if (existing!==-1) {
-            const key  = Object.keys(this.maps)[existing]
-            delete this.maps[key]
-        }
-
         this.maps[this.mapsKey(location)] = {map,lastUsed:Date.now(), radius:this.radius}
+        this.logEvent({message:'Map added',cnt:Object.keys(this.maps).length,maps:Object.keys(this.maps).map(k=>getMapsInfo(this.maps,k))})
     }
 
-    protected getMapForLocation(location:IncyclistNode):MapAreaRecord {        
-        return Object.values(this.maps).find(m=>m.map.isWithinBoundary(location))        
+    protected getMapsForLocation(location:IncyclistNode):MapAreaRecord[] {        
+        return Object.values(this.maps).filter(m=>m.map.isWithinBoundary(location))        
     }
-
 
 
     createMapData( openmapData):FreeRideDataSet {
@@ -211,6 +259,7 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
         if (this.iv)
             return;
 
+        this.logEvent({message:'Garbage collection started',frequency:'5min'})
         this.iv = setInterval(() => {
             this.garbageCollection()
         }, 1000 * 60 * 5);
@@ -232,8 +281,13 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
         const keyLastUsed = this.mapsKey(this.current.getQueryLocation())        
         const deleteTarget  = maps.filter(m=>this.mapsKey(m.map.getQueryLocation())!==keyLastUsed)
 
-        if (deleteTarget.length>MAX_MAPS)
-            deleteTarget.forEach(m=>delete this.maps[this.mapsKey(m.map.getQueryLocation())])        
+        if (deleteTarget.length>MAX_MAPS)  {
+            deleteTarget.forEach(m=> {                
+                delete this.maps[this.mapsKey(m.map.getQueryLocation())]
+            })        
+        }
+        this.logEvent({message:'Garbage collection done',cnt:Object.keys(this.maps).length,maps:Object.keys(this.maps).map(k=>getMapsInfo(this.maps,k))})
+
     }
 
 

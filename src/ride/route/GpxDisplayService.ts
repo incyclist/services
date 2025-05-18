@@ -2,7 +2,7 @@ import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
 import { getHeading } from "../../routes";
 import { UserSettingsService, useUserSettings } from "../../settings";
-import { CurrentRideDisplayProps, GpxDisplayProps, ICurrentRideService, RouteDisplayProps } from "../base";
+import { CurrentRideDisplayProps, GpxDisplayProps,  RouteDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 import { SatelliteViewEvent, StreetViewEvent } from "./types";
 
@@ -172,8 +172,6 @@ export class GpxDisplayService extends RouteDisplayService {
 
 
         const {route,position} = state??{}
-
-        console.log('# on position update',{route,position} )
 
         const rideView = this.getUserSettings().get('preferences.rideView','sv')
 
