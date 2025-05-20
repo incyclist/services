@@ -603,6 +603,9 @@ export class DeviceRideService  extends IncyclistService{
         const startProps = clone(props??{})
         const { forceErgMode, startPos, realityFactor, rideMode, route} = props??{};
 
+        ai.isHealthy = undefined
+        this.clearLastDataTS(ai)
+
 
         this.initCyclingMode(ai, forceErgMode);
 
@@ -813,6 +816,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     private updateOnDatahandler(ai: AdapterRideInfo) {
+        this.clearLastDataTS(ai)
         this.logEvent({message:'init health check',device:ai.adapter.getName(), udid:ai.udid })
         ai.adapter.off('data', this.deviceDataHandler);
         ai.adapter.on('data', this.deviceDataHandler);
@@ -856,7 +860,7 @@ export class DeviceRideService  extends IncyclistService{
         // are all adapters on the same interface down?
         const ifName = unhealthy.adapter.getInterface()
         const adapters = this.rideAdapters?.filter( ai=> ai.adapter.getInterface()===ifName)
-        const stillHealthy = adapters.filter(ai=>ai.isHealthy)
+        const stillHealthy = adapters.filter(ai=>ai.isHealthy===undefined || ai.isHealthy)
 
         this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData, stillHealthy:stillHealthy?.length, onSameInterface:adapters.length  })
 
