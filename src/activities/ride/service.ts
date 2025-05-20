@@ -1146,6 +1146,11 @@ export class ActivityRideService extends IncyclistService {
 
 
     protected updateActivityState() {
+
+
+        // TODO: if (control) device is unheathly calculate speed based on current power and slope
+        // state is stored here: this.current.dataState[capability.toLowerCase()] 
+
         if (this.state!=='active')
             return;
 
@@ -1245,6 +1250,7 @@ export class ActivityRideService extends IncyclistService {
     
             if (time!==prev && this.state==='active') {
                 const distance = this.current.routeDistance-(this.prevEmit?.routeDistance??0)
+                
                 const data = {
                     time: this.activity.time,
                     speed: this.current.deviceData.speed,
