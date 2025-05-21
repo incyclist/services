@@ -9,6 +9,7 @@ import { ActiveRideListAvatar, ActivityDetails, PrevRidesListDisplayProps, Scree
 import { Workout } from "../../workouts"
 import { Avatar } from "../../avatars"
 import { FreeRideOption } from "../../routes/list/types"
+import { MapViewPort } from "../route/types"
 
 export type RideType = 'Free-Ride' | 'GPX' | 'Video' | 'Workout'
 
@@ -59,9 +60,15 @@ export interface RouteDisplayProps extends IRideModeServiceDisplayProps {
     endPos: number,
     realityFactor: number
     nearbyRides: NearbyDisplayProps
-    map?: OverlayDisplayProps    
+    map?: MapOverlayDisplayProps    
     upcomingElevation?: OverlayDisplayProps
     totalElevation?: OverlayDisplayProps
+}
+
+export interface MapOverlayDisplayProps extends OverlayDisplayProps {
+    viewport?: MapViewPort
+    viewportOverwrite?: boolean
+    onViewportChange?: (viewport: MapViewPort) => void
 }
 
 
@@ -70,6 +77,9 @@ export interface GpxDisplayProps extends RouteDisplayProps {
 }
 export interface FreeRideDisplayProps extends GpxDisplayProps {
     options?: FreeRideOption[]
+    optionsDelay?: number
+    optionsId?: string
+    onOptionsVisibleChanged: (visible: boolean) => void
 }
 
 export interface VideoDisplayProps extends RouteDisplayProps {

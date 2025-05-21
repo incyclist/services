@@ -77,7 +77,7 @@ export class FreeRideService extends IncyclistService {
      * 
      * @returns A promise that resolves to the next options.
      */
-    async getNextOptions(forStart?:boolean):Promise<FreeRideOption[]> {
+    async getNextOptions(forStart?:boolean):Promise<FreeRideContinuation[]> {
         
         console.log(new Date().toISOString(),'# getNextOptions', this.selectedOption)
 
@@ -98,14 +98,13 @@ export class FreeRideService extends IncyclistService {
         }
 
 
-        const UIOptions: FreeRideOption[] = this.buildUIOptions(this.options);
 
-        console.log(new Date().toISOString(),'# confirmed next options', clone(UIOptions))
+        console.log(new Date().toISOString(),'# confirmed next options', clone(this.options))
 
-        if (UIOptions?.length > 0) {
-            this.selectOption(UIOptions[0]);
+        if (this.options?.length > 0) {
+            this.selectOption(this.options[0]);
         }
-        return UIOptions
+        return this.options
 
     }
 
@@ -299,6 +298,11 @@ export class FreeRideService extends IncyclistService {
                 else if (nextOpts?.length === 1) {
                     concatPaths(o.path, nextOpts[0].path, 'after');
                     segment = nextOpts[0];
+                    const originatingPoint = segment.path[0];
+
+                    // remove option that poins back to the originating point
+                    segment.options = segment.options.filter( o => o.path[o.path.length-1].id !== originatingPoint.id);
+
                 }
                 else {
                     done = true;
@@ -312,16 +316,30 @@ export class FreeRideService extends IncyclistService {
     }
 
     protected buildId (opt:FreeRideContinuation):string {
+        if (!opt) {
+            console.log('# buildId - no option')
+            return 
+        }
+
         return `${opt.id}:${opt.path[0].id??'crossing'}-${opt.path[opt.path.length-1].id??'crossing'}`        
     }
 
-
-    selectOption( option:FreeRideOption ) {
-        this.selectedOption = this.options.find( o=> (o.ui.id??this.buildId(o))===option.id )
-        console.log(new Date().toISOString(),'# option selected', option,'->',this.selectedOption)
+    getOptions():FreeRideContinuation[] {
+        return this.options
     }
 
-    applyOption( option?:FreeRideOption ) {
+
+    selectOption( option:FreeRideContinuation|string ):FreeRideContinuation[]{
+        console.log('# select option', option, this.options)
+
+        let opt = typeof option === 'string' ? this.options.find( o => this.buildId(o) === option) : option
+        this.selectedOption = this.options.find( o=> o.id === opt.id)
+        console.log(new Date().toISOString(),'# option selected', option,'->',this.selectedOption)
+        return this.options
+        
+    }
+
+    applyOption( option?:FreeRideContinuation ) {
         if (option)
             this.selectOption(option)
 
@@ -329,8 +347,23 @@ export class FreeRideService extends IncyclistService {
         console.log(new Date().toISOString(),'# updated current segment', this.currentSegment)
     }
 
-    getSelectedOption():FreeRideOption|undefined { 
-        return this.selectedOption.ui
+    applyStartOption( startOption?:FreeRideOption ) {
+        const option = this.options.find( o => this.buildId(o) === startOption?.id)
+
+        if (option)
+            this.selectOption(option)
+
+        this.currentSegment = this.selectedOption
+        
+        console.log(new Date().toISOString(),'# updated current segment', this.currentSegment)
+    }
+
+    getSelectedOption():FreeRideContinuation|undefined { 
+        return this.selectedOption
+    }
+
+    turnAround() {
+        // TODO
     }
 
 
@@ -353,13 +386,13 @@ export class FreeRideService extends IncyclistService {
         return path
     }
 
-    protected buildUIOptions(opts: FreeRideContinuation[] = this.options??[]): FreeRideOption[] {
+    buildUIOptions(opts: FreeRideContinuation[] = this.options??[]): FreeRideOption[] {
         
         return opts.map((option, idx) => {
-            const text = this.getOptionText(option);
-            const color = this.getOptionColor(idx, { isStartPos: false, selected: idx === 0 });
             const id = this.buildId(option)
             const selected = id === this.buildId(this.selectedOption)
+            const text = this.getOptionText(option);
+            const color = this.getOptionColor(idx, { isStartPos: false, selected});
             
             const uiOptions =  { id,  color, text,path: this.getPath(option),selected,direction:option.direction };
             option.ui = uiOptions
@@ -450,7 +483,11 @@ export class FreeRideService extends IncyclistService {
 
     protected getDefaultStartPosition():IncyclistNode {
         try {
-            return this.getUserSettings().get('preferences.routeSelection.freeRide.position',DEFAULT_POSITION)
+            const position = this.getUserSettings().get('preferences.routeSelection.freeRide.position',DEFAULT_POSITION)
+            if (position.lat===undefined || isNaN(position.lat) || position.lng===undefined|| isNaN(position.lng)) {
+                return DEFAULT_POSITION
+            }
+            return position
         }
         catch {
             return DEFAULT_POSITION

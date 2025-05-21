@@ -131,7 +131,6 @@ export class OptionManager {
                 option.direction = option.direction-360;
         })
 
-        this.sortOptions(options)
 
         if (props?.minDistance) {
             await this.checkMinDistance(options,props.minDistance)
@@ -140,24 +139,6 @@ export class OptionManager {
 
         return options;        
     }
-
-    protected sortOptions(options:Array<FreeRideContinuation>) {
-
-        //TODO
-/*
-            options.sort((a, b) => {
-                let dA = a.direction;
-                let dB = b.direction;
-    
-                if (dA > 180) dA = dA - 360;
-                if (dB > 180) dB = dB - 360;
-                if (dA > dB) return 1
-                if (dA < dB) return -1;
-                return 0;
-            })
-*/
-    }
-
 
     protected async checkMinDistance(options:Array<FreeRideContinuation>,minDistance:number) {
         // TODO: if any of the options is less than minDistance( in meters), add branches to these options

@@ -19,6 +19,7 @@ import { INativeUI } from "../../api/ui";
 import { getBindings } from "../../api";
 import { CurrentRideDisplayProps, ICurrentRideService, PrevRidesDisplayProps, StartOverlayProps } from "../base/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
+import { FreeRideOption } from "../../routes/list/types";
 
 @Singleton
 export class RideDisplayService extends IncyclistService implements ICurrentRideService {
@@ -322,6 +323,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     }
 
+    selectFreeRideOption(option:FreeRideOption|string) {
+        const service = this.getRideModeService() as FreeRideDisplayService
+
+        return service.selectOption(option)           
+    }
 
 
     /**

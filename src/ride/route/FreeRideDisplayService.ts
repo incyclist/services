@@ -1,4 +1,4 @@
-import { ActiveRidesService, ActivityRideService, useActivityRide } from "../../activities";
+import { ActivityRideService, useActivityRide } from "../../activities";
 import { Injectable } from "../../base/decorators";
 import { FreeRideService, useFreeRideService } from "../../routes/free-ride";
 import { concatPaths } from "../../maps/MapArea/utils";
@@ -8,33 +8,83 @@ import { Route } from "../../routes/base/model/route";
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
 import {  FreeRideOption, FreeRideStartSettings } from "../../routes/list/types";
 import { distanceBetween, LatLng } from "../../utils/geo";
-import { CurrentPosition, CurrentRideDisplayProps, FreeRideDisplayProps, GpxDisplayProps } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, FreeRideDisplayProps, GpxDisplayProps, MapOverlayDisplayProps  } from "../base";
 import { GpxDisplayService } from "./GpxDisplayService";
+import { FreeRideContinuation } from "../../maps/MapArea/types";
+import { MapViewPort } from "./types";
 
+const DEFAULT_OPTIONS_DELAY = 5000
 export class FreeRideDisplayService extends GpxDisplayService {
 
-    protected currentOptions: FreeRideOption[]
     protected initialPosition: LatLng
     protected isStarting: boolean = false
     protected isUpdating: boolean = false
+
+    protected viewportRide: MapViewPort
+    protected viewportPreview: MapViewPort
+    protected prevViewport: MapViewPort
+    protected tsLastOptionChange:number
+    protected optionsVisible: boolean
+    protected mapProps:MapOverlayDisplayProps
+
+    protected onViewportChange? = this.saveViewport.bind(this)
+    protected onOptionsVisibleChangedHandler? = this.onOptionsVisibleChanged.bind(this)
 
 
     protected get route():Route {
         return this.currentRoute
     }
 
+    protected get currentOptions():FreeRideContinuation[]|undefined {
+        return this.getFreeRideService().getOptions()        
+    }
+
 
     getDisplayProperties(props:CurrentRideDisplayProps):FreeRideDisplayProps {
         let routeProps:GpxDisplayProps = super.getDisplayProperties(props)
+        const options = this.getFreeRideService().buildUIOptions(this.currentOptions??[])
 
 
         return {
             ...routeProps,
             route:this.currentRoute,
-            options: this.currentOptions,
+            options,
+            onOptionsVisibleChanged: this.onOptionsVisibleChangedHandler,
+            optionsDelay: DEFAULT_OPTIONS_DELAY,
+            optionsId: this.getOptionsId(),
             upcomingElevation: {show:false},
             totalElevation: {show:false},
         }    
+    }
+
+    getOverlayProps(overlay, props: CurrentRideDisplayProps):MapOverlayDisplayProps {
+        const overlayProps:MapOverlayDisplayProps = super.getOverlayProps(overlay,props)
+
+        if ( overlay==='map') {
+            const mapProps = this.getMapProps()
+            this.mapProps = {...overlayProps,...mapProps }
+            return this.mapProps
+        }
+        return overlayProps
+    }
+
+    protected getOptionsId() {
+        return 'options:'+this.currentOptions.map( o => o.id ).join('|')
+
+    }
+
+    protected getMapProps() {
+        const prev = this.prevViewport
+        const viewport = this.getViewport()
+        const current = this.mapProps??{}
+
+        return {
+            ...current, 
+            viewport,
+            viewportOverwrite:viewport!==prev,
+            onViewportChange: this.onViewportChange,
+            
+        }
     }
 
     getLogProps(): object {
@@ -53,6 +103,13 @@ export class FreeRideDisplayService extends GpxDisplayService {
         return props
     }
 
+    saveViewport(viewport:MapViewPort) {
+        if (Date.now()-this.tsLastOptionChange>DEFAULT_OPTIONS_DELAY)
+            this.viewportRide = viewport
+        else 
+            this.viewportPreview = viewport
+    }
+
 
     start() {
         super.start()
@@ -61,7 +118,10 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
         this.isStarting = true
         const startSettings = this.getRouteList().getStartSettings() as FreeRideStartSettings
-        this.getFreeRideService().applyOption(startSettings.option)
+        this.getFreeRideService().applyStartOption(startSettings.option)
+
+        this.tsLastOptionChange = Date.now()
+        delete this.viewportPreview // force UI to 
 
         this.getNextOptions(true)
     }
@@ -86,8 +146,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
     
         const finished = this.updateRouteWithSelectedOption()
         freeRide.applyOption(selectedOption)
-
-        this.currentOptions = undefined
+        this.tsLastOptionChange = Date.now()
 
         if (!finished)
             this.getNextOptions()
@@ -104,8 +163,6 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
             this.currentRoute = this.createRoute(position,option)
             this.initialPosition = position
-            this.currentOptions = undefined
-
             
         }
         catch(err) {
@@ -176,7 +233,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
     }
 
     protected turnAround() {
-        // TODO: implement
+        this.getFreeRideService().turnAround()
     }
 
     protected updateRouteWithSelectedOption ():boolean {
@@ -204,8 +261,9 @@ export class FreeRideDisplayService extends GpxDisplayService {
         return false
     }
 
-    protected selectOption(option:FreeRideOption) { 
+    selectOption(option:FreeRideOption|string) { 
         this.getFreeRideService().selectOption(option)
+        return this.getFreeRideService().buildUIOptions(this.currentOptions)
     }
 
     protected getNextOptions(forStart?:boolean) {
@@ -214,10 +272,10 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
         const freeRide = this.getFreeRideService()
 
-        freeRide.getNextOptions(forStart).then( (options) => { 
+        freeRide.getNextOptions(forStart).then( () => { 
 
-            console.log(new Date().toISOString(),'# Display:  got options',options)    
-            this.currentOptions = options
+            console.log(new Date().toISOString(),'# Display:  got options',this.currentOptions)    
+            
 
 
             if (this.isStarting) {
@@ -225,13 +283,42 @@ export class FreeRideDisplayService extends GpxDisplayService {
                 this.isStarting = false    
             }
             else {
-                console.log( new Date().toISOString(),'# Display emitting route update')
-                this.service.getObserver().emit('route-update',{route:this.currentRoute,options})
+                this.emitRouteUpdate()
             }
 
             
         }) 
     }
+
+
+
+    protected getViewport():MapViewPort {
+        const viewport = Date.now()-this.tsLastOptionChange>DEFAULT_OPTIONS_DELAY ? this.viewportRide : this.viewportPreview
+        this.prevViewport = viewport
+        return viewport
+
+    }
+
+    protected onOptionsVisibleChanged(visible) {
+        console.log('# options visible changed',visible)
+
+        const prev = this.optionsVisible
+        this.optionsVisible = visible
+        if (visible && !prev) {
+            this.tsLastOptionChange = Date.now()
+        }
+
+    }
+
+    protected emitRouteUpdate() {
+
+        const options = this.getFreeRideService().buildUIOptions(this.currentOptions)
+        const map = this.getMapProps()
+
+        this.service.getObserver().emit('route-update',{route:this.currentRoute,options,map})
+
+    }
+
 
 
 
@@ -244,13 +331,5 @@ export class FreeRideDisplayService extends GpxDisplayService {
     getActivityRide(): ActivityRideService {
         return useActivityRide()
     }
-    
-
-
-
-
-    
-
-
     
 }
