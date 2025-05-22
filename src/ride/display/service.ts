@@ -543,7 +543,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         const sensors = this.isSensorsReadyToStart()
         const ride = this.getRideModeService().isStartRideCompleted()
 
-        console.log('# check start status', devices, sensors, ride)
         if (devices && sensors && ride) {
             this.onStartCompleted()
         }

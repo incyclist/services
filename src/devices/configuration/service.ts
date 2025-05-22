@@ -206,6 +206,45 @@ export class DeviceConfigurationService  extends IncyclistService{
         }
     }
 
+    updateCapabilities(udid:string) {
+        const adpater = this.getAdapter(udid)
+        if (!adpater)
+            return
+
+        const capabilties = adpater.getCapabilities()
+
+        // add additional capabilties
+        capabilties.forEach( capability=> {
+            const settings = this.settings.capabilities.find( c =>c.capability===capability)            
+            if (!settings?.devices?.includes(udid)) {
+                
+                this.addToCapability(udid, capability)
+            }    
+        })
+
+        // remove capabilties that are no more present
+        this.settings.capabilities.forEach( c => {
+            if (c.capability==='bike')
+                return
+
+            const capability = c.capability as IncyclistCapability
+            if (!capabilties.includes(capability)) {
+                this.delete(udid, capability)
+            }
+        })
+
+        //console.log('# updateCapabilities done',udid, capabilties, this.settings.capabilities)
+
+        this.updateUserSettings()
+        this.emitCapabiltyChanged()    
+    }
+
+    addCapability(udid:string, capability:ExtendedIncyclistCapability) {
+        this.addToCapability(udid, capability)
+
+        this.emitCapabiltyChanged(capability)
+    }
+
     add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {   
 
         let udid = this.getUdid(deviceSettings) 
@@ -1097,6 +1136,11 @@ export class DeviceConfigurationService  extends IncyclistService{
         if (!record) {
             capabilities.push( {capability, devices:[udid], selected:udid})
         }
+        else if (!record.devices?.length) {
+            record.devices.push(udid)
+            record.selected = udid
+        }            
+
         else if (!record.devices?.includes(udid)) {
             record.devices.push(udid)
         }            

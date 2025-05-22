@@ -782,37 +782,38 @@ export class DevicePairingService  extends IncyclistService{
    
     }
 
-    protected mergeState(current,newState) {
+    protected mergeState(current,update) {
         const {connectState,value,unit} = current
-
-        newState.devices.forEach( d=>  {
+        update.devices.forEach( d=>  {
         
             if (!current.devices || current.devices.length===0)
                 return; 
-            const cd = current.devices.find( c=> c.udid===d.udid )
+            const device = current.devices.find( c=> c.udid===d.udid )
             
-            if (cd) {
-                const {connectState, value,unit} = cd
+            if (device) {
+                const {connectState, value,unit} = device
                 Object.assign(d,{connectState, value,unit})
             }
         })
         
-        Object.assign(current,{...newState},connectState,value,unit)
+        Object.assign(current,{...update},connectState,value,unit)
    
     }
 
-    protected onConfigurationUpdate (newCapabilities:DeviceConfigurationInfo) {
-        this.logEvent({message:'Capability Config changed', capabilities:newCapabilities})
+    protected onConfigurationUpdate (update:DeviceConfigurationInfo) {
+
+        this.logEvent({message:'Capability Config changed', capabilities:update})
 
         try {
             const {capabilities} = this.state||{};
-            const keys = Object.keys(newCapabilities)
+            const keys = Object.keys(update)
 
             keys.forEach( key => {
-                const newCap = newCapabilities[key]
+                const capability = update[key]
                 const current = capabilities.find( c=>c.capability===key)
-                this.mergeState(current,this.mappedCapability(newCap))
+                this.mergeState(current,this.mappedCapability(capability))
             })
+            this.updateCapabilityConfig()
 
             this.checkCanStart()
         }
@@ -821,7 +822,6 @@ export class DevicePairingService  extends IncyclistService{
         }     
         
         const {capabilities,canStartRide} = this.state||{};
-       
         this.emitStateChange({canStartRide,capabilities })
     
     }
@@ -957,6 +957,7 @@ export class DevicePairingService  extends IncyclistService{
         this.rideService.on('pair-success',this.onPairingSuccessHandler)
         this.rideService.on('pair-error',this.onPairingErrorHandler)
         this.rideService.on('data', this.onDeviceDataHandler)
+        
     }
 
     protected removePairingCallbacks():void {
@@ -980,18 +981,22 @@ export class DevicePairingService  extends IncyclistService{
 
     protected onPairingStatusUpdate( udid:string, connectState:DevicePairingStatus,notify:boolean=true) {
         const capabilities=this.state.capabilities
-        
+        let changed = false;
+
         capabilities.forEach (c => {
             
             if (c.selected===udid) {                
-                c.connectState = connectState
+                if (c.connectState!==connectState) {
+                    c.connectState = connectState
+                    changed = true
+                }
             }
             const device = this.getCapabilityDevice(c)
             if (device && device.udid===udid) {
                 device.connectState = connectState
             }
         })
-        if (notify) {
+        if (notify && changed) {
             if (this.settings.onStateChanged && typeof this.settings.onStateChanged === 'function') {
                 this.settings.onStateChanged({capabilities})
             }   
@@ -1043,6 +1048,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onPairingSuccess(info:AdapterStateInfo|string) {
+       
         const udid = typeof info==='string' ? info : info?.udid
         this.onPairingStatusUpdate(udid,'connected')
     }
@@ -1071,7 +1077,6 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onDeviceData(data:DeviceData, udid:string) {
-        
         const capabilities=this.state.capabilities
 
         if (!this.state.data) {
@@ -1089,6 +1094,16 @@ export class DevicePairingService  extends IncyclistService{
 
             const unitInfo = Units.find( ui=> ui.capability === c.capability)
             const device =this.getCapabilityDevice(c,udid)
+
+            // did the device capabilities change?
+            const known = capabilities.filter( c=> c.devices.some( d=> d.udid===udid)).map(c=>c.capability).sort().join(';')   
+            const current = this.getDeviceAdapter(udid)?.getCapabilities().sort().join(';')
+
+            if (known!==current) {
+                this.configuration.updateCapabilities(udid)
+            }
+                
+            
 
             if (unitInfo) {
                 const value = data[unitInfo.value]?.toFixed(unitInfo.decimals)
@@ -1266,7 +1281,6 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected async run(props:PairingProps={}):Promise<void> {
-
         
         this.emit('run')
 
@@ -1305,11 +1319,12 @@ export class DevicePairingService  extends IncyclistService{
         //await this.waitForInterfacesInitialized()
 
         if (configOKToStart && !this.deviceSelectState && !props.enforcedScan)  {
-
             if (this.checkPairingSuccess()!==true)
                 await this.startPairing(adapters, props);
             else {
                 this.logEvent({message:'Pairing completed'})
+                this.initPairingCallbacks()
+                this.resumeAdapters()
                 this.emitStateChange()
             }
 
@@ -1320,9 +1335,6 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     private async startPairing(adapters: AdapterInfo[], props: PairingProps) {
-
-
-
         if (this.isPairing() ||  this.checkPairingSuccess()) 
             return;
 
@@ -1370,9 +1382,9 @@ export class DevicePairingService  extends IncyclistService{
         this.initPairingCallbacks();
         const selectedAdapters = target.map(ai=>({...ai, isStarted:false}))
 
+        this.onPairingStarted();
         const promise = this.rideService.startAdapters(selectedAdapters, 'pair');
         this.state.check={promise}
-        this.onPairingStarted();
 
 
         this.logEvent({ message: 'Start Pairing', adapters, props });
@@ -1702,7 +1714,6 @@ export class DevicePairingService  extends IncyclistService{
             return target?.adapter
 
         if (this.configuration.getAdapter(udid)) {
-            this.logEvent({message:'adapter list out of sync',missing:udid})
             // Pairing Service and Device Config are out of sync, reload adapaters
             this.state.adapters = this.configuration.getAdapters(false)            
             return this.configuration.getAdapter(udid)
@@ -1762,6 +1773,21 @@ export class DevicePairingService  extends IncyclistService{
                 return;
             const adapter = adapters.find(ai => ai.udid === c.selected)?.adapter;
             adapter?.pause();
+
+        });
+    }
+
+    protected resumeAdapters(adapters: AdapterInfo[]=this.state.adapters) {
+        if (!adapters?.length)
+            return;
+
+        const capabilities = this.state.capabilities;
+
+        capabilities.forEach(c => {
+            if (!c.selected && c.connectState === 'failed')
+                return;
+            const adapter = adapters.find(ai => ai.udid === c.selected)?.adapter;
+            adapter?.resume();
 
         });
     }

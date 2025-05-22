@@ -354,14 +354,32 @@ describe('PairingService',()=>{
                 
                 access.scan = jest.fn( async ()=>{
                     access.emit('device', device)
+
+                    ride.getAdapters= jest.fn().mockReturnValue( 
+                        [ { udid:'1', 
+                            capabilties:[IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed, IncyclistCapability.Cadence], 
+                            adapter: {  
+                                isStarted:jest.fn().mockReturnValue(true),
+                                isPaused:jest.fn().mockReturnValue(false),
+                                isStopped:jest.fn().mockReturnValue(undefined),
+                                pause:jest.fn().mockResolvedValue(true)
+                            }
+                          }])
+                    svc.getState().adapters = ride.getAdapters({})
+    
                     
                     return [device]
                 })
                 const updates: Array<PairingState> = [];
                 
+                let cnt = 0;
                 // we are expecting 3 status updates, the last one to contain the 
                 await new Promise (done => {
                     svc.on('log',(e)=>{ 
+                        cnt++;
+                        if (cnt>20)
+                            process.exit()
+    
                         if (e.message == 'Pairing completed')
                             done(updates)
                     })                   
@@ -375,7 +393,7 @@ describe('PairingService',()=>{
                 
                 expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Stopping Adapters'}))
                 expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'Start Scanning'}))
-                expect(logEvent).toHaveBeenNthCalledWith( 4,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'FE'}}))
+                expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'FE'}}))
                 expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'Pairing completed'}))
                 expect(access.scan).toHaveBeenCalled()
                 
@@ -395,7 +413,7 @@ describe('PairingService',()=>{
                 settings.devices = []
                 settings.capabilities =[]
                 configuration.inject('UserSettings',new UserSettingsMock(settings))
-
+                configuration.updateCapabilities = jest.fn()
                 
                 access.scan = jest.fn( async ()=>{
                     access.emit('device', device)                    

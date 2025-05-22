@@ -587,8 +587,8 @@ export class DeviceRideService  extends IncyclistService{
         const allOK = status.find( s=>s===false)===undefined
         this.emit(`${startType}-result`, allOK)
 
-        if (allOK && startType==='start') {
-            this.startRide(props)
+        if (allOK && (startType==='start' || startType==='pair')) {
+            this.registerOnDataHandler(props)
         }
 
         this.startPromises = null;
@@ -1134,7 +1134,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    startRide(_props) {
+    registerOnDataHandler(_props) {
         const adapters = this.getSelectedAdapters()
         adapters?.forEach(ai=> {
             ai.adapter.off('data',this.deviceDataHandler)

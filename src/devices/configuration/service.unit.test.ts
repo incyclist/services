@@ -250,6 +250,7 @@ describe( 'DeviceConfigurationService',()=>{
         test('normal legacy settings',async ()=>{
             const settings = clone(SampleLegacySettings)            
             testData = settings
+            service.updateCapabilities = jest.fn()
             await service.init()
 
             //expect(service.settings).toMatchSnapshot()
