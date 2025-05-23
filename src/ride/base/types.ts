@@ -7,7 +7,6 @@ import { Route } from "../../routes/base/model/route"
 import EventEmitter from "events"
 import { ActiveRideListAvatar, ActivityDetails, PrevRidesListDisplayProps, ScreenShotInfo } from "../../activities"
 import { Workout } from "../../workouts"
-import { Avatar } from "../../avatars"
 import { FreeRideOption } from "../../routes/list/types"
 import { MapViewPort } from "../route/types"
 

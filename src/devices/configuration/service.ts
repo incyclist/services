@@ -222,18 +222,16 @@ export class DeviceConfigurationService  extends IncyclistService{
             }    
         })
 
-        // remove capabilties that are no more present
+        // remove capabilties that are no more present (unless device is selected for this capability)
         this.settings.capabilities.forEach( c => {
-            if (c.capability==='bike')
+            if (c.capability==='bike') // legacy capability - ignore
                 return
 
             const capability = c.capability as IncyclistCapability
-            if (!capabilties.includes(capability)) {
+            if (!capabilties.includes(capability) && c.selected!==udid) {
                 this.delete(udid, capability)
             }
         })
-
-        //console.log('# updateCapabilities done',udid, capabilties, this.settings.capabilities)
 
         this.updateUserSettings()
         this.emitCapabiltyChanged()    
