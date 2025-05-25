@@ -51,6 +51,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         await this.closePrevRide();
             
         this.observer = new Observer()
+        
         try {
             this.displayService = this.getRideModeService(true)
             this.displayService.init(this)
@@ -60,7 +61,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             /* TODO:
                 'prepare-next-video' event
                 'next-video' event
-                'route-changed' event
+                
             */
             this.hideAll = false
             
@@ -518,7 +519,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         return this.route?.description?.hasVideo ? 'Video' : 'GPX'
     }
 
-    protected getRideModeService(overwrite?:boolean):IRideModeService {
+    getRideModeService(overwrite?:boolean):IRideModeService {
         if (this.displayService && !overwrite)    
             return this.displayService
 
@@ -590,7 +591,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 
     protected onActivityUpdate(data) {
-        
         if (this.state==='Active') {
             const currentValues = this.getActivityRide().getCurrentValues()
             if (!currentValues)
@@ -899,8 +899,14 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     protected onStartCompleted() {
+        // avoid double start due to parallel events
+        if (this.state==='Started')
+            return
+
         const logProps = this.getRideModeService().getLogProps()
         this.logEvent({ message: 'Start success',  ...logProps })
+
+        this.state = 'Started'
 
         this.disableScreensaver();
         this.createActivity()

@@ -279,8 +279,8 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
 
             if (this.isStarting) {
-                this.emit('state-update')
                 this.isStarting = false    
+                this.emit('state-update')
             }
             else {
                 this.emitRouteUpdate()
