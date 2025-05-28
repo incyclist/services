@@ -221,14 +221,38 @@ const addVideoDetails = (route: Route, details: RouteApiDetail)  => {
 
 
 
-export const validateRoute = (route:Route|RouteApiDetail):void =>{
+export const validateRoute = (route:Route|RouteApiDetail, reset:boolean=false):void =>{
     if (!route?.points?.length)
         return;
+
+    if (reset) {
+        route.points.forEach(p => { 
+            delete p.routeDistance; 
+            delete p.cnt; 
+            delete p.distance  
+            delete p.elevationGain
+            delete p.slope
+        });         
+    }
 
     validateDistance(route.points)    
     validateSlopes(route.points)
     updateElevationGain(route.points)
     updateCnt(route.points)
+
+
+    let isOK = true
+    
+    route.points.forEach( (p,idx) => {
+        isOK = isOK && p.cnt===idx
+        if (idx>0) {
+            isOK = isOK && p.routeDistance>=route.points[idx-1].routeDistance
+        }    
+    })
+    if (!isOK) {
+        console.log('# ERROR  - invalid path', route.points)
+    }
+        
 
     route.distance = route.points[ route.points.length-1].routeDistance
 }

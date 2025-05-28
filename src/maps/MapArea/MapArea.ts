@@ -48,12 +48,15 @@ export class MapArea implements IMapArea{
     protected queryLocation:IncyclistNode
     protected bounds: Boundary
     protected logger: EventLogger
+    protected lastUsed: number
+    
 
     constructor( data: FreeRideDataSet, queryLocation:IncyclistNode, bounds:Boundary) {
         this.data = data
         this.queryLocation = queryLocation
         this.bounds = bounds
         this.logger = new EventLogger('MapArea')
+        this.lastUsed = Date.now()
         this.correctRoundabouts()
     }
 
@@ -66,19 +69,27 @@ export class MapArea implements IMapArea{
     }
 
     getWays():IncyclistWay[] {
+        this.lastUsed = Date.now()
         return this.data.ways
     }
 
     getWay(id:string):IncyclistWay {
+        this.lastUsed = Date.now()
+
         return this.data.waysLookup[id]
     }
 
     getNode(id:string):IncyclistNode {
+        this.lastUsed = Date.now()
         return this.data.nodesLookup[id]
     }
 
     getStats():Record<string,number> {
         return this.data.typeStats
+    }
+
+    getLastUsed():number {
+        return this.lastUsed
     }
 
 
@@ -89,6 +100,8 @@ export class MapArea implements IMapArea{
      * @returns true if the location is within the boundaries, false otherwise
      */
     isWithinBoundary(location:LatLng):boolean {
+        this.lastUsed = Date.now()
+
         return isWithinBoundary(location, this.bounds)
     }
 
@@ -102,6 +115,8 @@ export class MapArea implements IMapArea{
      * @returns an object with the nearest  openmap way, the path and its distance to the location given
      */
     getNearestPath(point:IncyclistNode):NearestPathInfo {
+        this.lastUsed = Date.now()
+
         const ways = this.data?.ways??[]
 
         if (!ways?.length )
@@ -136,6 +151,8 @@ export class MapArea implements IMapArea{
      *          or undefined if no branching point is found.
      */
     getFirstBranch(way:WayInfo,ignore?:string):SplitPointInfo {
+        this.lastUsed = Date.now()
+
         if (way?.path===undefined)
             return;
 
@@ -185,6 +202,8 @@ export class MapArea implements IMapArea{
      *          and an array of branches if any exist.
      */
     splitAtFirstBranch(way:WayInfo):IncyclistWaySplit {
+        this.lastUsed = Date.now()
+
         if (way?.path===undefined)
             return;
 
@@ -250,6 +269,7 @@ export class MapArea implements IMapArea{
      */
 
     splitAtCrossingPoint(way:IncyclistWay,crossing:PathCrossingInfo):Array<IncyclistWaySplit> {
+        this.lastUsed = Date.now()
 
         if ( way?.path===undefined || crossing?.idx===undefined || crossing?.point===undefined)
             return;
@@ -360,6 +380,8 @@ export class MapArea implements IMapArea{
      */
 
     buildSegmentInfo(from:IncyclistWay, parts:Array<IncyclistWaySplit>):SegmentInfo {
+        this.lastUsed = Date.now()
+
         const segments = [];
         const points = [];
 
@@ -388,6 +410,8 @@ export class MapArea implements IMapArea{
      * @returns the direction in degrees as a number
      */
     getHeading(way:WayInfo, position:'start'|'end'='start'):number {
+        this.lastUsed = Date.now()
+
         if ( way?.path?.length<2)
             return;
         let fullWay = this.getWay(way.id);

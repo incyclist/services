@@ -4,6 +4,7 @@ import { LatLng, crossing } from "../../utils/geo";
 import { abs, cos, degrees, rad, sin } from "../../utils/math";
 import { GET_WAYS_IN_AREA, MAX_DISTANCE_FROM_PATH, RADIUS_EARTH } from "./consts";
 import { Boundary, CrossingInfo, IncyclistNode, OverpassResult, OverpassWay, IncyclistWay, FreeRideDataSet, SplitPointInfo, PathCrossingInfo, WayInfo } from "./types";
+import { RoutePoint } from "../../routes/base/types";
 
 
 export function addNode(node:number,nodesLookup:Record<string,IncyclistNode>,id:number,path:Array<IncyclistNode>):void {
@@ -124,8 +125,10 @@ export function splitAtIndex(way, idxSplit) {
  * @param position 'before' or 'after'. If 'before', the second path will be inserted before the first node of the original path. If 'after', the second path will be appended after the last node of the original path.
  * @returns nothing, the path is updated in place.
  */
-export function concatPaths(path:IncyclistNode[],path2:IncyclistNode[],position:'before'|'after'):void {  
-    const append = [...path2];        
+export function concatPaths(path:IncyclistNode[]|RoutePoint[],path2:IncyclistNode[]|RoutePoint[],position:'before'|'after'):void {  
+
+    // create a new path containing the values of path2 - don't copy by reference
+    const append = path2.map( p => ({...p}) )
     
     if ( position==='after') {
         append.shift();

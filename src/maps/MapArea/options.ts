@@ -23,7 +23,7 @@ export class OptionManager {
         
 
         
-        for (const segment of segments) {
+        for (const segment of segments??[]) {
             try {
                 const path =segment.path
 
@@ -59,85 +59,98 @@ export class OptionManager {
             }
 
         }
-            
-            
-
-
-        
-        // TODO
 
         return options
-
-        
     }
 
     async getNextOptions( from:WayInfo|FreeRideContinuation, props?:GetNextOptionProps ): Promise<Array<FreeRideContinuation>> {
-
-    
-        if (from?.id===undefined || from?.path===undefined || from?.path.length<1)  {
-            return []
-        }
-
-        // ensure we have a proper way object (not just the WayInfo)
-        const way = {...this.getWay(from.id),path:from.path}
-
-        // get last location of way, if it has no id, get second to last 
-        let location = way.path[way.path.length-1];
-        if (location.id===undefined) {
-            if (way.path.length>1)
-                location = way.path[way.path.length-2];
-            else {
+        try {
+            if (from?.id===undefined || from?.path===undefined || from?.path.length<1)  {
                 return []
             }
-        }
-
-        // get updated map (if required)
-        const map = await this.service.load(location)
-
-        if (!map)  {
-            if (!this.map)
-                return []
-        }
-        else {
-            this.setMap(map)
-        }
-
-
-        // get node and remaining part of way
-        const node = this.getNode(location);
-        const remaining = this.getRemaining(way);
-
-                
-        let options:Array<FreeRideContinuation> = [];
-
-        if (node!==undefined ) {
-            node.ways.forEach( (wid) => {
-                if ( wid===remaining.id) {
-                    options = this.getOptionsOnCurrentWay(node,remaining,options)           
+    
+            // ensure we have a proper way object (not just the WayInfo)
+            let originalWay = this.getWay(from.id) 
+            if ( !originalWay) {
+                const map = this.service.getMap(from.path[0])
+                const query:Partial<IncyclistWay> = {id:from.id,path:from.path, map:map}
+                originalWay = this.getWay(query as IncyclistWay)
+                if (!originalWay) {
+                    return []
                 }
+            }
+            const way = {...originalWay,path:from.path}
+    
+            // get last location of way, if it has no id, get second to last 
+            let location = way.path[way.path.length-1];
+            if (location.id===undefined) {
+                if (way.path.length>1)
+                    location = way.path[way.path.length-2];
                 else {
-                    const w = this.getWay(wid);
-                    options = this.checkOptionsOnDifferentWay(node,w,options)         
+                    return []
                 }
+            }
+    
+            // get updated map (if required)
+            const map = await this.service.load(location)
+    
+            if (!map)  {
+                if (!this.map)
+                    return []
+            }
+            else {
+                this.setMap(map)
+            }
+    
+    
+            // get node and remaining part of way
+            const node = this.getNode(location);
+            const remaining = this.getRemaining(way);
+    
+                    
+            let options:Array<FreeRideContinuation> = [];
+    
+            if (node!==undefined ) {
+                node.ways.forEach( (wid) => {
+                    if ( wid===remaining.id) {
+                        options = this.getOptionsOnCurrentWay(node,remaining,options)           
+                    }
+                    else {
+                        const w = this.getWay(wid);
+                        options = this.checkOptionsOnDifferentWay(node,w,options)         
+                    }
+                })
+                    
+            }
+    
+            const currentDirection = this.map.getHeading(way, 'end');
+            options.forEach( (option) => {
+                const direction = this.map.getHeading(option as WayInfo, 'start');
+                option.direction = direction-currentDirection
+                if (option.direction>180) 
+                    option.direction = option.direction-360;
             })
-                
+    
+    
+            if (props?.minDistance) {
+                await this.checkMinDistance(options,props.minDistance)
+            }
+    
+            // remove options that are pointing back to the origin
+            if (options?.length) {
+                const fromNode = from.path?.[from.path.length-2];
+                options = options.filter( o => o.path.length>0 && o.path[1].id!==fromNode.id)
+            }
+    
+    
+            return options;        
+    
         }
-
-        const currentDirection = this.map.getHeading(way, 'end');
-        options.forEach( (option) => {
-            const direction = this.map.getHeading(option as WayInfo, 'start');
-            option.direction = direction-currentDirection
-            if (option.direction>180) 
-                option.direction = option.direction-360;
-        })
-
-
-        if (props?.minDistance) {
-            await this.checkMinDistance(options,props.minDistance)
+        catch(err) {
+            this.logError(err,'getNextOptions')
+            return []
         }
-
-
-        return options;        
+    
     }
 
     protected async checkMinDistance(options:Array<FreeRideContinuation>,minDistance:number) {
@@ -365,13 +378,16 @@ export class OptionManager {
      * @returns a clone of the way
      */
     protected getWay( props:string|IncyclistWay):IncyclistWay {
+
         if (!props) return;
 
         if ( typeof props === 'string') {
             return clone(this.map?.getWay(props))
         }
-        if ( props.id !==undefined)
-            return clone(this.map?.getWay(props.id));
+        if ( props.id !==undefined) {
+            const map = props.map??this.map
+            return clone(map.getWay(props.id));
+        }
     }
 
     /**
@@ -408,47 +424,56 @@ export class OptionManager {
      * @returns The original way with the updated remaining path and a roundabout flag if applicable.
      */
 
-    getRemaining (partial:IncyclistWay): IncyclistWay {
+    protected getRemaining (partial:IncyclistWay): IncyclistWay {
 
-        const originalWay= this.getWay(partial) 
-        const path=originalWay.path;
-        const roundabout = isRoundabout(originalWay);
-        if (roundabout)
-            return {...originalWay, roundabout}
+        try {
+            const originalWay= this.getWay(partial) 
 
-        let newPath = path;
+            const path=originalWay.path;
+            const roundabout = isRoundabout(originalWay);
+            if (roundabout)
+                return {...originalWay, roundabout}
     
-        const last = partial.path[partial.path.length-1];
-        const prev = partial.path[partial.path.length-2];
-
-        const idxLast = path.findIndex( (p) => pointEquals(p,last) )
-        let idxPrev = path.findIndex( (p) => pointEquals(p,prev) )
-        if (idxPrev===-1) idxPrev = this.findClosestPoint(path,prev, last);
-
-
-        // check if we are already at the end
-        let lastOriginal;
-        if (idxPrev>idxLast) {
-            lastOriginal = originalWay.path[0];
-        }
-        else  {
-            lastOriginal = originalWay.path[originalWay.path.length-1];
-        }       
-        if (last.id===lastOriginal.id) {
-            return {...originalWay,path:[],roundabout:false}
-        }
-
-        // copy remaining part of original path
-        if (idxLast!==-1 && idxPrev!==-1) {               
-            if ( idxPrev<idxLast) // original path is in the same order
-                newPath = path.slice(idxLast)
-            else {
-                newPath = path.slice(0,idxLast+1);
-                newPath.reverse();
+            let newPath = path;
+        
+            const last = partial.path[partial.path.length-1];
+            const prev = partial.path[partial.path.length-2];
+    
+            const idxLast = path.findIndex( (p) => pointEquals(p,last) )
+            let idxPrev = path.findIndex( (p) => pointEquals(p,prev) )
+            if (idxPrev===-1) idxPrev = this.findClosestPoint(path,prev, last);
+    
+    
+            // check if we are already at the end
+            let lastOriginal;
+            if (idxPrev>idxLast) {
+                lastOriginal = originalWay.path[0];
             }
-        }
+            else  {
+                lastOriginal = originalWay.path[originalWay.path.length-1];
+            }       
+            if (last.id===lastOriginal.id) {
+                return {...originalWay,path:[],roundabout:false}
+            }
     
-        return {...originalWay,path:newPath,roundabout};
+            // copy remaining part of original path
+            if (idxLast!==-1 && idxPrev!==-1) {               
+                if ( idxPrev<idxLast) // original path is in the same order
+                    newPath = path.slice(idxLast)
+                else {
+                    newPath = path.slice(0,idxLast+1);
+                    newPath.reverse();
+                }
+            }
+        
+            return {...originalWay,path:newPath,roundabout};
+    
+        }
+        catch(err) {
+            this.logError(err,'getRemaining')
+            return {...partial,path:[],roundabout:false}
+
+        }
     }
 
     protected findClosestPoint(path:IncyclistNode[],point:IncyclistNode,exclude:IncyclistNode) {

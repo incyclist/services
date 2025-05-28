@@ -46,6 +46,7 @@ export type FreeRideContinuation = {
 
 export interface IMapAreaService  {
     load( location: IncyclistNode): Promise<IMapArea>
+    getMap(location:IncyclistNode):IMapArea 
 }
 
 
@@ -125,6 +126,7 @@ export interface IncyclistWay  extends WayInfo {
     name:string, 
     tags: Record<string,any>, 
     bounds:OverpassBounds
+    map?:IMapArea
 
     roundabout?:boolean
     originalId?:string

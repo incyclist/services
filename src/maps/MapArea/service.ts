@@ -19,24 +19,27 @@ type MapAreaRecord = {
 }
 const MAX_MAPS = 5
 
-export const getMapInfo = (m ) => {
+export const getMapInfo = (m:MapAreaRecord ) => {
     if (!m)
         return 'no map'
     try {
         const boundary = m.map.getBoundary()
         const bInfo = `${boundary.northeast.lat},${boundary.northeast.lng},${boundary.southwest.lat},${boundary.southwest.lng}`
 
-        return `${m.radius},[${bInfo}]`
+        
+        return `${m.radius},{${bInfo}}`
     }
-    catch {
+    catch (err) {
+        console.log('# ERROR',err)
         return ''
     }
 }
 
-export const getMapsInfo = (maps, key:string) => {
+export const getMapsInfo = (maps:Record<string,MapAreaRecord>, key:string) => {
     try {
         const m = maps[key]
-        return `${key}:${getMapInfo(m)}`
+        const time =  Number((Date.now()-(m.map.getLastUsed()??m.lastUsed))/1000).toFixed(1)
+        return `${key}:${getMapInfo(m)}:age=${time}s`
     
     }
     catch {
@@ -90,7 +93,7 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
         return this.loadMap(location)
     }
 
-    getMap(location:IncyclistNode):MapArea {
+    getMap(location:IncyclistNode):IMapArea {
         const maps = this.getAllMaps()??[]
         return maps.find(m=>m.isWithinBoundary(location))        
     }
@@ -113,7 +116,6 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
 
         let updateRequired = true
         let minDist = Number.MAX_VALUE
-        let minPct
         let best:MapAreaRecord|undefined
         do {
             if (records.length===0)
@@ -129,20 +131,15 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
 
             if (!updateRequired) { 
                 minDist = dist
-                minPct = minDist/radius*100
                 best = record
             }
 
             else if (dist<minDist) {
                 minDist = dist
-                minPct = minDist/radius*100
             }   
 
             await waitNextTick()
         } while (records.length>0 && updateRequired)    
-
-        const {lat,lng,id} = location
-        this.logEvent( {message:'distance between previous overpass request',location:{lat,lng,id},dist:minDist,pct:minPct,updateRequired, map:getMapInfo(best?.map)});
 
         return best?.map
     }
@@ -198,8 +195,10 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     protected addMap(map:MapArea,location:IncyclistNode) {
         this.current = map
 
-        this.maps[this.mapsKey(location)] = {map,lastUsed:Date.now(), radius:this.radius}
-        this.logEvent({message:'Map added',cnt:Object.keys(this.maps).length,maps:Object.keys(this.maps).map(k=>getMapsInfo(this.maps,k))})
+        const record = {map,lastUsed:Date.now(), radius:this.radius}
+        this.maps[this.mapsKey(location)] = record
+        const mapInfo = `${location.lat},${location.lng},${getMapInfo(record)}`
+        this.logEvent({message:'Map added',map:mapInfo,cnt:Object.keys(this.maps).length,maps:Object.keys(this.maps).map(k=>getMapsInfo(this.maps,k))})
     }
 
     protected getMapsForLocation(location:IncyclistNode):MapAreaRecord[] {        
@@ -210,16 +209,7 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     createMapData( openmapData):FreeRideDataSet {
         
 
-        let ts = Date.now();
         const data = parseMapData(openmapData,this.filter); 
-        let ts1 = Date.now(); 
-
-        /* istanbul ignore next */ 
-        this.logger.logEvent({message:'Parse',duration:(ts1-ts),
-                                ways:data?.ways.length??0,
-                                nodes:Object.keys(data?.nodesLookup??{}).length,
-                                typeStats:data?.typeStats
-                            });
 
         if (data!==undefined) {
             this.loaded = 'success';
@@ -240,6 +230,7 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
      */
     protected checkRadiusAdjustment(map:MapArea) {
         const ways = map.getWays()
+        
         if (ways.length < this.minWays) {
             if (ways.length > 0) {
                 let gap = this.minWays / ways.length;
@@ -274,8 +265,11 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     }
 
     protected garbageCollection() {
+
+        const tsLastUsed = (m:MapAreaRecord) => m.map.getLastUsed()??m.lastUsed
+
         const now = Date.now();
-        const maps = Object.values(this.maps).filter(m=>now-m.lastUsed<1000*60*5);
+        const maps = Object.values(this.maps).filter(m=>now-tsLastUsed(m)<1000*60*5);
 
         // Always keep the last map (this.current)  even if it has not been used for a while
         const keyLastUsed = this.mapsKey(this.current.getQueryLocation())        

@@ -667,8 +667,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     onRouteUpdated( route: Route ) {
-        console.log('# route updated',this.route.points)
-
         this.getActivityRide().onRouteUpdate(route.points)
     }
 

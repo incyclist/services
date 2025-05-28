@@ -9,6 +9,7 @@ import { ActiveRideListAvatar, ActivityDetails, PrevRidesListDisplayProps, Scree
 import { Workout } from "../../workouts"
 import { FreeRideOption } from "../../routes/list/types"
 import { MapViewPort } from "../route/types"
+import { LatLng } from "../../utils/geo"
 
 export type RideType = 'Free-Ride' | 'GPX' | 'Video' | 'Workout'
 
@@ -67,6 +68,8 @@ export interface RouteDisplayProps extends IRideModeServiceDisplayProps {
 export interface MapOverlayDisplayProps extends OverlayDisplayProps {
     viewport?: MapViewPort
     viewportOverwrite?: boolean
+    center?: LatLng
+    bounds?: Number[][]
     onViewportChange?: (viewport: MapViewPort) => void
 }
 
@@ -74,11 +77,19 @@ export interface MapOverlayDisplayProps extends OverlayDisplayProps {
 export interface GpxDisplayProps extends RouteDisplayProps {
     rideView: 'sv' | 'map' | 'sat',
 }
-export interface FreeRideDisplayProps extends GpxDisplayProps {
-    options?: FreeRideOption[]
+
+export interface RouteOptionDisplayProps { 
     optionsDelay?: number
     optionsId?: string
     onOptionsVisibleChanged: (visible: boolean) => void
+    isNearby?: boolean
+    distance?: number
+    turn?: boolean
+}
+
+export interface FreeRideDisplayProps extends GpxDisplayProps {
+    options?: FreeRideOption[]
+    optionProps?: RouteOptionDisplayProps
 }
 
 export interface VideoDisplayProps extends RouteDisplayProps {
@@ -92,7 +103,7 @@ export interface StartOverlayProps {
 }
 
 export interface OverlayDisplayProps {
-    show: boolean,
+    show?: boolean,
     minimized?: boolean
 }
 
