@@ -1,13 +1,17 @@
 import { EventLogger } from 'gd-eventlog';
 import { JSONObject, parseTime } from '../../../utils';
 import { RouteApiDetail } from '../api/types';
-import { RoutePoint } from '../types';
+import { RoutePoint, VideoMapping } from '../types';
 import { validateRoute } from '../utils';
 import { fixAnomalies } from '../utils/points';
 import { EnhancedRoutePoint, GPXParser } from './gpx';
 import { CutInfo } from './types';
 import { XMLParser, XmlParserContext } from './xml';
+import { GeometryParser } from './geometry';
 
+export interface  IncyclistParserContext  extends XmlParserContext {
+    mapping?: Array<VideoMapping>
+}
 
 export class IncyclistXMLParser extends XMLParser{
     static readonly SCHEME = 'gpx-import'
@@ -18,7 +22,7 @@ export class IncyclistXMLParser extends XMLParser{
     }
 
     
-    protected async loadDescription(context: XmlParserContext): Promise<void> {
+    protected async loadDescription(context: IncyclistParserContext): Promise<void> {
         await super.loadDescription(context)
 
         const title = context.data['title']
@@ -35,7 +39,7 @@ export class IncyclistXMLParser extends XMLParser{
         }
     }
 
-    protected async loadPoints(context: XmlParserContext): Promise<void> {
+    protected async loadPoints(context: IncyclistParserContext): Promise<void> {
         const {data,fileInfo,route} = context
         
         const gpxFile = {...fileInfo}
@@ -59,7 +63,24 @@ export class IncyclistXMLParser extends XMLParser{
 
         }
 
+
         try {
+
+            let points;
+
+            if (fileName.toLowerCase().endsWith('.json')) {
+                gpxFile.ext = 'json'
+                // we have a GEO JSON file
+                const geo = await new GeometryParser().import(gpxFile)
+                points  = [...geo.details.points]
+                context.mapping = geo.details.mapping
+            }
+            else {
+                const gpx = await new GPXParser({addTime:true}).import(gpxFile)
+                points = [...gpx.details.points]    
+            }
+
+
             if (context.data['autoCorrect']) {
                 const gpx = await new GPXParser({addTime:true, keepZero:true}).import(gpxFile)
                 const points = [...gpx.details.points]
@@ -79,10 +100,10 @@ export class IncyclistXMLParser extends XMLParser{
                 validateRoute(route)
             }
             else {
-                const gpx = await new GPXParser({addTime:true}).import(gpxFile)
-                route.points = gpx.details.points
-                    
+                route.points = points
+                
             }
+            
         }
         catch(err) {            
             if (!data['gpx-file-path'])
@@ -147,31 +168,41 @@ export class IncyclistXMLParser extends XMLParser{
     }
 
 
-    protected async parseVideo(context: XmlParserContext): Promise<void> {
+    protected async parseVideo(context: IncyclistParserContext): Promise<void> {
 
         await super.parseVideo(context)
 
-        const {data,route} = context
-        const points = route.points as Array<EnhancedRoutePoint>
+        const {data,route,mapping} = context
 
-        route.video.mappings =  points.map( (p,idx) => {
-            const time = p.time
-            
-            let videoSpeed;
-            if (idx!==points.length-1) {
-                    videoSpeed = (points[idx+1].routeDistance-p.routeDistance)/(points[idx+1].time-p.time)*3.6;                
-            }
-            else {
-                videoSpeed = points[idx-1].videoSpeed
-            }
+        // we already got the mapping from geometry
+        if (mapping) {
+            route.video.mappings = mapping
 
-            const distance = Math.round(p.routeDistance);
-            const frame = Math.round(p.time*route.video.framerate);
+        }
+        else {
+            const points = route.points as Array<EnhancedRoutePoint>
 
-            delete p.time;
+            route.video.mappings =  points.map( (p,idx) => {
+                const time = p.time
+                
+                let videoSpeed;
+                if (idx!==points.length-1) {
+                        videoSpeed = (points[idx+1].routeDistance-p.routeDistance)/(points[idx+1].time-p.time)*3.6;                
+                }
+                else {
+                    videoSpeed = points[idx-1].videoSpeed
+                }
 
-            return {time,videoSpeed,distance,frame};            
-        })
+                const distance = Math.round(p.routeDistance);
+                const frame = Math.round(p.time*route.video.framerate);
+
+                delete p.time;
+
+                return {time,videoSpeed,distance,frame};            
+            })
+
+        }
+
 
 
         if (data['cuts']) {

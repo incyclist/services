@@ -9,7 +9,7 @@ import { getReferencedFileInfo, parseInformations } from './utils';
 import { getFileName } from '../../../utils';
 
 
-export type  XmlParserContext = {
+export interface  XmlParserContext  {
    fileInfo: FileInfo,
    data: JSONObject,
    route?: RouteApiDetail

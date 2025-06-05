@@ -14,7 +14,7 @@ export type RouteProvider = {
 export type VideoMapping = {
     videoSpeed: number
     time: number
-    frame: number
+    frame?: number
     distance: number
 }
 
