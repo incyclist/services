@@ -58,7 +58,8 @@ export class RouteDisplayService extends RideModeService {
 
     
     onActivityUpdate(activityPos:ActivityUpdate,data):void { 
-        
+
+        console.log('# activtiy update',activityPos,data)
         if (data.power>0)
             this.prevPowerTs = Date.now()
 
@@ -242,7 +243,8 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected initRoute() { 
-        this.currentRoute = this.route  
+        this.currentRoute =  this.getRouteList().getSelected()
+
     }
 
     protected initView() { /* logic can be defined by subclasses */ }
@@ -346,12 +348,11 @@ export class RouteDisplayService extends RideModeService {
         if (this.isLoop() && !this.startSettings?.loopOverwrite) 
             return false
         
-        const finished =  position.routeDistance >= this.route.description.distance        
+        const finished =  position.routeDistance >= this.route.description.distance   
         return finished
     }
 
     protected onRideFinished() {
-
         this.logEvent({message: 'Route completed'})
         this.savePosition(0)
         this.emit('route-completed')

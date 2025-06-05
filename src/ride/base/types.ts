@@ -65,6 +65,23 @@ export interface RouteDisplayProps extends IRideModeServiceDisplayProps {
     totalElevation?: OverlayDisplayProps
 }
 
+export interface VideoDisplayProps  {
+    src: any        // TODO
+    playback: 'native' | 'converted',
+    startTime?: number,
+    observer: Observer,
+    muted?: boolean
+    onPlaybackUpdate?: (time: number, rate: number) => void
+    onLoaded?: () => void
+    onPlaybackError?: (error:string) => void
+    onLoadError?: (error:string) => void
+
+}
+
+export interface RLVDisplayProps extends RouteDisplayProps {
+    video?: VideoDisplayProps
+}
+
 export interface MapOverlayDisplayProps extends OverlayDisplayProps {
     viewport?: MapViewPort
     viewportOverwrite?: boolean
@@ -92,8 +109,6 @@ export interface FreeRideDisplayProps extends GpxDisplayProps {
     optionProps?: RouteOptionDisplayProps
 }
 
-export interface VideoDisplayProps extends RouteDisplayProps {
-}
 
 export interface StartOverlayProps {
     mode: RideType,

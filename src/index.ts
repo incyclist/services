@@ -14,6 +14,7 @@ export * from './routes'
 export * from './services'
 export { useUserSettings,initUserSettings, UserSettingsService,UserSettingsBinding,IUserSettingsBinding } from './settings'
 export * from './utils'
+export * from './video'
 export * from './workouts'
 
 

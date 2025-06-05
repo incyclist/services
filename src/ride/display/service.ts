@@ -13,13 +13,13 @@ import { formatDateTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { RideModeService } from "../base/base";
 import { FreeRideDisplayService } from "../route/FreeRideDisplayService";
 import { FollowRouteDisplayService } from "../route/FollowRouteDisplayService";
-import { VideoDisplayService } from "../route/VideoDisplayService";
 import { WorkoutDisplayService } from "../workout/WorkoutDisplayService";
 import { INativeUI } from "../../api/ui";
 import { getBindings } from "../../api";
 import { CurrentRideDisplayProps, ICurrentRideService, PrevRidesDisplayProps, StartOverlayProps } from "../base/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { FreeRideOption } from "../../routes/list/types";
+import { RLVDisplayService } from "../route/RLVDisplayService";
 
 @Singleton
 export class RideDisplayService extends IncyclistService implements ICurrentRideService {
@@ -386,8 +386,12 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         if (!this.type) {
             try {
                 this.type = this.detectRideType()
+                console.log('#ride type', this.type)
             }
-            catch { /* ignore error*/ }
+            catch(err) {
+                console.log('# error detecting ride type',err)
+            }
+            //catch { /* ignore error*/ }
         }
         return this.type
     }
@@ -419,7 +423,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
         // Videos might change the route during the ride ( e.g. next video functionality)
         if ( route?.description?.hasVideo && settings?.type==='Route' ) {
-            return this.getRideModeService().getCurrentRoute()            
+            return this.getRideModeService().getCurrentRoute() ??route
         }
 
         return route
@@ -501,7 +505,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected detectRideType():RideType { 
 
-
+        const route = this.getRouteList().getSelected()
         const startSettings= this.getRouteList().getStartSettings()
         const workout = this.getWorkoutList().getSelected()
 
@@ -509,14 +513,16 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             return 'Free-Ride'
         }
 
-        if (!this.route?.details && !!workout) {
+        if (!route?.details && !!workout) {
             return 'Workout'
         }
 
-        if (!this.route?.details)
-            throw new Error('unknown ride typpe')
+        if (!route?.details) {
+            console.log('# this.route?.details',route?.details, route)
+            throw new Error('unknown ride type')
+        }
 
-        return this.route?.description?.hasVideo ? 'Video' : 'GPX'
+        return route?.description?.hasVideo ? 'Video' : 'GPX'
     }
 
     getRideModeService(overwrite?:boolean):IRideModeService {
@@ -528,7 +534,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             switch(type) {
                 case 'Free-Ride': return new FreeRideDisplayService()
                 case 'GPX':return new FollowRouteDisplayService()
-                case 'Video': return new VideoDisplayService()
+                case 'Video': return new RLVDisplayService()
                 case 'Workout': return new WorkoutDisplayService()
                 default:
                     return new RideModeService()
@@ -673,6 +679,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected onRouteCompleted() {
         if (this.state!=='Active' && this.state!=='Paused')
             return
+
+        console.log('# route completed', this.getWorkoutRide().inUse())
+
 
         // workout is not completed yet, continue in workout display mode
         if (this.getWorkoutRide().inUse()) { 

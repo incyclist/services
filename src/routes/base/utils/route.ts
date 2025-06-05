@@ -670,12 +670,16 @@ function searchNextPoint(route:Route,pPrev:LapPoint,props:GetNextPositionProps,s
         pPrev = p;
     }
 
+
     if (route.description.isLoop) {
         const point = updatePoint(points[0], pPrev, props,  distance, targetRouteInLap, route, lap);
-        return {pSearchStart,point}
-        
+        return {pSearchStart,point}        
     }
-    return {pSearchStart}
+    else {
+        const point = updatePoint(points[points.length-1], points[points.length-1], props,  distance, targetRouteInLap, route, lap);
+        return {pSearchStart,point}        
+
+    }
 
 }
 
