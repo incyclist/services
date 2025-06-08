@@ -59,7 +59,6 @@ export class RouteDisplayService extends RideModeService {
     
     onActivityUpdate(activityPos:ActivityUpdate,data):void { 
 
-        console.log('# activtiy update',activityPos,data)
         if (data.power>0)
             this.prevPowerTs = Date.now()
 

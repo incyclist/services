@@ -12,6 +12,8 @@ export type RLVPlaybackStatus = {
 
     /** ts of last update*/
     ts: number,
+
+    lap: number
 }
 
 export type RLVActivityStatus = {
@@ -23,4 +25,6 @@ export type RLVActivityStatus = {
     
     /** ts of last update*/
     ts: number,
+
+    lap: number
 }

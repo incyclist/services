@@ -386,7 +386,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         if (!this.type) {
             try {
                 this.type = this.detectRideType()
-                console.log('#ride type', this.type)
             }
             catch(err) {
                 console.log('# error detecting ride type',err)
@@ -518,7 +517,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
 
         if (!route?.details) {
-            console.log('# this.route?.details',route?.details, route)
             throw new Error('unknown ride type')
         }
 

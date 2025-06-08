@@ -68,6 +68,7 @@ export interface RouteDisplayProps extends IRideModeServiceDisplayProps {
 export interface VideoDisplayProps  {
     src: any        // TODO
     playback: 'native' | 'converted',
+    loop?: boolean,
     startTime?: number,
     observer: Observer,
     muted?: boolean

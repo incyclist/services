@@ -1,6 +1,7 @@
+import { ActivityUpdate } from "../../activities/ride/types";
 import { Observer } from "../../base/types";
 import { Route } from "../../routes/base/model/route";
-import { VideoConversion } from "../../video";
+import { VideoConversion, VideoSyncHelper } from "../../video";
 import { CurrentRideDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 
@@ -11,6 +12,7 @@ export class RLVDisplayService extends RouteDisplayService {
     protected videoPlayback: 'native' | 'converted'
     protected videoLoaded: boolean
     protected currentRoute: Route
+    protected syncHelper: VideoSyncHelper
 
 
     constructor() {
@@ -20,9 +22,19 @@ export class RLVDisplayService extends RouteDisplayService {
     initView(): void {
         this.initVideoSource()    
         this.videoLoaded = false
+
         this.videoObserver = new Observer()
+        const loopMode = this.currentRoute?.description?.isLoop && !this.startSettings?.loopOverwrite
+        const observer = this.videoObserver
+        this.syncHelper = new VideoSyncHelper(this.currentRoute, this.startSettings?.startPos??0,{loopMode,observer} )
+    }
 
 
+
+    pause() {
+        super.pause()
+
+        this.syncHelper.pause()
     }
 
 
@@ -33,6 +45,7 @@ export class RLVDisplayService extends RouteDisplayService {
             src: this.videoSource,
             startTime,
             muted: true,
+            loop: this.isLoopEnabled(),
             playback: this.videoPlayback,
             observer: this.videoObserver,
             onLoaded: this.onVideoLoaded.bind(this),
@@ -103,7 +116,10 @@ export class RLVDisplayService extends RouteDisplayService {
 
 
 
-    protected onVideoLoaded() {
+    protected onVideoLoaded(bufferedTime: number) {
+        console.log('# video loaded',bufferedTime)
+        
+        this.syncHelper.setBufferedTime(bufferedTime)
         this.videoLoaded = true
         this.emit('state-update')
     }
@@ -119,22 +135,16 @@ export class RLVDisplayService extends RouteDisplayService {
         // TODO
     }
 
-    protected onVideoPlayBackUpdate(time:number, rate:number) {
-        // TODO
-        
+    protected onVideoPlayBackUpdate(time:number, rate:number,e) {
+        this.syncHelper.onVideoPlaybackUpdate(time,rate,e)
     }
 
-    protected onPositionUpdate( state) {
+    onActivityUpdate(activityPos:ActivityUpdate,data):void {  
 
-        console.log('# position update',state)
-        const {route,position} = state??{}    
+        super.onActivityUpdate(activityPos,data)
+        const {routeDistance,speed} = activityPos
+        this.syncHelper.onActivityUpdate(routeDistance,speed)
 
-        // TODO use SyncHelper to check for rate updates
-
-        this.videoObserver.emit('rate-update',1)
-        
-
-        
     }
 
 
@@ -170,8 +180,9 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
     protected getVideoTime(routeDistance:number) {
-        // TODO
-        return 0
+
+        
+        return this.syncHelper.getVideoTimeByPosition(routeDistance)
     }
 
     protected getAviVideoSource():VideoConversion {
@@ -212,6 +223,27 @@ export class RLVDisplayService extends RouteDisplayService {
         return `./${fileName}`;
        
     }
+
+    protected isLoopEnabled(): boolean {
+        return this.isLoop() && !this.startSettings?.loopOverwrite
+        
+    }
+
+    protected savePosition(startPos?:number) {
+
+        
+        try {
+            const { lapDistance  } = this.position
+            const routeId = this.route.description.id
+            this.getUserSettings().set(`routeSelection.video.prevSetting.${routeId}.startPos`,startPos??lapDistance)
+
+        }
+        catch (err) {
+            this.logEvent({ message: 'error', fn: 'savePosition()', position: this.position, error:err.message, stack:err.stack })
+        }
+
+    }
+
 
 
 }
