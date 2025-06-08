@@ -257,8 +257,9 @@ export class ActivityRideService extends IncyclistService {
         this.updateActivityTime();
 
         this._save()
-        this.emit('completed')
+            .then( ()=>{delete this.activity })
 
+        this.emit('completed')
         this.tsPauseStart = undefined
         delete this.tsStart
         
@@ -915,10 +916,15 @@ export class ActivityRideService extends IncyclistService {
     }
 
     protected async _save():Promise<void> {
-        const summary = buildSummary(this.activity)
-        const info = {summary,details:this.activity}
-        this.tsPrevSave = Date.now()
-        await this.getRepo().save(info,true)
+        try {
+            const summary = buildSummary(this.activity)
+            const info = {summary,details:this.activity}
+            this.tsPrevSave = Date.now()
+            await this.getRepo().save(info,true)
+        }
+        catch (err) {
+            this.logError(err,'_save')
+        }
     }
 
     protected getSaveInterval():number{
