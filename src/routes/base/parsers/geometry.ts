@@ -54,7 +54,11 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
             if (res.error) {
                 onError()                
             }
-            
+
+            if ((typeof res.data)==='string') {
+                return JSON.parse(res.data) as unknown as Geometry
+            }
+
             return res.data
         }
         catch {
@@ -66,8 +70,15 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
     async parse(file: FileInfo,json: Geometry): Promise<ParseResult<GeoParserData>> {
 
 
-        const geo = json.geometry
-        const video = json.video_points
+        let geo = (json.geometry??[]).sort( (a,b) => a.distance-b.distance)
+        let video = (json.video_points??[]).sort( (a,b) => a.time-b.time)
+        
+        geo = geo.filter((v,idx) => idx===0 || v.distance!==geo[idx-1].distance)  
+        video = video.filter((v,idx) => idx===0 || v.time!==video[idx-1].time)  
+
+        if (!video.length) {
+            console.log('# no video information')
+        }
 
         const points = geo.map( (g,idx)=> {
             return {                
@@ -82,8 +93,8 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
 
         const len = video.length
         let videoSpeed = 0
-
-        const mapping = video.map( (m,idx)=> {
+        
+        const mapping = len===0 ? undefined : video.map( (m,idx)=> {
             if (idx<len-1)
                 videoSpeed =  (video[idx+1].distance-m.distance)/(video[idx+1].time-m.time)*3.6;
 
