@@ -186,7 +186,7 @@ export class ActivityRideService extends IncyclistService {
         }
 
         if (this.observer) {
-            this.stop().then(doInit )
+            this.cleanup().then(doInit )
 
         }
         else {
@@ -256,8 +256,7 @@ export class ActivityRideService extends IncyclistService {
 
         this.updateActivityTime();
 
-        this._save()
-            .then( ()=>{delete this.activity })
+        this._save()            
 
         this.emit('completed')
         this.tsPauseStart = undefined
@@ -266,6 +265,12 @@ export class ActivityRideService extends IncyclistService {
 
         await waitNextTick()
         delete this.observer
+    }
+
+    async cleanup() {
+        if (this.state!=='idle' && this.state!=='completed')
+            await this.stop()
+        delete this.activity        
     }
 
     pause(autoResume:boolean=false) {
@@ -916,6 +921,10 @@ export class ActivityRideService extends IncyclistService {
     }
 
     protected async _save():Promise<void> {
+
+        if (!this.activity)
+            return
+
         try {
             const summary = buildSummary(this.activity)
             const info = {summary,details:this.activity}

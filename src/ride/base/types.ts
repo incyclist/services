@@ -69,18 +69,22 @@ export interface VideoDisplayProps  {
     src: any        // TODO
     playback: 'native' | 'converted',
     loop?: boolean,
+    hidden?: boolean
     startTime?: number,
     observer: Observer,
     muted?: boolean
-    onPlaybackUpdate?: (time: number, rate: number) => void
-    onLoaded?: () => void
-    onPlaybackError?: (error:string) => void
-    onLoadError?: (error:string) => void
+    onPlaybackUpdate?: (time:number, rate:number,e) => void
+    onLoaded?: (bufferedTime: number) => void
+    onPlaybackError?: (error:MediaError) => void
+    onLoadError?: (error:MediaError) => void
+    onStalled?,
+    onWaiting?
 
 }
 
 export interface RLVDisplayProps extends RouteDisplayProps {
     video?: VideoDisplayProps
+    videos?: Array<VideoDisplayProps>
 }
 
 export interface MapOverlayDisplayProps extends OverlayDisplayProps {

@@ -1,8 +1,10 @@
 export type RLVPlaybackStatus = {
     /** current plabnack rate */
     rate: number
+    rateRequested?: number
     /** current playback time of mediasource */
     time: number
+    timeRequested?: number
 
     /** position of video playback in the route */
     routeDistance: number   
@@ -14,6 +16,7 @@ export type RLVPlaybackStatus = {
     ts: number,
 
     lap: number
+    lapRequested?: boolean
 }
 
 export type RLVActivityStatus = {

@@ -19,10 +19,12 @@ export class RideModeService extends IncyclistService implements IRideModeServic
     protected processing: Array<UpdateRequest> = []
     protected queued: Array<UpdateRequest> = []
     protected service: ICurrentRideService
+    protected isStopped: boolean
 
     
     constructor() {
         super('Ride')
+        this.isStopped = false
     }
 
     init(service: ICurrentRideService) {
@@ -47,6 +49,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
     }
     async stop(): Promise<void> {
         this.removeAllListeners()
+        this.isStopped = true
     }
 
     getStartOverlayProps() {

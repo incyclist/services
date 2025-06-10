@@ -5,28 +5,74 @@ import { VideoConversion, VideoSyncHelper } from "../../video";
 import { CurrentRideDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 
+type VideoState = {
+    observer?: Observer
+    id?:string,
+    source?: string|VideoConversion
+    error?: string
+    playback?: 'native' | 'converted'
+    loaded?: boolean
+    route?: Route
+    syncHelper?: VideoSyncHelper
+    isCurrent: boolean
+    isInitial: boolean
+    offset?:number
+    next?: VideoState
+}
+
 export class RLVDisplayService extends RouteDisplayService {
-    protected videoObserver: Observer
-    protected videoSource: string|VideoConversion
-    protected videoError: string
-    protected videoPlayback: 'native' | 'converted'
-    protected videoLoaded: boolean
-    protected currentRoute: Route
-    protected syncHelper: VideoSyncHelper
+
+    protected currentVideo: VideoState
+    protected videos: Array<VideoState>
+    protected offset: number
+    protected isInitialized: boolean
+    
+    
 
 
     constructor() {
         super()        
+        this.isInitialized = false
     }
 
     initView(): void {
-        this.initVideoSource()    
-        this.videoLoaded = false
+        console.log('# init view')
 
-        this.videoObserver = new Observer()
-        const loopMode = this.currentRoute?.description?.isLoop && !this.startSettings?.loopOverwrite
-        const observer = this.videoObserver
-        this.syncHelper = new VideoSyncHelper(this.currentRoute, this.startSettings?.startPos??0,{loopMode,observer} )
+        this.currentVideo = undefined
+        this.videos = []
+
+        this.addVideo(this.currentRoute, true)
+        this.offset = 0
+        this.isInitialized = true
+
+        console.log('# init view done', this.currentVideo, this.videos)
+
+    }
+
+    protected addVideo( route:Route, isCurrent?:boolean):void {
+        console.log('# add video', isCurrent, route)
+        try {
+
+            const observer = new Observer()
+            const video:VideoState = {isCurrent,isInitial:isCurrent,route, loaded:false,observer}
+
+            this.initVideoSource(video)    
+
+            
+            const loopMode = isCurrent && this.isLoopEnabled()       
+            const startPos = isCurrent ? this.startSettings?.startPos??0 : 0
+
+            video.syncHelper = new VideoSyncHelper(route, startPos,{loopMode,observer} )
+            this.videos.push(video)
+
+            if (isCurrent) {
+                this.currentVideo = video
+            }        
+            console.log('# add video done', isCurrent, route)            
+        }
+        catch (error) {
+            console.log('# addVideo error', error)
+        }
     }
 
 
@@ -34,37 +80,66 @@ export class RLVDisplayService extends RouteDisplayService {
     pause() {
         super.pause()
 
-        this.syncHelper.pause()
+        this.currentVideo.syncHelper.pause()
     }
 
 
     getDisplayProperties(props: CurrentRideDisplayProps):RLVDisplayProps {
 
         const startTime = this.getVideoTime(this.startSettings?.startPos??0)
-        const video:VideoDisplayProps = {
-            src: this.videoSource,
-            startTime,
-            muted: true,
-            loop: this.isLoopEnabled(),
-            playback: this.videoPlayback,
-            observer: this.videoObserver,
-            onLoaded: this.onVideoLoaded.bind(this),
-            onLoadError: this.onVideoLoadError.bind(this),
-            onPlaybackError: this.onVideoPlaybackError.bind(this),
-            onPlaybackUpdate: this.onVideoPlayBackUpdate.bind(this)
+        const routeProps = super.getDisplayProperties(props)
+
+        if ( this.videos.length === 1) {
+            const video:VideoDisplayProps = {
+                src: this.currentVideo.source,
+                startTime,
+                muted: true,
+                loop: this.isLoopEnabled(),
+                playback: this.currentVideo.playback,
+                observer: this.currentVideo.observer,
+                onLoaded: this.onVideoLoaded.bind(this),
+                onLoadError: this.onVideoLoadError.bind(this),
+                onPlaybackError: this.onVideoPlaybackError.bind(this),
+                onPlaybackUpdate: this.onVideoPlayBackUpdate.bind(this),
+                onStalled: this.onVideoStalled.bind(this),
+                onWaiting: this.onVideoWaiting.bind(this),
+            }
+
+            return {
+                ...routeProps,
+                video
+            }    
+           
+        }
+        else {
+            const videos: Array<VideoDisplayProps> = this.videos.map(video => {
+                return {
+                    src: video.source,
+                    id: video.route?.details?.id,
+                    startTime: video.isInitial? startTime: 0,
+                    hidden: !video.isCurrent,
+                    muted: true,
+                    loop: false,
+                    playback: video.playback,
+                    observer: video.observer,
+                    onLoaded: (bufferedTime: number) => { this.onVideoLoaded(bufferedTime, video) },
+                    onLoadError: (error:MediaError) => { this.onVideoLoadError.bind(error,video)},
+                    onPlaybackError: (error:MediaError) => { this.onVideoPlaybackError.bind(this) },
+                    onPlaybackUpdate: (time:number, rate:number,e) => { this.onVideoPlayBackUpdate.bind(time, rate,e,video) }
+                }
+            })
+            return {
+                ...routeProps,
+                videos
+            }
 
         }
 
-        const routeProps = super.getDisplayProperties(props)
         
-        return {
-            ...routeProps,
-            video
-        }    
     }
     getStartOverlayProps() {
         const videoState = this.getVideoState()
-        const videoStateError = this.videoError
+        const videoStateError = this.currentVideo.error
         const videoProgress = this.getVideoLoadProgress()
 
         return {
@@ -95,16 +170,31 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
     isStartRideCompleted(): boolean {
-        return this.videoLoaded
+        return this.currentVideo?.loaded
     }
+
+    async stop() {
+        try {
+            this.currentVideo.syncHelper.stop()
+            await super.stop()
+
+        }
+        catch(err) {
+            this.logError(err,'stop')
+        }
+    }
+
 
 
     protected getVideoState() {
         let state = 'Starting'
+        if (!this.isInitialized)
+            return state
+
         if ( this.isStartRideCompleted()) {
             state = 'Started'
         }
-        else if (this.videoError) {
+        else if (this.currentVideo.error) {
             state = 'Start:Failed'
         }
         return state
@@ -116,88 +206,105 @@ export class RLVDisplayService extends RouteDisplayService {
 
 
 
-    protected onVideoLoaded(bufferedTime: number) {
-        console.log('# video loaded',bufferedTime)
-        
-        this.syncHelper.setBufferedTime(bufferedTime)
-        this.videoLoaded = true
-        this.emit('state-update')
+    protected onVideoLoaded(bufferedTime: number, video:VideoState = this.currentVideo) {
+        console.log('# video loaded', video?.id, bufferedTime,)
+
+        video.syncHelper.setBufferedTime(bufferedTime)
+        video.loaded = true
+        if (video.isInitial)
+            this.emit('state-update')
     }
 
-    protected onVideoLoadError(error:MediaError )  {
+    protected onVideoLoadError(error:MediaError, video:VideoState = this.currentVideo )  {
         console.log('# ERROR',error)
-        this.videoLoaded = false
-        this.videoError = this.buildVideoError('error' /*error*/)
+        video.loaded = false
+        video.error = this.buildVideoError(error)
 
+        if (!video.isInitial) {
+            this.logEvent({message: 'could not load next video',error:this.buildVideoError(error)})
+            this.videos = [this.currentVideo]
+        }
         this.emit('state-update')
     }
-    protected onVideoPlaybackError(error:string ) {
+
+    protected onVideoStalled(time:number, bufferedTime:number, buffers:Array<{start:number,end:number}>,video:VideoState = this.currentVideo ) {
+        console.log('# video stalled', time, bufferedTime, buffers)
+        this.logEvent({message: 'video stalled',bufferedTime,buffers})
+        video.syncHelper.onVideoStalled(time, bufferedTime)
+    }   
+    protected onVideoWaiting(time:number, bufferedTime:number, buffers:Array<{start:number,end:number}>, video:VideoState = this.currentVideo ) {
+        console.log('# video waiting', time, bufferedTime, buffers)
+        this.logEvent({message: 'video waiting',time, bufferedTime,buffers})
+        video.syncHelper.onVideoWaiting(time, bufferedTime)
+    }   
+
+    protected onVideoPlaybackError(error:MediaError ) {
         // TODO
     }
 
-    protected onVideoPlayBackUpdate(time:number, rate:number,e) {
-        this.syncHelper.onVideoPlaybackUpdate(time,rate,e)
+    protected onVideoPlayBackUpdate(time:number, rate:number,e, video:VideoState = this.currentVideo) {
+        video.syncHelper.onVideoPlaybackUpdate(time,rate,e)
     }
 
     onActivityUpdate(activityPos:ActivityUpdate,data):void {  
 
+        const offset = this.currentVideo.offset??0
         super.onActivityUpdate(activityPos,data)
         const {routeDistance,speed} = activityPos
-        this.syncHelper.onActivityUpdate(routeDistance,speed)
 
+        this.currentVideo.syncHelper.onActivityUpdate(routeDistance-offset,speed)
     }
 
 
-    protected initVideoSource() {
-        const videoFormat = this.currentRoute?.details?.video?.format
-        const src = this.currentRoute?.details?.video?.url
+    protected initVideoSource(video:VideoState) {
+        const route = video.route
+        const videoFormat = route?.details?.video?.format
+        const src = route?.details?.video?.url
 
 
         console.log('# init video source',src, videoFormat)
 
         if (!src) {
-            this.videoError = 'No video source found'
+            video.error = 'No video source found'
             return;
         }
         if (videoFormat==='mp4') {
-            this.initMp4VideoSource()
+            this.initMp4VideoSource(video)
             return
         }
-        return this.getAviVideoSource()
+        return this.getAviVideoSource(video)
     }
 
-    protected initMp4VideoSource():void {
-        this.videoSource = this.cleanupUrl(this.route?.details?.video?.url) 
-        this.videoPlayback = 'native'
+    protected initMp4VideoSource(video:VideoState):void {
+        video.source = this.cleanupUrl(video.route?.details?.video?.url) 
+        video.playback = 'native'
 
-        console.log('# init mp4 video source done',this.videoSource, this.videoPlayback)
+        console.log('# init mp4 video source done',video.source, video.playback)
     }
 
 
-    protected buildVideoError(error:string) {
+    protected buildVideoError(error:MediaError) {
         // TODO
-        return error    
+        return error.message    
     }
 
-    protected getVideoTime(routeDistance:number) {
-
-        
-        return this.syncHelper.getVideoTimeByPosition(routeDistance)
+    protected getVideoTime(routeDistance:number, video:VideoState = this.currentVideo) {
+        return video.syncHelper.getVideoTimeByPosition(routeDistance)
     }
 
-    protected getAviVideoSource():VideoConversion {
+    protected getAviVideoSource(video:VideoState):VideoConversion {
 
-        const src = this.route?.details?.video?.url
+        const src = video.route?.details?.video?.url
 
         // check for relative URLs that were not correctly converted during import
         
         if (src?.startsWith('video://.') || src?.startsWith('video:///.')) {
-            this.videoError = 'Cannot play video due to a failure during last import. Please import again';
+            video.error = 'Cannot play video due to a failure during last import. Please import again';
             return;
         }
   
-        this.videoPlayback = 'converted'
-        this.videoSource = new VideoConversion(this.cleanupUrl(src) )
+        video.playback = 'converted'
+        video.source = new VideoConversion(this.cleanupUrl(src) )
     }
 
     protected cleanupUrl(url:string) {

@@ -263,7 +263,8 @@ export class RouteDisplayService extends RideModeService {
 
     }
     protected _buildRequest(props:{limits?: ActiveWorkoutLimit, reset?:boolean}={}): UpdateRequest {
-
+        if (this.isStopped)
+            return
 
         try {
             const mode = this.getDeviceRide().getCyclingMode() as CyclingMode

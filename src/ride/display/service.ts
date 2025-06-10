@@ -230,7 +230,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.logError(err,'stop')
         }
 
-        this.stopRide({exit,noStateUpdates:true})
+        await this.stopRide({exit,noStateUpdates:true})
+        this.getActivityRide().cleanup()
+
         
     }
 
