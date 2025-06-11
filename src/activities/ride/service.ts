@@ -212,7 +212,7 @@ export class ActivityRideService extends IncyclistService {
     
             this.tsStart= Date.now()
             this.activity.startTime = new Date(this.tsStart).toISOString()
-    
+            this.current.tsUpdate = this.tsStart        
             this.statsCalculator = new ActivityStatsCalculator(this.activity,this.logger)
             this._save()
             this.state = 'active'
@@ -431,8 +431,12 @@ export class ActivityRideService extends IncyclistService {
             const isFreeRide = startSettings?.type==='Free-Ride'
             const showSave = this.activity!==undefined && !this.isSaveDone;
             const showContinue = this.state!=='completed'
-            const showMap = isFreeRide || (route?.description?.hasGpx)
+
+            const hasGPX = this.activity.logs?.some( (log) => !!log.lat && !!log.lng)
+            const showMap = hasGPX || isFreeRide || (route?.description?.hasGpx)
             const preview = showMap ? undefined: route?.description?.previewUrl
+
+            this.logEvent({message:'activity summary shown', showSave, showContinue, showMap, fileLink: this.activity?.fitFileName})
     
     
             const props = {
@@ -1261,6 +1265,8 @@ export class ActivityRideService extends IncyclistService {
             const prev = Math.floor(this.activity.time)
             this.updateActivityState()
             const time = Math.floor(this.activity.time)
+
+
     
     
             if (time!==prev && this.state==='active') {
