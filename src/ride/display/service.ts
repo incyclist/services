@@ -54,16 +54,21 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         
         try {
             this.displayService = this.getRideModeService(true)
-            this.displayService.init(this)
 
-            this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
-            this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
-            /* TODO:
-                'prepare-next-video' event
-                'next-video' event
+            const ftNewUI = this.getUserSettings().get('NEW_GPX_UI',false)
+            if (ftNewUI || this.displayService instanceof WorkoutDisplayService) {
                 
-            */
-            this.hideAll = false
+                this.displayService.init(this)
+
+                this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
+                this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
+                /* TODO:
+                    'prepare-next-video' event
+                    'next-video' event
+                    
+                */
+                this.hideAll = false
+            }
             
 
         }
@@ -233,6 +238,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         await this.stopRide({exit,noStateUpdates:true})
         this.getActivityRide().cleanup()
 
+        delete this.type
+
         
     }
 
@@ -384,7 +391,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         return this.observer
     }
 
-    getRideType():RideType {
+    getRideType(overwrite?:boolean):RideType {
+        if (overwrite) {
+            delete this.type
+        }
+
         if (!this.type) {
             try {
                 this.type = this.detectRideType()
@@ -510,6 +521,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         const startSettings= this.getRouteList().getStartSettings()
         const workout = this.getWorkoutList().getSelected()
 
+        console.log('# detectRideType', {route:!!route?.details, type:startSettings?.type, workout:!!workout, hasVideo:route?.description?.hasVideo})
+
         if( startSettings?.type ==='Free-Ride') {
             return 'Free-Ride'
         }
@@ -519,7 +532,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
 
         if (!route?.details) {
-            throw new Error('unknown ride type')
+            return 'Workout'  // TODO
+            //throw new Error('unknown ride type')
         }
 
         return route?.description?.hasVideo ? 'Video' : 'GPX'
@@ -530,7 +544,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             return this.displayService
 
         const createService = ()=> {
-            const type = this.getRideType()
+            const type = this.getRideType(overwrite)
             switch(type) {
                 case 'Free-Ride': return new FreeRideDisplayService()
                 case 'GPX':return new FollowRouteDisplayService()
