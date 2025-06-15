@@ -615,6 +615,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.logError(err,'getRouteDescription',id)
         }
     }
+    getRoute(id:string) {
+        try {
+            return this.getVisibleRoutes().find( r => r.description.id===id)
+        }
+        catch(err) {
+            this.logError(err,'getRoute',id)
+        }
+    }
 
     async getSelectedRouteDetails():Promise<RouteApiDetail> {
         try {

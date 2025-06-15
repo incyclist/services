@@ -77,7 +77,7 @@ export class RouteDisplayService extends RideModeService {
                 this.position = {...newPosition}
                 const {lat,lng,routeDistance,lap} = newPosition
 
-                this.onPositionUpdate({route:this.route,position:this.position})
+                this.onPositionUpdate({route:this.getOriginalRoute(),position:this.position})
                 this.logEvent({message:'position update', lat,lng,routeDistance,lap  })
                 this.observer.emit('position-update', this.service.getDisplayProperties())           
     
@@ -194,7 +194,7 @@ export class RouteDisplayService extends RideModeService {
         return {
             position: this.position,markers: this.getMarkers(props),
             sideViews: this.sideViews,
-            route: this.route,
+            route: this.getCurrentRoute(),
             realityFactor,
             startPos,endPos,
             nearbyRides,
@@ -206,10 +206,6 @@ export class RouteDisplayService extends RideModeService {
         const {lat,lng,routeDistance,elevation} = this.position
         const position = {lat,lng,routeDistance,elevation}
         return {fileName, position, time}        
-    }
-
-    getCurrentRoute():Route {
-        return this.currentRoute
     }
 
 
@@ -242,7 +238,7 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected initRoute() { 
-        this.currentRoute =  this.getRouteList().getSelected()
+        this.currentRoute =  this.getRouteList().getSelected().clone()
 
     }
 
@@ -296,7 +292,7 @@ export class RouteDisplayService extends RideModeService {
 
 
     protected setInitialPosition():CurrentPosition {
-        const lapPoint =  getNextPosition (this.route, {routeDistance:this.startSettings.startPos??0})
+        const lapPoint =  getNextPosition (this.getCurrentRoute(), {routeDistance:this.startSettings.startPos??0})
         return this.fromLapPoint(lapPoint)
     }
 
@@ -307,7 +303,7 @@ export class RouteDisplayService extends RideModeService {
 
             if (newRouteDistance !== currentRouteDistance) {
                 const prev = this.toLapPoint(this.position)
-                return  this.fromLapPoint(getNextPosition(this.route,{routeDistance:activityPos.routeDistance,prev}))                
+                return  this.fromLapPoint(getNextPosition(this.getCurrentRoute(),{routeDistance:activityPos.routeDistance,prev}))                
             }
 
             return this.position        
@@ -320,7 +316,7 @@ export class RouteDisplayService extends RideModeService {
 
     protected toLapPoint(position:CurrentPosition):LapPoint {
         const totalDistance = position.routeDistance
-        const routeDistance = position.lapDistance??position.routeDistance%this.route.description.distance
+        const routeDistance = position.lapDistance??position.routeDistance%this.getCurrentRoute().description.distance
 
         // point needs to be cloned otherwise the route points are modified
         const lapPoint =  clone({...position, totalDistance, routeDistance})
@@ -330,7 +326,7 @@ export class RouteDisplayService extends RideModeService {
 
     protected fromLapPoint(position:LapPoint):CurrentPosition {
         const routeDistance = position.totalDistance??0       
-        const lapDistance = position.routeDistance ?? (position.totalDistance??0)%this.route.description.distance
+        const lapDistance = position.routeDistance ?? (position.totalDistance??0)%this.getCurrentRoute().description.distance
 
         const lap = position.lap??1
 
@@ -341,14 +337,14 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected isLoop():boolean {
-        return this.route?.description?.isLoop
+        return this.getOriginalRoute()?.description?.isLoop
     }
 
     protected checkIsRouteFinished(position:CurrentPosition): boolean {
         if (this.isLoop() && !this.startSettings?.loopOverwrite) 
             return false
         
-        const finished =  position.routeDistance >= this.route.description.distance   
+        const finished =  position.routeDistance >= this.getCurrentRoute().description.distance   
         return finished
     }
 
@@ -399,6 +395,16 @@ export class RouteDisplayService extends RideModeService {
         // should be implemented by sub classes, as location is ride mode specifc
     }
 
+    getOriginalRoute():Route {
+        return this.route
+    }
+
+    getCurrentRoute():Route {
+        return this.currentRoute
+    }
+    
+
+
 
     @Injectable
     protected getUserSettings() {
@@ -420,7 +426,7 @@ export class RouteDisplayService extends RideModeService {
         return useDeviceRide() 
     }
 
-
+    @Injectable
     protected getAppInfo() {
         return getBindings().appInfo    
     }

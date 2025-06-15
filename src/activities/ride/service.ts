@@ -198,6 +198,8 @@ export class ActivityRideService extends IncyclistService {
         return observer
     }
 
+
+
     /** 
      * Starts a new activity, should be called once initial pedalling was detected
     */
@@ -272,6 +274,7 @@ export class ActivityRideService extends IncyclistService {
             await this.stop()
         delete this.activity        
     }
+
 
     pause(autoResume:boolean=false) {
         if (this.state!=='active')

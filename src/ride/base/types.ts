@@ -14,7 +14,7 @@ import { LatLng } from "../../utils/geo"
 export type RideType = 'Free-Ride' | 'GPX' | 'Video' | 'Workout'
 
 
-export type CurrentRideState = 'Idle' | 'Starting' | 'Started' | 'Active' | 'Paused'| 'Error'  | 'Finished'
+export type CurrentRideState = 'Idle' | 'Starting' | 'Started' | 'Active' | 'Paused'| 'Error'  | 'Finished' | 'Closing'
 export type CurrentRideDeviceState = 'Starting' | 'Started' | 'Error'
 export type CurrentRideViewState = 'Idle'| 'Starting' | 'Started' | 'Error'
 
@@ -65,11 +65,18 @@ export interface RouteDisplayProps extends IRideModeServiceDisplayProps {
     totalElevation?: OverlayDisplayProps
 }
 
+export interface InfotextDisplayProps {
+    routeDistance?: number,
+    text?: string,
+    timeout?: number,
+}
+
 export interface VideoDisplayProps  {
     src: any        // TODO
     playback: 'native' | 'converted',
     loop?: boolean,
     hidden?: boolean
+    info?: InfotextDisplayProps
     startTime?: number,
     observer: Observer,
     muted?: boolean

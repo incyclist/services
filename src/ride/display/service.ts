@@ -369,6 +369,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         try {
             const startOverlayProps = this.state==='Starting' ? this.getStartOverlayProps() : undefined
 
+            if (this.state==='Finished') {
+                return {state:this.state}                
+            }
 
             const props = { 
                 workout: this.actualWorkout, route: this.route, activity: this.activity,  state:this.state,
@@ -449,13 +452,14 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     // Protected
 
     protected async stopRide( props:{exit?:boolean, noStateUpdates?:boolean}={} ):Promise<void> {
+
         try {
             if ( this.state !== 'Starting' && this.state !=='Idle') {
                 this.logEvent({ message: "activity stopped",activity: this.activity?.id});                   
             }
 
             const prevState = this.state
-                this.state = 'Finished' // only update state internally, don't yet emit to UI
+            this.state = prevState==='Starting' ? 'Closing' : 'Finished' // only update state internally, don't yet emit to UI
 
             this.observer?.stop({immediately:props.noStateUpdates})
             if (props.noStateUpdates)
@@ -463,7 +467,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             else 
                 waitNextTick().then( ()=>delete this.observer)
 
-            if (prevState==='Finished' || prevState==='Idle') {
+            if (prevState==='Finished' || prevState==='Idle' || prevState==='Closing') {
                 this.state = 'Idle'
                 return;    
             }
@@ -575,7 +579,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     protected createActivity() {
+
         const observer = this.getActivityRide().init()
+
         observer.once('started', ()=>{ this.onActivityWentActive()} )
         observer.on('paused', (autoResume)=>{ this.onActivityPaused(autoResume)} )
         observer.on('resumed', ()=>{ this.onActivityResumed()} )       
@@ -586,6 +592,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected updateActivityWorkout() {
         this.activity.workout = this.actualWorkout
     }
+
 
     protected onActivityWentActive() {
         this.logEvent({ message: 'Activity went active', activity:this.activity?.id, interface: this.getBikeInterface() });
@@ -947,6 +954,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.checkStartStatus()
             this.updateStartOverlay()            
         })
+        .on('route-updated', this.onRouteUpdated.bind(this) )
 
     }
 

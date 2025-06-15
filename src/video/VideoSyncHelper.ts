@@ -39,6 +39,7 @@ export class VideoSyncHelper extends IncyclistService{
 
     protected cntWaitingEvents: number
     protected maxDelta: number
+    protected offset: number
     
 
 
@@ -78,6 +79,7 @@ export class VideoSyncHelper extends IncyclistService{
         this.validateMappings(route)
     }
 
+
     pause() {
         this.logEvent({message:'video paused'})
         this.isPaused = true
@@ -109,9 +111,25 @@ export class VideoSyncHelper extends IncyclistService{
         this.bufferedTime = time
     }
 
+    getRate():number {
+        if (this.isPaused || this.isStopped)
+            return 0
+        return this.rlvStatus.rate
+    }
+
     onVideoPlaybackUpdate(time:number,rate:number,e:{readyState?:number, networkState?:number, bufferedTime?:number} ) {
+
+        const endTime = this.getVideoTimeByPosition(this.route.distance)
+
+
+        // console.log('# video playback update', {src: this.route.details.title, time:time, endTime, bufferedTime:e.bufferedTime, stopped:this.isStopped})
         if (this.isStopped)
             return
+
+        if ( time> endTime-0.3 && !this.loopMode && !this.rlvStatus.timeRequested) { 
+            this.updateRate(0)
+            return
+        }
 
         const tsStart = Date.now()
 
@@ -252,7 +270,7 @@ export class VideoSyncHelper extends IncyclistService{
 
     onActivityUpdate(routeDistance:number,speed:number) {
 
-        console.log('# activity update', routeDistance)
+        // console.log('# activity update', routeDistance)
 
 
         if (routeDistance==this.activityStatus.routeDistance && speed==this.activityStatus.speed) {
@@ -319,7 +337,7 @@ export class VideoSyncHelper extends IncyclistService{
 
                 const totalTime = Date.now()-this.tsStart
 
-                console.log('# onUpdate ', {totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)}, {updates:updates.join(','),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)     })
+                // console.log('# onUpdate ', {totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)}, {updates:updates.join(','),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)     })
                 this.logEvent({message:'video playback update',updates:updates.join('|'),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
             }
 
