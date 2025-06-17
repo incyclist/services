@@ -2,7 +2,7 @@ import { ActivityUpdate } from "../../activities/ride/types";
 import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
 import { concatPaths } from "../../maps/MapArea/utils";
-import { RouteListService, useRouteList, validateRoute } from "../../routes";
+import { getNextVideoId, hasNextVideo, RouteListService, useRouteList, validateRoute } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { VideoConversion, VideoSyncHelper } from "../../video";
 import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
@@ -19,7 +19,6 @@ type VideoState = {
     syncHelper?: VideoSyncHelper
     isCurrent: boolean
     isInitial: boolean
-    offset?:number
     next?: VideoState
     info?: Array<{start:number, stop:number, props:InfotextDisplayProps}>
 }
@@ -48,27 +47,24 @@ export class RLVDisplayService extends RouteDisplayService {
         this.currentVideo = undefined
         this.videos = []
 
-        this.addVideo(this.route, true).then( ()=>{
+        this.addVideo(this.getOriginalRoute(), true).then( ()=>{
+            console.log('# init view done', this.currentVideo, this.videos)
+
             this.videosInitialized = true
             this.emit('state-update')
         })
 
         this.isInitialized = true
         this.offset = 0
-        console.log('# init view done', this.currentVideo, this.videos)
-        
-
-        
-
-
     }
 
     protected async addVideo( route:Route, isCurrent?:boolean, parent?:VideoState):Promise<void> {
-        console.log('# add video', isCurrent, {id:route?.details?.id,title:route?.description.title })     
+        console.log('# add video', isCurrent, {id:route?.details?.id,title:route?.description.title, next: getNextVideoId(route)} )     
         try {
 
+            const videoRoute = route.clone()
             const observer = new Observer()
-            const video:VideoState = {isCurrent,isInitial:isCurrent,route, loaded:false,observer}
+            const video:VideoState = {isCurrent,isInitial:isCurrent,route:videoRoute, loaded:false,observer}
 
             this.initVideoSource(video)    
 
@@ -76,15 +72,15 @@ export class RLVDisplayService extends RouteDisplayService {
             const loopMode = isCurrent && this.isLoopEnabled()       
             const startPos = isCurrent ? this.startSettings?.startPos??0 : 0
 
-            video.syncHelper = new VideoSyncHelper(route, startPos,{loopMode,observer} )
+            video.syncHelper = new VideoSyncHelper(videoRoute, startPos,{loopMode,observer} )
             this.videos.push(video)
 
             if (isCurrent) {
                 this.currentVideo = video
             }        
 
-            if (route.details?.infoTexts?.length > 0) {
-                video.info = route.details.infoTexts.map(info => {
+            if (videoRoute.details?.infoTexts?.length > 0) {
+                video.info = videoRoute.details.infoTexts.map(info => {
                     const start = video.syncHelper.getVideoTimeByPosition(info.distance)
                     const stop = start+5
 
@@ -103,7 +99,7 @@ export class RLVDisplayService extends RouteDisplayService {
                 parent.next = video
             }
 
-            await this.checkForAdditionalVideos(route)
+            await this.checkForAdditionalVideos(videoRoute)
                 
 
             console.log('# add video done', isCurrent, route)            
@@ -144,7 +140,7 @@ export class RLVDisplayService extends RouteDisplayService {
                 startTime,
                 info:this.getInfotextDisplayProps(),
                 muted: true,
-                loop: this.isLoopEnabled(),
+                loop: this.isLoopEnabled() ? true : undefined,
                 playback: this.currentVideo.playback,
                 observer: this.currentVideo.observer,
                 onLoaded: this.onVideoLoaded.bind(this),
@@ -153,6 +149,7 @@ export class RLVDisplayService extends RouteDisplayService {
                 onPlaybackUpdate: this.onVideoPlayBackUpdate.bind(this),
                 onStalled: this.onVideoStalled.bind(this),
                 onWaiting: this.onVideoWaiting.bind(this),
+                onEnded: this.onVideoEnded.bind(this)
             }
 
             return {
@@ -170,13 +167,13 @@ export class RLVDisplayService extends RouteDisplayService {
                     hidden: !video.isCurrent,
                     info:video.isCurrent ? this.getInfotextDisplayProps() : undefined,
                     muted: true,
-                    loop: false,
                     playback: video.playback,
                     observer: video.observer,
                     onLoaded: (bufferedTime: number) => { this.onVideoLoaded(bufferedTime, video) },
                     onLoadError: (error:MediaError) => { this.onVideoLoadError(error,video)},
                     onPlaybackError: (error:MediaError) => { this.onVideoPlaybackError(error,video) },
-                    onPlaybackUpdate: (time:number, rate:number,e) => { this.onVideoPlayBackUpdate(time, rate,e,video) }
+                    onPlaybackUpdate: (time:number, rate:number,e) => { this.onVideoPlayBackUpdate(time, rate,e,video) },
+                    onEnded: () => { this.onVideoEnded(video) }
                 }
             })
             return {
@@ -194,8 +191,6 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
     protected checkFinishOptions(position:CurrentPosition):boolean {
-
-        // console.log('# checkFinishOptions', position, this.videos.length, this.currentVideo?.next, this.checkIsRouteFinished(position))    
 
         if ( this.videos.length === 0 || !this.currentVideo?.loaded) {
             return super.checkFinishOptions(position)
@@ -224,18 +219,26 @@ export class RLVDisplayService extends RouteDisplayService {
             return
 
         old.isCurrent = false
+        old.isInitial = false
+
         next.isCurrent = true
 
         // reset start position for next ride of current video
         this.savePosition(0)
 
         // prepare next video
-        next.offset = old.offset??0 + old.route.description.distance
+        this.offset += old.route.description.distance
         next.syncHelper.updateRate( old.syncHelper.getRate())
 
         // switch to next video
         this.currentVideo = next
+
+        // stop/reset old video
         old.syncHelper.stop()
+        setTimeout(() => {
+            // reset for a potential restart
+            old.syncHelper.reset()
+        }, 2000)
 
         // update current route
         concatPaths(this.getCurrentRoute().details.points, next.route.details.points,'after')
@@ -244,7 +247,9 @@ export class RLVDisplayService extends RouteDisplayService {
 
         console.log('# onNextVideo done', {video:this.currentVideo, 
                 route: this.getCurrentRoute().details.title,totalDistance: this.getCurrentRoute().details.distance,
-                segment: this.currentVideo.route.description.title, offset: this.currentVideo.offset, segmentDistance: this.currentVideo.route.description.distance})
+                segment: this.currentVideo.route.description.title, offset: this.offset, segmentDistance: this.currentVideo.route.description.distance})
+
+        this.logEvent({message: 'switching to next video', route: this.getCurrentRoute().details.title,segmentDistance: this.currentVideo.route.description.distance,totalDistance: this.getCurrentRoute().details.distance, offset:this.offset})
 
     }
 
@@ -371,9 +376,18 @@ export class RLVDisplayService extends RouteDisplayService {
         this.checkInfotextDisplayProps(time)
     }
 
+    protected onVideoEnded(video:VideoState = this.currentVideo) { 
+        video.syncHelper.onVideoEnded()
+
+        if (this.currentVideo.next) {
+            this.onNextVideo()
+        }
+    }
+
+
     onActivityUpdate(activityPos:ActivityUpdate,data):void {  
         super.onActivityUpdate(activityPos,data)
-        const offset = this.currentVideo.offset??0       
+        const offset = this.offset??0       
         const {routeDistance,speed} = activityPos
 
         // console.log('# onActivityUpdate',{routeDistance, totalDistance:this.currentRoute.details.distance, totalDistanceDescr:this.currentRoute.description.distance})
@@ -471,7 +485,7 @@ export class RLVDisplayService extends RouteDisplayService {
 
             let distance = startPos
             if (startPos=== undefined) {
-                distance = this.isLoopEnabled() ? lapDistance : routeDistance-(this.currentVideo.offset??0)
+                distance = this.isLoopEnabled() ? lapDistance : routeDistance-(this.offset??0)
                 if (distance>this.currentVideo.route.details.distance) {
                     distance = 0
                 }
@@ -494,22 +508,37 @@ export class RLVDisplayService extends RouteDisplayService {
 
     protected async checkForAdditionalVideos( route:Route = this.currentRoute ):Promise<boolean> {
            
-        if (!route.details?.next)
+        
+        if (!hasNextVideo(route) || this.startSettings?.nextOverwrite)
             return false
 
         // does the user has imported the next route?
-        const nextRoute = await this.getRouteList().getRouteDetails(route.details.next,true)
-        if (!nextRoute) 
+        const nextId = getNextVideoId(route)
+        const nextRouteDetails = await this.getRouteList().getRouteDetails(nextId,true)
+
+        console.log('# checkForAdditionalVideos', {nextId, nextRoute: nextRouteDetails})
+
+        if (!nextRouteDetails) 
             return false
 
         // already added? 
-        if (this.videos.some(v => v.route?.details?.id === nextRoute.id)) { 
-            return false
+        if (this.videos.some(v => v.route?.details?.id === nextRouteDetails.id)) { 
+            // if this points back to the first video, we close the loop
+            if ( this.videos[0].route.details?.id === nextId) { 
+                const current = this.videos.find(v => v.route?.details?.id === route.details.id)
+                current.next = this.videos[0]
+                return false
+            }
         }
 
         const current = this.videos.find(v => v.route?.details?.id === route.details.id)
+        const nextRoute  = this.getRouteList().getRoute(nextId)
+        if (!nextRoute) {
+            console.log('# checkForAdditionalVideos: next route not found', nextId)
+            return false
+        }
 
-        this.addVideo( this.getRouteList().getRoute(nextRoute.id ), false,current)
+        this.addVideo( nextRoute, false,current)
         return true
 
     }

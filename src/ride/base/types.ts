@@ -85,7 +85,8 @@ export interface VideoDisplayProps  {
     onPlaybackError?: (error:MediaError) => void
     onLoadError?: (error:MediaError) => void
     onStalled?,
-    onWaiting?
+    onWaiting?,
+    onEnded?: () => void
 
 }
 

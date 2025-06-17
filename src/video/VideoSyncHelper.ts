@@ -39,7 +39,6 @@ export class VideoSyncHelper extends IncyclistService{
 
     protected cntWaitingEvents: number
     protected maxDelta: number
-    protected offset: number
     
 
 
@@ -47,38 +46,9 @@ export class VideoSyncHelper extends IncyclistService{
         super('VideoSync')
         this.route = route;
 
-        this.rlvStatus= {
-            ts: Date.now(),
-            rate:0,
-            time: this.getVideoTimeByPosition(startPos),
-            routeDistance:startPos,
-            speed:this.getMappingByDistance(startPos)?.videoSpeed,
-            lap:1,
-        }
-
-        this.activityStatus= {
-            ts: Date.now(),            
-            routeDistance:startPos,
-            speed:0,
-            lap:1,
-        }
-
-        this.loopMode = props?.loopMode ?? this.route.description.isLoop 
-        this.observer = props?.observer
-        this.isPaused = true
-        this.isStopped = false
-        this.maxRate = MAX_PLAYBACK_RATE
-        this.maxSuccessRate = MIN_PLAYBACK_RATE
-
-        this.cntWaitingEvents = 0
-        this.maxDelta = 0
-        delete this.tsStart
-        this.cpuTime = 0
-        
-
+        this.init(startPos, props);
         this.validateMappings(route)
     }
-
 
     pause() {
         this.logEvent({message:'video paused'})
@@ -92,6 +62,11 @@ export class VideoSyncHelper extends IncyclistService{
 
         this.logEvent({message:'video resumed'})
         this.isPaused = false
+    }
+
+    reset() {
+        this.logEvent({message:'video reset'})
+        this.init(0,{loopMode: this.loopMode, observer: this.observer})
     }
 
     stop() {
@@ -117,12 +92,18 @@ export class VideoSyncHelper extends IncyclistService{
         return this.rlvStatus.rate
     }
 
+    onVideoEnded() { 
+        console.log('# video ended', this.route.details.title)
+        this.logEvent({message:'video ended'})
+        this.isStopped = true
+    }
+
     onVideoPlaybackUpdate(time:number,rate:number,e:{readyState?:number, networkState?:number, bufferedTime?:number} ) {
 
         const endTime = this.getVideoTimeByPosition(this.route.distance)
 
 
-        // console.log('# video playback update', {src: this.route.details.title, time:time, endTime, bufferedTime:e.bufferedTime, stopped:this.isStopped})
+        //console.log('# video playback update', {src: this.route.details.title, time:time, endTime, bufferedTime:e.bufferedTime, stopped:this.isStopped})
         if (this.isStopped)
             return
 
@@ -337,7 +318,7 @@ export class VideoSyncHelper extends IncyclistService{
 
                 const totalTime = Date.now()-this.tsStart
 
-                // console.log('# onUpdate ', {totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)}, {updates:updates.join(','),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)     })
+                //console.log('# onUpdate ', {totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)},{routeDistance: totalDistance}, {updates:updates.join(','),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)     })
                 this.logEvent({message:'video playback update',updates:updates.join('|'),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
             }
 
@@ -435,12 +416,6 @@ export class VideoSyncHelper extends IncyclistService{
         this.send('time-update', time)
     }
 
-
-    protected send(event, ...args) {       
-        if (this.observer)
-            this.observer.emit(event,...args)
-    }
-
     getCurrentPlaybackSpeed() {
         const {rate,speed} = this.rlvStatus
         return rate*speed
@@ -502,42 +477,6 @@ export class VideoSyncHelper extends IncyclistService{
         }
 
     }
-
-    protected isNextLap(vt:number):boolean {
-        try  {
-            let time = vt
-
-            const {video} = this.route?.details??{}
-            const totalTime = video.mappings[video.mappings.length-1].time
-            return  (time>totalTime && this.loopMode && !this.rlvStatus.lapRequested)
-        }
-        catch(err) {
-            this.logError(err,'isNextLap')
-            return false
-        }
-
-    }
-
-    protected getTotalTime():number {
-        const {video} = this.route?.details??{}
-        return video.mappings[video.mappings.length-1].time        
-    }
-
-    protected getLapTime(vt:number):number {
-        try  {
-            const {video} = this.route?.details??{}
-            const totalTime = video.mappings[video.mappings.length-1].time
-            return  vt%totalTime
-        }
-        catch(err) {
-            this.logError(err,'getLapTime')
-            return vt
-        }
-        
-    }
-
-
-
     getPositionByVideoTime(vt:number):number {
         try  {
             let time = vt
@@ -611,6 +550,78 @@ export class VideoSyncHelper extends IncyclistService{
 
         return mapping
     }
+
+
+    protected init(startPos: number, props: { loopMode?: boolean; observer?: Observer; }) {
+        this.rlvStatus = {
+            ts: Date.now(),
+            rate: 0,
+            time: this.getVideoTimeByPosition(startPos),
+            routeDistance: startPos,
+            speed: this.getMappingByDistance(startPos)?.videoSpeed,
+            lap: 1,
+        };
+
+        this.activityStatus = {
+            ts: Date.now(),
+            routeDistance: startPos,
+            speed: 0,
+            lap: 1,
+        };
+
+        this.loopMode = props?.loopMode ?? this.route.description.isLoop;
+        this.observer = props?.observer;
+        this.isPaused = true;
+        this.isStopped = false;
+        this.maxRate = MAX_PLAYBACK_RATE;
+        this.maxSuccessRate = MIN_PLAYBACK_RATE;
+
+        this.cntWaitingEvents = 0;
+        this.maxDelta = 0;
+        delete this.tsStart;
+        this.cpuTime = 0;
+    }
+
+
+    protected send(event, ...args) {       
+        if (this.observer)
+            this.observer.emit(event,...args)
+    }
+
+
+    protected isNextLap(vt:number):boolean {
+        try  {
+            let time = vt
+
+            const {video} = this.route?.details??{}
+            const totalTime = video.mappings[video.mappings.length-1].time
+            return  (time>totalTime && this.loopMode && !this.rlvStatus.lapRequested)
+        }
+        catch(err) {
+            this.logError(err,'isNextLap')
+            return false
+        }
+
+    }
+
+    protected getTotalTime():number {
+        const {video} = this.route?.details??{}
+        return video.mappings[video.mappings.length-1].time        
+    }
+
+    protected getLapTime(vt:number):number {
+        try  {
+            const {video} = this.route?.details??{}
+            const totalTime = video.mappings[video.mappings.length-1].time
+            return  vt%totalTime
+        }
+        catch(err) {
+            this.logError(err,'getLapTime')
+            return vt
+        }
+        
+    }
+
 
     protected validateMappings(route:Route) {
         const mappings = route?.details?.video?.mappings

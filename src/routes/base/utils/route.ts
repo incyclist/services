@@ -760,3 +760,13 @@ const addMissingIndexes =(points:Array<RoutePoint>) => {
     })
 
 }
+
+export const hasNextVideo = (route:Route):boolean => {
+    const next = route?.details?.next??route?.details?.video?.next;
+    return next!==undefined && next!==null && next!=='';
+}
+
+export const getNextVideoId = (route:Route):string => {
+    const next = route?.details?.next??route?.details?.video?.next;
+    return next
+}
