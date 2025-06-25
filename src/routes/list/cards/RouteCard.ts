@@ -15,9 +15,8 @@ import { valid } from "../../../utils/valid";
 import { waitNextTick } from "../../../utils";
 import { DownloadObserver } from "../../download/types";
 import { RouteDownloadService } from "../../download/service";
-import { getLocalizedData } from "../../base/utils/localization";
 import { EventLogger } from "gd-eventlog";
-import { checkIsLoop, getPosition, updateSlopes} from "../../base/utils/route";
+import { checkIsLoop, getNextVideoId, getPosition, updateSlopes} from "../../base/utils/route";
 import { getWorkoutList } from "../../../workouts";
 import { checkIsNew } from "../utils";
 import { useOnlineStatusMonitoring } from "../../../monitoring";
@@ -390,12 +389,13 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         try {
             showLoopOverwrite = this.route?.description?.isLoop
-            showNextOverwrite = valid(this.route?.description?.next) 
+            const next = getNextVideoId(this.route)
+            showNextOverwrite = !!next
 
             hasWorkout = valid(workouts.getSelected())
 
             if (showNextOverwrite) {
-                const card = getRouteList().getCard(this.route?.description?.next)
+                const card = getRouteList().getCard(next)
                 const route = card?.getData()
                 if (!route || (route.description.requiresDownload && !route.description.isDownloaded)) {
                     showNextOverwrite = false

@@ -24,6 +24,8 @@ const ExistingAndNotUpdated = (existing: RouteInfo, descr: RouteInfo) => {
         return false
 
     const {isDeleted=false} = descr
+    if (existing.isLocal)
+        return true
 
     return ((existing.version || 0) >= (descr.version || 0))
         && (!isDeleted || (isDeleted && existing.isDownloaded));

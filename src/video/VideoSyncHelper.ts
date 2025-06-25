@@ -51,7 +51,7 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     pause() {
-        this.logEvent({message:'video paused'})
+        this.logEvent({message:'video paused', route:this.route.details.title})
         this.isPaused = true
         this.send('rate-update',0)
     }
@@ -60,17 +60,17 @@ export class VideoSyncHelper extends IncyclistService{
         if (this.isStopped)
             return;
 
-        this.logEvent({message:'video resumed'})
+        this.logEvent({message:'video resumed', route:this.route.details.title})
         this.isPaused = false
     }
 
     reset() {
-        this.logEvent({message:'video reset'})
+        this.logEvent({message:'video reset', route:this.route.details.title})
         this.init(0,{loopMode: this.loopMode, observer: this.observer})
     }
 
     stop() {
-        this.logEvent({message:'video stopped'})
+        this.logEvent({message:'video stopped', route:this.route.details.title})
         this.send('rate-update',0)
         this.isPaused = true
         this.isStopped = true

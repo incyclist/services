@@ -103,9 +103,13 @@ export class RLVDisplayService extends RouteDisplayService {
                 
 
             console.log('# add video done', isCurrent, route)            
+            const nextId = getNextVideoId(videoRoute)
+
+            this.logEvent({message: 'video added', id: videoRoute.description.id, title: videoRoute.description.title, segmentDistance: videoRoute.description.distance,next:nextId})
         }
         catch (error) {
             console.log('# addVideo error', error)
+            this.logError(error,'addVideo')
         }
     }
 
@@ -249,7 +253,9 @@ export class RLVDisplayService extends RouteDisplayService {
                 route: this.getCurrentRoute().details.title,totalDistance: this.getCurrentRoute().details.distance,
                 segment: this.currentVideo.route.description.title, offset: this.offset, segmentDistance: this.currentVideo.route.description.distance})
 
-        this.logEvent({message: 'switching to next video', route: this.getCurrentRoute().details.title,segmentDistance: this.currentVideo.route.description.distance,totalDistance: this.getCurrentRoute().details.distance, offset:this.offset})
+        this.logEvent({message: 'switching to next video', route: this.getCurrentRoute().details.title,
+                       segment:this.currentVideo.route.description.title, offset: this.offset, segmentDistance: this.currentVideo.route.description.distance,
+                       totalDistance: this.getCurrentRoute().details.distance})
 
     }
 
