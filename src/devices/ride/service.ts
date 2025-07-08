@@ -51,6 +51,7 @@ export class DeviceRideService  extends IncyclistService{
     protected lazyInitDone: boolean
     protected lastDataInfo: Record<string,number> = {}
     protected reconnectBusy: boolean
+    protected prevUpdate: UpdateRequest
 
     constructor() {
         super('DeviceRide')
@@ -1373,13 +1374,29 @@ export class DeviceRideService  extends IncyclistService{
         const adapters = this.getSelectedAdapters()??[];
         const targets = adapters.filter( ai =>  ai?.adapter?.isControllable() && ai?.adapter?.isStarted() &&  !ai.adapter?.isStopped())
 
+        if (this.prevUpdate && !request.targetPowerDelta && !request.reset) {
+            if ( (request.slope!==undefined && this.prevUpdate.slope === request.slope) || 
+                 (request.targetPower!==undefined && this.prevUpdate.targetPower === request.targetPower)) {
+                console.log('#send update skipped', request, this.prevUpdate,this.prevUpdate.slope === request.slope , this.prevUpdate.targetPower === request.targetPower )
+                return
+            }
+        }
+
+        console.log('#send update', request)
         this.promiseSendUpdate = []
         targets?.forEach(ai=> {
             this.promiseSendUpdate.push( ai.adapter.sendUpdate(request) )
         })
 
+        if (!request.targetPowerDelta) {
+            this.prevUpdate = request              
+        }
+
+
 
         await this.waitForUpdateFinish()
+
+
 
         this.promiseSendUpdate = undefined        
     }

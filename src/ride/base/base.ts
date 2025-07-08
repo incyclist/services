@@ -123,6 +123,10 @@ export class RideModeService extends IncyclistService implements IRideModeServic
 
         }
         else {
+            if (!update||Object.keys(update).length===0) {
+                return
+            }
+
             this.getDeviceRide().sendUpdate(update)
         }
     }
