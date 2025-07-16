@@ -1,9 +1,10 @@
 import { AxiosInstance } from "axios";
 import { FitExportActivity } from "../../model";
 import { useUserSettings } from "../../../../settings";
-import { DEFAULT_FIT_API, FITCONVERT_API } from "./consts";
+import { DEFAULT_DOMAIN, FITCONVERT_API } from "./consts";
 import { trimTrailingChars } from "../../../../utils";
 import { IncyclistRestApiClient } from "../../../../api";
+import { Injectable } from "../../../../base/decorators";
 
 export class IncyclistFitConvertApi { 
 
@@ -45,13 +46,21 @@ export class IncyclistFitConvertApi {
 
         let baseUrl
         try {
-            baseUrl = useUserSettings().get(FITCONVERT_API,DEFAULT_FIT_API)
+            const domain = this.getUserSettings().get('DOMAIN',DEFAULT_DOMAIN)
+            const defaultUrl = `https://dlws.${domain}/api/v1/fit/convert`
+            baseUrl = this.getUserSettings().get(FITCONVERT_API,defaultUrl)
         }
         catch {
-            baseUrl = DEFAULT_FIT_API
+            baseUrl = 'https://dlws.incyclist.com/api/v1/fit/convert'
         }
         return trimTrailingChars(baseUrl,'/')
     }
+
+    @Injectable
+    getUserSettings() {
+        return useUserSettings()
+    }
+    
 
 
 }

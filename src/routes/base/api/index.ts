@@ -1,10 +1,11 @@
 import {EventLogger} from 'gd-eventlog'
 import { RouteApiDescription, RouteApiDetail, RouteDescriptionQuery } from "./types";
 import { AxiosInstance } from "axios";
-import { DEFAULT_ROUTE_API, NO_CACHE, ROUTE_API } from './consts'
+import { DEFAULT_DOMAIN, NO_CACHE, ROUTE_API } from './consts'
 import { IncyclistRestApiClient } from '../../../api';
 import { useUserSettings } from '../../../settings';
 import { RoutePoint } from '../types';
+import { Injectable } from '../../../base/decorators';
 
 export default class IncyclistRoutesApi { 
 
@@ -36,9 +37,11 @@ export default class IncyclistRoutesApi {
     }
 
 
-    protected getBaseUrl() {
-        
-        return useUserSettings().get(ROUTE_API,DEFAULT_ROUTE_API)
+     protected getBaseUrl() {
+        const domain = this.getSetting('DOMAIN',DEFAULT_DOMAIN)
+        const defaultUrl = `https://dlws.${domain}/api/v1/routes`
+        const baseUrl = this.getSetting(ROUTE_API,defaultUrl)
+        return baseUrl
     }
 
     async getRouteDescriptions(query:RouteDescriptionQuery, throws:boolean = false): Promise<Array<RouteApiDescription>> {
@@ -124,6 +127,22 @@ export default class IncyclistRoutesApi {
     // only to be used by unit tests
     protected _reset() {
         IncyclistRoutesApi._instance = undefined
+    }
+
+    protected getSetting(key:string, def:any) {
+        try {
+            return this.getUserSettings().get(key, def)
+        }
+        catch {
+            return def
+        }
+    }
+
+
+
+    @Injectable
+    getUserSettings() {
+        return useUserSettings()
     }
 
 

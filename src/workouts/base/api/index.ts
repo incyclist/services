@@ -3,8 +3,9 @@ import { AxiosInstance } from "axios";
 import { IncyclistRestApiClient } from '../../../api';
 import { useUserSettings } from '../../../settings';
 import { Singleton } from '../../../base/types';
-import { DEFAULT_WORKOUT_API, WORKOUT_API } from './consts';
+import { DEFAULT_DOMAIN, WORKOUT_API } from './consts';
 import { Plan, Workout } from '../model/Workout';
+import { Injectable } from '../../../base/decorators';
 
 @Singleton
 export class IncyclistWorkoutsApi { 
@@ -31,8 +32,10 @@ export class IncyclistWorkoutsApi {
 
 
     protected getBaseUrl():string {
-        
-        return useUserSettings().get(WORKOUT_API,DEFAULT_WORKOUT_API)
+        const domain = this.getSetting('DOMAIN',DEFAULT_DOMAIN)
+        const defaultUrl = `https://dlws.${domain}/api/v1/workouts`
+        return this.getSetting(WORKOUT_API,defaultUrl)
+       
     }
 
 
@@ -76,6 +79,22 @@ export class IncyclistWorkoutsApi {
 
         return await api.get( request, ...args )       
     }
+
+    protected getSetting(key:string, def:any) {
+        try {
+            return this.getUserSettings().get(key, def)
+        }
+        catch {
+            return def
+        }
+    }
+
+    @Injectable
+    getUserSettings() {
+        return useUserSettings()
+    }
+
+
 
 
 }

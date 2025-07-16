@@ -3,10 +3,10 @@ import { AxiosInstance } from "axios";
 import { IncyclistRestApiClient } from "../api";
 import { useUserSettings } from "../settings";
 import { IncyclistService } from "../base/service";
+import { Injectable } from "../base/decorators";
 
 const UPDATE_SERVER_URL = 'UPDATE_SERVER_URL'
-const DEFAULT_UPDATE_SERVER_URL = 'https://updates.incyclist.com';
-const INCYCLIST_URL = 'https://incyclist.com'
+const DEFAULT_DOMAIN = 'incyclist.com'
 
 type VersionInfo = {
     version: string,
@@ -55,8 +55,9 @@ export class IncyclistUpdatesApi extends IncyclistService{
 
 
     protected getBaseUrl():string {
-        
-        const base:string = useUserSettings().get(UPDATE_SERVER_URL ,DEFAULT_UPDATE_SERVER_URL )
+        const domain = this.getSetting('DOMAIN',DEFAULT_DOMAIN)
+        const defaultUrl = `https://updates.${domain}`
+        const base:string = this.getSetting(UPDATE_SERVER_URL ,defaultUrl )
         return base;
     }
 
@@ -71,7 +72,8 @@ export class IncyclistUpdatesApi extends IncyclistService{
     protected async getLatestMacAppVersion():Promise<VersionInfo>{
         try {
             const res = await this._get('/download/app/latest/mac/latest-mac' )
-        
+            const domain = this.getSetting('DOMAIN',DEFAULT_DOMAIN)
+
             // istanbul ignore next
             if (!res)
                 return;
@@ -79,7 +81,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
             const version = res.data?.version
             const path = res.data?.path
             const downloadUrl = `${this.getBaseUrl()}/download/app/latest/mac/${path}`
-            const url = INCYCLIST_URL
+            const url = `https://${domain} `
 
             return {version,path,url,downloadUrl}
         }
@@ -91,9 +93,20 @@ export class IncyclistUpdatesApi extends IncyclistService{
 
     }
 
+    protected getSetting(key:string, def:any) {
+        try {
+            return this.getUserSettings().get(key, def)
+        }
+        catch {
+            return def
+        }
+    }
+
+
     protected async getLatestLinuxAppVersion():Promise<VersionInfo>{
         try {
         
+            const domain = this.getSetting('DOMAIN',DEFAULT_DOMAIN)
             const res = await this._get('/download/app/latest/linux/x64/latest-linux.yml' ) 
             // istanbul ignore next
             if (!res)
@@ -105,7 +118,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
             const pathMatch = /path: (.*)/.exec(res.data)
             const path = pathMatch?.length===2 ? pathMatch[1] : undefined
             const downloadUrl = `${this.getBaseUrl()}/download/app/latest/linux/x64/${path}`
-            const url = INCYCLIST_URL
+            const url = `https://${domain} `
 
             return {version,path,url,downloadUrl}
         }
@@ -135,7 +148,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
 
             const path = `incyclist-${version}-setup.exe`
             const downloadUrl = `${this.getBaseUrl()}/download/app/latest/win64/${path}`
-            const url = INCYCLIST_URL
+            const url = ``
 
             return {version,path,url,downloadUrl}
         }
@@ -144,6 +157,11 @@ export class IncyclistUpdatesApi extends IncyclistService{
                 this.logError(err,'getLatestWindowsAppVersion')
             }
         }
+    }
+
+    @Injectable
+    getUserSettings() {
+        return useUserSettings()
     }
 
 

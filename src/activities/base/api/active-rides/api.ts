@@ -7,7 +7,8 @@ import { IncyclistRestApiClient } from "../../../../api";
 import { ActiveRideEntry } from "../../../active-rides/types";
 import { ActiveRideQuery } from "./types";
 
-const DEFAULT_ACTIVE_RIDES_API = 'https://dlws.incyclist.com/api/v1/active-rides'
+
+const DEFAULT_DOMAIN = 'incyclist.com'
 
 @Singleton
 export class IncyclistActiveRidesApi { 
@@ -66,10 +67,13 @@ export class IncyclistActiveRidesApi {
 
         let baseUrl
         try {
-            baseUrl = this.getUserSettings().get('ACTIVE_RIDES_API',DEFAULT_ACTIVE_RIDES_API)
+            const domain = this.getUserSettings().get('DOMAIN',DEFAULT_DOMAIN)
+            const defaultUrl = `https://dlws.${domain}/api/v1/active-rides`
+            baseUrl = this.getUserSettings().get('ACTIVE_RIDES_API',defaultUrl)
         }
         catch {
-            baseUrl = DEFAULT_ACTIVE_RIDES_API
+            const domain = DEFAULT_DOMAIN
+            baseUrl = `https://dlws.${domain}/api/v1/active-rides`
         }
 
         return trimTrailingChars(baseUrl,'/')
