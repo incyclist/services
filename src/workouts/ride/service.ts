@@ -772,15 +772,19 @@ export class WorkoutRide extends IncyclistService{
             title += `(${repeatCount}/${segment.repeat})`    
         }
 
-        if (limit.text)
-            title += `${ch}${limit.text}`
-
-        if (limit.text && segment && !segment.text && segment.repeat>0) {
-            const repeatTime = segment.duration/segment.repeat;
-            const repeatCount = Math.floor((time-segment.getStart())/repeatTime )+1
-            title += `(${repeatCount}/${segment.repeat})`    
+        if (!limit) {
+            title += `${ch}free`
         }
-    
+        else {
+            if (limit?.text)
+                title += `${ch}${limit.text}`
+
+            if (limit?.text && segment && !segment.text && segment.repeat>0) {
+                const repeatTime = segment.duration/segment.repeat;
+                const repeatCount = Math.floor((time-segment.getStart())/repeatTime )+1
+                title += `(${repeatCount}/${segment.repeat})`    
+            }
+        }    
 
         return title
     }
