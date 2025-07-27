@@ -1,5 +1,4 @@
 import IncyclistRoutesApi from '../../base/api'
-import { DEFAULT_ROUTE_API } from '../../base/api/consts'
 import { Route } from '../../base/model/route'
 import {RoutesApiLoader}  from './api'
 import { RouteListService } from '../service'
@@ -9,6 +8,9 @@ import videos from '../../../../__tests__/data/db/videos.json'
 
 import valdrome from '../../../../__tests__/data/rlv/valdrome.json'
 import { RouteApiDescription } from '../../base/api/types'
+
+
+const DEFAULT_ROUTE_API = 'https://dlws.incyclist.com/api/v1/routes'
 
 describe('RoutesApiLoader',()=>{
 

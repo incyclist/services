@@ -81,7 +81,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
             const version = res.data?.version
             const path = res.data?.path
             const downloadUrl = `${this.getBaseUrl()}/download/app/latest/mac/${path}`
-            const url = `https://${domain} `
+            const url = `https://${domain}`
 
             return {version,path,url,downloadUrl}
         }
@@ -118,7 +118,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
             const pathMatch = /path: (.*)/.exec(res.data)
             const path = pathMatch?.length===2 ? pathMatch[1] : undefined
             const downloadUrl = `${this.getBaseUrl()}/download/app/latest/linux/x64/${path}`
-            const url = `https://${domain} `
+            const url = `https://${domain}`
 
             return {version,path,url,downloadUrl}
         }
@@ -133,6 +133,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
     protected async getLatestWindowsAppVersion():Promise<VersionInfo>{
         try {
             const res = await this._get('/download/app/latest/win64/RELEASE' ) 
+            const domain = this.getSetting('DOMAIN',DEFAULT_DOMAIN)
             // istanbul ignore next
             if (!res)
                 return;
@@ -148,7 +149,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
 
             const path = `incyclist-${version}-setup.exe`
             const downloadUrl = `${this.getBaseUrl()}/download/app/latest/win64/${path}`
-            const url = ``
+            const url = `https://${domain}`
 
             return {version,path,url,downloadUrl}
         }
