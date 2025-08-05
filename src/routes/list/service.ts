@@ -1323,41 +1323,49 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     protected findCard(target:Route|string):{ card:RouteCard, list:CardList<Route>} {
         
-        let id:string;
-        let legacyId;
-        if (typeof target==='string') {
-            id = target
-        }
-        else {
-            const route = target
-            id = route.description.id
-            legacyId = route.description.legacyId
-        }
+        try {
+            let id:string;
+            let legacyId;
+            if (typeof target==='string') {
+                id = target
+            }
+            else {
+                const route = target
+                id = route?.description?.id
+                legacyId = route?.description?.legacyId
+            }
+
+            if (!id && !legacyId) {
+                return;
+            }
 
 
-        let card =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===id || c.getData()?.description?.legacyId===id ) as RouteCard
-        if (card)
-            return {card,list:this.myRoutes}
+            let card =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===id || c.getData()?.description?.legacyId===id ) as RouteCard
+            if (card)
+                return {card,list:this.myRoutes}
 
-        if (legacyId) {
-            const legacyCard =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===legacyId ) as RouteCard
-            if (legacyCard) {
-                this.myRoutes.remove(legacyCard)
-                const idx = this.routes.findIndex( r => r.description.id===legacyId && !r.description.isDeleted)
-                if (idx!==-1) {
-                    this.routes.splice(idx,1)
+            if (legacyId) {
+                const legacyCard =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===legacyId ) as RouteCard
+                if (legacyCard) {
+                    this.myRoutes.remove(legacyCard)
+                    const idx = this.routes.findIndex( r => r?.description?.id===legacyId && !r?.description?.isDeleted)
+                    if (idx!==-1) {
+                        this.routes.splice(idx,1)
+                    }
+                    return
                 }
-                return
+            }
+        
+            const lists = [this.selectedRoutes,this.alternatives, ...this.custom??[] ]         
+            for (let list of lists) {
+                card = list.getCards().find(c=>c.getData()?.description?.id===id) as RouteCard
+                if (card)
+                    return {card,list}
             }
         }
-    
-        const lists = [this.selectedRoutes,this.alternatives, ...this.custom??[] ]         
-        for (let list of lists) {
-            card = list.getCards().find(c=>c.getData()?.description?.id===id) as RouteCard
-            if (card)
-                return {card,list}
+        catch (err) {
+            this.logError(err,'findCard',{target})
         }
-
     }
 
     protected resetCards() {
