@@ -525,8 +525,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         const startSettings= this.getRouteList().getStartSettings()
         const workout = this.getWorkoutList().getSelected()
 
-        console.log('# detectRideType', {route:!!route?.details, type:startSettings?.type, workout:!!workout, hasVideo:route?.description?.hasVideo})
-
         if( startSettings?.type ==='Free-Ride') {
             return 'Free-Ride'
         }

@@ -58,9 +58,11 @@ export class IntervalsAppConnection extends ConnectedAppService<IntervalsCredent
 
     disconnect():void {
         try {            
+
             this.config = undefined
-            this.saveCredentials()
             this.getApi().init(undefined)
+            this.saveCredentials()
+            
         }
         catch(err) {
             // Should never happen, but just in case ...  I will log
@@ -72,6 +74,7 @@ export class IntervalsAppConnection extends ConnectedAppService<IntervalsCredent
 
 
     isConnected(): boolean {
+
         if (!this.isInitialized) {
             this.init()
         }

@@ -215,7 +215,7 @@ describe('WorkoutCard',()=>{
         test('normal',()=>{           
             card.unselect()
 
-            expect(service.unselect).toHaveBeenCalledWith()
+            expect(service.unselect).toHaveBeenCalledWith(card)
 
             expect(card.cardObserver.emit).toHaveBeenCalledWith('update',expect.objectContaining({selected:false}))
         })

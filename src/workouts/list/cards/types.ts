@@ -2,7 +2,7 @@ import { ImportFilter } from "../../../base/cardlist/types";
 import { Observer } from "../../../base/types/observer";
 import { Workout } from "../../base/model";
 
-export type WorkoutCardType = 'WorkoutImport' | 'Workout' | 'ActiveWorkoutImport' | 'WorkoutCreate' ;
+export type WorkoutCardType = 'WorkoutImport' | 'Workout' | 'ActiveWorkoutImport' | 'WorkoutCreate' | 'ScheduledWorkout'; 
 
 export const DEFAULT_TITLE = 'Import Workout';
 export const DEFAULT_FILTERS = [
@@ -69,7 +69,13 @@ export interface WorkoutSettingsDisplayProps {
     categories: string[]
     /** The category, this workout belongs to */
     category: string
+
 }
+
+export interface ScheduledWorkoutSettingsDisplayProps extends WorkoutSettingsDisplayProps {
+    date: Date
+}
+
 
 export interface WorkoutCardDisplayProperties {
     /** title to be shown on card */
@@ -88,5 +94,10 @@ export interface WorkoutCardDisplayProperties {
     selected: boolean
     /** observer Object that will be used to informa abotu relevant updates*/
     observer: Observer
+    
+}
 
+export interface ScheduledWorkoutCardDisplayProperties  extends WorkoutCardDisplayProperties { 
+    /** scheduled date of the workout */
+    date: Date
 }

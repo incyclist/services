@@ -5,9 +5,8 @@ import { IListService, ListObserver, Singleton } from "../../base/types";
 import { PromiseObserver } from "../../base/types/observer";
 import { useRouteList } from "../../routes";
 import { useUserSettings } from "../../settings";
-import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
-import { Plan, Workout } from "../base/model/Workout";
+import { Workout } from "../base/model/Workout";
 import { WorkoutParser } from "../base/parsers";
 import { ActiveImportCard } from "./cards/ActiveImportCard";
 import { WorkoutCard } from "./cards/WorkoutCard";
@@ -15,6 +14,10 @@ import { WorkoutImportCard,WorkoutCreateCard } from './cards'
 import { WorkoutSettings } from "./cards/types";
 import { WorkoutsDbLoader } from "./loaders/db";
 import { WP,WorkoutSettingsDisplayProps } from "./types";
+import { Injectable } from "../../base/decorators";
+import { useWorkoutCalendar, WorkoutCalendarEntry } from "../calendar";
+import { ScheduledWorkoutCard } from "./cards/ScheduledWorkoutCard";
+import { useAppState } from "../../appstate";
 
 /**
  * [WorkoutListService](WorkoutListService.md) is the service managing the business flows of the Workout List page and the Workout Area in the settings dialog
@@ -36,7 +39,7 @@ import { WP,WorkoutSettingsDisplayProps } from "./types";
  * 
  */
 @Singleton
-export class WorkoutListService extends IncyclistService  implements IListService<Workout|Plan> { 
+export class WorkoutListService extends IncyclistService  implements IListService<WP> { 
 
     protected myWorkouts: CardList<WP>;
     protected lists: Array<CardList<WP>>
@@ -49,6 +52,9 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     protected language:string
     protected selectedWorkout:Workout
     protected ftp:number
+    protected scheduledToday: WorkoutCalendarEntry
+    protected scheduledList:  CardList<WP>
+    protected selectedCard: Card<WP>
 
 
     constructor () {
@@ -151,16 +157,21 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
                 if (!this.preloadObserver)
                     this.preload()
+
+                this.getAppState().setState('workoutShown',true)
+                this.getAppState().setPersistedState('page','workouts')
                 return  {observer: this.observer, lists:null }
             }
             
-            waitNextTick().then ( ()=> {
-                this.emitLists('updated')
-            })            
+            // waitNextTick().then ( ()=> {
+            //     this.emitLists('updated')
+            // })            
         }
         catch(err) {
             this.logError(err,'open')
         }
+        this.getAppState().setState('workoutShown',true)
+        this.getAppState().setPersistedState('page','workouts')
         return {observer: this.observer, lists }
     }
 
@@ -358,6 +369,16 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                 const promise = this.loadWorkouts()
                 this.preloadObserver = new PromiseObserver<void>( promise )
     
+                this.getWorkoutCalendar().once('scheduled',( event:WorkoutCalendarEntry )=> {
+                    
+                    this.scheduledToday = event
+                    this.getAppState().setState('scheduledToday',event.workout.id)
+                    this.getAppState().setPersistedState('page','workouts')
+                    
+                    
+                })
+                this.getWorkoutCalendar().init()
+
                 this.preloadObserver.start()
                     .then( ()=> { 
                         const cards = {                        
@@ -487,7 +508,51 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
             const lists = this.lists.filter( l=>l.getCards().length>0)
 
-            // TODO Add additional Lists (Plans, e.g.)
+
+            // TODO: refactor -> move management of List to Calendar service
+            const scheduled = useWorkoutCalendar().getScheduledWorkouts()
+            if (scheduled.length>0) {
+
+                if (!this.scheduledList) {
+
+                    const schedList = new CardList<WP>('scheduled','Scheduled Workouts')
+                    scheduled.forEach( w => schedList.add(new ScheduledWorkoutCard(w)))
+
+                    const today = this.getAppState().getState('scheduledToday')
+                    if (today) {
+                        schedList.getCards().forEach( c => {
+                            if (c.getId()===today) {
+                                c.select()
+                            }
+                        })                    
+                    }
+                    this.scheduledList = schedList
+                    
+                    return [ schedList,...lists]
+                }
+                else {
+                    const schedList = this.scheduledList
+                    const cards = schedList.getCards()
+                    scheduled.forEach( w => {
+                        if (!cards.some( c=>c.getId()===w.workout.id))
+                            schedList.add(new ScheduledWorkoutCard(w))
+                    })
+
+                    const today = this.getAppState().getState('scheduledToday')
+
+                    if (today) {
+                        schedList.getCards().forEach( c => {
+                            if (c.getId()===today) {
+                                c.select()
+                            }
+                        })                    
+                    }
+                    
+                    return [ schedList,...lists]
+                }      
+                
+                
+            }
 
             return lists
 
@@ -519,13 +584,39 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
 
-    unselect() {
+    unselect(selectedCard?:Card<WP>) {
+
+        if (selectedCard) {
+            delete this.selectedCard    
+            this.selectedWorkout = null    
+            this.getAppState().setState('scheduledToday',null)
+            return;
+        }
+
+        if (!this.selectedCard) { 
+            return;
+        }
+
+        const card = this.selectedCard
+        delete this.selectedCard
+        card.unselect()
+        
+        
         this.selectedWorkout = null    
+        this.getAppState().setState('scheduledToday',null)
     }
 
     select(workout:WP) {
         if (workout.type==='workout')
             this.selectedWorkout = workout as unknown as Workout
+        else if (workout.type==='scheduled') {
+            this.selectedWorkout = (workout as unknown as WorkoutCalendarEntry).workout
+        }
+
+        // after selecting a workout, clear the scheduledToday (which is only used to select scheduled entry on first launch after preload)
+        this.getAppState().setState('scheduledToday',null)
+        
+
     }
 
     
@@ -536,6 +627,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                 selectedCard.unselect()
         }
         this.select(card.getData())
+        this.selectedCard = card
         
     }
     unselectCard(card:Card<WP>) {
@@ -622,6 +714,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                 const add = this.addItem.bind(this)
                 const update = this.updateItem.bind(this)
 
+
                 observer.on('workout.added',add)
                 observer.on('workout.updated',update)
                 observer.on('done',done)
@@ -633,6 +726,10 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         })
 
     }
+
+
+
+
     
     protected addItem(item:WP):Card<WP> {       
         const list = this.selectList(item)
@@ -840,6 +937,17 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     // istanbul ignore next
     protected getInitTimeout():number {
         return 1000;
+    }
+
+
+    @Injectable
+    protected getWorkoutCalendar() {
+        return useWorkoutCalendar()
+    }
+
+    @Injectable
+    protected getAppState() {
+        return useAppState()
     }
 
     // istanbul ignore next

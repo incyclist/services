@@ -369,7 +369,18 @@ describe('ZwoParser',()=>{
         
             expect(err?.message).toBe('parsing error: test error');
         })
+
+        
+        test('ftpOverride ',async ()=>{
+            const parser = new ZwoParser()
+            const file = './__tests__/data/workouts/Ramp_Test.zwo'
+            const xml = await loadFile('utf-8',file) as string
+            const fileInfo:FileInfo = {type:'file', name:'Ramp_Test.zwo',filename:file, ext:'zwo',dir:'./__tests__/data/workouts',url:undefined, delimiter:'/'}
+            const workout = await parser.import(fileInfo, xml)
     
+            //console.log( JSON.stringify(workout,undefined,2) )
+        })
+
     
     })    
 

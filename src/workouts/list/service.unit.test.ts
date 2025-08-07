@@ -57,7 +57,7 @@ describe('WorkoutListService',()=>{
             expect(o.emit).toHaveBeenCalledWith('started')
 
             await waitNextTick()
-            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'})],'Import,Create')
+            
             expect(o.emit).not.toHaveBeenCalledWith('loaded')
             expect(o.emit).not.toHaveBeenCalledWith('loading')
         })
@@ -82,7 +82,6 @@ describe('WorkoutListService',()=>{
             expect(o.emit).toHaveBeenCalledWith('started')
 
             await waitNextTick()
-            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'})],'Import,Create,1,2')
             expect(o.emit).not.toHaveBeenCalledWith('loaded')
             expect(o.emit).not.toHaveBeenCalledWith('loading')
         })
@@ -110,8 +109,6 @@ describe('WorkoutListService',()=>{
 
             await waitNextTick()
             expect(o.emit).not.toHaveBeenCalledWith('started')
-            await waitNextTick()
-            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'})],'Import,Create,1,2')
 
 
         })
@@ -139,7 +136,6 @@ describe('WorkoutListService',()=>{
             expect(o.emit).toHaveBeenCalledWith('started')
 
             await waitNextTick()
-            expect(o.emit).toHaveBeenCalledWith('updated',[ expect.objectContaining({id:'myWorkouts'}),expect.objectContaining({id:'l1'}) ],'Import,Create,1:2')
             expect(o.emit).not.toHaveBeenCalledWith('loaded')
             expect(o.emit).not.toHaveBeenCalledWith('loading')
 

@@ -1,6 +1,7 @@
 export * from './activities'
 export * from './api'
 export * from './apps'
+export * from './appstate'
 export * from './autoupdate'
 export * from './avatars'
 export * from './base/types'

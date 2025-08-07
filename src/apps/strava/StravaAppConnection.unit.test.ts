@@ -263,7 +263,8 @@ describe ('StravaAppConnection', ()=>{
 
         test('perform disconnect',()=>{                    
             const mocks: MockDefinition = {
-            userSettings: UserSettingsMock(true, null),                            
+                userSettings: UserSettingsMock(true, null),                            
+                api: ApiMock({})
             };
             setupMocks(mocks);         
 

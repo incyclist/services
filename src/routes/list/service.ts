@@ -27,6 +27,7 @@ import { Injectable } from "../../base/decorators";
 import { RouteSyncFactory } from "../sync/factory";
 import { sleep } from "../../utils/sleep";
 import { useAppsService } from "../../apps";
+import { useAppState } from "../../appstate";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -144,6 +145,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
 
         this.resetLists()
+        this.getAppState().setPersistedState('page','routes')
         return {observer: this.observer, lists:this.getLists() }
     }
 
@@ -213,7 +215,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.saveFilters(filters)
         }
 
-        return this.searchRepo(filters)
+        const res = this.searchRepo(filters)
+        this.getAppState().setPersistedState('page','search')
+        return res
 
     }
 
@@ -1426,6 +1430,12 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected getRouteSyncFactory() {
         return new RouteSyncFactory()
     }
+
+    @Injectable
+    protected getAppState() {
+        return useAppState()
+    }
+
 
     @Injectable getAppsService() {
         return useAppsService()

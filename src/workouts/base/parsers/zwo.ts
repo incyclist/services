@@ -30,6 +30,11 @@ const setPowerValues = (power,powerTarget) => {
 interface ParseResult  {
     step?: StepDefinition,
     segment?: SegmentDefinition
+
+}
+
+type ParserContext = {   
+    ftpOverride?: number,
 }
 
 /* 
@@ -40,6 +45,7 @@ export class ZwoParser implements WorkoutParser<string>{
 
     protected logger: EventLogger
     protected tagHandlers: Record<string,(json)=>ParseResult>
+    protected context: ParserContext
 
     constructor () {
 
@@ -51,13 +57,18 @@ export class ZwoParser implements WorkoutParser<string>{
     async import(file: FileInfo, data?: string): Promise<Workout> {       
         const str = await this.getData(file,data)
         
+        return this.fromStr(str, file.name)
+    }
+
+    async fromStr(str: string, fileName?:string): Promise<Workout> {
         const xml = await parseXml(str)
         xml.expectScheme('workout_file')   
 
-        const name = ignoreEmpty(xml.json['name']) ?? file.name        
+        const name = ignoreEmpty(xml.json['name']) ?? fileName       
         const description = ignoreEmpty(xml.json['description'])
         const workout = new Workout( {type:'workout',name,description});
         return this.parse(str,workout)
+        
     }
 
 
@@ -88,32 +99,33 @@ export class ZwoParser implements WorkoutParser<string>{
 
     protected getPowerLimit(json, reverse?:boolean):PowerLimit {
         const power:PowerLimit= {type:'pct of FTP'}
+
         let powerTarget;
 
         const {Power, PowerHigh, PowerLow }  = json;
 
+        const max = reverse ? PowerLow : PowerHigh;
+        const min = reverse ? PowerHigh : PowerLow; 
+
         if (Power===undefined && PowerHigh===undefined && PowerLow===undefined)
             return undefined;
 
-
-        if ( PowerHigh) {
-            if ( reverse!==true)
-                power.max = pVal(PowerHigh)
-            else 
-                power.min = pVal(PowerHigh)
-        }
+        if (!!max)
+            power.max = pVal(max)
+        if (!!min)
+            power.min = pVal(min)
         
-        if ( PowerLow) {
-            if ( reverse!==true)
-                power.min = pVal(PowerLow)
-            else 
-                power.max = pVal(PowerLow)
-        }
-
         if (Power) {
             powerTarget = pVal(Power);
             setPowerValues(power,powerTarget);
         }        
+
+        if ( !!this.context.ftpOverride) {
+            power.max = power.max ? Math.round(this.context.ftpOverride * power.max/100) : undefined
+            power.min = power.min ? Math.round(this.context.ftpOverride * power.min/100) : undefined
+            power.type = 'watt'
+        }
+
         return power;
 
     }
@@ -254,7 +266,7 @@ export class ZwoParser implements WorkoutParser<string>{
         th['MaxEffort']=this.parseMaxEffort.bind(this);
     }
 
-    protected handleTag(tagName:string, tagValue) {
+    protected handleTag(tagName:string, tagValue:string) {
         const fnHandler = this.tagHandlers[tagName];
         if ( fnHandler) {
             return fnHandler(tagValue)
@@ -275,7 +287,16 @@ export class ZwoParser implements WorkoutParser<string>{
                 }
 
                 try {
+
+                    this.context = {}
+
                     const zwoSteps = result.workout_file.workout[0].$$ ?? []
+
+                    const ftpOverride = result.workout_file.ftpOverride?.[0] ?? -1;                    
+                    if (ftpOverride!==-1) {
+                        this.context.ftpOverride = Number(ftpOverride)
+                    }
+
                     zwoSteps.forEach( step => {
                         const tagName = step['#name'];
                         const tagValue = step.$;

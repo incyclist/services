@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workout_file>
+    <name>Ramp Test</name>
+    <sportType>bike</sportType>
+    <ftpOverride>210</ftpOverride>
+    <tags/>
+    <workout>
+        <Ramp PowerHigh="0.75" PowerLow="0.4" Duration="600"/>
+        <Ramp PowerHigh="1.0" PowerLow="0.75" Duration="300"/>
+        <Ramp PowerHigh="0.55" PowerLow="0.55" Duration="300"/>
+        <SteadyState show_avg="1" Power="0.476" Duration="30"/>
+        <SteadyState show_avg="1" Power="0.595" Duration="30"/>
+        <SteadyState show_avg="1" Power="0.714" Duration="30"/>
+        <SteadyState show_avg="1" Power="0.833" Duration="30"/>
+        <SteadyState show_avg="1" Power="0.952" Duration="30"/>
+        <SteadyState show_avg="1" Power="1.071" Duration="30"/>
+    </workout>
+</workout_file>

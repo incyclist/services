@@ -16,7 +16,7 @@ export class AppsService extends IncyclistService   {
     protected readonly services:AppsIntergationSpec = {
         ActivityUpload: ['strava', 'velohero','intervals'],
         WorkoutUpload: [],
-        WorkoutDownload: [],
+        WorkoutDownload: ['intervals'],
         ActivityDownload: [/*'strava','komoot'   */ ],
         RouteDownload: [/*'strava' ,*/'komoot']
     }
@@ -30,6 +30,8 @@ export class AppsService extends IncyclistService   {
 
     constructor() {
         super('AppsService')
+
+
     }
 
     openSettings() {
@@ -54,7 +56,9 @@ export class AppsService extends IncyclistService   {
         const entry = this.serviceMap.find( e=>e.key===app)
         if (!entry?.connection)
             return false
-        return await entry.connection.connect(credentials)
+
+        const success = await entry.connection.connect(credentials)
+        this.emit('connected',app,success)
         
     }
 
@@ -70,6 +74,7 @@ export class AppsService extends IncyclistService   {
         if (!entry?.connection)
             return
         entry.connection.disconnect()
+        this.emit('disconnected',app)
 
     }
 

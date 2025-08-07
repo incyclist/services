@@ -12,7 +12,7 @@ export interface PowerLimit extends Limit {
     type?:PowerLimitType    
 }
 
-export type DataType = 'step' | 'segment' | 'workout' | 'plan'
+export type DataType = 'step' | 'segment' | 'workout' | 'plan' | 'scheduled'
 
 export interface StepDefinition {
     /** @public identifies the type of the Object (should always be 'step', 'segment', 'workout', 'plan'*/

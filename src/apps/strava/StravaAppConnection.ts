@@ -59,8 +59,8 @@ export class StravaAppConnection extends ConnectedAppService<StravaCredentials> 
     disconnect():void {
         try {            
             this.config = undefined
-            this.saveCredentials()
             this.getApi().init(undefined)
+            this.saveCredentials()
         }
         catch(err) {
             // Should never happen, but just in case ...  I will log

@@ -83,5 +83,43 @@ describe ('Intervals.icu API',()=> {
         })
     })
 
+    describe( 'getCalendarWorkouts',()=>{
+        let api;
+        let refresh
+
+        beforeEach( ()=>{
+            api = new IntervalsApi()           
+            api.init( {accessToken})
+        })
+
+        test('normal use',async ()=>{
+            const res = await api.getCalendarWorkouts()
+            console.log(res.length, res.map( a=>`${a.name}, ${a.start_date_local}`))
+            
+        })
+        test('with dates',async ()=>{
+            // set oldest to today and newest to today + 14 days
+            const oldest = new Date()
+            const newest = new Date(oldest.valueOf() + 14*24*60*60*1000)
+            
+            const res = await api.getCalendarWorkouts({oldest,newest})
+
+            console.log(oldest.toISOString(), newest.toISOString())
+            console.log(res.length, res.map( a=>`${a.name}, ${a.start_date_local}`))
+            
+        })
+
+
+        test('with parameter days',async ()=>{
+            // set oldest to today and newest to today + 14 days
+            
+            const res = await api.getCalendarWorkouts({days:14})
+
+            
+            console.log(res.length, res.map( a=>`${a.name}, ${a.start_date_local}`))
+            
+        })
+
+    })
 
 })

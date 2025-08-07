@@ -3,7 +3,8 @@ import { valid } from "../../../../utils/valid"
 import { AppApiBase } from "../base"
 import { EventLogger} from 'gd-eventlog'
 import { AxiosResponse } from "axios"
-import { IntervalsAthlete, IntervalsConfig, IntervalsUploadProps, IntervalsUploadRequest, IntervalsUploadResponse, IntervalsUploadResult } from "./types"
+import { IntervalsAthlete, IntervalsCalendarEvent, IntervalsCalendarRequest, IntervalsConfig, IntervalsUploadProps, IntervalsUploadRequest, IntervalsUploadResponse, IntervalsUploadResult } from "./types"
+import { formatDateTime } from "../../../../utils"
 
 const API_BASE_URL = 'https://intervals.icu/api/v1'
 
@@ -110,6 +111,24 @@ export class IntervalsApi extends AppApiBase{
     }
 
 
+    /**
+     * Retrieves the list of workout calendar events for the authenticated user.
+     * 
+     * The opts parameter can be used to filter the results. The following options are available:
+     * 
+     * - `oldest`: The oldest date of the events to retrieve. 
+     * - `newest`: The newest date of the events to retrieve. 
+     * - `days`: The number of days (assuming that only oldest or newest was set)
+     * - `ext`: data format (zwo|mrc|erg|fit)
+     * 
+     * @param {IntervalsCalendarRequest} [opts] - The options for retrieving calendar events.
+     * @returns {Promise<IntervalsCalendarEvent[]>} The list of calendar events.
+     */
+    async getCalendarWorkouts( opts:IntervalsCalendarRequest={}):Promise<IntervalsCalendarEvent[]> {
+        const url = `/athlete/0/events${this.getCalendarWorkoutsParams(opts)}`
+        const response =  await this.get( url )        
+        return response.data
+    }
 
 
     protected async verifyAuthentication() {
@@ -166,6 +185,7 @@ export class IntervalsApi extends AppApiBase{
     protected getUploadParams(request:IntervalsUploadRequest):string {
             
         const params:Array<string> = []
+        
         if (request.name)
             params.push(`name=${request.name}`)
         if (request.description)
@@ -177,6 +197,34 @@ export class IntervalsApi extends AppApiBase{
         return '?'+params.join('&')
     }
 
+    protected getCalendarWorkoutsParams(request:IntervalsCalendarRequest):string {
+            
+        const params:Array<string> = []
+        params.push('category=WORKOUT')
+
+        if (request.oldest)
+            params.push(`oldest=${ formatDateTime(request.oldest,'%Y-%m-%d')}`)
+        if (request.newest)
+            params.push(`newest=${ formatDateTime(request.newest,'%Y-%m-%d')}`)
+
+        if (request.days && !request.newest ) {
+            const oldest = request.oldest ?? new Date()
+            if (!request.oldest)                
+                params.push(`oldest=${ formatDateTime(oldest,'%Y-%m-%d')}`)
+            const newest = new Date(oldest.valueOf() + request.days*24*60*60*1000)
+            params.push(`newest=${ formatDateTime(newest,'%Y-%m-%d')}`)
+        }
+        else if (request.days && request.newest && !request.oldest ) {
+            const oldest = new Date(request.newest.valueOf() - request.days*24*60*60*1000)
+            params.push(`oldest=${ formatDateTime(oldest,'%Y-%m-%d')}`)
+        }
+
+        if (request.ext)
+            params.push(`ext=${request.ext}`)
+
+
+        return '?'+params.join('&')
+    }
     
     protected getBaseUrl() {
         try {

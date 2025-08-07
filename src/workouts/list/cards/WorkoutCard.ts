@@ -6,12 +6,14 @@ import { BaseCard } from "./base";
 import { WorkoutCardDisplayProperties, WorkoutCardType, WorkoutSettings, WorkoutSettingsDisplayProps } from "./types";
 import { WorkoutsDbLoader } from "../loaders/db";
 import { useUserSettings } from "../../../settings";
-import { getWorkoutList, useWorkoutList } from '../service'
+import {  useWorkoutList } from '../service'
 import { waitNextTick } from "../../../utils";
 import { Segment} from "../../base/model/Segment";
 import { valid } from "../../../utils/valid";
 import { useRouteList } from "../../../routes";
 import { Injectable } from "../../../base/decorators";
+import { useAppState } from "../../../appstate";
+
 
 /**
  * [WorkoutCard](WorkoutCard.md) objects are used to represent a single workout in the workout list
@@ -93,12 +95,12 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
      * @emits update  Update is fired, so that card view can refresh ( to update select state)
      */
     select(settings?:WorkoutSettings):void {
-        const service = getWorkoutList()
+        const service = this.getWorkoutList()
         
         service.selectCard(this)
         if (settings)
             service.setStartSettings(settings)
-        if (settings.noRoute) {
+        if (settings?.noRoute) {
             this.getRouteList().unselect()
         }
 
@@ -111,8 +113,8 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
      * @emits update  Update is fired, so that card view can refresh ( to update select state)
      */
     unselect() {
-        const service = getWorkoutList()
-        service.unselect()
+        const service = this.getWorkoutList()
+        service.unselect(this)
         this.emitUpdate()
     }
 
@@ -127,7 +129,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         if (!targetListName?.length)
             return;
 
-        const service = getWorkoutList()
+        const service = this.getWorkoutList()
 
         const newList = service.moveCard(this,this.list,targetListName)
         if (newList) {
@@ -160,7 +162,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
     delete(): PromiseObserver<boolean> {
         try {
 
-            const service = getWorkoutList()
+            const service = this.getWorkoutList()
             service.unselectCard(this)
 
             // already deleting
@@ -244,7 +246,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
      * 
      */
     getDisplayProperties():WorkoutCardDisplayProperties {
-        const userSettings = useUserSettings()
+        const userSettings = this.getUserSettings()
         let user
         try {
             user = userSettings.get('user',{})
@@ -316,7 +318,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
 
             // remove from list in UI
             this.deleteFromUIList();
-            getWorkoutList().emitLists('updated');
+            this.getWorkoutList().emitLists('updated');
             
             deleted =true;   
         }
@@ -376,21 +378,47 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
     }
 
     protected emitUpdate() {
-        if (this.cardObserver)
-            this.cardObserver.emit('update', this.getDisplayProperties())
+
+        if (this.cardObserver) {
+            const props = this.getDisplayProperties()
+            this.cardObserver.emit('update', props)
+        }
     }
 
     protected isSelected():boolean {
-        const service = getWorkoutList()
+        const service = this.getWorkoutList()
         const selectedWorkout = service.getSelected()
         if (selectedWorkout?.id===this.workout.id)
             return true;
         return false
     }
 
+    protected getSettings(key:string, defValue:any) {
+        try {
+            return this.getUserSettings().get(key, defValue)
+        }
+        catch {
+            return defValue
+        }
+    }
+
     @Injectable
     protected getRouteList() {
         return useRouteList()
+    }
+    @Injectable
+    protected getWorkoutList() {
+        return useWorkoutList()
+    }
+
+    @Injectable
+    protected getUserSettings() {
+        return useUserSettings()
+    }
+
+    @Injectable
+    protected getAppState() {
+        return useAppState()
     }
 
 

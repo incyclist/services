@@ -1,3 +1,4 @@
+import { useAppState } from "../../appstate";
 import { Injectable } from "../../base/decorators/Injection";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
@@ -136,7 +137,9 @@ export class ActivityListService extends IncyclistService {
         if (!this.initialized)
             this.preload()
         
-        return this.getListDisplayProperties()
+        const props = this.getListDisplayProperties()
+        this.getAppState().setPersistedState('page','activities')
+        return props
 
     }
 
@@ -609,6 +612,13 @@ export class ActivityListService extends IncyclistService {
     protected getActivityUploadFactory() /* istanbul ignore next */ {
         return new ActivityUploadFactory()
     }
+
+    @Injectable
+    protected getAppState() {
+        return useAppState()
+    }
+
+
 
 
 }
