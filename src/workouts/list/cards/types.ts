@@ -6,8 +6,9 @@ export type WorkoutCardType = 'WorkoutImport' | 'Workout' | 'ActiveWorkoutImport
 
 export const DEFAULT_TITLE = 'Import Workout';
 export const DEFAULT_FILTERS = [
-    { name: 'Workouts', extensions: ['zwo'] },
-    { name: 'Zwift', extensions: ['zwo'] }
+    { name: 'Workouts', extensions: ['zwo','json'] },
+    { name: 'Zwift', extensions: ['zwo'] },
+    { name: 'Intervals.icu', extensions: ['zwo','json'] }
 ];
 
 export interface WorkoutImportProps {

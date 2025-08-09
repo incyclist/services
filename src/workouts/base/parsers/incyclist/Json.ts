@@ -1,10 +1,10 @@
-import { FileInfo, getBindings } from "../../../api";
-import { valid } from "../../../utils/valid";
-import { Workout } from "../model/Workout";
-import { WorkoutParser } from "./types";
+import { FileInfo, getBindings } from "../../../../api";
+import { valid } from "../../../../utils/valid";
+import { Workout } from "../../model/Workout";
+import { WorkoutParser } from "../types";
 import {EventLogger} from 'gd-eventlog'
 
-export default class JsonParser implements WorkoutParser<string>{
+export class JsonParser implements WorkoutParser<string>{
 
     protected logger: EventLogger
 
@@ -30,6 +30,7 @@ export default class JsonParser implements WorkoutParser<string>{
                 }                
             });
             this.logger.logEvent({message: 'parse success', file:file?.url||file?.filename})
+
             return workout
         }
         catch(err) {
@@ -45,10 +46,12 @@ export default class JsonParser implements WorkoutParser<string>{
     supportsContent(str:string): boolean {
         try {
             const json = JSON.parse(str)
-            return valid(json?.name) && valid(json?.steps) && Array.isArray(json?.steps)
+            const supported = json?.type==='workout' && valid(json?.name) && valid(json?.steps) && Array.isArray(json?.steps)
+
+            return supported
         }
         catch {
-            return true
+            return false
         }
     }
 

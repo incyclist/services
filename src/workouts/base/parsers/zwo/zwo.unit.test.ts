@@ -1,7 +1,7 @@
-import { loadFile } from "../../../../__tests__/utils/loadFile"
-import { FileInfo } from "../../../api"
-import { Workout} from "../model/Workout"
-import { SegmentDefinition, StepDefinition } from "../model/types"
+import { loadFile } from "../../../../../__tests__/utils/loadFile"
+import { FileInfo } from "../../../../api"
+import { Workout} from "../../model/Workout"
+import { SegmentDefinition, StepDefinition } from "../../model/types"
 import {ZwoParser} from './zwo'
 
 

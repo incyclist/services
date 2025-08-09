@@ -1,8 +1,9 @@
 import { FileInfo } from '../../../api'
 import { Workout } from '../model/Workout'
-import JsonParser from './Json'
+import { JsonParser } from './incyclist/Json'
 import {WorkoutParserFactory} from './factory'
-import { ZwoParser } from './zwo'
+import { ZwoParser } from './zwo/zwo'
+import { IntervalsJsonParser } from './intervals/parser'
 
 const useWorkoutParsers = () => {
 
@@ -11,6 +12,7 @@ const useWorkoutParsers = () => {
     if (!parsers.isInitialized()) {
         parsers.add( new JsonParser() )
         parsers.add( new ZwoParser() )
+        parsers.add( new IntervalsJsonParser() )
         parsers.setInitialized(true)
     }
     return parsers;

@@ -3,8 +3,11 @@ import { IntervalsAppConnection } from "../../../../apps/intervals/IntervalsAppC
 import { Injectable } from "../../../../base/decorators"
 import { IncyclistService } from "../../../../base/service"
 import { Observer } from "../../../../base/types"
-import { formatDateTime, getFirstDayOfCurrentWeek, waitNextTick } from "../../../../utils"
-import { ZwoParser } from "../../../base/parsers/zwo"
+import { getFirstDayOfCurrentWeek, waitNextTick } from "../../../../utils"
+import { IntervalsJsonParser } from "../../../base/parsers/intervals/parser"
+import { IntervalsWorkout } from "../../../base/parsers/intervals/types"
+import { ZwoParser } from "../../../base/parsers/zwo/zwo"
+
 import { WorkoutCalendarEntry } from "../../types"
 import { WorkoutSyncFactory } from "../factory"
 import { IWorkoutSyncProvider } from "../types"
@@ -112,8 +115,9 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
     }
 
     protected async parseWorkouts( events: Array<IntervalsCalendarEvent>): Promise<Array<WorkoutCalendarEntry>> {
-        const parser = new ZwoParser()
+        const zwoParser = new ZwoParser()
         const promises: Array<Promise<void>> = []
+        const parser = new IntervalsJsonParser()
 
         const transform = async (event: IntervalsCalendarEvent) => {
             try {
@@ -121,11 +125,29 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
                 const updated = event.updated ? new Date(event.updated) : undefined
 
                 // decode (base 64) the event.workout_file_base64 field
-                const workoutStr = Buffer.from(event.workout_file_base64, 'base64').toString('utf-8')
-                const fileName = event.workout_filename
 
-                // parse workoutStr as ZWo file content
-                const workout = await parser.fromStr(workoutStr,fileName)
+                let workout
+                let error
+
+                try {
+                    workout =  parser.fromJSON(event.workout_doc as IntervalsWorkout, event.name)
+
+                }
+                catch (err) {
+                    error = err
+
+                    // Fallback : parse workoutStr as ZWo file content
+                    const workoutStr = Buffer.from(event.workout_file_base64, 'base64').toString('utf-8')
+                    const fileName = event.workout_filename
+
+                    try {
+                        workout = await zwoParser.fromStr(workoutStr,fileName)
+                    }
+                    catch {
+                        throw error
+                    }
+
+                }   
 
 
                 const w: WorkoutCalendarEntry = {

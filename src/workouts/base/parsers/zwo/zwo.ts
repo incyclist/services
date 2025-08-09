@@ -1,11 +1,11 @@
 import {EventLogger} from 'gd-eventlog'
-import { WorkoutParser } from './types';
-import { FileInfo, getBindings } from '../../../api';
-import { Workout } from '../model/Workout';
+import { WorkoutParser } from '../types';
+import { FileInfo, getBindings } from '../../../../api';
+import { Workout } from '../../model/Workout';
 import xml2js from 'xml2js';
-import { Limit, PowerLimit, SegmentDefinition, StepDefinition } from '../model/types';
-import { parseXml } from '../../../utils/xml';
-import { ignoreEmpty } from '../../../utils';
+import { Limit, PowerLimit, SegmentDefinition, StepDefinition } from '../../model/types';
+import { parseXml } from '../../../../utils/xml';
+import { ignoreEmpty } from '../../../../utils';
 
 const parser = new xml2js.Parser({explicitChildren :true,preserveChildrenOrder :true,mergeAttrs :false} );
 
