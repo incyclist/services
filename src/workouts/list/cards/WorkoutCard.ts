@@ -77,7 +77,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
             
 
             categories = (service.getLists()??[]).map(l=>l.getTitle())
-            category = this.list.getTitle()
+            category = this.list?.getTitle()
             
         }
         catch(err) {

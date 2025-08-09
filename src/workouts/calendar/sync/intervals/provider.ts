@@ -1,6 +1,7 @@
 import { IntervalsCalendarEvent, useAppsService } from "../../../../apps"
 import { IntervalsAppConnection } from "../../../../apps/intervals/IntervalsAppConnection"
 import { Injectable } from "../../../../base/decorators"
+import { IncyclistService } from "../../../../base/service"
 import { Observer } from "../../../../base/types"
 import { formatDateTime, getFirstDayOfCurrentWeek, waitNextTick } from "../../../../utils"
 import { ZwoParser } from "../../../base/parsers/zwo"
@@ -8,15 +9,17 @@ import { WorkoutCalendarEntry } from "../../types"
 import { WorkoutSyncFactory } from "../factory"
 import { IWorkoutSyncProvider } from "../types"
 
-export class IntervalsCalendarSyncProvider implements IWorkoutSyncProvider {
+export class IntervalsCalendarSyncProvider extends IncyclistService implements IWorkoutSyncProvider  {
     protected lastSyncTS: number
     protected observer: Observer
     protected stopRequested: boolean
     protected workouts:Array<WorkoutCalendarEntry> 
 
     constructor() {
+        super('IntervalsCalendarSync')
         this.lastSyncTS = 0
         this.workouts = []
+
     }   
 
     sync(): Observer {
@@ -157,7 +160,7 @@ export class IntervalsCalendarSyncProvider implements IWorkoutSyncProvider {
 
             }
             catch(err) {
-                this.observer.emit('error', err, event)
+                this.logEvent( {message:'error parsing workout', error:err.message, workout:event.name})
             }
         }
 

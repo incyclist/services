@@ -10,9 +10,9 @@ import { ignoreEmpty } from '../../../utils';
 const parser = new xml2js.Parser({explicitChildren :true,preserveChildrenOrder :true,mergeAttrs :false} );
 
 
-const intVal = v=>Number.parseInt(v);
-const floatVal = v=>Number.parseFloat(v);
-const pVal   = v => floatVal(v)*100
+const intVal = v=>!!v ? Number.parseInt(v) : undefined;
+const floatVal = v=>!!v ? Number.parseFloat(v) : undefined;
+const pVal   = v => !!v ? floatVal(v)*100 : undefined
 
 const setPowerValues = (power,powerTarget) => {
     if (power.max === undefined && power.min === undefined) {
@@ -104,16 +104,11 @@ export class ZwoParser implements WorkoutParser<string>{
 
         const {Power, PowerHigh, PowerLow }  = json;
 
-        const max = reverse ? PowerLow : PowerHigh;
-        const min = reverse ? PowerHigh : PowerLow; 
-
         if (Power===undefined && PowerHigh===undefined && PowerLow===undefined)
             return undefined;
 
-        if (!!max)
-            power.max = pVal(max)
-        if (!!min)
-            power.min = pVal(min)
+        power.max = pVal(PowerHigh)
+        power.min = pVal(PowerLow)
         
         if (Power) {
             powerTarget = pVal(Power);
@@ -127,7 +122,6 @@ export class ZwoParser implements WorkoutParser<string>{
         }
 
         return power;
-
     }
 
     protected getCadenceLimit( json,reverse?:boolean):Limit {
@@ -180,22 +174,31 @@ export class ZwoParser implements WorkoutParser<string>{
         const {Duration, Text }  = json;
 
         const cadence = this.getCadenceLimit(json);
-        const power = this.getPowerLimit(json)
+        let power = this.getPowerLimit(json)
         const duration = intVal(Duration);
         const text = Text;
         const steady = (power?.min===power?.max || !power?.min || !power?.max );
+        if (power?.max<power?.min) {
+            const p = {...power};
+            power = {...p,min:p.max,max:p.min}
+        }
 
-        return  { step:{duration,power,cadence,text,steady} }
+
+        return  { step:{duration,power,cadence,text,steady,cooldown:false} }
     }
 
     protected parseCooldown(json):ParseResult {
         const {Duration, Text }  = json;
 
         const cadence = this.getCadenceLimit(json,true);
-        const power = this.getPowerLimit(json,true)
+        let power = this.getPowerLimit(json,true)
         const duration = intVal(Duration);
         const text = Text;
         const steady = (power?.min===power?.max || !power?.min || !power?.max );
+        if (power?.max<power?.min) {
+            const p = {...power};
+            power = {...p,min:p.max,max:p.min}
+        }
 
         return  { step:{duration,power,cadence,text,steady,cooldown:true} }
     }
@@ -279,6 +282,7 @@ export class ZwoParser implements WorkoutParser<string>{
     protected parse(data:string,workout:Workout):Promise<Workout> {
         return new Promise( (resolve,reject) =>  {    
 
+            let tag
             parser.parseString(data, (err:Error,result)=> {
                 if (err) {
                     err.message = 'File contains error(s): '+ err.message.replace(/\n/g,' ');
@@ -300,6 +304,8 @@ export class ZwoParser implements WorkoutParser<string>{
                     zwoSteps.forEach( step => {
                         const tagName = step['#name'];
                         const tagValue = step.$;
+
+                        tag = {name:tagName,...tagValue}
                         const s = this.handleTag(tagName,tagValue);
                         if ( s!==undefined) {
                             if ( s.segment!==undefined)
@@ -313,7 +319,7 @@ export class ZwoParser implements WorkoutParser<string>{
                     resolve(workout)
                 }
                 catch ( err) {
-                    this.logger.logEvent( {message: 'error', fn:'parse()', error: err.message, stack: err.stack})
+                    this.logger.logEvent( {message: 'error', fn:'parse()', error: err.message, tag, stack: err.stack})
                     reject( new Error( `parsing error: ${err.message}` ))
                 }
             });    

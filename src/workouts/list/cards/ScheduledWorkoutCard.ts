@@ -22,7 +22,7 @@ export class ScheduledWorkoutCard extends WorkoutCard {
     openSettings():ScheduledWorkoutSettingsDisplayProps {
         const settings =  super.openSettings()
         const {day: date} = this.event
-        return {...settings,date}
+        return {...settings,date, category: 'scheduled'}
 
     }
 

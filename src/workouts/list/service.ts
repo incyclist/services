@@ -531,11 +531,13 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                     return [ schedList,...lists]
                 }
                 else {
+                    this.logEvent({message:'show scheduled workouts', cnt: scheduled.length, scheduled: scheduled.map( w=>w.workout.name).join(',')})
+
                     const schedList = this.scheduledList
                     const cards = schedList.getCards()
                     scheduled.forEach( w => {
                         if (!cards.some( c=>c.getId()===w.workout.id))
-                            schedList.add(new ScheduledWorkoutCard(w))
+                            schedList.add(new ScheduledWorkoutCard(w,))
                     })
 
                     const today = this.getAppState().getState('scheduledToday')
