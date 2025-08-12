@@ -5,7 +5,8 @@ export interface IntervalsWorkout {
     duration: number;
     distance: number;
     ftp: number;
-    lthr: number;
+    lthr?: number;
+    max_hr?: number;
     threshold_pace: number; // meters/sec
     pace_units: 'SECS_100M' | 'SECS_100Y' | 'MINS_KM' | 'MINS_MILE' | 'SECS_500M';
     sportSettings: any;
