@@ -8,7 +8,6 @@ import { RouteListService, useRouteList } from "../../routes";
 import { RoutePoint } from "../../routes/base/types";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
-import clone from "../../utils/clone";
 import { ActivityRouteType } from "../base";
 import { IncyclistActiveRidesApi } from "../base/api/active-rides";
 import { ActivityRideService, useActivityRide } from "../ride";
@@ -176,7 +175,7 @@ export class ActiveRidesService extends IncyclistService {
 
                 if (this.current && this.others?.length>0) {
                     this.isStarted = true
-                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash()})                    
+                    this.logEvent({message:'group ride started', active:this.others?.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash()})                    
                 }
             }
         }
@@ -631,7 +630,8 @@ export class ActiveRidesService extends IncyclistService {
             return
 
         const item = items[0]
-        const localItem = this.others.find( e=>e.sessionId===sessionId) 
+        const others = this.others??[]
+        const localItem = others.find( e=>e.sessionId===sessionId) 
         if (localItem) {
             localItem.user = item.user
             localItem.id = item.id
