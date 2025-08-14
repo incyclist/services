@@ -513,6 +513,13 @@ describe('ActivityRideService',()=>{
             return {...template, time,distance,routeDistance:distance}
         }
 
+        beforeAll( ()=>{
+        const origDate = global.Date.prototype.toLocaleDateString;
+            jest.spyOn(global.Date.prototype, 'toLocaleDateString').mockImplementation(function () { 
+                return origDate.call(this, 'en-US');
+            });
+        })
+
         beforeEach( ()=>{
             svc = service = new ActivityRideService()
             
@@ -522,7 +529,10 @@ describe('ActivityRideService',()=>{
             service.stop()
             resetSingleton(service)
         })
-        
+
+        afterAll(()=>{
+            jest.restoreAllMocks()
+        })
 
         test('current ride is slower - time and distance in middle of prev ride',()=>{
             const details = troll as ActivityDetails
@@ -550,7 +560,7 @@ describe('ActivityRideService',()=>{
             data = service.getPrevRideStats(current(16.001,74.99548756151944))
             data = service.getPrevRideStats(current(17.001,80.91931132633276))
 
-            const res = data.find(a=>a.title==='6/19/2024')
+            const res = data.find(a=>a.title==='6/19/2024' )
             
             expect(res?.distanceGap).toBe('-1m')
             expect(res?.timeGap).toBe('-0.2s')

@@ -415,7 +415,7 @@ export class WorkoutRide extends IncyclistService{
             this.powerDown(-delta)
         try {
 
-            if ( this.currentLimits.minPower!==this.currentLimits.maxPower && this.currentLimits.targetPower<this.currentLimits.maxPower) {
+            if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower<this.currentLimits?.maxPower) {
                 let deltaVal = delta
                 if ( this.settings?.ftp) {
                     deltaVal = delta===1 ? 5 : 50
@@ -453,7 +453,7 @@ export class WorkoutRide extends IncyclistService{
      */
     powerDown(delta:number):void {
         try {
-            if ( this.currentLimits.minPower!==this.currentLimits.maxPower && this.currentLimits.targetPower>this.currentLimits.minPower) {
+            if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower>this.currentLimits?.minPower) {
                 let deltaVal = delta
                 if ( this.settings?.ftp) {
                     deltaVal = delta===1 ? 5 : 50
