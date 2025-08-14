@@ -410,7 +410,21 @@ export class WorkoutRide extends IncyclistService{
      * 
      */
     powerUp(delta:number):void {
+
+        if (delta<0)
+            this.powerDown(-delta)
         try {
+
+            if ( this.currentLimits.minPower!==this.currentLimits.maxPower && this.currentLimits.targetPower<this.currentLimits.maxPower) {
+                let deltaVal = delta
+                if ( this.settings?.ftp) {
+                    deltaVal = delta===1 ? 5 : 50
+                }
+                this.currentLimits.targetPower = Math.min(this.currentLimits.targetPower+deltaVal, this.currentLimits.maxPower)
+                this.emit('update', this.getDashboardDisplayProperties())
+                return;
+            }
+
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp * (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
@@ -439,6 +453,17 @@ export class WorkoutRide extends IncyclistService{
      */
     powerDown(delta:number):void {
         try {
+            if ( this.currentLimits.minPower!==this.currentLimits.maxPower && this.currentLimits.targetPower>this.currentLimits.minPower) {
+                let deltaVal = delta
+                if ( this.settings?.ftp) {
+                    deltaVal = delta===1 ? 5 : 50
+                }
+                this.currentLimits.targetPower = Math.max(this.currentLimits.targetPower-deltaVal, this.currentLimits.minPower)
+                this.emit('update', this.getDashboardDisplayProperties())
+                return;
+            }
+
+
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp / (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
@@ -703,8 +728,12 @@ export class WorkoutRide extends IncyclistService{
 
 
     protected setCurrentLimits( trainingTime?:number ):void {
-        if (valid(trainingTime))
+
+        let refresh = true
+        if (valid(trainingTime)) {
             this.trainingTime = trainingTime
+            refresh = false
+        }
 
         const time = this.trainingTime
         const ftp  = this.settings.ftp;
@@ -720,6 +749,20 @@ export class WorkoutRide extends IncyclistService{
             request.time = Math.round(time);
             request.minPower = this.getPowerVal(limits.power,'min')
             request.maxPower = this.getPowerVal(limits.power,'max')
+            if ( request.minPower===request.maxPower) {
+                request.targetPower = request.minPower
+            }
+            else if (refresh) {
+                request.targetPower = this.currentLimits?.targetPower
+            }
+            else if ( request.minPower!==undefined && request.maxPower!==undefined && request.minPower!==request.maxPower) {
+                if ( request.minPower!==this.currentLimits?.minPower  || request.maxPower!==this.currentLimits?.maxPower)  {
+                    request.targetPower = request.minPower
+                }
+                else {
+                    request.targetPower = this.currentLimits?.targetPower
+                }
+            }
             request.minCadence = limits?.cadence?.min ? Math.round(limits.cadence.min) : undefined;
             request.maxCadence = limits?.cadence?.max ? Math.round(limits.cadence.max) : undefined;
             request.minHrm = limits.hrm?.min ? Math.round(limits.hrm.min) : undefined;

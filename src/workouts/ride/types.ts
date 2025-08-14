@@ -4,6 +4,7 @@ export interface WorkoutRequest {
     time: number
     minPower?: number
     maxPower?: number
+    targetPower?: number
     minCadence?: number
     maxCadence?: number
     minHrm?: number

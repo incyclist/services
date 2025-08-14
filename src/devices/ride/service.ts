@@ -1369,13 +1369,17 @@ export class DeviceRideService  extends IncyclistService{
 
 
     async sendUpdate( request:UpdateRequest):Promise<void> {
-
-        
         const adapters = this.getSelectedAdapters()??[];
         const targets = adapters.filter( ai =>  ai?.adapter?.isControllable() && ai?.adapter?.isStarted() &&  !ai.adapter?.isStopped())
 
+        if (!request.targetPower) {
+            if ( request.minPower===request.maxPower) {
+                request.targetPower = request.minPower
+            }
+        }        
+
         if (this.prevUpdate && !request.targetPowerDelta && !request.reset) {
-            if ( (request.slope!==undefined && this.prevUpdate.slope === request.slope) || 
+            if ( (request.slope!==undefined && this.prevUpdate.slope === request.slope) &&  
                  (request.targetPower!==undefined && this.prevUpdate.targetPower === request.targetPower)) {
                 return
             }

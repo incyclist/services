@@ -699,9 +699,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         if (this.state!=='Active' && this.state!=='Paused')
             return
 
-        console.log('# route completed', this.getWorkoutRide().inUse())
-
-
         // workout is not completed yet, continue in workout display mode
         if (this.getWorkoutRide().inUse()) { 
 
@@ -736,14 +733,16 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected adjustPower( increase:boolean, large:boolean ) {
         try {
 
-            const sgn = increase ? 1:-1
+            
             
 
             if (this.getWorkoutRide().inUse()) {
-                const inc = large ? sgn*5:sgn*1
-                this.getWorkoutRide().powerUp(inc)    
+                const inc = large ? 5:1
+                if (increase) this.getWorkoutRide().powerUp(inc) 
+                    else  this.getWorkoutRide().powerDown(inc)
             }
             else {
+                const sgn = increase ? 1:-1
                 const inc = large ? sgn*50:sgn*5
                 this.devicePowerUp(inc)
             }
@@ -917,6 +916,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 .on( 'forward', this.onForward.bind(this) )
                 .on( 'backward', this.onBackward.bind(this) )
                 .on( 'stopped', this.onWorkoutStopped.bind(this) )
+//                .on( 'request-update', this.onWorkoutRequestUpdate.bind(this) )
                 .once( 'completed', this.onWorkoutCompleted.bind(this) )    
         }
         catch(err) {
