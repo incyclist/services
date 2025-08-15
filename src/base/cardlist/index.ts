@@ -1,4 +1,4 @@
-import { PromiseObserver } from "../types/observer"
+import { Observer, PromiseObserver } from "../types/observer"
 
 
 export interface Card<T>{
@@ -25,6 +25,7 @@ export class CardList<T>  {
     
     protected hovered: Card<T>
     protected cards: Array<Card<T>>
+    public observer?:Observer
 
 
     constructor( protected id:string, protected title:string) {

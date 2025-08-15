@@ -2,7 +2,7 @@ import { FileInfo } from "../../api";
 import { Card, CardList } from "../../base/cardlist";
 import { IncyclistService } from "../../base/service";
 import { IListService, ListObserver, Singleton } from "../../base/types";
-import { PromiseObserver } from "../../base/types/observer";
+import { Observer, PromiseObserver } from "../../base/types/observer";
 import { useRouteList } from "../../routes";
 import { useUserSettings } from "../../settings";
 import { valid } from "../../utils/valid";
@@ -15,7 +15,7 @@ import { WorkoutSettings } from "./cards/types";
 import { WorkoutsDbLoader } from "./loaders/db";
 import { WP,WorkoutSettingsDisplayProps } from "./types";
 import { Injectable } from "../../base/decorators";
-import { useWorkoutCalendar, WorkoutCalendarEntry } from "../calendar";
+import { ScheduledWorkout, useWorkoutCalendar, WorkoutCalendarEntry } from "../calendar";
 import { ScheduledWorkoutCard } from "./cards/ScheduledWorkoutCard";
 import { useAppState } from "../../appstate";
 
@@ -72,6 +72,11 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
 
         this.registerUserChangeHandler();
+
+        this.getWorkoutCalendar().on('updated', () => {
+            this.onScheduledWorkoutsUpdated();
+        });
+
     }
 
     // Getters && Setters
@@ -137,7 +142,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
      */
 
     open():{observer:ListObserver<WP>,lists:Array<CardList<WP>> } {
-
+        this.getWorkoutCalendar().setActive(true)
         let lists = null;
         try {
             this.logEvent( {message:'open workout list'})
@@ -183,7 +188,9 @@ export class WorkoutListService extends IncyclistService  implements IListServic
      */
     // istanbul ignore next
     close(): void {
-        // nothing to do        
+        // nothing to do
+        this.getWorkoutCalendar().setActive(false)
+        
     }
 
     /**
@@ -510,52 +517,11 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
 
             // TODO: refactor -> move management of List to Calendar service
-            const scheduled = useWorkoutCalendar().getScheduledWorkouts()
+            const scheduled = this.getWorkoutCalendar().getScheduledWorkouts()
             if (scheduled.length>0) {
-
-                if (!this.scheduledList) {
-
-                    const schedList = new CardList<WP>('scheduled','Scheduled Workouts')
-                    scheduled.forEach( w => schedList.add(new ScheduledWorkoutCard(w)))
-
-                    const today = this.getAppState().getState('scheduledToday')
-                    if (today) {
-                        schedList.getCards().forEach( c => {
-                            if (c.getId()===today) {
-                                c.select()
-                            }
-                        })                    
-                    }
-                    this.scheduledList = schedList
-                    
-                    return [ schedList,...lists]
-                }
-                else {
-                    this.logEvent({message:'show scheduled workouts', cnt: scheduled.length, scheduled: scheduled.map( w=>w.workout.name).join(',')})
-
-                    const schedList = this.scheduledList
-                    const cards = schedList.getCards()
-                    scheduled.forEach( w => {
-                        if (!cards.some( c=>c.getId()===w.workout.id))
-                            schedList.add(new ScheduledWorkoutCard(w,))
-                    })
-
-                    const today = this.getAppState().getState('scheduledToday')
-
-                    if (today) {
-                        schedList.getCards().forEach( c => {
-                            if (c.getId()===today) {
-                                c.select()
-                            }
-                        })                    
-                    }
-                    
-                    return [ schedList,...lists]
-                }      
-                
-                
+                const schedList = this.getScheduledWorkouts(scheduled);               
+                return [ schedList,...lists]                               
             }
-
             return lists
 
         }
@@ -567,6 +533,55 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
     
+    protected getScheduledWorkouts(scheduled: ScheduledWorkout[]) {
+        const schedList = new CardList<WP>('scheduled', 'Scheduled Workouts');
+        scheduled.forEach(w => schedList.add(new ScheduledWorkoutCard(w)));
+
+        const today = this.getAppState().getState('scheduledToday');
+        if (today) {
+            schedList.getCards().forEach(c => {
+                if (c.getId() === today) {
+                    c.select();
+                }
+            });
+        }
+        
+        const newList = (this.scheduledList===undefined || this.scheduledList===null)
+        if (newList) {
+            this.scheduledList = schedList;    
+            this.scheduledList.observer = new Observer()
+        }
+        else {
+            const observer = this.scheduledList.observer;
+            this.scheduledList = schedList;    
+            this.scheduledList.observer = observer ?? new Observer()
+
+        }
+        
+        return schedList;
+    }
+
+    protected onScheduledWorkoutsUpdated() {
+        const listShown = (this.scheduledList?.length > 0)
+        
+
+        if (!listShown) {
+            this.emitLists('updated')
+        }
+        else {
+            const scheduled = this.getWorkoutCalendar().getScheduledWorkouts()
+            if (!scheduled || scheduled.length===0) {
+                delete this.scheduledList
+                this.emitLists('updated')
+                return;
+            }
+            this.getScheduledWorkouts(scheduled)
+            this.scheduledList.observer?.emit('update', this.scheduledList)
+            
+
+        }
+    }
+
     emitLists( event:'loaded'|'updated') {
 
         try {

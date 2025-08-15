@@ -9,6 +9,7 @@ export class ScheduledWorkoutCard extends WorkoutCard {
     constructor(event:ScheduledWorkout ) {
         super(event.workout)
         this.event = event
+        this.event.observer?.on('updated', this.onUpdate.bind(this))
     }
     /**
      * returns type of this card
@@ -26,6 +27,15 @@ export class ScheduledWorkoutCard extends WorkoutCard {
 
     }
 
+    getDisplayProperties():ScheduledWorkoutCardDisplayProperties {
+        const {day: date} = this.event
+
+        const props = super.getDisplayProperties()
+
+        return {...props,date}
+    }
+
+
     protected isSelected():boolean {
         const service = this.getWorkoutList()
         const selectedWorkout = service.getSelected()
@@ -36,16 +46,21 @@ export class ScheduledWorkoutCard extends WorkoutCard {
         return isSelected
     }
 
+    protected onUpdate(scheduled:ScheduledWorkout) {
 
-    getDisplayProperties():ScheduledWorkoutCardDisplayProperties {
-        const {day: date} = this.event
+        const wasSelected = this.isSelected()
+        this.event = scheduled
+        this.workout = scheduled.workout
 
-        const props = super.getDisplayProperties()
+        this.checkSelectionChanges(wasSelected)
 
-        return {...props,date}
-    }
+        this.emitUpdate()
+   }
 
-
+   protected checkSelectionChanges(wasSelected:boolean) {
+       // TODO: if the card was selected, but the date is not the current date anymore, we need to unselect
+       // TODO: if the card was not selected, but the date is the current date, we need to select
+   }
 
 
 }

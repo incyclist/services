@@ -51,6 +51,7 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
         
 
         const workout =  new Workout({type:'workout',name,description: data.description});
+
         data.steps.forEach(s => {
             if ( s.reps!==undefined && s.reps!==null) {
                 const segment = this.convertSegment(s,data)
@@ -78,7 +79,7 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
         const text = step.text
         const work = step.intensity==='active' || step.intensity==='interval' 
         const steady = !step.ramp
-        let cooldown = step.cooldown 
+        let cooldown = this.isCoolDown(step)
 
         let power,cadence,hrm;
         if (!step.freeride) {
@@ -92,10 +93,21 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
                 hrm = this.convertHr(step.hr, {lthr,max_hr,sportSettings, absolute:step._hr})
             
         }
+
         return {duration,power,cadence,hrm,text,work,steady,cooldown}
 
         
 
+    }
+
+    protected isCoolDown(step:IntervalsStep) : boolean {
+        if (step.cooldown)
+            return true
+
+        if (step.power?.start>step.power.end ||  step.hr?.start>step.hr?.end)
+            return true
+
+        return false
     }
 
     protected convertSegment( step:IntervalsStep,workout:IntervalsWorkout) : SegmentDefinition { 
