@@ -1,20 +1,25 @@
+import { JsonRepository } from "../../api";
 import { useAppsService } from "../../apps";
 import { Injectable } from "../../base/decorators";
 import { IncyclistService } from "../../base/service";
 import { Observer, Singleton } from "../../base/types";
+import { useOnlineStatusMonitoring } from "../../monitoring";
 import { useUserSettings } from "../../settings";
-import { addDays, getFirstDayOfCurrentWeek } from "../../utils";
+import { addDays, getFirstDayOfCurrentWeek, JSONObject } from "../../utils";
+import clone from "../../utils/clone";
 import { WorkoutSyncFactory } from "./sync";
 import { ScheduledWorkout, WorkoutCalendarEntry } from "./types";
 
 const SYNC_INTERVAL = 5* 60*1000
+const DB_NAME = 'calendar'
 
 @Singleton
 export class WorkoutCalendarService extends IncyclistService{
-    protected syncInfo:  {iv?: NodeJS.Timeout, observer?: Observer, listChanged?:boolean} 
+    protected syncInfo:  {iv?: NodeJS.Timeout, observer?: Observer, listChanged?:boolean, contentChanged?:boolean} 
     protected initialized: boolean
     protected workouts: Array<WorkoutCalendarEntry>
     protected listActive: boolean
+    protected repo: JsonRepository
 
 
 
@@ -31,9 +36,21 @@ export class WorkoutCalendarService extends IncyclistService{
         this.getAppsService().on('disconnected', onAppDisconnectedHandler)
     }
 
-    init() {
-        this.performSync()
-        //this.startSync()
+    async init() {
+        try {
+            await this.loadFromRepo()
+            await this.performSync()
+
+            if (!this.initialized) {
+                this.initialized = true
+                this.emit('initialized')
+            }
+
+            this.checkIfScheduledCurrentDay()
+        }
+        catch (err) {
+            this.logError(err, 'init')
+        }
     }
 
     isInitialized():boolean {
@@ -62,6 +79,30 @@ export class WorkoutCalendarService extends IncyclistService{
         if (active)
             this.startSync(active)
     }
+
+    protected async loadFromRepo() { 
+
+        try {
+            const dbData = await this.getRepo().read(DB_NAME)  as unknown as WorkoutCalendarEntry[] | undefined
+            if (dbData) {
+
+                this.workouts = dbData.map( w=> ({...w, day: new Date(w.day), updated: new Date(w.updated)}))
+            }
+        }
+        catch  {
+            return []
+        }
+    }
+
+    protected async saveToRepo() {
+        try {
+            const workouts = this.workouts.map(w => ({ ...w, observer: undefined }))
+            await this.getRepo().write(DB_NAME, workouts as unknown as JSONObject)
+        }
+        catch {
+            // handle error
+        }
+    }   
 
     protected  getScheduledWorkout(w: WorkoutCalendarEntry): ScheduledWorkout {
         return { type: 'scheduled', name: w.workout.name, id: `${w.source ?? ''}:${w.workoutId}`, ...w };
@@ -99,6 +140,12 @@ export class WorkoutCalendarService extends IncyclistService{
             await new Promise<void>( done => this.syncInfo.observer.once('done',done))
         }
 
+        const online = this.getOnlineStatusMonitoring().onlineStatus
+        if (!online) {
+            return;
+        }
+
+
         
 
         return new Promise<void>( done =>{
@@ -126,20 +173,17 @@ export class WorkoutCalendarService extends IncyclistService{
                     
                 }
                 delete this.syncInfo.listChanged
+                if (this.syncInfo.contentChanged) {
+                    this.saveToRepo()
+                }   
+
                 done()                
 
             }
 
             const onloaded = ( workouts)=>{
                 this.workouts = workouts.map( w => ({ ...w, observer:new Observer()}))
-
-                if (!this.initialized) {
-                    this.initialized = true
-                    this.emit('initialized')
-                }
-
                 this.checkIfScheduledCurrentDay()
-
                 onDone()
             }
             observer.once('done',onDone)
@@ -165,12 +209,14 @@ export class WorkoutCalendarService extends IncyclistService{
 
         this.workouts.push({ ...workout, source:service, observer:new Observer()})
         this.syncInfo.listChanged = true
+        this.syncInfo.contentChanged = true
     }
 
     protected onSyncWorkoutUpdated(workout:WorkoutCalendarEntry,service:string) {
         if (!this.isInitialized)            
             return
 
+        this.syncInfo.contentChanged = true
         const idx = this.workouts.findIndex( d=> d.source===service && d.workoutId===workout.workoutId)
         if (idx>-1) {
             const prev = this.workouts[idx]
@@ -187,6 +233,7 @@ export class WorkoutCalendarService extends IncyclistService{
         if (!this.isInitialized)            
             return
 
+        this.syncInfo.contentChanged = true
         const idx = this.workouts.findIndex( d=> d.source===service && d.workoutId===workout.workoutId)
         if (idx>-1) {
             this.workouts.splice(idx,1)
@@ -235,6 +282,19 @@ export class WorkoutCalendarService extends IncyclistService{
     protected getAppsService()  {
         return  useAppsService() 
     }
+
+    @Injectable
+    protected getOnlineStatusMonitoring() {
+        return useOnlineStatusMonitoring()        
+    }
+
+    protected getRepo() {
+        if (!this.repo)
+           this.repo  =JsonRepository.create('workouts')
+        return this.repo
+
+    }
+
 
     
 

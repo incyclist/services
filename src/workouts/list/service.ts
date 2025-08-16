@@ -517,7 +517,10 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
 
             // TODO: refactor -> move management of List to Calendar service
+
+            
             const scheduled = this.getWorkoutCalendar().getScheduledWorkouts()
+
             if (scheduled.length>0) {
                 const schedList = this.getScheduledWorkouts(scheduled);               
                 return [ schedList,...lists]                               
