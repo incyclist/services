@@ -3,6 +3,7 @@ import { WorkoutParser } from "../types";
 import { FileInfo, getBindings } from "../../../../api";
 import { Limit, PowerLimit, SegmentDefinition, StepDefinition, Workout } from "../../model";
 import { IntervalsStep, IntervalsValue, IntervalsWorkout } from "./types";
+import { Injectable } from "../../../../base/decorators/Injection";
 
 export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkout>{ 
 
@@ -68,6 +69,37 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
         
     }
 
+    supportsExtension(extension:string): boolean {
+        return extension === 'json'
+    }
+
+    supportsContent(str:string): boolean {
+        try {
+            const json = JSON.parse(str)
+
+
+            const supported =  json.type!=='workout'
+            return supported
+        }
+        catch {
+            return false
+        }
+    }
+
+    async getData(file:FileInfo, data?:string):Promise<string> {
+        if (data)
+            return data
+
+        const loader = this.getLoader()
+        const res = await loader.open(file)
+        if (res.error) {
+            throw new Error('Could not open file')
+        }        
+        return res.data
+
+    }
+
+
     protected convertStep( step:IntervalsStep,workout:IntervalsWorkout) : StepDefinition {
 
         const duration = step.duration
@@ -104,7 +136,7 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
         if (step.cooldown)
             return true
 
-        if (step.power?.start>step.power.end ||  step.hr?.start>step.hr?.end)
+        if (step.power?.start>step.power?.end ||  step.hr?.start>step.hr?.end)
             return true
 
         return false
@@ -213,11 +245,11 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
         else if (sportSettings) {
             const zones = sportSettings.hr_zones;
 
-            const minZoneValue = value?.value ?? Math.min(value?.start, value?.end);
-            const maxZoneValue = value?.value ?? Math.max(value?.start, value?.end);
+            const minZoneIdx = Math.round(value?.value ?? Math.min(value?.start, value?.end))-1;
+            const maxZoneIdx = Math.round(value?.value ?? Math.max(value?.start, value?.end))-1;
 
-            hr.min = zones.findIndex(z => z.zone === Math.round(minZoneValue));
-            hr.max = zones.findIndex(z => z.zone === Math.round(maxZoneValue));
+            hr.min = minZoneIdx ? zones[minZoneIdx-1]+1 : 0
+            hr.max = zones[maxZoneIdx] ?? hr.min;
 
         }
         else {
@@ -246,18 +278,11 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
             }
             else if (props?.sportSettings.power_zones) {
                 const zones = props?.sportSettings.power_zones;
-                const ftp = props?.ftp;
+                const minZoneIdx = Math.round(value?.value ?? Math.min(value?.start, value?.end))-1;
+                const maxZoneIdx = Math.round(value?.value ?? Math.max(value?.start, value?.end))-1;
 
-                const minZoneValue = value?.value ?? Math.min(value?.start, value?.end);
-                const maxZoneValue = value?.value ?? Math.max(value?.start, value?.end);
-
-                const minZone = zones.findIndex(z => z.zone === Math.round(minZoneValue));
-                const maxZone = zones.findIndex(z => z.zone === Math.round(maxZoneValue));
-
-
-                power.min = zones[minZone].minWatts / ftp * 100;
-                power.max = zones[maxZone].maxWatts / ftp * 100;
-
+                power.min = minZoneIdx ? zones[minZoneIdx-1]+1 : 0
+                power.max = zones[maxZoneIdx] ?? power.min;
             }
             else {
                 throw new Error('cannot parse power zone: ' + JSON.stringify(value));
@@ -270,20 +295,6 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
                 const abs = props?.absolute;
                 power.min = Math.min(abs.start, abs.end);
                 power.max = Math.max(abs.start, abs.end);
-            }
-            else if (props?.sportSettings.power_zones) {
-                const zones = props?.sportSettings.power_zones;
-
-                const minZoneValue = value?.value ?? Math.min(value?.start, value?.end);
-                const maxZoneValue = value?.value ?? Math.max(value?.start, value?.end);
-
-                const minZone = zones.findIndex(z => z.zone === Math.round(minZoneValue));
-                const maxZone = zones.findIndex(z => z.zone === Math.round(maxZoneValue));
-
-
-                power.min = zones[minZone].minWatts;
-                power.max = zones[maxZone].maxWatts;
-
             }
             else {
                 throw new Error('cannot parse power zone: ' + JSON.stringify(value));
@@ -318,35 +329,12 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
         
     }
 
-    supportsExtension(extension:string): boolean {
-        return extension === 'json'
+    @Injectable
+    protected getLoader() {
+        return getBindings().loader;
     }
 
-    supportsContent(str:string): boolean {
-        try {
-            const json = JSON.parse(str)
 
-
-            const supported =  json.type!=='workout'
-            return supported
-        }
-        catch {
-            return false
-        }
-    }
-
-    async getData(file:FileInfo, data?:string):Promise<string> {
-        if (data)
-            return data
-
-        const loader = getBindings().loader
-        const res = await loader.open(file)
-        if (res.error) {
-            throw new Error('Could not open file')
-        }        
-        return res.data
-
-    }
 
 
 
