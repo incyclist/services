@@ -6,7 +6,6 @@ import { Observer, Singleton } from "../../base/types";
 import { useOnlineStatusMonitoring } from "../../monitoring";
 import { useUserSettings } from "../../settings";
 import { addDays, getFirstDayOfCurrentWeek, JSONObject } from "../../utils";
-import clone from "../../utils/clone";
 import { WorkoutSyncFactory } from "./sync";
 import { ScheduledWorkout, WorkoutCalendarEntry } from "./types";
 
@@ -193,11 +192,13 @@ export class WorkoutCalendarService extends IncyclistService{
     }
 
     protected checkIfScheduledCurrentDay() {
+        if (!this.workouts) return;
+
         const now = new Date()
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
-        const workouts = this.workouts.filter( w=> w.day?.toLocaleDateString()===today.toLocaleDateString() )
-        if (workouts.length>0)  {
+        const workouts = this.workouts?.filter( w=> w.day?.toLocaleDateString()===today.toLocaleDateString() )??[]
+        if (workouts?.length>0)  {
             this.emit('scheduled',workouts[0])
         }
             
