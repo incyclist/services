@@ -63,6 +63,11 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
         }
     }
 
+    reset() {
+        this.lastSyncTS = 0
+        this.workouts = []
+    }
+
 
     // ------  PROTECTED MEMBERS ----------
 

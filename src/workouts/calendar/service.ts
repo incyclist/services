@@ -31,20 +31,18 @@ export class WorkoutCalendarService extends IncyclistService{
 
         const onAppConnectedHandler = this.onAppConnected.bind(this)
         const onAppDisconnectedHandler = this.onAppDisconnected.bind(this)
+        const onAppEnableHandler = this.onAppEnable.bind(this)
+        const onAppDisableHandler = this.onAppDisable.bind(this)
         this.getAppsService().on('connected', onAppConnectedHandler)
         this.getAppsService().on('disconnected', onAppDisconnectedHandler)
+        this.getAppsService().on('operation-enabled', onAppEnableHandler)
+        this.getAppsService().on('operation-disabled', onAppDisableHandler)
     }
 
     async init() {
         try {
             await this.loadFromRepo()
             await this.performSync()
-
-            if (!this.initialized) {
-                this.initialized = true
-                this.emit('initialized')
-            }
-
             this.checkIfScheduledCurrentDay()
         }
         catch (err) {
@@ -57,27 +55,74 @@ export class WorkoutCalendarService extends IncyclistService{
     }
 
     getScheduledWorkouts():Array<ScheduledWorkout> {
+        try {
+            const now = new Date()
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            const from = getFirstDayOfCurrentWeek()
+            const to = addDays( today,7)
+            if (this.workouts) {
+                const workouts = this.workouts.filter( w=> w.day?.valueOf()>=from.valueOf() && w.day.valueOf()<=to.valueOf() )
+                workouts.sort( (a,b)=> a.day.valueOf() - b.day.valueOf() )
+                return workouts.map( w => this.getScheduledWorkout(w))
+            }
 
-        const now = new Date()
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-        const from = getFirstDayOfCurrentWeek()
-        const to = addDays( today,7)
-        if (this.workouts) {
-            const workouts = this.workouts.filter( w=> w.day?.valueOf()>=from.valueOf() && w.day.valueOf()<=to.valueOf() )
-            workouts.sort( (a,b)=> a.day.valueOf() - b.day.valueOf() )
-            return workouts.map( w => this.getScheduledWorkout(w))
+        }
+        catch (err) { 
+            this.logError(err, 'getScheduledWorkouts')
         }
 
         return []
     }
 
     setActive(active:boolean) {
-        this.listActive = active
+        try {
+            this.listActive = active
 
-        this.stopSync()
-        if (active)
-            this.startSync(active)
+            this.stopSync()
+            if (active)
+                this.startSync(active)
+
+        }
+        catch (err) {
+            this.logError(err, 'setActive')
+        }
     }
+
+    onAppConnected(app:string, success:boolean=true) {
+        if (!success)
+            return;
+
+        const cnt = this.workouts?.length
+        this.performSync(app)
+            .then(() => {
+                if (cnt !== this.workouts?.length) {
+                    this.checkIfScheduledCurrentDay()
+                    this.emitListUpdate()
+                }            
+            })
+            .catch(err => {
+                this.logError(err, 'onAppConnected')
+            })
+    }
+
+    onAppDisconnected(app:string) {
+        this.workouts = this.workouts?.filter( w=> w.source!==app) ?? []
+        this.getWorkoutSyncFactory().get(app)?.reset()
+        this.emitListUpdate()
+    }
+
+    onAppEnable(app:string, operation:string) {
+        if (operation==='WorkoutDownload') {
+            this.onAppConnected(app,true)
+        }   
+    }
+
+    onAppDisable(app:string, operation:string) {
+        if (operation==='WorkoutDownload') {
+            this.onAppDisconnected(app)
+        }   
+    }
+
 
     protected async loadFromRepo() { 
 
@@ -86,6 +131,11 @@ export class WorkoutCalendarService extends IncyclistService{
             if (dbData) {
 
                 this.workouts = dbData.map( w=> ({...w, day: new Date(w.day), updated: new Date(w.updated)}))
+
+                if (!this.initialized && this.workouts?.length>0) {
+                    this.initialized = true
+                    this.emit('initialized')
+                }
             }
         }
         catch  {
@@ -149,9 +199,18 @@ export class WorkoutCalendarService extends IncyclistService{
 
         return new Promise<void>( done =>{
 
+            if ( !service) {
+                const services = this.getAppsService().getConnectedServices('WorkoutDownload')
+                const enabled = services.filter( s => s.key && this.getAppsService().isEnabled(s.key,'WorkoutDownload'))
+                if (!enabled?.length)
+                    return done()
+            }
+
+
             const observer = this.getWorkoutSyncFactory().sync(service)
-            if (!observer)
+            if (!observer) {
                 done()
+            }
 
             this.syncInfo.observer = observer
             this.syncInfo.listChanged = false
@@ -183,6 +242,8 @@ export class WorkoutCalendarService extends IncyclistService{
             const onloaded = ( workouts)=>{
                 this.workouts = workouts.map( w => ({ ...w, observer:new Observer()}))
                 this.checkIfScheduledCurrentDay()
+                this.syncInfo.listChanged = true
+                this.syncInfo.contentChanged = true
                 onDone()
             }
             observer.once('done',onDone)
@@ -242,12 +303,6 @@ export class WorkoutCalendarService extends IncyclistService{
         }
     }
 
-    protected onAppConnected(app:string,success:true) {
-        this.performSync()
-    }
-    protected onAppDisconnected(app:string) {
-        console.log('# app disconncted',app)
-    }
 
     protected getSetting(key:string, def:any) {
         try {

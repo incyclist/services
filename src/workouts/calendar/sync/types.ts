@@ -8,5 +8,5 @@ export type WorkoutSyncInfo = {
 export interface IWorkoutSyncProvider {
     isConnected(): boolean
     sync(): Observer
-    
+    reset(): void
 }

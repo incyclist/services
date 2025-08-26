@@ -120,6 +120,10 @@ export class AppsService extends IncyclistService   {
                 .filter( s => s.connected)
             return this.serviceMap.filter( s => connected.find( c => c.key===s.key))
         }
+        else if (operation === 'WorkoutDownload') {
+            return this.serviceMap.filter( s => available.includes(s.key) && s.connection.isConnected())
+
+        }
         return []
     }
 
