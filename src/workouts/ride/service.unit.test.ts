@@ -6,31 +6,38 @@ import  {useWorkoutList} from '../list'
 import { WorkoutRide } from './service'
 import { ActiveWorkoutLimit } from './types'
 import { WorkoutSettings } from '../list/cards/types'
+import { Inject } from '../../base/decorators'
 
-let workouts
+let MockWorkoutList
+let MockUserSettings
 
 
+const setupMocks = (workout?:Workout, settings?:WorkoutSettings, userSettings?:object) => {
+    MockUserSettings = {
+        get: jest.fn( (key:string, defValue:any) => {
+            return userSettings?.[key] ?? defValue
+        }),
+        set: jest.fn()
+    }
 
-const init = (workout?:Workout, settings?:WorkoutSettings) => {
-    workouts = useWorkoutList()
-
-    workouts.getSelected = jest.fn()
-    workouts.getStartSettings = jest.fn().mockReturnValue(settings??{ftp:255,useErgMode:true})
-    workouts.setStartSettings = jest.fn()
+    MockWorkoutList = {
+        getSelected: jest.fn(),
+        getStartSettings: jest.fn().mockReturnValue(settings??{ftp:255,useErgMode:true}),
+        setStartSettings: jest.fn()
+    }
 
     if (workout) 
-        workouts.getSelected= jest.fn().mockReturnValue(workout)
+        MockWorkoutList.getSelected= jest.fn().mockReturnValue(workout)
 
-    return workouts
+    Inject('WorkoutList', MockWorkoutList)
+    Inject('UserSettings', MockUserSettings)
+    return MockWorkoutList
 }
 
-const cleanup = () => {
-    const workouts = useWorkoutList()
-    
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const _wo = workouts as any
+const resetMocks = () => {
 
-    _wo.reset()
+    Inject('WorkoutList', null)
+    Inject('UserSettings', null)
 }
 
 describe('WorkoutRide',()=>{
@@ -38,6 +45,14 @@ describe('WorkoutRide',()=>{
 
 
     describe('constructor',()=>{
+
+        beforeEach( ()=>{
+            setupMocks()
+        })
+
+        afterEach( ()=>{
+            resetMocks()
+        })
 
         let s;
         test('normal',()=>{
@@ -66,12 +81,12 @@ describe('WorkoutRide',()=>{
             s.stopWorker()
             s.reset()       
 
-            cleanup()
+            resetMocks()
             jest.resetAllMocks()
         })
 
         test('normal',async ()=>{
-            init(workout)
+            setupMocks(workout)
             const service = new WorkoutRide()
             s = service
             emit = jest.spyOn(s,'emit')
@@ -90,7 +105,7 @@ describe('WorkoutRide',()=>{
         })
 
         test('no workout',()=>{
-            init()
+            setupMocks()
             const service = new WorkoutRide()
             s = service
             emit = jest.spyOn(s,'emit')
@@ -102,7 +117,7 @@ describe('WorkoutRide',()=>{
         })
 
         test('with FTP',()=>{
-            init(workout,{ftp:300})
+            setupMocks(workout,{ftp:300})
 
             const service = new WorkoutRide()
             s = service
@@ -114,7 +129,7 @@ describe('WorkoutRide',()=>{
             
         })
         test('without FTP',()=>{
-            init(workout,{})
+            setupMocks(workout,{})
 
             const service = new WorkoutRide()
             s = service
@@ -123,7 +138,7 @@ describe('WorkoutRide',()=>{
             expect(observer).toBeDefined()
             expect(s.state).toBe('initialized')
             expect(s.settings.ftp).toBe(200)
-            expect(workouts.setStartSettings).toHaveBeenCalledWith({ftp:200})
+            expect(MockWorkoutList.setStartSettings).toHaveBeenCalledWith({ftp:200})
             
         })
 
@@ -143,7 +158,7 @@ describe('WorkoutRide',()=>{
         let s,service:WorkoutRide
         let  emit;
         beforeEach( ()=>{
-            init(workout)
+            setupMocks(workout)
             s = service = new WorkoutRide()
             s.init()       
 
@@ -153,7 +168,7 @@ describe('WorkoutRide',()=>{
             s.stopWorker()
             s.reset()       
 
-            cleanup()
+            resetMocks()
             jest.resetAllMocks()
         })
 
@@ -209,7 +224,7 @@ describe('WorkoutRide',()=>{
         let s,service:WorkoutRide
         let  emit;
         beforeEach( ()=>{
-            init(workout)
+            setupMocks(workout)
             s = service = new WorkoutRide()
             s.init()       
             s.start()    
@@ -221,7 +236,7 @@ describe('WorkoutRide',()=>{
             s.stopWorker()
             s.reset()       
 
-            cleanup()
+            resetMocks()
             jest.resetAllMocks()
         })
 
@@ -292,7 +307,7 @@ describe('WorkoutRide',()=>{
         let s,service:WorkoutRide
         let  emit;
         beforeEach( ()=>{
-            init(workout)
+            setupMocks(workout)
             s = service = new WorkoutRide()
             s.init()       
             s.start()    
@@ -304,7 +319,7 @@ describe('WorkoutRide',()=>{
             s.stopWorker()
             s.reset()       
 
-            cleanup()
+            resetMocks()
             jest.resetAllMocks()
         })
 
@@ -369,7 +384,7 @@ describe('WorkoutRide',()=>{
         let s,service:WorkoutRide
         let  emit;
         beforeEach( ()=>{
-            init(workout)
+            setupMocks(workout)
             s = service = new WorkoutRide()
             s.init()       
             s.start()    
@@ -380,7 +395,7 @@ describe('WorkoutRide',()=>{
             s.stopWorker()
             s.reset()       
 
-            cleanup()
+            resetMocks()
             jest.resetAllMocks()
         })
 
@@ -444,7 +459,7 @@ describe('WorkoutRide',()=>{
         let s,service:WorkoutRide
         let  emit;
         beforeEach( ()=>{
-            init(workout)
+            setupMocks(workout)
             s = service = new WorkoutRide()
             s.init()       
             s.start()    
@@ -455,7 +470,7 @@ describe('WorkoutRide',()=>{
             s.stopWorker()
             s.reset()       
 
-            cleanup()
+            resetMocks()
             jest.resetAllMocks()
         })
 
@@ -510,7 +525,7 @@ describe('WorkoutRide',()=>{
         let s,service:WorkoutRide
         let  emit;
         beforeEach( ()=>{
-            init(workout)
+            setupMocks(workout)
             s = service = new WorkoutRide()
             s.init()       
             s.start()    
@@ -521,7 +536,7 @@ describe('WorkoutRide',()=>{
             s.stopWorker()
             s.reset()       
 
-            cleanup()
+            resetMocks()
             jest.resetAllMocks()
         })
 
@@ -621,7 +636,7 @@ describe('WorkoutRide',()=>{
         ] })
 
         beforeEach( ()=>{
-            init(workout)
+            setupMocks(workout)
             s = service = new WorkoutRide()
             s.workoutList = useWorkoutList()
             s.resetTimes()            
@@ -636,7 +651,7 @@ describe('WorkoutRide',()=>{
         })
         afterEach( ()=>{
             s.reset()                  
-            cleanup()
+            resetMocks()
             jest.resetAllMocks()
         })
 
@@ -682,7 +697,7 @@ describe('WorkoutRide',()=>{
         ] })
 
         beforeEach( ()=>{
-            init()
+            setupMocks()
             s = service = new WorkoutRide()
             s.workoutList = useWorkoutList()
             s.resetTimes()            
@@ -697,7 +712,7 @@ describe('WorkoutRide',()=>{
         })
         afterEach( ()=>{
             s.reset()                  
-            cleanup()
+            resetMocks()
             jest.resetAllMocks()
         })
 

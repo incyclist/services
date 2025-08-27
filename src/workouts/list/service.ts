@@ -55,6 +55,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     protected scheduledToday: WorkoutCalendarEntry
     protected scheduledList:  CardList<WP>
     protected selectedCard: Card<WP>
+    protected onUpdate: () => void
 
 
     constructor () {
@@ -73,11 +74,18 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
         this.registerUserChangeHandler();
 
-        this.getWorkoutCalendar().on('updated', () => {
-            this.onScheduledWorkoutsUpdated();
-        });
+        this.onUpdate  = this.onScheduledWorkoutsUpdated.bind(this);
+
+        this.getWorkoutCalendar().on('updated', this.onUpdate);
 
     }
+
+    reset() {
+        super.reset();
+        this.getWorkoutCalendar().off('updated', this.onUpdate);
+        this.getWorkoutCalendar().reset();
+    }
+
 
     // Getters && Setters
     getSelected():Workout { return this.selectedWorkout }

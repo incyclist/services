@@ -873,6 +873,18 @@ export class DevicePairingService  extends IncyclistService{
         }
     }
 
+    protected async reconnectInterface(ifName: string, delay?:number) {
+        if (delay && delay>0)
+            await sleep(delay)
+
+        try {
+            await this.access.connect(ifName)
+        }
+        catch (err) {
+            this.logError(err, 'reconnectInterface')
+        }
+    }
+
     protected checkRequiredActions(ifDetails: any, current: any, ifName: any ) {
         let restartScan = false
         let restartPair = false
@@ -888,11 +900,7 @@ export class DevicePairingService  extends IncyclistService{
               
                         current.state = 'disconnected';
                         this.emitStateChange({ interfaces: this.state.interfaces });
-
-                        sleep(1000).then( ()=> {
-                            this.access.connect(ifName)
-                                       .catch( (err) => {this.logError(err, 'reconnect')})
-                        })
+                        this.reconnectInterface(ifName,1000);
                 }
 
             }
@@ -954,16 +962,16 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected initPairingCallbacks():void {
-        this.rideService.on('pair-success',this.onPairingSuccessHandler)
-        this.rideService.on('pair-error',this.onPairingErrorHandler)
-        this.rideService.on('data', this.onDeviceDataHandler)
+        this.rideService?.on('pair-success',this.onPairingSuccessHandler)
+        this.rideService?.on('pair-error',this.onPairingErrorHandler)
+        this.rideService?.on('data', this.onDeviceDataHandler)
         
     }
 
     protected removePairingCallbacks():void {
-        this.rideService.off('pair-success',this.onPairingSuccessHandler)
-        this.rideService.off('pair-error',this.onPairingErrorHandler)
-        this.rideService.off('data', this.onDeviceDataHandler)
+        this.rideService?.off('pair-success',this.onPairingSuccessHandler)
+        this.rideService?.off('pair-error',this.onPairingErrorHandler)
+        this.rideService?.off('data', this.onDeviceDataHandler)
     }
 
     protected initScanningCallbacks():void {
@@ -972,8 +980,8 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected removeScanningCallbacks():void {
-        this.access.off('device',this.onDeviceDetectedHandler)
-        this.access.off('data', this.onDeviceDataHandler)    
+        this.access?.off('device',this.onDeviceDetectedHandler)
+        this.access?.off('data', this.onDeviceDataHandler)    
         this.deregisterScanningDataHandlers()
     }
 
@@ -1532,9 +1540,13 @@ export class DevicePairingService  extends IncyclistService{
             return;
 
         ai.forEach( a=> {
-            a.adapter.onScanStop()
-            a.adapter.off('data',a.handler) 
+            try {
+                a.adapter?.onScanStop()
+                a.adapter?.off('data',a.handler) 
+            } 
+            catch {}
         })
+
         delete this.state.scan.adapters
     }
 
@@ -1936,6 +1948,22 @@ export class DevicePairingService  extends IncyclistService{
             caps.push(this.mappedCapability(c))
         })        
         return caps
+    }
+
+    reset() {
+        super.reset()
+
+        if (this.state?.scanTo) {
+            this.state.scanTo.unref()
+            clearTimeout(this.state.scanTo)
+        }
+
+        if (this.state?.check?.to) {
+            this.state.check.to.unref()
+            clearTimeout(this.state.check.to)
+        }
+        this.removePairingCallbacks()
+        this.removeScanningCallbacks()
     }
 
     

@@ -20,7 +20,10 @@ export class WorkoutCalendarService extends IncyclistService{
     protected listActive: boolean
     protected repo: JsonRepository
 
-
+    protected onAppConnectedHandler: (app:string, success:boolean) => void
+    protected onAppDisconnectedHandler: (app:string) => void
+    protected onAppEnableHandler: (app:string) => void
+    protected onAppDisableHandler: (app:string) => void
 
     constructor() {
         super('WorkoutCalendar')
@@ -28,15 +31,15 @@ export class WorkoutCalendarService extends IncyclistService{
         this.syncInfo = {}        
         this.initialized = false
         this.listActive = false
+        this.onAppConnectedHandler = this.onAppConnected.bind(this)
+        this.onAppDisconnectedHandler = this.onAppDisconnected.bind(this)
+        this.onAppEnableHandler = this.onAppEnable.bind(this)
+        this.onAppDisableHandler = this.onAppDisable.bind(this)
 
-        const onAppConnectedHandler = this.onAppConnected.bind(this)
-        const onAppDisconnectedHandler = this.onAppDisconnected.bind(this)
-        const onAppEnableHandler = this.onAppEnable.bind(this)
-        const onAppDisableHandler = this.onAppDisable.bind(this)
-        this.getAppsService().on('connected', onAppConnectedHandler)
-        this.getAppsService().on('disconnected', onAppDisconnectedHandler)
-        this.getAppsService().on('operation-enabled', onAppEnableHandler)
-        this.getAppsService().on('operation-disabled', onAppDisableHandler)
+        this.getAppsService().on('connected', this.onAppConnectedHandler)
+        this.getAppsService().on('disconnected', this.onAppDisconnectedHandler)
+        this.getAppsService().on('operation-enabled', this.onAppEnableHandler)
+        this.getAppsService().on('operation-disabled', this.onAppDisableHandler)
     }
 
     async init() {
@@ -48,6 +51,18 @@ export class WorkoutCalendarService extends IncyclistService{
         catch (err) {
             this.logError(err, 'init')
         }
+    }
+
+    reset() {
+        super.reset()
+        this.removeAllListeners()
+
+        this.getAppsService().off('connected', this.onAppConnectedHandler)
+        this.getAppsService().off('disconnected', this.onAppDisconnectedHandler)
+        this.getAppsService().off('operation-enabled', this.onAppEnableHandler)
+        this.getAppsService().off('operation-disabled', this.onAppDisableHandler)
+
+        this.getOnlineStatusMonitoring().reset()
     }
 
     isInitialized():boolean {

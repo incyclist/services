@@ -126,6 +126,16 @@ export class OnlineStateMonitoringService extends IncyclistService {
         return false
     }
 
+    reset() {
+        super.reset()
+        this.removeAllListeners()
+
+        const running = Object.keys(this.contextHandlers)
+        for (const context of running) {
+            this.stop(context)
+        }
+    }
+
 
 }
 

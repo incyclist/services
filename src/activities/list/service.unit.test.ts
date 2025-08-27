@@ -302,8 +302,9 @@ describe('ActivityListService',()=>{
             expect(res.observer).toBe(observer)
 
             const finalize = ():Promise<ActivityListDisplayProperties|undefined> => new Promise(done=>{
-                res.observer?.on('loaded',done)
-                setTimeout( ()=>{ done(undefined)},1000)
+                const to = setTimeout( ()=>{ done(undefined)},1000)
+                res.observer?.on('loaded', (res)=>{ clearTimeout(to); done(res)})
+                
             })
 
             const loaded = await finalize()
@@ -540,8 +541,9 @@ describe('ActivityListService',()=>{
                         resolve()
 
                     }
-                    setTimeout(done,to)
+                    const timeoutId = setTimeout(done,to)
                     service.getObserver().once('updated',(update)=>{
+                        clearTimeout(timeoutId)
                         res = update
                         done()
                     })

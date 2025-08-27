@@ -274,6 +274,15 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
+
+    /*
+
+    
+    */
+    
+
+
+
     
     /**
      * Stores the current top position of the RouteList in the list component for a specified display type.
@@ -512,7 +521,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                         this.initialized = true
                         
                         this.logEvent( {message:'preload route list completed'})
-                        updateRepoStats()
+                        this.updateRepoStats()
                         this.emitLists('loaded',{log:true})
                         process.nextTick( ()=>{delete this.preloadObserver})
                     })
@@ -532,6 +541,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
         return this.preloadObserver
     }
+
+
 
     private createRoutesLogEntry(includeDetails=false):RouteListLog {
         try {
@@ -1067,7 +1078,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     // with the current timestamp minus one minute. 
     // This will ensure that any new routes added to the repo will show up as "New" in the UI for those users, which otherwise would not happen
     protected async checkUIUpdateWithNoRepoStats() {
-        const repoUpdate = getRepoUpdates();
+        const repoUpdate = this.getRepoUpdates();
         if (this.routes.length > 0 && repoUpdate.initial === undefined) {
 
             const ts = Date.now() - 60000;
@@ -1075,10 +1086,23 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 r.description.tsImported = ts;
                 this.update(r);
             });
-            updateRepoStats(ts);
+            this.updateRepoStats(ts);
             await sleep(5); // just to make sure that any following route import will have a different tsImported
 
         }
+    }
+
+    protected getRepoUpdates() {
+        try {
+            return getRepoUpdates();
+        }
+        catch  {         
+            return {  };
+        }
+    }
+
+    protected updateRepoStats(ts?:number) {
+        updateRepoStats(ts);
     }
 
     protected async loadRoutesFromRepo():Promise<void> {
@@ -1439,6 +1463,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     @Injectable getAppsService() {
         return useAppsService()
+    }
+
+    reset() {
+        super.reset()
+        if (this.syncInfo?.iv ) {
+            clearInterval(this.syncInfo.iv)
+            this.syncInfo.iv = undefined
+        }   
     }
 
 

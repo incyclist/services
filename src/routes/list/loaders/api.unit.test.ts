@@ -56,7 +56,7 @@ describe('RoutesApiLoader',()=>{
                 //console.log('updated '+route.description.title)
             })
             observer.on('done' ,async ()=>{
-                observer.stop()
+                observer.stop({immediately:true})
                 await waitNextTick()        
 
                 done({added,updated,routes})

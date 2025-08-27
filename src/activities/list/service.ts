@@ -618,6 +618,13 @@ export class ActivityListService extends IncyclistService {
         return useAppState()
     }
 
+    reset() {
+        const keys = Object.keys(this.observers)
+        for (const key of keys) {
+            this.observers[key]?.stop({immediately:true})
+        }
+    }
+
 
 
 

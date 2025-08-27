@@ -6,6 +6,7 @@ import { RoutesRepoUpdates } from "./types"
 const DURATION_2_WEEKS = 1000*60*60*24*14
 const DURATION_30_SECONDS = 1000*30
 
+
 export const updateRepoStats = (ts?:number):void => {
     const settings = useUserSettings()
     const updates = settings.get('repo.routesUpdates',{}) as unknown as RoutesRepoUpdates
@@ -23,8 +24,13 @@ export const updateRepoStats = (ts?:number):void => {
 
 export const getRepoUpdates = ():RoutesRepoUpdates => {
     const settings = useUserSettings()
-    const updates = settings.get('repo.routesUpdates',{}) as unknown as RoutesRepoUpdates
-    return updates
+    try {
+        const updates = settings.get('repo.routesUpdates',{}) as unknown as RoutesRepoUpdates
+        return updates
+    }
+    catch {
+        return {  };
+    }
 }
 
 export  const checkIsNew = (descr: RouteInfo):boolean => {

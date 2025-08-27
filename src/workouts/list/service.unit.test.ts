@@ -7,11 +7,46 @@ import { waitNextTick } from '../../utils'
 import { WorkoutListService } from './service'
 import { WP } from './types'
 import { FileInfo } from '../../api'
+import { Inject } from '../../base/decorators'
 
 describe('WorkoutListService',()=>{
 
+    const setupMocks = ()=> {
+    
+
+        const MockCalendar = {
+            on: jest.fn(),
+            off: jest.fn(),
+            once: jest.fn(),
+            init: jest.fn(),
+            setActive: jest.fn(),
+            getScheduledWorkouts: jest.fn().mockReturnValue([]),
+            reset: jest.fn()
+        }
+        const MockAppState = {
+            setState: jest.fn(),
+            setPersistedState: jest.fn().mockReturnValue({}),
+            getState: jest.fn()
+        }
+        Inject('WorkoutCalendar', MockCalendar)
+        Inject('AppState', MockAppState)
+    }
+
+    const resetMocks = () => {
+        Inject('WorkoutCalendar', null)
+        Inject('AppState', null)
+    }
+
     describe('constructor and getters',()=>{
         let s,service
+
+        beforeEach( ()=>{
+            setupMocks()
+        })
+        afterEach( ()=>{
+            resetMocks()
+        })
+
         afterAll( ()=>{
             s.reset()
         })
@@ -34,11 +69,13 @@ describe('WorkoutListService',()=>{
         let s,service
 
         beforeEach( ()=>{
+            setupMocks()
             s = service = new WorkoutListService()
             s.logError = jest.fn()
         })
         
         afterEach( ()=>{
+            resetMocks()
             s.reset()
         })
 
@@ -177,11 +214,13 @@ describe('WorkoutListService',()=>{
         let s,service
 
         beforeEach( ()=>{
+            setupMocks()
             s = service = new WorkoutListService()
             s.logError = jest.fn()
         })
         
         afterEach( ()=>{
+            resetMocks()
             s.reset()
         })
 
@@ -308,6 +347,8 @@ describe('WorkoutListService',()=>{
         let user
         let ergPref
         beforeEach( ()=>{
+            setupMocks()
+
             s = service = new WorkoutListService()
             s.getUserSettings = jest.fn().mockReturnValue( {
                 get:jest.fn( (key,defValue)=> { 
@@ -323,6 +364,7 @@ describe('WorkoutListService',()=>{
         })
         
         afterEach( ()=>{
+            resetMocks()
             s.reset()
             user = undefined
             ergPref = undefined
@@ -397,11 +439,13 @@ describe('WorkoutListService',()=>{
     describe('onResize',()=>{
         let s,service
         beforeEach( ()=>{
+            setupMocks()
             s = service = new WorkoutListService()
             s.logError = jest.fn()
         })
         
         afterEach( ()=>{
+            resetMocks()  
             s.reset()
         })
 
@@ -433,12 +477,14 @@ describe('WorkoutListService',()=>{
     describe('onCarouselInitialized',()=>{
         let s,service
         beforeEach( ()=>{
+            setupMocks()
             s = service = new WorkoutListService()
             s.logError = jest.fn()
 
         })
         
         afterEach( ()=>{
+            resetMocks()
             s.reset()
         })
 
@@ -496,7 +542,9 @@ describe('WorkoutListService',()=>{
         let loadResult
         let delay
         let eventSpy 
+
         beforeEach( ()=>{
+            setupMocks()
             s = service = new WorkoutListService()
             s.logError = jest.fn()
 
@@ -524,6 +572,7 @@ describe('WorkoutListService',()=>{
         })
         
         afterEach( ()=>{
+            resetMocks()
             s.reset()
             loadError = undefined
             loadResult = undefined
@@ -593,6 +642,7 @@ describe('WorkoutListService',()=>{
         let s,service
         let eventSpy
         beforeEach( ()=>{
+            setupMocks()
             s = service = new WorkoutListService()
             s.initialized = true;
             s.logError = jest.fn()
@@ -607,6 +657,7 @@ describe('WorkoutListService',()=>{
         })
         
         afterEach( ()=>{
+            resetMocks()
             s.reset()
             jest.resetAllMocks()
         })        
@@ -724,6 +775,7 @@ describe('WorkoutListService',()=>{
 
 
         beforeEach( ()=>{
+            setupMocks()    
             s = service = new WorkoutListService()
             s.logError = jest.fn()
             s.observer = new Observer()
@@ -737,6 +789,7 @@ describe('WorkoutListService',()=>{
         })
 
         afterEach( ()=>{
+            resetMocks()
             s.reset()
         })
 
@@ -762,6 +815,7 @@ describe('WorkoutListService',()=>{
 
 
         beforeEach( ()=>{
+            setupMocks()
             s = service = new WorkoutListService()
             s.logError = jest.fn()
             s.observer = new Observer()
@@ -781,6 +835,7 @@ describe('WorkoutListService',()=>{
         })
 
         afterEach( ()=>{
+            resetMocks()
             s.reset()
         })
 
@@ -849,10 +904,12 @@ describe('WorkoutListService',()=>{
         let s,service
 
         beforeEach( ()=>{
+            setupMocks()
             s = service = new WorkoutListService()
         })
 
         afterEach( ()=>{
+            resetMocks()
             s.reset()
         })
         test('no route selected',()=>{

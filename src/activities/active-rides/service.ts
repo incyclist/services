@@ -75,6 +75,7 @@ export class ActiveRidesService extends IncyclistService {
         
         try {
             if (this.observer) {
+                this.observer.stop({immediately:true})
                 this.stop()
             }
 
@@ -849,6 +850,12 @@ export class ActiveRidesService extends IncyclistService {
         return this.getIncyclistActiveRidesApi()
     }
 
+    reset() {
+        if (this.observer) {
+            this.observer.stop({immediately:true})
+            delete this.observer
+        }
+    }
     
 
 }

@@ -16,6 +16,9 @@ import { ParseResult, RouteInfo } from "../base/types";
 import { Observer } from "../../base/types/observer";
 import { useUserSettings } from "../../settings";
 import { Card } from "../../base/cardlist";
+import { waitNextTick } from "../../utils";
+import { sleep } from "../../utils/sleep";
+import { Inject } from "../../base/decorators";
 
 let cnt = 0
 
@@ -73,7 +76,8 @@ const prepareMock = ( database, props) => {
     
     
     service.loadRoutesFromApi = jest.fn().mockResolvedValue([])
-    
+    service.updateRepoStats = jest.fn()
+
 
     const filesystem = fs as unknown as IFileSystem;
 
@@ -117,22 +121,32 @@ describe('RouteListService',()=>{
 
         let db
         let service:MockeableService
-        let userSettings
 
 
+        const AppStateMock = {
+            setPersistedState:jest.fn()
+        }
+
+        const MockUserSettings = {
+            get: jest.fn().mockReturnValue({}),
+            set: jest.fn()
+        }
 
         beforeEach(()=>{ 
             service = prepareMock(db,{mockLoad:false})
-            userSettings = useUserSettings()
-            userSettings.get = jest.fn().mockReturnValue({})
-            userSettings.set = jest.fn()
+            Inject('AppState', AppStateMock)
+            Inject('UserSettings', MockUserSettings)
         })
 
         afterEach( ()=>{
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (service as any).reset()
             db?.reset()
-            userSettings?.reset()
+            
+            Inject('AppState', null)
+            Inject('UserSettings', null)
+
+            jest.resetAllMocks()
         })
 
         test('1',async ()=>{
@@ -144,13 +158,13 @@ describe('RouteListService',()=>{
             expect(routes.length).toBe(34)
 
             // remove observer before we check the result against expectation
-            routes.forEach( r => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const d = r as any
-                delete d?.observer
-            })
+            // routes.forEach( r => {
+            //     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            //     const d = r as any
+            //     d.observer?.stop({immediately:true})
+            //     delete d?.observer
+            // })
             //expect(routes.sort(sort)).toMatchObject(repoData.sort(sort))
-            
 
         })
 

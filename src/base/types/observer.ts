@@ -36,16 +36,17 @@ export class Observer   implements IObserver  {
 
     stop( props:{immediately?:boolean}={}) {
         this.emitter.emit('stopped')
-        if (props.immediately) {
-            this.emitter.removeAllListeners()
-        }
-        else {
-            setTimeout( ()=>{
-                this.emitter.removeAllListeners()               
-            }, 1000)
-   
-        }
         
+        if ( this.emitter.listenerCount()>0 ) {    
+            if (props.immediately) {
+                this.emitter.removeAllListeners()
+            }
+            else {
+                setTimeout( ()=>{
+                    this.emitter.removeAllListeners()               
+                }, 1000)            
+            }
+        }        
     }
 
     emit(event:string, ...data) {
