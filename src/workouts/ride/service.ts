@@ -6,7 +6,7 @@ import { useDeviceRide } from "../../devices";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
-import { PowerLimit,  StepDefinition, Workout } from "../base/model";
+import { CurrentStep, PowerLimit,  StepDefinition, Workout } from "../base/model";
 import { WorkoutListService, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
 import { ActiveWorkoutLimit, WorkoutDisplayProperties } from "./types";
@@ -742,41 +742,42 @@ export class WorkoutRide extends IncyclistService{
 
         
         if ( limits!==undefined) {
-
-            this.currentStep = limits.step
-            const request:ActiveWorkoutLimit = {time:0, duration:0, remaining:0} 
-    
-            request.time = Math.round(time);
-            request.minPower = this.getPowerVal(limits.power,'min')
-            request.maxPower = this.getPowerVal(limits.power,'max')
-            if ( request.minPower===request.maxPower) {
-                request.targetPower = request.minPower
-            }
-            else if (refresh) {
-                request.targetPower = this.currentLimits?.targetPower
-            }
-            else if ( request.minPower!==undefined && request.maxPower!==undefined && request.minPower!==request.maxPower) {
-                if ( request.minPower!==this.currentLimits?.minPower  || request.maxPower!==this.currentLimits?.maxPower)  {
-                    request.targetPower = request.minPower
-                }
-                else {
-                    request.targetPower = this.currentLimits?.targetPower
-                }
-            }
-            request.minCadence = limits?.cadence?.min ? Math.round(limits.cadence.min) : undefined;
-            request.maxCadence = limits?.cadence?.max ? Math.round(limits.cadence.max) : undefined;
-            request.minHrm = limits.hrm?.min ? Math.round(limits.hrm.min) : undefined;
-            request.maxHrm = limits.hrm?.max ? Math.round(limits.hrm.max) : undefined;
-            this.currentLimits = { ...request, duration: limits.duration, remaining:limits.remaining };                 
+            this.createLimitRequest(limits, time, refresh);                 
         }
 
         this.isFreeRide = limits?.power===undefined || limits?.power===null
-        
-
         this.logger.logEvent( {message: 'workout requests', ...this.currentLimits,ftp})
         this.emit('request-update',this.currentLimits)
     }
 
+
+    protected createLimitRequest(limits: CurrentStep, time: number, refresh: boolean) {
+        this.currentStep = limits.step;
+        const request: ActiveWorkoutLimit = { time: 0, duration: 0, remaining: 0 };
+
+        request.time = Math.round(time);
+        request.minPower = this.getPowerVal(limits.power, 'min');
+        request.maxPower = this.getPowerVal(limits.power, 'max');
+        if (request.minPower === request.maxPower) {
+            request.targetPower = request.minPower;
+        }
+        else if (refresh) {
+            request.targetPower = this.currentLimits?.targetPower;
+        }
+        else if (request.minPower !== undefined && request.maxPower !== undefined && request.minPower !== request.maxPower) {
+            if (request.minPower !== this.currentLimits?.minPower || request.maxPower !== this.currentLimits?.maxPower) {
+                request.targetPower = request.minPower;
+            }
+            else {
+                request.targetPower = this.currentLimits?.targetPower;
+            }
+        }
+        request.minCadence = limits?.cadence?.min ? Math.round(limits.cadence.min) : undefined;
+        request.maxCadence = limits?.cadence?.max ? Math.round(limits.cadence.max) : undefined;
+        request.minHrm = limits.hrm?.min ? Math.round(limits.hrm.min) : undefined;
+        request.maxHrm = limits.hrm?.max ? Math.round(limits.hrm.max) : undefined;
+        this.currentLimits = { ...request, duration: limits.duration, remaining: limits.remaining };
+    }
 
     protected getZoomParameters(time: number) {
         let start, stop;

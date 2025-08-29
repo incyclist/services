@@ -1104,8 +1104,9 @@ export class DevicePairingService  extends IncyclistService{
             const device =this.getCapabilityDevice(c,udid)
 
             // did the device capabilities change?
-            const known = capabilities.filter( c=> c.devices.some( d=> d.udid===udid)).map(c=>c.capability).sort().join(';')   
-            const current = this.getDeviceAdapter(udid)?.getCapabilities().sort().join(';')
+            const alphabetical = (a, b) => a.localeCompare(b);
+            const known = capabilities.filter( c=> c.devices.some( d=> d.udid===udid)).map(c=>c.capability).sort(alphabetical).join(';')
+            const current = this.getDeviceAdapter(udid)?.getCapabilities().sort(alphabetical).join(';')
 
             if (known!==current) {
                 this.configuration.updateCapabilities(udid)

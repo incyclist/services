@@ -243,8 +243,8 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             else failed.push(items[idx]);
         });
 
-        for ( let i=0; i<success.length;i++) {
-            const item = success[i]
+        for (const element of success) {
+            const item = element
 //        success.forEach(item => {
             this.emitRouteEvents(!item.added,item.route)
 
