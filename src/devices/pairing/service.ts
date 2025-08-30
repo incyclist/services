@@ -483,7 +483,13 @@ export class DevicePairingService  extends IncyclistService{
     */
     async unselectDevices(capability:IncyclistCapability):Promise<void> { 
         try  {
+            const adapater = this.configuration.getSelected(capability)
             this.configuration.unselect(capability,true)
+
+            if (adapater?.isStarted()) {
+                this.restart()
+            }
+
         }
         catch(err) { // istanbul ignore next
             this.logError(err, 'deleteDevice')
@@ -1390,6 +1396,7 @@ export class DevicePairingService  extends IncyclistService{
 
         this.initPairingCallbacks();
         const selectedAdapters = target.map(ai=>({...ai, isStarted:false}))
+        this.setRequestedCapabilties(selectedAdapters)
 
         this.onPairingStarted();
         const promise = this.rideService.startAdapters(selectedAdapters, 'pair');
@@ -1419,6 +1426,14 @@ export class DevicePairingService  extends IncyclistService{
         }
 
 
+    }
+
+    protected setRequestedCapabilties(selectedAdapters: AdapterInfo[]) {
+        selectedAdapters.forEach ( ai => {  
+            const requested = this.state.capabilities.filter( c=> c.selected===ai.udid)  ?? []
+            ai.capabilities = requested.map(c => c.capability);
+            ai.isControl = requested.some(c => c.capability === 'control' || c.capability === 'power' || c.capability==='speed');
+        })
     }
 
     private isReadyToPair() {

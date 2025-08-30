@@ -618,8 +618,8 @@ export class DeviceRideService  extends IncyclistService{
             this.initForStart(ai, startProps, route, startPos, realityFactor, rideMode);
         }
 
-        const sType = (ai.isControl ?? ai.adapter.hasCapability(IncyclistCapability.Control)) ? 'bike' : 'sensor'
-        
+        const sType = (ai.isControl ) ? 'bike' : 'sensor'
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const logProps = {} as any
         logProps[sType] = ai.adapter.getUniqueName()
@@ -630,7 +630,7 @@ export class DeviceRideService  extends IncyclistService{
             logProps.cyclingMode = bike.getCyclingMode()?.getName()
             logProps.bikeType = bike.getCyclingMode()?.getSetting('bikeType') 
         }
-
+        startProps.capabilities = ai.capabilities
 
         this.logEvent( {message:`${startType} ${sType} request`,...logProps})
         return ai.adapter.start(startProps)
@@ -678,7 +678,11 @@ export class DeviceRideService  extends IncyclistService{
     private initCyclingMode(ai: AdapterRideInfo, forceErgMode: any) {
         let bike,mode,settings;
 
-        if (ai.adapter?.isControllable()) {
+        const isNoControl = ai.capabilities?.includes(IncyclistCapability.Control);
+
+        if (ai.adapter?.isControllable() && !isNoControl) {
+
+
             bike = ai.adapter;
             const config = this.getDeviceConfiguration()
 
