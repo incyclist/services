@@ -76,11 +76,27 @@ describe('DeviceRideService',()=>{
             getModeSettings:jest.fn().mockReturnValue({}),
         }
 
-        const setupMocks = (s,a)=> {
-            s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
-            s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
+        const setupMocks = (s,a,props?)=> {
+
+            let _mode = undefined
+            const {disableControl} = props ?? {}
+
+            if (disableControl) {
+                s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities().filter( c => c !== IncyclistCapability.Control)}])
+                s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities().filter( c => c !== IncyclistCapability.Control)}])
+                
+            }
+            else  {
+                s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
+                s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
+
+            }
+
             a.isStarted = jest.fn().mockReturnValue(true)
             a.start = jest.fn().mockResolvedValue(true)
+
+            a.getCyclingMode = jest.fn( ()=> { return _mode ?? a.getDefaultCyclingMode()})
+            a.setCyclingMode = jest.fn( (mode, settings) => { _mode = mode })
         }
         beforeEach( ()=>{
             service = new DeviceRideService()
@@ -89,7 +105,7 @@ describe('DeviceRideService',()=>{
 
         afterEach( ()=>{                
             service.stop()
-            service.reset()            
+            service.reset()        
         })
 
         test('only powermeter',async ()=>{
@@ -108,6 +124,34 @@ describe('DeviceRideService',()=>{
             const props:Partial<RideServiceDeviceProperties> = {forceErgMode:false, user:{weight:70}}
             const started = await service.start(props)
             expect(started).toBe(true)
+            expect(adapter.setCyclingMode).toHaveBeenCalled()
+            expect(adapter.getCyclingMode().getName()).toBe('Smart Trainer')
+        })
+
+        test('workout with enforced erg mode',async ()=>{
+            adapter = new AntFEAdapter({deviceID: '2606',profile: 'FE',interface: 'ant'})
+            setupMocks(service,adapter)
+
+            const props:Partial<RideServiceDeviceProperties> = {forceErgMode:true, user:{weight:70}}
+            const started = await service.start(props)
+            expect(started).toBe(true)
+            expect(adapter.setCyclingMode).toHaveBeenCalled()
+            expect(adapter.getCyclingMode().getName()).toBe('ERG')
+
+        })
+
+        test('adapter is disabled for control capability',async ()=>{
+            adapter = new AntFEAdapter({deviceID: '2606',profile: 'FE',interface: 'ant' },{capabilities:[IncyclistCapability.Power]})
+            setupMocks(service,adapter,{disableControl:true})
+
+            
+
+            const props:Partial<RideServiceDeviceProperties> = {forceErgMode:true, user:{weight:70}}
+            const started = await service.start(props)
+            expect(started).toBe(true)
+            //expect(adapter.setCyclingMode).not.toHaveBeenCalled()
+            expect(adapter.getCyclingMode().getName()).toBe('PowerMeter')
+
         })
 
     })

@@ -657,7 +657,7 @@ export class DeviceRideService  extends IncyclistService{
 
             // Special Case Daum8i "Daum Classic" mode:
             // we need to upload the route data (in Epp format) as part of the start commands
-            if (bike.getCyclingMode().getModeProperty('eppSupport')) {
+            if (bike.getCyclingMode()?.getModeProperty('eppSupport')) {
                 startProps.route = this.prepareEppRoute({ route, startPos, realityFactor, rideMode });
                 startProps.onStatusUpdate = (completed: number, total: number) => {
                     this.emit('start-update', this.getAdapterStateInfo(ai), completed, total);
@@ -678,9 +678,9 @@ export class DeviceRideService  extends IncyclistService{
     private initCyclingMode(ai: AdapterRideInfo, forceErgMode: any) {
         let bike,mode,settings;
 
-        const isNoControl = ai.capabilities?.includes(IncyclistCapability.Control);
+        const isControlDisabled = !ai.capabilities?.includes(IncyclistCapability.Control);
 
-        if (ai.adapter?.isControllable() && !isNoControl) {
+        if (ai.adapter?.isControllable() ) {
 
 
             bike = ai.adapter;
@@ -699,8 +699,14 @@ export class DeviceRideService  extends IncyclistService{
                     settings = modeInfo.settings;
                 }
             }
-            
-            mode = mode??bike.getDefaultCyclingMode();
+
+            if (!isControlDisabled) {
+                mode = mode??bike.getDefaultCyclingMode();
+            }
+            else {
+                mode = bike.getDefaultCyclingMode();
+            }
+
             bike.setCyclingMode(mode, settings);
         }
     }
