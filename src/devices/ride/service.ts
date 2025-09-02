@@ -123,8 +123,11 @@ export class DeviceRideService  extends IncyclistService{
         if (!this.simulatorEnforced)
             return this.adapters
 
-        const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});        
+        const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});               
         this.rideAdapters =  [{adapter,udid:'Simulator'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false, isControl:true}]
+
+        this.setRequestedCapabilties(this.rideAdapters)
+
         return this.rideAdapters
     
     }
@@ -569,13 +572,29 @@ export class DeviceRideService  extends IncyclistService{
     }
 
 
+    protected setRequestedCapabilties(selectedAdapters: AdapterInfo[]) {
+        try {
+            const selected = this.getDeviceConfiguration().getSelectedDevices()
+            if (!selected) 
+                return;
+
+            selectedAdapters.forEach ( ai => {  
+                ai.capabilities = ai.capabilities.filter ( c => {
+                    return selected.some( conf => conf.capability===c && conf.selected===ai.udid)                   
+                })
+            })
+        }
+        catch (err) {
+            this.logError(err, 'setRequestedCapabilities');
+        }
+    }
+
+
    
     async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check' | 'pair',props?:RideServiceDeviceProperties ):Promise<boolean> {
-        
-
+    
 
         const duplicates = this.checkAntSameDeviceID(adapters)
-
 
         this.startPromises = adapters?.map( async ai=> 
             this.startSingleAdapter(ai,duplicates,props,startType)

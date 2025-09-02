@@ -74,6 +74,7 @@ describe('DeviceRideService',()=>{
             off:jest.fn(),
             removeAllListeners:jest.fn(),
             getModeSettings:jest.fn().mockReturnValue({}),
+            //getSelectedDevices:jest.fn().mockReturnValue(null)
         }
 
         const setupMocks = (s,a,props?)=> {
