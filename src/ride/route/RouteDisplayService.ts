@@ -27,6 +27,7 @@ export class RouteDisplayService extends RideModeService {
     protected prevPowerTs: number
 
     protected nearbyRiders: ActiveRideListDisplayItem[]
+    protected _startSettings: RouteSettings
 
 
 
@@ -131,6 +132,7 @@ export class RouteDisplayService extends RideModeService {
     onStopped() {
         try {
             this.cleanupActiveRides()
+            delete this._startSettings
         }
         catch(err) {
             this.logError(err,'onStopped')
@@ -250,7 +252,13 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected get startSettings():RouteSettings {
-        return this.getRouteList().getStartSettings() as RouteSettings
+
+        // cache the start settings as they can be changed during the ride, 
+        // but might also be deleted when route is finished, but workout continues
+        const prev = this._startSettings
+        this._startSettings = this.getRouteList().getStartSettings() as RouteSettings ?? prev
+
+        return this._startSettings
     }
 
     protected buildRequest(props:{limits?: ActiveWorkoutLimit, reset?:boolean}={}): UpdateRequest { 
@@ -266,7 +274,7 @@ export class RouteDisplayService extends RideModeService {
             const mode = this.getDeviceRide().getCyclingMode() as CyclingMode
             const isSIM = mode?.isSIM() 
 
-            const realityFactor = this.startSettings.realityFactor ?? 100
+            const realityFactor = this.startSettings?.realityFactor ?? 100
             const targetSlope = (this.position.slope ?? 0) * realityFactor / 100
 
             if (props?.limits && !isSIM) {
