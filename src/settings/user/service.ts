@@ -118,6 +118,15 @@ export class UserSettingsService {
         }
     }
 
+    getValue( key:string, defValue:any ):any { 
+        try {
+            return this.get(key,defValue)
+        }
+        catch {
+            return defValue
+        }
+    }
+
 
     set( key:string, value:any, save:boolean=true):void {
 

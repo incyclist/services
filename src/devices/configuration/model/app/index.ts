@@ -1,5 +1,5 @@
 
-export type ExtendedIncyclistCapability = 'control' |'power'| 'speed' | 'cadence' |'heartrate'|  'bike'
+export type ExtendedIncyclistCapability = 'control' |'power'| 'speed' | 'cadence' |'heartrate'|'bike' | 'app_control';
 
 export interface DeviceInformation {
     udid: string;

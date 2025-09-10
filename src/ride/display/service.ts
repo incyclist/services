@@ -732,10 +732,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected adjustPower( increase:boolean, large:boolean ) {
         try {
-
-            
-            
-
             if (this.getWorkoutRide().inUse()) {
                 const inc = large ? 5:1
                 if (increase) this.getWorkoutRide().powerUp(inc) 
@@ -1004,6 +1000,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             deviceStartNOKHandler:this.onDeviceStartError.bind(this),
             deviceDataHandler: this.onDeviceData.bind(this) ,
             toggleCyclingModeHandler: this.onCyclingModeToggled.bind(this),
+            deviceKeyPressedHandler: this.onDeviceKeyPressed.bind(this)
         }
 
         const h = this.startDeviceHandlers
@@ -1013,6 +1010,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         devices.on( 'start-update', h.deviceStartUpdateHandler)
         devices.on( 'start-error',   h.deviceStartNOKHandler)
         devices.on( 'cycling-mode-toggle', h.toggleCyclingModeHandler)
+        devices.on( 'key-pressed', h.deviceKeyPressedHandler)
         
     }
 
@@ -1202,6 +1200,12 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     onCyclingModeToggled(mode:'SIM' | 'ERG', request:UpdateRequest) {
         this.observer.emit('cycling-mode-toggle', mode, request)
+    }
+
+    protected onDeviceKeyPressed( event /*: DeviceKeypressedEvent*/, udid:string) {
+        const {key, /*deviceType,*/ duration} = event
+        if (key==='up') this.adjustPower(true,duration>1000)
+        else if (key==='down') this.adjustPower(false,duration>1000);
     }
 
     protected startListeningForDeviceData() {

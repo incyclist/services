@@ -953,6 +953,11 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.verifyCapabilityExists(IncyclistCapability.HeartRate)
         this.verifyCapabilityExists(IncyclistCapability.Speed)
         this.verifyCapabilityExists(IncyclistCapability.Cadence)
+
+        if ( this.hasFTControllers()) {
+            this.verifyCapabilityExists(IncyclistCapability.AppControl)
+        }
+
         if (bikeCapIdx!==-1) {
             capabilities.splice( bikeCapIdx,1)
         }
@@ -988,6 +993,10 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
 
         this.initWifiInterface()
+    }
+
+    protected hasFTControllers():boolean {
+        return this.getUserSettings().getValue('CONTROLLERS',false)
     }
 
     protected doesAppSupportsWifi():boolean {

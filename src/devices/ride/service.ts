@@ -26,6 +26,7 @@ type DuplicateInfo = {
     info: AdapterRideInfo;
 };
 
+
 /**
  * Provides method to consume a devcie
  *  - start/stop/pause/resume a ride
@@ -48,6 +49,7 @@ export class DeviceRideService  extends IncyclistService{
     protected promiseSendUpdate: Promise<UpdateRequest|void>[]
     protected originalMode: CyclingMode
     protected deviceDataHandler = this.onData.bind(this)
+    protected deviceKeyHandler = this.onKeyPressed.bind(this)
     protected lazyInitDone: boolean
     protected lastDataInfo: Record<string,number> = {}
     protected reconnectBusy: boolean
@@ -848,13 +850,13 @@ export class DeviceRideService  extends IncyclistService{
     private updateOnDatahandler(ai: AdapterRideInfo) {
         this.clearLastDataTS(ai)
         this.logEvent({message:'init health check',device:ai.adapter.getName(), udid:ai.udid })
-        ai.adapter.off('data', this.deviceDataHandler);
-        ai.adapter.on('data', this.deviceDataHandler);
+        this.unsubscribeDeviceEvents(ai.adapter)
+        this.subscribeDeviceEvents(ai.adapter)
     }
 
     private removeOnDatahandler(ai: AdapterRideInfo) {
         this.logEvent({message:'cleanup health check', device:ai.adapter.getName(), udid:ai.udid })
-        ai.adapter.off('data', this.deviceDataHandler);
+        this.unsubscribeDeviceEvents(ai.adapter)            
     }
 
     stopHealthCheck(ai: AdapterRideInfo) {
@@ -1040,7 +1042,7 @@ export class DeviceRideService  extends IncyclistService{
             })
         }
         unhealthy.isRestarting = true;
-        unhealthy.adapter.off('data', this.deviceDataHandler);            
+        this.unsubscribeDeviceEvents(unhealthy.adapter)
 
         try {
             await unhealthy.adapter.stop()
@@ -1050,7 +1052,6 @@ export class DeviceRideService  extends IncyclistService{
         }
 
     }
-
     private async reconnectSingle(unhealthy: AdapterRideInfo) {
         unhealthy.isRestarting = true;
 
@@ -1144,7 +1145,7 @@ export class DeviceRideService  extends IncyclistService{
         const promises:Array<Promise<boolean>> = []
         adapters?.forEach(ai=> {
             const d = ai.adapter
-            d.off('data',this.deviceDataHandler)
+            this.unsubscribeDeviceEvents(d)
             if (!d.isStarted()){
                 this.logEvent({message:'cancel start of device',udid:ai.udid})
                 promises.push(d.stop())
@@ -1167,8 +1168,8 @@ export class DeviceRideService  extends IncyclistService{
     registerOnDataHandler(_props) {
         const adapters = this.getSelectedAdapters()
         adapters?.forEach(ai=> {
-            ai.adapter.off('data',this.deviceDataHandler)
-            ai.adapter.on('data',this.deviceDataHandler)
+            this.unsubscribeDeviceEvents(ai.adapter)
+            this.subscribeDeviceEvents(ai.adapter)
         })
     }
 
@@ -1187,7 +1188,7 @@ export class DeviceRideService  extends IncyclistService{
         const promises = adapters?.filter( ai=> udid ? ai.udid===udid : true)        
         .map(ai => {
             this.stopHealthCheck(ai)
-            ai.adapter.off('data',this.deviceDataHandler)
+            this.unsubscribeDeviceEvents(ai.adapter)
             return ai.adapter.stop()
 
         })
@@ -1215,7 +1216,7 @@ export class DeviceRideService  extends IncyclistService{
         adapters?.forEach(ai=> {
             ai.tsLastData = Date.now()
             ai.adapter.pause()
-            ai.adapter.off('data',this.deviceDataHandler)
+            this.unsubscribeDeviceEvents(ai.adapter)
             this.stopHealthCheck(ai)
         })
     }
@@ -1251,6 +1252,18 @@ export class DeviceRideService  extends IncyclistService{
 
     }
 
+    onKeyPressed( deviceSettings:DeviceSettings, event) {
+        
+        const adapters = this.getSelectedAdapters();
+        // get adapterinfo from the device that is sending data
+        const adapterInfo = adapters?.find( ai=>ai.adapter.isEqual(deviceSettings))
+        if (!adapterInfo?.capabilities.includes(IncyclistCapability.AppControl) )
+            return;
+
+        this.logEvent({message:'Controller key pressed', device:adapterInfo.adapter.getName(), ...event})
+
+        this.emit('key-pressed',event,adapterInfo.udid)
+    }
 
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
 
@@ -1398,6 +1411,7 @@ export class DeviceRideService  extends IncyclistService{
 
 
     async sendUpdate( request:UpdateRequest):Promise<void> {
+
         const adapters = this.getSelectedAdapters()??[];
         const targets = adapters.filter( ai =>  ai?.adapter?.isControllable() && ai?.adapter?.isStarted() &&  !ai.adapter?.isStopped())
 
@@ -1619,6 +1633,28 @@ export class DeviceRideService  extends IncyclistService{
         if (adapter)
             this.originalMode = adapter.getCyclingMode() as CyclingMode
     }
+
+    protected subscribeDeviceEvents(adapter:IncyclistDeviceAdapter) {
+        try {
+            adapter.on('data', this.deviceDataHandler);            
+            adapter.on('key-pressed', this.deviceKeyHandler);
+        }
+        catch (err) {
+            this.logError(err,'subscribeDeviceEvents')
+        }
+    }
+
+
+    protected unsubscribeDeviceEvents(adapter:IncyclistDeviceAdapter) {
+        try {
+            adapter.off('data', this.deviceDataHandler);            
+            adapter.off('key-pressed', this.deviceKeyHandler);
+        }
+        catch (err) {
+            this.logError(err,'unsubscribeDeviceEvents')
+        }
+    }
+
 
     @Injectable
     protected getDeviceConfiguration() {
