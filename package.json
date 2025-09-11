@@ -18,7 +18,7 @@
     "typedoc": "^0.28.12",
     "typedoc-plugin-markdown": "^4.8.1",
     "typedoc-plugin-no-inherit": "^1.6.1",
-    "typescript": "^5.7.2"
+    "typescript": "^5.9.2"
   },
   "scripts": {
     "lint": "eslint . --ext .ts",
