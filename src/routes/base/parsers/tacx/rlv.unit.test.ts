@@ -18,7 +18,7 @@ describe ('RLV Reader', ()=>{
         
         test('valid',async ()=>{
             const file = './__tests__/data/rlv/ES_Andalusia-1.rlv'
-            const data = await loadFile(null,file) as Buffer
+            const data = await loadFile(null,file) as ArrayBuffer
 
             const fileInfo = reader.parse( data )
 
@@ -31,7 +31,7 @@ describe ('RLV Reader', ()=>{
 
         test('invalid file type',async ()=>{
             const file = './__tests__/data/rlv/ES_Andalusia-1.pgmf'
-            const data = await loadFile(null,file) as Buffer
+            const data = await loadFile(null,file) as ArrayBuffer
 
             expect ( ()=>reader.parse( data )).toThrow('Invalid file type')
 
