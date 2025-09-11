@@ -117,17 +117,17 @@ describe ( 'crossing', () => {
     test ( 'Invalid Parameter AB', () => {
         expect(() => {
             crossing( "test", [0,0],[1,1] );
-        }).toThrowError("AB is not a vector");
+        }).toThrow("AB is not a vector");
     } );
     test ( 'Invalid Parameter CD', () => {
         expect(() => {
             crossing( [0,0],"test", [1,1] );
-        }).toThrowError("CD is not a vector");
+        }).toThrow("CD is not a vector");
     } );
     test ( 'Invalid Parameter AC', () => {
         expect(() => {
             crossing(  [0,0],[1,1],"test" );
-        }).toThrowError("AC is not a vector");
+        }).toThrow("AC is not a vector");
     } );
 
     

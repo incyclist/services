@@ -97,7 +97,7 @@ describe ( 'eq', () => {
     test ( 'static: 1st argument is any other type', () => {
         expect(() => {
             Vector.eq( '10', [1,2] )
-        }).toThrowError("invalid argument");
+        }).toThrow("invalid argument");
     } );
 
 
@@ -151,7 +151,7 @@ describe ( 'isParallel', () => {
     test ( 'static: 1st argument is any other type', () => {
         expect(() => {
             Vector.isParallel( '10', [1,2] )
-        }).toThrowError("invalid argument");
+        }).toThrow("invalid argument");
     } );
 
     test ( 'static: x is 0', () => {
@@ -223,7 +223,7 @@ describe ( 'add', () => {
         expect(() => {
             let v = new Vector( [1,2] );
             v.add( 10 );
-        }).toThrowError("invalid argument");
+        }).toThrow("invalid argument");
     } );
     test ( 'static ', () => {
         let v1 = new Vector( [1,2] )
@@ -267,7 +267,7 @@ describe ( 'min', () => {
         expect(() => {
             let v = new Vector( [1,2] );
             v.min( 10 );
-        }).toThrowError("invalid argument");
+        }).toThrow("invalid argument");
     } );
     test ( 'static ', () => {
         let v1 = new Vector( [2,3] )
@@ -313,7 +313,7 @@ describe ( 'multiply', () => {
         expect(() => {
             let v = new Vector( [1,2] );
             v.multiply( 'Test' );
-        }).toThrowError("invalid argument");
+        }).toThrow("invalid argument");
     } );
     
     test ( 'static: 1st argument is Number', () => {
@@ -336,12 +336,12 @@ describe ( 'multiply', () => {
     test ( 'static: 1st argument is incorrect type', () => {
         expect(() => {
             Vector.multiply( 'Test',[1,2] );
-        }).toThrowError("invalid argument");
+        }).toThrow("invalid argument");
     } );
     test ( 'static: 1st argument is NUmber and 2nd argument is incorrect type', () => {
         expect(() => {
             Vector.multiply( 10,'Test' );
-        }).toThrowError("invalid argument");
+        }).toThrow("invalid argument");
     } );
 
 
