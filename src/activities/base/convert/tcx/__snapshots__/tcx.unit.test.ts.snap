@@ -11,7 +11,7 @@ exports[`TCXConverter activity with workout, should add workout steps as laps 1`
       <TotalTimeSeconds>
       41
     </TotalTimeSeconds><DistanceMeters>
-      5242.032294477613
+      280.0039897879837
     </DistanceMeters><Calories>
       0
     </Calories><Intensity>
@@ -945,7 +945,7 @@ exports[`TCXConverter activity with workout, should add workout steps as laps 1`
       <TotalTimeSeconds>
       30
     </TotalTimeSeconds><DistanceMeters>
-      12304.013354866403
+      255.61306833940586
     </DistanceMeters><Calories>
       0
     </Calories><Intensity>
@@ -1649,7 +1649,7 @@ exports[`TCXConverter activity with workout, should add workout steps as laps 1`
       <TotalTimeSeconds>
       40
     </TotalTimeSeconds><DistanceMeters>
-      28330.486584155573
+      333.47097812369566
     </DistanceMeters><Calories>
       0
     </Calories><Intensity>
@@ -2583,7 +2583,7 @@ exports[`TCXConverter activity with workout, should add workout steps as laps 1`
       <TotalTimeSeconds>
       6.049000000000007
     </TotalTimeSeconds><DistanceMeters>
-      6317.384089491212
+      59.21267863029004
     </DistanceMeters><Calories>
       0
     </Calories><Intensity>

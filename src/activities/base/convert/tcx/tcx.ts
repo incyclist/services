@@ -66,9 +66,12 @@ export class TcxConverter implements IActivityConverter{
                 const lapEnd   = new Date(startTime.valueOf()+end*1000)
 
                 const points = trackPoints.filter( p=> p.Time>=lapStart && p.Time<lapEnd)
+                const lastPointBeforeLap = trackPoints.filter( p=> p.Time<lapStart)?.pop()
+                const lastPointInLap = points[points.length-1]
+                const distanceStart = lastPointBeforeLap?.DistanceMeters ?? 0
 
                 // @build sum of points[].distance
-                const DistanceMeters = points.reduce((acc, current) => acc + current.DistanceMeters, 0);
+                const DistanceMeters = lastPointInLap?.DistanceMeters ? lastPointInLap.DistanceMeters - distanceStart : 0
                 const lap:ActivityLap = new ActivityLap( lapStart, {
                     Calories:0,
                     DistanceMeters,
