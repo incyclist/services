@@ -1320,6 +1320,7 @@ export class DeviceRideService  extends IncyclistService{
                     this.data.internalDistanceCounter = data.internalDistanceCounter;
                     this.data.slope = data.slope;
                     this.data.timestamp = data.timestamp
+                    this.data.gearStr = data.gearStr;
                     break;      
             }
         })

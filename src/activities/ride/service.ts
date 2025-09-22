@@ -346,7 +346,7 @@ export class ActivityRideService extends IncyclistService {
     protected buildDashboardInfo(currentValues, avgMaxStats, display) {
 
 
-        const { distance, time, speed, power, slope, heartrate, cadence,distanceRemaining,timeRemaining } = currentValues
+        const { distance, time, speed, power, slope, heartrate, cadence,distanceRemaining,timeRemaining,gear } = currentValues
         const {speedDetails,powerDetails,elevationGain, heartrateDetails,cadenceDetails} = avgMaxStats
         const info = [];
 
@@ -368,6 +368,10 @@ export class ActivityRideService extends IncyclistService {
         info.push({ title: 'Heartrate', data: [{ value: formatNumber(heartrate, 0), unit: 'bpm' }, heartrateDetails], dataState: this.current.dataState?.heartrate });
         info.push({ title: 'Cadence', data: [{ value: formatNumber(cadence, 0), unit: 'rpm' }, cadenceDetails], dataState: this.current.dataState?.cadence });
 
+        if (gear) {
+            info.push({ title: 'Gear', data: [{ value: gear }] });
+        }
+
         return info;
     }
 
@@ -382,6 +386,7 @@ export class ActivityRideService extends IncyclistService {
         const position = this.current.position??{}
         const lap = this.current.lap
         const routeDistance = this.current.routeDistance
+        const gear = this.current.deviceData?.gearStr
         
 
         let distanceRemaining = (this.getTotalDistance()/1000-distance)
@@ -396,7 +401,7 @@ export class ActivityRideService extends IncyclistService {
             )    
         }
 
-        return { position, distance, routeDistance, time, speed, power, slope, heartrate, cadence, timeRemaining, distanceRemaining,lap };
+        return { position, distance, routeDistance, time, speed, power, slope, heartrate, cadence, timeRemaining, distanceRemaining,lap, gear };
     }
 
     protected getAverageValues() {
@@ -840,7 +845,6 @@ export class ActivityRideService extends IncyclistService {
             }
            
             this.current.deviceData = { ...this.current.deviceData, ...update}
-
 
             if (this.state!=='active') {
     

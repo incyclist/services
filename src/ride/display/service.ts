@@ -1045,6 +1045,13 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         else if (mode.isERG()) {
             this.getRideModeService().sendUpdate({targetPowerDelta:inc} )
         }      
+        else if (mode.isSIM()) {
+            let gearDelta = inc/5 
+            if (Math.abs(gearDelta)>1) {
+                gearDelta = Math.sign(gearDelta)*5
+            }
+            this.getRideModeService().sendUpdate({gearDelta} )
+        }
 
     }
 

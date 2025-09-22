@@ -148,7 +148,7 @@ export class WorkoutRide extends IncyclistService{
             
         }
         catch(err) {
-            this.logError(err,'init')
+            this.logError(err,'init',{workout:this.workout, woType: typeof this.workout})
         }
     }
 
