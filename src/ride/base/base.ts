@@ -1,7 +1,7 @@
 import { DeviceData, UpdateRequest } from "incyclist-devices";
 import { Observer } from "../../base/types";
 import { ActiveWorkoutLimit, useWorkoutRide } from "../../workouts";
-import { CurrentRideDisplayProps, ICurrentRideService, IRideModeService } from "./types";
+import { CurrentRideDisplayProps, ICurrentRideService, IRideModeService, IRideModeServiceDisplayProps } from "./types";
 import { IncyclistService } from "../../base/service";
 import { useDeviceRide } from "../../devices";
 import { Injectable } from "../../base/decorators";
@@ -55,8 +55,8 @@ export class RideModeService extends IncyclistService implements IRideModeServic
     getStartOverlayProps() {
         return {}
     }
-    getDisplayProperties(props: CurrentRideDisplayProps) {
-        return {}
+    getDisplayProperties(props: CurrentRideDisplayProps):IRideModeServiceDisplayProps {
+        return { dbColumns: this.getDashboardColums() }
     }
 
     onActivityUpdate(activityPos:ActivityUpdate,data):void {
@@ -181,11 +181,23 @@ export class RideModeService extends IncyclistService implements IRideModeServic
             return { bike: 'Simulator', interface: 'Simulator',mode: 'Simulator' }  
         }
 
+        const settings = mode?.getSettings()??{}
         return {
             bike: device.adapter?.getDisplayName(),
             interface: device.adapter?.getInterface(),
-            bikeMode: mode?.getName()
+            bikeMode: mode?.getName(),
+            ...settings
         }
+    }
+
+    protected getDashboardColums(): number {
+
+        
+        const mode = this.getDeviceRide().getCyclingMode()
+        const virtshift = mode?.getSetting('virtshift')
+        const enabled = virtshift!==undefined && virtshift!==null && virtshift!=='Disabled'
+
+        return enabled ? 8 : 7;
     }
 
     @Injectable

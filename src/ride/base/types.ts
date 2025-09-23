@@ -29,7 +29,9 @@ export type CurrentRideDeviceInfo = {
     healthStatus?: HealthStatus
 }
 
-export interface IRideModeServiceDisplayProps {}
+export interface IRideModeServiceDisplayProps {
+    dbColumns?: number
+}
 
 export interface WorkoutDisplayProps extends IRideModeServiceDisplayProps {}
 
@@ -147,6 +149,7 @@ export interface CurrentRideDisplayProps extends IRideModeServiceDisplayProps {
     startOverlayProps?:StartOverlayProps,
     prevRides?: PrevRidesDisplayProps
     hideAll?: boolean
+
 }
 
 type SideView = 'slope' | 'previous' | 'elevation' | 'sv-right' | 'sv-left' | 'prev-rides' | 'map'

@@ -648,6 +648,10 @@ export class FreeRideDisplayService extends GpxDisplayService {
     }
 
 
+    protected getDashboardColums(): number {
+        const parent = super.getDashboardColums()
+        return parent-1; // (no slope)
+    }
 
 
 

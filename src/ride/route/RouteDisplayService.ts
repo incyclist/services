@@ -187,20 +187,23 @@ export class RouteDisplayService extends RideModeService {
 
         
         const {realityFactor,startPos,endPos} = this.startSettings
-        
+        const parent = super.getDisplayProperties(props)
         const map = this.getOverlayProps('map',props)
         const upcomingElevation = this.getOverlayProps('slope',props)
         const totalElevation = this.getOverlayProps('elevation',props)
         const nearbyRides = this.getNearbyRidesProps(props)
-        
+
+
         return {
+            ...parent,
             position: this.position,markers: this.getMarkers(props),
             sideViews: this.sideViews,
             route: this.getCurrentRoute(),
             realityFactor,
             startPos,endPos,
             nearbyRides,
-            map,upcomingElevation, totalElevation
+            map,upcomingElevation, totalElevation,
+            
         }    
     }
 
