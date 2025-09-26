@@ -108,7 +108,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     protected getSelectedAdapters():AdapterRideInfo[] {
-        if (this.rideAdapters)
+        if (this.rideAdapters?.length)
             return this.rideAdapters
 
         this.rideAdapters = this.adapters = this.getConfiguredAdapters(true)
