@@ -1,3 +1,4 @@
+import { Workout } from "../../base/model";
 import { ScheduledWorkout } from "../../calendar";
 import { ScheduledWorkoutCardDisplayProperties, ScheduledWorkoutSettingsDisplayProps, WorkoutCardType } from "./types";
 import { WorkoutCard } from "./WorkoutCard";
@@ -7,9 +8,10 @@ export class ScheduledWorkoutCard extends WorkoutCard {
     protected event:ScheduledWorkout
 
     constructor(event:ScheduledWorkout ) {
-        super(event.workout)
+        super( new Workout(event.workout))
         this.event = event
         this.event.observer?.on('updated', this.onUpdate.bind(this))
+
     }
     /**
      * returns type of this card
