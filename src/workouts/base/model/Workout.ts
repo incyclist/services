@@ -50,7 +50,7 @@ export class Workout extends Segment implements WorkoutDefinition {
 
     get hash():string {
         if (this._hash)
-            return this.hash
+            return this._hash
 
         const {name,description,steps,repeat } = this
 
