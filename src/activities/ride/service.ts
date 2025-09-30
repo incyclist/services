@@ -114,6 +114,7 @@ export class ActivityRideService extends IncyclistService {
     protected durationCalculator: ActivityDuration
 
     protected deviceDataHandler = this.onDeviceData.bind(this)
+    protected gearChangeHandler = this.onGearChange.bind(this)
     protected dataHealthHandler = this.onDeviceHealthUpdate.bind(this)
 
     protected current: {
@@ -174,6 +175,7 @@ export class ActivityRideService extends IncyclistService {
                 this.durationCalculator = new ActivityDuration(this.activity)
         
                 this.getDeviceRide().on('data',this.deviceDataHandler)
+                this.getDeviceRide().on('gear-change',this.gearChangeHandler)
         
                 waitNextTick().then( ()=>{
                     this.emit('initialized')
@@ -253,6 +255,7 @@ export class ActivityRideService extends IncyclistService {
         }
 
         useDeviceRide().off('data',this.deviceDataHandler)
+        useDeviceRide().off('gear-change',this.gearChangeHandler)
         this.disableDeviceHealthCheck()
         this.state = 'completed'
 
@@ -824,6 +827,12 @@ export class ActivityRideService extends IncyclistService {
         this.current.position = position
     }
 
+    protected onGearChange(gearStr:string) {
+        if (!this.current.deviceData)
+            this.current.deviceData = {}
+        this.current.deviceData.gearStr = gearStr
+        this.emit('data', {gear: gearStr})
+    }
 
     protected onDeviceData(data:DeviceData) {
 

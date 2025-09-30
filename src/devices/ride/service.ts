@@ -1416,6 +1416,8 @@ export class DeviceRideService  extends IncyclistService{
         const adapters = this.getSelectedAdapters()??[];
         const targets = adapters.filter( ai =>  ai?.adapter?.isControllable() && ai?.adapter?.isStarted() &&  !ai.adapter?.isStopped())
 
+        const tsStart = Date.now()
+
         if (!request.targetPower) {
             if ( request.minPower===request.maxPower) {
                 request.targetPower = request.minPower
@@ -1442,8 +1444,17 @@ export class DeviceRideService  extends IncyclistService{
 
         await this.waitForUpdateFinish()
 
+        if (request.gearDelta) {
+            
+            const t = targets[0]
+            const gearStr = t?.adapter?.getCyclingMode().getData().gearStr
+            if (gearStr) {
+                this.data.gearStr = gearStr
 
-
+                this.emit('gear-change', this.data.gearStr)
+            }
+            this.logEvent({message:'gear change confirmed',gear:gearStr, duration:Date.now()-tsStart})
+        }
         this.promiseSendUpdate = undefined        
     }
 
