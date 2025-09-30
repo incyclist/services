@@ -294,7 +294,7 @@ export class RLVDisplayService extends RouteDisplayService {
             mode: 'video',
             route: this.getOriginalRoute().description.title,
             showPrev,
-            realityFactor,
+            realityFactor: `${realityFactor}%`,
             start: startPos,
             end:endPos,
             segment,

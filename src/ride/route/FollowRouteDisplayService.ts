@@ -14,7 +14,7 @@ export class FollowRouteDisplayService extends GpxDisplayService {
             rideView,
             route: route.description.title,
             start: settings.startPos,
-            realityFactor: settings.realityFactor,
+            realityFactor: `${settings.realityFactor}%`,
             showPrev: settings.showPrev,
             ...bikeProps
         }
