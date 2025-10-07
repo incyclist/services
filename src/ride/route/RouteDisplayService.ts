@@ -70,6 +70,8 @@ export class RouteDisplayService extends RideModeService {
 
         try {
             const newPosition = this.updatePosition(activityPos);
+            if (!newPosition)
+                return;
 
             const isCompleted = this.checkFinishOptions(newPosition)
             if (!isCompleted) {
@@ -92,7 +94,7 @@ export class RouteDisplayService extends RideModeService {
     
         }
         catch(err) {
-            this.logError(err,'onDeviceData')
+            this.logError(err,'onActivityUpdate')
         }
 
 
@@ -308,13 +310,15 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected  updatePosition(activityPos:ActivityUpdate): CurrentPosition {
+        
         try {
-            const currentRouteDistance = this.position.routeDistance ?? 0;
-            const newRouteDistance = activityPos.routeDistance ?? 0;
+            const currentRouteDistance = this.position?.routeDistance ?? 0;
+            const newRouteDistance = activityPos?.routeDistance ?? 0;
 
             if (newRouteDistance !== currentRouteDistance) {
-                const prev = this.toLapPoint(this.position)
-                return  this.fromLapPoint(getNextPosition(this.getCurrentRoute(),{routeDistance:activityPos.routeDistance,prev}))                
+                const current = this.toLapPoint(this.position)
+                const next = getNextPosition(this.getCurrentRoute(),{routeDistance:activityPos.routeDistance,prev: current})
+                return  this.fromLapPoint(next)                
             }
 
             return this.position        
@@ -326,6 +330,9 @@ export class RouteDisplayService extends RideModeService {
 
 
     protected toLapPoint(position:CurrentPosition):LapPoint {
+        if (!position)
+            return;
+
         const totalDistance = position.routeDistance
         const routeDistance = position.lapDistance??position.routeDistance%this.getCurrentRoute().description.distance
 
@@ -336,6 +343,9 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected fromLapPoint(position:LapPoint):CurrentPosition {
+        if (!position)
+            return;
+
         const routeDistance = position.totalDistance??0       
         const lapDistance = position.routeDistance ?? (position.totalDistance??0)%this.getCurrentRoute().description.distance
 

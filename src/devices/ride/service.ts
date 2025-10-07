@@ -1545,7 +1545,7 @@ export class DeviceRideService  extends IncyclistService{
             return {changed:true, mode:adapter.getCyclingMode() as CyclingMode}
         }
         catch(err) {
-            this.logEvent({message:'error', error:err.message,fn:'resetCyclingMode'})
+            this.logEvent({message:'error', fn:'resetCyclingMode', error:err.message, stack:err.stack})
             return {changed:false};
         }
 
@@ -1555,7 +1555,7 @@ export class DeviceRideService  extends IncyclistService{
         const config = this.getDeviceConfiguration();
         const modeInfo = config.getModeSettings(udid);
         const mode = modeInfo?.mode;
-        const settings = modeInfo.settings;
+        const settings = modeInfo?.settings??{};
         return { mode, settings };
     }
 
@@ -1592,7 +1592,7 @@ export class DeviceRideService  extends IncyclistService{
             }
         }
         catch(err) {
-            this.logEvent({message:'error', error:err.message,fn:'enforceERG'})
+            this.logEvent({message:'error',fn:'enforceERG', error:err.message,})
         }
 
     }
