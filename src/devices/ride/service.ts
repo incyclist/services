@@ -767,11 +767,14 @@ export class DeviceRideService  extends IncyclistService{
         this.logEvent({ message: `${startType} ${sType} request finished`, ...logProps });
         if (startType === 'check')
             await ai.adapter.pause().catch(console.log);
-        if (ai.adapter.isControllable())
+        if (ai.adapter.isControllable()) {
             this.setSerialPortInUse(ai.adapter);
+            ai.adapter.sendInitCommands()
+        }
 
         if (startType === 'start') {
             this.startHealthCheck(ai);
+            
         }
 
         ai.isStarted = true
