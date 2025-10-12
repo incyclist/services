@@ -120,7 +120,7 @@ export class Plan implements PlanDefinition {
 
     get hash():string {
         if (this._hash)
-            return this.hash
+            return this._hash
 
         const {name,description,workouts } = this
 
