@@ -5,22 +5,23 @@ import defaultData from '../../../__tests__/data/overpass/default-location.json'
 import defaultData2 from '../../../__tests__/data/overpass/default-2.json'
 import defaultData3 from '../../../__tests__/data/overpass/default-3.json'
 import miamiData from '../../../__tests__/data/overpass/miami.json'
+import gardenData from '../../../__tests__/data/overpass/garden-issue1.json'
 
 import { MapArea } from "./MapArea";
 import { getBounds, getPointCrossingPath } from "./utils";
 
 describe('OptionManager',()=>{
 
-    const pathInfo = (path) => '['+path.map(p=>p.id??`{lat:${p.lat.toFixed(4)},lng:${p.lng.toFixed(4)}}`).join(',')+']'
+    const pathInfo = (path:any) => '['+path.map(p=>p.id??`{lat:${p.lat.toFixed(4)},lng:${p.lng.toFixed(4)}}`).join(',')+']'
 
 
 
     describe ('getStartOptions',()=>{
 
         let manager: OptionManager
-        let map
+        let map:MapArea
 
-        const setup  = async (data,location,maps?:Record<string,object>)=> {
+        const setup  = async (data:any,location:any,maps?:Record<string,object>)=> {
             const mapData = useMapArea().createMapData(data)
             const boundary = getBounds(location.lat,location.lng,DEFAULT_RADIUS)
 
@@ -54,6 +55,29 @@ describe('OptionManager',()=>{
             expect(pathInfo(res[1].path)).toEqual('[{lat:26.6854,lng:-80.0348},99887563,99887565,99887567]')
 
         })
+
+        test('bugfix: incorrect options given at -34.305, 18.826',async ()=>{
+            const location = {lat: -34.305075359846555,lng: 18.82589606633218}
+            setup(gardenData, location)
+
+            const way = map.getWay('261772478')
+            const crossing = getPointCrossingPath(location, way.path,true)
+            const options = await manager.getStartOptions(way,crossing)
+
+            
+            const res = await manager.getNextOptions(options[1])
+
+            expect(res.length).toBe(2)
+            expect(res[1].path[1].id).toBe('1028491949')
+            expect(res[1].path[res[1].path.length-1].id).toBe('29386619')
+
+            
+            expect(res[0].path[1].id).toBe('2292003367')
+            expect(res[0].path[res[0].path.length-1].id).toBe('29386619')
+
+        })
+        // {
+ 
 
         test('at end of street, should check continuation',async ()=>{
 

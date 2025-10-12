@@ -112,6 +112,7 @@ export interface IncyclistNode extends LatLng {
     id?: string,
     ways?: Array<string>
     tags?: Record<string,string>    
+    wayId?: string
 }
 
 

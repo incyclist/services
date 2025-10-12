@@ -123,12 +123,17 @@ export function splitAtIndex(way, idxSplit) {
  * @param path the first path
  * @param path2 the second path
  * @param position 'before' or 'after'. If 'before', the second path will be inserted before the first node of the original path. If 'after', the second path will be appended after the last node of the original path.
+ * @param wayId the id of the way that the nodes of the path belong to
  * @returns nothing, the path is updated in place.
  */
-export function concatPaths(path:IncyclistNode[]|RoutePoint[],path2:IncyclistNode[]|RoutePoint[],position:'before'|'after'):void {  
+export function concatPaths(path:IncyclistNode[]|RoutePoint[],path2:IncyclistNode[]|RoutePoint[],
+                            position:'before'|'after', wayId?:string):void {  
 
     // create a new path containing the values of path2 - don't copy by reference
     const append = path2.map( p => ({...p}) )
+    if (wayId!==undefined) {
+        append.forEach( p => {p.wayId = wayId})
+    }
     
     if ( position==='after') {
         append.shift();
@@ -249,6 +254,32 @@ export function removeDuplicates(options) {
 
 }
 
+
+/**
+ * Remove duplicates from an array of path options.
+ * A path option is considered a duplicate if it has the same node-ids as a previous option.
+ * Only the first occurrence of a path option is kept.
+ * The function returns a new array with the duplicates removed.
+ * @param options The array of path options to remove duplicates from.
+ * @returns A new array with the duplicates removed.
+ */
+export function removeDuplicatePaths(options) {
+    const unique = [];
+
+    return options.filter( (o) => {
+        if (o.path?.length===0) return false;
+        
+        const id = `${o.path.map(n=>n.id??(n.lat+','+n.lng)).join(',')}`
+        const idx = unique.indexOf(id);
+        if (idx<0) {
+            unique.push( id)
+            return true;
+        }
+        return false;
+    } )
+
+
+}
 
 
 /**

@@ -1,7 +1,7 @@
 import { EventLogger } from "gd-eventlog";
 import clone from "../../utils/clone";
 import { FreeRideContinuation, GetNextOptionProps, IMapArea, IMapAreaService, IncyclistNode, IncyclistWay, PathCrossingInfo, WayInfo } from "./types";
-import { concatPaths, isAllowed, isOneWay, isRoundabout, pointEquals, removeDuplicates, splitAtIndex, splitAtPoint  } from "./utils";
+import { concatPaths, isAllowed, isOneWay, isRoundabout, pointEquals, removeDuplicatePaths, removeDuplicates, splitAtIndex, splitAtPoint  } from "./utils";
 import { calculateDistance } from "../../utils/geo";
 import { waitNextTick } from "../../utils";
 
@@ -34,7 +34,7 @@ export class OptionManager {
 
                     // same route, just extend path
                     if ( opts[0].id !== segment.id) { 
-                        concatPaths( path, opts[0].path,'after' )    
+                        concatPaths( path, opts[0].path,'after',opts[0].id )    
                     }
                     else {
                         // different route, which might include a point we already have
@@ -45,7 +45,7 @@ export class OptionManager {
                             foundSameSegment =  (points.find ( pAll => pAll.id===point.id)!==undefined)
                         } )
                         if ( !foundSameSegment) {
-                            concatPaths( path, opts[0].path,'after' )        
+                            concatPaths( path, opts[0].path,'after',opts[0].id )        
                         }
                     }
                 }
@@ -68,9 +68,13 @@ export class OptionManager {
             if (from?.id===undefined || from?.path===undefined || from?.path.length<1)  {
                 return []
             }
-    
+
+            // handle special case: way is a continuation (appending a single option) from the original  way
+            const lastPoint = from.path.length>0 ? from.path[from.path.length-1] : undefined
+            const fromWayId = lastPoint?.wayId ?? from.id
+            let originalWay = this.getWay(fromWayId) 
+
             // ensure we have a proper way object (not just the WayInfo)
-            let originalWay = this.getWay(from.id) 
             if ( !originalWay) {
                 const map = this.service.getMap(from.path[0])
                 const query:Partial<IncyclistWay> = {id:from.id,path:from.path, map:map}
@@ -113,15 +117,19 @@ export class OptionManager {
             if (node!==undefined ) {
                 node.ways.forEach( (wid) => {
                     if ( wid===remaining.id) {
-                        options = this.getOptionsOnCurrentWay(node,remaining,options)           
+                        options.push(... this.getOptionsOnCurrentWay(node,remaining,options))
                     }
                     else {
                         const w = this.getWay(wid);
-                        options = this.checkOptionsOnDifferentWay(node,w,options)         
+                        options.push(... this.checkOptionsOnDifferentWay(node,w,options))
                     }
                 })
                     
             }
+
+            options = removeDuplicatePaths(options)
+            
+
     
             const currentDirection = this.map.getHeading(way, 'end');
             options.forEach( (option) => {

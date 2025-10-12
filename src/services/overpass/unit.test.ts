@@ -8,9 +8,9 @@ describe ('OverpassClient Unit Test' ,() => {
     describe ( 'query', () => {
 
         let client:OverpassApi;
-        let mock
+        let mock:any
 
-        const setupMocks = (c,props:{response?,error?, noResponse?:boolean}) => {
+        const setupMocks = (c:any,props:{response?:any,error?:any, noResponse?:boolean}) => {
             const {response,error,noResponse} = props
             if (response)
                 c.post = jest.fn().mockResolvedValue(response)               
@@ -37,11 +37,13 @@ describe ('OverpassClient Unit Test' ,() => {
         })
 
         afterEach( ()=>{
-            const timeouts = mock.timeouts??[]
-            timeouts.forEach(t=>clearTimeout(t))
-            jest.resetAllMocks()
-            jest.useRealTimers()
-            client.reset()
+            if (mock) {
+                const timeouts = mock.timeouts??[]
+                timeouts.forEach( (t:NodeJS.Timeout)=>clearTimeout(t) )
+                jest.resetAllMocks()
+                jest.useRealTimers()
+                client.reset()
+            }
         })
 
         test ( 'positive case',async  () => {
@@ -98,16 +100,16 @@ describe ('OverpassClient Unit Test' ,() => {
             // const fileName = './__tests__/data/overpass/default-3.json'
 
             const location = {
-                "lat": 25.7780433,
-                "lng": -80.2247692,
-                "id": "99155348"
+                lat: -34.305075359846555,
+                lng: 18.82589606633218,
+                id: "261772478"
             }
             
-            const radius = 805
+            const radius = 1435
 
             const boundary = getBounds(location.lat,location.lng,radius);
             const query = buildQuery(GET_WAYS_IN_AREA,boundary)
-            const fileName = './__tests__/data/overpass/miami.json'
+            const fileName = './__tests__/data/overpass/garden-issue1.json'
 
             const result = await client.query(query) as JSON       
             console.log(result)
