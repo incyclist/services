@@ -836,6 +836,8 @@ export class ActivityRideService extends IncyclistService {
 
     protected onDeviceData(data:DeviceData) {
 
+        console.log('# Activity RideService: onDeviceData', data, this.getDashboardDisplayProperties())
+
         // not initialized yet
         if (!this.current)
             return 
@@ -1277,6 +1279,9 @@ export class ActivityRideService extends IncyclistService {
 
 
     protected update() {
+
+
+        console.log('# Activity RideService: update', this.state)
         try {
             const prev = Math.floor(this.activity.time)
             this.updateActivityState()
@@ -1319,6 +1324,7 @@ export class ActivityRideService extends IncyclistService {
                     this.emit('prevRides',list)
                 }
 
+                console.log('# Activity RideService: update - emitting data', data, list)
                 this.emit('data', data,list)
                 this.prevEmit = data;
                 

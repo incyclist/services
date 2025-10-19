@@ -616,6 +616,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 
     protected onActivityUpdate(data) {
+
+        console.log('# RideDisplayService onActivityUpdate', data, this.state)
         if (this.state==='Active') {
             const currentValues = this.getActivityRide().getCurrentValues()
             if (!currentValues)
