@@ -288,9 +288,8 @@ export class RouteDisplayService extends RideModeService {
             }
 
             else {
-
-                const hasSlopeChanged = this.prevRequestSlope===undefined || (this.prevRequestSlope !== this.position.slope)
-                const request:UpdateRequest = (hasSlopeChanged||props?.reset) ? {slope:targetSlope} : {}
+                //const hasSlopeChanged = this.prevRequestSlope===undefined || (this.prevRequestSlope !== this.position.slope)
+                const request:UpdateRequest = {slope:targetSlope} //(hasSlopeChanged||props?.reset) ?  : {refresh:true}
 
                 this.prevRequestSlope = targetSlope
                 return request

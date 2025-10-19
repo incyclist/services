@@ -1427,13 +1427,6 @@ export class DeviceRideService  extends IncyclistService{
             }
         }        
 
-        if (this.prevUpdate && !request.targetPowerDelta && !request.reset) {
-            if ( (request.slope!==undefined && this.prevUpdate.slope === request.slope) &&  
-                 (request.targetPower!==undefined && this.prevUpdate.targetPower === request.targetPower)) {
-                return
-            }
-        }
-
         this.promiseSendUpdate = []
         targets?.forEach(ai=> {
             this.promiseSendUpdate.push( ai.adapter.sendUpdate(request) )
