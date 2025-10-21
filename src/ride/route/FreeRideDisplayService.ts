@@ -2,7 +2,7 @@ import { ActivityRideService, useActivityRide } from "../../activities";
 import { Injectable } from "../../base/decorators";
 import { FreeRideService, useFreeRideService } from "../../routes/free-ride";
 import { concatPaths, isOneWay } from "../../maps/MapArea/utils";
-import { getNextPosition, getTotalDistance, validateRoute } from "../../routes";
+import { addDetails, getNextPosition, getTotalDistance, validateRoute } from "../../routes";
 import { RouteApiDetail } from "../../routes/base/api/types";
 import { Route } from "../../routes/base/model/route";
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
@@ -367,7 +367,40 @@ export class FreeRideDisplayService extends GpxDisplayService {
     }
 
 
+    // this method was created for support until legacy UI code was removed
+    protected _createRouteFromPoints(points:RoutePoint[]) {
+        const id = 'Free-Ride'
+        const title='Free-Ride'
+        const details:RouteApiDetail = {
+            id,
+            title,
+            points
+        }
 
+        const info:RouteInfo = {id ,title,hasGpx:true}
+        
+        const route = new Route( info)
+        addDetails(route,details)
+        validateRoute(route)
+        this.currentRoute = route        
+    }
+
+    // this method was created for support until legacy UI code was removed
+    protected _updateRouteFromPoints(points:RoutePoint[]) { 
+            points.forEach( (p,cnt) => {
+                p.elevation = 0;
+                p.slope = 0;
+                p.cnt=cnt
+            })
+
+        this.currentRoute.details.points = points
+        validateRoute(this.currentRoute)
+
+        this.currentRoute.details.distance = points[points.length-1].routeDistance
+        addDetails(this.currentRoute,this.currentRoute.details)
+
+
+    }
 
     protected initRoute() {
         try {
@@ -606,6 +639,10 @@ export class FreeRideDisplayService extends GpxDisplayService {
         }
 
 
+    }
+
+    getCurrentRoute():Route {
+        return this.currentRoute
     }
 
     protected get route():Route {
