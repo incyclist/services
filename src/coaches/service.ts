@@ -1,4 +1,3 @@
-import { IncyclistCapability } from "incyclist-devices";
 import { IncyclistService } from "../base/service";
 import { Singleton } from "../base/types";
 import { Observer } from "../base/types/observer";
@@ -12,6 +11,7 @@ import { IncyclistAdapterData } from "incyclist-devices/lib/types";
 import { getNextPosition } from "../routes/base/utils/route";
 import { useActivityRide } from "../activities";
 import { Injectable } from "../base/decorators";
+import { RideDisplayService, useRideDisplay } from "../ride";
 
 @Singleton
 export class CoachesService extends IncyclistService {
@@ -179,7 +179,7 @@ export class CoachesService extends IncyclistService {
         
         const startSettings = this.routesService.getStartSettings() as RouteSettings
         const {distance} = data        
-        const route = this.routesService.getSelected()
+        const route = this.getRideDisplay().route
 
         if(!route || !coach || !data)
             return;
@@ -204,7 +204,10 @@ export class CoachesService extends IncyclistService {
 
         const startSettings = this.routesService.getStartSettings() as RouteSettings
         const {realityFactor=0} = startSettings
-        const route = this.routesService.getSelected()
+        const route = this.getRideDisplay().route
+
+        if (!route)
+            return
 
         const prevPosition = coach.getPosition() || route.points[0];
         let nextPosition = undefined;
@@ -227,6 +230,12 @@ export class CoachesService extends IncyclistService {
     protected getDeviceRide():DeviceRideService {
         return useDeviceRide()
     }
+
+    @Injectable
+    protected getRideDisplay():RideDisplayService {
+        return useRideDisplay()
+    }
+
     protected get deviceConfig():DeviceConfigurationService {
         return useDeviceConfiguration()
     }

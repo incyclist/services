@@ -434,7 +434,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
         // Free rides will have no selected route, but will actively manage a current (dynamic) route in the mode service
         if ( !route && settings?.type==='Free-Ride' ) {
-            return this.getRideModeService().getCurrentRoute()            
+            const svc = this.getRideModeService()
+            return svc.getCurrentRoute() 
         }
         // Videos might change the route during the ride ( e.g. next video functionality)
         if ( route?.description?.hasVideo && settings?.type==='Route' ) {
@@ -534,7 +535,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
 
         if (!route?.details) {
-            return 'Workout'  // TODO
+            return undefined
+            //return 'Workout'  // TODO
             //throw new Error('unknown ride type')
         }
 
@@ -616,8 +618,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 
     protected onActivityUpdate(data) {
-
-        console.log('# RideDisplayService onActivityUpdate', data, this.state)
         if (this.state==='Active') {
             const currentValues = this.getActivityRide().getCurrentValues()
             if (!currentValues)
