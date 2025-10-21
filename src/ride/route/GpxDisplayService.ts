@@ -20,6 +20,9 @@ export class GpxDisplayService extends RouteDisplayService {
     protected tsPrevSVUpdate: number
     protected tsLastSVEvent: number
     protected tsPositionUpdateConfirmed: number
+    protected tsLastPovChanged: number
+    protected povTimeout: NodeJS.Timeout
+    protected updateDurations: Array<number> = []
     
     
 
@@ -145,21 +148,64 @@ export class GpxDisplayService extends RouteDisplayService {
     }
 
     protected onStreetViewEvent(event:StreetViewEvent,data:any) {
-        //console.log('# streetview event', event, data)
 
-        
+        const resetTimeout = ()=> {
+            if (this.povTimeout) {
+                clearTimeout(this.povTimeout)
+                this.povTimeout = undefined
+            }
+
+        }
+
         if (event==='Loaded') {
             this.mapLoaded = true
             this.emit('state-update')
+            this.tsLastSVEvent = Date.now()
         }
         else if (event==='Error') {
             this.mapError = data as string
             this.emit('state-update')
+            this.logEvent({message:'street view position update error', error:this.mapError})
+            resetTimeout()
         }
-        if ( event==='position_changed') {
-            this.tsPositionUpdateConfirmed = Date.now()
+        else if ( event==='pano_changed') {
+            this.logEvent({message:'street view panorama changed', panorama:data})
+            this.tsLastSVEvent = Date.now()
         }
-        this.tsLastSVEvent = Date.now()
+        else if ( event==='pov_changed') {
+
+            if (this.tsLastPovChanged) {
+                this.tsLastPovChanged = Date.now()
+                this.tsLastSVEvent = Date.now()
+
+                resetTimeout()
+                this.povTimeout = setTimeout(() => {
+                    this.povTimeout = undefined
+                    let duration:number
+                    if (this.tsPrevSVUpdate) {
+                        duration = Date.now()-this.tsPrevSVUpdate;
+                        if (duration>250) {
+                            if (this.updateDurations.length==10) {
+                                this.updateDurations.shift()
+                            }
+                            this.updateDurations.push(duration)
+                        }
+                    }
+                    //console.log('# street view position confirmed', duration, clone({lat,lng,heading}), clone(this.svPosition))
+                    if (duration!==undefined && duration>250) {
+                        this.logEvent({message:'street view position update confirmed', duration})
+                    }
+                }, 100)
+            }
+            else {
+                this.tsLastPovChanged = Date.now()
+            }
+
+            
+        }
+        else if ( event==='status_changed' || event==='position_changed') {
+            this.tsLastSVEvent = Date.now()
+        }
 
     }
 
@@ -168,46 +214,49 @@ export class GpxDisplayService extends RouteDisplayService {
         return this.svObserver
     }
 
+    protected getStreetViewUpdateDelay() {
+        const prefDelay = this.getUserSettings().getValue('preferences.sv.updateDelay',this.getDefaultUpdateFrequency())
+        if (this.updateDurations.length>=10) {
+            const avgDuration = this.updateDurations.reduce((a,b)=>a+b,0)/this.updateDurations.length
+            let suggested = prefDelay
+            if (avgDuration>800 && avgDuration<=1200)
+                suggested = prefDelay+avgDuration
+            else if (avgDuration>1200)
+                suggested = SV_UPDATE_FREQ + avgDuration*1.5
+
+            return Math.max(prefDelay, suggested)
+        }
+        return prefDelay
+    }
+
     protected onPositionUpdate( state) {
 
 
         const {route,position} = state??{}
 
-        const rideView = this.getUserSettings().get('preferences.rideView','sv')
+        const rideView = this.getUserSettings().getValue('preferences.rideView','sv')
 
         if (rideView==='sv') {
-            const updatePending = (Date.now()-(this.tsPrevSVUpdate??0))> this.getDefaultUpdateFrequency()
-            const stillBusy =  (!this.tsPositionUpdateConfirmed  && (Date.now()-(this.tsPrevSVUpdate??0))<500) || (Date.now()-(this.tsLastSVEvent??0))<this.getMinimalPause()
-            const updatePossible = this.tsPositionUpdateConfirmed && (Date.now()-this.tsLastSVEvent)>this.getBestCaseUpdateFrequency()
-    
-            if ( (!stillBusy||!this.tsPrevSVUpdate) && (updatePending || updatePossible) ){
-                if (position) {
-    
-                    const freq = this.tsPrevSVUpdate ? Date.now()-this.tsPrevSVUpdate : undefined
-                    const duration = this.tsPrevSVUpdate ? (this.tsLastSVEvent??Date.now())-this.tsPrevSVUpdate : undefined
-                   
-                    const {lat,lng,routeDistance} = position
-                    const heading = getHeading(route,position )
-                    this.getStreetViewObserver()?.emit('position-update',{lat,lng,heading})
-    
-                    this.logEvent({message:'street view position update', lat,lng, routeDistance, heading, freq, duration})
-    
-                    this.tsPrevSVUpdate = Date.now()
-                    delete this.tsPositionUpdateConfirmed
-                    delete this.tsLastSVEvent
+            const sincePrev = Date.now()-(this.tsPrevSVUpdate??0) 
+            if (sincePrev>this.getStreetViewUpdateDelay()-25) {
+
+                if (this.povTimeout) {
+                    clearTimeout(this.povTimeout)
+                    this.povTimeout = undefined
                 }
-            }    
+
+                const freq = this.tsPrevSVUpdate ? sincePrev : undefined
+                const {lat,lng,routeDistance} = position
+                const heading = getHeading(route,position )
+                this.getStreetViewObserver()?.emit('position-update',{lat,lng,heading})
+                this.logEvent({message:'street view position update', lat,lng, routeDistance, heading, timeSinceLastUpdate:freq, timeSinceLastEvent:Date.now()-this.tsLastSVEvent})
+                this.tsPrevSVUpdate = Date.now()
+                delete this.tsPositionUpdateConfirmed
+                delete this.tsLastSVEvent
+                delete this.tsLastPovChanged
+            }
             else {
-                const duration = this.tsPrevSVUpdate ? Date.now()-this.tsPrevSVUpdate : undefined
-                if (stillBusy) {                    
-                    this.logEvent({message:'street view position update skipped', reason:'busy', duration})
-                    // enforce next update after 10s
-                    if (duration>10000) {
-                        delete this.tsPrevSVUpdate
-                        delete this.tsPositionUpdateConfirmed
-                        delete this.tsLastSVEvent                            
-                    }
-                }
+                console.log('# street view position update skipped, time since last update:', sincePrev, 'ms' , 'delay:', this.getStreetViewUpdateDelay(),'ms'     )
             }
         }
         else {
