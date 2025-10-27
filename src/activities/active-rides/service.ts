@@ -336,11 +336,19 @@ export class ActiveRidesService extends IncyclistService {
         return displayProps
     }
 
+    protected validName(str:string) {
+        if (!str?.length)
+            return false
+        if (str==='undefined' || str==='undefined undefined')
+            return false
+
+    }
+
     protected getName(item) {
         if (item.sessionId===this.session || item.user?.id===this.current.user?.id)
             return item.user?.name?.length ? item.user?.name : 'You'
 
-        return item.user?.name?.length ? item.user?.name : this.randomName(item.user?.id)
+        return this.validName(item.user?.name) ? item.user?.name : this.randomName(item.user?.id)
     }
 
     protected randomName(id?:string) {
@@ -468,12 +476,25 @@ export class ActiveRidesService extends IncyclistService {
         return this.activity?.route?.hash
     }
 
+    protected getUserName(user?:{firstname?:string, lastname?:string}):string { 
+        if (!user) 
+            return undefined
+
+        if (user.firstname && user.lastname) 
+            return `${user.firstname} ${user.lastname}`
+        if (user.firstname) 
+            return user.firstname
+        if (user.lastname) 
+            return user.lastname
+        return undefined
+    }
+
     protected getUser():ActiveRideUser {
         const userFromSettings = this.getUserSettings().get('user',{})
 
         const user: ActiveRideUser = {
             id: this.activity.user?.uuid??userFromSettings.id,
-            name: userFromSettings.username??`${userFromSettings.firstname} ${userFromSettings.lastname}`,
+            name: userFromSettings.username??this.getUserName(userFromSettings),
             weight: this.activity.user?.weight??userFromSettings.weight,
             ftp:userFromSettings.ftp,
             gender: userFromSettings.gender
