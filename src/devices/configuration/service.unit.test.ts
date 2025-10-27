@@ -102,24 +102,30 @@ const ErrorLegacySettings:LegacySettings = {
 describe( 'DeviceConfigurationService',()=>{
 
     describe('init',()=>{
-        let service;
-        let testData
-        beforeEach( ()=>{            
-            service = new DeviceConfigurationService()
-            service.emit = jest.fn()
-            service.initFromLegacy = jest.fn() //spyOn(service,'initFromLegacy')
-            service.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
-            service.isWindows = jest.fn().mockReturnValue(false)
+        let service:any;
+        let testData:any
+
+        const setupMocks = (s:any) => {
+            s.emit = jest.fn()
+            s.initFromLegacy = jest.fn() //spyOn(service,'initFromLegacy')
+            s.doesAppSupportsWifi = jest.fn().mockReturnValue(true)
+            s.isWindows = jest.fn().mockReturnValue(false)
 
             //service.initFromLegacy = jest.fn()
-            service.inject('UserSettings', {
+            s.inject('UserSettings', {
                 init: jest.fn(),
                 set: jest.fn(),
                 get: jest.fn( (key,defVal) => testData[key]||defVal),
+                getValue: jest.fn( (key,defVal) => testData[key]||defVal),
                 save: jest.fn()
             })
-            service.emitInitialized = jest.fn()
+            s.emitInitialized = jest.fn()
             SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue( {})
+
+        }
+        beforeEach( ()=>{            
+            service = new DeviceConfigurationService()
+            setupMocks(service)
         })
 
         afterEach( ()=>{
