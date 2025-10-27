@@ -411,8 +411,12 @@ export class WorkoutRide extends IncyclistService{
      */
     powerUp(delta:number):void {
 
+
         if (delta<0)
-            this.powerDown(-delta)
+            return this.powerDown(-delta)
+
+        this.logEvent({message: 'workout power up', delta})
+
         try {
 
             if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower<this.currentLimits?.maxPower) {
@@ -421,6 +425,7 @@ export class WorkoutRide extends IncyclistService{
                     deltaVal = delta===1 ? 5 : 50
                 }
                 this.currentLimits.targetPower = Math.min(this.currentLimits.targetPower+deltaVal, this.currentLimits.maxPower)
+                this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
                 return;
             }
@@ -428,6 +433,7 @@ export class WorkoutRide extends IncyclistService{
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp * (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
+                this.logEvent({message: 'workout FTP adjusted', ftp:this.settings.ftp})
             }            
             this.manualPowerOffset += delta
 
@@ -452,6 +458,8 @@ export class WorkoutRide extends IncyclistService{
      * 
      */
     powerDown(delta:number):void {
+        this.logEvent({message: 'workout power down', delta})
+
         try {
             if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower>this.currentLimits?.minPower) {
                 let deltaVal = delta
@@ -459,6 +467,7 @@ export class WorkoutRide extends IncyclistService{
                     deltaVal = delta===1 ? 5 : 50
                 }
                 this.currentLimits.targetPower = Math.max(this.currentLimits.targetPower-deltaVal, this.currentLimits.minPower)
+                this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
                 return;
             }
@@ -467,6 +476,7 @@ export class WorkoutRide extends IncyclistService{
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp / (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
+                this.logEvent({message: 'workout FTP adjusted', ftp:this.settings.ftp})
             }
 
             this.manualPowerOffset -= delta
