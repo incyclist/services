@@ -1,4 +1,4 @@
-import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode } from "incyclist-devices"
+import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
 import { AdapterInfo, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting, 
          LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"
@@ -76,6 +76,8 @@ export class DeviceConfigurationService  extends IncyclistService{
                     interfaces: this.getUserSettings().get('interfaces',[])
                 }
             }
+
+            this.initFeatureToggles()
     
             // first time initialization?
             let emptyConfig = false
@@ -129,6 +131,15 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.features[name] = enabled
     }
 
+    protected hasFeature(name:string):boolean {
+        return this.getUserSettings().getValue(name,false)
+    }
+
+    protected initFeatureToggles() {
+        if (this.hasFeature('NEW_GPX_UI') || this.hasFeature('VIRTUAL_SHIFTING')) {
+            this.getDevicesFeatureToggle().add('VirtualShifting')
+        }
+    }
 
     /** 
      * Provides the initialization state of the interface
@@ -1215,6 +1226,11 @@ export class DeviceConfigurationService  extends IncyclistService{
     @Injectable
     protected getAdapterFactory() {
         return AdapterFactory
+    }
+
+    @Injectable
+    protected getDevicesFeatureToggle() {
+        return useFeatureToggle()
     }
 
 }
