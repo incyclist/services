@@ -109,6 +109,7 @@ export class ActivityRideService extends IncyclistService {
     protected prevEmit: { distance:number, routeDistance:number, speed:number}
     protected saveObserver: PromiseObserver<boolean>
     protected isSaveDone: boolean
+    protected isDonateShown: boolean
 
     protected statsCalculator: ActivityStatsCalculator
     protected durationCalculator: ActivityDuration
@@ -223,6 +224,7 @@ export class ActivityRideService extends IncyclistService {
             this.tsStart = Date.now()
             this.tsPauseStart = undefined
             this.isSaveDone = false
+            this.isDonateShown = false
     
             this.logEvent({message:'activity started' })
             this.startWorker()
@@ -456,6 +458,7 @@ export class ActivityRideService extends IncyclistService {
                 showSave,
                 showContinue,
                 showMap,
+                showDonate:this.canShowDonate(),
                 preview
     
             }
@@ -468,6 +471,60 @@ export class ActivityRideService extends IncyclistService {
             this.logError(err,'getActivitySummaryDisplayProperties()')
             return {}
         }
+    }
+
+    protected canShowDonate() {
+
+        if (this.isDonateShown)
+            return true
+
+        if (this.saveObserver || this.isSaveDone) {
+
+            const lastClicked = this.getUserSettings().getValue('state.donateClicked',0)
+            // only check once a year
+            if (Date.now()-lastClicked<1000*60*60*24*365) {
+                if (this.saveObserver)
+                    this.logEvent({message:'donate check ', showDonate:false, lastClicked: new Date(lastClicked).toISOString()})
+                return false
+            }
+
+            const lastShown = this.getUserSettings().getValue('state.donateShown',0)
+            // only check once every two weeks
+            if (Date.now()-lastShown<1000*60*60*24*14) {
+                if (this.saveObserver)
+                    this.logEvent({message:'donate check ', showDonate:false, lastClicked: new Date(lastShown).toISOString()})
+                return false
+            }
+            
+            // only check if uuid starts with '1'
+            if (!this.activity.user.uuid.startsWith('1') && !this.activity.user.uuid.startsWith('a')) {
+                if (this.saveObserver)
+                    this.logEvent({message:'donate check ', showDonate:false, reason:'user not in trial'})
+                return false
+            }
+
+            // get number of activities
+            const activities = this.getRepo().getAll()
+            // filter activities within last 12 months that are longer than 2km
+
+            const lastYear = new Date()
+            lastYear.setFullYear(lastYear.getFullYear()-1)           
+            const activitiesLastYear = activities.filter( a => a.summary?.startTime > lastYear.getTime() && a.summary?.distance>2000)
+
+            if (this.saveObserver)
+                this.logEvent({message:'donate check ',  showDonate:activitiesLastYear.length>=10, activitiesLastYear})
+            if (activitiesLastYear.length<10)
+                return false
+                        
+            this.getUserSettings().set('state.donateShown',Date.now())
+            this.isDonateShown = true
+            return true
+        }
+        return false
+    }
+
+    onDonateClicked() {
+        this.getUserSettings().set('state.donateClicked',Date.now())
     }
 
     getActivity():ActivityDetails {
