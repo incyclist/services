@@ -478,7 +478,24 @@ export class ActivityRideService extends IncyclistService {
         if (this.isDonateShown)
             return true
 
-        if (this.saveObserver || this.isSaveDone) {
+        let trialGroup;
+        if (this.activity.user.uuid.startsWith('1') || this.activity.user.uuid.startsWith('a')) {
+            trialGroup = 'A'
+        }
+        else if (this.activity.user.uuid.startsWith('2') || this.activity.user.uuid.startsWith('b')) {
+            trialGroup = 'B'
+        }
+        if (!trialGroup) {
+            if (this.saveObserver)
+                this.logEvent({message:'donate check ', showDonate:false, reason:'user not in trial'})
+            return false
+        }
+
+        // Trial Group A only sees the donation text, when saving
+        // Trial Group B always sees the donation text  
+        // in  both cases, the donation text is only shown once every two weeks and not before one year after clicking on donate
+
+        if (this.saveObserver || this.isSaveDone || trialGroup==='B') {
 
             const lastClicked = this.getUserSettings().getValue('state.donateClicked',0)
             // only check once a year
@@ -496,12 +513,6 @@ export class ActivityRideService extends IncyclistService {
                 return false
             }
             
-            // only check if uuid starts with '1'
-            if (!this.activity.user.uuid.startsWith('1') && !this.activity.user.uuid.startsWith('a')) {
-                if (this.saveObserver)
-                    this.logEvent({message:'donate check ', showDonate:false, reason:'user not in trial'})
-                return false
-            }
 
             // get number of activities
             const activities = this.getRepo().getAll()
@@ -512,7 +523,7 @@ export class ActivityRideService extends IncyclistService {
             const activitiesLastYear = activities.filter( a => a.summary?.startTime > lastYear.getTime() && a.summary?.distance>2000)
 
             if (this.saveObserver)
-                this.logEvent({message:'donate check ',  showDonate:activitiesLastYear.length>=10, activitiesLastYear})
+                this.logEvent({message:'donate check ',  trialGroup, showDonate:activitiesLastYear?.length>=10, activities:activitiesLastYear?.length})
             if (activitiesLastYear.length<10)
                 return false
                         
