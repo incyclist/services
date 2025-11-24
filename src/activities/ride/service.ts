@@ -475,7 +475,9 @@ export class ActivityRideService extends IncyclistService {
 
     protected canShowDonate() {
 
-        if (this.isDonateShown)
+        if (!this.activity?.user?.uuid)
+            return false
+        if (this.isDonateShown || !this.activity?.user?.uuid)
             return true
 
         let trialGroup;
