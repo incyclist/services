@@ -295,45 +295,56 @@ export class ActiveRidesService extends IncyclistService {
 
     protected getDisplayProps():ActiveRideListDisplayItem[] {
 
-        
         const items =  this.get()
-        if (!items.length)
-            return []
-        
-        const displayProps: ActiveRideListDisplayItem[] = []
-        items.forEach( item=> {
-            const displayItem:ActiveRideListDisplayItem = {
-                isUser: item.sessionId===this.session,
-                name: this.getName(item),
-                diffDistance: this.getDistanceDiff(item),
-                distance: item.currentRideDistance,
-                avatar: this.getAvatar(item),
-                lap: this.getLap(item,true),
-                power: item.currentPower,
-                mpower: this.getRelativePower(item),
-                speed: item.currentSpeed,
-                lat: item.currentPosition?.lat,
-                lng: item.currentPosition?.lng,
-            }
-            displayProps.push(displayItem )
-        })
 
-        if (displayProps.length>this.maxLength) {
-            const absDiff = (r) => Math.abs(r.diffDistance) 
+        try {
+            if (!items.length)
+                return []
+            
+            const displayProps: ActiveRideListDisplayItem[] = []
+            items.forEach( item=> {
+                if (!item?.id && !item?.user?.name?.length && item?.sessionId!==this.session)
+                    return;
+
+                const displayItem:ActiveRideListDisplayItem = {
+                    isUser: item.sessionId===this.session,
+                    name: this.getName(item),
+                    diffDistance: this.getDistanceDiff(item),
+                    distance: item.currentRideDistance,
+                    avatar: this.getAvatar(item),
+                    lap: this.getLap(item,true),
+                    power: item.currentPower,
+                    mpower: this.getRelativePower(item),
+                    speed: item.currentSpeed,
+                    lat: item.currentPosition?.lat,
+                    lng: item.currentPosition?.lng,
+                }
+                displayProps.push(displayItem )
+            })
+
+            if (displayProps.length>this.maxLength) {
+                const absDiff = (r) => Math.abs(r.diffDistance) 
+
+                displayProps.sort( (a,b) => {
+                    return absDiff(b) > absDiff(a) ? -1 : 1
+                })
+                
+                return displayProps.filter( (_r,idx) => idx<this.maxLength)    
+            
+            }
 
             displayProps.sort( (a,b) => {
-                return absDiff(b) > absDiff(a) ? -1 : 1
-            })
-            
-            return displayProps.filter( (_r,idx) => idx<this.maxLength)    
-           
+                return b.diffDistance > a.diffDistance ? -1 : 1
+            })    
+
+            return displayProps
+
         }
-
-        displayProps.sort( (a,b) => {
-            return b.diffDistance > a.diffDistance ? -1 : 1
-        })    
-
-        return displayProps
+        catch(err) {
+            this.logError(err,'getDisplayProps', { items})
+            return []
+        }
+        
     }
 
     protected validName(str:string) {
@@ -352,6 +363,9 @@ export class ActiveRidesService extends IncyclistService {
     }
 
     protected randomName(id?:string) {
+        if (!id)
+            return 'Anonymous'
+
         const names = [ 'Alex', 'Bart', 'Cosmas', 'Dirk', 'Ernesto', 'Frank', 'Guido', 'Hans', 'Irene','John', 'Kai','Lorenzo', 'Martin', 'Naijb', 'Oswaldo', 'Pete', 'Quentin', 'Rachel', 'Sophia','Trevor', 'Ute', 'Vivian', 'Wil', 'Xaver', 'Younes', 'Zoe' ]
         
         const fnKey = id.charAt(0).toLowerCase()
@@ -613,7 +627,15 @@ export class ActiveRidesService extends IncyclistService {
 
             // ignore activity if it already exists in our list
             const others = this.others??[]
-            if (others.find( ar=>ar.sessionId===session ) )
+            if (others.some( ar=>ar.sessionId===session ) )
+                return
+
+            // ... or is the current user
+            if (payload.user?.id && payload.user?.id===this.current.user?.id)
+                return
+
+            // ... or the user is already in the list
+            if (payload.user?.id && others.some( ar=>ar.user?.id===payload.user?.id ) )
                 return
 
 
@@ -632,7 +654,7 @@ export class ActiveRidesService extends IncyclistService {
             }
             else {
                 this.isStarted = true
-                this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash() } )
+                this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(),user:payload?.user?.id } )
 
             }
 
@@ -787,34 +809,40 @@ export class ActiveRidesService extends IncyclistService {
 
     protected updateCoaches(){
 
-        if (!this.current)
-            return
+        try {
+            if (!this.current)
+                return
 
-        const coachesService = this.getCoachesService()
-        const coaches = coachesService.getCoaches()
+            const coachesService = this.getCoachesService()
+            const coaches = coachesService.getCoaches()
 
-        if (!coaches?.length) {
-            this.coaches = undefined
-            return
-        }
-            
-
-        this.coaches = coaches.map(c=>{
-            const props = c.getDisplayProperties()
-            const rideEntry:ActiveRideEntry = {
-                id: `coach:${props.name}`,
-                user: {
-                    name:props.name,
-                    id: `coach:${props.name}`,
-                },
-                ride: this.current?.ride,
-                tsLastUpdate: Date.now(),
-                currentRideDistance: c.getProgess(),
-                currentPosition: c.getPosition(),
-                isCoach:true
+            if (!coaches?.length) {
+                this.coaches = undefined
+                return
             }
-            return rideEntry
-        }) 
+                
+
+            this.coaches = coaches.map(c=>{
+                const props = c.getDisplayProperties()
+                const rideEntry:ActiveRideEntry = {
+                    id: `coach:${props.name}`,
+                    user: {
+                        name:props.name,
+                        id: `coach:${props.name}`,
+                    },
+                    ride: this.current?.ride,
+                    tsLastUpdate: Date.now(),
+                    currentRideDistance: c.getProgess(),
+                    currentPosition: c.getPosition(),
+                    isCoach:true
+                }
+                return rideEntry
+            }) 
+
+        }
+        catch(err) {
+            this.logError(err,'updateCoaches')
+        }
             
 
     }
