@@ -56,7 +56,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.displayService = this.getRideModeService(true)
 
             const ftNewUI = this.getUserSettings().get('NEW_GPX_UI',false)
-            if (ftNewUI || this.displayService instanceof WorkoutDisplayService) {
+
+            const showLegacy = !ftNewUI && (this.displayService instanceof RLVDisplayService)
+
+            if (!showLegacy) {
                 
                 this.displayService.init(this)
 
