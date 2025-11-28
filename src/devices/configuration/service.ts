@@ -1,4 +1,4 @@
-import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle } from "incyclist-devices"
+import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle, InterfaceFactory, BleDeviceSettings, DeviceSettings } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
 import { AdapterInfo, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting, 
          LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"
@@ -98,9 +98,16 @@ export class DeviceConfigurationService  extends IncyclistService{
             if (!this.settings?.devices)
                 this.settings.devices = []
     
+            let updated = false
             this.settings.devices.forEach( d=> {
-                if (!d?.udid)
+                if (!d?.udid ) {
+                    if (d?.settings.interface==='wifi') {
+                        d.udid = generateUdid() as string
+                        updated = true
+                    }
                     return;
+                }
+                
                 try {
                     this.adapters[d.udid] = this.getAdapterFromSetting(d.settings)
                 }
@@ -108,6 +115,9 @@ export class DeviceConfigurationService  extends IncyclistService{
                     this.logEvent({message:'error',fn:'init()->Adapterfactory.create()',error:err.message,udid:d.udid, settings:d.settings,  devices:this.settings.devices, stack:err.stack,})
                 }
             })
+            if (updated) {
+                this.getUserSettings().set('devices',this.settings.devices)
+            }
     
             this.initWifiInterface()
     
@@ -255,7 +265,6 @@ export class DeviceConfigurationService  extends IncyclistService{
     }
 
     add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {   
-
         let udid = this.getUdid(deviceSettings) 
 
         const {legacy=false} = props||{}
@@ -264,8 +273,18 @@ export class DeviceConfigurationService  extends IncyclistService{
 
 
         let adapter;
+        
+        const updateWifiSettings = (udid:string) => {
+            const settingIdx = this.settings.devices.findIndex(d => d.udid === udid)
+            if (settingIdx !== -1 && this.settings.devices[settingIdx]?.settings?.interface === 'wifi') {
+                this.settings.devices[settingIdx].settings = { ...this.settings.devices[settingIdx].settings, ...deviceSettings }
+            }
+        }
+
+
         if (deviceAlreadyExists && this.adapters[udid])  {
             adapter = this.adapters[udid]
+            updateWifiSettings(udid)
         }
         else {
             this.logEvent({message:'add device',udid,deviceSettings, legacy})
@@ -276,7 +295,10 @@ export class DeviceConfigurationService  extends IncyclistService{
             }
     
             udid = this.settings.devices?.find( d=> adapter.isEqual(d.settings))?.udid
-            if (!udid) {
+            if (udid) {
+                updateWifiSettings(udid)
+            }
+            else {
                 if (!this.settings.devices)
                     this.settings.devices = []
                 udid = generateUdid() as string
@@ -664,6 +686,15 @@ export class DeviceConfigurationService  extends IncyclistService{
             this.settings.interfaces[idx] = {name:'wifi',enabled,invisible}
 
         }
+
+        const wifiDevices = this.settings.devices.filter(d => d?.settings?.interface === 'wifi')
+
+        const dc = this.getDirectConnectInterface()
+        wifiDevices.forEach( d=> {
+            const settings: BleDeviceSettings = d.settings as BleDeviceSettings
+            dc.addKnownDevice(settings)
+        })
+
 
     }
 
@@ -1231,6 +1262,11 @@ export class DeviceConfigurationService  extends IncyclistService{
     @Injectable
     protected getDevicesFeatureToggle() {
         return useFeatureToggle()
+    }
+
+    @Injectable
+    protected getDirectConnectInterface() {
+        return InterfaceFactory.create('wifi')
     }
 
 }
