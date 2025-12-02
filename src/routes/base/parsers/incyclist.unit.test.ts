@@ -151,6 +151,12 @@ describe('IncyclistParser',()=>{
                 expect(points[10].elevation).toBeCloseTo(371,0)
                 expect(Math.abs(points[9].slope??0)).toBeLessThan(10)
             })
+            
+            test('no timestamps', async()=> {
+              const {data} = await run('ES_Catalunya_Spain.xml')
+              expect(data.points?.length).toBeGreaterThan(0)
+
+            })
     
         })
 

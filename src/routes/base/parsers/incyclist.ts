@@ -67,6 +67,17 @@ export class IncyclistXMLParser extends XMLParser{
         try {
 
             let points;
+            let duration;
+
+            try {
+                if (data['framerate'] && data['end-frame']) { 
+                    duration = Number(data['end-frame'])/Number(data['framerate']);
+                }
+                else if (data['duration']) {
+                    duration = Number(data['duration']);
+                }
+            }
+            catch {}
 
             if (fileName.toLowerCase().endsWith('.json')) {
                 gpxFile.ext = 'json'
@@ -76,13 +87,13 @@ export class IncyclistXMLParser extends XMLParser{
                 context.mapping = geo.details.mapping
             }
             else {
-                const gpx = await new GPXParser({addTime:true}).import(gpxFile)
+                const gpx = await new GPXParser({addTime:true,duration}).import(gpxFile)
                 points = [...gpx.details.points]    
             }
 
 
             if (context.data['autoCorrect']) {
-                const gpx = await new GPXParser({addTime:true, keepZero:true}).import(gpxFile)
+                const gpx = await new GPXParser({addTime:true, keepZero:true,duration}).import(gpxFile)
                 const points = [...gpx.details.points]
     
                 const {fixed,time,error} = fixAnomalies(points)  

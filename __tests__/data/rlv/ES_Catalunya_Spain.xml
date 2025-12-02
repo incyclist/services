@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<gpx-import>
+    <name>ES_Catalunya_Spain</name>    
+    <id>cc09e358-9e4f-4f9f-a0e2-5baa9030c7d6</id>
+    <country>ES</country>
+    <title>60 min Cycling Workout Catalunya Spain</title>
+    <video-file-path>ES_Catalunya_Spain.mp4</video-file-path>
+    <gpx-file-path>ES_Catalunya_Spain.gpx</gpx-file-path>
+    <framerate>30</framerate>
+    <start-frame>1</start-frame>
+    <end-frame>108000</end-frame>    
+	<informations>
+		<information distance="100" en="Sunshine Indoor Cycling Workout Catalunya Spain\n\nCopyright: https://www.youtube.com/@indoorcyclingtreadmillworkout\nSource: https://www.youtube.com/watch?v=kirQYDubdPQ" />
+	</informations>
+</gpx-import>

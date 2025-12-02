@@ -14,6 +14,7 @@ export interface EnhancedRoutePoint extends RoutePoint {
 interface GPXParserProps {
     addTime?: boolean;
     keepZero?: boolean
+    duration?: number
 }
 
 export class GPXParser extends XMLParser { 
@@ -58,7 +59,59 @@ export class GPXParser extends XMLParser {
             context.route.localizedTitle= { en: lt}
         }
     }
- 
+
+    protected getNumberOfPoints(context:XmlParserContext):number { 
+        const data = context.data 
+        const track = Array.isArray(data['trk']) ? data['trk'][0] : data['trk']
+
+        const segments = Array.isArray(track.trkseg) ? track.trkseg : [track.trkseg]
+
+        return segments.reduce( (sum,segment) => {
+            let pts = 0
+            if (Array.isArray(segment?.trkpt))
+                pts = segment.trkpt.length
+            if ( typeof(segment?.trkpt)==='object' && Object.keys(segment?.trkpt ) ) {
+                const keys = Object.keys(segment?.trkpt)
+                pts = keys.length
+            }
+            return sum + pts
+        },0) 
+
+    }
+
+    protected hasTimestamps(context:XmlParserContext):boolean {
+        const data = context.data 
+        const track = Array.isArray(data['trk']) ? data['trk'][0] : data['trk']
+
+        const segments = Array.isArray(track.trkseg) ? track.trkseg : [track.trkseg]
+
+        for (const segment of segments) {
+            let points = []
+            if (Array.isArray(segment?.trkpt))
+                points = segment.trkpt
+            if ( typeof(segment?.trkpt)==='object' && Object.keys(segment?.trkpt ) ) {
+                const keys = Object.keys(segment?.trkpt)
+                points = keys.map( key=>segment?.trkpt[key])
+            }   
+            if (points?.some( (p) => p.time )) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    // adjust times based on average speed
+    protected async adjustTimes (context:XmlParserContext) { 
+        const totalDistance = context.route.points.length>0 ? context.route.points[context.route.points.length-1].routeDistance : 0
+        const avgSpeed = totalDistance / this.props.duration; // m/s
+
+        for (const p of context.route.points) {
+            p.time = p.routeDistance / avgSpeed;
+        }
+
+    }
+
 
     protected async loadPoints(context: XmlParserContext) {
         const data = context.data 
@@ -67,8 +120,25 @@ export class GPXParser extends XMLParser {
         const segments = Array.isArray(track.trkseg) ? track.trkseg : [track.trkseg]
         let prev;
         let startTime=null
-        
+        let stepSize = 1
+        let useAverageSpeed = false
 
+        if (this.props.duration) { 
+
+
+
+            const totalPoints = this.getNumberOfPoints(context)
+            const hasTimestamps = this.hasTimestamps(context)
+            if (!hasTimestamps) {
+                useAverageSpeed = true
+            }
+            if (totalPoints && totalPoints>0) {
+                stepSize = this.props.duration / totalPoints
+            }
+        }
+
+        
+    
         segments.forEach( segment => {
             let points = []
             if (Array.isArray(segment?.trkpt))
@@ -77,6 +147,7 @@ export class GPXParser extends XMLParser {
                 const keys = Object.keys(segment?.trkpt)
                 points = keys.map( key=>segment?.trkpt[key])
             }
+
 
             points.forEach( (gpxPt)=> {
                 const point:EnhancedRoutePoint = {
@@ -88,9 +159,16 @@ export class GPXParser extends XMLParser {
                 }
                 
                 if (this.props.addTime) {
-                    point.time = startTime===null ? 0: (Date.parse(gpxPt.time)-startTime)/1000;
-                    if ( startTime===null)
-                        startTime = Date.parse(gpxPt.time);
+
+                    if (startTime===null) {
+                        point.time = 0;
+                        startTime = gpxPt.time ? Date.parse(gpxPt.time) : Date.now();
+                    }
+                    else {
+                        const gpxTime = gpxPt.time ? (Date.parse(gpxPt.time)-startTime)/1000 : null;                       
+                        point.time = gpxTime ?? prev.time+stepSize
+                    }
+
 
                 }
 
@@ -106,8 +184,15 @@ export class GPXParser extends XMLParser {
                 point.cnt = context.route.points.length
                 context.route.points.push(point)
                 prev = point
+                
             })
         })
+
+        if (useAverageSpeed) {
+
+            this.adjustTimes(context)
+        }
+
 
     }
 
