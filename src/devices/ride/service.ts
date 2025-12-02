@@ -1234,24 +1234,32 @@ export class DeviceRideService  extends IncyclistService{
         })
     }
 
-    protected verifySelected( selectedDevices, capability:IncyclistCapability) {
+    protected verifySelected( selectedDevices, requested:IncyclistCapability) {
         
-        if (selectedDevices.find( sd => sd.capability===capability)===undefined) {
+        // If there was already a device selected for this capability, then we are done
+        if (selectedDevices.some( sd => sd.capability===requested))
+            return;
 
-            const verify = ( toCheck:IncyclistCapability):boolean => {
-                const found = selectedDevices.find( sd => sd.capability===toCheck)
-    
-                if (found) {
-                    const additional = clone(found)
-                    additional.capability  = capability
-                    selectedDevices.push(additional)                
-                }
-                return found;
+
+        const verify = ( toCheck:IncyclistCapability):boolean => {
+            const found = selectedDevices.find( sd => sd.capability===toCheck)
+
+            if (found) {
+                const additional = clone(found)
+                additional.capability  = requested
+                selectedDevices.push(additional)                
             }
-    
-            const added = verify(IncyclistCapability.Control)
-            if (!added && capability!==IncyclistCapability.Power) verify(IncyclistCapability.Power)
+            return found;
         }
+
+        // try to find a device for the requested capability by looking for other capabilities that might provide the same data
+        // e.g. Speed can be provided by SmartTrainer or Power Sensor
+        // Cadence can be provided by SmartTrainer or Power Sensor
+        // Power can be provided by SmartTrainer
+        const added = verify(IncyclistCapability.Control)
+        if (!added && requested!==IncyclistCapability.Power) 
+            verify(IncyclistCapability.Power)
+        
 
     }
 
@@ -1288,6 +1296,7 @@ export class DeviceRideService  extends IncyclistService{
 
         // get selected devices for each of the capabilities
         const selectedDevices = config.getSelectedDevices()
+        this.logEvent({message:'onData - device info', device:adapterInfo.adapter.getName(), udid:adapterInfo.udid, selectedDevices })
 
         // If we are still using the legacy framework, then there will be no device selected
         // for capabilities Speed and Cadence
@@ -1359,6 +1368,8 @@ export class DeviceRideService  extends IncyclistService{
 
     private getEnabledCapabilities(adapterInfo: AdapterRideInfo, selected?:Array<{capability:IncyclistCapability,selected?:string }> ) {
 
+        this.logEvent({message:'getEnabledCapabilities', device:adapterInfo.adapter.getName(), udid:adapterInfo.udid, selected  })
+
         const adapters = this.getSelectedAdapters();
         const config = this.getDeviceConfiguration()
 
@@ -1397,6 +1408,8 @@ export class DeviceRideService  extends IncyclistService{
             enabledCapabilities = selectedDevices.filter(sd => sd.selected === adapterInfo.udid).map(c => c.capability);
 
         }
+        this.logEvent({message:'getEnabledCapabilities result', device:adapterInfo.adapter.getName(), udid:adapterInfo.udid, enabledCapabilities,toBeReplaced })
+
         return { enabledCapabilities, toBeReplaced };
     }
 
