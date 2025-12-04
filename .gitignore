@@ -45,3 +45,7 @@ typings
 .vscode
 nohup.out
 
+tools/*/build
+
+tools/activity-replay-agent/build/index.js
+tools/activity-replay-agent/build/index.js.map
