@@ -271,6 +271,9 @@ export class ActiveRidesService extends IncyclistService {
 
 
     protected onActivityResumed() {
+        if (!this.current)
+            return
+
         try {
             this.current.isPaused = false
             this.current.tsLastUpdate = Date.now()
