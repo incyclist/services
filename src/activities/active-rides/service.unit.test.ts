@@ -28,7 +28,7 @@ describe('ActiveRides',()=>{
 
     let service: ActiveRidesService
 
-    const setupMocks =(s,props?) => {
+    const setupMocks =(s:any,props?) => {
         Inject('ActivityRide',props?.activityRide??MockRide)
         s.getMessageQueue = jest.fn().mockReturnValue(props?.messageQueue??MockMessageQueue)
 
@@ -53,4 +53,25 @@ describe('ActiveRides',()=>{
         expect(observer).toBeDefined()
 
     })
+
+    test('getName',()=>{
+        service = useActiveRides()
+        setupMocks(service)
+
+        const run = (s:any, userName?:string)=>{
+            s.current = { user:{id:'9999',name:'Current User'} }
+            s.randomName = jest.fn().mockReturnValue('Random')
+
+            return s.getName({user:{id:'1234',name:userName},sessionId:'abcd'})
+
+        }
+
+        expect(run(service,'John')).toBe('John')
+        expect(run(service,undefined)).toBe('Random')
+        expect(run(service,'')).toBe('Random')
+        expect(run(service,'undefined')).toBe('Random')
+        expect(run(service,'undefined undefined')).toBe('Random')
+    })
+
+        
 })

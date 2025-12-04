@@ -352,14 +352,19 @@ export class ActiveRidesService extends IncyclistService {
             return false
         if (str==='undefined' || str==='undefined undefined')
             return false
-
+        return true
+        
     }
 
     protected getName(item) {
-        if (item.sessionId===this.session || item.user?.id===this.current.user?.id)
-            return item.user?.name?.length ? item.user?.name : 'You'
 
-        return this.validName(item.user?.name) ? item.user?.name : this.randomName(item.user?.id)
+        if (item.sessionId===this.session || item.user?.id===this.current.user?.id) {
+            const name = item.user?.name?.length ? item.user?.name : 'You'
+            return name
+        }
+
+        const name=this.validName(item.user?.name) ? item.user?.name : this.randomName(item.user?.id)
+        return name
     }
 
     protected randomName(id?:string) {
