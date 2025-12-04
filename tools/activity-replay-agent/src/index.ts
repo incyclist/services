@@ -234,6 +234,8 @@ const parseArgs = ():Arguments=> {
         console.error('Usage: node index.js <activity> [count] [startDelay]');
         process.exit(1);
     }
+
+    console.log('Arguments:', args);    
     const activity = args[0]
     const count = Number(args?.[1]??1)
     const startDelay = Number(args?.[2]??-1)
@@ -244,10 +246,13 @@ const parseArgs = ():Arguments=> {
 main( parseArgs() )
 
 function createUser(uuid: string, activity: ActivityDetails): ActiveRideUser {
-    return {
+    const user = {
         id: uuid,
         weight: activity.user?.weight,
+        name:  process.env.NAME
+
     };
+    return user
 }
 
 function createRide(activity: ActivityDetails, activityId: string): ActiveRideRoute {
