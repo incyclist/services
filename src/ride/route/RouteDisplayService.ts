@@ -412,7 +412,7 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected savePosition(startPos?:number) {
-        // should be implemented by sub classes, as location is ride mode specifc
+        // should be implemented by sub classes, as location is ride mode specific
     }
 
     getOriginalRoute():Route {

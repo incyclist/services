@@ -56,7 +56,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         return {}
     }
     getDisplayProperties(props: CurrentRideDisplayProps):IRideModeServiceDisplayProps {
-        return { dbColumns: this.getDashboardColums() }
+        return { dbColumns: this.getDashboardColumns() }
     }
 
     onActivityUpdate(activityPos:ActivityUpdate,data):void {
@@ -191,7 +191,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         }
     }
 
-    protected getDashboardColums(): number {
+    protected getDashboardColumns(): number {
 
         
         const mode = this.getDeviceRide().getCyclingMode()

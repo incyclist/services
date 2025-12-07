@@ -72,7 +72,7 @@ export class GpxDisplayService extends RouteDisplayService {
 
     // We might need to restrict the position update frequency, similar to StreetView
     // {position,googleMaps,visible,options,onEvent}
-    getSateliteViewProps() {
+    getSatelliteViewProps() {
         return {
             onDisplayEvent: this.onSatelliteViewEvent.bind(this),
             displayPosition: this.position
@@ -117,7 +117,7 @@ export class GpxDisplayService extends RouteDisplayService {
             routeProps = {...routeProps, ...this.getStreetViewProps(props)}
         }
         else if (rideView==='sat') {
-            routeProps = {...routeProps, ...this.getSateliteViewProps()}
+            routeProps = {...routeProps, ...this.getSatelliteViewProps()}
         }
         else {
             routeProps = {...routeProps, ...this.getMapViewProps()}
@@ -285,7 +285,7 @@ export class GpxDisplayService extends RouteDisplayService {
                 return
             const val = Number(ret)
             if (isNaN(val)) {
-                this.logEvent({message:'inalid setting', key,ret})
+                this.logEvent({message:'invalid setting', key,ret})
                 return
             }
             return val
