@@ -414,7 +414,7 @@ export interface GetNextPositionProps {
 export const getNextPosition = ( route:Route, props:GetNextPositionProps ):LapPoint => {
     const points = route.points
 
-    if (props===undefined) {
+    if (props===undefined || props===null) {
         return;
     }
     if ( props.distance===undefined && props.routeDistance===undefined) {
@@ -663,7 +663,7 @@ function searchNextPoint(route:Route,pPrev:LapPoint,props:GetNextPositionProps,s
 
     for ( let cnt = searchStartIdx;cnt<points.length;cnt++) {
         const p = points[cnt];
-        if ( p.routeDistance>=targetRouteInLap) {            
+        if ( p?.routeDistance>=targetRouteInLap) {            
             const point = updatePoint(p, pPrev, props,  distance, targetRouteInLap, route, lap);
             return {pSearchStart,point}; 
         }   

@@ -316,7 +316,7 @@ export class RouteDisplayService extends RideModeService {
 
             if (newRouteDistance !== currentRouteDistance) {
                 const current = this.toLapPoint(this.position)
-                const next = getNextPosition(this.getCurrentRoute(),{routeDistance:activityPos.routeDistance,prev: current})
+                const next = getNextPosition(this.getCurrentRoute(),{routeDistance:activityPos?.routeDistance,prev: current})
                 return  this.fromLapPoint(next)                
             }
 
