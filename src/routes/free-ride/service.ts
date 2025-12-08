@@ -73,7 +73,6 @@ export class FreeRideService extends IncyclistService {
      */
     async getNextOptions(forStart?:boolean):Promise<FreeRideContinuation[]> {
         
-        console.log(new Date().toISOString(),'# getNextOptions', this.selectedOption)
         let prepared = false
 
         // if we already have calculated the next level of options, return them immeditately and calculate the next level
@@ -81,7 +80,6 @@ export class FreeRideService extends IncyclistService {
 
         
         if (from?.options?.length > 0) {
-            console.log(new Date().toISOString(),'# already got next options', from.options)
             this.options = this.evaluateOptions(from.options, from);
             prepared = true
                      
@@ -100,8 +98,6 @@ export class FreeRideService extends IncyclistService {
 
         const message = forStart ? 'start options updated' : 'free ride options updated'
         this.logEvent({message,prepared, options: optionsInfo(this.options), from: this.buildId(from)})
-
-        console.log(new Date().toISOString(),'# '+message, optionsInfo(this.options))
 
         if (this.options?.length > 0) {
             this.selectOption(this.options[0]);
@@ -129,14 +125,10 @@ export class FreeRideService extends IncyclistService {
 
     private async loadNextOptions(from: FreeRideContinuation,forStart?:boolean): Promise<FreeRideContinuation[]> {    
 
-        console.log(new Date().toISOString(),'# load next options ', from)
-
         const optionManager = useMapArea().getOptionManager()
         let opts =  await optionManager.getNextOptions(from) ?? [];
 
         opts = this.evaluateOptions(opts, from);
-        console.log(new Date().toISOString(),'# load next options done', opts)
-
         // for each of the options, get next options
         if (forStart )
             await this.getNextLevelOptions(opts);
@@ -186,7 +178,6 @@ export class FreeRideService extends IncyclistService {
                     newSegment = {...way}
                 }
                 const result = map.splitAtFirstBranch(newSegment)
-                console.log('# addLastSegmentReverse - split at first branch', result)
                 path = result?.path??[]
             }
             else {
@@ -329,7 +320,6 @@ export class FreeRideService extends IncyclistService {
             return `${o.id}:(${o.path.length}):${o.path[0].id}->${o.path[o.path.length-1].id}`
         }
 
-        console.log('# getNextLevelOptions',opts)
         // run in sequence to not overload overpass servers
         for (const o of opts??[]) {
 
@@ -342,8 +332,6 @@ export class FreeRideService extends IncyclistService {
             let isSingle = false
 
             do {
-                console.log('# get next options for',segmentLog(segment))
-
                 const nextOpts = await optionManager.getNextOptions(segment);
 
                 const handleSingleOption = () => {
@@ -352,8 +340,6 @@ export class FreeRideService extends IncyclistService {
                     isSingle = true
         
                     try {
-                        console.log('# processing single next options for',segmentLog(segment),'=>', nextOpts?.length, nextOpts?.map( o=>segmentLog(o) ).join(','))
-
                         segment = nextOpts[0];
                         concatPaths(o.path, segment.path, 'after');
                         const originatingPoint = segment.path[1];
@@ -362,13 +348,11 @@ export class FreeRideService extends IncyclistService {
         
                         // remove option that poins back to the originating point
                         if (segment.options?.length > 0) {
-                            console.log('# filtering options', segment.id, segment.path,originatingPoint, segment.options?.map( o => o.path.map( p => p.id ).join(',')))
                             segment.options = segment.options.filter( o => o.path[o.path.length-1].id !== originatingPoint.id);
                         }
     
                     }
                     catch(err) {
-                        console.log('# error processing single next options for',segmentLog(segment),'=>', nextOpts?.length, nextOpts?.map( o=>segmentLog(o) ).join(','), err)
                         this.logError(err,'getNextLevelOptions#handleSingleOption')                        
                     }
 
@@ -386,7 +370,6 @@ export class FreeRideService extends IncyclistService {
                     }
         
                     try {
-                        console.log('# no next options found', clone(segment.path), segment.id)
                         const map = segment.map ?? this.getMapArea().getMap(segment.path[0])
     
                         const newPath = []
@@ -398,10 +381,8 @@ export class FreeRideService extends IncyclistService {
                         
     
                         const way = map?.getWay(segment.id)
-                        console.log('# new path', newPath.map( p => p.id).join(','), 'way:',way)
     
                         if ( !isOneWay(way) ||  isAllowed(way, newPath[0], newPath[newPath.length-1])) {
-                            console.log('# adding new segment', segmentLog(segment), '->', newPath.map( p => p.id).join(','))
                             segment = {
                                 id:o.id,
                                 map:o.map,                            
@@ -411,18 +392,15 @@ export class FreeRideService extends IncyclistService {
                             }
                             
                             concatPaths(o.path, newPath, 'after');
-                            console.log('# adjusted original path',clone(o))
     
                         }
                         else {
-                            console.log('# no option allowed')
                             o.options = []
                             done = true
                         }
     
                     }
                     catch(err) {
-                        console.log('# error processing no next options for',segmentLog(segment),'=>', nextOpts?.length, nextOpts?.map( o=>segmentLog(o) ).join(','), err)
                         this.logError(err,'getNextLevelOptions#handleNoOption')
                     }
 
@@ -437,7 +415,6 @@ export class FreeRideService extends IncyclistService {
                     handleNoOption()           
                 }
                 else {
-                    console.log('# setting next options for',segmentLog(segment),'=>', nextOpts?.length, nextOpts?.map( o=>segmentLog(o) ).join(','))
                     o.options = nextOpts;
                     done = true                           
                 }
@@ -445,13 +422,11 @@ export class FreeRideService extends IncyclistService {
                 await waitNextTick()
             } while (!done);
         }
-        console.log('# getNextLevelOptions done',opts)
 
     }
 
     protected buildId (opt:FreeRideContinuation):string {
         if (!opt) {
-            console.log('# buildId - no option')
             return 
         }
 
@@ -464,8 +439,6 @@ export class FreeRideService extends IncyclistService {
 
 
     selectOption( option:FreeRideContinuation|string|number ):FreeRideContinuation[]{
-        console.log('# select option', option, this.options)
-
         let opt;
         switch (typeof option) {
             case 'number':
@@ -479,7 +452,6 @@ export class FreeRideService extends IncyclistService {
         }
 
         this.selectedOption = this.options.find( o=> this.buildId(o) === this.buildId(opt))
-        console.log(new Date().toISOString(),'# option selected', option,'->',this.selectedOption)
         return this.options
         
     }
@@ -491,7 +463,6 @@ export class FreeRideService extends IncyclistService {
         this.logEvent({message:'free ride option applied', option: this.buildId(this.selectedOption)})
 
         this.currentSegment = this.selectedOption
-        console.log(new Date().toISOString(),'# free ride option applied', this.currentSegment)
     }
 
     applyStartOption( startOption?:FreeRideOption ) {
@@ -572,8 +543,6 @@ export class FreeRideService extends IncyclistService {
     }
 
     protected async getStartOptions(map:IMapArea,initial:boolean=false) {
-        console.log(new Date().toISOString(),'# getStartOptions',initial)
-
         this.startOptions = []
         if (!map)
             return
@@ -584,8 +553,6 @@ export class FreeRideService extends IncyclistService {
         if (!way) {
             const {lat,lng} = this.startPosition
             this.logEvent({message:'no options found for',lat,lng, reason:'off track'})
-            console.log(new Date().toISOString(),'# getStartOptions - no way found')
-
             return
         }
 
@@ -593,7 +560,6 @@ export class FreeRideService extends IncyclistService {
         if (!crossing) {
             if ( way.path.length>1)
                 this.startOptions = [ {path:way.path}] 
-            console.log(new Date().toISOString(),'# getStartOptions - no crossing found')
             return
         }
 
@@ -607,9 +573,6 @@ export class FreeRideService extends IncyclistService {
         this.startOptions.push(...options)
 
         this.options = this.startOptions
-
-        console.log(new Date().toISOString(),'# getStartOptions - done', this.startOptions)
-
     }
 
     protected setStartPosition( position?:LatLng ) {

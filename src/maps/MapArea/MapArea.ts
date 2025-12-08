@@ -1,7 +1,7 @@
 import { EventLogger } from "gd-eventlog";
 import { calculateHeaderFromPoints, LatLng } from "../../utils/geo";
 import { Boundary, FreeRideDataSet, IMapArea, IncyclistNode, IncyclistWay, IncyclistWaySplit, NearestPathInfo, PathCrossingInfo, SegmentInfo, SplitPointInfo, WayInfo } from "./types";
-import { distanceToPath, generateID, isOneWay, isRoundabout, isWithinBoundary, splitAtPoint, splitAtPointInfo } from "./utils";
+import { distanceToPath, generateID, isOneWay, isRoundabout, isWay, isWithinBoundary, splitAtPoint, splitAtPointInfo } from "./utils";
 import clone from "../../utils/clone";
 
 /**
@@ -449,20 +449,42 @@ export class MapArea implements IMapArea{
     protected correctRoundabouts():void {
         let multiWayRoundabouts = [];   // roundabout is tagged as roundabout in OpenMap and consist of multiple ways
         let roundaboutsImplicit = [];   // roundabout with single way having first and last point are equal / may  not be tagged as roundabout
-       
+      
 
         try {
             // retrieve all roundabouts
             this.data?.ways.forEach( way => {
                 if ( isRoundabout(way,true) ) {
                     let ways = this.collectRoundaboutWays(way);
+                    if (ways?.length<2)  {
+                        return;
+                    }
                     let id = generateID(ways);
                     let found =  multiWayRoundabouts.find( e => e.id===id)
                     if (!found) {
+
+                        const idxMatching = multiWayRoundabouts.findIndex( r => {
+                            for (const w of ways) {
+                                if (r.ways.includes(w)) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        })
+                        if (idxMatching>=0) { 
+                            const matching = multiWayRoundabouts[idxMatching];
+                            if (matching.ways.length<ways.length) {
+                                multiWayRoundabouts[idxMatching] = {id,ways}
+                                return
+                            }
+                        }
+                        
                         found = (way.path[0].id===way.path[way.path.length-1].id);
                         if (found) {
                             roundaboutsImplicit.push(way);
                         }
+
+
                     }
                     if (!found) multiWayRoundabouts.push( {id,ways})
                 }
@@ -472,11 +494,17 @@ export class MapArea implements IMapArea{
             } )
 
             multiWayRoundabouts.forEach( ri => {
+
                 let originalNodes = [];
+                if (ri.ways.length<2) {
+                    return
+                }
 
                 // 1st pass: collect nodes
                 ri.ways.forEach( (wid,i) => {
                     let way = this.getWay(wid);
+                    if (way===undefined)
+                        return;
                     let path = way.path;
                     path.forEach( n => {
                         if ( originalNodes.length===0 ||
@@ -515,6 +543,7 @@ export class MapArea implements IMapArea{
         }
         
     }
+
 
     /**
      * Collects all ways that are belonging to the same roundabout into an array
@@ -615,8 +644,10 @@ export class MapArea implements IMapArea{
 
         let oldId = way.id;
         let w = this.getWay(oldId)
-        
-        
+
+        if (oldId===newId)
+            return w;
+
         w.originalId = w.id;
         w.id = newId;
         w.path.forEach( (nx,j) => {

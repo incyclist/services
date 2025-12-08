@@ -4,6 +4,7 @@ import {useMapArea} from './service';
 import testData from '../../../__tests__/data/overpass/MapArea-test1.json';
 import defaultData from '../../../__tests__/data/overpass/default-location.json';
 import roundaboutData from '../../../__tests__/data/overpass/roundabout-test.json';
+import roundaboutIssuesData from '../../../__tests__/data/overpass/roundabout-issues.json';
 
 import { MapArea } from './MapArea';
 import {  IncyclistNode, IncyclistWay, IncyclistWaySplit, PathCrossingInfo, WayInfo } from './types';
@@ -56,6 +57,22 @@ describe( 'MapArea', () => {
             expect(roundabout).toBeUndefined()
 
             const multiNodeRB = area.getWays().find(w => w.id.startsWith('R:')&&w.id.split(',').includes('700616380')) ??{} as IncyclistWay
+            expect(printWay(multiNodeRB)).toMatchSnapshot()
+            
+            
+
+        })
+        test('incorrect tagging in multi-way roundabouts', () => { 
+            // 2nd part is not tagged as roundabout
+            const location = { lat:36.1460519399368,lng:-5.342090963297901 }
+            const boundary = { northeast:{ lat:1, lng:1 }, southwest:{ lat:1, lng:1 } } // not relevant
+            const data = useMapArea().createMapData(roundaboutIssuesData);           
+            area = new MapArea(data, location, boundary);            
+
+            const roundabout = area.getWay('525571772')
+            expect(roundabout).toBeUndefined()
+
+            const multiNodeRB = area.getWays().find(w => w.id.startsWith('R:')&&w.id.split(',').includes('525571772')) ??{} as IncyclistWay
             expect(printWay(multiNodeRB)).toMatchSnapshot()
             
             
