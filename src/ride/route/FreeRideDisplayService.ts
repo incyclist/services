@@ -13,7 +13,6 @@ import { GpxDisplayService } from "./GpxDisplayService";
 import { FreeRideContinuation, IncyclistNode } from "../../maps/MapArea/types";
 import { MapViewPort } from "./types";
 import { ActivityUpdate } from "../../activities/ride/types";
-import clone from "../../utils/clone";
 import { waitNextTick } from "../../utils";
 
 
@@ -55,6 +54,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
     start() {
         try {
             super.start()
+            this.initListeners()
 
             this.isStarting = true
             this.isTurnEnabled = false;
@@ -130,6 +130,17 @@ export class FreeRideDisplayService extends GpxDisplayService {
         catch(err) {
             this.logError(err,'continueWithSelectedOption')
         }
+    }
+
+    protected initListeners() {
+        this.cleanupListeners();
+        this.getFreeRideService().on('options-update', () => {   
+            this.emitOptionsUpdate()
+        })
+    }
+
+    protected cleanupListeners() {  
+        this.getFreeRideService().removeAllListeners('options-update');
     }
 
     protected async onTurn() {
@@ -290,7 +301,6 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
     onActivityUpdate(activityPos:ActivityUpdate,data):void { 
 
-        console.log('# FreeRideDisplayService onActivityUpdate', clone(activityPos), clone(data) ); 
         // if we are currently busy with a turn, don't update position
         if (this.turnPosition)
             return
@@ -585,6 +595,14 @@ export class FreeRideDisplayService extends GpxDisplayService {
         this.service.getObserver().emit('route-update',{route:this.currentRoute,options,map})
 
     }
+    protected emitOptionsUpdate() {
+
+        const options = this.getFreeRideService().buildUIOptions(this.currentOptions)
+        const map = this.getOverlayProps('map')
+
+        this.service.getObserver().emit('options-update',{options,map})
+
+    }
 
     protected  updatePosition(activityPos:ActivityUpdate): CurrentPosition {
         try {
@@ -617,9 +635,14 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
 
     protected appendOption(route: Route, selectedOption: FreeRideContinuation) {
-        concatPaths(route.points, selectedOption.path, 'after');
-        
-        validateRoute(route,true);
+        try {
+            concatPaths(route.points, selectedOption.path, 'after');
+            
+            validateRoute(route,true);
+        }
+        catch(err) {
+            this.logError(err,'appendOption',{selectedOption})
+        }
     }
 
     protected updateRoutePoints(route: Route, points: RoutePoint[]) {
@@ -659,6 +682,10 @@ export class FreeRideDisplayService extends GpxDisplayService {
         return parent-1; // (no slope)
     }
 
+    reset() {
+        super.reset()
+        this.cleanupListeners();
+    }
 
 
     @Injectable

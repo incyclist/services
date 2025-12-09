@@ -78,6 +78,10 @@ export class FreeRideService extends IncyclistService {
         // if we already have calculated the next level of options, return them immeditately and calculate the next level
         const from = this.selectedOption
 
+        const optionsInfo = (opts:FreeRideContinuation[]) => {
+            return opts?.map( o => this.buildId(o)).join('|') ??'none'
+        }                
+
         
         if (from?.options?.length > 0) {
             this.options = this.evaluateOptions(from.options, from);
@@ -92,9 +96,6 @@ export class FreeRideService extends IncyclistService {
             this.options =  await this.loadNextOptions(from,forStart);
         }
 
-        const optionsInfo = (opts:FreeRideContinuation[]) => {
-            return opts?.map( o => this.buildId(o)).join('|') ??'none'
-        }                
 
         const message = forStart ? 'start options updated' : 'free ride options updated'
         this.logEvent({message,prepared, options: optionsInfo(this.options), from: this.buildId(from)})
@@ -439,19 +440,35 @@ export class FreeRideService extends IncyclistService {
 
 
     selectOption( option:FreeRideContinuation|string|number ):FreeRideContinuation[]{
+
+        const current = this.selectedOption
+
         let opt;
         switch (typeof option) {
             case 'number':
                 opt = this.options?.[option-1]
                 break;
             case 'string':
-                opt = this.options.find( o => this.buildId(o) === option)
+                opt = this.options.find( o => this.buildId(o) === option);
+                if (!opt) {
+                    const wayId = option.split(':')[0]
+                    opt = this.options.find( o => o.id === wayId)
+                }
+                if (!opt) { 
+                    opt = current
+                }                      
                 break
             default:
                 opt = option
         }
 
-        this.selectedOption = this.options.find( o=> this.buildId(o) === this.buildId(opt))
+        this.selectedOption = this.options.find( o=> this.buildId(o) === this.buildId(opt)) 
+
+        if (!this.selectedOption) {
+            this.logEvent({message:'free ride option selection failed', requested: option, type:typeof option, options: this.options, optionKeys: this.options.map(o => this.buildId(o))} )
+
+        }
+
         return this.options
         
     }

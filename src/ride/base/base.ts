@@ -109,8 +109,6 @@ export class RideModeService extends IncyclistService implements IRideModeServic
     }
 
     async sendUpdate(request?:UpdateRequest) {  
-        console.log('# RideModeService: sendUpdate', request);
-
         let update = request
         if ( !request) { 
             update = this.buildRequest({reset:true})

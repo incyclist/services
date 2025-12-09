@@ -255,13 +255,6 @@ export class GpxDisplayService extends RouteDisplayService {
                 delete this.tsLastSVEvent
                 delete this.tsLastPovChanged
             }
-            else {
-                console.log('# street view position update skipped, time since last update:', sincePrev, 'ms' , 'delay:', this.getStreetViewUpdateDelay(),'ms'     )
-            }
-        }
-        else {
-            //
-            console.log('# position update', this.position)
         }
 
     }
