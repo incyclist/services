@@ -302,7 +302,9 @@ export class DeviceConfigurationService  extends IncyclistService{
                 if (!this.settings.devices)
                     this.settings.devices = []
                 udid = generateUdid() as string
-                this.settings.devices.push( {udid,settings:adapter.getSettings()})
+                if (!this.settings.devices.some( d=>d.udid===udid)) {
+                    this.settings.devices.push( {udid,settings:adapter.getSettings()})
+                }
             }
     
             this.adapters[udid] = adapter;
@@ -312,13 +314,15 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.initCapabilties()
             
         this.settings.capabilities.forEach( c=> {
-            if (c.devices.includes(udid))
+            if (c.devices.includes(udid) && c.selected!==undefined && c.selected!==null)
                 return udid;
 
             const isBike = adapter.hasCapability(IncyclistCapability.Control)
 
             if ( adapter.hasCapability(c.capability) && c.capability!=='bike') {
-                c.devices.push(udid)
+                if (!c.devices.includes(udid)) {
+                    c.devices.push(udid)
+                }
 
                 if (!c.selected && !c.disabled && (isBike || c.capability===IncyclistCapability.HeartRate))
                     c.selected = udid
