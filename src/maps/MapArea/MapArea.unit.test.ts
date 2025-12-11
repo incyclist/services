@@ -5,10 +5,12 @@ import testData from '../../../__tests__/data/overpass/MapArea-test1.json';
 import defaultData from '../../../__tests__/data/overpass/default-location.json';
 import roundaboutData from '../../../__tests__/data/overpass/roundabout-test.json';
 import roundaboutIssuesData from '../../../__tests__/data/overpass/roundabout-issues.json';
+import roundaboutIssue2 from '../../../__tests__/data/overpass/roundabout-issue2.json';
 
 import { MapArea } from './MapArea';
 import {  IncyclistNode, IncyclistWay, IncyclistWaySplit, PathCrossingInfo, WayInfo } from './types';
 import { getPointCrossingPath, isOneWay } from './utils';
+import { DEFAULT_FILTER } from './consts';
 
 
 const printWay = (way:WayInfo) => {
@@ -21,7 +23,7 @@ describe( 'MapArea', () => {
 
         let area:MapArea
         beforeEach(() => {           
-            useMapArea().setFilter(null)
+            useMapArea().setFilter(DEFAULT_FILTER)
         });
 
         afterEach(() => {
@@ -32,6 +34,8 @@ describe( 'MapArea', () => {
         test('normal flow', () => { 
             const location = { lat:1, lng:1 }
             const boundary = { northeast:{ lat:1, lng:1 }, southwest:{ lat:1, lng:1 } }
+
+            useMapArea().setFilter(null)
             const data = useMapArea().createMapData(testData);           
             area = new MapArea(data, location, boundary);            
 
@@ -74,11 +78,23 @@ describe( 'MapArea', () => {
 
             const multiNodeRB = area.getWays().find(w => w.id.startsWith('R:')&&w.id.split(',').includes('525571772')) ??{} as IncyclistWay
             expect(printWay(multiNodeRB)).toMatchSnapshot()
-            
-            
-
         })
 
+        test('defect', () => { 
+            // 2nd part is not tagged as roundabout
+            const location = { lat:41.37009146958872,lng:2.1879956390742854}
+            const boundary = { northeast:{ lat:1, lng:1 }, southwest:{ lat:1, lng:1 } } // not relevant
+
+            const data = useMapArea().createMapData(roundaboutIssue2);
+            area = new MapArea(data, location, boundary);            
+
+            const roundabout = area.getWay('74975048')
+            expect(roundabout).toBeUndefined()
+
+            const multiNodeRB = area.getWays().find(w => w.id.startsWith('R:')&&w.id.split(',').includes('74975048')) ??{} as IncyclistWay
+            console.log('# multi-node roundabout way:', printWay(multiNodeRB));
+            expect(printWay(multiNodeRB)).toMatchSnapshot()
+        })
 
     })
 

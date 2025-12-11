@@ -87,9 +87,12 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
             id =  ( element.id!==undefined && typeof  element.id ==='number' )  ? element.id.toString() : '_INT_'+idx;
             const name = element.tags?.name;
             const type = element.tags?.highway;
-        
-            if ( type!==undefined && (filter===undefined || filter.find( e => e===type)===undefined)) {
-               
+
+            // in some cases individual legs of a roundabout are tagged with highway=service, which would break the roundabout detection
+            const isRoundabout = (element.tags?.junction==='roundabout' || element.tags?.roundabout==='true');
+
+            if ( isRoundabout || (type!==undefined && (filter===undefined || filter.find( e => e===type)===undefined)) ) {
+
                 way.nodes?.forEach( node => {
                     addNode(node, nodesLookup,id,path)
                 });

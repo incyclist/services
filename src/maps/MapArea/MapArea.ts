@@ -477,6 +477,9 @@ export class MapArea implements IMapArea{
                                 multiWayRoundabouts[idxMatching] = {id,ways}
                                 return
                             }
+                            else {
+                                return
+                            }
                         }
                         
                         found = (way.path[0].id===way.path[way.path.length-1].id);
