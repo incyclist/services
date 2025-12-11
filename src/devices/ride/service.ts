@@ -1540,7 +1540,7 @@ export class DeviceRideService  extends IncyclistService{
             const {udid,adapter} = adapterInfo
             const { mode, settings } = this.getConfiguredModeInfo(udid);
 
-            if (mode===adapter.getCyclingMode().getName())
+            if (mode===adapter.getCyclingMode()?.getName())
                 return {changed:false, mode:adapter.getCyclingMode() as CyclingMode};
             
             // We can't switch back to DaumClassic mode on Daum Premium, we would have to sent the whole route mid ride
