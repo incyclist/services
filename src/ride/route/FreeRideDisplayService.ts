@@ -459,7 +459,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
                 routeHash: `Free-Ride:${uuid}:${Date.now()}`,
                 points
             }
-            const desription: RouteInfo = {
+            const description: RouteInfo = {
                 id: `Free-Ride:${uuid}:${Date.now()}`,
                 title: 'Free Ride',
                 routeHash: `Free-Ride:${uuid}:${Date.now()}`,
@@ -470,7 +470,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
 
             }
-            const route =  new Route( desription,details)
+            const route =  new Route( description,details)
             validateRoute(route)        
 
             route.description.distance = route.details.distance = getTotalDistance(details)
@@ -583,7 +583,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
             return 
         }
 
-        // TODO: consider logginf this
+        // TODO: consider logging this
         this.optionsVisible = visible
     }
 
@@ -677,8 +677,8 @@ export class FreeRideDisplayService extends GpxDisplayService {
     }
 
 
-    protected getDashboardColums(): number {
-        const parent = super.getDashboardColums()
+    protected getDashboardColumns(): number {
+        const parent = super.getDashboardColumns()
         return parent-1; // (no slope)
     }
 
