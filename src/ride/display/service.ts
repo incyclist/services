@@ -398,6 +398,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     getRideType(overwrite?:boolean):RideType {
+        let prev = this.type
         if (overwrite) {
             delete this.type
         }
@@ -407,7 +408,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 this.type = this.detectRideType()
             }
             catch(err) {
-                console.log('# error detecting ride type',err)
+                this.logError(err,'getRideType')
+                this.type = prev
             }
             //catch { /* ignore error*/ }
         }
