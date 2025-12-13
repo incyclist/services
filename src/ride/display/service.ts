@@ -56,8 +56,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.displayService = this.getRideModeService(true)
 
             const ftNewUI = this.getUserSettings().get('NEW_GPX_UI',false)
+            const isVideo = this.getRideType()=== 'Video'
+            const isMp4 = this.route?.description?.videoFormat.toLowerCase() === 'mp4'
 
-            const showLegacy = !ftNewUI && (this.displayService instanceof RLVDisplayService)
+            const showLegacy = isVideo && !isMp4 && !ftNewUI 
 
             if (!showLegacy) {
                 
