@@ -9,7 +9,7 @@
     "@types/node": "^24.9.1",
     "@typescript-eslint/eslint-plugin": "^8.43.0",
     "@typescript-eslint/parser": "^8.18.2",
-    "dotenv": "^17.2.2",
+    "dotenv": "^17.2.3",
     "eslint": "^9.35.0",
     "formdata-node": "^6.0.3",
     "jest": "^30.1.3",
