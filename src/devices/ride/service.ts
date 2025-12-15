@@ -1510,20 +1510,25 @@ export class DeviceRideService  extends IncyclistService{
 
         let mode
         let request
-        if (!currentMode.isERG())  {
-            const power = adapter.getData().power
-            this.enforceERG()
-            request = {targetPower:power}
-            adapter.sendUpdate(request)
-            mode  = 'ERG'
-        }
-        else  {
+        if (currentMode.isERG())  {
             const slope = adapter.getData().slope
             adapter.setCyclingMode(targetMode)
             this.resetCyclingMode(false) 
-            request = {slope}
-            adapter.sendUpdate(request)
-            mode='SIM'
+            const newMode = adapter.getCyclingMode() as CyclingMode
+            if (newMode.isSIM()) {
+                request = {slope}
+                adapter.sendUpdate(request)
+                mode='SIM'
+            }
+        }
+        else  {
+            const power = adapter.getData().power
+            const isERG = this.enforceERG()
+            if (isERG) {
+                request = {targetPower:power}
+                adapter.sendUpdate(request)
+                mode  = 'ERG'
+            }
         }
 
         this.emit('cycling-mode-toggle',mode,request)
@@ -1575,19 +1580,19 @@ export class DeviceRideService  extends IncyclistService{
         return adapterInfo;
     }
 
-    async enforceERG():Promise<void> {
+    enforceERG():boolean {
         try {
             const adapters = this.getSelectedAdapters();
 
             const adapterInfo = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control)) 
             if (!adapterInfo?.adapter)
-                return
+                return false
             const {udid,adapter} = adapterInfo
             const config = this.getDeviceConfiguration()
 
             // We can't switch back to DaumClassic mode on Daum Premium, we would have to sent the whole route mid ride
             if (adapter.getCyclingMode().getModeProperty('eppSupport'))
-                return;
+                return false;
             
             const modes = adapter.getSupportedCyclingModes().filter( C => C.supportsERGMode())
             if (modes.length>0)  {
@@ -1597,7 +1602,7 @@ export class DeviceRideService  extends IncyclistService{
 
                 const device = adapter
                 device.setCyclingMode(mode,settings)
-    
+                return true
             }
         }
         catch(err) {
