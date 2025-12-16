@@ -19,6 +19,8 @@ type VideoState = {
     syncHelper?: VideoSyncHelper
     isCurrent: boolean
     isInitial: boolean
+    buffering?:string
+    bufferTime?: number
     next?: VideoState
     info?: Array<{start:number, stop:number, props:InfotextDisplayProps}>
 }
@@ -66,6 +68,12 @@ export class RLVDisplayService extends RouteDisplayService {
             
             const loopMode = isCurrent && this.isLoopEnabled()       
             const startPos = isCurrent ? this.startSettings?.startPos??0 : 0
+
+            if (video.playback==='converted') {
+                const conversion = video.source as VideoConversion
+                conversion.setStartPos(startPos)
+
+            }
 
             video.syncHelper = new VideoSyncHelper(videoRoute, startPos,{loopMode,observer} )
             this.videos.push(video)
@@ -122,6 +130,7 @@ export class RLVDisplayService extends RouteDisplayService {
         const startTime = this.getVideoTime(this.startSettings?.startPos??0)
         const routeProps = super.getDisplayProperties(props)
 
+
         if (!this.videosInitialized || !this.currentVideo) {
             return {
                 ...routeProps,                
@@ -132,9 +141,12 @@ export class RLVDisplayService extends RouteDisplayService {
 
 
         if ( this.videos.length === 1) {
+            const autoConvert = this.currentVideo?.playback==='converted'
+
             const video:VideoDisplayProps = {
                 src: this.currentVideo.source,
                 startTime,
+                autoConvert,
                 info:this.getInfotextDisplayProps(),
                 muted: true,
                 loop: this.isLoopEnabled() ? true : undefined,
@@ -146,7 +158,8 @@ export class RLVDisplayService extends RouteDisplayService {
                 onPlaybackUpdate: this.onVideoPlayBackUpdate.bind(this),
                 onStalled: this.onVideoStalled.bind(this),
                 onWaiting: this.onVideoWaiting.bind(this),
-                onEnded: this.onVideoEnded.bind(this)
+                onEnded: this.onVideoEnded.bind(this),
+                onConvertUpdate: this.onConvertUpdate.bind(this)
             }
 
             return {
@@ -157,10 +170,14 @@ export class RLVDisplayService extends RouteDisplayService {
         }
         else {
             const videos: Array<VideoDisplayProps> = this.videos.map(video => {
+
+                const autoConvert = video?.playback === 'converted'
+
                 return {
                     src: video.source,
                     id: video.route?.details?.id,
                     startTime: video.isInitial? startTime: 0,
+                    autoConvert,
                     hidden: !video.isCurrent,
                     info:video.isCurrent ? this.getInfotextDisplayProps() : undefined,
                     muted: true,
@@ -170,7 +187,7 @@ export class RLVDisplayService extends RouteDisplayService {
                     onLoadError: (error:MediaError) => { this.onVideoLoadError(error,video)},
                     onPlaybackError: (error:MediaError) => { this.onVideoPlaybackError(error,video) },
                     onPlaybackUpdate: (time:number, rate:number,e) => { this.onVideoPlayBackUpdate(time, rate,e,video) },
-                    onEnded: () => { this.onVideoEnded(video) }
+                    onEnded: () => { this.onVideoEnded(video) }                    
                 }
             })
             return {
@@ -310,8 +327,9 @@ export class RLVDisplayService extends RouteDisplayService {
 
     protected getVideoState() {
         let state = 'Starting'
-        if (!this.isInitialized)
+        if (!this.isInitialized) {
             return state
+        }
 
         if ( this.isStartRideCompleted()) {
             state = 'Started'
@@ -319,13 +337,34 @@ export class RLVDisplayService extends RouteDisplayService {
         else if (this.currentVideo?.error) {
             state = 'Start:Failed'
         }
+        else if (this.currentVideo?.buffering!==undefined) {
+            const val = this.currentVideo?.buffering
+            state = `Buffering (${val})`
+        }
         return state
     }
 
     protected getVideoLoadProgress() {
-        return undefined
+        return {loaded:this.currentVideo?.loaded, bufferTime:this.currentVideo.bufferTime}
     }
 
+    protected onConvertUpdate(progress:number, frames:number, time:number) {
+        if (!this.currentVideo || this.currentVideo.loaded)
+            return;
+
+        if (progress===100 || time>30) {
+            this.onVideoLoaded(0)
+        }
+        else {
+            if (time!==undefined) {
+                this.currentVideo.buffering = `${time}s`
+                this.currentVideo.bufferTime = time
+            }
+            else if (progress!==undefined)
+                this.currentVideo.buffering = `${progress}%`
+            this.emit('state-update')
+        }
+    }
 
 
     protected onVideoLoaded(bufferedTime: number, video:VideoState = this.currentVideo) {
@@ -426,7 +465,8 @@ export class RLVDisplayService extends RouteDisplayService {
         }
   
         video.playback = 'converted'
-        video.source = new VideoConversion(this.cleanupUrl(src) )
+        video.source = new VideoConversion(this.cleanupUrl(src), video?.route )
+        video.source.getObserver().on( 'convert-progress', this.onConvertUpdate.bind(this))
     }
 
     protected cleanupUrl(url:string) {

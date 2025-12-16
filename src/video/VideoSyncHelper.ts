@@ -93,7 +93,6 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     onVideoEnded() { 
-        console.log('# video ended', this.route.details.title)
         this.logEvent({message:'video ended'})
         this.isStopped = true
     }
@@ -319,6 +318,7 @@ export class VideoSyncHelper extends IncyclistService{
                 const totalTime = Date.now()-this.tsStart
 
                 //console.log('# onUpdate ', {totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)},{routeDistance: totalDistance}, {updates:updates.join(','),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)     })
+                //console.log('# video playback update',{updates:updates.join('|'),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
                 this.logEvent({message:'video playback update',updates:updates.join('|'),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
             }
 

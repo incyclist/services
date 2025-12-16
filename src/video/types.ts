@@ -31,3 +31,24 @@ export type RLVActivityStatus = {
 
     lap: number
 }
+
+export type ConversionCpuInfo = {
+    cpu?: number,
+    user?:number,
+    nice?: number,
+    sys?: number,
+    irq?:number,
+    idle?: number,
+    ts?:number
+}
+
+export type ConversionInfo = {
+    target: number,
+    current: number,
+    completed: number,
+    frames: number,
+    timemark?:string,
+    cpu?: ConversionCpuInfo
+    priority?:number
+
+}

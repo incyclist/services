@@ -82,6 +82,7 @@ export interface VideoDisplayProps  {
     startTime?: number,
     observer: Observer,
     muted?: boolean
+    autoConvert?: boolean,
     onPlaybackUpdate?: (time:number, rate:number,e) => void
     onLoaded?: (bufferedTime: number) => void
     onPlaybackError?: (error:MediaError) => void
@@ -89,6 +90,7 @@ export interface VideoDisplayProps  {
     onStalled?,
     onWaiting?,
     onEnded?: () => void
+    onConvertUpdate?: (progress:number) => void
 
 }
 
