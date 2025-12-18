@@ -57,7 +57,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
             const ftNewUI = this.getUserSettings().get('NEW_GPX_UI',false)
             const isVideo = this.getRideType()=== 'Video'
-            const isMp4 = this.route?.description?.videoFormat.toLowerCase() === 'mp4'
+            const isMp4 = isVideo && this.route?.description?.videoFormat?.toLowerCase() === 'mp4'
 
             const showLegacy = isVideo && !isMp4 && !ftNewUI 
 
@@ -67,11 +67,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
                 this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
                 this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
-                /* TODO:
-                    'prepare-next-video' event
-                    'next-video' event
-                    
-                */
                 this.hideAll = false
             }
             
@@ -377,12 +372,22 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             if (this.state==='Finished') {
                 return {state:this.state}                
             }
+            const isStarting = this.state==='Starting' || this.state==='Idle'
+            const showDashboard = !!this.activity && !this.hideAll
+            const showWorkout = !!this.actualWorkout && !this.hideAll && !isStarting
+
+
+            const virtualShiftingEnabled = this.isVirtualShiftingEnabled()
+            const showShiftingButtons = virtualShiftingEnabled && !this.actualWorkout && !!this.activity
 
             const props = { 
                 workout: this.actualWorkout, route: this.route, activity: this.activity,  state:this.state,
                 startOverlayProps,
                 prevRides: this.getPrevRidesProps(),
                 hideAll: this.hideAll,
+                showShiftingButtons,
+                showDashboard,
+                showWorkout
                 }
 
             const childProps = this.getRideModeService()?.getDisplayProperties(props)??{}
@@ -433,6 +438,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         return this.getWorkoutRide().getWorkout() ?? this.getWorkoutList().getSelected()
         
     }
+
+
     
 
     get route():Route {
@@ -739,7 +746,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     }
 
-    protected adjustPower( increase:boolean, large:boolean ) {
+    adjustPower( increase:boolean, large:boolean ) {
         try {
             if (this.getWorkoutRide().inUse()) {
                 const inc = large ? 5:1
@@ -1307,6 +1314,28 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.getUserSettings().get('debug',false)        
         }
         catch {
+            return false
+        }
+    }
+
+    protected isVirtualShiftingEnabled () {
+        // TODO: move into device mode class
+        try {
+            const mode = this.getDeviceRide().getCyclingMode() as CyclingMode
+
+            if (mode.isSIM()) {            
+                const virtshiftMode = mode.getSetting('virtshift') as unknown as string
+                return (virtshiftMode==='Mixed' || virtshiftMode==='Incyclist' || virtshiftMode==='SmartTrainer'|| virtshiftMode==='Enabled')
+            }
+            
+            if (mode.isResistance()) {
+                return true
+            }
+
+            return false
+        }
+        catch(err) {            
+            this.logError(err,'isVirtualShiftingEnabled')
             return false
         }
     }

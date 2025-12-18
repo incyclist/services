@@ -30,10 +30,10 @@ describe( 'RouteDisplayService', () => {
         emit: jest.fn()
     }
 
-    let mockRideService 
+    let mockRideService:any 
     
 
-    const setupMocks = (s, options) => {  
+    const setupMocks = (s:any, options:any) => {  
         Inject('UserSettings',{
             get:jest.fn( (k,d)=> d)
         })
@@ -45,20 +45,22 @@ describe( 'RouteDisplayService', () => {
         mockRideService = new RideDisplayService()
         mockRideService.getObserver= jest.fn().mockReturnValue(mockObserver)
         mockRideService.displayService = s
+        mockRideService.isVirtualShiftingEnabled = jest.fn().mockReturnValue(options.virtualShifting ?? false)
                     
         if (options.mockRideService) {
             s.observer = mockObserver
             s.service = mockRideService
             s.init(mockRideService)
         }
+        
         s.emit= jest.fn()
     }
 
-    const getPosition = (s) => {
+    const getPosition = (s:any) => {
         return s.position
     }
 
-    const cleanupMocks = (s)=>{
+    const cleanupMocks = (s:any)=>{
         s.reset()
         if (mockRideService)
             mockRideService.reset()
@@ -72,7 +74,9 @@ describe( 'RouteDisplayService', () => {
         beforeEach( async ()=>{
             service = new RouteDisplayService()
             
+            
         })
+
     
         afterEach( async ()=>{
             cleanupMocks(service)

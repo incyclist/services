@@ -112,7 +112,7 @@ describe('RideDisplayService', () => {
         const emit = jest.fn()
 
 
-        const setupMocks = (s, props?: { hidden?: boolean, sideViews?: object, rideType?:RideType, route?:Route, startSettings?:any, setFn? }) => {
+        const setupMocks = (s:any, props?: { hidden?: boolean, sideViews?: object, rideType?:RideType, route?:Route, startSettings?:any, setFn? }) => {
 
             Inject('UserSettings', {
                 get: jest.fn((k, d) => {
@@ -139,6 +139,7 @@ describe('RideDisplayService', () => {
                 s.getRideType = jest.fn().mockReturnValue(props?.rideType)
 
             s.hideAll = props?.hidden??false
+            s.isVirtualShiftingEnabled = jest.fn().mockReturnValue(false)
 
         }
 
