@@ -2,6 +2,7 @@ import { IncyclistService } from "../base/service";
 import { Observer } from "../base/types";
 import { Route } from "../routes/base/model/route"
 import { RLVActivityStatus, RLVPlaybackStatus } from "./types"
+import { v4 as generateUUID } from 'uuid';
 
 
 const MIN_PLAYBACK_RATE = 0.0625
@@ -39,6 +40,8 @@ export class VideoSyncHelper extends IncyclistService{
 
     protected cntWaitingEvents: number
     protected maxDelta: number
+    protected id:string
+    protected tsLastSummeryLog:number
     
 
 
@@ -52,6 +55,7 @@ export class VideoSyncHelper extends IncyclistService{
 
     pause() {
         this.logEvent({message:'video paused', route:this.route.details.title})
+        this.logPlaybackSummary()
         this.isPaused = true
         this.send('rate-update',0)
     }
@@ -75,8 +79,7 @@ export class VideoSyncHelper extends IncyclistService{
         this.isPaused = true
         this.isStopped = true
 
-        const totalTime = Date.now()-this.tsStart
-        this.logEvent({message:'video playback summary', route:this.route.details.title,routeId:this.route.description.id, maxDelta: n(this.maxDelta,1), cntWaiting:this.cntWaitingEvents, totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)})
+        this.logPlaybackSummary()
     }
 
     setBufferedTime(time:number) {
@@ -580,6 +583,7 @@ export class VideoSyncHelper extends IncyclistService{
         this.maxDelta = 0;
         delete this.tsStart;
         this.cpuTime = 0;
+        this.id = generateUUID()
     }
 
 
@@ -638,8 +642,16 @@ export class VideoSyncHelper extends IncyclistService{
             route.details.video.mappings = newMappings
 
         }
-            
+    }
 
+    protected logPlaybackSummary() {
+        // if previous log was done within last minute, don't log again
+        if (Date.now()-(this.tsLastSummeryLog??0)<60000)
+            return;
+
+        const totalTime = Date.now()-this.tsStart
+        this.logEvent({message:'video playback summary', syncId:this.id, route:this.route.details.title,routeId:this.route.description.id, maxDelta: n(this.maxDelta,1), cntWaiting:this.cntWaitingEvents, totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)})
+        this.tsLastSummeryLog = Date.now()
 
     }
 
