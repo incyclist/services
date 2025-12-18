@@ -55,21 +55,12 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         
         try {
             this.displayService = this.getRideModeService(true)
+               
+            this.displayService.init(this)
 
-            const ftNewUI = this.getUserSettings().get('NEW_GPX_UI',false)
-            const isVideo = this.getRideType()=== 'Video'
-            const isMp4 = isVideo && this.route?.description?.videoFormat?.toLowerCase() === 'mp4'
-
-            const showLegacy = isVideo && !isMp4 && !ftNewUI 
-
-            if (!showLegacy) {
-                
-                this.displayService.init(this)
-
-                this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
-                this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
-                this.hideAll = false
-            }
+            this.displayService.on('lap-completed',this.onLapCompleted.bind(this))
+            this.displayService.on('route-completed',this.onRouteCompleted.bind(this))
+            this.hideAll = false
             
 
         }
