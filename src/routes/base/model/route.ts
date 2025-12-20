@@ -5,6 +5,7 @@ import { RouteApiDetail } from "../api/types";
 import { RouteInfo, RoutePoint } from "../types";
 import { getLocalizedText } from "../utils/localization";
 
+
 export class Route {
 
     private readonly _description:RouteInfo

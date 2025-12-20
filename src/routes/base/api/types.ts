@@ -1,4 +1,5 @@
-import { DaumEpp, LocalizedText, RouteBase, RouteCategory, RouteInfoText, RoutePoint, RouteProvider, RouteSegment, RouteType, VideoDescription } from "../types"
+import { LocalizedText } from "../../../i18n"
+import { DaumEpp, RouteBase, RouteCategory, RouteInfoText, RoutePoint, RouteProvider, RouteSegment, RouteType, VideoDescription } from "../types"
 
 export type RouteDescriptionQuery = {
     category?: string

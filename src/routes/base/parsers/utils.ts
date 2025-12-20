@@ -1,6 +1,7 @@
 import { FileInfo,  getBindings} from "../../../api";
-import { LocalizedText, RouteInfoText } from "../types";
+import { RouteInfoText } from "../types";
 import { JSONObject } from "../../../utils/xml";
+import { LocalizedText } from "../../../i18n";
 
 export class BinaryReader {
     protected pos:number

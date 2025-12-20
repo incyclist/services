@@ -18,5 +18,6 @@ export interface INativeUI  {
     selectDirectory(): SelectDirectoryResult
     showItemInFolder(fileName:string): void
     getPathForFile(file:string): string
+    detectLanguage():Array<string>|string
     
 }
