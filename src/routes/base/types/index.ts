@@ -16,6 +16,7 @@ export type VideoMapping = {
     time: number
     frame?: number
     distance: number
+    fps?: number
 }
 
 export type RouteInfoText = {

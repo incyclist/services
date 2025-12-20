@@ -255,6 +255,7 @@ export class ActivityRideService extends IncyclistService {
 
     
         }
+        this.logEvent({message:'activity stopped' })
 
         useDeviceRide().off('data',this.deviceDataHandler)
         useDeviceRide().off('gear-change',this.gearChangeHandler)
@@ -271,6 +272,7 @@ export class ActivityRideService extends IncyclistService {
         
 
         await waitNextTick()
+        this.cleanup()
         delete this.observer
     }
 

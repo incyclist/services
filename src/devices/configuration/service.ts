@@ -146,9 +146,9 @@ export class DeviceConfigurationService  extends IncyclistService{
     }
 
     protected initFeatureToggles() {
-        if (this.hasFeature('VIRTUAL_SHIFTING')) {
+//        if (this.hasFeature('VIRTUAL_SHIFTING')) {
             this.getDevicesFeatureToggle().add('VirtualShifting')
-        }
+//        }
     }
 
     /** 

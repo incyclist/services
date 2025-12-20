@@ -1,5 +1,6 @@
 import { IncyclistService } from "../base/service";
 import { Observer } from "../base/types";
+import { RouteApiDetail } from "../routes/base/api/types";
 import { Route } from "../routes/base/model/route"
 import { RLVActivityStatus, RLVPlaybackStatus } from "./types"
 import { v4 as generateUUID } from 'uuid';
@@ -42,6 +43,8 @@ export class VideoSyncHelper extends IncyclistService{
     protected maxDelta: number
     protected id:string
     protected tsLastSummeryLog:number
+    protected mapping: any
+    protected endTime: number
     
 
 
@@ -49,8 +52,9 @@ export class VideoSyncHelper extends IncyclistService{
         super('VideoSync')
         this.route = route;
 
-        this.init(startPos, props);
         this.validateMappings(route)
+        this.initCorrectedMapping(this.route?.details)        
+        this.init(startPos, props);
     }
 
     pause() {
@@ -71,6 +75,7 @@ export class VideoSyncHelper extends IncyclistService{
     reset() {
         this.logEvent({message:'video reset', route:this.route.details.title})
         this.init(0,{loopMode: this.loopMode, observer: this.observer})
+        delete this.endTime
     }
 
     stop() {
@@ -79,6 +84,7 @@ export class VideoSyncHelper extends IncyclistService{
         this.isPaused = true
         this.isStopped = true
 
+        delete this.endTime
         this.logPlaybackSummary()
     }
 
@@ -102,10 +108,10 @@ export class VideoSyncHelper extends IncyclistService{
 
     onVideoPlaybackUpdate(time:number,rate:number,e:{readyState?:number, networkState?:number, bufferedTime?:number} ) {
 
-        const endTime = this.getVideoTimeByPosition(this.route.distance)
+        this.endTime = this.endTime ?? this.getVideoTimeByPosition(this.route.description?.distance)
+        const endTime = this.endTime
 
 
-        //console.log('# video playback update', {src: this.route.details.title, time:time, endTime, bufferedTime:e.bufferedTime, stopped:this.isStopped})
         if (this.isStopped)
             return
 
@@ -124,7 +130,6 @@ export class VideoSyncHelper extends IncyclistService{
         }
 
         if (time>=this.rlvStatus.timeRequested) {
-            //console.log('# new video time confirmed', time, this.rlvStatus.timeRequested)
             delete this.rlvStatus.timeRequested
             delete this.tsLastIssue
             delete this.bufferedTimeIssue 
@@ -199,7 +204,6 @@ export class VideoSyncHelper extends IncyclistService{
                 this.rlvStatus.lapRequested = true
             }       
 
-            //console.log('# new video lap detected', time, this.rlvStatus)
             updates.push('rlv:lap')
             
         }
@@ -252,9 +256,6 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     onActivityUpdate(routeDistance:number,speed:number) {
-
-        // console.log('# activity update', routeDistance)
-
 
         if (routeDistance==this.activityStatus.routeDistance && speed==this.activityStatus.speed) {
             return;            
@@ -318,10 +319,6 @@ export class VideoSyncHelper extends IncyclistService{
                 if (changed.length===0)
                     return
 
-                const totalTime = Date.now()-this.tsStart
-
-                //console.log('# onUpdate ', {totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)},{routeDistance: totalDistance}, {updates:updates.join(','),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)     })
-                //console.log('# video playback update',{updates:updates.join('|'),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
                 this.logEvent({message:'video playback update',updates:updates.join('|'),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
             }
 
@@ -340,9 +337,12 @@ export class VideoSyncHelper extends IncyclistService{
 
             log()
 
+            
             if (!this.rlvStatus.timeRequested) {
                 if (Math.abs(delta)>200) {
-                    this.updateTime( this.getVideoTimeByPosition(actDistance) )
+                    const newTime = this.getVideoTimeByPosition(actDistance) 
+                    this.logEvent({message:'video forwarded', newTime})
+                    this.updateTime( newTime)
                 }
                 else {
                     if (delta===0) {
@@ -366,13 +366,13 @@ export class VideoSyncHelper extends IncyclistService{
 
                  
             }
+        
 
             this.cpuTime = (this.cpuTime??0) + (Date.now()-tsStart)
 
 
         }
         catch(err) {
-            console.log('# ERROR',err)
             this.logError(err,'onUpdate')
             
         }
@@ -415,7 +415,6 @@ export class VideoSyncHelper extends IncyclistService{
         delete this.tsLastIssue
         delete this.tsLastRateIncrease
 
-        console.log('# time update requested',time)
         this.send('time-update', time)
     }
 
@@ -434,30 +433,32 @@ export class VideoSyncHelper extends IncyclistService{
      */
     getVideoTimeByPosition(routeDistance:number):number {
         try {
-            const {points,video} = this.route?.details??{}
+            const mappings = this.mapping
 
             const totalDistance = this.route.description.distance
             const distance = Math.max(0,this.loopMode ? routeDistance % totalDistance : Math.min(routeDistance, totalDistance))
 
-            if (!points?.length || !video?.mappings?.length || distance===0)
+            if (!mappings?.length || distance===0) {
                 return 0;
+            }
 
             // end of video reached ? last mapping record represents enf of video
             if ( distance===totalDistance)  {
-                return video.mappings[video.mappings.length-1].time
+                return mappings[mappings.length-1].time
             }
 
             const mapping = this.getMappingByDistance(routeDistance)
-            if (!mapping)   
+            if (!mapping)   {
                 return 0
+            }
 
             if (mapping.videoSpeed===undefined || mapping.videoSpeed===null) {
-                const idx = video.mappings.indexOf(mapping)
-                if (idx===video.mappings.length-1) {
-                    mapping.videoSpeed = video.mappings[idx-1].videoSpeed??video.mappings[0].videoSpeed
+                const idx = mappings.indexOf(mapping)
+                if (idx===mappings.length-1) {
+                    mapping.videoSpeed = mappings[idx-1].videoSpeed??mappings[0].videoSpeed
                 }
                 else {
-                    mapping.videoSpeed = video.mappings[idx+1].videoSpeed
+                    mapping.videoSpeed = mappings[idx+1].videoSpeed
                 }
             }
 
@@ -465,10 +466,10 @@ export class VideoSyncHelper extends IncyclistService{
             const v = mapping.videoSpeed/3.6
             const t = mapping.time +(distance-s0)/v
 
-            if (!isNaN(t) )
+            if (!Number.isNaN(t) ) {
                 return t
+            }
             else {
-                console.log('#getVideoTimeByPosition ERROR invalid time', {routeId:this.route.description.id,routeDistance,mapping,mappings:video.mappings, distance, s0, v, t})
                 this.logEvent({message:'error', fn:'getVideoTimeByPosition', error:'invalid time', routeId:this.route.description.id,routeDistance,mapping, distance, s0, v, t})
                 return 0
             }
@@ -481,10 +482,13 @@ export class VideoSyncHelper extends IncyclistService{
 
     }
     getPositionByVideoTime(vt:number):number {
+
         try  {
             let time = vt
-            const {video} = this.route?.details??{}
-            const totalTime = video.mappings[video.mappings.length-1].time
+            const mappings = this.mapping
+
+
+            const totalTime = mappings[mappings.length-1].time
             if (time>totalTime){
                 time = totalTime
             }
@@ -506,49 +510,52 @@ export class VideoSyncHelper extends IncyclistService{
 
         }
         catch(err) {
-            this.logError(err,'getPositionByVideoTime',{routeId:this.route.description.id,time:vt})
+            this.logError(err,'getPositionByVideoTime',{routeId:this.route.description.id,time:vt, mappings:this.mapping})
             return 0
         }
 
     }
 
     getMappingByDistance(routeDistance:number) {
-        const {points,video} = this.route?.details??{}
 
+        const {points} = this.route?.details??{}
+
+        const mappings = this.mapping
         const totalDistance = this.route?.description?.distance??0
         const distance = this.loopMode ? routeDistance % totalDistance : Math.min(routeDistance, totalDistance)
 
-        if (!points?.length || !video?.mappings?.length)
+        if (!points?.length || !mappings?.length)
             return undefined;
         
-        const mappingIdx = video.mappings.findIndex( (m) => m.distance>=distance ) 
+        const mappingIdx = mappings.findIndex( (m) => m.distance>=distance ) 
         if (mappingIdx===-1)    
             return undefined;
-        let mapping = video.mappings[mappingIdx]
+        let mapping = mappings[mappingIdx]
         if (mappingIdx>0 && mapping.distance>distance) {
-            mapping = video.mappings[mappingIdx-1]            
+            mapping = mappings[mappingIdx-1]            
         }
 
         return mapping
     }
 
     getMappingByTime(time:number) {
-        const {video} = this.route?.details??{}
-        if (!video?.mappings?.length)
+
+        const mappings = this.mapping
+        if (!mappings?.length)
             return undefined;
 
-        const totalTime = video.mappings[video.mappings.length-1].time
+        const totalTime = mappings[mappings.length-1].time
         if (totalTime<=time) {
-            return video.mappings[video.mappings.length-1]
+            return mappings[mappings.length-1]
         }
 
         
-        const mappingIdx = video.mappings.findIndex( (m) => m.time>=time ) 
+        const mappingIdx = mappings.findIndex( (m) => m.time>=time ) 
         if (mappingIdx===-1)    
             return undefined;
-        let mapping = video.mappings[mappingIdx]
+        let mapping = mappings[mappingIdx]
         if (mappingIdx>0 && mapping.time>time) {
-            mapping = video.mappings[mappingIdx-1]            
+            mapping = mappings[mappingIdx-1]            
         }
 
         return mapping
@@ -556,6 +563,7 @@ export class VideoSyncHelper extends IncyclistService{
 
 
     protected init(startPos: number, props: { loopMode?: boolean; observer?: Observer; }) {
+
         this.rlvStatus = {
             ts: Date.now(),
             rate: 0,
@@ -596,9 +604,7 @@ export class VideoSyncHelper extends IncyclistService{
     protected isNextLap(vt:number):boolean {
         try  {
             let time = vt
-
-            const {video} = this.route?.details??{}
-            const totalTime = video.mappings[video.mappings.length-1].time
+            const totalTime = this.mapping[this.mapping.length-1].time
             return  (time>totalTime && this.loopMode && !this.rlvStatus.lapRequested)
         }
         catch(err) {
@@ -609,14 +615,12 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     protected getTotalTime():number {
-        const {video} = this.route?.details??{}
-        return video.mappings[video.mappings.length-1].time        
+        return this.mapping[this.mapping.length-1].time        
     }
 
     protected getLapTime(vt:number):number {
         try  {
-            const {video} = this.route?.details??{}
-            const totalTime = video.mappings[video.mappings.length-1].time
+            const totalTime = this.mapping[this.mapping.length-1].time
             return  vt%totalTime
         }
         catch(err) {
@@ -640,9 +644,59 @@ export class VideoSyncHelper extends IncyclistService{
             const newMappings = [...mappings]
             newMappings.unshift({distance:0,time:0,videoSpeed:second.videoSpeed})
             route.details.video.mappings = newMappings
-
         }
+
     }
+
+    protected   initCorrectedMapping( routeData:RouteApiDetail) {
+
+        // Some video files contain an incomplete mapping (in extrem case: just one record with constant VideoSpeed)
+        // The parsers do not address this
+        // But as we need to have the mapping for the whole distance of the video, we need to correct these cases here
+        // otherwise the video playback would be "stuttering"
+
+        if (!routeData?.video?.mappings || !Array.isArray(routeData.video.mappings)) {
+            return;
+        }
+
+        const mappings = routeData.video.mappings;
+        const totalDistance = routeData.distance;
+        const framerate = routeData.video.framerate
+        
+        const newMappings = [...mappings]
+        this.mapping = newMappings
+
+        let lastRecord = newMappings[newMappings.length-1]
+        let error
+
+        // if the mappings do not cover the full distance, fill up with records containing constant speed (every 1s)
+        while (lastRecord.distance<totalDistance && lastRecord.videoSpeed && !error) {
+            try {
+                let time = Math.floor(lastRecord.time)+1
+                const t = time-lastRecord.time
+                const v = lastRecord.videoSpeed/3.6
+                const s = v*t
+                let distance = lastRecord.distance + s
+
+                if (distance>totalDistance) {
+                    const s = totalDistance-lastRecord.distance
+                    const t = s/v
+                    time = lastRecord.time+t
+                    distance = totalDistance
+
+                }          
+                const frame =   Math.round(time*framerate)
+                newMappings.push({...lastRecord, frame, time, distance})
+            }
+            catch(err) {
+                error = err
+            }
+            lastRecord = newMappings[newMappings.length-1]
+        }
+
+        return newMappings;
+    }
+
 
     protected logPlaybackSummary() {
         // if previous log was done within last minute, don't log again
