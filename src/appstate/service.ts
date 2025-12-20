@@ -2,6 +2,7 @@ import { Injectable } from "../base/decorators";
 import { IncyclistService } from "../base/service";
 import { Singleton } from "../base/types";
 import { useUserSettings } from "../settings";
+import { AppFeature } from "./types";
 
 /**
  * This service is responsible for managing the application state.
@@ -27,6 +28,9 @@ export class AppStateService extends IncyclistService {
         super('AppState')
     }
     
+    public hasFeature( feature:AppFeature) {
+        return this.getSetting( feature, false)
+    }
 
     /**
      * Retrieves the persisted state associated with the given key.
