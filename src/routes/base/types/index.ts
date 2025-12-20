@@ -1,4 +1,5 @@
 import { FileInfo } from "../../../api";
+import { LocalizedText } from "../../../i18n";
 import { LatLng } from "../../../utils/geo";
 
 export type RouteType = 'gpx' | 'video';
@@ -133,8 +134,6 @@ export interface    RouteInfo extends RouteBase{
     source?:string,
     isLoopVerified?:boolean
 }
-
-export type LocalizedText = { [index: string]: string; };
 
 export interface ParseResult<T extends RouteBase> {
     data: RouteInfo

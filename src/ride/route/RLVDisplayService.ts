@@ -1,6 +1,7 @@
 import { ActivityUpdate } from "../../activities/ride/types";
 import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
+import { LocalizationService, useLocalization } from "../../i18n";
 import { concatPaths } from "../../maps/MapArea/utils";
 import { getNextVideoId, hasNextVideo, RouteListService, useRouteList, validateRoute } from "../../routes";
 import { Route } from "../../routes/base/model/route";
@@ -301,10 +302,16 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
     protected getLocalizedText(info: RouteInfoText): string {
-        // replace \n with <br> in text
-        let text = this.getUIText(info.text)
-        return text
+        
+        let text
+        if (info.localizedText) {
+            text = this.getLocalization().getLocalized(info.localizedText)
+        }
+        else {
+            text = info.text
+        }
 
+        return this.getUIText(text)
     }
 
 
@@ -599,6 +606,11 @@ export class RLVDisplayService extends RouteDisplayService {
     @Injectable
     protected getRouteList(): RouteListService {
         return useRouteList()
+    }
+
+    @Injectable
+    protected getLocalization(): LocalizationService {
+        return useLocalization()
     }
 
 

@@ -1,4 +1,5 @@
-import { LocalizedText, RouteInfo } from "../types";
+import { LocalizedText } from "../../../i18n";
+import { RouteInfo } from "../types";
 
 export const getLocalizedData = (data:RouteInfo , language:string='en'):RouteInfo => {
     

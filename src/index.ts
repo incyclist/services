@@ -7,7 +7,7 @@ export * from './avatars'
 export * from './base/types'
 export * from './coaches'
 export * from './devices'
-// i18n, maps ??
+export * from './i18n'
 export * from './maps'
 export * from './monitoring'
 export * from './ride'
