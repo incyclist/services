@@ -4,6 +4,7 @@ import { Observer } from "../../base/types";
 import { concatPaths } from "../../maps/MapArea/utils";
 import { getNextVideoId, hasNextVideo, RouteListService, useRouteList, validateRoute } from "../../routes";
 import { Route } from "../../routes/base/model/route";
+import { RouteInfoText } from "../../routes/base/types";
 import { VideoConversion, VideoSyncHelper } from "../../video";
 import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
@@ -103,8 +104,8 @@ export class RLVDisplayService extends RouteDisplayService {
                         start,
                         stop,
                         props: {
-                            text: info.text,
-                            routeDistance: info.distance,                            
+                            text: this.getLocalizedText(info),
+                            routeDistance: info.distance
                         }
                     }
                 })
@@ -286,6 +287,24 @@ export class RLVDisplayService extends RouteDisplayService {
         else {
             this.infotext = undefined
         }
+    }
+
+    protected getUIText(input:string): string {
+        // replace \n with <br> in text
+        let text = input                     
+        if (text?.length) {
+            text = text.replace(/\\n/g, '<br>')
+        }
+
+        return text
+
+    }
+
+    protected getLocalizedText(info: RouteInfoText): string {
+        // replace \n with <br> in text
+        let text = this.getUIText(info.text)
+        return text
+
     }
 
 
