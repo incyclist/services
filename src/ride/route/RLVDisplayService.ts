@@ -5,7 +5,7 @@ import { concatPaths } from "../../maps/MapArea/utils";
 import { getNextVideoId, hasNextVideo, RouteListService, useRouteList, validateRoute } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { VideoConversion, VideoSyncHelper } from "../../video";
-import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 
 type VideoState = {
@@ -33,7 +33,8 @@ export class RLVDisplayService extends RouteDisplayService {
     protected isInitialized: boolean
     protected infotext?: InfotextDisplayProps
     protected videosInitialized: boolean = false
-    
+    protected startTime: number
+
     
     
 
@@ -46,6 +47,7 @@ export class RLVDisplayService extends RouteDisplayService {
     initView(): void {
         this.currentVideo = undefined
         this.videos = []
+        delete this.startTime
 
         this.addVideo(this.getOriginalRoute(), true).then( ()=>{
             this.videosInitialized = true
@@ -55,6 +57,16 @@ export class RLVDisplayService extends RouteDisplayService {
         this.isInitialized = true
         this.offset = 0
     }
+
+    getOverlayProps(overlay, props: CurrentRideDisplayProps):OverlayDisplayProps {
+        const res = super.getOverlayProps(overlay, props)
+
+        if (overlay==='map') {
+            res.show = this.currentRoute.description.hasGpx
+        }
+        return res
+    }
+
 
     protected async addVideo( route:Route, isCurrent?:boolean, parent?:VideoState):Promise<void> {
         try {
@@ -126,8 +138,8 @@ export class RLVDisplayService extends RouteDisplayService {
 
 
     getDisplayProperties(props: CurrentRideDisplayProps):RLVDisplayProps {
-
-        const startTime = this.getVideoTime(this.startSettings?.startPos??0)
+        this.startTime = this.startTime??this.getVideoTime(this.startSettings?.startPos??0)
+        const startTime = this.startTime
         const routeProps = super.getDisplayProperties(props)
 
 
@@ -276,6 +288,8 @@ export class RLVDisplayService extends RouteDisplayService {
         }
     }
 
+
+
     getStartOverlayProps() {
         const videoState = this.getVideoState()
         const videoStateError = this.currentVideo?.error
@@ -315,6 +329,7 @@ export class RLVDisplayService extends RouteDisplayService {
     async stop() {
         try {
             this.currentVideo.syncHelper.stop()
+            delete this.startTime
             await super.stop()
 
         }
@@ -352,7 +367,8 @@ export class RLVDisplayService extends RouteDisplayService {
         if (!this.currentVideo || this.currentVideo.loaded)
             return;
 
-        if (progress===100 || time>30) {
+        if (progress===100) {
+            this.logEvent({message: 'video conversion finished'})
             this.onVideoLoaded(0)
         }
         else {
@@ -368,6 +384,7 @@ export class RLVDisplayService extends RouteDisplayService {
 
 
     protected onVideoLoaded(bufferedTime: number, video:VideoState = this.currentVideo) {
+        this.logEvent({message: 'video loaded',bufferedTime})
         video.syncHelper.setBufferedTime(bufferedTime)
         video.loaded = true
         if (video.isInitial)

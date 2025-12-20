@@ -112,10 +112,11 @@ export class VideoConversion extends IncyclistService {
         const pct = frames ? Math.floor(info.frames/frames *100) : undefined
         const cpu = this.getCpuStats(info)
         
-        if (frames) {
+        if (frames||time) {
             this.observer.emit('convert-progress',pct, info.frames, time)
             this.logEvent({message:'video conversion progress',pct,frames:{converted:info.frames, total: frames},time, ffmpegTime:info.timemark, cpu})
         }
+        
     }
 
     protected getCpuStats(info:ConversionInfo) {
