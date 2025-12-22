@@ -454,9 +454,9 @@ export interface GetPositionProps {
 }
 
     /**
-     * Returns a point from the route
+     * Returns a specific point from the route, identified by search properties
      * 
-     * @param route The route Object
+     * @param src The route Object or points array
      * @param props Object with parameters
      * 
      * @returns a RoutePoint
@@ -467,21 +467,32 @@ export interface GetPositionProps {
      * const point = route.getPosition({distance:300}) // returns the point at distance 300
      * const point = route.getPosition({latlng: {lat:12.3, lng:45.6}}) // returns the point at the given latlng
      */
-export const getPosition = (route:Route,  props:GetPositionProps) => {
-    if (props===undefined || route.points===undefined)
+export const getPosition = (src:Route|Array<RoutePoint>,  props:GetPositionProps) => {
+
+    let route: Route
+    let points: Array<RoutePoint>
+
+    if ( Array.isArray(src)){
+        points = src;
+    }
+    else {
+        route = src
+    }
+
+    if (props===undefined || (route?.points===undefined && !points?.length))
         return;
 
     const {cnt,distance, nearest=true, latlng} = props
     if (props.cnt!==undefined) {
-        return getPointAtIndex(route,cnt)
+        return getPointAtIndex(src,cnt)
     }
 
     if (props.distance!==undefined) {
-        return getPointAtDistance(route, distance, nearest)
+        return getPointAtDistance(src, distance, nearest)
     }
 
     if (props.latlng!==undefined) {
-        return getPointAtLatLng(route, latlng, nearest)
+        return getPointAtLatLng(src, latlng, nearest)
     }
 }
 
@@ -531,13 +542,14 @@ export const getHeading  = ( route:Route, point: RoutePoint) => {
  * returns a copy of the point at a specifc index in the points array
  * 
  * 
- * @param route The route Object
+ * @param src the route Object or points array
  * @param idx   index 
  * 
  * @returns a copy of the RoutePoint at the given index
  */
-const getPointAtIndex = (route:Route,idx:number):RoutePoint => {
-    const points = route.points
+const getPointAtIndex = (src:Route|Array<RoutePoint>,idx:number):RoutePoint => {
+    const  points =  Array.isArray(src)  ? src : src.points
+
     if (idx>=points.length || idx<0)
         return;
 
@@ -549,13 +561,13 @@ const getPointAtIndex = (route:Route,idx:number):RoutePoint => {
 /**
  * returns a copy of the point at a specifc routeDistance
  * 
- * @param route the route object
+ * @param src the route Object or points array
  * @param routeDistance the distance we would like to have the point 
  * @param nearest  if set to true, it will deliver the point nearest to the routeDistance, otherwise it will only return a point if the point's routeDistance matches exactly the requested one 
  * @returns a copy of the RoutePoint at the given position
  */
-export const getPointAtDistance = (route:Route|RouteApiDetail,routeDistance:number, nearest:boolean=true):RoutePoint => {
-    const points = route.points
+export const getPointAtDistance = (src:Route|RouteApiDetail|Array<RoutePoint>,routeDistance:number, nearest:boolean=true):RoutePoint => {
+    const  points =  Array.isArray(src)  ? src : src.points
     if (!points)
         return;
 
@@ -589,9 +601,10 @@ export const getPointAtDistance = (route:Route|RouteApiDetail,routeDistance:numb
 
 
 
-const getPointAtLatLng = (route:Route, latlng:LatLng, nearest:boolean=true):RoutePoint => {
-    const points = route.points
-    if (!points || !route.description.hasGpx)
+const getPointAtLatLng = (src:Route|Array<RoutePoint>, latlng:LatLng, nearest:boolean=true):RoutePoint => {
+
+    const  points =  Array.isArray(src)  ? src : src.points
+    if (!points)
         return;
 
 
