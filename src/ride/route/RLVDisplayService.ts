@@ -467,7 +467,7 @@ export class RLVDisplayService extends RouteDisplayService {
     protected initVideoSource(video:VideoState) {
         const route = video.route
         const videoFormat = route?.details?.video?.format
-        const src = route?.details?.video?.url
+        const src = this.getVideoUrl(video)
 
 
         if (!src) {
@@ -478,12 +478,15 @@ export class RLVDisplayService extends RouteDisplayService {
             this.initMp4VideoSource(video)
             return
         }
-        return this.getAviVideoSource(video)
+        return this.initAviVideoSource(video)
     }
 
     protected initMp4VideoSource(video:VideoState):void {
-        video.source = this.cleanupUrl(video.route?.details?.video?.url) 
-        video.playback = 'native'
+        const src = this.getVideoUrl(video)
+        if (src) {
+            video.source = this.cleanupUrl(src) 
+            video.playback = 'native'
+        }
     }
 
 
@@ -492,13 +495,21 @@ export class RLVDisplayService extends RouteDisplayService {
         return error.message    
     }
 
+    protected getVideoUrl(video:VideoState): string {
+        return video?.route?.details?.video?.url
+                ??video?.route?.description?.videoUrl
+                ??video?.route?.details?.video?.file
+    }
+
     protected getVideoTime(routeDistance:number, video:VideoState = this.currentVideo) {
         return video.syncHelper.getVideoTimeByPosition(routeDistance)
     }
 
-    protected getAviVideoSource(video:VideoState):VideoConversion {
+    protected initAviVideoSource(video:VideoState):VideoConversion {
 
-        const src = video.route?.details?.video?.url
+        const src = this.getVideoUrl(video)
+        if (!src)
+            return undefined
 
         // check for relative URLs that were not correctly converted during import
         
@@ -513,6 +524,8 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
     protected cleanupUrl(url:string) {
+        if (!url)
+            return
         let fileName = url
         const lc = url.toLowerCase()
 
