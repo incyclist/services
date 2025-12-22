@@ -581,6 +581,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         const devices = this.isStartDeviceReadyToStart()
         const sensors = this.isSensorsReadyToStart()
         const ride = this.getRideModeService().isStartRideCompleted()
+        const props = this.getStartOverlayProps()
+
+        this.logEvent({message:'start overlay update', ...props})
 
         if (devices && sensors && ride) {
             this.onStartCompleted()
@@ -942,6 +945,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             return
 
         const logProps = this.getRideModeService().getLogProps()
+        this.logEvent({message:'overlay closed',overlay:'start overlay' })        
         this.logEvent({ message: 'Start success',  ...logProps })
 
         this.state = 'Started'
