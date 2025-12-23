@@ -170,8 +170,8 @@ describe('DeviceRideService',()=>{
         }
 
         const setupMocks = (s,a, props:{mode?:string}={})=> {
-            s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
-            s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilties:a.getCapabilities()}])
+            s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
+            s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabiilties:a.getCapabilities()}])
             a.isStarted = jest.fn().mockReturnValue(true)
             a.start = jest.fn().mockResolvedValue(true)
             s.getConfiguredModeInfo = jest.fn().mockReturnValue({ mode: props?.mode??a.getDefaultCyclingMode().getName(), settings: {} });
