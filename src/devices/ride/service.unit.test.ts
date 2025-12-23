@@ -13,7 +13,7 @@ describe('DeviceRideService',()=>{
         let service:DeviceRideService, s
         const data: Array<DeviceData> = []
         const setupMocks  = (s,adapters)=>{
-            s.getSelectedAdapters = jest.fn().mockReturnValue( adapters)
+            s.getRideAdapters = jest.fn().mockReturnValue( adapters)
 
             const configurationService= { 
                 getSelectedDevices: jest.fn(()=>
@@ -83,12 +83,12 @@ describe('DeviceRideService',()=>{
             const {disableControl} = props ?? {}
 
             if (disableControl) {
-                s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities().filter( c => c !== IncyclistCapability.Control)}])
+                s.getRideAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities().filter( c => c !== IncyclistCapability.Control)}])
                 s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities().filter( c => c !== IncyclistCapability.Control)}])
                 
             }
             else  {
-                s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
+                s.getRideAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
                 s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
 
             }
@@ -170,8 +170,8 @@ describe('DeviceRideService',()=>{
         }
 
         const setupMocks = (s,a, props:{mode?:string}={})=> {
-            s.getSelectedAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
-            s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabiilties:a.getCapabilities()}])
+            s.getRideAdapters = jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
+            s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
             a.isStarted = jest.fn().mockReturnValue(true)
             a.start = jest.fn().mockResolvedValue(true)
             s.getConfiguredModeInfo = jest.fn().mockReturnValue({ mode: props?.mode??a.getDefaultCyclingMode().getName(), settings: {} });

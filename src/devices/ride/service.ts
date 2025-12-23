@@ -107,19 +107,24 @@ export class DeviceRideService  extends IncyclistService{
         return this.data
     }
 
-    protected getSelectedAdapters():AdapterRideInfo[] {
+    protected getRideAdapters():AdapterRideInfo[] {
         if (this.rideAdapters?.length)
             return this.rideAdapters
 
         try {
+            
             this.rideAdapters = this.adapters = this.getConfiguredAdapters(true)
             const configuredControlDevice  =this.getControlAdapter(true)
 
             let controlDevice
             if (this.simulatorEnforced) {
                 controlDevice = this.getControlAdapter()
+                this.addSimulatorAdapter(controlDevice, this.rideAdapters)
+
                 // remove originally configured control adapter
-                this.rideAdapters = this.rideAdapters.filter( ai => ai.udid!==configuredControlDevice.udid)
+                if (configuredControlDevice) { 
+                    this.rideAdapters = this.rideAdapters.filter( ai => ai.udid!==configuredControlDevice.udid)
+                }
             }
             else {
                 controlDevice = configuredControlDevice                
@@ -131,20 +136,15 @@ export class DeviceRideService  extends IncyclistService{
                 })
             }
             
-            if (!this.simulatorEnforced) {
-                return this.adapters
+            if (this.simulatorEnforced) {
+                this.setRequestedCapabilties(this.rideAdapters)
             }
-
-            // const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});               
-            // this.rideAdapters =  [{adapter,udid:'Simulator:'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false, isControl:true}]
-
-            this.setRequestedCapabilties(this.rideAdapters)
 
             return this.rideAdapters
 
         }
         catch(err) {
-            this.logError(err,'getSelectedAdapters')
+            this.logError(err,'getRideAdapters')
             return this.rideAdapters??[]
         }
 
@@ -162,7 +162,8 @@ export class DeviceRideService  extends IncyclistService{
     protected getConfiguredAdapters(onlySelected=true):AdapterRideInfo[] {
         const config = this.getDeviceConfiguration()
         const adapters = config.getAdapters(onlySelected)?.map( ai=> ({...ai, isStarted:false}))
-        return adapters
+
+        return [...adapters]
 } 
 
 
@@ -503,7 +504,7 @@ export class DeviceRideService  extends IncyclistService{
         const {udid,interface: ifName, interfaces} = filter      
 
         const onlySelected = !udid 
-        let adapters:AdapterRideInfo[] = onlySelected ? this.getSelectedAdapters() :this.getAllAdapters() 
+        let adapters:AdapterRideInfo[] = onlySelected ? this.getRideAdapters() :this.getAllAdapters() 
         
 
         const getIf = (adapter) => {
@@ -627,7 +628,7 @@ export class DeviceRideService  extends IncyclistService{
         this.emit(`${startType}-result`, allOK)
 
         if (allOK && (startType==='start' || startType==='pair')) {
-            this.registerOnDataHandler(props)
+            this.registerOnDataHandler( adapters)
         }
 
         this.startPromises = null;
@@ -1125,7 +1126,8 @@ export class DeviceRideService  extends IncyclistService{
         // getSelectedAdapters will cache data in this.rideAdapters. Therefore we need t
         this.cleanInternalCache()
 
-        const adapters = this.getSelectedAdapters()
+        delete this.rideAdapters
+        const adapters = this.getRideAdapters()
 
         this.emit('start-request', adapters?.map( this.getAdapterStateInfo.bind(this) ))
 
@@ -1142,11 +1144,11 @@ export class DeviceRideService  extends IncyclistService{
         await this.lazyInit();
 
         // notify the start of all adapters
-        const selected = this.getSelectedAdapters()
+        const selected = this.getRideAdapters()
         this.emit('start-request', selected?.map( this.getAdapterStateInfo ))
 
         // only try to start the adapters that are not already started
-        const adapters = this.getSelectedAdapters().filter( ai=> !ai.adapter.isStarted())
+        const adapters = selected.filter( ai=> !ai.adapter.isStarted())
 
         const goodToGo = await this.waitForPreviousStartToFinish()
         if (!goodToGo) 
@@ -1163,7 +1165,7 @@ export class DeviceRideService  extends IncyclistService{
 
         this.logEvent({message:'cancel start'})
 
-        const adapters = this.getSelectedAdapters()
+        const adapters = this.getRideAdapters()
 
         const promises:Array<Promise<boolean>> = []
         adapters?.forEach(ai=> {
@@ -1188,8 +1190,8 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    registerOnDataHandler(_props) {
-        const adapters = this.getSelectedAdapters()
+    registerOnDataHandler(adapters:AdapterRideInfo[]) {
+        
         adapters?.forEach(ai=> {
             this.unsubscribeDeviceEvents(ai.adapter)
             this.subscribeDeviceEvents(ai.adapter)
@@ -1235,7 +1237,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     pause():void {
-        const adapters = this.getSelectedAdapters();
+        const adapters = this.getRideAdapters();
 
         adapters?.forEach(ai=> {
             ai.tsLastData = Date.now()
@@ -1246,7 +1248,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     resume():void {
-        const adapters = this.getSelectedAdapters();
+        const adapters = this.getRideAdapters();
 
         adapters?.forEach(ai=> {
             ai.tsLastData = Date.now()
@@ -1286,7 +1288,7 @@ export class DeviceRideService  extends IncyclistService{
 
     onKeyPressed( deviceSettings:DeviceSettings, event) {
         
-        const adapters = this.getSelectedAdapters();
+        const adapters = this.getRideAdapters();
         // get adapterinfo from the device that is sending data
         const adapterInfo = adapters?.find( ai=>ai.adapter.isEqual(deviceSettings))
         if (!adapterInfo?.capabilities.includes(IncyclistCapability.AppControl) )
@@ -1300,7 +1302,7 @@ export class DeviceRideService  extends IncyclistService{
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
 
 
-        const adapters = this.getSelectedAdapters();
+        const adapters = this.getRideAdapters();
         const config = this.getDeviceConfiguration()
 
         // get adapterinfo from the device that is sending data
@@ -1391,7 +1393,7 @@ export class DeviceRideService  extends IncyclistService{
 
         this.logEvent({message:'getEnabledCapabilities', device:adapterInfo.adapter.getName(), udid:adapterInfo.udid, selected  })
 
-        const adapters = this.getSelectedAdapters();
+        const adapters = this.getRideAdapters();
         const config = this.getDeviceConfiguration()
 
         const selectedDevices = selected ?? config.getSelectedDevices()
@@ -1450,7 +1452,7 @@ export class DeviceRideService  extends IncyclistService{
 
     async sendUpdate( request:UpdateRequest):Promise<void> {
 
-        const adapters = this.getSelectedAdapters()??[];
+        const adapters = this.getRideAdapters()??[];
         const targets = adapters.filter( ai =>  ai?.adapter?.isControllable() && ai?.adapter?.isStarted() &&  !ai.adapter?.isStopped())
 
         const tsStart = Date.now()
@@ -1490,7 +1492,7 @@ export class DeviceRideService  extends IncyclistService{
 
     getCyclingMode(udid?:string):ICyclingMode {
         
-        const adapters = this.getSelectedAdapters();       
+        const adapters = this.getRideAdapters();       
         let adapter
 
         if (this.simulatorEnforced) {
@@ -1597,19 +1599,26 @@ export class DeviceRideService  extends IncyclistService{
         return { mode, settings };
     }
 
+    protected addSimulatorAdapter( info:AdapterInfo, adapters:AdapterInfo[]) {
+        const existing = adapters?.some(ai => ai.udid.startsWith('Simulator:') || ai.adapter.getName()==='Simulator');
+        if (!existing) {
+            adapters.push(info)
+        }
+
+    }
+
     getControlAdapter(onlyConfigured:boolean = false):AdapterRideInfo {
-        const adapters = this.getSelectedAdapters();
+        const adapters = this.getConfiguredAdapters();
 
 
         if (this.simulatorEnforced && !onlyConfigured) {
-            const adapterInfo = adapters?.find(ai => ai.udid.startsWith('Simulator:'));
-            if (!adapterInfo) {
-
-                const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});
-                return {adapter,udid:'Simulator:'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false}
+            const adapterInfo = adapters?.find(ai => ai.udid.startsWith('Simulator:') || ai.adapter.getName()==='Simulator');
+            if (adapterInfo) {
+                return adapterInfo
             }
-            return adapterInfo
-
+            
+            const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});
+            return {adapter,udid:'Simulator:'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false}            
         }
         else {
             const adapterInfo = adapters?.find(ai => ai.isControl) 
@@ -1629,7 +1638,7 @@ export class DeviceRideService  extends IncyclistService{
 
     enforceERG():boolean {
         try {
-            const adapters = this.getSelectedAdapters();
+            const adapters = this.getRideAdapters();
 
             const adapterInfo = adapters?.find( ai=> ai.adapter.hasCapability(IncyclistCapability.Control)) 
             if (!adapterInfo?.adapter)
@@ -1663,7 +1672,7 @@ export class DeviceRideService  extends IncyclistService{
         const currentMode = this.getCyclingMode(udid)
         if (!currentMode || currentMode.getName()!==mode) { // mode was changed
             
-            const adapters = this.getSelectedAdapters()
+            const adapters = this.getRideAdapters()
             const adapter = adapters?.find( ai=> ai.udid===udid)?.adapter
             if (adapter?.isControllable()) {
                 adapter.setCyclingMode(mode,settings)
