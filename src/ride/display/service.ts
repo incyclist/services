@@ -219,6 +219,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     async stop(exit:boolean = false) {
+
+        this.getDeviceRide().enforceSimulator(false)
         try {
             this.getRideModeService()?.onStopped()
         }
@@ -1317,6 +1319,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         // TODO: move into device mode class
         try {
             const mode = this.getDeviceRide().getCyclingMode() as CyclingMode
+            if (!mode)
+                return false
+
 
             if (mode.isSIM()) {            
                 const virtshiftMode = mode.getSetting('virtshift') as unknown as string
