@@ -311,6 +311,9 @@ export const getTotalElevation = (route:RouteApiDetail):number =>{
 }
 
 export const getElevationGainAt = (route:Route, routeDistance:number):number => {
+    if (!route?.points?.length) {
+        return 0;
+    }
 
 
     let distance = routeDistance

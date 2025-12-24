@@ -1182,6 +1182,15 @@ export class ActivityRideService extends IncyclistService {
                 break;
             case 'Route':
                 {
+                    if (!selectedRoute?.points?.length) { 
+                        this.logEvent( {message:'route does not have any points', route:selectedRoute?.description.title, 
+                            hasGPX: selectedRoute?.description.hasGpx,
+                            descPoints: selectedRoute?.description?.points?.length,
+                            detPoints: selectedRoute?.details?.points?.length,
+                        })
+                    }
+
+
                     validateRoute(selectedRoute)
                     const s = (startSettings as RouteSettings)
                     startPos = s.startPos
