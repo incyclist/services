@@ -45,6 +45,8 @@ export class VideoSyncHelper extends IncyclistService{
     protected tsLastSummeryLog:number
     protected mapping: any
     protected endTime: number
+
+    protected prevDelta: number
     
 
 
@@ -85,6 +87,7 @@ export class VideoSyncHelper extends IncyclistService{
         this.isStopped = true
 
         delete this.endTime
+        delete this.prevDelta
         this.logPlaybackSummary()
     }
 
@@ -319,7 +322,13 @@ export class VideoSyncHelper extends IncyclistService{
                 if (changed.length===0)
                     return
 
-                this.logEvent({message:'video playback update',updates:updates.join('|'),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
+                this.logEvent({message:'video playback update',updates:updates.join('|'),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), 
+                                    rlvTime: f(this.rlvStatus?.time),rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
+
+                if (f(rlvDistance)==='-') {
+                    this.logEvent( {message:'video debug', videoState:this.rlvStatus, activityState: this.activityStatus})
+
+                }
             }
 
             if (this.loopMode && this.rlvStatus.lap>this.activityStatus.lap) {
@@ -339,12 +348,16 @@ export class VideoSyncHelper extends IncyclistService{
 
             
             if (!this.rlvStatus.timeRequested) {
-                if (Math.abs(delta)>200) {
+                if ( Math.abs(this.prevDelta-(delta??0))>100 && Math.abs(delta)>MAX_DELTA ) {
                     const newTime = this.getVideoTimeByPosition(actDistance) 
-                    this.logEvent({message:'video forwarded', newTime})
-                    this.updateTime( newTime)
+                    if (newTime-this.rlvStatus.time>1) {
+                        this.logEvent({message:'video forwarded', newTime})
+                        this.updateTime( newTime)
+                    }
+                    this.prevDelta = delta
                 }
                 else {
+                    this.prevDelta = delta
                     if (delta===0) {
                         if (updates.includes('activity:speed') || updates.includes('rlv:speed')) {
                             const rate = this.rlvStatus.speed ? this.activityStatus.speed/this.rlvStatus.speed : 1
