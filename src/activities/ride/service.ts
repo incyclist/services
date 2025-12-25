@@ -110,6 +110,7 @@ export class ActivityRideService extends IncyclistService {
     protected saveObserver: PromiseObserver<boolean>
     protected isSaveDone: boolean
     protected isDonateShown: boolean
+    protected isSummaryShown: boolean
 
     protected statsCalculator: ActivityStatsCalculator
     protected durationCalculator: ActivityDuration
@@ -135,7 +136,8 @@ export class ActivityRideService extends IncyclistService {
         dataState: Record<string,HealthStatus>
         prevRides?: Array<ActivityInfo>
         prevRidesLogs?: PastActivityInfo
-        lap?:number
+        lap?:number,
+        pointsErrorLogged?: boolean
     }
 
     constructor() {
@@ -225,6 +227,7 @@ export class ActivityRideService extends IncyclistService {
             this.tsPauseStart = undefined
             this.isSaveDone = false
             this.isDonateShown = false
+            this.isSummaryShown = false
     
             this.logEvent({message:'activity started' })
             this.startWorker()
@@ -280,6 +283,7 @@ export class ActivityRideService extends IncyclistService {
         if (this.state!=='idle' && this.state!=='completed')
             await this.stop()
         delete this.activity        
+
     }
 
 
@@ -318,6 +322,7 @@ export class ActivityRideService extends IncyclistService {
         this._save()
 
         this.isSaveDone = false;
+        this.isSummaryShown = false
     }
 
     ignoreEndPos() {
@@ -450,8 +455,12 @@ export class ActivityRideService extends IncyclistService {
             const hasGPX = this.activity?.logs?.some( (log) => !!log.lat && !!log.lng)
             const showMap = hasGPX || isFreeRide || (route?.description?.hasGpx)
             const preview = showMap ? undefined: route?.description?.previewUrl
+            
+            if (!this.isSummaryShown) { 
+                this.logEvent({message:'activity summary shown', showSave, showContinue, showMap, fileLink: this.activity?.fitFileName})
+            }
 
-            this.logEvent({message:'activity summary shown', showSave, showContinue, showMap, fileLink: this.activity?.fitFileName})
+            this.isSummaryShown = true
     
     
             const props = {
@@ -1290,6 +1299,11 @@ export class ActivityRideService extends IncyclistService {
                 // update position and elevation gain
                 const prev = this.current.position
 
+                if (!this.current?.route?.points && !this.current.pointsErrorLogged) {
+                    this.logEvent({message:'error', error:'route does not have any points', route:this.current.route})
+                    this.current.pointsErrorLogged = true;
+                }
+
                 const position = getNextPosition(this.current.route,{routeDistance:this.current.routeDistance,prev:this.current.position} ) ??
                                 getNextPosition(this.current.route,{distance,prev:this.current.position} ) 
                 this.current.position = position??prev
@@ -1307,7 +1321,7 @@ export class ActivityRideService extends IncyclistService {
             }
         }
         catch(err) {
-            this.logError(err,'updateAcitivityState')
+            this.logError(err,'updateActivityState')
         }
 
         this.current.tsUpdate = tsNow
