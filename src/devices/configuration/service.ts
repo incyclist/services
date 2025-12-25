@@ -510,7 +510,7 @@ export class DeviceConfigurationService  extends IncyclistService{
 
         }
         catch(err) {
-            this.logError(err,'getModeSettings()')
+            this.logError(err,'getModeSettings()', {requestedUdid, requestedMode})
             return;
         }
     }
