@@ -372,6 +372,15 @@ export class RLVDisplayService extends RouteDisplayService {
             return state
         }
 
+        if ( this.currentRoute?.description?.hasGpx && !this.currentRoute?.points?.length) {
+            state = 'Start:Failed'
+            const errMessage = 'Invalid route (GPX missing)'
+            if (!this.currentVideo.error) {
+                this.logError( new Error(errMessage), 'getVideoState',{route:this.currentVideo.route})
+            }
+            this.currentVideo.error = errMessage
+            
+        }
         if ( this.isStartRideCompleted()) {
             state = 'Started'
         }
