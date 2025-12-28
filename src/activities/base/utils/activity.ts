@@ -293,17 +293,23 @@ export class Activity implements ActivityInfo{
 
     createStartSettings():RouteSettings {
 
-        const {startPos,realityFactor,segment,endPos} = this.details
-        const card = this.getRouteCard()
-        return {
-            startPos,
-            segment,
-            endPos,
-            realityFactor,
-            showPrev:true,
-            type:card.getCardType()
+        try {
+            const {startPos,realityFactor,segment,endPos} = this.details
+            const card = this.getRouteCard()
+            const settings =  {
+                startPos,
+                segment,
+                endPos,
+                realityFactor,
+                showPrev:true,
+                type:card?.getCardType()??'Route'
+            }
+            return settings
         }
-
+        catch(err) {
+            this.logError(err,'createStartSettings')
+            return 
+        }
         
     }
 

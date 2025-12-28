@@ -653,6 +653,13 @@ describe('ActivityListService',()=>{
             db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails    
             const selected = db.activities[1]
             const  mocks = setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
+
+            Inject('RouteList',{
+                selectCard:jest.fn(),
+                setStartSettings: jest.fn(),
+                getSelected: jest.fn().mockReturnValue(db.activities[1])
+                
+            })
         })
 
         afterEach( ()=>{
@@ -676,7 +683,7 @@ describe('ActivityListService',()=>{
                 getRouteDescription:jest.fn().mockReturnValue(route)
             })
 
-            const {canStart} = service.rideAgain()
+            const {canStart} = await service.rideAgain()
             expect(canStart).toBe(true)
 
             const card = target.getRouteCard()
@@ -694,7 +701,7 @@ describe('ActivityListService',()=>{
                 getCardType:jest.fn().mockReturnValue('Video')
             })
 
-            const {canStart} = service.rideAgain()
+            const {canStart} = await service.rideAgain()
             expect(canStart).toBe(false)
 
             const card = target.getRouteCard()
@@ -706,7 +713,7 @@ describe('ActivityListService',()=>{
         test('no route selected',async ()=>{
 
             service.getSelected = jest.fn().mockReturnValue(null)
-            const {canStart} = service.rideAgain()
+            const {canStart} = await service.rideAgain()
             expect(canStart).toBe(false)
         })    
 

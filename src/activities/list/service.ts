@@ -3,6 +3,7 @@ import { Injectable } from "../../base/decorators/Injection";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer, PromiseObserver } from "../../base/types/observer";
+import { useRouteList } from "../../routes";
 import { RouteCard } from "../../routes/list/cards/RouteCard";
 import { waitNextTick } from "../../utils";
 import { ActivitiesRepository, Activity, ActivitySearchCriteria } from "../base";
@@ -363,21 +364,38 @@ export class ActivityListService extends IncyclistService {
      * 
      * @returns true if the activity could be started, false otherwise
      */
-    rideAgain():RideAgainResponse {
+    async rideAgain():Promise<RideAgainResponse> {
 
-        if (!this.getSelected()?.canStart()) {
-            return {canStart:false}    
+        try {
+            if (!this.getSelected()?.canStart()) {
+                return {canStart:false}    
+            }
+
+            const startStettings = this.selected.createStartSettings()
+            const card = this.selected.getRouteCard() 
+
+            const routes = this.getRouteList()
+            routes.selectCard(card)
+            routes.setStartSettings(startStettings)
+            const route = routes.getSelected()
+            if (!route.details) {
+                route.details = await routes.getRouteDetails(route.description.id)
+                if (!route.details) {
+                    return {canStart:false}
+                }
+            }
+
+            
+            card.changeSettings(startStettings)
+            card.start()
+
+
+            return {canStart:true, route};
         }
-
-        const startStettings = this.selected.createStartSettings()
-        const card = this.selected.getRouteCard() 
-
-        const route = card.getRouteDescription()
-
-        
-        card.changeSettings(startStettings)
-        card.start()
-        return {canStart:true, route};
+        catch (err) {
+            this.logError(err,'rideAgain')
+            return {canStart:false}
+        }
     }
 
     async export(format:string):Promise<boolean> {
@@ -616,6 +634,11 @@ export class ActivityListService extends IncyclistService {
     @Injectable
     protected getAppState() {
         return useAppState()
+    }
+
+    @Injectable
+    protected getRouteList() {
+        return useRouteList()
     }
 
     reset() {

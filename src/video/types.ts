@@ -5,6 +5,7 @@ export type RLVPlaybackStatus = {
     /** current playback time of mediasource */
     time: number
     timeRequested?: number
+    tsLastTimeRequest?: number
 
     /** position of video playback in the route */
     routeDistance: number   
@@ -14,6 +15,7 @@ export type RLVPlaybackStatus = {
 
     /** ts of last update*/
     ts: number,
+    tsVideoUpdate?: number
 
     lap: number
     lapRequested?: boolean

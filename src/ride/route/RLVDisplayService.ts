@@ -441,9 +441,8 @@ export class RLVDisplayService extends RouteDisplayService {
         this.logEvent({message: 'video stalled',bufferedTime,buffers})
         video.syncHelper.onVideoStalled(time, bufferedTime)
     }   
-    protected onVideoWaiting(time:number, bufferedTime:number, buffers:Array<{start:number,end:number}>, video:VideoState = this.currentVideo ) {
-        this.logEvent({message: 'video waiting',time, bufferedTime,buffers})
-        video.syncHelper.onVideoWaiting(time, bufferedTime)
+    protected onVideoWaiting(time:number, rate,  bufferedTime:number, buffers:Array<{start:number,end:number}>, video:VideoState = this.currentVideo ) {
+        video.syncHelper.onVideoWaiting(time,rate, bufferedTime, buffers)
     }   
 
     protected onVideoPlaybackError(error:MediaError, video:VideoState = this.currentVideo ) {

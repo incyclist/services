@@ -10,6 +10,7 @@ const MIN_PLAYBACK_RATE = 0.0625
 const MAX_PLAYBACK_RATE = 16.0
 const MAX_DELTA = 200;
 const MAX_RATE_UPDATE = 500
+const MAX_FWD_FREQ = 60*1000    // once per minute
 
 const n = (v,i) => isNaN(v)||v===undefined ? '-' : Number(v.toFixed(i))
 const f = (v) => n(v,0)
@@ -111,151 +112,170 @@ export class VideoSyncHelper extends IncyclistService{
 
     onVideoPlaybackUpdate(time:number,rate:number,e:{readyState?:number, networkState?:number, bufferedTime?:number} ) {
 
-        this.endTime = this.endTime ?? this.getVideoTimeByPosition(this.route.description?.distance)
-        const endTime = this.endTime
+        try {
+            this.endTime = this.endTime ?? this.getVideoTimeByPosition(this.route.description?.distance)
+            const endTime = this.endTime
 
 
-        if (this.isStopped)
-            return
+            if (this.isStopped)
+                return
 
-        if ( time> endTime-0.3 && !this.loopMode && !this.rlvStatus.timeRequested) { 
-            this.updateRate(0)
-            return
-        }
+            if ( time> endTime-0.3 && !this.loopMode && !this.rlvStatus.timeRequested) { 
+                this.updateRate(0)
+                return
+            }
 
-        const tsStart = Date.now()
+            const tsStart = Date.now()
 
-        this.tsStart = this.tsStart ??Date.now()
-        let updates:string[] = []
+            this.tsStart = this.tsStart ??Date.now()
+            let updates:string[] = []
 
-        if (e.bufferedTime!==undefined) {
-            this.setBufferedTime(e.bufferedTime)
-        }
+            if (e.bufferedTime!==undefined) {
+                this.setBufferedTime(e.bufferedTime)
+            }
 
-        if (time>=this.rlvStatus.timeRequested) {
-            delete this.rlvStatus.timeRequested
-            delete this.tsLastIssue
-            delete this.bufferedTimeIssue 
-            this.maxSuccessRate = 1
-            this.maxRate = MAX_PLAYBACK_RATE
+            if (this.rlvStatus.timeRequested!==undefined && time>=this.rlvStatus.timeRequested) {
+                delete this.rlvStatus.timeRequested
+                delete this.tsLastIssue
+                delete this.bufferedTimeIssue 
+                this.maxSuccessRate = 1
+                this.maxRate = MAX_PLAYBACK_RATE
 
-            updates.push('rlv:time-reset')
-        }
-        else if (this.rlvStatus.timeRequested && time<this.rlvStatus.timeRequested) {
-            //console.log('# waiting for video time', time, this.rlvStatus.timeRequested)
-        }
+                updates.push('rlv:time-reset')
+            }
+            else if (this.rlvStatus.timeRequested!==undefined && time<this.rlvStatus.timeRequested) {
+                //console.log('# waiting for video time', time, this.rlvStatus.timeRequested)
+            }
 
-        
-        else if (rate===this.rlvStatus.rateRequested)  {
-            delete this.rlvStatus.rateRequested 
+            
+            else if (this.rlvStatus.rateRequested!==undefined && rate>=this.rlvStatus.rateRequested)  {
+                delete this.rlvStatus.rateRequested 
 
-            if (this.tsLastIssue!==undefined) {
-                const timeSinceLastIssue = (Date.now()-this.tsLastIssue)/1000
-                const timeSinceLastRateIncrease = (Date.now()-(this.tsLastRateIncrease??0))/1000
+                if (this.tsLastIssue!==undefined) {
+                    const timeSinceLastIssue = (Date.now()-this.tsLastIssue)/1000
+                    const timeSinceLastRateIncrease = (Date.now()-(this.tsLastRateIncrease??0))/1000
 
-                if (timeSinceLastIssue>5 && timeSinceLastRateIncrease>1 && this.bufferedTime>=0.75 ) {
+                    if (timeSinceLastIssue>5 && timeSinceLastRateIncrease>1 && this.bufferedTime>=0.75 ) {
 
-                    this.maxRate= this.maxRate +  0.2
-                    this.tsLastRateIncrease = Date.now()
-                    this.bufferedTimePrevIncrease = this.bufferedTime
-                    
-                    if (timeSinceLastIssue>10 && this.bufferedTime>=2.5) {
-                        this.maxRate=MAX_PLAYBACK_RATE
+                        this.maxRate= this.maxRate +  0.2
+                        this.tsLastRateIncrease = Date.now()
+                        this.bufferedTimePrevIncrease = this.bufferedTime
+                        
+                        if (timeSinceLastIssue>10 && this.bufferedTime>=2.5) {
+                            this.maxRate=MAX_PLAYBACK_RATE
+                        }
+                        
+                        if (this.maxRate===MAX_PLAYBACK_RATE) {
+                            delete this.tsLastIssue
+                            delete this.bufferedTimePrevIncrease
+                            delete this.bufferedTimeIssue
+
+                        }
+
+                        //console.log('# video playback issue fixed', this.maxSuccessRate,this.maxRate, timeSinceLastIssue, this.bufferedTime, timeSinceLastRateIncrease)
+
                     }
-                    
-                    if (this.maxRate===MAX_PLAYBACK_RATE) {
-                        delete this.tsLastIssue
-                        delete this.bufferedTimePrevIncrease
-                        delete this.bufferedTimeIssue
-
-                    }
-
-                    //console.log('# video playback issue fixed', this.maxSuccessRate,this.maxRate, timeSinceLastIssue, this.bufferedTime, timeSinceLastRateIncrease)
-
+                }
+                if (this.bufferedTime>1) {
+                    this.maxSuccessRate = Math.max(this.maxSuccessRate, rate)                 
                 }
             }
-            if (this.bufferedTime>1) {
-                this.maxSuccessRate = Math.max(this.maxSuccessRate, rate)                 
+            else {
+                //console.log('# rate not confirmed',  this.rlvStatus.rateRequested, rate, this.maxSuccessRate)
             }
-        }
-        else {
-            //console.log('# rate not confirmed',  this.rlvStatus.rateRequested, rate, this.maxSuccessRate)
-        }
 
-        if (this.isPaused) {
+            if (this.isPaused) {
+                this.rlvStatus.ts = Date.now()
+                this.rlvStatus.time = time
+                this.rlvStatus.rate = 0
+                return
+            }
+
+            this.rlvPrev = {...this.rlvStatus}
+
             this.rlvStatus.ts = Date.now()
             this.rlvStatus.time = time
-            this.rlvStatus.rate = 0
-            return
-        }
+            this.rlvStatus.rate = rate
 
-        this.rlvPrev = {...this.rlvStatus}
+            if ( this.isNextLap(time) ) {
 
-        this.rlvStatus.ts = Date.now()
-        this.rlvStatus.time = time
-        this.rlvStatus.rate = rate
+                
+                const vt = this.getLapTime(time)
+                const mapping = this.getMappingByTime(vt)
+                if (mapping) {
+                    this.rlvStatus.routeDistance = this.getPositionByVideoTime(vt)
+                    this.rlvStatus.speed = mapping.videoSpeed
+                    this.rlvStatus.lap++
+                    this.rlvStatus.lapRequested = true
+                }       
 
-        if ( this.isNextLap(time) ) {
-
-            
-            const vt = this.getLapTime(time)
-            const mapping = this.getMappingByTime(vt)
-            if (mapping) {
-                this.rlvStatus.routeDistance = this.getPositionByVideoTime(vt)
-                this.rlvStatus.speed = mapping.videoSpeed
-                this.rlvStatus.lap++
-                this.rlvStatus.lapRequested = true
-            }       
-
-            updates.push('rlv:lap')
-            
-        }
-        else if (time<this.rlvStatus.time && time<10) { // new lap confirmed
-            delete this.rlvStatus.lapRequested
-        }
-        else {
-            const vt = this.loopMode ? this.getLapTime(time) : (time>this.getTotalTime() ? this.getTotalTime() : time)
-            const mapping = this.getMappingByTime(vt)
-            if (mapping) {
-                this.rlvStatus.routeDistance = this.getPositionByVideoTime(vt)
-                this.rlvStatus.speed = mapping.videoSpeed
-            }       
-            if (this.rlvStatus.routeDistance>this.rlvPrev.routeDistance) {
-                updates.push('rlv:distance')
+                updates.push('rlv:lap')
+                
             }
+            else if (time<this.rlvStatus.time && time<10) { // new lap confirmed
+                delete this.rlvStatus.lapRequested
+            }
+            else {
+                const vt = this.loopMode ? this.getLapTime(time) : (time>this.getTotalTime() ? this.getTotalTime() : time)
+                const mapping = this.getMappingByTime(vt)
+                if (mapping) {
+                    this.rlvStatus.routeDistance = this.getPositionByVideoTime(vt)
+                    this.rlvStatus.speed = mapping.videoSpeed
+                }       
+                if (this.rlvStatus.routeDistance>this.rlvPrev.routeDistance) {
+                    updates.push('rlv:distance')
+                }
+            }
+
+            if (this.rlvStatus.speed!==this.rlvPrev.speed) {
+                updates.push('rlv:speed')
+            }
+
+            this.cpuTime = (this.cpuTime??0) + (Date.now()-tsStart)
+
+            this.onUpdate(updates)
+
+
+        }
+        catch(err) {
+            this.logError(err,'onVideoPlaybackUpdate')            
+
         }
 
-        if (this.rlvStatus.speed!==this.rlvPrev.speed) {
-            updates.push('rlv:speed')
-        }
 
-        this.cpuTime = (this.cpuTime??0) + (Date.now()-tsStart)
-        this.onUpdate(updates)
        
     }
 
     onVideoStalled(time:number, bufferedTime:number) {
         // TODO
     }
-    onVideoWaiting(time:number, bufferedTime:number) {
+    onVideoWaiting(time:number, rate:number, bufferedTime:number,buffers:Array<{start:number,end:number}>) {
+        this.logEvent({message: 'video waiting',time, bufferedTime,buffers})
 
         // ignore while we are resetting time
-        if (this.rlvStatus.timeRequested || this.rlvStatus.rateRequested)
+        if (this.rlvStatus.timeRequested ) {
             return;
+        }
 
         this.cntWaitingEvents++
 
-        if (this.rlvStatus.rateRequested>this.maxSuccessRate) {
-            this.maxRate = this.maxSuccessRate    
-        }
-        else {
-            this.maxRate = this.maxSuccessRate =  (this.rlvStatus.rateRequested??1)-0.1
+        // rate was requested might have caused the waiting event (too fast)
+        if (this.rlvStatus.rateRequested) {
+            if (this.rlvStatus.rateRequested>this.maxSuccessRate) { // we are beyond the fastest confirmed playback rate
+                this.maxRate = this.maxSuccessRate    
+            }
+            else {  // we are less or equal the fastest confirmed playback rate
+                // reduce maximum allowed rate for next updates
+                this.maxRate = Math.min(1,this.rlvStatus.rateRequested-0.1)
+            }
         }
 
         this.tsLastIssue = Date.now()
         this.bufferedTimeIssue = bufferedTime
         delete this.rlvStatus.rateRequested
-        this.onUpdate(['rlv:waiting'])
+        this.rlvStatus.rate = rate
+
+        //this.onUpdate(['rlv:waiting'])
     }
 
     onActivityUpdate(routeDistance:number,speed:number) {
@@ -315,15 +335,22 @@ export class VideoSyncHelper extends IncyclistService{
 
             }
 
+            const canLog = ()=> {
+                const changed = updates.filter( u=>u!=='rlv:distance') 
+                return (changed.length>0 || Date.now()-(this.rlvStatus.tsVideoUpdate??0)>1000) 
+            }
+            const isNewVideoUpdate = ()=> {
+                if (!canLog())
+                    return false
+                return updates.some( u=>u.startsWith('rlv'))
+            }
 
             const log = ()=> {
-
-                const changed = updates.filter( u=>u!=='rlv:distance') 
-                if (changed.length===0)
+                if (!canLog())
                     return
 
                 this.logEvent({message:'video playback update',updates:updates.join('|'),delta:n(delta,1), bufferedTime:n(this.bufferedTime,1), rlvDistance:f(rlvDistance), actDistance:f(actDistance), 
-                                    rlvTime: f(this.rlvStatus?.time),rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
+                                    rlvTime: n(this.rlvStatus?.time,2),rate: n(this.rlvStatus.rate,2), maxRate: n(this.maxRate,2), maxSuccessRate: n(this.maxSuccessRate,2)  })
 
                 if (f(rlvDistance)==='-') {
                     this.logEvent( {message:'video debug', videoState:this.rlvStatus, activityState: this.activityStatus})
@@ -346,9 +373,16 @@ export class VideoSyncHelper extends IncyclistService{
 
             log()
 
+            if (isNewVideoUpdate()) {
+                this.rlvStatus.tsVideoUpdate = Date.now()
+            }
+
             
-            if (!this.rlvStatus.timeRequested) {
-                if ( Math.abs(this.prevDelta-(delta??0))>100 && Math.abs(delta)>MAX_DELTA ) {
+            if (!this.rlvStatus.timeRequested && Date.now()-(this.rlvStatus.tsLastTimeRequest??0)>MAX_FWD_FREQ) {
+
+                if ( Math.abs(delta)>MAX_DELTA ) {
+
+
                     const newTime = this.getVideoTimeByPosition(actDistance) 
                     if (newTime-this.rlvStatus.time>1) {
                         this.logEvent({message:'video forwarded', newTime})
@@ -397,6 +431,11 @@ export class VideoSyncHelper extends IncyclistService{
         if (requested===undefined || isNaN(requested))
             return
 
+        if (!this.isPaused && !this.isStopped && this.rlvStatus.rate!==undefined && Math.abs(requested-this.rlvStatus.rate)<0.01)  {
+            delete this.rlvStatus.rateRequested
+            return;
+        }
+
         let rate 
         if (this.tsLastIssue!==undefined) {
             const maxTarget = this.bufferedTime>1 ? (this.maxSuccessRate+this.maxRate)/2 : this.maxSuccessRate
@@ -406,6 +445,7 @@ export class VideoSyncHelper extends IncyclistService{
             rate = Math.max(0, Math.min(requested, this.maxRate))
         }
 
+        this.logEvent({message:'video rate update requested', rate:Math.round(rate*100)/100})
         
 
         if (this.isPaused && rate>0) {

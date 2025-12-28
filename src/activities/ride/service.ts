@@ -1329,44 +1329,56 @@ export class ActivityRideService extends IncyclistService {
     }
 
     protected getTotalDistance():number {
-        const route = this.current.route
-        if (!route)
-            return 0;
+        try {
+            const route = this.current.route
+            if (!route)
+                return 0;
 
-        const isLoop = checkIsLoop(route)
-        const totalRouteDistance = this.current?.endPos ?? route.points[route.points.length-1]?.routeDistance
-        if (isLoop) {
-            const currentLap = Math.floor((this.current.routeDistance??0)/totalRouteDistance)
-            return totalRouteDistance-(this.activity.startPos??0)+currentLap*totalRouteDistance
+            const isLoop = checkIsLoop(route)
+            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.[route.points.length-1]?.routeDistance
+            if (isLoop) {
+                const currentLap = Math.floor((this.current.routeDistance??0)/totalRouteDistance)
+                return totalRouteDistance-(this.activity.startPos??0)+currentLap*totalRouteDistance
+            }
+            else {
+                return totalRouteDistance-(this.activity.startPos??0)
+            }
         }
-        else {
-            return totalRouteDistance-(this.activity.startPos??0)
+        catch(err) {
+            this.logError(err,'getTotalDistance')
+            return 0 
         }
     }
 
     protected getTotalElevation():number {
-        const route = this.current.route
-        if (!route)
-            return 0;
+        try {
+            const route = this.current.route
+            if (!route)
+                return 0;
 
-        const isLoop = checkIsLoop(route)
-        const totalRouteDistance = this.current?.endPos ?? route.points[route.points.length-1]?.routeDistance
-        let totalElevation = route.points[route.points.length-1]?.elevationGain
-        if (this.current?.endPos!==undefined) {
-            const endPosPoint = route.points.find( p=> p.routeDistance>=this.current.endPos)
-            if (endPosPoint) {
-                totalElevation = endPosPoint.elevationGain
+            const isLoop = checkIsLoop(route)
+            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.[route.points.length-1]?.routeDistance
+            let totalElevation = route.points?.[route.points.length-1]?.elevationGain??0
+            if (this.current?.endPos!==undefined && route.points) {
+                const endPosPoint = route.points.find( p=> p.routeDistance>=this.current.endPos)
+                if (endPosPoint) {
+                    totalElevation = endPosPoint.elevationGain
+                }
+                    
             }
-                
-        }
 
-        const gainAtStart = getElevationGainAt(route,this.activity.startPos??0)
-        if (isLoop) {
-            const currentLap = Math.floor((this.current.routeDistance??0)/totalRouteDistance)
-            return totalElevation-gainAtStart+currentLap*totalElevation
+            const gainAtStart = getElevationGainAt(route,this.activity.startPos??0)
+            if (isLoop) {
+                const currentLap = Math.floor((this.current.routeDistance??0)/totalRouteDistance)
+                return totalElevation-gainAtStart+currentLap*totalElevation
+            }
+            else {
+                return totalElevation-gainAtStart
+            }
         }
-        else {
-            return totalElevation-gainAtStart
+        catch(err) {
+            this.logError(err,'getTotalElevation')
+            return 0
         }
     }
 
