@@ -18,15 +18,20 @@ export class WorkoutDisplayService extends RideModeService {
 
 
     onActivityUpdate(activityPos:ActivityUpdate,data):void { 
+        try {
 
-        if (data.power>0)
-            this.prevPowerTs = Date.now()
+            if (data.power>0)
+                this.prevPowerTs = Date.now()
 
-        if (data.power===0 && (Date.now()-(this.prevPowerTs??0))>MAX_INACTIVITY) {
-            this.service.pause('device')
-            return
+            if (data.power===0 && (Date.now()-(this.prevPowerTs??0))>MAX_INACTIVITY) {
+                this.service.pause('device')
+                return
+            }
+            super.onActivityUpdate(activityPos,data)
         }
-        super.onActivityUpdate(activityPos,data)
+        catch(err) {
+            this.logError(err,'onActivityUpdate')
+        }
     }
 
     getLogProps(): object {

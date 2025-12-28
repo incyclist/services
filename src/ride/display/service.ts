@@ -727,6 +727,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
             this.type  = 'Workout'
             this.displayService = new WorkoutDisplayService()
+            this.displayService.init(this)
             this.observer?.emit('view-changed')  
             
             return
