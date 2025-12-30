@@ -485,64 +485,69 @@ export class ActivityRideService extends IncyclistService {
     }
 
     protected canShowDonate() {
-
-        if (!this.activity?.user?.uuid)
-            return false
-        if (this.isDonateShown || !this.activity?.user?.uuid)
-            return true
-
-        let trialGroup;
-        if (this.activity.user.uuid.startsWith('1') || this.activity.user.uuid.startsWith('a')) {
-            trialGroup = 'A'
-        }
-        else if (this.activity.user.uuid.startsWith('2') || this.activity.user.uuid.startsWith('b')) {
-            trialGroup = 'B'
-        }
-        if (!trialGroup) {
-            if (this.saveObserver)
-                this.logEvent({message:'donate check ', showDonate:false, reason:'user not in trial'})
-            return false
-        }
-
-        // Trial Group A only sees the donation text, when saving
-        // Trial Group B always sees the donation text  
-        // in  both cases, the donation text is only shown once every two weeks and not before one year after clicking on donate
-
-        if (this.saveObserver || this.isSaveDone || trialGroup==='B') {
-
-            const lastClicked = this.getUserSettings().getValue('state.donateClicked',0)
-            // only check once a year
-            if (Date.now()-lastClicked<1000*60*60*24*365) {
-                if (this.saveObserver)
-                    this.logEvent({message:'donate check ', showDonate:false, lastClicked: new Date(lastClicked).toISOString()})
-                return false
+        try {
+            if (this.isDonateShown ) {                
+                return true
             }
 
-            const lastShown = this.getUserSettings().getValue('state.donateShown',0)
-            // only check once every two weeks
-            if (Date.now()-lastShown<1000*60*60*24*14) {
+            let trialGroup  = 'A';
+            // if (this.activity.user.uuid.startsWith('1') || this.activity.user.uuid.startsWith('a')) {
+            //     trialGroup = 'A'
+            // }
+            // else if (this.activity.user.uuid.startsWith('2') || this.activity.user.uuid.startsWith('b')) {
+            //     trialGroup = 'B'
+            // }
+            // if (!trialGroup) {
+            //     if (this.saveObserver)
+            //         this.logEvent({message:'donate check ', showDonate:false, reason:'user not in trial'})
+            //     return false
+            // }
+
+            // Trial Group A only sees the donation text, when saving
+            // Trial Group B always sees the donation text  
+            // in  both cases, the donation text is only shown once every two weeks and not before one year after clicking on donate
+
+            if (this.saveObserver || this.isSaveDone || trialGroup==='B') {
+
+                const lastClicked = this.getUserSettings().getValue('state.donateClicked',0)
+                // only check once a year
+                if (Date.now()-lastClicked<1000*60*60*24*365) {
+                    if (this.saveObserver)
+                        this.logEvent({message:'donate check ', showDonate:false, lastClicked: new Date(lastClicked).toISOString()})
+                    return false
+                }
+
+                const lastShown = this.getUserSettings().getValue('state.donateShown',0)
+                // only check once every two weeks
+                if (Date.now()-lastShown<1000*60*60*24*14) {
+                    if (this.saveObserver)
+                        this.logEvent({message:'donate check ', showDonate:false, lastClicked: new Date(lastShown).toISOString()})
+                    return false
+                }
+                
+
+                // get number of activities
+                const activities = this.getRepo().getAll()
+                // filter activities within last 12 months that are longer than 2km
+
+                const lastYear = new Date()
+                lastYear.setFullYear(lastYear.getFullYear()-1)           
+                const activitiesLastYear = activities.filter( a => a.summary?.startTime > lastYear.getTime() && a.summary?.distance>2000)
+
                 if (this.saveObserver)
-                    this.logEvent({message:'donate check ', showDonate:false, lastClicked: new Date(lastShown).toISOString()})
-                return false
+                    this.logEvent({message:'donate check ',  trialGroup, showDonate:activitiesLastYear?.length>=10, activities:activitiesLastYear?.length})
+                if (activitiesLastYear.length<10)
+                    return false
+                            
+                this.getUserSettings().set('state.donateShown',Date.now())
+                this.isDonateShown = true
+                return true
             }
-            
 
-            // get number of activities
-            const activities = this.getRepo().getAll()
-            // filter activities within last 12 months that are longer than 2km
 
-            const lastYear = new Date()
-            lastYear.setFullYear(lastYear.getFullYear()-1)           
-            const activitiesLastYear = activities.filter( a => a.summary?.startTime > lastYear.getTime() && a.summary?.distance>2000)
-
-            if (this.saveObserver)
-                this.logEvent({message:'donate check ',  trialGroup, showDonate:activitiesLastYear?.length>=10, activities:activitiesLastYear?.length})
-            if (activitiesLastYear.length<10)
-                return false
-                        
-            this.getUserSettings().set('state.donateShown',Date.now())
-            this.isDonateShown = true
-            return true
+        }
+        catch(err) {
+            this.logError(err, 'canShowDonate')
         }
         return false
     }
