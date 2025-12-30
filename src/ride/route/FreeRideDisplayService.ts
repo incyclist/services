@@ -351,6 +351,8 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
 
     protected getOptionsId() {
+        if (!this.currentOptions?.length)
+            return 'none'
         return 'options:'+this.currentOptions.map( o => o.id ).join('|')
 
     }
