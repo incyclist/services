@@ -304,26 +304,35 @@ export class RouteDisplayService extends RideModeService {
 
 
     protected setInitialPosition():CurrentPosition {
-        const lapPoint =  getNextPosition (this.getCurrentRoute(), {routeDistance:this.startSettings.startPos??0})
-        return this.fromLapPoint(lapPoint)
+        try {
+            const lapPoint =  getNextPosition (this.getCurrentRoute(), {routeDistance:this.startSettings?.startPos??0})
+            return this.fromLapPoint(lapPoint)
+        }
+        catch(err) {
+            this.logError(err,'setInitialPosition',{cntPoints:this.getCurrentRoute()?.points?.length,routeDistance:this.startSettings?.startPos??0 })
+        }
     }
 
     protected  updatePosition(activityPos:ActivityUpdate): CurrentPosition {
-        
+
+        let currentRouteDistance
+        let newRouteDistance
+        let props
         try {
-            const currentRouteDistance = this.position?.routeDistance ?? 0;
-            const newRouteDistance = activityPos?.routeDistance ?? 0;
+            currentRouteDistance = this.position?.routeDistance ?? 0;
+            newRouteDistance = activityPos?.routeDistance ?? 0;
 
             if (newRouteDistance !== currentRouteDistance) {
                 const current = this.toLapPoint(this.position)
-                const next = getNextPosition(this.getCurrentRoute(),{routeDistance:activityPos?.routeDistance,prev: current})
+                props = {routeDistance:activityPos?.routeDistance,prev: current}
+                const next = getNextPosition(this.getCurrentRoute(),props)
                 return  this.fromLapPoint(next)                
             }
 
             return this.position        
         }
         catch(err) {
-            this.logError(err,'updatePosition')
+            this.logError(err,'updatePosition',{currentRouteDistance, newRouteDistance, getNextPositionProps:props})
         }
     }
 
