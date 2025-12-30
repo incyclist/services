@@ -39,6 +39,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected startDeviceHandlers
     protected isResuming: boolean
     //protected prevRides: PrevRidesListDisplayProps
+    protected stateUpdateHandler = this.onStateUpdate.bind(this)
 
     constructor() {
         super('RideDisplay')
@@ -952,6 +953,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.logEvent({ message: 'Start success',  ...logProps })
 
         this.state = 'Started'
+        this.displayService.off('state-update',this.stateUpdateHandler)
 
         this.disableScreensaver();
         this.createActivity()
@@ -966,13 +968,18 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected startRide(retry?:boolean) { 
         this.displayService.start(retry)
-
-        this.displayService.on('state-update',()=>{
-            this.checkStartStatus()
-            this.updateStartOverlay()            
-        })
+        
+        this.displayService.on('state-update',this.stateUpdateHandler)
         .on('route-updated', this.onRouteUpdated.bind(this) )
 
+    }
+
+    protected onStateUpdate() {
+
+        console.log('# state update', this.state)
+
+        this.checkStartStatus()
+        this.updateStartOverlay()            
     }
 
     protected startDevices(retry?:boolean) {
