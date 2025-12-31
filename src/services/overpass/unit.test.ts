@@ -69,6 +69,7 @@ describe ('OverpassClient Unit Test' ,() => {
             client.query("myquery",5000).then( res=> { result = res});
             
             jest.advanceTimersByTime(5000)
+            jest.advanceTimersByTime(100)
             await jest.runAllTimersAsync()
             
             expect(mocks.post).toHaveBeenCalledTimes(3)
