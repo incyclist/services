@@ -26,9 +26,11 @@ export class FollowRouteDisplayService extends GpxDisplayService {
 
         
         try {
-            const { lapDistance  } = this.position
-            const routeId = this.route.description.id
-            this.getUserSettings().set(`routeSelection.followRoute.prevSetting.${routeId}.startPos`,startPos??lapDistance)
+            const { lapDistance  } = this.position??{}
+            const routeId = this.route?.description?.id
+            if (routeId && lapDistance!==undefined) {
+                this.getUserSettings().set(`routeSelection.followRoute.prevSetting.${routeId}.startPos`,startPos??lapDistance)
+            }
 
         }
         catch (err) {
