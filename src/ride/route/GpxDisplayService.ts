@@ -1,3 +1,4 @@
+import { GoogleMapsService, useGoogleMaps } from "../../apps";
 import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
 import { getHeading } from "../../routes";
@@ -42,6 +43,11 @@ export class GpxDisplayService extends RouteDisplayService {
                 this.logEvent({message:'init streetview', updateFreq, minimalPause, bestFreq})                
             }
 
+            // if we haven't retrieved a Api yet, trigger reload
+            if (!this.getGoogleMaps().getApi()) {
+                this.logEvent({message:'reload maps api'})                
+                this.getGoogleMaps().reload()
+            }
             
         }
         catch(err) {
@@ -134,6 +140,7 @@ export class GpxDisplayService extends RouteDisplayService {
             this.mapLoaded = true
         }
         else if (state==='Error') {
+            this.logEvent({message:'sat view error', error:this.mapError})
             this.mapError = error
         }
         this.emit('state-update')
@@ -290,6 +297,11 @@ export class GpxDisplayService extends RouteDisplayService {
     @Injectable
     protected getUserSettings(): UserSettingsService {
         return useUserSettings()
+    }
+
+    @Injectable
+    protected getGoogleMaps():GoogleMapsService {
+        return useGoogleMaps()
     }
 
     

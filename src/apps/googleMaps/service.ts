@@ -53,6 +53,11 @@ export class GoogleMapsService extends IncyclistService {
         return MAPS_API_URL
     }
 
+    reload() {
+        delete this.api
+        this.emit('reload')
+    }
+
 
     protected getSecret(key:string):string {
         return this.getSecretBindings()?.getSecret(key)
