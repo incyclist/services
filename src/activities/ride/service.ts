@@ -275,7 +275,6 @@ export class ActivityRideService extends IncyclistService {
         
 
         await waitNextTick()
-        this.cleanup()
         delete this.observer
     }
 
