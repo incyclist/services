@@ -220,12 +220,12 @@ export class RLVDisplayService extends RouteDisplayService {
 
     protected checkFinishOptions(position:CurrentPosition):boolean {
 
-        if ( this.videos.length === 0 || !this.currentVideo?.loaded) {
+        if ( !this.videos?.length  || !this.currentVideo?.loaded) {
             return super.checkFinishOptions(position)
         }
 
         
-        if (!this.currentVideo?.next) {
+        if (!this.currentVideo?.next || this.videos?.length===1) {
             return super.checkFinishOptions(position)
         }
 
@@ -431,8 +431,17 @@ export class RLVDisplayService extends RouteDisplayService {
         video.error = this.buildVideoError(error)
 
         if (!video.isInitial) {
-            this.logEvent({message: 'could not load next video',error:this.buildVideoError(error)})
-            this.videos = [this.currentVideo]
+            this.logEvent({message: 'could not load next video',video:this.getVideoUrl(video),error:error.message, errorCode:error.code})
+
+            // remove all videos with an index >= the video that failed to load
+            const errIdx = this.videos.indexOf(video)
+            if (errIdx!==-1) {
+                this.videos.splice(errIdx)
+                this.logEvent({message: 'changed video config',videos:this.videos.map( v => this.getVideoUrl(v)).join('|')})                
+            }
+            
+
+            
         }
         this.emit('state-update')
     }
