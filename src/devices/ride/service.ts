@@ -140,6 +140,23 @@ export class DeviceRideService  extends IncyclistService{
                 this.setRequestedCapabilties(this.rideAdapters)
             }
 
+            if (this.rideAdapters.length===0) {
+                const devices = this.getDeviceConfiguration()
+                const adapter = devices.getSelected(IncyclistCapability.Control) ?? devices.getSelected(IncyclistCapability.Power) ?? devices.getSelected(IncyclistCapability.Speed) 
+                if (adapter) {
+                    const adapters = this.getConfiguredAdapters(true)??[]
+                    this.logEvent({ message:'error', 
+                                    error:'incorrect device configuration', 
+                                    adapters:adapters.map( ai=> `${ai.udid}, ${ai.isControl ? '(C)' :''}`).join('|'),
+                                    configuredControlDevice:configuredControlDevice?.udid,
+                                    controlDevice:controlDevice?.udid,
+                                    simulatorEnforced: this.simulatorEnforced
+                                 })
+
+                }
+                
+            }
+
             return this.rideAdapters
 
         }
@@ -1126,9 +1143,8 @@ export class DeviceRideService  extends IncyclistService{
         // getSelectedAdapters will cache data in this.rideAdapters. Therefore we need t
         this.cleanInternalCache()
 
-        delete this.rideAdapters
         const adapters = this.getRideAdapters()
-
+        this.logEvent({message:'sending start request', retry:false,deviceInfo:adapters?.map( this.getAdapterStateInfo.bind(this) )})
         this.emit('start-request', adapters?.map( this.getAdapterStateInfo.bind(this) ))
 
         const goodToGo = await this.waitForPreviousStartToFinish()
@@ -1145,7 +1161,8 @@ export class DeviceRideService  extends IncyclistService{
 
         // notify the start of all adapters
         const selected = this.getRideAdapters()
-        this.emit('start-request', selected?.map( this.getAdapterStateInfo ))
+        this.logEvent({message:'sending start request', retry:true, deviceInfo:selected?.map( this.getAdapterStateInfo.bind(this) )})
+        this.emit('start-request', selected?.map( this.getAdapterStateInfo.bind(this) ))
 
         // only try to start the adapters that are not already started
         const adapters = selected.filter( ai=> !ai.adapter.isStarted())
