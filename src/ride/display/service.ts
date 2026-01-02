@@ -976,8 +976,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected onStateUpdate() {
 
-        console.log('# state update', this.state)
-
         this.checkStartStatus()
         this.updateStartOverlay()            
     }
@@ -1262,6 +1260,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected isStartDeviceReadyToStart() {
         const devices = this.deviceInfo??[]
+        if (devices.length===0) {
+            return false;
+        }
 
         const mandatory = devices?.filter( d=>d.isControl)??[]
 
