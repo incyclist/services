@@ -688,6 +688,9 @@ export class DeviceRideService  extends IncyclistService{
         }
         startProps.capabilities = ai.capabilities
 
+        // reset start state
+        ai.isStarted = false
+
         this.logEvent( {message:`${startType} ${sType} request`,...logProps})
         return ai.adapter.start(startProps)
             .then( async (success)=>{
