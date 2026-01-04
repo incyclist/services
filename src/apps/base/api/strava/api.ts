@@ -180,13 +180,16 @@ export class StravaApi extends AppApiBase{
         await this.verifyToken()
     }
 
+    protected async waitForReady() {
+            await sleep(1000)
+    }
 
 
     protected async waitForUploadResponse(response: StravaUploadResponse):Promise<StravaUploadResult> {
         let data = response
 
         while ( data.status!=='Your activity is ready.' && !data.error) {        
-            await sleep(1000)
+            await this.waitForReady()
             data = await this.getUploadById(data.id_str)
         }   
 

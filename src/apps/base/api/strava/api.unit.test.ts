@@ -16,6 +16,7 @@ describe ('Strava API',()=> {
             api.getFormBinding = jest.fn( ()=> new AxiosFormPost())
             api.isAuthenticated = jest.fn().mockReturnValue(true)
             api.verifyToken = jest.fn().mockResolvedValue(true) 
+            api.waitForReady = jest.fn().mockResolvedValue(undefined)
             
         })
 
