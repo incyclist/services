@@ -74,7 +74,11 @@ describe('DeviceRideService',()=>{
             off:jest.fn(),
             removeAllListeners:jest.fn(),
             getModeSettings:jest.fn().mockReturnValue({}),
-            //getSelectedDevices:jest.fn().mockReturnValue(null)
+            getSelectedDevices: jest.fn(()=>
+                    [{capability:IncyclistCapability.Cadence,selected:'2'},
+                    {capability:IncyclistCapability.Power,selected:'1'}])
+
+            
         }
 
         const setupMocks = (s,a,props?)=> {
@@ -92,6 +96,9 @@ describe('DeviceRideService',()=>{
                 s.getConfiguredAdapters= jest.fn().mockReturnValue( [{udid:'1', adapter:a, capabilities:a.getCapabilities()}])
 
             }
+            // disable health checks - we don't need them for this test
+            s.startHealthCheck = jest.fn()
+            s.stopHealthCheck = jest.fn()
 
             a.isStarted = jest.fn().mockReturnValue(true)
             a.start = jest.fn().mockResolvedValue(true)

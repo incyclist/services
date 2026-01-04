@@ -92,7 +92,6 @@ describe( 'MapArea', () => {
             expect(roundabout).toBeUndefined()
 
             const multiNodeRB = area.getWays().find(w => w.id.startsWith('R:')&&w.id.split(',').includes('74975048')) ??{} as IncyclistWay
-            console.log('# multi-node roundabout way:', printWay(multiNodeRB));
             expect(printWay(multiNodeRB)).toMatchSnapshot()
         })
 
