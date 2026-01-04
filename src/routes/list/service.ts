@@ -1278,6 +1278,51 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         })
     }
 
+    protected async checkExistingPreviewFiles(descr:RouteInfo):Promise<string|undefined> {
+        const videoUrl = descr.videoUrl || descr.downloadUrl
+        const path = getBindings().path
+        const fs = getBindings().fs
+
+        let existingPreview:string
+        let fileUrl = false
+        try {
+            let {dir,name} = path.parse(videoUrl)??{}
+            if (!dir.startsWith('htttp')) {
+                if (dir.startsWith('video:')) {                    
+                    dir = dir.replace('video:', 'file:')                    
+                }
+                if (dir.startsWith('file:///')) {
+                    dir = dir.replace('file:///','')
+                    fileUrl = true
+                }
+
+
+                const check = async (name:string) => {
+                    if (existingPreview)
+                        return
+                    if (await fs.existsFile( name))
+                        existingPreview = name
+                }
+
+                await check(path.join( dir, 'preview.png'))
+                await check(path.join( dir, 'preview.jpg'))
+                await check(path.join( dir, `${name}_preview.png`))
+                await check(path.join( dir, `${name}_preview.jpg`))
+
+                if (existingPreview) {
+                    this.logEvent({message:'found preview', title:descr.title, id:descr.id, video:videoUrl, existingPreview})
+                    descr.previewUrl = fileUrl ? `file:///${existingPreview}` : existingPreview
+                    return descr.previewUrl
+                }
+
+            }
+        }
+        catch {
+            // ignore errors
+        }
+
+    }
+
     protected async doCreatePreview( descr:RouteInfo):Promise<string> {
 
         let props 
@@ -1294,7 +1339,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const outDir = path.join( appInfo.getAppDir(),'previewImg')
         await fs.ensureDir(outDir)
 
-        
+        const existing = await this.checkExistingPreviewFiles(descr)
+        if (existing)
+            return existing
 
         if (!videoUrl)
             return;
