@@ -77,7 +77,7 @@ export class ActivityListService extends IncyclistService {
         let preloadObserver:PromiseObserver<void> = this.getPreloadObserver()
         try {
             // avoid parallel preloads
-            if (!preloadObserver) {
+            if (preloadObserver===undefined || preloadObserver===null) {
                 this.logEvent( {message:'preload activity list'})
 
                 // load the summary records
@@ -404,7 +404,10 @@ export class ActivityListService extends IncyclistService {
             return false;
         }
 
-        const emitUpdate = ()=>{this.emitSelected('updated')}
+        const emitUpdate = async ()=>{
+            this.exports = await this.selected.getExports()
+            this.emitSelected('updated')
+        }
         const observer = new Observer()
         observer.on('export', emitUpdate)
 
