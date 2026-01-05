@@ -36,6 +36,7 @@ export class RLVDisplayService extends RouteDisplayService {
     protected infotext?: InfotextDisplayProps
     protected videosInitialized: boolean = false
     protected startTime: number
+    protected isVideoPaused: boolean = false
 
     
     
@@ -134,8 +135,14 @@ export class RLVDisplayService extends RouteDisplayService {
         super.pause()
 
         this.currentVideo.syncHelper.pause()
+        this.isVideoPaused = true
+    }
 
-
+    resume() {
+        super.resume()
+        this.currentVideo.syncHelper.resume()
+        this.isVideoPaused = false
+        
     }
 
 
@@ -477,7 +484,9 @@ export class RLVDisplayService extends RouteDisplayService {
         const offset = this.offset??0       
         const {routeDistance,speed} = activityPos
 
-        this.currentVideo.syncHelper.onActivityUpdate(routeDistance-offset,speed)
+        if (!this.isVideoPaused) {
+            this.currentVideo.syncHelper.onActivityUpdate(routeDistance-offset,speed)
+        }
     }
 
 

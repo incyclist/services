@@ -153,6 +153,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     pause(requester: 'user' | 'device'='user') {
+
+
+        if (requester==='device' && this.isResuming) {
+            return;
+        }
         try {
             if (this.state!=='Active')
                 return
@@ -184,12 +189,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             
             this.getActivityRide().resume()
             this.getWorkoutRide().resume()
-            this.displayService.resume()   
 
+            this.pauseReason = 'device'                
             this.observer?.emit('state-update',this.state)        
-            waitNextTick().then( ()=>this.isResuming = false)
-            
-            delete this.pauseReason
         }
         catch(err) {
             this.logError(err,'resume')
@@ -629,15 +631,22 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 
     protected onActivityUpdate(data) {
-        if (this.state==='Active') {
+        if (this.state==='Active' ) {
             const currentValues = this.getActivityRide().getCurrentValues()
             if (!currentValues)
                 return
 
-            if (currentValues.speed===0) {
+            if (currentValues.speed===0 && !this.isResuming) {
                 this.pause('device')
                 return;
             }
+
+            if (currentValues.speed>0 && this.isResuming) {
+                this.displayService.resume()  
+                this.isResuming = false        
+                delete this.pauseReason                
+            }
+
             this.getRideModeService().onActivityUpdate(data,currentValues)
             this.observer.emit('data-update',data,currentValues )
         }
@@ -698,7 +707,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 
     protected onLapCompleted(oldLap:number, newLap:number):void {
-        console.log('# lap completed', oldLap, newLap)
+        //console.log('# lap completed', oldLap, newLap)
         // TODO:
         // add lap to activity
         // emit lap update to UI, so that Ui can display lap totals/stats
@@ -1104,9 +1113,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             udid: d.udid,
             isControl: d.isControl,
             capabilities: d.capabilities,
-            status: d.isStarted ? 'Started' : 'Starting'
+            status: 'Starting'
         }))
-
         this.updateStartOverlay()
     }   
 
@@ -1203,6 +1211,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         if (this.state!=='Starting')
             return
 
+
+
         const startDevice = this.deviceInfo.find( d=> d.udid===device.udid)
         if (!startDevice)
             return;
@@ -1212,6 +1222,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.logEvent( {message:'onDeviceStartStatusUpdate', pct})            
 
         startDevice.stateText = `uploading (${pct}%)`;
+        this.checkStartStatus() 
     }
 
     protected onDeviceData(data:DeviceData,udid:string) {
@@ -1220,7 +1231,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         if (this.state!=='Active') {
             return;
         }
-
         this.getRideModeService().onDeviceData(data,udid)
     }
 

@@ -65,6 +65,9 @@ export class VideoSyncHelper extends IncyclistService{
         this.logPlaybackSummary()
         this.isPaused = true
         this.send('rate-update',0)
+        this.activityStatus.ts = Date.now()
+        this.rlvStatus.ts = Date.now()
+
     }
 
     resume() {
@@ -73,6 +76,8 @@ export class VideoSyncHelper extends IncyclistService{
 
         this.logEvent({message:'video resumed', route:this.route.details.title})
         this.isPaused = false
+        this.activityStatus.ts = Date.now()
+        this.rlvStatus.ts = Date.now()
     }
 
     reset() {
@@ -117,7 +122,7 @@ export class VideoSyncHelper extends IncyclistService{
             const endTime = this.endTime
 
 
-            if (this.isStopped)
+            if (this.isStopped || this.isPaused)
                 return
 
             if ( time> endTime-0.3 && !this.loopMode && !this.rlvStatus.timeRequested) { 
@@ -312,7 +317,7 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     onUpdate( updates:string[]=[] ) {
-        if (this.isStopped || this.rlvStatus.timeRequested)
+        if (this.isStopped  || this.rlvStatus.timeRequested)
             return
 
         try {
@@ -451,9 +456,12 @@ export class VideoSyncHelper extends IncyclistService{
         if (this.isPaused && rate>0) {
             this.resume()
         }
+        else if (this.isPaused && rate===0) {
+            delete this.rlvStatus.rateRequested
+            return
+        }
 
         this.rlvStatus.rateRequested = rate
-
         this.send('rate-update', rate)                
 
     }
