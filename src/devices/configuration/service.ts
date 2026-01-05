@@ -485,7 +485,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             if (adapter.getSupportedCyclingModes) {
                 modes = adapter.getSupportedCyclingModes()               
             }
-            const options = modes.map( M=> new M(adapter))
+            const options = modes.map( M=> adapter.createMode(M))
 
             mode = requestedMode || device.mode 
             if (!mode) {
