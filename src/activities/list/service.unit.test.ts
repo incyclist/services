@@ -766,6 +766,7 @@ describe('ActivityListService',()=>{
             observer.on('updated',updatedSpy)
 
             const success = await service.export('tcx')
+            
             expect(success).toBe(true)
             expect(target.export).toHaveBeenCalledWith('tcx',expect.any(Observer))
             expect(updatedSpy).toHaveBeenCalledTimes(2)            

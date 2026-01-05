@@ -404,14 +404,21 @@ export class ActivityListService extends IncyclistService {
             return false;
         }
 
-        const emitUpdate = async ()=>{
-            this.exports = await this.selected.getExports()
-            this.emitSelected('updated')
-        }
-        const observer = new Observer()
-        observer.on('export', emitUpdate)
+        return new Promise( done => {
+            const emitUpdate = async (update:{status:'started'|'done', format:string, success:boolean, error:string} )=>{
+                
+                this.exports = await this.selected.getExports()
+                this.emitSelected('updated')
+                if (update.status==='done')
+                    done(update.success)
+            }
+            const observer = new Observer()
+            observer.on('export', emitUpdate)
 
-        return await activity.export(format,observer)
+            activity.export(format,observer)
+
+        })
+
 
     }
 
@@ -421,12 +428,28 @@ export class ActivityListService extends IncyclistService {
             return false;
         }
 
-        const emitUpdate = ()=>{this.emitSelected('updated')}
-        const observer = new Observer()
-        observer.on('upload', emitUpdate)
-        observer.on('export', emitUpdate)
+        return new Promise ( done=> {
+            const emitUploadUpdate = (update:{status:'started'|'done', connectedApp:string, success:boolean, error:string }) =>{
+                if (connectedApp===update.connectedApp ) {
+                    this.emitSelected('updated')
+                    if (update.status==='done') {
+                        done(update.success)
+                    }
+                }
+            }
+            const emitExportUpdate = async (update:{status:'started'|'done', format:string, success:boolean, error:string} )=>{                
+                this.exports = await this.selected.getExports()
+                this.emitSelected('updated')
+            }
 
-        return await activity.upload(connectedApp,observer)
+            const observer = new Observer()
+            observer.on('upload', emitUploadUpdate)
+            observer.on('export', emitExportUpdate)
+
+            activity.upload(connectedApp,observer)
+
+
+        })
     }
 
     /**
