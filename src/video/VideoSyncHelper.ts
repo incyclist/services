@@ -383,8 +383,6 @@ export class VideoSyncHelper extends IncyclistService{
 
             log()
 
-            console.log('# update', rlvDistance, actDistance, delta)
-
             if (isNewVideoUpdate()) {
                 this.rlvStatus.tsVideoUpdate = Date.now()
             }
