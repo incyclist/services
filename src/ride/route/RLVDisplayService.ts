@@ -435,10 +435,13 @@ export class RLVDisplayService extends RouteDisplayService {
 
     protected onVideoLoadError(error:MediaError, video:VideoState = this.currentVideo )  {
         video.loaded = false
-        video.error = this.buildVideoError(error)
+        video.error = this.buildVideoError(error,video)
 
-        if (!video.isInitial) {
-            this.logEvent({message: 'could not load next video',video:this.getVideoUrl(video),error:error.message, errorCode:error.code})
+        if (video.isInitial) {
+            this.logEvent({message: 'could not load video',video:this.getVideoUrl(video),error:error.message, errorCode:this.getCode(error)})
+        }
+        else {
+            this.logEvent({message: 'could not load next video',video:this.getVideoUrl(video),error:error.message, errorCode:this.getCode(error)})
 
             // remove all videos with an index >= the video that failed to load
             const errIdx = this.videos.indexOf(video)
@@ -446,9 +449,6 @@ export class RLVDisplayService extends RouteDisplayService {
                 this.videos.splice(errIdx)
                 this.logEvent({message: 'changed video config',videos:this.videos.map( v => this.getVideoUrl(v)).join('|')})                
             }
-            
-
-            
         }
         this.emit('state-update')
     }
@@ -461,8 +461,29 @@ export class RLVDisplayService extends RouteDisplayService {
         video.syncHelper.onVideoWaiting(time,rate, bufferedTime, buffers)
     }   
 
+    protected getCode(error:MediaError) {
+        const codes = [ 'MEDIA_ERR_ABORTED', 'MEDIA_ERR_NETWORK','MEDIA_ERR_DECODE',  'MEDIA_ERR_SRC_NOT_SUPPORTED' ]
+        try {
+            let codeStr
+            if (error.code!==undefined) {
+                codeStr = codes?.[error.code-1]
+                if (codeStr) {
+                    codeStr = `${codeStr} (${error.code})`
+                }
+                else {
+                    codeStr = error.code.toString()
+                }
+            }
+            return codeStr
+        }
+        catch(err) {
+            this.logError(err,'getCode')
+        }
+    }
+
     protected onVideoPlaybackError(error:MediaError, video:VideoState = this.currentVideo ) {
-        // TODO
+
+        this.logEvent({message:'video playback error', video:this.getVideoUrl(video), error:error.message, errorCode:this.getCode(error)})
     }
 
     protected onVideoPlayBackUpdate(time:number, rate:number,e, video:VideoState = this.currentVideo) {
@@ -516,8 +537,26 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
 
-    protected buildVideoError(error:MediaError) {
+    protected buildVideoError(error:MediaError,video=this.currentVideo) {
         // TODO
+
+        const src = this.getVideoUrl(video)
+        const remote = src?.startsWith('http')
+
+        switch (error.code) {
+            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                if (error.message.includes('Format error'))
+                    return remote ? 'Could not load video' : 'Could not open video file' ;
+                return 'Could not decode video'
+
+            case MediaError.MEDIA_ERR_NETWORK:
+                return remote ? 'Could not load video' : 'Could not open video file' ;
+            case MediaError.MEDIA_ERR_ABORTED:
+                return 'The playback was canceled'
+            case MediaError.MEDIA_ERR_DECODE:
+                return 'Could not decode video'
+
+        }
         return error.message    
     }
 
