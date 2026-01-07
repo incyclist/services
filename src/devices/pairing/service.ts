@@ -1260,7 +1260,7 @@ export class DevicePairingService  extends IncyclistService{
 
         const configReadyToRide = this.configuration.canStartRide() // we either have a power or a conto
 
-        if (!configReadyToRide)
+        if (!configReadyToRide || this.isScanning())
             return false;
         
         const control = this.getCapability(IncyclistCapability.Control)
