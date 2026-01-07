@@ -88,7 +88,10 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
 
     // Getters && Setters
-    getSelected():Workout { return this.selectedWorkout }
+    getSelected():Workout { 
+        const workoutShown = this.getAppState().getState('workoutShown')
+        return workoutShown ? this.selectedWorkout : undefined 
+    }
     setScreenProps(props) {this.screenProps = props }
     getScreenProps() { return this.screenProps}
    
