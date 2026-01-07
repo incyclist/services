@@ -363,20 +363,27 @@ export class VideoSyncHelper extends IncyclistService{
                 }
             }
 
-            if (this.loopMode && this.rlvStatus.lap>this.activityStatus.lap) {
-                rlvDistance = rlvDistance + totalDistance
-            }
-            else if (this.loopMode && this.rlvStatus.lap<this.activityStatus.lap) {
-                actDistance =  actDistance + totalDistance
+            if (this.loopMode && actDistance>totalDistance) {
+                actDistance = actDistance % totalDistance
+                rlvDistance = rlvDistance % totalDistance
             }
 
-            const delta = rlvDistance-actDistance
+
+            let delta = rlvDistance-actDistance
+            if (this.loopMode) {
+                const deltaActAhead = rlvDistance-(actDistance+totalDistance)
+                const deltaRlvAhead = (rlvDistance+totalDistance)-actDistance
+                // get the value with the lowest abs value from delta, deltaActAhead and deltaRlvAhead                
+                delta = [delta, deltaActAhead, deltaRlvAhead].reduce((best, cur) => Math.abs(cur) < Math.abs(best) ? cur : best, delta)        
+            }
 
             if (Math.abs(delta)>Math.abs(this.maxDelta)) {
                 this.maxDelta = delta
             }
 
             log()
+
+            console.log('# update', rlvDistance, actDistance, delta)
 
             if (isNewVideoUpdate()) {
                 this.rlvStatus.tsVideoUpdate = Date.now()
@@ -398,7 +405,7 @@ export class VideoSyncHelper extends IncyclistService{
                 else {
                     this.prevDelta = delta
                     if (delta===0) {
-                        if (updates.includes('activity:speed') || updates.includes('rlv:speed')) {
+                        if (updates.includes('activity:speed') || updates.includes('rlv:speed') ) {
                             const rate = this.rlvStatus.speed ? this.activityStatus.speed/this.rlvStatus.speed : 1
                             this.updateRate(rate)
                         }
@@ -408,7 +415,7 @@ export class VideoSyncHelper extends IncyclistService{
 
 
                     const tTarget = 5 // aim is to reach delta=0 in 5 seconds
-                    const maxCorrection = Math.max(20,this.rlvStatus.time<100 ? 15 : this.bufferedTime/2.5*15) // max correction in m withing tTarget
+                    const maxCorrection = Math.max(20,this.rlvStatus.time<100 ? 15 : (this.bufferedTime??0)/2.5*15) // max correction in m withing tTarget
                     const correction = Math.sign(delta)*Math.min(Math.abs(delta),maxCorrection)
 
                     const rate=(this.activityStatus.speed-correction/tTarget*3.6)/this.rlvStatus.speed

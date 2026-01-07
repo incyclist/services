@@ -3,15 +3,11 @@ import { VideoSyncHelper } from './VideoSyncHelper'
 import { createFromJson } from '../routes/base/utils/route'
 import { Route } from 'incyclist-devices'
 import { RouteApiDetail } from '../routes/base/api/types'
+import { RLVActivityStatus, RLVPlaybackStatus } from './types'
 
 describe('VideoSyncHelper',()=>{
 
     describe('getVideoTimeByPosition',()=>{
-
-        // implement these tests based on routeData
-        // use an existing helper in this repo to generate the Route object from the routeData
-        // these tests are for the VideoSyncHelper.getPositionByVideoTime
-
 
         const route = createFromJson(routeData as unknown as RouteApiDetail)
 
@@ -52,6 +48,65 @@ describe('VideoSyncHelper',()=>{
             expect(time).toBe(0)
         })
         
+
+    })
+
+    describe('update',()=>{
+        const route = createFromJson(routeData as unknown as RouteApiDetail)
+
+        
+        let updateTime:any
+        let updateRate:any
+
+        const initMock = ( sh:any, rlvStatus:Partial<RLVPlaybackStatus>, activityStatus:Partial<RLVActivityStatus>) => {            
+            const prevRlvStatus = sh.rlvStatus??{}
+            const prevActStatus = sh.activityStatus??{}
+            sh.rlvStatus = { ...prevRlvStatus, ...rlvStatus}
+            sh.activityStatus = { ...prevActStatus, ...activityStatus}
+
+            sh.logEvent = jest.fn() // (...args )=> console.log(args))
+            updateTime = sh.updateTime = jest.fn()
+            updateRate = sh.updateRate = jest.fn()
+        }
+        test('rlv in lap 1, activity in lap 2', () => {
+            // Assume video duration is available in routeData or route object
+            const videoSyncHelper = new VideoSyncHelper(route,0,{loopMode:true})
+            const totalDistance = route.description.distance??0
+            
+            console.log(totalDistance)
+            initMock(videoSyncHelper, { routeDistance:8296, speed:30, rate:1, time:9000}, {routeDistance:8300, speed:30})
+            videoSyncHelper.onUpdate(['activity:lap','activity:sped'])           
+            expect(videoSyncHelper.logEvent).toHaveBeenCalledWith( expect.objectContaining({delta:-4}))
+            expect(updateTime).not.toHaveBeenCalled()
+            expect(updateRate).toHaveBeenCalledWith( expect.closeTo(1.1,1)) // speed up playback
+        })
+
+        test('rlv in lap 2, activity in lap 1', () => {
+            // Assume video duration is available in routeData or route object
+            const videoSyncHelper = new VideoSyncHelper(route,0,{loopMode:true})
+            const totalDistance = route.description.distance??0
+            
+            console.log(totalDistance)
+            initMock(videoSyncHelper, { routeDistance:3, speed:30, rate:1, time:9000}, {routeDistance:8296, speed:30})
+            videoSyncHelper.onUpdate(['activity:lap','activity:sped'])           
+            expect(videoSyncHelper.logEvent).toHaveBeenCalledWith( expect.objectContaining({delta:4.9}))
+            expect(updateTime).not.toHaveBeenCalled()
+            expect(updateRate).toHaveBeenCalledWith( expect.closeTo(0.9,1)) // slow down playback
+        })
+
+        test('rlv in lap 3, activity in lap 2', () => {
+            // Assume video duration is available in routeData or route object
+            const videoSyncHelper = new VideoSyncHelper(route,0,{loopMode:true})
+            const totalDistance = route.description.distance??0
+            
+            console.log(totalDistance)
+            initMock(videoSyncHelper, { routeDistance:3, speed:30, rate:1, time:9000}, {routeDistance:16595, speed:30})
+            videoSyncHelper.onUpdate(['activity:lap','activity:sped'])      
+            
+            expect(videoSyncHelper.logEvent).toHaveBeenCalledWith( expect.objectContaining({delta:3.8}))
+            expect(updateTime).not.toHaveBeenCalled()
+            expect(updateRate).toHaveBeenCalledWith( expect.closeTo(0.9,1))  // slow down playback
+      })
 
     })
 })
