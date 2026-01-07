@@ -143,7 +143,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         try {
             const props = this.getStartOverlayProps()
             this.logEvent({message:'button clicked',overlay:'start overlay',button:'Cancel',reason: 'user cancel', state:props, eventSource:'user'})
-            await this.stopRide()
+            await this.stopRide({noStateUpdates:true})
 
         }
         catch(err) {
