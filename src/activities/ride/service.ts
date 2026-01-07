@@ -138,6 +138,7 @@ export class ActivityRideService extends IncyclistService {
         prevRidesLogs?: PastActivityInfo
         lap?:number,
         pointsErrorLogged?: boolean
+        info?: string
     }
 
     constructor() {
@@ -341,8 +342,22 @@ export class ActivityRideService extends IncyclistService {
             const avgMaxStats = (display===0) ? this.getAverageValues() :  this.getMaximumValues();
     
             const info = this.buildDashboardInfo(currentValues, avgMaxStats, display);
+
+            let showLog = true
+            // avoid logging if nothing has changed
+            try {
+                const infoStr = JSON.stringify(info)
+                showLog = infoStr !== this.current.info
+                this.current.info = infoStr
+
             
-            this.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value??''}:${i.data[1]?.value??''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
+            }
+            catch {}
+
+            if (showLog)
+                this.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value??''}:${i.data[1]?.value??''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
+                
+
             return info
     
         }
@@ -941,6 +956,7 @@ export class ActivityRideService extends IncyclistService {
             this.current.deviceData = { ...this.current.deviceData, ...update}
 
             if (this.state!=='active') {
+                this.emit('data')
     
                 if (this.state==='paused' && (data.power>0||data.cadence>0) && this.current.isAutoResume) {
                     this.resume('system')
