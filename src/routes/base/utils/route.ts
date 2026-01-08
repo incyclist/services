@@ -219,6 +219,14 @@ const addVideoDetails = (route: Route, details: RouteApiDetail)  => {
     route.description.next = details.video?.next;
 }
 
+export const correctDistanceValues = (points:RoutePoint[]) => {
+    points.forEach( (p,idx) => {
+        if (idx==0) {
+            return
+        }
+        p.distance = p.routeDistance-points[idx-1].routeDistance        
+    })
+}
 
 
 export const validateRoute = (route:Route|RouteApiDetail, reset:boolean=false):void =>{

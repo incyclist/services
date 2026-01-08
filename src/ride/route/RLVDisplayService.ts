@@ -3,9 +3,10 @@ import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
 import { LocalizationService, useLocalization } from "../../i18n";
 import { concatPaths } from "../../maps/MapArea/utils";
-import { getNextVideoId, hasNextVideo, RouteListService, useRouteList, validateRoute } from "../../routes";
+import { correctDistanceValues, getNextVideoId, hasNextVideo, RouteListService, useRouteList, validateRoute } from "../../routes";
 import { Route } from "../../routes/base/model/route";
-import { RouteInfoText } from "../../routes/base/types";
+import { RouteInfoText, RoutePoint } from "../../routes/base/types";
+import { distanceBetween } from "../../utils/geo";
 import { VideoConversion, VideoSyncHelper } from "../../video";
 import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
@@ -243,6 +244,30 @@ export class RLVDisplayService extends RouteDisplayService {
         }
     }
 
+    protected preparePointsForMerge(currentPoints:RoutePoint[], nextPoints:RoutePoint[]) {
+        // as the route might contain jumps (detected during parsing), the distance values might not fit to the routeDistance values
+        // therefore we need to correct these issues before merging
+        correctDistanceValues(currentPoints)
+        correctDistanceValues(nextPoints)
+        nextPoints.forEach(p=>{
+            delete p.routeDistance
+            delete p.cnt; 
+            delete p.elevationGain
+            delete p.slope
+        })
+
+        // the elevation profiles of these two routes might not be aligned
+        // we need to see if there is a jump of elevation between last point of first route
+        // and first point of second route. 
+        // This jump needs to be corrected in the 2nd route
+        const pLastCurrent = currentPoints[currentPoints.length-1]
+        const pFirstNext  = nextPoints[0]
+        const distance = distanceBetween(pLastCurrent,pFirstNext)
+        const elevationGain = distance < 5 ? 0 : pLastCurrent.slope*distance/100
+        const elevationDelta = (pLastCurrent.elevation+elevationGain)-pFirstNext.elevation
+        nextPoints.forEach( p=>{ p.elevation+=elevationDelta })
+    }
+
     protected onNextVideo() { 
 
         const old = this.currentVideo
@@ -273,9 +298,12 @@ export class RLVDisplayService extends RouteDisplayService {
             old.syncHelper.reset()
         }, 2000)
 
+        const currentPoints = this.getCurrentRoute().details.points
+        const nextPoints = next.route.details.points
+        this.preparePointsForMerge(currentPoints,nextPoints)
         // update current route
-        concatPaths(this.getCurrentRoute().details.points, next.route.details.points,'after')
-        validateRoute(this.getCurrentRoute(),true)
+        concatPaths(currentPoints,nextPoints ,'after')
+        validateRoute(this.getCurrentRoute(),false)
         this.emit('route-updated', this.getCurrentRoute())
 
         this.logEvent({message: 'switching to next video', route: this.getCurrentRoute().details.title,
