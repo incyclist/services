@@ -11,6 +11,12 @@ import { Inject } from '../../base/decorators'
 
 describe('WorkoutListService',()=>{
 
+    const MockAppState = {
+        setState: jest.fn(),
+        setPersistedState: jest.fn().mockReturnValue({}),
+        getState: jest.fn()
+    }
+
     const setupMocks = ()=> {
     
 
@@ -22,11 +28,6 @@ describe('WorkoutListService',()=>{
             setActive: jest.fn(),
             getScheduledWorkouts: jest.fn().mockReturnValue([]),
             reset: jest.fn()
-        }
-        const MockAppState = {
-            setState: jest.fn(),
-            setPersistedState: jest.fn().mockReturnValue({}),
-            getState: jest.fn()
         }
         Inject('WorkoutCalendar', MockCalendar)
         Inject('AppState', MockAppState)
@@ -770,27 +771,36 @@ describe('WorkoutListService',()=>{
     describe ('unselect',()=>{})
 
     describe ('selectCard',()=>{
-        let s,service
+        let service:WorkoutListService
         const cards:Card<WP>[] = []
 
 
         beforeEach( ()=>{
-            setupMocks()    
-            s = service = new WorkoutListService()
-            s.logError = jest.fn()
-            s.observer = new Observer()
-            s.initialized = true
-             
-            for (let i=0;i<10;i++) {
-                const c = s.addItem(new Workout({type:'workout',id:`${i+1}`,name:`${i+1}`}))
-                cards.push(c)
+
+            const init = (s:any)=> {
+                s.logError = jest.fn()
+                s.observer = new Observer()
+                s.initialized = true
+                
+                for (let i=0;i<10;i++) {
+                    const c = s.addItem(new Workout({type:'workout',id:`${i+1}`,name:`${i+1}`}))
+                    cards.push(c)
+                }
             }
+
+            setupMocks()    
+            // simulate the situation that the user has already visited the Workouts page
+            MockAppState.getState.mockReturnValue(true)
+
+            service = new WorkoutListService()
+            init(service)
+
 
         })
 
         afterEach( ()=>{
             resetMocks()
-            s.reset()
+            service.reset()
         })
 
         test('nothing selected before',()=>{
@@ -801,6 +811,16 @@ describe('WorkoutListService',()=>{
             service.selectCard(cards[0])
             service.selectCard(cards[1])
             expect( service.getSelected()).toBe(cards[1].getData())
+
+        })
+
+        test('not yet visited workouts page',()=> {
+            // simulate the situation that the user has already visited the Workouts page
+            MockAppState.getState.mockReturnValue(false)
+
+            service.selectCard(cards[0])
+            service.selectCard(cards[1])
+            expect( service.getSelected()).toBeUndefined()
 
         })
 

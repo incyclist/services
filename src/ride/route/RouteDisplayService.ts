@@ -69,13 +69,13 @@ export class RouteDisplayService extends RideModeService {
         }
 
         try {
+            const prevPosition = {...this.position}
             const newPosition = this.updatePosition(activityPos);
             if (!newPosition)
                 return;
 
             const isCompleted = this.checkFinishOptions(newPosition)
             if (!isCompleted) {
-                const prevPosition = this.position
     
                 this.position = {...newPosition}
                 const {lat,lng,routeDistance,lap} = newPosition
