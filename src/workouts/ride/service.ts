@@ -327,6 +327,11 @@ export class WorkoutRide extends IncyclistService{
             const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts);
+
+            if (!limits) {
+                return;
+            }
+
             
             this.manualTimeOffset += limits.remaining   
             this.update()
@@ -354,6 +359,10 @@ export class WorkoutRide extends IncyclistService{
             const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts,true);
+
+            if (!limits) {
+                return;
+            }
 
             const completed = limits.duration-limits.remaining
 
@@ -392,7 +401,14 @@ export class WorkoutRide extends IncyclistService{
 
         }
         catch(err) {
-            this.logError(err,'backward')
+            let limits;
+            let ts
+            try {
+                ts = this.trainingTime
+                limits = this.workout?.getLimits(ts,true)
+            }
+            catch {}
+            this.logError(err,'backward',{ts,limits})
         }
 
     }
