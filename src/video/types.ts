@@ -2,6 +2,8 @@ export type RLVPlaybackStatus = {
     /** current plabnack rate */
     rate: number
     rateRequested?: number
+    tsLastRateRequest?: number
+
     /** current playback time of mediasource */
     time: number
     timeRequested?: number
@@ -19,6 +21,8 @@ export type RLVPlaybackStatus = {
 
     lap: number
     lapRequested?: boolean
+
+    isStalled?: boolean    
 }
 
 export type RLVActivityStatus = {

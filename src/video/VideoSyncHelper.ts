@@ -60,8 +60,18 @@ export class VideoSyncHelper extends IncyclistService{
         this.init(startPos, props);
     }
 
+    logEvent(event: any): void {
+        if (!event)
+            return
+
+        const route = this.route?.details?.title        
+        const syncId = this.id
+        const logEvent = { message:event.message,route, syncId, ...event }
+        super.logEvent(logEvent)
+    }
+
     pause() {
-        this.logEvent({message:'video paused', route:this.route.details.title})
+        this.logEvent({message:'video paused'})
         this.logPlaybackSummary()
         this.isPaused = true
         this.send('rate-update',0)
@@ -74,20 +84,20 @@ export class VideoSyncHelper extends IncyclistService{
         if (this.isStopped)
             return;
 
-        this.logEvent({message:'video resumed', route:this.route.details.title})
+        this.logEvent({message:'video resumed'})
         this.isPaused = false
         this.activityStatus.ts = Date.now()
         this.rlvStatus.ts = Date.now()
     }
 
     reset() {
-        this.logEvent({message:'video reset', route:this.route.details.title})
+        this.logEvent({message:'video reset'})
         this.init(0,{loopMode: this.loopMode, observer: this.observer})
         delete this.endTime
     }
 
     stop() {
-        this.logEvent({message:'video stopped', route:this.route.details.title})
+        this.logEvent({message:'video stopped'})
         this.send('rate-update',0)
         this.isPaused = true
         this.isStopped = true
@@ -155,6 +165,7 @@ export class VideoSyncHelper extends IncyclistService{
             
             else if (this.rlvStatus.rateRequested!==undefined && rate>=this.rlvStatus.rateRequested)  {
                 delete this.rlvStatus.rateRequested 
+                delete this.rlvStatus.tsLastRateRequest
 
                 if (this.tsLastIssue!==undefined) {
                     const timeSinceLastIssue = (Date.now()-this.tsLastIssue)/1000
@@ -185,9 +196,15 @@ export class VideoSyncHelper extends IncyclistService{
                     this.maxSuccessRate = Math.max(this.maxSuccessRate, rate)                 
                 }
             }
-            else {
-                //console.log('# rate not confirmed',  this.rlvStatus.rateRequested, rate, this.maxSuccessRate)
+            else if (this.rlvStatus.rateRequested!==undefined && (Date.now()-(this.rlvStatus.rateRequested??0)>2000)) {          
+                delete this.rlvStatus.rateRequested
+                delete this.rlvStatus.rateRequested
+                this.logEvent({message:'video rate update timeout'})
+                
             }
+
+            this.checkIfStalledEnded(time)
+            this.rlvPrev = {...this.rlvStatus}
 
             if (this.isPaused) {
                 this.rlvStatus.ts = Date.now()
@@ -196,7 +213,6 @@ export class VideoSyncHelper extends IncyclistService{
                 return
             }
 
-            this.rlvPrev = {...this.rlvStatus}
 
             this.rlvStatus.ts = Date.now()
             this.rlvStatus.time = time
@@ -251,8 +267,9 @@ export class VideoSyncHelper extends IncyclistService{
        
     }
 
-    onVideoStalled(time:number, bufferedTime:number) {
-        // TODO
+    onVideoStalled(time:number, _bufferedTime:number) {
+        this.logEvent({message:'video stalled', time, source:'event'})
+        this.rlvStatus.isStalled = true
     }
     onVideoWaiting(time:number, rate:number, bufferedTime:number,buffers:Array<{start:number,end:number}>) {
         this.logEvent({message: 'video waiting',time, bufferedTime,buffers})
@@ -310,7 +327,9 @@ export class VideoSyncHelper extends IncyclistService{
         }
         this.activityStatus.ts = Date.now()
         this.activityStatus.routeDistance = distance
-        this.activityStatus.speed = speed           
+        this.activityStatus.speed = speed      
+        
+        this.checkIfStalled()
 
         this.onUpdate(updates)
 
@@ -397,8 +416,19 @@ export class VideoSyncHelper extends IncyclistService{
                     if (newTime-this.rlvStatus.time>1) {
                         this.logEvent({message:'video forwarded', newTime})
                         this.updateTime( newTime)
+                        this.prevDelta = delta
                     }
-                    this.prevDelta = delta
+                    else {
+                        const time = this.rlvStatus.time
+                        const vt = this.loopMode ? this.getLapTime(time) : (time>this.getTotalTime() ? this.getTotalTime() : time)
+                        const mapping = this.getMappingByTime(vt)
+
+                        this.logEvent({message:'video forwarded skipped', 
+                            newTime,rlvTime:this.rlvStatus.time,rlvSpeed:this.rlvStatus.speed, rate:this.rlvStatus.rate,
+                            routeDistance:this.rlvStatus.routeDistance, tDelta:Date.now()-this.rlvStatus.ts,
+                            mapping
+                        })
+                    }
                 }
                 else {
                     this.prevDelta = delta
@@ -438,8 +468,12 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     updateRate(requested:number) {
-        if (requested===undefined || isNaN(requested))
+        if (requested===undefined)
             return
+        if (isNaN(requested)) {
+            delete this.rlvStatus.rateRequested
+            return
+        }
 
         if (!this.isPaused && !this.isStopped && this.rlvStatus.rate!==undefined && Math.abs(requested-this.rlvStatus.rate)<0.01)  {
             delete this.rlvStatus.rateRequested
@@ -467,6 +501,7 @@ export class VideoSyncHelper extends IncyclistService{
         }
 
         this.rlvStatus.rateRequested = rate
+        this.rlvStatus.tsLastRateRequest = Date.now()
         this.send('rate-update', rate)                
 
     }
@@ -478,6 +513,7 @@ export class VideoSyncHelper extends IncyclistService{
 
         this.rlvStatus.timeRequested = time
         delete this.rlvStatus.rateRequested
+        delete this.rlvStatus.tsLastRateRequest
         delete this.tsLastIssue
         delete this.tsLastRateIncrease
 
@@ -770,9 +806,32 @@ export class VideoSyncHelper extends IncyclistService{
             return;
 
         const totalTime = Date.now()-this.tsStart
-        this.logEvent({message:'video playback summary', syncId:this.id, route:this.route.details.title,routeId:this.route.description.id, maxDelta: n(this.maxDelta,1), cntWaiting:this.cntWaitingEvents, totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)})
+        this.logEvent({message:'video playback summary', routeId:this.route.description.id, maxDelta: n(this.maxDelta,1), cntWaiting:this.cntWaitingEvents, totalTime:f(totalTime??0), cpuTime: f(this.cpuTime??0), pct: n(this.cpuTime/totalTime*100,1)})
         this.tsLastSummeryLog = Date.now()
 
     }
+
+    protected checkIfStalled() {
+        if ( this.rlvStatus.tsVideoUpdate===undefined )
+            return 
+
+        const timeSinceLastUpdate = Date.now()-this.rlvStatus.tsVideoUpdate
+        if (timeSinceLastUpdate>2000 && !this.rlvStatus.isStalled) { 
+            this.rlvStatus.isStalled = true
+            this.logEvent( {message:'video stalled', time:this.rlvStatus.time,source:'timeout' })
+        }
+    }
+
+    protected checkIfStalledEnded(time:number) {
+        if (!this.rlvStatus.isStalled)
+            return 
+
+        if (time>this.rlvPrev.time) {
+            this.rlvStatus.isStalled = false
+            this.logEvent( {message:'video playback unstalled'})
+        }
+
+    }
+
 
 }
