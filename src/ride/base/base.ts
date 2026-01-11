@@ -1,6 +1,6 @@
-import { DeviceData, UpdateRequest } from "incyclist-devices";
+import { CyclingMode, DeviceData, UpdateRequest } from "incyclist-devices";
 import { Observer } from "../../base/types";
-import { ActiveWorkoutLimit, useWorkoutRide } from "../../workouts";
+import { ActiveWorkoutLimit, useWorkoutList, useWorkoutRide } from "../../workouts";
 import { CurrentRideDisplayProps, ICurrentRideService, IRideModeService, IRideModeServiceDisplayProps } from "./types";
 import { IncyclistService } from "../../base/service";
 import { useDeviceRide } from "../../devices";
@@ -168,24 +168,59 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         
     }
 
+    protected isForcedERG() {
+        let forceErgMode = false
+        if (this.getWorkoutList().getSelected()) {
+            forceErgMode = this.getWorkoutList().getStartSettings()?.useErgMode
+        }
+        return forceErgMode
+    }
+
+    protected updatePropsForForcedERG( mode:CyclingMode, logProps:any) {
+        try {
+            const isSIM = typeof mode?.isSIM ==='function' ? mode.isSIM() : false
+
+            if (this.isForcedERG()) {
+                if (isSIM) {
+                    logProps.bikeMode = 'ERG (Workout)'
+                }
+
+                // TODO: find a better way to only show relevant settings
+                delete logProps['virtshift']
+                delete logProps['startGear']
+                delete logProps['slopeAdj']
+                delete logProps['slopeAsjDown']
+            }
+        }
+        catch(err) {
+            this.logError(err,'updatePropsForForcedERG')
+        }
+
+
+
+    }
+
     protected getBikeLogProps(): object {
 
         const device = this.getDeviceRide().getControlAdapter()
         if (!device ) 
             return { };
 
-        const mode = this.getDeviceRide().getCyclingMode();
+        const mode = this.getDeviceRide().getCyclingMode() as CyclingMode;
 
         if (mode?.getName()==='Simulator') {
-            return { bike: 'Simulator', interface: 'Simulator',mode: 'Simulator' }  
+            return { bike: 'Simulator', interface: 'Simulator',bikeMode: 'Simulator' }  
         }
 
+        let bikeMode = mode?.getName()
         const settings = mode?.getSettings()??{}
+        const logProps = { bikeMode, ...settings}
+        this.updatePropsForForcedERG(mode, logProps)
+
         return {
             bike: device.adapter?.getDisplayName(),
-            interface: device.adapter?.getInterface(),
-            bikeMode: mode?.getName(),
-            ...settings
+            interface: device.adapter?.getInterface(),            
+            ...logProps
         }
     }
 
@@ -207,6 +242,12 @@ export class RideModeService extends IncyclistService implements IRideModeServic
     protected getWorkoutRide() { 
         return useWorkoutRide()
     }
+
+    @Injectable
+    protected getWorkoutList() {
+        return useWorkoutList()
+    }
+
 
 }
 
