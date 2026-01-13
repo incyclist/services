@@ -35,3 +35,31 @@ export function cos(degree) {
 export function abs(num) {
     return Math.abs(num)
 }
+
+
+/**
+ * Convert a string or number input to a numeric value.
+ *
+ * Attempts to coerce the provided value using `Number()`. If the result is
+ * `NaN`, the function returns `undefined`.
+ *
+ * @param value - The value to convert (string or number).
+ * @returns The converted number, or `undefined` if conversion produced `NaN`.
+ *
+ * @example
+ * // returns 42
+ * num("42");
+ *
+ * @example
+ * // returns undefined
+ * num("not-a-number");
+ */
+export const num = (value: string|number) => {
+    const res = Number(value)
+    if ( isNaN(res)) {
+        return
+    }
+    return res
+}
+
+

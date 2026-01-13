@@ -1,4 +1,5 @@
 import { geo } from "../../../utils"
+import { num } from "../../../utils/math";
 import { valid } from "../../../utils/valid";
 import { RouteInfo, RoutePoint } from "../types"
 import { checkIsLoop, getRouteHash } from "../utils/route"
@@ -148,14 +149,22 @@ export class GPXParser extends XMLParser {
                 points = keys.map( key=>segment?.trkpt[key])
             }
 
-
             points.forEach( (gpxPt)=> {
                 const point:EnhancedRoutePoint = {
-                    lat:Number(gpxPt.lat),
-                    lng:Number(gpxPt.lon),
-                    elevation: gpxPt.ele ? Number(gpxPt.ele): prev?.elevation,
+                    lat:num(gpxPt.lat),
+                    lng:num(gpxPt.lon),
+                    elevation: gpxPt.ele ? num(gpxPt.ele): prev?.elevation,
                     routeDistance:0,
                     distance:0
+                }
+
+                if (point.lat===undefined || point.lng===undefined) {
+                    const info = {
+                        original: gpxPt,
+                        parsed: point
+                    }
+                    this.logger.logEvent({ message:'error', fn:'loadPoints',reason:'unvalid point', info})
+                    return
                 }
                 
                 if (this.props.addTime) {
