@@ -826,6 +826,9 @@ export class VideoSyncHelper extends IncyclistService{
         if (!this.rlvStatus.isStalled)
             return 
 
+        if (!this.rlvPrev)
+            return
+
         if (time>this.rlvPrev.time) {
             this.rlvStatus.isStalled = false
             this.logEvent( {message:'video playback unstalled'})
