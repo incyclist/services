@@ -23,6 +23,7 @@ export type RLVPlaybackStatus = {
     lapRequested?: boolean
 
     isStalled?: boolean    
+    tsStalled?: number
 }
 
 export type RLVActivityStatus = {
