@@ -82,3 +82,10 @@ export interface IRouteList {
     searchRepo( requestedFilters?:SearchFilter ): { routes: Array<SummaryCardDisplayProps>}
     getAllAppRoutes(source:string):Array<RouteInfo>
 }
+
+export type ActiveRideCount = {
+    count: number,
+    routeId: string,
+    routeHash: string
+
+}

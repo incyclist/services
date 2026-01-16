@@ -32,6 +32,7 @@ export interface SummaryCardDisplayProps extends RouteInfo{
     initialized:boolean;
     loading?:boolean
     isNew?:boolean
+    cntActive?:number
 }
 
 export interface DetailCardDisplayProps  {
@@ -97,6 +98,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected deleteObserver: PromiseObserver<boolean>
     protected ready:boolean
     protected logger:EventLogger
+    protected cntActive: number
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
         super()
@@ -290,6 +292,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
+    async setActiveCount( cnt:number, update:boolean = true) {
+        const prev = this.cntActive??0
+        this.cntActive = cnt??0
+        if (update && prev!==this.cntActive) {
+            await waitNextTick()
+            this.emitUpdate()
+        }
+    } 
+
+
     getDisplayProperties(): SummaryCardDisplayProps {
         try {
             const descr = this.getRouteDescription()
@@ -313,7 +325,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             return {...descr, initialized:this.initialized, loaded,ready:true,state:'loaded',visible:this.visible,isNew,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
-                    observer:this.cardObserver}
+                    observer:this.cardObserver, cntActive:this.cntActive}
         }
         catch(err) {
             this.logError(err,'getDisplayProperties')

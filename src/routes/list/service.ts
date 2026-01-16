@@ -12,7 +12,7 @@ import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard, SummaryCardDisplayProps } from "./cards/RouteCard";
-import { DisplayType, IRouteList, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
+import { ActiveRideCount, DisplayType, IRouteList, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
@@ -59,6 +59,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected displayType: DisplayType
     protected syncInfo:  {iv?: NodeJS.Timeout, observer?: Observer} 
     protected currentView: 'list'|'grid'|'routes'
+    protected stats
 
     constructor () {
         super('RouteList')
@@ -137,7 +138,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             
             if (this.initialized && !hasLists)
                 emitLoadedEvent()
-    
+
+            this.observer.on('stats-update', this.onRouteStatsUpdate.bind(this))
+            this.emit('opened', this.observer, this.stats===undefined )
                 
         }
         catch (err) {
@@ -168,6 +171,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     close():void {
         try {
             this.logEvent( {message:'close route list'})
+            this.emit('closed', this.observer )
             this.observer?.emit('stopped')
             this.observer?.reset()
    
@@ -216,6 +220,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
 
         const res = this.searchRepo(filters)
+
+        this.observer.on('stats-update', this.onRouteStatsUpdate.bind(this))
+        this.emit('opened', this.observer, this.stats===undefined )
+
+
         this.getAppState().setPersistedState('page','search')
         return res
 
@@ -232,9 +241,15 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     }
 
+    getAllRoutes():Array<Route> {
+        return this.routes
+    }
+
+
     searchRepo( requestedFilters?:SearchFilter ) {
-        if (!this.observer)
+        if (!this.observer) {
             this.observer = new RouteListObserver(this)
+        }
 
         try {
 
@@ -1490,6 +1505,20 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         
 
 
+    }
+
+    protected onRouteStatsUpdate(stats: ActiveRideCount[]) {
+
+        this.stats = stats
+
+        for ( const stat of stats) {
+            const id = stat.routeId
+            const card = this.getCard(id)
+            if (card) {
+                card.setActiveCount(stat.count)
+            }
+        }
+     
     }
 
     @Injectable

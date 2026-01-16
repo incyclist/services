@@ -6,6 +6,7 @@ import { CoachesService, getCoachesService } from "../../coaches";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../monitoring";
 import { RouteListService, useRouteList } from "../../routes";
 import { RoutePoint } from "../../routes/base/types";
+import { ActiveRideCount } from "../../routes/list/types";
 import { UserSettingsService, useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { ActivityRouteType } from "../base";
@@ -56,6 +57,9 @@ export class ActiveRidesService extends IncyclistService {
     protected prevLogTS:number = 0 
     protected isStarted = false
 
+    protected routeListObserver: Observer
+    protected routesStats: ActiveRideCount [] = []
+
     protected readonly activityEventHandlers = {
         update: this.onActivityUpdateEvent.bind(this),
         start: this.onActivityStartEvent.bind(this),
@@ -68,7 +72,17 @@ export class ActiveRidesService extends IncyclistService {
 
     constructor() {
         super('ActiveRides')
+
+        const routeList = this.getRouteList()
+
+        routeList.on('opened', this.onRoutePageOpened.bind(this))
+        routeList.on('closed', () => {
+            delete this.routeListObserver
+        })
+        
     }
+
+
 
     init(session:string, maxLength:number=10):Observer {
         this.maxLength = maxLength
@@ -130,6 +144,68 @@ export class ActiveRidesService extends IncyclistService {
         catch(err) {
             this.logError(err,'stop')
         }
+    }
+
+    protected countRidesByRoute(): Map<string, number> { 
+        const map = new Map<string, number>()
+
+        const rides = this.get()
+        rides.forEach( ride => {
+            const routeHash = ride.ride.routeHash
+            if (!map.has(routeHash)) {
+                map.set(routeHash,0)
+            }
+            const count = map.get(routeHash)
+            map.set(routeHash, count+1)
+        })
+
+        return map
+    }
+
+
+    protected async onRoutePageOpened (observer:Observer ) {
+        this.routeListObserver = observer
+
+        await this.getActiveRideCounts()
+            
+        this.routeListObserver.emit('stats-update', this.routesStats)
+        
+    }    
+
+    protected async getActiveRideCounts():  Promise<ActiveRideCount[]> {
+        try {
+            const isOnline = this.getOnlineStatusMonitoring().onlineStatus
+            if (!isOnline)
+                return
+            
+            const activeRides = await this.getApi().getAll() 
+            
+            const routes = this.getRouteList().getAllRoutes()
+
+            const counts: ActiveRideCount[] = []
+            routes.forEach( route => {
+                const routeRides = activeRides.filter( ar => ar.ride.routeHash === route.description.routeHash)??[]
+                const count = routeRides.length
+               
+                counts.push( {
+                    count,
+                    routeId: route.description.id,
+                    routeHash: route.description.routeHash
+                })
+                
+            })
+
+            this.routesStats = counts
+
+            return counts
+
+        }
+        catch(err) {
+            const isOnline = this.getOnlineStatusMonitoring().onlineStatus
+            if (isOnline)
+                this.logError(err,'getActiveRideCounts')
+        }
+        return []
     }
 
     protected start(session:string) {
@@ -926,7 +1002,8 @@ export class ActiveRidesService extends IncyclistService {
 
     @Injectable getCoachesService(): CoachesService {
         return getCoachesService()
-    }
+   }
+
 
     protected getMessageQueue ():ActiveRideListMessageQueue {
         if (!this.mq)
