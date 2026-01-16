@@ -169,19 +169,25 @@ export class RouteDisplayService extends RideModeService {
     }
 
     getNearbyRidesProps(props: CurrentRideDisplayProps):NearbyDisplayProps { 
-        const {minimized} = this.getOverlayProps('',props)
-        const hasNearbyRides  = this.getActiveRides().get()?.length > 0
-        const show = hasNearbyRides && !props.hideAll
-        const observer = this.getActiveRides().getObserver()??null
+        try {
+            const {minimized} = this.getOverlayProps('',props)
+            const hasNearbyRides  = this.getActiveRides().get()?.length > 0
+            const show = hasNearbyRides && !props.hideAll
+            const observer = this.getActiveRides().getObserver()??null
 
-        const nearbyRides = {show,minimized,observer}
+            const nearbyRides = {show,minimized,observer}
 
-        if (this.hasNearbyRides !== hasNearbyRides) {
-            this.hasNearbyRides = hasNearbyRides
-            this.service.getObserver().emit('overlay-update', {nearbyRides})
+            if (this.hasNearbyRides !== hasNearbyRides) {
+                this.hasNearbyRides = hasNearbyRides
+                this.service.getObserver().emit('overlay-update', {nearbyRides})
+            }
+
+            return nearbyRides
         }
-
-        return nearbyRides
+        catch(err) {
+            this.logError(err,'getNearbyRidesProps')
+            return {show:false,minimized:true, observer:null}
+        }
     }
 
 

@@ -41,6 +41,9 @@ describe( 'RouteDisplayService', () => {
             getSelected: jest.fn().mockReturnValue(options.route??sydneyRoute),
             getStartSettings: jest.fn().mockReturnValue(options.startSettings??defaultStartSettings)
         })
+        Inject('ActiveRides', {
+            get: jest.fn().mockReturnValue([])
+        })
 
         mockRideService = new RideDisplayService()
         mockRideService.getObserver= jest.fn().mockReturnValue(mockObserver)
