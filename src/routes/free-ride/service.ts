@@ -83,16 +83,22 @@ export class FreeRideService extends IncyclistService {
         }                
 
         
+        let loadAsync = false
         if (from?.options?.length > 0) {
             this.options = this.evaluateOptions(from.options, from);
-            prepared = true
-                     
-            // pre-calculate one level deeper
-            this.getNextLevelOptions(from.options);                    
+            if (this.options?.length) { 
+                prepared = true
+                        
+                // pre-calculate one level deeper
+                this.getNextLevelOptions(from.options);                    
+            }
+            else {
+                loadAsync = true
+            }
         }
-        else {
-            // otherwise load the continuation options
-            
+        
+        if (loadAsync) {
+            // otherwise load the continuation options            
             this.options =  await this.loadNextOptions(from,forStart);
         }
 
@@ -103,6 +109,10 @@ export class FreeRideService extends IncyclistService {
         if (this.options?.length > 0) {
             this.selectOption(this.options[0]);
         }
+        else {
+            this.selectedOption = undefined
+        }
+        
         return this.options
 
     }
@@ -442,17 +452,18 @@ export class FreeRideService extends IncyclistService {
     selectOption( option:FreeRideContinuation|string|number ):FreeRideContinuation[]{
 
         const current = this.selectedOption
+        const options = this.options??[]
 
         let opt;
         switch (typeof option) {
             case 'number':
-                opt = this.options?.[option-1]
+                opt = options[option-1]
                 break;
             case 'string':
-                opt = this.options.find( o => this.buildId(o) === option);
+                opt = options.find( o => this.buildId(o) === option);
                 if (!opt) {
                     const wayId = option.split(':')[0]
-                    opt = this.options.find( o => o.id === wayId)
+                    opt = options.find( o => o.id === wayId)
                 }
                 if (!opt) { 
                     opt = current
@@ -462,10 +473,11 @@ export class FreeRideService extends IncyclistService {
                 opt = option
         }
 
-        this.selectedOption = this.options.find( o=> this.buildId(o) === this.buildId(opt)) 
+
+        this.selectedOption = options?.find( o=> this.buildId(o) === this.buildId(opt)) 
 
         if (!this.selectedOption) {
-            this.logEvent({message:'free ride option selection failed', requested: option, type:typeof option, options: this.options, optionKeys: this.options.map(o => this.buildId(o))} )
+            this.logEvent({message:'free ride option selection failed', requested: option, type:typeof option, options: options??'none', optionKeys: options.map(o => this.buildId(o))} )
 
         }
 

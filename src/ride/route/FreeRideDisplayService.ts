@@ -144,6 +144,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
     }
 
     protected async onTurn() {
+        this.logEvent({message:'initiating turn', position:this.position })
         this.turnPosition  = this.position
         this.isTurnEnabled = false
 
