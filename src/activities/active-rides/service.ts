@@ -12,7 +12,7 @@ import { ActivityRouteType } from "../base";
 import { IncyclistActiveRidesApi } from "../base/api/active-rides";
 import { ActivityRideService, useActivityRide } from "../ride";
 import { ActiveRideListMessageQueue } from "./mq";
-import { ActiveRideBike, ActiveRideEntry, ActiveRideListDisplayItem, ActiveRideListMessage, ActiveRidePosition, ActiveRideRoute, ActiveRideUser, ActivityStartMessage, ActivityUpdateMessage, ActiveRideRouteType } from "./types";
+import { ActiveRideBike, ActiveRideEntry, ActiveRideListDisplayItem, ActiveRideListMessage, ActiveRidePosition, ActiveRideRoute, ActiveRideUser, ActivityStartMessage, ActivityUpdateMessage, ActiveRideRouteType, ActivityInfoMessage } from "./types";
 
 
 /**
@@ -594,9 +594,20 @@ export class ActiveRidesService extends IncyclistService {
 
     protected async subscribeActivityEvents() {       
         const hash = this.current?.ride.routeHash
-        const topic = `incyclist/activity/+/${hash}/+`
-        this.getMessageQueue().subscribe(topic,this.onActivityEvent.bind(this), 'incyclist/activity')
+        const session = this.current?.sessionId
+        const updateTopic = `incyclist/activity/+/${hash}/+`
+        this.getMessageQueue().subscribe(updateTopic,this.onActivityEvent.bind(this), 'incyclist/activity')
+
+        const infoTopic = `incyclist/session/${session}/info`
+        this.getMessageQueue().subscribe(infoTopic,this.onInfoEvent.bind(this), 'incyclist/session')
+
         this.isSubscribed = true
+    }
+
+    protected onInfoEvent(topic:string) {
+        const keys = topic.split('/');
+        const session = keys[2];
+        this.onActivityInfoEvent(session)
     }
 
     protected onActivityEvent(topic:string, payload:ActiveRideListMessage) {
@@ -627,6 +638,27 @@ export class ActiveRidesService extends IncyclistService {
         this.getMessageQueue().sendMessage(topic,payload)
 
     }
+
+    protected onActivityInfoEvent(session:string) { 
+        this.logEvent({message:'Received session info request', sessionId:session})
+        if (session!==this.current.sessionId)
+            return
+
+        const payload:ActivityInfoMessage = {
+            user: this.current.user,
+            ride: this.current.ride,
+            position: this.current.currentPosition,
+            rideDistance: this.current.currentRideDistance,
+            duration: this.current.currentDuration,
+            lap: this.current.currentLap
+        }
+
+        const topic:string = `incyclist/activity/${this.session}/${this.getRouteHash()}/info`
+        this.getMessageQueue().sendMessage(topic,payload)
+
+    }
+
+
     protected onActivityStartEvent(session:string, payload:ActivityStartMessage) {
 
         const prevActive = this.others?.length

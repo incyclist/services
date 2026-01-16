@@ -72,6 +72,12 @@ export interface ActivityUpdateMessage extends ActiveRideListMessage {
     isPaused?:boolean
 }
 
+export interface ActivityInfoMessage extends ActivityStartMessage { 
+    rideDistance: number,
+    lap?:number, 
+    duration?: number
+}
+
 export type ActiveRideListAvatar = {
     shirt: string,
     helmet: string,
