@@ -339,6 +339,9 @@ export class VideoSyncHelper extends IncyclistService{
     onUpdate( updates:string[]=[] ) {
         if (this.isStopped  || this.rlvStatus.timeRequested)
             return
+        if (!updates?.length)
+            return
+
 
         try {
             const tsStart = Date.now()
@@ -359,6 +362,7 @@ export class VideoSyncHelper extends IncyclistService{
                 //console.log( '# distance after lap update', rlvDistance, {tDelta:Date.now()-this.rlvStatus.ts, s0:this.rlvStatus.routeDistance, v:this.rlvStatus.speed/3.6},this.rlvStatus )
 
             }
+
 
             const canLog = ()=> {
                 const changed = updates.filter( u=>u!=='rlv:distance') 
