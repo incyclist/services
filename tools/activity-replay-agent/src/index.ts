@@ -90,7 +90,7 @@ const publishUpdateMessage = (sessionId:string, routeHash:string, message:Activi
 
 const simulate = async (activity: ActivityDetails): Promise<void> => { 
 
-    console.log(`Simulating activity: ${activity.name}`);
+    console.log(`Simulating activity: ${activity.name}` , activity.user);
 
     // create a unique uuid and sessionId for the activity, using uuid package
     const uuid = createUuid();
@@ -249,7 +249,8 @@ function createUser(uuid: string, activity: ActivityDetails): ActiveRideUser {
     const user = {
         id: uuid,
         weight: activity.user?.weight,
-        name:  process.env.NAME
+        name:  process.env.NAME,
+        isBot:true
 
     };
     return user
@@ -257,13 +258,13 @@ function createUser(uuid: string, activity: ActivityDetails): ActiveRideUser {
 
 function createRide(activity: ActivityDetails, activityId: string): ActiveRideRoute {
     return {
-        title: activity.name,
+        title: activity.route?.title??activity.name,
         activityId,
         type: routeType(activity.routeType),
         startPos: activity.startPos,
         realityFactor: activity.realityFactor,
         isLap: false,
-        routeHash: activity.route.hash,
+        routeHash: activity.route?.hash,
         distance: activity.distance,
     };
 }
