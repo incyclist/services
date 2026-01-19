@@ -86,6 +86,7 @@ export class ActiveRidesService extends IncyclistService {
 
     init(session:string, maxLength:number=10):Observer {
         this.maxLength = maxLength
+        this.logEvent({message:'init active rides list', session})
         
         try {
             if (this.observer) {
@@ -653,6 +654,7 @@ export class ActiveRidesService extends IncyclistService {
 
     protected onDisconnect() {
         this.getMessageQueue().onDisconnect()
+        this.isSubscribed = false
     }
 
     protected async onConnect(props?:{initial:boolean}) {
@@ -789,7 +791,13 @@ export class ActiveRidesService extends IncyclistService {
         if (!items.length)
             return
 
-        const item = items[0]
+        let item = items[0]
+        if (item.sessionId!==sessionId) {
+            item = items.find( i=>i.sessionId===sessionId)
+            if (!item)
+                return
+        }
+
         const others = this.others??[]
         const localItem = others.find( e=>e.sessionId===sessionId) 
         if (localItem) {
@@ -835,7 +843,6 @@ export class ActiveRidesService extends IncyclistService {
                 existing.currentSpeed = payload.speed
                 existing.currentLap = payload.lap
                 existing.tsLastUpdate = Date.now()
-
             }
             else {
 
@@ -855,8 +862,9 @@ export class ActiveRidesService extends IncyclistService {
         
                     }
 
-
-                    this.addActiveRide(entry as ActiveRideEntry )
+                    if (!existing) {
+                        this.addActiveRide(entry as ActiveRideEntry )
+                    }
                 }
 
                 if ( prevActive===0) {
@@ -865,7 +873,8 @@ export class ActiveRidesService extends IncyclistService {
                 }
                 else {
                     this.isStarted = true
-                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash() } )
+                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), 
+                        remote:{ uuid:item.user?.id, session:item.sessionId} } )
     
                 }
 
