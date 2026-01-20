@@ -88,6 +88,7 @@ export class VideoSyncHelper extends IncyclistService{
         this.isPaused = false
         this.activityStatus.ts = Date.now()
         this.rlvStatus.ts = Date.now()
+        this.rlvStatus.tsResume = Date.now()
     }
 
     reset() {
@@ -829,13 +830,16 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     protected checkIfStalled() {
-        if ( this.rlvStatus.tsVideoUpdate===undefined )
+        if ( this.rlvStatus.tsVideoUpdate===undefined || this.rlvStatus.tsVideoUpdate===null)
             return 
 
         const timeSinceLastUpdate = Date.now()-this.rlvStatus.tsVideoUpdate
-        if (timeSinceLastUpdate>2000 && !this.rlvStatus.isStalled && this.rlvStatus.rate>0.1 && !this.isPaused && !this.isStopped) { 
+        const timeSinceLastResume = Date.now()-(this.rlvStatus.tsResume??0)
+
+        const timeToCheck = Math.min(timeSinceLastUpdate,timeSinceLastResume)
+        if (timeToCheck>2000 && !this.rlvStatus.isStalled && this.rlvStatus.rate>0.1 && !this.isPaused && !this.isStopped) { 
             this.rlvStatus.isStalled = true
-            this.rlvStatus.tsStalled = this.rlvStatus.tsVideoUpdate
+            this.rlvStatus.tsStalled = timeToCheck===timeSinceLastUpdate ? this.rlvStatus.tsVideoUpdate : this.rlvStatus.tsResume
             this.logEvent( {message:'video stalled', time:this.rlvStatus.time,source:'timeout' })
         }
     }

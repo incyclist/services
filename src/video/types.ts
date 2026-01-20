@@ -18,6 +18,7 @@ export type RLVPlaybackStatus = {
     /** ts of last update*/
     ts: number,
     tsVideoUpdate?: number
+    tsResume?: number
 
     lap: number
     lapRequested?: boolean
