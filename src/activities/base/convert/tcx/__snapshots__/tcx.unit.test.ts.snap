@@ -2755,7 +2755,13 @@ exports[`TCXConverter activity with workout, should add workout steps as laps 1`
     </Track>
     </Lap><Notes>
       Incyclist Ride
-    </Notes>
+    </Notes><Creator xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="Application_t">
+      <Name>
+      Incyclist
+    </Name><Channel>
+      desktop
+    </Channel>
+    </Creator>
     </Activity>
     </Activities>
     </TrainingCenterDatabase>"
@@ -13730,7 +13736,13 @@ exports[`TCXConverter valid acitvity 1`] = `
     </Track>
     </Lap><Notes>
       Incyclist Ride
-    </Notes>
+    </Notes><Creator xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="Application_t">
+      <Name>
+      Incyclist
+    </Name><Channel>
+      desktop
+    </Channel>
+    </Creator>
     </Activity>
     </Activities>
     </TrainingCenterDatabase>"

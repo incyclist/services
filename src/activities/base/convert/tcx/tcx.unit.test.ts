@@ -6,6 +6,9 @@ import testData from '../../../.././../__tests__/data/activities/vancouver.json'
 import workoutData from '../../../.././../__tests__/data/activities/with_workout.json'
 import clone from '../../../../utils/clone';
 import { parseXml } from '../../../../utils/xml';
+import { Inject } from '../../../../base/decorators';
+import { IncyclistBindings } from '../../../../api';
+import { IAppInfo } from '../../../../api/appInfo';
 
 
 const getLap = async (result:string) => {
@@ -17,11 +20,30 @@ const getLap = async (result:string) => {
 
 describe('TCXConverter',()=> {
 
-    let c
+    let c:any
+    let converter:TcxConverter
+
+    const setupMocks = (c:any) => {
+        const MockAppInfo: Partial<IAppInfo>  = {
+            getOS: jest.fn().mockReturnValue('linux'),
+            getChannel: jest.fn().mockReturnValue('desktop')
+        }
+        const MockBindings: Partial<IncyclistBindings> = { appInfo:MockAppInfo as IAppInfo}
+        Inject('Bindings',MockBindings)
+    }
+
+    beforeEach( ()=> {
+        converter = new TcxConverter()
+        c = converter
+        setupMocks(converter)
+    })
+
+    afterEach( ()=> {
+        Inject('Bindings',null)
+    })
 
     test('valid acitvity',async ()=>{        
         const activity = testData as unknown as ActivityDetails
-        const converter = new TcxConverter()
         
         const result = await converter.convert(activity);
         expect(result).toMatchSnapshot();        
@@ -33,11 +55,7 @@ describe('TCXConverter',()=> {
 
     test('errors during converions',async ()=>{        
         const activity = testData as unknown as ActivityDetails
-        const converter = new TcxConverter()
-        c = converter
         c.creatTrackPoints = jest.fn( ()=>{ throw new Error('XXX')})
-        
-        
         await expect( async ()=> { await converter.convert(activity)}).rejects.toThrow('XXX')
         
     })
@@ -46,7 +64,6 @@ describe('TCXConverter',()=> {
         const activity = {...testData} as unknown as ActivityDetails
         delete activity.stats
 
-        const converter = new TcxConverter()
         const result = await converter.convert(activity);
         const lap = await getLap(result)
         
@@ -61,13 +78,12 @@ describe('TCXConverter',()=> {
         const activity = clone(testData) as unknown as ActivityDetails
         activity.logs.forEach( p=> { delete p.lat; delete p.lng})
 
-        const converter = new TcxConverter()
         const result = await converter.convert(activity);
         const lap = await getLap(result)
-        const points = lap.Track.Trackpoint
+        const points = lap.Track.Trackpoint 
 
         // no positions in TCX
-        expect(points.find(p=>p.Position!==undefined)).toBeUndefined()
+        expect(points.find((p:any)  =>p.Position!==undefined)).toBeUndefined()
     })
 
     test('legacy format',async ()=>{
@@ -76,18 +92,16 @@ describe('TCXConverter',()=> {
         activity.logs.forEach( p=> { p.lon = p.lng; delete p.lng})
         
 
-        const converter = new TcxConverter()
         const result = await converter.convert(activity);
         const lap = await getLap(result)
         const points = lap.Track.Trackpoint
 
         // all records have a position
-        expect(points.find(p=>p.Position===undefined)).toBeUndefined()
+        expect(points.find( (p:any) =>p.Position===undefined)).toBeUndefined()
     })
 
     test('activity with workout, should add workout steps as laps',async ()=>{
         const activity = workoutData as unknown as ActivityDetails
-        const converter = new TcxConverter()
         
         const result = await converter.convert(activity);
         expect(result).toMatchSnapshot();        

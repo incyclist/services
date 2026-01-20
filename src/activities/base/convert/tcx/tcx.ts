@@ -1,10 +1,48 @@
 import { EventLogger } from 'gd-eventlog'
-import {Activity, ActivityList, TrainingCenterDatabase, TrackPoint,ActivityLap,HeartRateInBeatsPerMinute,Track,Position,HeartRateBpm,TrackPointExtensions}  from 'tcx-builder'
+import {Activity, ActivityList, TrainingCenterDatabase, TrackPoint,ActivityLap,HeartRateInBeatsPerMinute,Track,Position,HeartRateBpm,TrackPointExtensions, AbstractSource, AbstractSourceAttributes, BaseObject}  from 'tcx-builder'
 import { IActivityConverter } from '../types'
 import { ActivityDetails } from '../../model'
 import { useActivityRide } from '../../../ride'
 import { TcxLapMarker } from './types'
 import { Step } from '../../../../workouts'
+import { getBindings } from '../../../../api'
+import { Injectable } from '../../../../base/decorators'
+
+
+export class IncyclistAttribution extends AbstractSource {
+
+    
+    toXml(): string {
+
+        const appInfo = this.getAppInfo()
+
+        const channel = appInfo.getChannel()
+        const os = appInfo.getOS().platform
+
+        let xmlElement = '';
+        xmlElement += BaseObject.buildXmlNode('Name', 'Incyclist');
+        xmlElement += BaseObject.buildXmlNode('Channel', channel);
+        xmlElement += BaseObject.buildXmlNode('OS', os);
+        return xmlElement;        
+    }
+
+    constructor() {
+        const attr = new AbstractSourceAttributes('Application_t')
+        super( attr, 'Incyclist' )
+    }
+
+    protected getAppInfo() {
+        const appInfo = this.getBindings().appInfo
+        return appInfo
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
+    }
+
+
+}
 
 /**
  * Class responsible for converting activity data into TCX (Training Center XML) format.
@@ -35,7 +73,8 @@ export class TcxConverter implements IActivityConverter{
 
             const trackPoints =  this.creatTrackPoints(activity, startTime)
             const laps = this.createLaps(startTime, activity, trackPoints)
-            const tcxActivity = new Activity( 'Biking', {Id:startTime, Notes:'Incyclist Ride', Laps:laps}  )
+            const creator = new IncyclistAttribution()
+            const tcxActivity = new Activity( 'Biking', {Id:startTime, Notes:'Incyclist Ride', Laps:laps, Creator:creator}  )
             const activityList = new ActivityList({ activity: [tcxActivity] });  
             const tcxObj = new TrainingCenterDatabase({ activities: activityList });
     
