@@ -83,8 +83,9 @@ export class FreeRideService extends IncyclistService {
         }                
 
         
-        let loadAsync = false
+        let loadAsync = true
         if (from?.options?.length > 0) {
+            loadAsync = false
             this.options = this.evaluateOptions(from.options, from);
             if (this.options?.length) { 
                 prepared = true
