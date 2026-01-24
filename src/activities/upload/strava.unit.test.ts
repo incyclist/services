@@ -1,4 +1,3 @@
-import { sleep } from 'incyclist-devices/lib/utils/utils'
 import { IncyclistBindings } from '../../api'
 import { ISecretBinding } from '../../api/bindings/secret'
 import { DuplicateError, StravaApi, StravaAppConnection, StravaConfig } from '../../apps'

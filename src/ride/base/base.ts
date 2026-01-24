@@ -6,9 +6,9 @@ import { IncyclistService } from "../../base/service";
 import { useDeviceRide } from "../../devices";
 import { Injectable } from "../../base/decorators";
 import { ActivityUpdate } from "../../activities/ride/types";
-import { sleep } from "incyclist-devices/lib/utils/utils";
 import { ScreenShotInfo } from "../../activities";
 import { Route } from "../../routes/base/model/route";
+import { sleep } from "../../utils/sleep";
 
 export class RideModeService extends IncyclistService implements IRideModeService {
 

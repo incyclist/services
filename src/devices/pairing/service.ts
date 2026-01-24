@@ -4,9 +4,9 @@ import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectSta
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
-import { sleep } from "incyclist-devices/lib/utils/utils";
 import { IncyclistService } from "../../base/service";
 import { EnrichedInterfaceSetting } from "../access";
+import { sleep } from "../../utils/sleep";
 
 
 const Units = [

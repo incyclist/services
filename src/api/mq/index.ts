@@ -1,4 +1,4 @@
-import EventEmitter from "events"
+import {EventEmitter} from "events"
 
 export interface IMessageQueueBinding extends EventEmitter{
     enabled(): boolean

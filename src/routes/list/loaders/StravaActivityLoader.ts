@@ -4,7 +4,7 @@ import { Observer } from "../../../base/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo, RoutePoint } from "../../base/types";
 import { Loader, MinimalDescription } from "./types";
-import EventEmitter from "events";
+import { EventEmitter } from "events";
 import { waitNextTick } from "../../../utils";
 import { calculateDistance } from "../../../utils/geo";
 import { useUserSettings } from "../../../settings";
@@ -17,7 +17,6 @@ interface Activity extends SummaryActivity, MinimalDescription {}
 
 export class StravaActivityLoader extends Loader< Activity >  {
 
-    protected loadObserver: Observer
     protected api:StravaApi
     protected logger: EventLogger
     protected internalEmitter: EventEmitter

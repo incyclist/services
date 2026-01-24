@@ -45,7 +45,6 @@ export class DeviceRideService  extends IncyclistService{
     protected startPromises: Promise<boolean>[]
     protected data:DeviceData  ={}
     protected simulatorEnforced:boolean
-    protected logger: EventLogger
     protected promiseSendUpdate: Promise<UpdateRequest|void>[]
     protected originalMode: CyclingMode
     protected deviceDataHandler = this.onData.bind(this)

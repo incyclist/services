@@ -1,9 +1,9 @@
-import { sleep } from "incyclist-devices/lib/utils/utils";
 import { ISecretBinding } from "../../api/bindings/secret";
 import { Inject } from "../../base/decorators";
 import { Observer } from "../../base/types";
 import { UserSettingsService } from "../../settings";
 import { waitNextTick } from "../../utils";
+import { sleep } from "../../utils/sleep";
 import { StravaApi, StravaConfig } from "../base/api";
 import { StravaAppConnection } from "./StravaAppConnection";
 import { StravaCredentials } from "./types";

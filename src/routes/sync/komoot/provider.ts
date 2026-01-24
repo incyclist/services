@@ -1,4 +1,3 @@
-import { sleep } from "incyclist-devices/lib/utils/utils";
 import { useAppsService } from "../../../apps";
 import { KomootCoordinate, KomootSportTypeNames, KomootTourSummary } from "../../../apps/base/api/komoot/types";
 import { KomootAppConnection } from "../../../apps/komoot";
@@ -8,6 +7,7 @@ import { Observer  } from "../../../base/types";
 import { useUserSettings } from "../../../settings";
 import { waitNextTick } from "../../../utils";
 import { calculateDistance } from "../../../utils/geo";
+import { sleep } from "../../../utils/sleep";
 import { Route } from "../../base/model/route";
 import { RouteInfo, RoutePoint } from "../../base/types";
 import { IRouteList } from "../../list/types";

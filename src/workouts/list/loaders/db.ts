@@ -20,7 +20,6 @@ export class WorkoutsDbLoader extends Loader{
    
     protected saveObserver: PromiseObserver<void>
     protected repo: JsonRepository
-    protected workouts: Array<Workout|Plan>
     protected tsLastWrite:number
     protected isDirty:boolean
     protected workoutsSaveObserver:{ [index:string]:PromiseObserver<void>} = {}

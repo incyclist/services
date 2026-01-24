@@ -2,7 +2,7 @@ const {EventLogger,ConsoleAdapter} = require( 'gd-eventlog');
 const {AntDevice} = require('incyclist-ant-plus/lib/bindings');
 const { TCPBinding } = require('incyclist-devices');
 
-const { DeviceAccessService } = require('incyclist-services');
+const { useDeviceAccess} = require('incyclist-services');
 
 EventLogger.registerAdapter(new ConsoleAdapter()) 
 
@@ -21,7 +21,7 @@ class App {
     constructor(props) {
         this.props = props;
         this.logger= new EventLogger('SampleApp')
-        this.deviceAccess = DeviceAccessService.getInstance()
+        this.deviceAccess = useDeviceAccess()
     }
 
     async run() {

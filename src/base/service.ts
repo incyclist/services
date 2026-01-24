@@ -1,4 +1,4 @@
-import EventEmitter from 'events';
+import { EventEmitter} from 'node:events';
 import { EventLogger } from 'gd-eventlog';
 
 export class IncyclistService extends EventEmitter {

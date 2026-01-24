@@ -1,6 +1,5 @@
 import { ActiveRideRoute, ActiveRideRouteType, ActiveRideUser, ActivityDetails, ActivityRouteType, ActivityStartMessage, ActivityUpdateMessage  } from "incyclist-services"
 import * as fs from 'fs/promises';
-import { sleep } from "incyclist-devices/lib/utils/utils";
 import { v4 as createUuid } from 'uuid';
 import mqtt from 'mqtt'; 
 import * as dotenv from 'dotenv';
@@ -141,7 +140,7 @@ const simulate = async (activity: ActivityDetails): Promise<void> => {
         const delay = log.time*1000 - prevTime;
         prevTime = log.time*1000;
         // if the delay is less than 0, set it to 0
-        await sleep(delay);
+        await (delay);
     }
     
 

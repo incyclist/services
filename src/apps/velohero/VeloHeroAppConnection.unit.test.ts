@@ -1,4 +1,3 @@
-import { sleep } from "incyclist-devices/lib/utils/utils";
 import { ISecretBinding } from "../../api/bindings/secret";
 import { Inject } from "../../base/decorators";
 import { Observer } from "../../base/types";

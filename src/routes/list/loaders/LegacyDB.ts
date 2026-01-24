@@ -9,7 +9,6 @@ import { JSONObject } from "../../../utils/xml"
 @Singleton
 export class RoutesLegacyDbLoader extends DBLoader<RouteDBApiDescription>{
     
-    protected loadObserver: Observer
     protected saveObserver: PromiseObserver<void>
     
 

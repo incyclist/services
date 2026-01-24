@@ -1,10 +1,10 @@
-import { sleep } from "incyclist-devices/lib/utils/utils"
 import { Observer } from "../../../../base/types/observer"
 import { valid } from "../../../../utils/valid"
 import { AppApiBase } from "../base"
 import { ActivityStreamEntry, DetailedActivity, DuplicateError, getLoggedInAthleteActivitiesProps, StravaConfig, StravaRefreshTokenResponse, StravaStreamType, StravaUploadProps, StravaUploadRequest, StravaUploadResponse, StravaUploadResult, SummaryActivity } from "./types"
 import { EventLogger} from 'gd-eventlog'
 import { AxiosResponse } from "axios"
+import { sleep } from "../../../../utils/sleep"
 
 const API_BASE_URL = 'https://www.strava.com/api/v3'
 const OAUTH_URL = 'https://www.strava.com/oauth'

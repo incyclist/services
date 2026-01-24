@@ -1,5 +1,4 @@
 
-import { sleep } from 'incyclist-devices/lib/utils/utils'
 import { Workout, WorkoutCard } from '..'
 import { Card, CardList } from '../../base/cardlist'
 import { Observer } from '../../base/types/observer'
@@ -8,6 +7,7 @@ import { WorkoutListService } from './service'
 import { WP } from './types'
 import { FileInfo } from '../../api'
 import { Inject } from '../../base/decorators'
+import { sleep } from '../../utils/sleep'
 
 describe('WorkoutListService',()=>{
 

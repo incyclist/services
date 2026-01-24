@@ -15,11 +15,7 @@ import clone from "../../../utils/clone"
 @Singleton
 export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
    
-    protected loadObserver: Observer
     protected saveObserver: PromiseObserver<void>
-    protected videosRepo: JsonRepository
-    protected routesRepo: JsonRepository
-    protected routeDescriptions: Array<RouteInfoDBEntry>
     protected routeHashes: Record<string,string>
     protected tsLastWrite:number
     protected isDirty:boolean
