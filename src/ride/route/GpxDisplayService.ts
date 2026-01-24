@@ -43,11 +43,6 @@ export class GpxDisplayService extends RouteDisplayService {
                 this.logEvent({message:'init streetview', updateFreq, minimalPause, bestFreq})                
             }
 
-            // if we haven't retrieved a Api yet, trigger reload
-            if (!this.getGoogleMaps().getApi()) {
-                this.logEvent({message:'reload maps api'})                
-                this.getGoogleMaps().reload()
-            }
             
         }
         catch(err) {

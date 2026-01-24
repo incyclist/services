@@ -4,7 +4,8 @@ import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { useUserSettings } from "../../settings";
 
-const MAPS_API_URL = 'https://maps.googleapis.com/maps/api/js'
+const MAPS_API_URL = 'https://updates.incyclist.com/api/v1/maps'// 'https://maps.googleapis.com/maps/api/js'
+
 
 @Singleton
 export class GoogleMapsService extends IncyclistService {
@@ -19,23 +20,30 @@ export class GoogleMapsService extends IncyclistService {
 
     setApi(api): void {     
         this.api = api
+        this.emit('loaded')
     }
 
     getApi(): any {
         return this.api
     }
 
+    async waitForApiKey():Promise<boolean> {
+        if (this.api)
+            return true
+    }
+
     async getApiKey(): Promise<string> {
         const settings = this.getUserSettings()
 
-        const personalKey = settings.get('GOOGLE_MAPS_API_KEY',undefined)
-        const appKey = this.getSecret('GOOGLE_API_KEY')
+
+        const personalKey = settings.getValue('GOOGLE_MAPS_API_KEY',undefined)
         const developmentMode = settings.get('mode', 'production')==='development';
 
         if (developmentMode)
-            return personalKey
+             return personalKey??'development'
 
-        return personalKey ?? appKey
+
+        return personalKey //?? appKey
     }
 
     hasPersonalApiKey() {
@@ -50,14 +58,16 @@ export class GoogleMapsService extends IncyclistService {
     }
 
     getMapsDownloadUrl () {
-        return MAPS_API_URL
+        const settings = this.getUserSettings()
+        const url = settings.getValue('MAPS_API_URL',MAPS_API_URL)
+        return url
     }
 
     reload() {
-        delete this.api
-        this.emit('reload')
+        if (!this.api) {
+            this.emit('reload')
+        }
     }
-
 
     protected getSecret(key:string):string {
         return this.getSecretBindings()?.getSecret(key)
