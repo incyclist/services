@@ -3,7 +3,7 @@ import {EventLogger} from 'gd-eventlog'
 import clone from '../../utils/clone';
 import { merge } from '../../utils/merge';
 import { valid } from '../../utils/valid';
-import {IUserSettingsBinding } from './bindings';
+import {IUserSettingsBinding } from '../bindings';
 import { Observer } from '../../base/types/observer';
 
 
@@ -24,6 +24,8 @@ export class UserSettingsService {
     initPromise: Promise<boolean>
     observers: Array<{id:string,key:string, observer:Observer}> = []
     isNew: boolean
+
+    paused:Record<string,boolean> = {}
     
 
     static getInstance() {
@@ -191,6 +193,17 @@ export class UserSettingsService {
         return settings;
     }
 
+    pauseNotify(key:string) {
+        this.paused[key] = true
+    }
+    resumeNotify(key:string, send:boolean) {
+        this.paused[key] = false
+        if (send) {
+            const value = this.getValue(key,null)
+            this.emitChanged(key,value)
+        }
+    }
+
     requestNotifyOnChange(requesterId:string,key:string):Observer {
         const observer = new Observer()
         this.observers.push({id:requesterId, key, observer})
@@ -270,6 +283,9 @@ export class UserSettingsService {
     }
 
     protected emitChanged(key: string, value: any) {
+        if (this.paused[key])
+            return;
+        
         const observers = this.observers.filter(oi => oi.key === key);
         if (observers?.length) {
             observers.forEach(o => o.observer.emit('changed', value));

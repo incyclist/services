@@ -21,6 +21,8 @@ import { getWorkoutList } from "../../../workouts";
 import { checkIsNew } from "../utils";
 import { useOnlineStatusMonitoring } from "../../../monitoring";
 import { distanceBetween } from "../../../utils/geo";
+import { getUnitConversionShortcuts, Unit } from "../../../i18n";
+import clone from "../../../utils/clone";
 
 export interface SummaryCardDisplayProps extends RouteInfo{
     loaded:boolean
@@ -33,6 +35,8 @@ export interface SummaryCardDisplayProps extends RouteInfo{
     loading?:boolean
     isNew?:boolean
     cntActive?:number
+    totalDistance: {value:number, unit:Unit},
+    totalElevation: {value:number, unit:Unit}
 }
 
 export interface DetailCardDisplayProps  {
@@ -51,20 +55,38 @@ export interface StartSettings {
     showPrev?:boolean
 
 }
+export interface UIStartSettings {
+    segment?:string
+    startPos: { value:number,unit: Unit}
+    endPos?: { value:number,unit: Unit}
+    realityFactor:number,
+    downloadProgress?:number,
+    convertProgress?:number,
+    loopOverwrite?: boolean,
+    nextOverwrite?:boolean,
+    showPrev?:boolean
+
+}
 
 export type RouteSettings = StartSettings & RouteStartSettings
-export type UIRouteSettings = RouteSettings & {
+export type UIRouteSettings = UIStartSettings & {
     prevRides?:Array<any>
 }
 
 export type RouteCardProps = {
-    settings:RouteSettings,
+    settings:UIRouteSettings,
     showLoopOverwrite:boolean,
     showNextOverwrite:boolean,
     hasWorkout?:boolean
     canStart?:boolean
     videoMissing?:Promise<boolean>
     videoChecking?:boolean
+    totalDistance: { value:number, unit:Unit},
+    totalElevation: { value:number, unit:Unit},
+    xScale?: { value:number, unit:Unit},
+    yScale?: { value:number, unit:Unit},
+    updateStartPos?: (updated:number)=>{ value:number, unit:Unit}
+    updateMarkers?: (settings: UIRouteSettings)=> UIRouteSettings
 }
 
 
@@ -303,6 +325,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
 
     getDisplayProperties(): SummaryCardDisplayProps {
+        const [C,U] = getUnitConversionShortcuts()
+
+
         try {
             const descr = this.getRouteDescription()
             const details = this.getRouteData()
@@ -323,7 +348,18 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             const loading = this.deleteObserver!==undefined
 
+            const totalDistance = descr.distance===undefined ? undefined : {
+                value: C( descr.distance,'distance',{digits:1}),
+                unit: U('distance')
+            }
+            const totalElevation = descr.elevation===undefined ? undefined : {
+                value: C(descr.elevation,'elevation',{digits:0}),
+                unit: U('elevation')
+            }
+
+
             return {...descr, initialized:this.initialized, loaded,ready:true,state:'loaded',visible:this.visible,isNew,
+                    totalDistance,totalElevation,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
                     observer:this.cardObserver, cntActive:this.cntActive}
         }
@@ -339,12 +375,30 @@ export class RouteCard extends BaseCard implements Card<Route> {
             const startSettings = settings || this.getSettings()
             this.adjustStartPosAvi(startSettings)
 
-            const startDistance = startSettings.startPos||0
+            const startDistance = startSettings.startPos??0
             const startPos = getPosition(this.route, {distance:startDistance,nearest:true})
             markers.push(startPos)
         }
         catch(err) {
             this.logError(err,'getMarkers')            
+        }
+        return markers
+    }
+
+    updateMarkers(startPos?:{value:number, unit:Unit}):Array<RoutePoint> {
+        const [C] = getUnitConversionShortcuts()
+        
+
+        const markers = []
+        try {
+            if (startPos!==undefined && startPos!==null) {
+                const startDistance = C( startPos.value,'distance', {from: startPos.unit,to:'m'} )
+                const position = getPosition(this.route, {distance:startDistance,nearest:true})
+                markers.push(position)
+            }
+        }
+        catch(err) {
+            this.logError(err,'updateMarkers')            
         }
         return markers
 
@@ -367,7 +421,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     openSettings():RouteCardProps {
 
+        const [C,U] = getUnitConversionShortcuts()
+
         const settings =this.getSettings();
+        const uiSettings:UIRouteSettings = {
+            ...settings,
+            startPos: { value: C(settings.startPos,'distance',{digits:1}), unit: U('distance') },
+            endPos: settings.endPos===undefined ? undefined : { value: C(settings.endPos,'distance',{digits:1}), unit: U('distance') }
+        }
+
+
         const workouts = getWorkoutList()
         const isOnline = useOnlineStatusMonitoring().onlineStatus
         let canStart = this.canStart( {isOnline})
@@ -422,23 +485,87 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.logError(err,'openSettings')
         }
 
-        return {settings,showLoopOverwrite,showNextOverwrite,hasWorkout,canStart, videoChecking, videoMissing }
+        const uDist = U('distance')
+        const uEl   = U('elevation')
+        const totalDistance = { value: C(this.route.distance,'distance',{digits:1}), unit: uDist}
+        const totalElevation = { value: C(this.route.description.elevation,'elevation',{digits:0}), unit:uEl }
+        const xScale = { value: C( 1, 'distance'), unit: uDist }
+        const yScale = { value: C( 1, 'elevation'), unit: uEl }
+
+        return {settings:uiSettings,totalDistance, totalElevation, showLoopOverwrite,showNextOverwrite,hasWorkout,canStart, videoChecking, videoMissing, 
+                xScale, yScale,
+                updateStartPos: this.updateStartPos.bind(this),
+                updateMarkers: this.updateMarkers.bind(this)
+        }
 
     }
 
-    changeSettings(props:UIRouteSettings) {
+    updateStartPos(p:number|RoutePoint, data:UIStartSettings ) : UIStartSettings|null {
+
+        const [C,U] = getUnitConversionShortcuts()
+
+
+        let value
+        if (typeof p==='number')
+            value = p
+        else  {
+            const point:RoutePoint = p
+            value = C( point.routeDistance, 'distance')
+        }
+        console.log('# update start pos',p)
+
+        if (data?.startPos.value===value)
+            return null;
+
+        const startPos = { value, unit: U('distance') }
+
+        const updated = { ...data}
+        updated.startPos = startPos        
+        delete updated.endPos
+        delete updated.segment
+        return updated
+
+    }
+
+    changeSettings(props:RouteSettings|UIRouteSettings):void {
+
+        const [C,U] = getUnitConversionShortcuts()
+
+        const isUI = typeof props.startPos !== 'number'
+        
 
         try {
             
-            delete props.prevRides
-            this.startSettings = {...props}
+            delete props['prevRides']
+
+            if (isUI) {
+                const  uiProps  = props as UIRouteSettings
+                const {realityFactor, segment, showPrev} = uiProps
+
+                const startPos= C(uiProps.startPos.value,'distance',{from:U('distance'), to:'m'})
+                const endPos= uiProps.endPos===undefined ? uiProps.endPos : C(uiProps.endPos.value,'distance',{from:U('distance'), to:'m'})
+                
+                this.startSettings = {
+                    ...this.startSettings,
+                    startPos, endPos, realityFactor, segment, showPrev
+                }
+            }
+            else {
+                const {startPos, endPos, realityFactor, segment, showPrev} = props as RouteSettings
+
+                this.startSettings = {
+                    ...this.startSettings,
+                    startPos, endPos, realityFactor, segment, showPrev
+                }
+
+            }
             
 
             // update User Settings
             const userSettings = useUserSettings()
             const key = this.buildSettingsKey();
 
-            userSettings.set(key,{...props},true)
+            userSettings.set(key,{...this.startSettings},true)
 
             // bugfix: prevRides were added in previous versions. We need to delete them as they would blow up settings.json
             userSettings.set( key+'.prevRides',null,true)
@@ -877,9 +1004,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
-    protected emitUpdate() {
+    emitUpdate() {
         if (this.cardObserver)
             this.cardObserver.emit('update', this.getDisplayProperties())
+
+    }
+    emitRedraw() {
+        if (this.cardObserver) {
+            console.log('# emit redraw ',this.getTitle())
+            this.cardObserver.emit('redraw', this.getDisplayProperties())
+        }
 
     }
 
@@ -959,7 +1093,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         this.logger.logEvent({message:'error', error:err.message, fn, stack:err.stack})
     }
     
-    protected getSettings() {
+    protected getSettings():RouteSettings {
         this.startSettings = { startPos: 0, realityFactor: 100, type: this.getCardType() };
 
         try {

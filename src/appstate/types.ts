@@ -1,1 +1,1 @@
-export type AppFeature = 'NEW_SEARCH_UI' | 'CONTROLLERS'
+export type AppFeature = 'NEW_SEARCH_UI' | 'CONTROLLERS' | 'IMPERIAL'

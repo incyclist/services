@@ -34,7 +34,6 @@ const ExistingAndNotUpdated = (existing: RouteInfo, descr: RouteInfo) => {
 export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
     protected api: IncyclistRoutesApi
-    protected loadObserver: Observer
     protected saveObserver: PromiseObserver<void>
     protected logger: EventLogger
 

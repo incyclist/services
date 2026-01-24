@@ -12,6 +12,7 @@ import { getBindings } from "../../api";
 import { ActivityUpdate } from "../../activities/ride/types";
 import clone from "../../utils/clone";
 import { useDeviceRide } from "../../devices";
+import { useUnitConverter } from "../../i18n";
 
 const MAX_INACTIVITY = 5000
 
@@ -201,6 +202,11 @@ export class RouteDisplayService extends RideModeService {
         const totalElevation = this.getOverlayProps('elevation',props)
         const nearbyRides = this.getNearbyRidesProps(props)
 
+        const [C,U] = this.getUnitConversionShortcuts()
+
+        const xScale = { value: C( 1,'distance', U('distance')), unit:U('distance') }
+        const yScale = { value: C( 1,'elevation', U('elevation')), unit:U('elevation') }
+        
 
         return {
             ...parent,
@@ -210,6 +216,7 @@ export class RouteDisplayService extends RideModeService {
             realityFactor,
             startPos,endPos,
             nearbyRides,
+            xScale,yScale,
             map,upcomingElevation, totalElevation,
             
         }    
@@ -252,6 +259,8 @@ export class RouteDisplayService extends RideModeService {
 
     protected initRoute() { 
         this.currentRoute =  this.getRouteList().getSelected().clone()
+
+        console.log('# current Route', this.currentRoute.details.points)
 
     }
 
@@ -464,6 +473,18 @@ export class RouteDisplayService extends RideModeService {
     @Injectable
     protected getAppInfo() {
         return getBindings().appInfo    
+    }
+
+    protected getUnitConversionShortcuts () {
+        const c = this.getUnitConverter()
+        const C = c.convert.bind(c)
+        const U = c.getUnit.bind(c)
+        return [C,U]
+    }
+
+    @Injectable
+    protected getUnitConverter() {
+        return useUnitConverter()
     }
 
 

@@ -2,7 +2,7 @@ import {UserSettingsService} from './service'
 
 describe('UserSettingsService',()=>{
 
-    let us;
+    let us:any;
 
     describe('get',()=>{
         beforeEach( ()=>{

@@ -4,13 +4,14 @@ import { DisplayExportInfo, DisplayUploadInfo, ActivityUploadStatus } from "../.
 import { ActivityInfo, DEFAULT_ACTIVITY_TITLE } from "../model";
 import { ActivitiesRepository, DB_VERSION } from "../repo";
 import { getBindings } from "../../../api";
-import { RouteCard, RouteSettings } from "../../../routes/list/cards/RouteCard";
+import { RouteCard, RouteSettings, UIRouteSettings } from "../../../routes/list/cards/RouteCard";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../../monitoring";
 import { useAppsService } from "../../../apps";
 import { Injectable } from "../../../base/decorators/Injection";
 import { ActivityConverter } from "../convert";
 import { ActivityUploadFactory } from "../../upload";
 import { EventLogger } from "gd-eventlog";
+import { getUnitConversionShortcuts } from "../../../i18n";
 
 export class Activity implements ActivityInfo{
     
@@ -292,14 +293,17 @@ export class Activity implements ActivityInfo{
     }
 
     createStartSettings():RouteSettings {
+        // const [C,U] = getUnitConversionShortcuts()
 
         try {
             const {startPos,realityFactor,segment,endPos} = this.details
             const card = this.getRouteCard()
             const settings =  {
+                // startPos: { value: C(startPos,'distance',{digits:1}), unit: U('distance') },
+                // endPos: endPos===undefined ? undefined : { value: C(endPos,'distance',{digits:1}), unit: U('distance') },
                 startPos,
-                segment,
                 endPos,
+                segment,
                 realityFactor,
                 showPrev:true,
                 type:card?.getCardType()??'Route'

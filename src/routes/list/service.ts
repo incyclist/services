@@ -141,6 +141,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             this.observer.on('stats-update', this.onRouteStatsUpdate.bind(this))
             this.emit('opened', this.observer, this.stats===undefined )
+
+            // enforce redraw of cards if units have changed by user (metric<->imperial)
+            const unitsObserver = this.getUserSettings().requestNotifyOnChange('routeList','preferences.units' )
+            unitsObserver.on( 'changed',this.redrawCards.bind(this))
+
                 
         }
         catch (err) {
@@ -152,7 +157,21 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return {observer: this.observer, lists:this.getLists() }
     }
 
+    protected redrawCards() {
+        const lists = this.getLists()
+        lists.forEach( list=> {
+            const cards = list.getCards()
+            cards.forEach( card => {
+                if (card.getCardType()==='Route' && card.isVisible() ) {
+                    const rc:RouteCard = card as RouteCard
+                    rc.emitRedraw()
+                }
+                
+            })
+        })
+        
 
+    }
 
     private resetLists() {
 
@@ -174,6 +193,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.emit('closed', this.observer )
             this.observer?.emit('stopped')
             this.observer?.reset()
+            this.getUserSettings().stopNotifyOnChange('routeList')
    
             this.resetCards()   
         }

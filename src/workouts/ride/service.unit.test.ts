@@ -1,4 +1,3 @@
-import { sleep } from 'incyclist-devices/lib/utils/utils'
 import { Observer } from '../../base/types/observer'
 import { waitNextTick } from '../../utils'
 import { Workout } from '../base/model'
@@ -7,6 +6,7 @@ import { WorkoutRide } from './service'
 import { ActiveWorkoutLimit } from './types'
 import { WorkoutSettings } from '../list/cards/types'
 import { Inject } from '../../base/decorators'
+import { sleep } from '../../utils/sleep'
 
 let MockWorkoutList
 let MockUserSettings

@@ -10,6 +10,7 @@ import { Workout } from "../../workouts"
 import { FreeRideOption } from "../../routes/list/types"
 import { MapViewPort } from "../route/types"
 import { LatLng } from "../../utils/geo"
+import { Unit } from "../../i18n"
 
 export type RideType = 'Free-Ride' | 'GPX' | 'Video' | 'Workout'
 
@@ -65,6 +66,8 @@ export interface RouteDisplayProps extends IRideModeServiceDisplayProps {
     map?: MapOverlayDisplayProps    
     upcomingElevation?: OverlayDisplayProps
     totalElevation?: OverlayDisplayProps
+    xScale?: { value:number, unit:Unit}
+    yScale?: { value:number, unit:Unit}
 }
 
 export interface InfotextDisplayProps {
@@ -117,7 +120,7 @@ export interface RouteOptionDisplayProps {
     optionsId?: string
     onOptionsVisibleChanged: (visible: boolean) => void
     isNearby?: boolean
-    distance?: number
+    distance?: {value:number, unit:Unit}
     turn?: boolean
 }
 

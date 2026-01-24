@@ -1,3 +1,5 @@
+import { Unit } from "../../i18n"
+
 export type Gender = 'M' | 'F' | 'X'
 export type ActiveRideRouteType = 'follow route' |  'video' | 'free ride'
 
@@ -89,14 +91,14 @@ export type ActiveRideListDisplayItem = {
     avatar?:ActiveRideListAvatar
     isPaused?: boolean   
     name: string,
-    distance?: number
+    distance?: number|{value:number, unit:Unit}
     lapDistance?:number,
-    diffDistance?: number,
+    diffDistance?: number|{value:number, unit:Unit},
     diffTime?: number,
     lap?: number,
     power?: number,
     mpower?: number,
-    speed?: number,
+    speed?: number|{value:number, unit:Unit},
     lat?:number,
     lng?:number,
     backgroundColor?: string,

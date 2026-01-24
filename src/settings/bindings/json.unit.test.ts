@@ -76,7 +76,7 @@ describe ('JSONFileBindig',()=>{
                 });
 
                 test('empty array', () => {
-                    const input = [];
+                    const input:any = [];
                     json.set('test', input);
                     expect(json.settings.test).toEqual(input);
                 });

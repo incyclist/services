@@ -14,6 +14,7 @@ import { FreeRideContinuation, IncyclistNode } from "../../maps/MapArea/types";
 import { MapViewPort } from "./types";
 import { ActivityUpdate } from "../../activities/ride/types";
 import { waitNextTick } from "../../utils";
+import { Unit } from "../../i18n";
 
 
 const pathInfo = (path) => {
@@ -256,13 +257,16 @@ export class FreeRideDisplayService extends GpxDisplayService {
             let routeProps:GpxDisplayProps = super.getDisplayProperties(props)
             const options = this.getFreeRideService().buildUIOptions(this.currentOptions??[])
             
+            let distance = this.getRemainingDistance();
+
+
             const optionProps = {
                 onOptionsVisibleChanged: this.onOptionsVisibleChangedHandler,     
                 onTurn: this.onTurnHandler,       
                 optionsDelay: DEFAULT_OPTIONS_DELAY,            
                 optionsId: this.getOptionsId(),
-                distance: this.distanceRemaining,
-                isNearby: this.isNearbyOption,
+                distance ,
+                isNearby: this.isNearbyOption && distance!==undefined,
                 turn: this.isTurnEnabled
             }
     
@@ -684,6 +688,37 @@ export class FreeRideDisplayService extends GpxDisplayService {
         const parent = super.getDashboardColumns()
         return parent-1; // (no slope)
     }
+
+    protected getRemainingDistance():{value:number,unit:Unit} {
+        if (this.distanceRemaining===undefined || this.distanceRemaining===null)
+            return;
+
+        const [C, U] = this.getUnitConversionShortcuts();
+        const units = this.getUnitConverter().getUnits();
+        const km = C(this.distanceRemaining, 'distance', { to: 'km', digits: 1 });
+        const mi = C(this.distanceRemaining, 'distance', { to: 'mi', digits: 1 });
+        let m = C(this.distanceRemaining, 'distance', { to: 'm', digits: 0 });
+        if (m>10)
+            m = C(this.distanceRemaining, 'distance', { to: 'm', digits: -1 });
+        let yd = C(this.distanceRemaining, 'distance', { to: 'yd', digits: 0});
+        if (yd>10) {
+            yd = C(this.distanceRemaining, 'distance', { to: 'yd', digits: -1});
+        }
+
+        let distance;
+        const dist = units === 'metric' ? km : mi;
+        if (dist >= 1) {
+            distance = { value: dist, unit: U('distance') };
+        }
+        else {
+
+            const value = units === 'metric' ? m : yd;
+            const unit = units === 'metric' ? 'm' : 'yd';
+            distance = { value, unit };
+        }
+        return distance;
+    }
+
 
     reset() {
         super.reset()

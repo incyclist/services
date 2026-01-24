@@ -3,6 +3,7 @@ import { Injectable } from "../../base/decorators";
 import { IncyclistService } from "../../base/service";
 import { Observer, Singleton } from "../../base/types";
 import { CoachesService, getCoachesService } from "../../coaches";
+import { Unit, useUnitConverter } from "../../i18n";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../monitoring";
 import { RouteListService, useRouteList } from "../../routes";
 import { RoutePoint } from "../../routes/base/types";
@@ -310,10 +311,13 @@ export class ActiveRidesService extends IncyclistService {
             return
 
         const all = displayProps
-        const logInfo = all.map(r => `${r.name}${r.isUser?'(*)':''}:${r.avatar?.shirt ?? ''}-${((r.distance??0)/1000).toFixed(1)}km-${r.lap ?? ''}-${r.power ?? '?'}W`)
+        const distanceText = (r) => typeof r?.distance==='number' ? `${((r?.distance??0)/1000).toFixed(1)}km` : `${r?.distance?.value}${r?.distance?.unit}`
+        const logInfo = all.map(r => `${r?.name}${r?.isUser?'(*)':''}:${r?.avatar?.shirt ?? ''}-${distanceText(r)}-${r?.lap ?? ''}-${r?.power ?? '?'}W`)
             .join('|');
         
         const cnt = (this.others?.length??0) + 1
+
+        console.log('# nearby riders log', logInfo, all)
         const event = { message: 'NearbyRiders', activityId:this.activity?.id, title:this.activity?.route?.title, cnt , nearbyRiders: logInfo }               
         this.logEvent(event);
         this.prevLogTS = Date.now()
@@ -390,12 +394,12 @@ export class ActiveRidesService extends IncyclistService {
                     isUser: item.sessionId===this.session,
                     name: this.getName(item),
                     diffDistance: this.getDistanceDiff(item),
-                    distance: item.currentRideDistance,
+                    distance: this.getDistance(item),
                     avatar: this.getAvatar(item),
                     lap: this.getLap(item,true),
                     power: item.currentPower,
                     mpower: this.getRelativePower(item),
-                    speed: item.currentSpeed,
+                    speed: this.getSpeed(item),
                     lat: item.currentPosition?.lat,
                     lng: item.currentPosition?.lng,
                 }
@@ -511,7 +515,7 @@ export class ActiveRidesService extends IncyclistService {
     }
 
 
-    protected getDistance (r:ActiveRideEntry):number  {
+    protected getRoutePosDistance (r:ActiveRideEntry):number  {
 
         const lap = this.getLap(r);
         const route = this.current ? this.current.ride : r.ride;
@@ -520,24 +524,78 @@ export class ActiveRidesService extends IncyclistService {
         return r.currentRideDistance || 0
     }
 
+    protected getSpeed(r:ActiveRideEntry):{value:number, unit:Unit}  { 
+        try {
+            const format = (v:number) => {
+                const [C,U] = this.getUnitConversionShortcuts()
 
-    protected getDistanceDiff (r:ActiveRideEntry):number  {
+                const value = C( v, 'speed',{digits:1})
+                const unit = U('speed')
+                return {value,unit}
+            }
+
+            return format(r.currentSpeed)
+        }
+        catch( err) {
+            this.logError(err,'getSpeed')
+        }
+
+    }
+
+    protected getDistance(r:ActiveRideEntry):{value:number, unit:Unit}  { 
+
+        try {
+            const format = (v:number) => {
+                const [C,U] = this.getUnitConversionShortcuts()
+
+                let value = C( v, 'distance',{digits:1})
+                const unit = U('distance')
+                if (value>=100) {
+                    value = Math.round(value)
+                }
+                return {value,unit}
+            }
+
+            return format(r.currentRideDistance)
+        }
+        catch( err) {
+            this.logError(err,'getDistance')
+        }
+    }
+
+
+    protected getDistanceDiff (r:ActiveRideEntry):{value:number, unit:Unit}  {
         if (!r) return;
 
-        const isLap = this.current?.ride?.isLap;
-        const distance = this.getDistance(r);
-        const myDistance = this.getDistance(this.current);
+        try {
+            const format = (v:number) => {
+                const [C,U] = this.getUnitConversionShortcuts()
+                let value = C( v, 'distance',{digits:1})
+                const unit = U('distance')
+                if (value>=10) {
+                    value = Math.round(value)
+                }
+                return {value,unit}
+            }
 
-        if (distance===undefined || myDistance===undefined)
-            return;
+            const isLap = this.current?.ride?.isLap;
+            const distance = this.getRoutePosDistance(r);
+            const myDistance = this.getRoutePosDistance(this.current);
 
-        if ( !isLap ) 
-            return myDistance - distance;
-        
-        const distances = [myDistance - distance, myDistance+this.current.ride.distance - distance, myDistance-this.current.ride.distance - distance];
-        distances.sort( (a,b) => Math.abs(a) - Math.abs(b) );
-        return distances[0];
+            if (distance===undefined || myDistance===undefined)
+                return;
 
+            if ( !isLap ) {
+                return format(myDistance - distance);
+            }
+            
+            const distances = [myDistance - distance, myDistance+this.current.ride.distance - distance, myDistance-this.current.ride.distance - distance];
+            distances.sort( (a,b) => Math.abs(a) - Math.abs(b) );
+            return format(distances[0]);
+        }
+        catch(err) {
+            this.logError(err,'getDistanceDiff')
+        }
 
     }
 
@@ -766,13 +824,15 @@ export class ActiveRidesService extends IncyclistService {
             }
             this.addActiveRide( entry)
 
+            const remote = { uuid:payload.user?.id, session}
+
             if ( prevActive===0) {
                 this.isStarted = true
-                this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash()})
+                this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(),remote})
             }
             else {
                 this.isStarted = true
-                this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(),user:payload?.user?.id } )
+                this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(),remote } )
 
             }
 
@@ -867,15 +927,14 @@ export class ActiveRidesService extends IncyclistService {
                     }
                 }
 
+                this.isStarted = true
+                const remote = (item===undefined || item===null) ? {session } : { uuid:item.user?.id, session:item.sessionId}
+
                 if ( prevActive===0) {
-                    this.isStarted = true
-                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash()})
+                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), remote})
                 }
                 else {
-                    this.isStarted = true
-                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), 
-                        remote:{ uuid:item.user?.id, session:item.sessionId} } )
-    
+                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), remote} )    
                 }
 
                 
@@ -1011,7 +1070,17 @@ export class ActiveRidesService extends IncyclistService {
 
     @Injectable getCoachesService(): CoachesService {
         return getCoachesService()
-   }
+    }
+
+
+    @Injectable getUnitConverter() {
+        return useUnitConverter()
+    }
+
+    protected getUnitConversionShortcuts() {
+        return this.getUnitConverter().getUnitConversionShortcuts()
+
+    }
 
 
     protected getMessageQueue ():ActiveRideListMessageQueue {
@@ -1031,6 +1100,7 @@ export class ActiveRidesService extends IncyclistService {
             delete this.observer
         }
     }
+
     
 
 }
