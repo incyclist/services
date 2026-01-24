@@ -1,6 +1,8 @@
 {
   "name": "incyclist-services",
   "version": "1.6.8",
+  "type": "module",
+
   "peerDependencies": {
     "gd-eventlog": "^0.1.26"
   },
@@ -36,6 +38,13 @@
     "lib/"
   ],
   "main": "lib/index.js",
+  "module": "./lib/index.js",
+  "exports": {
+    ".": {
+      "import": "./lib/index.js",
+      "default": "./lib/index.js"
+    }
+  },
   "directories": {
     "example": "./sample",
     "lib": "./src"
