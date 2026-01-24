@@ -259,9 +259,6 @@ export class RouteDisplayService extends RideModeService {
 
     protected initRoute() { 
         this.currentRoute =  this.getRouteList().getSelected().clone()
-
-        console.log('# current Route', this.currentRoute.details.points)
-
     }
 
     protected initView() { /* logic can be defined by subclasses */ }

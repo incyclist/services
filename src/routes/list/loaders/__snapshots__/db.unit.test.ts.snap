@@ -13,6 +13,7 @@ Route {
     "isLoop": true,
     "title": "Sydney Opera House and Botanic Garden",
   },
+  "_details": undefined,
   "updateCountryFromPoints": [Function],
 }
 `;

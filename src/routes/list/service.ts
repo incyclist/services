@@ -205,6 +205,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     saveFilters(requestedFilters?:SearchFilter) {        
+        if (!requestedFilters) {
+            this.filters = {}
+            const settingsFilter = {}
+            const settings = this.getUserSettings()
+            settings.set('preferences.search.filter',settingsFilter??null)
+            return
+        }
+
         this.filters = clone(requestedFilters)
         const settingsFilter = clone(requestedFilters)
 
