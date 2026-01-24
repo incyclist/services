@@ -12,7 +12,7 @@ import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard, SummaryCardDisplayProps } from "./cards/RouteCard";
-import { ActiveRideCount, DisplayType, IRouteList, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
+import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
@@ -28,6 +28,8 @@ import { RouteSyncFactory } from "../sync/factory";
 import { sleep } from "../../utils/sleep";
 import { useAppsService } from "../../apps";
 import { useAppState } from "../../appstate";
+import { useUnitConverter } from "../../i18n";
+import clone from "../../utils/clone";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -203,10 +205,37 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     saveFilters(requestedFilters?:SearchFilter) {        
-        this.filters = requestedFilters
+        this.filters = clone(requestedFilters)
+        const settingsFilter = clone(requestedFilters)
+
+
+        const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
+
+        const Dist = (v) => {
+            if (v?.value!==undefined && v.unit ) {
+                return C(v.value,'distance',{from:v.unit,to:'m'})
+            }
+            return v
+        }
+        const El = (v) => {
+            if (v?.value!==undefined && v.unit ) {
+                return C(v.value,'elevation',{from:v.unit,to:'m'})
+            }
+            return v
+        }
+
+        if (settingsFilter.elevation) {
+            const v = settingsFilter.elevation
+            settingsFilter.elevation ={ min:El(v.min), max:El(v.max) }
+        }
+        if (settingsFilter.distance) {
+            const v = settingsFilter.distance
+            settingsFilter.distance ={ min:Dist(v.min), max:Dist(v.max) }
+        }
+
 
         const settings = this.getUserSettings()
-        settings.set('preferences.search.filter',requestedFilters??null)
+        settings.set('preferences.search.filter',settingsFilter??null)
     }
 
     getFilters():SearchFilter {
@@ -214,6 +243,23 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             if (!this.filters) {
                 const settings = this.getUserSettings()
                 this.filters = settings.get('preferences.search.filter',undefined)
+
+                const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
+
+                if (this.filters.elevation) {
+                    const v = this.filters.elevation
+                    const min = v.min===undefined ? undefined: { value:C( v.min,'elevation',{from:'m',digits:0}), unit:U('elevation') }
+                    const max = v.max===undefined ? undefined: { value:C( v.max,'elevation',{from:'m',digits:0}), unit:U('elevation') }
+                    this.filters.elevation = {min,max}                    
+                }
+                if (this.filters.distance) {
+                    const v = this.filters.distance
+                    const min = v.min===undefined ? undefined: { value:C( v.min,'distance',{from:'m',digits:1}), unit:U('distance') }
+                    const max = v.max===undefined ? undefined: { value:C( v.max,'distance',{from:'m',digits:1}), unit:U('distance') }
+                    this.filters.distance = {min,max}                    
+                }
+
+
             }
         }
         catch {}
@@ -298,8 +344,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             this.setListTop('list',0)
             this.setListTop('tiles',0)
+
+            const units = this.getUnitConverter().getDefaultUnits()
           
-            return {routes,cards,filters,observer:this.observer}
+            return {routes,cards,filters,observer:this.observer,units}
     
         }
         catch(err) {
@@ -428,21 +476,46 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return routes;
     }
 
-    private applyElevationFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
-        if (filters.elevation?.min)
-            routes = routes.filter(r => r.elevation >= filters.elevation.min);
+    getFilterValue(filters: SearchFilter, scope:'distance'|'elevation', minMax:'min'|'max'):number {
+        if (!filters)
+            return
+        const obj = filters[scope]
+        if (!obj)
+            return;
+        const v = obj[minMax]
+        if (v===undefined || v===null )
+            return 
+        if (typeof v==='number')
+            return v
 
-        if (filters.elevation?.max)
-            routes = routes.filter(r => r.elevation <= filters.elevation.max);
+        if (v.value!==undefined && v.unit) {
+            return this.getUnitConverter().convert(v.value,scope,{from:v.unit,to:'m'})
+        }
+        return
+    }
+
+    private applyElevationFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+
+        const elevationMin = this.getFilterValue(filters,'elevation','min')
+        const elevationMax = this.getFilterValue(filters,'elevation','max')
+
+        if (elevationMin!==undefined)
+            routes = routes.filter(r => r.elevation >= elevationMin);
+
+        if (elevationMax!==undefined)
+            routes = routes.filter(r => r.elevation <= elevationMax);
         return routes;
     }
 
     private applyDistanceFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
-        if (filters.distance?.min)
-            routes = routes.filter(r => r.distance >= filters.distance.min);
+        const distanceMin = this.getFilterValue(filters,'distance','min')
+        const distanceMax = this.getFilterValue(filters,'distance','max')
 
-        if (filters.distance?.max)
-            routes = routes.filter(r => r.distance <= filters.distance.max);
+        if (distanceMin!==undefined)
+            routes = routes.filter(r => r.distance >= distanceMin);
+
+        if (distanceMax!==undefined)
+            routes = routes.filter(r => r.distance <= distanceMax);
         return routes;
     }
 
@@ -634,7 +707,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
 
-    async getRouteDetails(id:string, expectLocal=false):Promise<RouteApiDetail> {
+    async getRouteDetails(id:string, expectLocal=false):Promise<RouteDetailUIItem> {
         try {
             const route = this.getVisibleRoutes().find( r => r.description.id===id)
             if (!route) 
@@ -649,7 +722,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             }
 
             this.verifyRouteCountry(route);
-            return route.details
+            const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
+
+            const totalDistance = C(route.details.distance,'distance')
+            const totalElevation = C(route.details.elevation,'elevation')
+            return {...route.details, totalDistance, totalElevation}
         }
         catch(err) {
             this.logError(err,'getRouteDetails',id)
@@ -1559,6 +1636,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     @Injectable getAppsService() {
         return useAppsService()
+    }
+
+    @Injectable getUnitConverter() {
+        return useUnitConverter()
     }
 
     reset() {

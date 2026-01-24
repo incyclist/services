@@ -122,6 +122,11 @@ export class UnitConverterService extends IncyclistService{
         return type
     }
 
+    getDefaultUnits():Record<Dimension,Unit> {
+        return this.getUnits() === 'metric' ? this.metric : this.imperial
+        
+    }
+
     getUnitConversionShortcuts = ()=> {
         const C = this.convert.bind(this)
         const U = this.getUnit.bind(this)

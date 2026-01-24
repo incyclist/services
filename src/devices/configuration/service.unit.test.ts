@@ -5,7 +5,7 @@ import clone from "../../utils/clone";
 import { DeviceConfigurationService } from "./service"
 import { DeviceConfigurationSettings,
          LegacySettings,LegacyGearSetting, LegacySerialPortInfo, LegacySerialSettings } from "./model";
-import UserSettingsMock from "../../settings/user/mock";
+import UserSettingsMock from "../../settings/service/mock";
 
 
 const SampleSettings: DeviceConfigurationSettings= {                

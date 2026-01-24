@@ -1,5 +1,7 @@
-import { FreeRideContinuation, IncyclistNode } from "../../maps/MapArea/types";
-import { distanceBetween, LatLng } from "../../utils/geo"
+import { FormattedNumber } from "../../i18n";
+import { IncyclistNode } from "../../maps/MapArea/types";
+import { LatLng } from "../../utils/geo"
+import { RouteApiDetail } from "../base/api/types";
 import { RouteInfo, RoutePoint } from "../base/types";
 import { SummaryCardDisplayProps } from "./cards/RouteCard";
 import { RouteCardType } from "./cards/types";
@@ -43,9 +45,10 @@ export interface FreeRideStartSettings  {
     type: RouteCardType,    
 }
 
+
 export interface MinMax {
-    min?: number,
-    max?: number
+    min?: number|FormattedNumber
+    max?: number|FormattedNumber
 }
 
 
@@ -88,4 +91,9 @@ export type ActiveRideCount = {
     routeId: string,
     routeHash: string
 
+}
+
+export type RouteDetailUIItem = RouteApiDetail & {
+    totalDistance: FormattedNumber
+    totalElevation: FormattedNumber
 }

@@ -388,13 +388,13 @@ export class ActivityRideService extends IncyclistService {
         });
         info.push({ title: 'Distance', 
             data: [
-                { value: C(distance,'distance',{from:'km',digits:2}), unit: U('distance') }, 
-                { value: distanceRemaining === undefined ? undefined : `-${C(distanceRemaining,'distance',{from:'km',digits:2})}`}] 
+                { value: C(distance,'distance',{from:'km'})?.toFixed(2)??'', unit: U('distance') }, 
+                { value: distanceRemaining === undefined ? undefined : `-${C(distanceRemaining,'distance',{from:'km'}).toFixed(2) }`}] 
             });
 
         info.push({ title: 'Speed', 
                 data: [
-                    { value: C(speed, 'speed',{digits:1}), unit: U('speed') }, 
+                    { value: C(speed, 'speed')?.toFixed(1)??'', unit: U('speed') }, 
                     speedDetails], 
                 dataState: this.current.dataState?.speed 
         });
@@ -448,11 +448,11 @@ export class ActivityRideService extends IncyclistService {
         const [C,U] = this.getUnitConversionShortcuts()
 
         const stats = this.activity?.stats
-        const speedDetails = { value: C(stats?.speed?.max,'speed', {digits:1}), label: 'max' };
+        const speedDetails = { value: C(stats?.speed?.max,'speed')?.toFixed(1)??'', label: 'max' };
         const powerDetails = { value: formatNumber(stats?.power?.max, 0), label: 'max' };
         const heartrateDetails = { value: formatNumber(stats?.hrm?.max, 0), label: 'max' };
         const cadenceDetails = { value: formatNumber(stats?.cadence?.max, 0), label: 'max' };
-        const elevationGain = { value: C(this.current.elevationGainDisplay ?? 0,'elevation', {digits:0}), label: 'elev. done', unit: U('elevation') };
+        const elevationGain = { value: C(this.current.elevationGainDisplay ?? 0,'elevation' )?.toFixed(0)??'', label: 'elev. done', unit: U('elevation') };
         return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };
     }
 
@@ -460,7 +460,7 @@ export class ActivityRideService extends IncyclistService {
         const [C,U] = this.getUnitConversionShortcuts()
 
         const stats = this.activity?.stats
-        const speedDetails = { value: C(stats?.speed?.avg, 'speed', {digits:1}), label: 'avg' };
+        const speedDetails = { value: C(stats?.speed?.avg, 'speed')?.toFixed(1)??'', label: 'avg' };
         const powerDetails = { value: formatNumber(stats?.power?.avg, 0), label: 'avg' };
         const heartrateDetails = { value: formatNumber(stats?.hrm?.avg, 0), label: 'avg' };
         const cadenceDetails = { value: formatNumber(stats?.cadence?.avg, 0), label: 'avg' };
@@ -468,7 +468,7 @@ export class ActivityRideService extends IncyclistService {
         let elevationGainRemaining = this.getTotalElevation() - (this.current.elevationGainDisplay ?? 0);
         if (isNaN(elevationGainRemaining)) elevationGainRemaining = undefined;
         if (elevationGainRemaining < 0) elevationGainRemaining = 0;
-        const value = elevationGainRemaining === undefined ?  undefined: `${C(elevationGainRemaining,'elevation', {digits:0})}`
+        const value = elevationGainRemaining === undefined ?  undefined: `${C(elevationGainRemaining,'elevation').toFixed(0)}`
 
         const elevationGain = { value, label: 'elev. todo', unit: U('elevation') };
         return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };

@@ -22,7 +22,6 @@ import { checkIsNew } from "../utils";
 import { useOnlineStatusMonitoring } from "../../../monitoring";
 import { distanceBetween } from "../../../utils/geo";
 import { getUnitConversionShortcuts, Unit } from "../../../i18n";
-import clone from "../../../utils/clone";
 
 export interface SummaryCardDisplayProps extends RouteInfo{
     loaded:boolean

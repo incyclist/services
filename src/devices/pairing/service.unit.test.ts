@@ -4,7 +4,7 @@ import { CapabilityInformation, DeviceConfigurationService, DeviceConfigurationS
 import {DevicePairingService} from './service'
 import { DeviceAccessService, useDeviceAccess } from '../access'
 import { DeviceRideService, useDeviceRide } from '../ride'
-import UserSettingsMock from '../../settings/user/mock'
+import UserSettingsMock from '../../settings/service/mock'
 import { CapabilityData, DevicePairingData, PairingSettings, PairingState } from './model'
 import { UserSettingsService } from '../../settings'
 import { sleep } from '../../utils/sleep'
