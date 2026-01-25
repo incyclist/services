@@ -6,7 +6,7 @@ import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
 import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,DEFAULT_ACTIVITY_TITLE,ScreenShotInfo } from "../base";
+import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityDetailsUI, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,DEFAULT_ACTIVITY_TITLE,ScreenShotInfo } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { v4 as generateUUID } from 'uuid';
@@ -24,7 +24,7 @@ import { useAvatars } from "../../avatars";
 import clone from "../../utils/clone";
 import { buildSummary } from "../base/utils";
 import { Injectable } from "../../base/decorators";
-import { useUnitConverter } from "../../i18n";
+import { FormattedNumber, useUnitConverter } from "../../i18n";
 
 const SAVE_INTERVAL = 5000;
 
@@ -493,16 +493,17 @@ export class ActivityRideService extends IncyclistService {
             }
 
             this.isSummaryShown = true
-    
-    
+
             const props = {
-                activity: this.activity,
+                activity: this.createUIActivity(this.activity),
     
                 showSave,
                 showContinue,
                 showMap,
                 showDonate:this.canShowDonate(),
-                preview
+                preview,
+                units: this.getUnitConverter().getDefaultUnits()
+
     
             }
             
@@ -514,6 +515,38 @@ export class ActivityRideService extends IncyclistService {
             this.logError(err,'getActivitySummaryDisplayProperties()')
             return {}
         }
+    }
+
+    protected createUIActivity( activity:ActivityDetails): ActivityDetailsUI {
+        const ui = { ...activity} as ActivityDetailsUI
+        const [C,U] = this.getUnitConversionShortcuts()
+
+        ui.distance = { value:C(activity.distance,'distance', {digits:1}), unit:U('distance')}
+        if (ui.distance.value>100) ui.distance.value = Math.round(ui.distance.value)
+
+        const formatSpeed = (v:number):FormattedNumber=> {
+            return { value:C(v,'speed', {digits:1}), unit:U('speed')}
+        }
+
+        if (ui.stats?.speed) {
+            const fields = ['min','max','avg']
+            for (const field of fields) {
+                ui.stats.speed[field] = formatSpeed(ui.stats.speed[field])
+            }
+        }
+
+        ui.logs = []
+        for (const log of activity.logs ) {
+            const {speed,distance,elevation} = log
+            const uiLog = {...log}
+            uiLog.speed = C(speed,'speed', {digits:1})
+            uiLog.distance = C(distance,'distance', {digits:2})
+            uiLog.elevation = C(elevation,'elevation', {digits:0})
+            ui.logs.push(uiLog)
+        }
+
+        return ui
+
     }
 
     protected canShowDonate() {

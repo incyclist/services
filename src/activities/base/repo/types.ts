@@ -1,11 +1,12 @@
+import { FormattedNumber } from "../../../i18n"
 import { UploadInfo } from "../model"
 
 
 export interface ActivitySearchCriteria {
     routeId?: string, 
     routeHash?: string,
-    startPos?: number,
-    endPos?: number,
+    startPos?: number|FormattedNumber,
+    endPos?: number|FormattedNumber,
     realityFactor?: number,
     uploadStatus?: UploadInfo|Array<UploadInfo>
     isSaved?:boolean,

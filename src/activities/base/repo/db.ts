@@ -10,6 +10,7 @@ import { JSONObject } from "../../../utils/xml";
 import { useRouteList } from "../../../routes";
 import { ActivitiesDBMigratorFactory } from "./migration/factory";
 import { Injectable } from "../../../base/decorators/Injection";
+import { useUnitConverter } from "../../../i18n";
 
 export const DB_VERSION = '4'
 export const DB_NAME = 'db'
@@ -340,12 +341,24 @@ export class ActivitiesRepository {
 
 
     private checkStartPosFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
-        if (result?.length > 0 && criteria?.startPos !== undefined) {
-            result = result.filter(ai => ai.summary.startPos === criteria.startPos);
+
+        
+        let startPos = criteria?.startPos
+        if (typeof startPos!=='number' &&  startPos?.value!==undefined) {
+            startPos = this.getUnitConverter().convert( startPos.value, 'distance', {from:startPos.unit, to:'m'})
+        }
+
+        if (result?.length > 0 && startPos !== undefined) {
+            result = result.filter(ai => ai.summary.startPos === startPos);
         }
         return result
     }
     private checkEndPosFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        let endPos = criteria?.endPos
+        if (typeof endPos!=='number' &&  endPos?.value!==undefined) {
+            endPos = this.getUnitConverter().convert( endPos.value, 'distance', {from:endPos.unit, to:'m'})
+        }
+
         if (result?.length > 0 && criteria?.endPos !== undefined) {
             result = result.filter(ai => ai.summary.endPos === criteria.endPos);
         }
@@ -701,6 +714,11 @@ export class ActivitiesRepository {
     @Injectable
     protected getBindings() {
         return getBindings()
+    }
+
+    @Injectable
+    protected getUnitConverter() {
+        return useUnitConverter()
     }
 
 }

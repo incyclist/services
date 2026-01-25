@@ -1,3 +1,4 @@
+import { FormattedNumber } from "../../../i18n"
 import { RoutePoint } from "../../../routes/base/types"
 import { Workout } from "../../../workouts"
 
@@ -17,26 +18,32 @@ export type ActivityRoute = {
 }
 
 
-export type ActivityStatsRecord = {
-    min: number,
-    max: number,
-    avg: number,
+export type ActivityStatsRecord<T> = {
+    min: T,
+    max: T,
+    avg: T,
     cntVal: number,
-    sum: number,
-    minAllowed?: number
-    weighted?:number
+    sum: T,
+    minAllowed?: T
+    weighted?:T
 
 }
 
 
 
-export type ActivityStats = {
-    hrm?: ActivityStatsRecord,
-    cadence?: ActivityStatsRecord,
-    speed: ActivityStatsRecord,
-    slope?: ActivityStatsRecord,
-    power: ActivityStatsRecord,
+interface ActivityStatsBase  {
+    hrm?: ActivityStatsRecord<number>,
+    cadence?: ActivityStatsRecord<number>,
+    slope?: ActivityStatsRecord<number>,
+    power: ActivityStatsRecord<number>,
     powerCurve?: Record<string,number>
+}
+
+export interface ActivityStats extends ActivityStatsBase {
+    speed: ActivityStatsRecord<number>,
+}
+export interface ActivityStatsUI extends ActivityStatsBase {
+    speed: ActivityStatsRecord<number|FormattedNumber>,
 }
 
 export interface ActivityAppLink  {
@@ -174,7 +181,7 @@ export type FitExportActivity = {
     screenshots: Array<FitScreenshots>
 }
 
-export interface ActivityDetails  {
+interface ActivityDetailsBase  {
     /** file type - always has to be "IncyclistActivity" */    
     type?: ActivityType     
 
@@ -205,9 +212,6 @@ export interface ActivityDetails  {
     /** pausing time (in secs)*/
     timePause: number
 
-    /** distance [in m] ridden in this activity*/
-    distance: number
-
     /** starting position [in m] of this activity*/
     startPos: number,
 
@@ -223,14 +227,8 @@ export interface ActivityDetails  {
     /** @deprecated */
     endpos?: number
 
-    /** total elevation gain of this activity */
-    totalElevation: number
-
     /** all log records */
     logs: Array<ActivityLogRecord>
-
-    /** Statistcs ( max,min,avg) for power, speed,cadence and hrm */
-    stats?: ActivityStats
 
     /** reference to screenshots made during the ride */
     screenshots?: Array<ScreenShotInfo>
@@ -262,6 +260,28 @@ export interface ActivityDetails  {
 
     workout?: Workout
 }
+
+export interface ActivityDetails extends ActivityDetailsBase {
+
+    /** distance [in m] ridden in this activity*/
+    distance: number
+
+    /** total elevation gain of this activity */
+    totalElevation: number
+
+    /** Statistcs ( max,min,avg) for power, speed,cadence and hrm */
+    stats?: ActivityStats
+
+}
+
+export interface ActivityDetailsUI extends ActivityDetailsBase {
+    
+    distance: number|FormattedNumber
+    totalElevation: number|FormattedNumber
+    stats?: ActivityStatsUI
+
+}
+
 
 export type ActivityLogRecord = {
     /** time (in s) since start */
