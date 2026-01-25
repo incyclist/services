@@ -114,7 +114,7 @@ export class OptionManager {
                     
             let options:Array<FreeRideContinuation> = [];
     
-            if (node!==undefined ) {
+            if (node!==undefined && remaining!==undefined ) {
                 node.ways.forEach( (wid) => {
                     if ( wid===remaining.id) {
                         options.push(... this.getOptionsOnCurrentWay(node,remaining,options))
@@ -436,6 +436,9 @@ export class OptionManager {
 
         try {
             const originalWay= this.getWay(partial) 
+            if (!partial || !originalWay) {                
+                return
+            }
 
             const path=originalWay.path;
             const roundabout = isRoundabout(originalWay);
@@ -478,8 +481,10 @@ export class OptionManager {
     
         }
         catch(err) {
-            this.logError(err,'getRemaining')
-            return {...partial,path:[],roundabout:false}
+            const path = partial?.path??[]
+            this.logError(err,'getRemaining',{id:partial?.id, path: path.map(p=>`${p?.id}`).join('|')})
+            const p = partial??{} as IncyclistWay
+            return {...p,path:[],roundabout:false}
 
         }
     }
