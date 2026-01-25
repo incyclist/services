@@ -766,13 +766,13 @@ export class ActiveRidesService extends IncyclistService {
             }
             this.addActiveRide( entry)
 
+            this.isStarted = true
+            const remote = { uuid:payload?.user?.id, session} 
             if ( prevActive===0) {
-                this.isStarted = true
-                this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash()})
+                this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(),remote})
             }
             else {
-                this.isStarted = true
-                this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(),user:payload?.user?.id } )
+                this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(),remote } )
 
             }
 
@@ -867,14 +867,14 @@ export class ActiveRidesService extends IncyclistService {
                     }
                 }
 
+                this.isStarted = true
+                const remote = { uuid:item?.user?.id, session} 
+
                 if ( prevActive===0) {
-                    this.isStarted = true
-                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash()})
+                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), remote})
                 }
                 else {
-                    this.isStarted = true
-                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), 
-                        remote:{ uuid:item.user?.id, session:item.sessionId} } )
+                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), remote })
     
                 }
 
@@ -883,7 +883,7 @@ export class ActiveRidesService extends IncyclistService {
 
         }
         catch(err) {
-            this.logError(err,'onActivityStartEvent')
+            this.logError(err,'onActivityUpdateEvent')
 
         }
 
