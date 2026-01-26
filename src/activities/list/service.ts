@@ -10,6 +10,7 @@ import { ActivitiesRepository, Activity, ActivitySearchCriteria } from "../base"
 import { ActivityInfo } from "../base/model";
 import { ActivityUploadFactory } from "../upload";
 import { ActivityErrorDisplayProperties, ActivityListDisplayProperties, DisplayExportInfo, RideAgainResponse, SelectedActivityDisplayProperties, SelectedActivityResponse } from "./types";
+import { createUIActivityInfo } from "./utils";
 
 /**
  * This service is used by the Front-End to manage and query the current and past activities
@@ -36,6 +37,7 @@ import { ActivityErrorDisplayProperties, ActivityListDisplayProperties, DisplayE
  * @class
  * @public 
  */
+
 
 
 @Singleton
@@ -592,10 +594,12 @@ export class ActivityListService extends IncyclistService {
         const loading = this.isStillLoading()
         const observer = loading ? this.getListObserver() : undefined
         const activities = loading ? undefined : this.getPastActivities()
+        const activitiesUI = activities===undefined ? undefined : activities.map(createUIActivityInfo)
+        
         const filter = this.filter
 
 
-        return {filter,activities ,loading, observer}
+        return {filter,activities:activitiesUI ,loading, observer}
     }
 
     private getSelectedActivityDisplayProps() {

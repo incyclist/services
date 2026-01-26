@@ -88,7 +88,7 @@ export type ActivityDB = {
     isComplete: boolean;
 }
 
-export type ActivitySummary = {
+export type ActivitySummaryBase  = {
     /** unique ID */
     id: string;
 
@@ -106,12 +106,10 @@ export type ActivitySummary = {
     previewImage?: string
     startTime: number
     rideTime: number
-    distance: number
     startPos: number
     endPos?:number
     segment?:string,
     realityFactor: number
-    totalElevation: number
 
     uploadStatus: Array<UploadInfo>
     isCompleted?: boolean
@@ -119,6 +117,16 @@ export type ActivitySummary = {
     saveRideTime?: number
     laps?: Array<LapSummary>
 
+}
+
+export type ActivitySummary = ActivitySummaryBase & { 
+    distance: number
+    totalElevation: number
+}
+
+export type ActivitySummaryUI = ActivitySummaryBase & { 
+    distance: number|FormattedNumber
+    totalElevation: number|FormattedNumber
 }
 
 export type LapSummary  ={
@@ -325,4 +333,10 @@ export type ActivityLogRecord = {
 export type ActivityInfo = {
     summary: ActivitySummary,
     details?: ActivityDetails
+}
+
+
+export type ActivityInfoUI = {
+    summary: ActivitySummaryUI,
+    details?: ActivityDetailsUI
 }

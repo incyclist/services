@@ -2,7 +2,7 @@ import { Avatar } from "../../avatars";
 import { Observer } from "../../base/types";
 import { FormattedNumber } from "../../i18n";
 import { RouteInfo } from "../../routes/base/types";
-import { ActivityDetails, ActivityInfo, ActivitySearchCriteria, ActivityStats } from "../base";
+import { ActivityDetails, ActivityInfoUI, ActivitySearchCriteria, ActivityStats } from "../base";
 
 export type PastActivityLogEntry = {
     routeHash?: string,
@@ -30,7 +30,7 @@ export interface PrevRidesListDisplayProps extends PastActivityLogEntry {
 }
 
 export type ActivityListDisplayProperties = {
-    activities?: Array<ActivityInfo>,
+    activities?: Array<ActivityInfoUI>,
     filter?: ActivitySearchCriteria,
     loading?: boolean
     observer?: Observer

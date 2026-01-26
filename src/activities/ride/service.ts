@@ -24,7 +24,8 @@ import { useAvatars } from "../../avatars";
 import clone from "../../utils/clone";
 import { buildSummary } from "../base/utils";
 import { Injectable } from "../../base/decorators";
-import { FormattedNumber, useUnitConverter } from "../../i18n";
+import { useUnitConverter } from "../../i18n";
+import { createUIActivityDetails } from "../list/utils";
 
 const SAVE_INTERVAL = 5000;
 
@@ -495,7 +496,7 @@ export class ActivityRideService extends IncyclistService {
             this.isSummaryShown = true
 
             const props = {
-                activity: this.createUIActivity(this.activity),
+                activity: createUIActivityDetails(this.activity),
     
                 showSave,
                 showContinue,
@@ -517,37 +518,6 @@ export class ActivityRideService extends IncyclistService {
         }
     }
 
-    protected createUIActivity( activity:ActivityDetails): ActivityDetailsUI {
-        const ui = { ...activity} as ActivityDetailsUI
-        const [C,U] = this.getUnitConversionShortcuts()
-
-        ui.distance = { value:C(activity.distance,'distance', {digits:1}), unit:U('distance')}
-        if (ui.distance.value>100) ui.distance.value = Math.round(ui.distance.value)
-
-        const formatSpeed = (v:number):FormattedNumber=> {
-            return { value:C(v,'speed', {digits:1}), unit:U('speed')}
-        }
-
-        if (ui.stats?.speed) {
-            const fields = ['min','max','avg']
-            for (const field of fields) {
-                ui.stats.speed[field] = formatSpeed(ui.stats.speed[field])
-            }
-        }
-
-        ui.logs = []
-        for (const log of activity.logs ) {
-            const {speed,distance,elevation} = log
-            const uiLog = {...log}
-            uiLog.speed = C(speed,'speed', {digits:1})
-            uiLog.distance = C(distance,'distance', {digits:2})
-            uiLog.elevation = C(elevation,'elevation', {digits:0})
-            ui.logs.push(uiLog)
-        }
-
-        return ui
-
-    }
 
     protected canShowDonate() {
         try {
