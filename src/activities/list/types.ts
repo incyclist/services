@@ -1,8 +1,8 @@
 import { Avatar } from "../../avatars";
 import { Observer } from "../../base/types";
-import { FormattedNumber } from "../../i18n";
+import { Dimension, FormattedNumber, Unit } from "../../i18n";
 import { RouteInfo } from "../../routes/base/types";
-import { ActivityDetails, ActivityInfoUI, ActivitySearchCriteria, ActivityStats } from "../base";
+import { ActivityDetails, ActivityDetailsUI, ActivityInfoUI, ActivitySearchCriteria, ActivityStats } from "../base";
 
 export type PastActivityLogEntry = {
     routeHash?: string,
@@ -47,19 +47,20 @@ export interface ActivityErrorDisplayProperties extends SelectedActivityResponse
 
 export interface SelectedActivityDisplayProperties extends SelectedActivityResponse {
      
-    distance: number,
+    distance: number|FormattedNumber,
     duration: number,
-    elevation: number,
-    startPos?: number
+    elevation: number|FormattedNumber,
+    startPos?: number|FormattedNumber
     segment?:  string
     started: Date
     showMap: boolean,
     points?: Array<{lat:number,lng:number}>
-    activity: ActivityDetails
+    activity: ActivityDetailsUI,
     exports: Array<DisplayExportInfo>
     canStart: boolean
     canOpen: boolean,
     uploads: Array<DisplayUploadInfo> 
+    units: Record<Dimension,Unit>
 }
 
 

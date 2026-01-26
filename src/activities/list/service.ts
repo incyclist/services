@@ -3,6 +3,7 @@ import { Injectable } from "../../base/decorators/Injection";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer, PromiseObserver } from "../../base/types/observer";
+import { useUnitConverter } from "../../i18n";
 import { useRouteList } from "../../routes";
 import { RouteCard } from "../../routes/list/cards/RouteCard";
 import { waitNextTick } from "../../utils";
@@ -10,7 +11,7 @@ import { ActivitiesRepository, Activity, ActivitySearchCriteria } from "../base"
 import { ActivityInfo } from "../base/model";
 import { ActivityUploadFactory } from "../upload";
 import { ActivityErrorDisplayProperties, ActivityListDisplayProperties, DisplayExportInfo, RideAgainResponse, SelectedActivityDisplayProperties, SelectedActivityResponse } from "./types";
-import { createUIActivityInfo } from "./utils";
+import { createUIActivityDetails, createUIActivityInfo } from "./utils";
 
 /**
  * This service is used by the Front-End to manage and query the current and past activities
@@ -603,17 +604,25 @@ export class ActivityListService extends IncyclistService {
     }
 
     private getSelectedActivityDisplayProps() {
-        const activity = this.selected.details;
+        const activity =  createUIActivityDetails(this.selected.details);
 
         const logs = activity?.logs??[]
         const points = logs.map(p => ({ lat: p.lat, lng: p.lng ?? p.lon }));
 
+
+        const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
+        const distance = activity?.distance=== undefined ? undefined : {value:C(activity.distance,'distance',{digits:1}),unit:U('distance') }
+        const startPosVal = activity?.segment ? undefined : activity?.startPos
+        const startPos = startPosVal===undefined? undefined : {value:C(startPosVal,'distance',{digits:1}),unit:U('distance') }
+        const totalElevation = this.selected.getElevation()
+        const elevation = totalElevation=== undefined ? undefined : {value:C(totalElevation,'elevation',{digits:0}),unit:U('elevation') }
+
         const props: SelectedActivityDisplayProperties = {
             title: this.selected.getTitle(),
-            distance: activity?.distance,
+            distance,
             duration: activity?.time,
-            elevation: this.selected.getElevation(),
-            startPos: activity?.segment ? undefined : activity?.startPos,
+            elevation,
+            startPos, 
             segment: activity?.segment,
             started: activity? new Date(activity.startTime) : undefined,
             showMap: true,
@@ -623,6 +632,7 @@ export class ActivityListService extends IncyclistService {
             canStart: this.selected.canStart(),
             canOpen: this.selected.isRouteAvailable(),
             uploads: this.selected.getUploadStatus(),
+            units: this.getUnitConverter().getDefaultUnits()
         };
         return props;
     }
@@ -669,6 +679,11 @@ export class ActivityListService extends IncyclistService {
     @Injectable
     protected getRouteList() {
         return useRouteList()
+    }
+
+    @Injectable
+    protected getUnitConverter() {
+        return useUnitConverter()
     }
 
     reset() {
