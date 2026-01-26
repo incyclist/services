@@ -20,7 +20,6 @@ import { CurrentRideDisplayProps, ICurrentRideService, PrevRidesDisplayProps, St
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { FreeRideOption } from "../../routes/list/types";
 import { RLVDisplayService } from "../route/RLVDisplayService";
-import { useUnitConverter } from "../../i18n";
 
 @Singleton
 export class RideDisplayService extends IncyclistService implements ICurrentRideService {

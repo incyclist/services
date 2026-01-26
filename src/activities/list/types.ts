@@ -1,5 +1,6 @@
 import { Avatar } from "../../avatars";
 import { Observer } from "../../base/types";
+import { FormattedNumber } from "../../i18n";
 import { RouteInfo } from "../../routes/base/types";
 import { ActivityDetails, ActivityInfo, ActivitySearchCriteria, ActivityStats } from "../base";
 
@@ -11,12 +12,12 @@ export type PastActivityLogEntry = {
     time?: number,
     power?: number,
     heartrate?: number,    
-    speed?:number,
+    speed?:number|FormattedNumber,
     distance?: number,
     routeDistance?: number,
     lap?: number,
     timeGap: string,
-    distanceGap: string,
+    distanceGap: string|FormattedNumber,
     lat?:number,
     lng?:number
 }

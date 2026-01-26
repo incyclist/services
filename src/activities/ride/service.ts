@@ -822,9 +822,14 @@ export class ActivityRideService extends IncyclistService {
 
         let logInfo = ''
         try {
+            const buildLog = (pr) => {
+                const distanceGap= typeof pr.distance==='object' ? `${pr.distance?.value}${pr.distance?.unit}` : pr.distance
+
+                return `${pr.position}:${pr.avatar?.shirt}-${pr.avatar?.helmet}:${pr.title}:${pr.timeGap}:${distanceGap}`
+            }
+
             logInfo = `(${props.length}/${prevRides.length})`
-                      + props.map( pr => `${pr.position}:${pr.avatar?.shirt}-${pr.avatar?.helmet}:${pr.title}:${pr.timeGap}:${pr.distanceGap}`)
-                             .join(',')
+                      + props.map(buildLog).join(',')
 
         }
         catch {}
@@ -850,15 +855,17 @@ export class ActivityRideService extends IncyclistService {
             if (!current?.distance ||current.distance>totalDistance)
                 return null
 
-            let prefix =''            
             const sameTime = this.getRecordWithSameOrBiggerTime(logs,current)
             if (!sameTime) 
                 return null
                 
-            const {power,heartrate,distance,speed} = sameTime
+            const {power,heartrate,distance} = sameTime
 
             // calculate distance Gap, based on the record with same (or larger) timestamp
             const {distanceGap,routeDistance,lat,lng} = this.calculateDistanceGap(ai,sameTime,current)
+
+            const [C,U] = this.getUnitConversionShortcuts()
+            const speed = { value:C(sameTime.speed, 'speed',{digits:1}), unit:U('speed')}
 
             // calculate time Gap, based on the record with same (or larger) distance
             let sameDistance = this.getRecordWithSameOrBiggerDistance(logs,current)
@@ -921,8 +928,30 @@ export class ActivityRideService extends IncyclistService {
             lng = point?.lng
         }
 
-        let prefix = Math.sign(distanceDelta)>0 ? '+' : ''
-        const distanceGap = prefix + (Math.abs(distanceDelta)>1000 ? `${(distanceDelta/1000).toFixed(1)}km` : `${distanceDelta.toFixed(0)}m`)
+
+        const [C,U] = this.getUnitConversionShortcuts()       
+        const units = this.getUnitConverter().getUnits()
+        let distanceGap
+        if (units==='metric') {
+            if (distanceDelta<1000)
+                 distanceGap = { value:C(distanceDelta,'distance',{to:'m', digits:0}),units:'m'}
+            else  {
+                const digits = distanceDelta<10000 ? 1: 0
+                distanceGap = { value:C(distanceDelta,'distance',{to:'km', digits}),units:'km'}
+            }
+        }
+        else {
+            const yards = C(distanceDelta,'distance',{from:'m',to:'yd'})
+            const miles = C(distanceDelta,'distance',{from:'m',to:'mi'})
+
+            if (yards<1000)
+                 distanceGap = { value:C(distanceDelta,'distance',{to:'yd', digits:0}),units:'yd'}
+            else  {
+                const digits = miles<10 ? 1: 0
+                distanceGap = { value:C(distanceDelta,'distance',{to:'mi', digits}),units:'mi'}
+            }
+
+        }
 
         return {distanceGap, routeDistance,lat,lng}
     }
@@ -960,7 +989,10 @@ export class ActivityRideService extends IncyclistService {
             const routeId = ai.summary.routeId
             const tsStart = ai.summary.startTime
             const title = 'current'
-            const {power,heartrate,distance,speed,lat,lng} = current
+            const {power,heartrate,distance,lat,lng} = current
+
+            const [C,U] = this.getUnitConversionShortcuts()
+            const speed = { value:C(current.speed,'speed',{digits:1}), unit:U('speed')}
 
             const calculate = {routeHash,routeId,tsStart,title,power,heartrate,speed,distance,timeGap,distanceGap,lat,lng} as  PastActivityLogEntry
             calculate.routeDistance = calculate.distance + ai.summary.startPos
