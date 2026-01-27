@@ -605,13 +605,21 @@ export class ActivityListService extends IncyclistService {
 
     private getSelectedActivityDisplayProps() {
         const activity =  createUIActivityDetails(this.selected.details);
+        const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
 
         const logs = activity?.logs??[]
         const points = logs.map(p => ({ lat: p.lat, lng: p.lng ?? p.lon }));
 
+        const getDistance = ()=> {
+            if (activity?.distance=== undefined)
+                return undefined 
+            if (typeof activity?.distance==='number')
+                return {value:C(activity.distance,'distance',{digits:1}),unit:U('distance') }
+            return activity?.distance
 
-        const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
-        const distance = activity?.distance=== undefined ? undefined : {value:C(activity.distance,'distance',{digits:1}),unit:U('distance') }
+        }
+
+        const distance = getDistance()
         const startPosVal = activity?.segment ? undefined : activity?.startPos
         const startPos = startPosVal===undefined? undefined : {value:C(startPosVal,'distance',{digits:1}),unit:U('distance') }
         const totalElevation = this.selected.getElevation()

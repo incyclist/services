@@ -17,7 +17,7 @@ import { Observer } from "../../base/types/observer"
 
 describe('ActivityRideService',()=>{
 
-    const mockUserSettingsGet = (key,defValue) => {
+    const mockUserSettingsGet = (key:string,defValue:any) => {
         const json = {
             uuid: 'test',
             user: {
@@ -28,13 +28,13 @@ describe('ActivityRideService',()=>{
         return json[key]??defValue        
     }
 
-    const protectedMember = (service,member) => service[member]
+    const protectedMember = (service:any,member:any) => service[member]
 
-    const resetSingleton = (service) =>{
+    const resetSingleton = (service:any) =>{
         service.reset()
     }
 
-    const mockServices = (svc,props?) => {
+    const mockServices = (svc:any,props?:any) => {
         svc.getUserSettings = jest.fn( ()=> ({
             get:jest.fn( mockUserSettingsGet)
         }))
@@ -361,7 +361,7 @@ describe('ActivityRideService',()=>{
         let service:ActivityRideService
         const ride   = new EventEmitter()
 
-        const run = (duration, values) => {
+        const run = (duration:any, values:any) => {
             ride.emit('data',values)
             for (let i=0;i<100;i++) {
                 jest.advanceTimersByTime(1000); 
@@ -498,7 +498,7 @@ describe('ActivityRideService',()=>{
 
     describe('getPrevRideStats',()=>{
         let service:ActivityRideService
-        let svc
+        let svc:any
 
         const template = {
             time: 48.001,
@@ -509,7 +509,7 @@ describe('ActivityRideService',()=>{
             power:0,
 
         }
-        const current = (time,distance) => {
+        const current = (time:any,distance:any) => {
             return {...template, time,distance,routeDistance:distance}
         }
 
@@ -544,7 +544,7 @@ describe('ActivityRideService',()=>{
 
             expect (data.length).toBe(2)
             expect(data[1]?.title).toBe('current')
-            expect(data[0]?.distanceGap).toBe('-16m')
+            expect(data[0]?.distanceGap).toEqual({"units": "m", "value": -16})
             expect(data[0]?.timeGap).toBe('-3.7s')
         })
 
@@ -560,9 +560,9 @@ describe('ActivityRideService',()=>{
             data = service.getPrevRideStats(current(16.001,74.99548756151944))
             data = service.getPrevRideStats(current(17.001,80.91931132633276))
 
-            const res = data.find(a=>a.title==='6/19/2024' )
+            const res = data.find(a=>a?.title==='6/19/2024' )
             
-            expect(res?.distanceGap).toBe('-1m')
+            expect(res?.distanceGap).toEqual({"units": "m", "value": -1})
             expect(res?.timeGap).toBe('-0.2s')
         })
 
@@ -576,7 +576,7 @@ describe('ActivityRideService',()=>{
 
             expect (data.length).toBe(2)
             expect(data[1]?.title).toBe('current')
-            expect(data[0]?.distanceGap).toBe('-110m')
+            expect(data[0]?.distanceGap).toEqual({"units": "m", "value": -110})
             expect(data[0]?.timeGap).toBe('-44.1s')
         })
 
@@ -603,7 +603,7 @@ describe('ActivityRideService',()=>{
 
             expect (data.length).toBe(2)
             expect(data[0]?.title).toBe('current')
-            expect(data[1]?.distanceGap).toBe('+10m')
+            expect(data[1]?.distanceGap).toEqual({"units": "m", "value": 10})
             expect(data[1]?.timeGap).toBe('+2.5s')
         })
 
@@ -622,7 +622,7 @@ describe('ActivityRideService',()=>{
 
     describe('getPrevRidesListDisplay',()=>{
         let service:ActivityRideService
-        let svc
+        let svc:any
 
         const template:PastActivityLogEntry = {tsStart:1, title:'', routeDistance:1, timeGap:'', distanceGap:''} 
 
@@ -637,7 +637,7 @@ describe('ActivityRideService',()=>{
 
         }
 
-        const getList = (l) => l.map(e=>e.title).join(',')
+        const getList = (l:any) => l.map((e:any)=>e.title).join(',')
 
         beforeEach( ()=>{
             svc = service = new ActivityRideService()

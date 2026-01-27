@@ -51,7 +51,7 @@ export const createUIActivityDetails =( details:ActivityDetails): ActivityDetail
     }
 
     ui.logs = []
-    for (const log of details.logs ) {
+    for (const log of details.logs??[] ) {
         const {speed,distance,elevation} = log
         const uiLog = {...log}
         uiLog.speed = C(speed,'speed', {digits:1})

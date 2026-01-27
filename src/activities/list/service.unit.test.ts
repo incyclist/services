@@ -8,7 +8,6 @@ import { ActivityListDisplayProperties } from "./types"
 import SampleDetails from '../../../__tests__/data/activities/v3.json'
 import { sleep } from "../../utils/sleep"
 import { RouteInfo } from "../../routes/base/types"
-import clone from "../../utils/clone"
 
 const MockActivitySummary = (id):ActivitySummary=> ({
     id,
@@ -88,7 +87,7 @@ class RepoMockClass {
         if (!activity)
             throw new Error('Activity not found')
 
-        activity.details = this.props.details??clone(SampleDetails)
+        activity.details = this.props.details??structuredClone(SampleDetails)
         //console.log(new Date().toISOString(),'getWithDetails done',id)
         return activity;
     }
@@ -370,7 +369,7 @@ describe('ActivityListService',()=>{
         test('details already loaded',async ()=>{
             
             const db = new RepoMockClass({cntEntries:5})
-            db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails            
+            db.activities[1].details = structuredClone(SampleDetails) as unknown as ActivityDetails            
             const mocks = setupMocks({repo:db.mock,initialized:true,listOpened:true})
             
 
@@ -452,7 +451,7 @@ describe('ActivityListService',()=>{
         test('details already loaded',async ()=>{
 
             const db = new RepoMockClass({cntEntries:5,repoDelay:100})
-            db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails            
+            db.activities[1].details = structuredClone(SampleDetails) as unknown as ActivityDetails            
             const mocks = setupMocks({repo:db.mock,initialized:true,listOpened:true})
            
 
@@ -523,7 +522,7 @@ describe('ActivityListService',()=>{
         test('normal',async ()=>{
 
             const db = new RepoMockClass({cntEntries:5,repoDelay:100})
-            db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails    
+            db.activities[1].details = structuredClone(SampleDetails) as unknown as ActivityDetails    
             const selected = db.activities[1]
             setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
             
@@ -563,7 +562,7 @@ describe('ActivityListService',()=>{
         test('no item selected',async ()=>{
 
             const db = new RepoMockClass({cntEntries:5,repoDelay:100})
-            db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails    
+            db.activities[1].details = structuredClone(SampleDetails) as unknown as ActivityDetails    
             setupMocks({repo:db.mock,initialized:true,listOpened:true})
             
             let res
@@ -577,7 +576,7 @@ describe('ActivityListService',()=>{
         test('seleced items does not have logs',()=>{
             const db = new RepoMockClass({cntEntries:5,repoDelay:100})
 
-            const activity = clone(SampleDetails)
+            const activity = structuredClone(SampleDetails)
             delete activity.logs
             db.activities[1].details = activity as unknown as ActivityDetails    
            
@@ -610,7 +609,7 @@ describe('ActivityListService',()=>{
         test('normal',async ()=>{
 
             const db = new RepoMockClass({cntEntries:5,repoDelay:100})
-            db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails    
+            db.activities[1].details = structuredClone(SampleDetails) as unknown as ActivityDetails    
             const selected = db.activities[1]
             setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
             
@@ -626,7 +625,7 @@ describe('ActivityListService',()=>{
         test('keep selected',async ()=>{
 
             const db = new RepoMockClass({cntEntries:5,repoDelay:100})
-            db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails    
+            db.activities[1].details = structuredClone(SampleDetails) as unknown as ActivityDetails    
             const selected = db.activities[1]
             setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
             
@@ -650,7 +649,7 @@ describe('ActivityListService',()=>{
             service = new ActivityListService()
 
             const db = new RepoMockClass({cntEntries:5,repoDelay:100})
-            db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails    
+            db.activities[1].details = structuredClone(SampleDetails) as unknown as ActivityDetails    
             const selected = db.activities[1]
             const  mocks = setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
 
@@ -742,7 +741,7 @@ describe('ActivityListService',()=>{
             service = new ActivityListService()
 
             const db = new RepoMockClass({cntEntries:5,repoDelay:100})
-            db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails    
+            db.activities[1].details = structuredClone(SampleDetails) as unknown as ActivityDetails    
             const selected = db.activities[1]
             setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
         })
@@ -813,7 +812,7 @@ describe('ActivityListService',()=>{
             service = new ActivityListService()
 
             const db = new RepoMockClass({cntEntries:5,repoDelay:100})
-            db.activities[1].details = clone(SampleDetails) as unknown as ActivityDetails    
+            db.activities[1].details = structuredClone(SampleDetails) as unknown as ActivityDetails    
             const selected = db.activities[1]
             setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
         })

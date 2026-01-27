@@ -4,9 +4,15 @@ exports[`ActivityListService openSelected normal 1`] = `
 {
   "canOpen": true,
   "canStart": undefined,
-  "distance": 103.5223967660755,
+  "distance": {
+    "unit": "km",
+    "value": 0.1,
+  },
   "duration": 28.884,
-  "elevation": 5,
+  "elevation": {
+    "unit": "m",
+    "value": 5,
+  },
   "exports": [
     {
       "file": "/mnt/c/temp/Incyclist/activities/Incyclist Ride-20241128153550.json",
@@ -23,9 +29,18 @@ exports[`ActivityListService openSelected normal 1`] = `
   ],
   "segment": undefined,
   "showMap": true,
-  "startPos": 6900,
+  "startPos": {
+    "unit": "km",
+    "value": 6.9,
+  },
   "started": 2024-11-28T14:35:50.612Z,
   "title": "Menglonnais",
+  "units": {
+    "distance": "km",
+    "elevation": "m",
+    "speed": "km/h",
+    "weight": "kg",
+  },
   "uploads": [],
 }
 `;

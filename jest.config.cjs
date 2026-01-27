@@ -3,6 +3,14 @@ module.exports = {
     transform: {
       '^.+\\.tsx?$': 'ts-jest',
     },
+    // transformIgnorePatterns: [
+    //     "/node_modules/(?!uuid)" 
+    // ],
+    moduleNameMapper: {
+        // Force Jest to use the CommonJS version of uuid
+        //'^uuid$': require.resolve('uuid'),
+        '^uuid$': '<rootDir>/test/uuid.ts',
+    },
     globalSetup: './jest-setup.js',
     testRegex: '^.+(\\.)?(test|spec)\\.(ts|js)?$',
     moduleFileExtensions: ['ts', 'js', 'json', 'node'],
