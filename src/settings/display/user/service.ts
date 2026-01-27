@@ -54,11 +54,9 @@ export class UserSettingsDisplayService extends IncyclistService {
 
         let units, unitsOptions;
 
-        if (useAppState().hasFeature('IMPERIAL'))  {
-            units = c.getUnits()==='metric' ? 'Metric' : 'Imperial'
-            unitsOptions = ['Metric', 'Imperial']
+        units = c.getUnits()==='metric' ? 'Metric' : 'Imperial'
+        unitsOptions = ['Metric', 'Imperial']
 
-        }
 
         return {
             imageUrl,
