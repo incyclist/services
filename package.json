@@ -5,7 +5,18 @@
   "peerDependencies": {
     "gd-eventlog": "^0.1.26"
   },
+  "dependencies": {
+    "@serialport/bindings-interface": "^1.2.2",
+    "axios": "^1.8.2",
+    "incyclist-devices": "^3.0.1",
+    "promise.any": "^2.0.6",
+    "semver": "^7.6.3",
+    "tcx-builder": "^1.1.1",
+    "uuid": "^13.0.0",
+    "xml2js": "^0.6.2"
+  },
   "devDependencies": {
+    "@serialport/binding-mock": "^10.2.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.9.1",
     "@typescript-eslint/eslint-plugin": "^8.43.0",
@@ -47,14 +58,5 @@
   "directories": {
     "example": "./sample",
     "lib": "./src"
-  },
-  "dependencies": {
-    "axios": "^1.8.2",
-    "incyclist-devices": "^2.4.13",
-    "promise.any": "^2.0.6",
-    "semver": "^7.6.3",
-    "tcx-builder": "^1.1.1",
-    "uuid": "^13.0.0",
-    "xml2js": "^0.6.2"
   }
 }
