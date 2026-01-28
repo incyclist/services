@@ -1,8 +1,5 @@
-import { ISecretBinding } from "../../api/bindings/secret";
 import { Inject } from "../../base/decorators";
-import { Observer } from "../../base/types";
 import { UserSettingsService } from "../../settings";
-import { waitNextTick } from "../../utils";
 import { VeloHeroApi } from "../base/api";
 import { VeloHeroAppConnection } from "./VeloHeroAppConnection";
 import { VeloHeroAuth, VeloHeroCredentials } from "./types";
@@ -17,7 +14,7 @@ const UserSettingsMock = (initialized:boolean, credentials:VeloHeroAuth|null,uui
     set: jest.fn()
 })
 
-const ApiMock = (props:{loginSuccess?:boolean, loginError?:string, uploadResponse?, uploadError?:string}):Partial<VeloHeroApi> =>{
+const ApiMock = (props:{loginSuccess?:boolean, loginError?:string, uploadResponse?:any, uploadError?:string}):Partial<VeloHeroApi> =>{
     const result:Partial<VeloHeroApi> = {
         login:jest.fn(),
         upload:jest.fn()
@@ -39,7 +36,7 @@ const ApiMock = (props:{loginSuccess?:boolean, loginError?:string, uploadRespons
     return result
 }
 
-const createCredentials = (s,credentials) =>{
+const createCredentials = (s:any,credentials:any) =>{
     s.credentials = credentials   
     s.getUuid = ()=>'12345678-0000-1111-2222-123456789abc'
 
@@ -66,7 +63,7 @@ describe ('VeloHeroAppConnection', ()=>{
             service['decrypt'] = mocks.decryptMock
         }
     }
-    const cleanupMocks = (s) => {
+    const cleanupMocks = () => {
         Inject('UserSettings', null)
         Inject('Api', null)               
         jest.clearAllMocks()
@@ -81,7 +78,7 @@ describe ('VeloHeroAppConnection', ()=>{
         })
 
         afterEach(()=>{           
-            cleanupMocks(service) 
+            cleanupMocks() 
             service.reset()
         })
 
@@ -185,7 +182,7 @@ describe ('VeloHeroAppConnection', ()=>{
         })
 
         afterEach(()=>{           
-            cleanupMocks(service) 
+            cleanupMocks() 
             service.reset()
         })
 
@@ -244,7 +241,7 @@ describe ('VeloHeroAppConnection', ()=>{
         })
 
         afterEach(()=>{           
-            cleanupMocks(service) 
+            cleanupMocks() 
             service.reset()
         })
 

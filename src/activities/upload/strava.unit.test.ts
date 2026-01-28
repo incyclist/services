@@ -1,15 +1,11 @@
-import { IncyclistBindings } from '../../api'
-import { ISecretBinding } from '../../api/bindings/secret'
 import { DuplicateError, StravaApi, StravaAppConnection, StravaConfig } from '../../apps'
 import { Inject } from '../../base/decorators/Injection'
 import { Observer } from '../../base/types'
-import { UserSettingsService } from '../../settings'
 import { waitNextTick } from '../../utils'
 import { ActivityDetails } from '../base'
 import { StravaUpload } from './strava'
-import { Credentials, StravaAuth } from './types'
 
-const ApiMock = (props:{tokenUpdate?:StravaConfig,initError?:boolean, uploadResponse?, uploadError?:string,uploadDuplicateError?:DuplicateError}):Partial<StravaApi> =>{
+const ApiMock = (props:{tokenUpdate?:StravaConfig,initError?:boolean, uploadResponse?:any, uploadError?:string,uploadDuplicateError?:DuplicateError}):Partial<StravaApi> =>{
 
     let observer = new Observer()
     const result:Partial<StravaApi> = {
@@ -44,7 +40,7 @@ const ApiMock = (props:{tokenUpdate?:StravaConfig,initError?:boolean, uploadResp
     
 }
 
-const AppConnectionMock = (initialized:boolean, connected:boolean, api):Partial<StravaAppConnection> => ({
+const AppConnectionMock = (initialized:boolean, connected:boolean, api:any):Partial<StravaAppConnection> => ({
     init: jest.fn().mockReturnValue(initialized),
     isConnected: jest.fn().mockReturnValue(connected),
     getApi: jest.fn().mockReturnValue(api)
@@ -69,7 +65,7 @@ describe ('StravaUpload', ()=>{
         }
         Inject('StravaAppConnection',mocks.connection)
     }
-    const cleanupMocks = (s) => {
+    const cleanupMocks = (s:any) => {
         Inject('StravaAppConnection',null)
     }
 

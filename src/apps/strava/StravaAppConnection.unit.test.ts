@@ -1,4 +1,4 @@
-import { ISecretBinding } from "../../api/bindings/secret";
+import { ISecretBinding } from "../../api/secret";
 import { Inject } from "../../base/decorators";
 import { Observer } from "../../base/types";
 import { UserSettingsService } from "../../settings";
@@ -59,7 +59,7 @@ describe ('StravaAppConnection', ()=>{
         Inject('SecretBindings', mocks.bindings)
         service.getApi = jest.fn().mockReturnValue(mocks.api)
     }
-    const cleanupMocks = (s) => {
+    const cleanupMocks = () => {
         Inject('UserSettings', null)
         Inject('Api', null)               
         Inject('SecretBindings', null)
@@ -74,7 +74,7 @@ describe ('StravaAppConnection', ()=>{
         })
 
         afterEach(()=>{           
-            cleanupMocks(service) 
+            cleanupMocks() 
             service.reset()
         })
 
@@ -198,7 +198,7 @@ describe ('StravaAppConnection', ()=>{
         })
 
         afterEach(()=>{           
-            cleanupMocks(service) 
+            cleanupMocks() 
             service.reset()
         })
 
@@ -257,7 +257,7 @@ describe ('StravaAppConnection', ()=>{
         })
 
         afterEach(()=>{           
-            cleanupMocks(service) 
+            cleanupMocks() 
             service.reset()
         })
 

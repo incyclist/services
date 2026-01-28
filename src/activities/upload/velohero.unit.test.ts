@@ -4,7 +4,7 @@ import { ActivityDetails } from '../base'
 import { VeloHeroUpload } from './velohero'
 
 
-const AppConnectionMock = (initialized:boolean, connected:boolean, api):Partial<VeloHeroAppConnection> => ({
+const AppConnectionMock = (initialized:boolean, connected:boolean, api:any):Partial<VeloHeroAppConnection> => ({
     init: jest.fn().mockReturnValue(initialized),
     isConnected: jest.fn().mockReturnValue(connected),
     getApi: jest.fn().mockReturnValue(api),
@@ -12,7 +12,7 @@ const AppConnectionMock = (initialized:boolean, connected:boolean, api):Partial<
 })
 
 
-const ApiMock = (props:{loginSuccess?:boolean, loginError?:string, uploadResponse?, uploadError?:string}):Partial<VeloHeroApi> =>{
+const ApiMock = (props:{loginSuccess?:boolean, loginError?:string, uploadResponse?:any, uploadError?:string}):Partial<VeloHeroApi> =>{
     const result:Partial<VeloHeroApi> = {
         login:jest.fn(),
         upload:jest.fn()
@@ -47,7 +47,7 @@ describe ('VeloHeroUpload', ()=>{
         Inject('VeloHeroAppConnection',mocks.connection)
            
     }
-    const cleanupMocks = (s) => {
+    const cleanupMocks = () => {
         Inject('VeloHeroAppConnection',null)
     }
 
@@ -60,7 +60,7 @@ describe ('VeloHeroUpload', ()=>{
         })
 
         afterEach(()=>{           
-            cleanupMocks(service) 
+            cleanupMocks() 
             service.reset()
         })
 
@@ -110,7 +110,7 @@ describe ('VeloHeroUpload', ()=>{
         })
 
         afterEach(()=>{           
-            cleanupMocks(service) 
+            cleanupMocks() 
             service.reset()
         })
 

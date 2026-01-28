@@ -208,7 +208,7 @@ export class DevicePairingService  extends IncyclistService{
      * 
     */
 
-   async stop(adapters:Array<string>,forExit:boolean=false ):Promise<void> {
+   async stop(adapters:Array<string>=[],forExit:boolean=false ):Promise<void> {
 
         const adapterFilter = adapters??[]
 
