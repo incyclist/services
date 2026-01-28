@@ -10,7 +10,8 @@ import { useDeviceAccess, useDeviceConfiguration, useDevicePairing } from "../de
 import { useFreeRideService, useRouteList } from "../routes";
 import { useWorkoutList } from "../workouts";
 import { useActiveRides, useActivityList } from "../activities";
-import { sleep } from "../utils/sleep";
+import { IMessageQueueBinding } from "../api/mq";
+import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../monitoring";
 
 @Singleton
 export class UserInterfaceServcie extends IncyclistService {
@@ -19,7 +20,8 @@ export class UserInterfaceServcie extends IncyclistService {
     protected platform!: IncyclistPlatform
     protected version!: string
     protected isTerminating: boolean
-    
+    protected queuedMessages: Array< {topic:string, payload:object} > = []
+    protected iv!: NodeJS.Timeout
 
     constructor() {
         super('Incyclist')
@@ -63,32 +65,145 @@ export class UserInterfaceServcie extends IncyclistService {
 
         }
         catch(err) {
-            console.log('# ERROR', err)
+            this.logError(err,'onAppLaunch')
         }
 
     }
 
     async onAppExit() {
-        
-        if (!this.isTerminating) {
-            this.isTerminating = true
-            this.logEvent({message:'onAppExit called'})
+        try {
+            if (!this.isTerminating) {
+                this.isTerminating = true
+                this.logEvent({message:'onAppExit called'})
 
-            await useDevicePairing().exit()
-            await useDeviceAccess().disconnect()
-            
+                this.sendAppExitMessage()
+                await useDevicePairing().exit()
+                await useDeviceAccess().disconnect()
+                
 
-            this.logEvent({message:'onAppExit finished'})
-            return true
-            
+
+                this.logEvent({message:'onAppExit finished'})
+                return true
+                
+            }
+            return false
+
         }
-        return false
+        catch(err) {
+            this.logError(err,'onAppExit')
+            return true;
+        }        
 
     }
 
     protected onSessionStart() {
+        try {
+            
+            this.startQueueWorker();
+
+            let sent = false
+
+            const user = this.getUserSettings().getValue('user',{})
+            const id = this.getUserSettings().getValue('uuid',undefined)
+            const {username,weight,ftp,gender} = user
+            const topic = `incyclist/session/${this.session}/start`
+            const payload = {
+                user: {name:username,weight,ftp,gender,id},
+                platform: this.platform,
+                version: this.version,
+                started: new Date().toISOString()
+            }
+
+            
+            if (this.isOnline()) {
+                this.sendMessage(topic,payload)                
+            }
+            
+
+            if (!sent) {
+                this.queueMessage(topic,payload)
+
+            }
+
+        }
+        catch ( err) {
+
+        }
+    }
+
+    protected sendAppExitMessage() {
+        if (!this.isOnline()) {
+            return;
+        }
+
+        const topic = `incyclist/session/${this.session}/app-exit`
+        this.sendMessage(topic,{})                
+    }
+
+    protected startQueueWorker():void {
+        if (this.iv)
+            return
+
+        this.iv = setInterval( this.resendQueue.bind(this), 1000)
+    }
+
+    protected stopQueueWorker():void {
+        if (!this.iv)
+            return
+
+        clearInterval(this.iv)
+        this.iv = undefined
+    }
+
+    protected resendQueue():void {
+        try {
+            if (!this.iv || !this.isOnline() || this.queuedMessages.length===0) {
+                return
+            }
+
+            const failed: Array< {topic:string, payload:object} > = []
+            while (this.queuedMessages.length>0) {
+                const {topic,payload} = this.queuedMessages.pop()
+                const success = this.sendMessage(topic,payload)
+                if (!success) {
+                    failed.push( {topic,payload})
+                }
+            }
+
+            this.queuedMessages.push( ...failed)
+        }
+        catch (err) {
+
+        }
+    }
+
+    protected isOnline( ) {
+        return this.getOnlineStatusMonitoring().onlineStatus
 
     }
+
+    protected sendMessage(topic:string, payload:object) {
+        const mq = this.getMessageQueue();
+        if (!mq?.enabled())
+            return
+
+        try {
+            mq.publish(topic, payload)
+            return true
+        }
+        catch  {
+            return false
+        }
+
+    }
+
+    protected queueMessage(topic:string, payload:object) { 
+        this.queuedMessages.push({topic,payload})
+    }
+
+    
+
+
 
     protected async initUserSettings() {
         if (!this.bindings.settings) {
@@ -275,12 +390,21 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
 
-
+    @Injectable
+    protected getMessageQueue ():IMessageQueueBinding {
+        return getBindings().mq
+    }
 
     @Injectable
     protected getUserSettings() {
         return useUserSettings()
     }
+
+    @Injectable
+    protected getOnlineStatusMonitoring ():OnlineStateMonitoringService {
+        return useOnlineStatusMonitoring()
+    }
+
 
 
 
