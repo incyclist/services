@@ -1,11 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export interface IUserSettingsBinding {
-    
-    getAll(): Promise<any>
-    set(key:string,value:any):Promise<boolean>
-    save(settings:any,final?:boolean):Promise<boolean>
-    canOverwrite(): boolean;
-}
+
+import { IUserSettingsBinding } from "../../api";
 
 export abstract class UserSettingsBinding implements IUserSettingsBinding {
     static getInstance():IUserSettingsBinding {

@@ -15,8 +15,14 @@ export * from './routes'
 export * from './services'
 export * from './settings'
 export * from './settings/display'
+export * from './ui'
 export * from './utils'
 export * from './video'
 export * from './workouts'
+
+
+
+export {CyclingModeProperyType} from 'incyclist-devices'
+
 
 

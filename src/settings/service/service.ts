@@ -3,8 +3,8 @@ import {EventLogger} from 'gd-eventlog'
 import clone from '../../utils/clone';
 import { merge } from '../../utils/merge';
 import { valid } from '../../utils/valid';
-import {IUserSettingsBinding } from '../bindings';
 import { Observer } from '../../base/types/observer';
+import { IUserSettingsBinding } from '../../api';
 
 
 

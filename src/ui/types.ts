@@ -1,0 +1,1 @@
+export type IncyclistPlatform = 'desktop' | 'mobile/webview' | 'web'

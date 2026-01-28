@@ -7,7 +7,7 @@ import { RouteSettings } from "../routes/list/cards/RouteCard";
 import { UserSettingsService, useUserSettings } from "../settings";
 import { waitNextTick } from "../utils";
 import { Coach } from "./coach";
-import { IncyclistAdapterData } from "incyclist-devices/lib/types";
+import { DeviceData } from "incyclist-devices";
 import { getNextPosition } from "../routes/base/utils/route";
 import { useActivityRide } from "../activities";
 import { Injectable } from "../base/decorators";
@@ -172,7 +172,7 @@ export class CoachesService extends IncyclistService {
     }
 
 
-    protected onCoachDataUpdate(coach:Coach, data:IncyclistAdapterData) {
+    protected onCoachDataUpdate(coach:Coach, data:DeviceData) {
 
         if (this.isPaused)
             return;

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { IUserSettingsBinding } from "../bindings";
+import { IUserSettingsBinding } from "../../api";
 import { UserSettingsService } from "./service";
 
 

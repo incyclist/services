@@ -208,8 +208,13 @@ export class DevicePairingService  extends IncyclistService{
      * 
     */
 
-   async stop(adapterFilter:Array<string>=[]):Promise<void> {
-        this.logEvent({message:'Stop Pairing (Skip)'})
+   async stop(adapters:Array<string>,forExit:boolean=false ):Promise<void> {
+
+        const adapterFilter = adapters??[]
+
+        if (!forExit) {
+            this.logEvent({message:'Stop Pairing (Skip)'})
+        }
         try {
             this.state.stopRequested = true;
             
@@ -229,6 +234,10 @@ export class DevicePairingService  extends IncyclistService{
         catch (err) { // istanbul ignore next
             this.logError(err,'stop')
         }          
+    }
+
+    async exit() {
+        return this.stop([],true)
     }
 
 

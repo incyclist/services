@@ -35,7 +35,7 @@ export class FreeRideService extends IncyclistService {
      * @param position - The position to set as the start position. If not given, the default position is used.
      * @returns The route definition display props containing the start position and the free ride options.
      */
-    async selectStartPosition( position: LatLng|undefined) {
+    async selectStartPosition( position?: LatLng|undefined) {
         this.setStartPosition(position)  
 
         const map = await this.getMapArea().load(this.startPosition)
