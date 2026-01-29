@@ -1,0 +1,25 @@
+{
+	"compilerOptions": {
+        "target": "es2024",
+        "esModuleInterop": true,
+        "resolveJsonModule": true,
+        "allowJs": true,
+        "moduleResolution": "node",
+        "declaration": true,
+        "outDir": "lib",
+        "removeComments": true
+    },
+    "lib": ["ESNext.Array","ES2023.Array"],
+    "include": [
+        "src/**/*.js",
+        "src/**/*.ts"
+      ],
+    "exclude": [
+      "src/**/*.spec.*",
+      "tools/**",
+      "__tests__/**/*.ts",
+      "src/**/*.test.*",
+        "src/**/*.tests.*",
+        "./node_modules" 
+      ]
+}

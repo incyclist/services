@@ -1,0 +1,10 @@
+{
+    "extends": "./tsconfig.base.json",    
+	"compilerOptions": {
+        "target": "es2024",
+        "outDir": "./lib/esm",
+        "module": "esnext",
+        "declaration": true,
+        "declarationDir": "./lib/types"      
+    }
+}
