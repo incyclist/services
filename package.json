@@ -1,6 +1,6 @@
 {
   "name": "incyclist-services",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "peerDependencies": {
     "gd-eventlog": "^0.1.27"
   },
@@ -37,7 +37,6 @@
     "build": "npm run build:esm && npm run build:cjs",
     "build:esm": "tsc -p tsconfig.esm.json",
     "build:cjs": "tsc -p tsconfig.cjs.json",
-
     "test": "npx jest",
     "test:e2e": "npx jest --coverage -c jest.e2e-config.cjs  --coverageDirectory coverage.e2e",
     "test:unit": "npx jest --coverage -c jest.unit-config.cjs  ",
@@ -49,16 +48,16 @@
   "files": [
     "lib/"
   ],
-    "module": "./lib/esm/index.js",
-    "main": "./lib/cjs/index.js",
-    "types": "./lib/types/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./lib/types/index.d.ts",
-            "import": "./lib/esm/index.js",
-            "require": "./lib/cjs/index.js"
-        }
-    },
+  "module": "./lib/esm/index.js",
+  "main": "./lib/cjs/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "import": "./lib/esm/index.js",
+      "require": "./lib/cjs/index.js"
+    }
+  },
   "directories": {
     "example": "./sample",
     "lib": "./src"
