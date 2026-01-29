@@ -12,6 +12,7 @@ import { getNextPosition } from "../routes/base/utils/route";
 import { useActivityRide } from "../activities";
 import { Injectable } from "../base/decorators";
 import { RideDisplayService, useRideDisplay } from "../ride";
+import { useUnitConverter } from "../i18n";
 
 @Singleton
 export class CoachesService extends IncyclistService {
@@ -247,6 +248,11 @@ export class CoachesService extends IncyclistService {
     protected get userService():UserSettingsService {
         return useUserSettings()
     }
+
+    @Injectable getUnitConverter() {
+        return useUnitConverter()
+    }
+
 
 }
 

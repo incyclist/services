@@ -2,6 +2,7 @@ import { EventLogger } from "gd-eventlog";
 import { CoachEditProps, CoachSettings } from "./types";
 import {AdapterFactory, DeviceProperties, DeviceSettings, INTERFACE, IncyclistDeviceAdapter} from 'incyclist-devices'
 import { RoutePoint } from "../routes/base/types";
+import { FormattedNumber, useUnitConverter } from "../i18n";
 
 interface SimulatorProperties extends DeviceProperties { 
     port?:string
@@ -68,21 +69,54 @@ export class Coach {
         const power = type==='power' ? target : undefined
         const speed = type==='speed' ? target : undefined
 
+        const [C,U] = this.getUnitConversionShortcuts()
+
+        const speedConverted =  {
+            value: speed===undefined ? speed : C(speed,'speed',{digits:1}),
+            unit: U('speed')
+        }
+
         const props:CoachEditProps = { 
-            name,type,speed,power, lead
+            name,type,speed:speedConverted,power, lead
         }
 
         if ( this.routeDistance!==undefined && this.riderPosition!==undefined)
             props.lead = this.lead
+
+
+        props.lead = {
+            value: props.lead===undefined ? undefined : C(props.lead,'distance',{digits:1}),
+            unit: U('distance')
+        }
        
         return props
     }
 
     update(settings:CoachEditProps) {
-        const {name,power,speed,lead} = settings
+        const {name,power,speed: speedEdit,lead: leadEdit} = settings
+
+        const getValue = (v:number|FormattedNumber, d:'distance'|'speed'):number  => {
+
+            const [C,U] = this.getUnitConversionShortcuts()
+
+            if (v===undefined || typeof(v)==='number') 
+                return v as number
+            if (v.unit===undefined)
+                return undefined
+
+            if (d==='distance') 
+                return C( v.value, 'distance', {from:U('distance'),to:'m'})
+            else {
+                return C( v.value, 'speed', {from:U(d),to:'km/h'})
+            }
+        }
+
+        const lead = getValue(leadEdit,'distance')
+        const speed = getValue(speedEdit,'speed')
+        
 
         if ( settings.type.toLowerCase()==='power')  {
-            this._settings = { name,type:'power', target:power, lead}
+            this._settings = { name,type:'power', target:power, lead }
             if (!name || name.length===0 && power!==undefined)
                 this._settings.name = `${power.toFixed(0)}W Coach`
         }
@@ -130,6 +164,14 @@ export class Coach {
        
         this.simulator.stop()
         this.routeDistance = undefined
+    }
+
+    protected getUnitConversionShortcuts () {
+        return useUnitConverter().getUnitConversionShortcuts()
+    }
+
+    protected getUnits() {
+        return useUnitConverter().getUnits()
     }
 
     
