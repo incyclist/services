@@ -446,33 +446,51 @@ export class ActivityRideService extends IncyclistService {
     }
 
     protected getAverageValues() {
-        const [C,U] = this.getUnitConversionShortcuts()
+        try {
+            const [C,U] = this.getUnitConversionShortcuts()
 
-        const stats = this.activity?.stats
-        const speedDetails = { value: C(stats?.speed?.max,'speed')?.toFixed(1)??'', label: 'max' };
-        const powerDetails = { value: formatNumber(stats?.power?.max, 0), label: 'max' };
-        const heartrateDetails = { value: formatNumber(stats?.hrm?.max, 0), label: 'max' };
-        const cadenceDetails = { value: formatNumber(stats?.cadence?.max, 0), label: 'max' };
-        const elevationGain = { value: C(this.current.elevationGainDisplay ?? 0,'elevation' )?.toFixed(0)??'', label: 'elev. done', unit: U('elevation') };
-        return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };
+            const stats = this.activity?.stats
+            const maxSpeed = stats?.speed?.max
+            const speedDetails = { value: formatNumber(C(maxSpeed,'speed'),1), label: 'max' };
+            const powerDetails = { value: formatNumber(stats?.power?.max, 0), label: 'max' };
+            const heartrateDetails = { value: formatNumber(stats?.hrm?.max, 0), label: 'max' };
+            const cadenceDetails = { value: formatNumber(stats?.cadence?.max, 0), label: 'max' };
+            const elevationGain = { value: C(this.current.elevationGainDisplay ?? 0,'elevation' )?.toFixed(0)??'', label: 'elev. done', unit: U('elevation') };
+            return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };
+        }
+        catch(err) {
+            this.logError(err,'getAverageValues',{stats:this.activity?.stats})
+            return {}
+        }
     }
 
     protected getMaximumValues() {
-        const [C,U] = this.getUnitConversionShortcuts()
+        try {
+            const [C,U] = this.getUnitConversionShortcuts()
 
-        const stats = this.activity?.stats
-        const speedDetails = { value: C(stats?.speed?.avg, 'speed')?.toFixed(1)??'', label: 'avg' };
-        const powerDetails = { value: formatNumber(stats?.power?.avg, 0), label: 'avg' };
-        const heartrateDetails = { value: formatNumber(stats?.hrm?.avg, 0), label: 'avg' };
-        const cadenceDetails = { value: formatNumber(stats?.cadence?.avg, 0), label: 'avg' };
 
-        let elevationGainRemaining = this.getTotalElevation() - (this.current.elevationGainDisplay ?? 0);
-        if (isNaN(elevationGainRemaining)) elevationGainRemaining = undefined;
-        if (elevationGainRemaining < 0) elevationGainRemaining = 0;
-        const value = elevationGainRemaining === undefined ?  undefined: `${C(elevationGainRemaining,'elevation').toFixed(0)}`
+            const stats = this.activity?.stats
+            const avgSpeed = stats?.speed?.avg
 
-        const elevationGain = { value, label: 'elev. todo', unit: U('elevation') };
-        return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };
+            const speedDetails = { value: formatNumber(C(avgSpeed, 'speed'),1), label: 'avg' };
+            const powerDetails = { value: formatNumber(stats?.power?.avg, 0), label: 'avg' };
+            const heartrateDetails = { value: formatNumber(stats?.hrm?.avg, 0), label: 'avg' };
+            const cadenceDetails = { value: formatNumber(stats?.cadence?.avg, 0), label: 'avg' };
+
+            let elevationGainRemaining = this.getTotalElevation() - (this.current.elevationGainDisplay ?? 0);
+            if (isNaN(elevationGainRemaining)) elevationGainRemaining = undefined;
+            if (elevationGainRemaining < 0) elevationGainRemaining = 0;
+            const value = elevationGainRemaining === undefined ?  undefined: `${C(elevationGainRemaining,'elevation').toFixed(0)}`
+
+            const elevationGain = { value, label: 'elev. todo', unit: U('elevation') };
+            return { speedDetails, powerDetails, heartrateDetails, cadenceDetails, elevationGain };
+
+        }
+        catch (err) {
+            this.logError(err,'getMaximumValues',{stats:this.activity?.stats})
+            return {}
+
+        }
     }
 
     getActivitySummaryDisplayProperties():ActivitySummaryDisplayProperties {
