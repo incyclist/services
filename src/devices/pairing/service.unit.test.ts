@@ -8,6 +8,8 @@ import UserSettingsMock from '../../settings/service/mock'
 import { CapabilityData, DevicePairingData, PairingSettings, PairingState } from './model'
 import { UserSettingsService } from '../../settings'
 import { sleep } from '../../utils/sleep'
+import { Inject } from '../../base/decorators'
+import { getUnitConversionShortcuts } from '../../i18n'
 
 let ride:DeviceRideService
 let access:DeviceAccessService
@@ -1678,6 +1680,7 @@ describe('PairingService',()=>{
                 svc.resetServices()
                 TestWrapper.resetMocks()
                 jest.resetAllMocks()
+                Inject('UnitConverter',null)
             })
 
             test('device is selected',() =>{
@@ -1735,6 +1738,26 @@ describe('PairingService',()=>{
                 expect(spd.devices.find(d=>d.udid==='2')?.value).toBe('25.0')
 
             })
+
+            test('imperial',() =>{
+
+                Inject('UnitConverter',{
+                    getUnitConversionShortcuts: jest.fn().mockReturnValue(
+                    [
+                        (v:number)=>(v/1.6),
+                        ()=>'mph'
+                    ]
+                    )
+                })
+                 
+                ride.emit('data',{power:120,cadence:90, speed:21.123},'1')
+
+                const spd = svc.getCapabilityData('speed')                
+                expect(spd.value).toBe('13.2')
+                expect(spd.unit).toBe('mph')
+
+            })
+
 
             test('no scan, no pairing',()=>{
 

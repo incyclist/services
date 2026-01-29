@@ -7,12 +7,14 @@ import clone from "../../utils/clone";
 import { IncyclistService } from "../../base/service";
 import { EnrichedInterfaceSetting } from "../access";
 import { sleep } from "../../utils/sleep";
+import { Injectable } from "../../base/decorators";
+import { FormattedNumber, useUnitConverter } from "../../i18n";
 
 
 const Units = [
     { capability:IncyclistCapability.HeartRate, unit:'bpm', value:'heartrate', decimals:0},
     { capability:IncyclistCapability.Power, unit:'W', value:'power', decimals:0},
-    { capability:IncyclistCapability.Speed, unit:'km/h', value:'speed', decimals:1},
+    { capability:IncyclistCapability.Speed, unit:'km/h', value:'speed', decimals:1, convert:'speed'},
     { capability:IncyclistCapability.Cadence, unit:'rpm', value:'cadence', decimals:0},
 ]
 
@@ -1100,6 +1102,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onDeviceData(data:DeviceData, udid:string) {
+        console.log('# got data',data)
         const capabilities=this.state.capabilities
 
         if (!this.state.data) {
@@ -1128,16 +1131,24 @@ export class DevicePairingService  extends IncyclistService{
             }
                 
             
+            
 
             if (unitInfo) {
-                const value = data[unitInfo.value]?.toFixed(unitInfo.decimals)
+                let value = data[unitInfo.value]?.toFixed(unitInfo.decimals)
+                let unit = unitInfo.unit
+                if (unitInfo.convert) {
+                    const converted = this.convert(data[unitInfo.value],unitInfo.convert,unitInfo?.decimals)
+                    value = converted.value
+                    unit = converted.unit
+                }
+
                 if (c.selected===udid) {
                     c.value = value
-                    c.unit = unitInfo.unit
+                    c.unit = unit
                 }
                 if (device) {
                     device.value = value
-                    device.unit = unitInfo.unit
+                    device.unit = unit
                     device.connectState = 'connected'
                 }
             }
@@ -1147,6 +1158,23 @@ export class DevicePairingService  extends IncyclistService{
     
         this.emitStateChange({capabilities})
 
+    }
+
+    protected convert(value:number, target:string, digits:number):{value:string, unit:string} {
+        const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
+
+        
+        const numValue =  C(value,target)
+        const unit= U(target)
+        let strValue
+        if (numValue===undefined || numValue===null || Number.isNaN(numValue))
+            strValue = ''
+        else    
+            strValue = numValue.toFixed(digits??0)
+        
+
+
+        return {value:strValue,unit}
     }
 
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
@@ -1990,6 +2018,12 @@ export class DevicePairingService  extends IncyclistService{
         this.removePairingCallbacks()
         this.removeScanningCallbacks()
     }
+
+    @Injectable
+    protected getUnitConverter() {
+        return useUnitConverter()
+    }
+
 
     
 }
