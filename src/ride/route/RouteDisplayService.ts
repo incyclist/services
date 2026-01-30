@@ -65,7 +65,6 @@ export class RouteDisplayService extends RideModeService {
             this.prevPowerTs = Date.now()
 
         if (data.power===0 && (data.speed===0 ||  data.speed<5 && (Date.now()-(this.prevPowerTs??0))>MAX_INACTIVITY)) {
-            this.service.pause('device')
             return
         }
 
