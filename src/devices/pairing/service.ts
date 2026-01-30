@@ -676,10 +676,10 @@ export class DevicePairingService  extends IncyclistService{
             return;
 
         return new Promise( done => {
-            this.access = this.access || useDeviceAccess();
-            this.rideService = this.rideService || useDeviceRide()
+            this.configuration  = this.getDeviceConfiguration()            
+            this.access = this.access || this.getDeviceAccess();
+            this.rideService = this.rideService || this.getDeviceRide()
             this.onScanningDataHandler= this.rideService.onData.bind(this.rideService)
-            this.configuration  = this.configuration|| useDeviceConfiguration();            
 
             if (this.configuration.isInitialized()) {
                 this.state.initialized = true;
@@ -1102,7 +1102,6 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onDeviceData(data:DeviceData, udid:string) {
-        console.log('# got data',data)
         const capabilities=this.state.capabilities
 
         if (!this.state.data) {
@@ -2024,6 +2023,20 @@ export class DevicePairingService  extends IncyclistService{
         return useUnitConverter()
     }
 
+    @Injectable
+    protected getDeviceConfiguration() {
+        return this.configuration??useDeviceConfiguration()
+    }
+
+    @Injectable
+    protected getDeviceAccess() {
+        return this.access??useDeviceAccess()
+    }
+
+    @Injectable
+    protected getDeviceRide() {
+        return this.rideService??useDeviceRide()
+    }
 
     
 }

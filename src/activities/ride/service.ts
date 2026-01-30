@@ -181,8 +181,9 @@ export class ActivityRideService extends IncyclistService {
         
                 this.durationCalculator = new ActivityDuration(this.activity)
         
-                this.getDeviceRide().on('data',this.deviceDataHandler)
-                this.getDeviceRide().on('gear-change',this.gearChangeHandler)
+                const ride = this.getDeviceRide()
+                ride.on('data',this.deviceDataHandler)
+                ride.on('gear-change',this.gearChangeHandler)
         
                 waitNextTick().then( ()=>{
                     this.emit('initialized')
@@ -309,6 +310,12 @@ export class ActivityRideService extends IncyclistService {
         if (this.state!=='paused')
             return;
 
+        
+        if (requester==='user') {
+            this.current.isAutoResume = true
+            return;
+        }
+
         const pauseDuration = (Date.now()-this.tsPauseStart)/1000;
         this.tsPauseStart = undefined
         this.current.isAutoResume = false
@@ -418,7 +425,7 @@ export class ActivityRideService extends IncyclistService {
 
     getCurrentValues() {
         const distance = (this.activity?.distance ?? 0) / 1000;
-        const speed = (this.current.deviceData?.speed ?? 0);
+        let speed = (this.current.deviceData?.speed ?? 0);
         const power = (this.current.deviceData?.power ?? 0);
         const slope = this.current.position?.slope;
         const heartrate = this.current.deviceData?.heartrate;
@@ -429,6 +436,9 @@ export class ActivityRideService extends IncyclistService {
         const routeDistance = this.current.routeDistance
         const gear = this.current.deviceData?.gearStr
         
+        if (this.state!='active' ) {
+            speed = 0
+        }
 
         let distanceRemaining = (this.getTotalDistance()/1000-distance)
         if (isNaN(distanceRemaining)) distanceRemaining=undefined
@@ -436,7 +446,7 @@ export class ActivityRideService extends IncyclistService {
 
         let timeRemaining 
         
-        if (speed>0)  {
+        if (speed>0 && this.durationCalculator)  {
             timeRemaining = this.durationCalculator.getRemainingTime(
                 {route:this.current.route, speed:this.current.deviceData?.speed,routePos:this.activity.distance+(this.activity?.startPos??0), endPos:this.current?.endPos}
             )    
@@ -1026,20 +1036,26 @@ export class ActivityRideService extends IncyclistService {
            
             this.current.deviceData = { ...this.current.deviceData, ...update}
 
-            if (this.state!=='active') {
-                this.emit('data')
-    
-                if (this.state==='paused' && (data.power>0||data.cadence>0) && this.current.isAutoResume) {
+            if (this.state==='active') {
+                if (update.speed===0) {
+                    this.pause(true)
+                    return;
+                }
+            }
+            else if (this.state==='paused') {
+                if ( (data.power>0||data.cadence>0) && this.current.isAutoResume) {
                     this.resume('system')
                     return;
                 }
-
+                this.emit('data')
+            }
+            else  {
                 if (this.state==='ininitalized' && (data.speed>0)) {
                     this.start()
-                    return;
                 }
-    
-                this.current.deviceData.speed = 0
+
+                // not yet emitted 
+                this.emit('data')
                 return;
             }
     

@@ -153,11 +153,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     pause(requester: 'user' | 'device'='user') {
-
-
-        if (requester==='device' && this.isResuming) {
-            return;
-        }
+        
         try {
             if (this.state!=='Active')
                 return
@@ -165,7 +161,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.logEvent({ message: "pause activity request",activity: this.activity?.id, userRequested: requester === 'user'});
 
             this.state = 'Paused'
-            this.getActivityRide().pause( requester === 'device')
+            if (requester==='user') {
+                this.getActivityRide().pause(false)
+            }
             this.getWorkoutRide().pause()   
             this.displayService.pause()  
 
@@ -179,7 +177,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     resume(requester: 'user' | 'device'='user') {
         try {
-            if (this.state!=='Paused' || this.isResuming)
+            if (this.state!=='Paused')
                 return
 
             this.logEvent({ message: "continue activity request",activity: this.activity?.id,userRequested: requester === 'user'});
@@ -187,9 +185,14 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.isResuming = true
             this.state = 'Active'
             
-            this.getActivityRide().resume()
-            this.getWorkoutRide().resume()
+            if (requester==='user') {
+                this.getActivityRide().resume('user')
+                // This will cause that Activity is still in paused state (autoResume)
+                // but display service is already on active state ( i.e. will close pause dialog)
+            }
+            
 
+            this.getWorkoutRide().resume()
             this.pauseReason = 'device'                
             this.observer?.emit('state-update',this.state)        
         }
@@ -616,16 +619,13 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected onActivityPaused(autoResume) {
         if (this.state==='Paused')
-            return
-
-        if (autoResume && this.state==='Active')
-            this.pause('device')
+            return        
+        this.pause('device')
     }
 
     protected onActivityResumed() {
         if (this.state!=='Paused')
             return
-
         this.resume('device')
     }
 
@@ -635,11 +635,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             const currentValues = this.getActivityRide().getCurrentValues()
             if (!currentValues)
                 return
-
-            if (currentValues.speed===0 && !this.isResuming) {
-                this.pause('device')
-                return;
-            }
 
             if (currentValues.speed>0 && this.isResuming) {
                 this.displayService.resume()  

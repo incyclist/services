@@ -13,19 +13,21 @@ import prev2 from '../../../__tests__/data/activities/prevRide1.json'
 import { ActivityDetails, ActivityInfo, buildSummary, DB_VERSION } from '../base'
 import { PastActivityLogEntry } from "../list"
 import { Observer } from "../../base/types/observer"
+import { DeviceRideService } from "../../devices"
+import { Inject } from "../../base/decorators"
 
 
 describe('ActivityRideService',()=>{
 
     const mockUserSettingsGet = (key:string,defValue:any) => {
-        const json = {
+        const json:any = {
             uuid: 'test',
             user: {
                 weight: 75,
                 ftp:200
             }
         }
-        return json[key]??defValue        
+        return json[key]??defValue
     }
 
     const protectedMember = (service:any,member:any) => service[member]
@@ -312,6 +314,91 @@ describe('ActivityRideService',()=>{
 
         })
 
+        test('automatic pause if no power and cadence',()=>{
+            const activity:Partial<ActivityDetails> = {id:'123',startTime:'2020-01-01T00:00:00.000Z',logs:[]} 
+            mockServices(service,
+                {route,startSettings:{startPos:0,realityFactor:100,type:'Route' }, 
+                init:{
+                    state:'active',tsStart:Date.now(),
+                    observer, activity
+                }
+            })
+
+            let isPaused = false
+            let isResumed = false
+            const emittedData: Array<any> = [] 
+
+            service.init()
+            observer.on('paused',()=>{isPaused=true; isResumed=false})
+            observer.on('resumed',()=>{isResumed=true; isPaused=false})
+
+            // add or update data
+            observer.on('data',()=>{
+                const data = service.getCurrentValues();
+                const idx = emittedData.findIndex(d => d.time===data.time )
+                if (idx===-1) {
+                    emittedData[idx] = data
+                }
+                emittedData.push(data )
+            })
+            
+
+            const s  =service as any
+            s.state = 'ininitalized'
+            s._save = jest.fn().mockResolvedValue(undefined)
+            s.enableDeviceHealthCheck = jest.fn()
+            const pauseSpy = jest.spyOn( s, 'pause')
+
+            jest.advanceTimersByTime(1000)
+            s.onDeviceData({power:100, speed:10, heartrate:10, cadence:10})
+            expect(s.state).toBe('active')
+
+            // send some data for 2s
+            jest.advanceTimersByTime(1000)
+            s.onDeviceData({power:100, speed:10, heartrate:10, cadence:10})
+            jest.advanceTimersByTime(1000)
+            s.onDeviceData({power:100, speed:10, heartrate:10, cadence:10})
+
+
+            // send 0 power, 0 speed 
+            // should trigger auto-pause
+            jest.advanceTimersByTime(1000)
+            s.onDeviceData({power:0, speed:0, heartrate:0, cadence:0})
+            expect(isPaused).toBeTruthy()
+            expect(emittedData.length).toBe(4)  
+            expect(s.state).toBe('paused')
+
+            
+            // send power>0, speed>0
+            // should trigger auto-resume
+            jest.advanceTimersByTime(1000)
+            s.onDeviceData({power:100, speed:10, heartrate:0, cadence:0})
+            jest.advanceTimersByTime(1000)
+            expect(isPaused).toBeFalsy()
+            expect(isResumed).toBeTruthy()
+            expect(emittedData.length).toBe(5)  
+            expect(s.state).toBe('active')
+
+
+            // send 0 power, 0 speed 
+            // should trigger auto-pause
+            jest.advanceTimersByTime(1000)
+            s.onDeviceData({power:0, speed:0, heartrate:0, cadence:0})
+            expect(isPaused).toBeTruthy()
+            expect(isResumed).toBeFalsy()
+            expect(s.state).toBe('paused')
+            expect(emittedData.length).toBe(6)  
+
+            isPaused = false
+            isResumed = false
+            // user requests resume
+            s.resume('user')
+            expect(isPaused).toBeFalsy()
+            expect(isResumed).toBeFalsy()
+            expect(s.state).toBe('paused')
+
+        })
+
 
         test('pausing paused acitvity',()=>{
             const activity:Partial<ActivityDetails> = {id:'123',startTime:'2020-01-01T00:00:00.000Z'} 
@@ -330,7 +417,7 @@ describe('ActivityRideService',()=>{
         })
 
 
-        test('resuming paused acitvity',()=>{
+        test('user resuming paused acitvity',()=>{
             const activity:Partial<ActivityDetails> = {id:'123',startTime:'2020-01-01T00:00:00.000Z'} 
             mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'}, 
                 init:{
@@ -344,7 +431,31 @@ describe('ActivityRideService',()=>{
             service.pause()
 
             jest.advanceTimersByTime(1000)
-            service.resume()
+            service.resume('user') // 
+
+            jest.advanceTimersByTime(1000)
+            service.stop()
+            expect(activity.timeTotal).toBe(3)
+            expect(activity.time).toBe(1)
+            expect(activity.timePause).toBe(2)
+
+        })
+
+        test('system resuming paused acitvity',()=>{
+            const activity:Partial<ActivityDetails> = {id:'123',startTime:'2020-01-01T00:00:00.000Z'} 
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'}, 
+                init:{
+                    state:'active',tsStart:Date.now(),
+                    activity,observer
+                }
+            })
+            let isPaused = false
+            jest.advanceTimersByTime(1000)
+            observer.on('paused',()=>{isPaused=true})
+            service.pause()
+
+            jest.advanceTimersByTime(1000)
+            service.resume('system') // 
 
             jest.advanceTimersByTime(1000)
             service.stop()
@@ -353,7 +464,6 @@ describe('ActivityRideService',()=>{
             expect(activity.timePause).toBe(1)
 
         })
-
 
     })
 
@@ -514,10 +624,12 @@ describe('ActivityRideService',()=>{
         }
 
         beforeAll( ()=>{
-        const origDate = global.Date.prototype.toLocaleDateString;
-            jest.spyOn(global.Date.prototype, 'toLocaleDateString').mockImplementation(function () { 
+            const origDate = Date.prototype.toLocaleDateString;
+
+            jest.spyOn(global.Date.prototype, 'toLocaleDateString').mockImplementation(function (this: Date) { 
+                // TypeScript now knows 'this' is a Date instance
                 return origDate.call(this, 'en-US');
-            });
+            });        
         })
 
         beforeEach( ()=>{
