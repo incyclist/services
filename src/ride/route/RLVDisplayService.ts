@@ -1,6 +1,7 @@
 import { ActivityUpdate } from "../../activities/ride/types";
 import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
+import { getCoachesService } from "../../coaches";
 import { LocalizationService, useLocalization } from "../../i18n";
 import { concatPaths } from "../../maps/MapArea/utils";
 import { correctDistanceValues, getNextVideoId, hasNextVideo, RouteListService, useRouteList, validateRoute } from "../../routes";
@@ -305,6 +306,10 @@ export class RLVDisplayService extends RouteDisplayService {
         concatPaths(currentPoints,nextPoints ,'after')
         validateRoute(this.getCurrentRoute(),false)
         this.emit('route-updated', this.getCurrentRoute())
+
+        this.getCoaches().updateRoute(this.getCurrentRoute())
+
+
 
         this.logEvent({message: 'switching to next video', route: this.getCurrentRoute().details.title,
                        segment:this.currentVideo.route.description.title, offset: this.offset, segmentDistance: this.currentVideo.route.description.distance,
@@ -718,5 +723,9 @@ export class RLVDisplayService extends RouteDisplayService {
         return useLocalization()
     }
 
+    @Injectable
+    protected getCoaches() {
+        return getCoachesService()
+    }
 
 }

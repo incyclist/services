@@ -13,6 +13,7 @@ import { useActivityRide } from "../activities";
 import { Injectable } from "../base/decorators";
 import { RideDisplayService, useRideDisplay } from "../ride";
 import { useUnitConverter } from "../i18n";
+import { Route } from "../routes/base/model/route";
 
 @Singleton
 export class CoachesService extends IncyclistService {
@@ -20,6 +21,7 @@ export class CoachesService extends IncyclistService {
     protected coaches: Array<Coach> = []
     protected observer: Observer    
     protected isPaused: boolean
+    protected route!: Route
 
     constructor() {
         super('Coaches')
@@ -69,19 +71,20 @@ export class CoachesService extends IncyclistService {
     }
 
 
-    async startRide():Promise<Observer|null> {
-
-        
+    async startRide(route:Route):Promise<Observer|null> {
         try {
             if (this.observer) {
                 await this.stopRide()
             }
 
-            if (!this.coaches)
+            if (!this.coaches?.length) {
+                delete this.observer
                 return null;
+            }
 
             this.observer = new Observer()
             this.isPaused = false
+            this.route = route
 
             const onDataUpdate = this.onCoachDataUpdate.bind(this)
             this.coaches.forEach( c => {
@@ -92,6 +95,7 @@ export class CoachesService extends IncyclistService {
                 }           
 
                 const lead = (isNaN(c.settings?.lead) ? 0 : c.settings?.lead)??0
+                c.setRoute(route)
                 c.setProgress(lead+pos)
                 c.setRiderPosition(pos)
                 this.setCoachPosition(c,lead+pos)
@@ -121,7 +125,17 @@ export class CoachesService extends IncyclistService {
         return this.observer
     }
 
+    updateRoute(route:Route) {
+        this.route = route
+        if (this.observer) {
+            this.coaches.forEach( c=>{c.setRoute(route)})
+        }
+    }
+
     async stopRide():Promise<void> {
+
+        if (!this.observer)
+            return
         try {
             this.coaches.forEach( c=> {c.stop()})
             this.isPaused = false;
@@ -133,6 +147,9 @@ export class CoachesService extends IncyclistService {
     }
 
     pauseRide() {
+        if (!this.observer)
+            return
+
         try {
             this.isPaused = true
         }
@@ -143,6 +160,9 @@ export class CoachesService extends IncyclistService {
     }
 
     resumeRide() {
+        if (!this.observer)
+            return
+
         try {
             this.isPaused = false
 
@@ -180,12 +200,12 @@ export class CoachesService extends IncyclistService {
         
         const startSettings = this.routesService.getStartSettings() as RouteSettings
         const {distance} = data        
-        const route = this.getRideDisplay().route
+        const route = this.route
 
         if(!route || !coach || !data)
             return;
 
-        const prevRouteDistance = coach.getProgess();
+        const prevRouteDistance = coach.getProgess()??0;
         const newRouteDistance = prevRouteDistance + data.distance 
         coach.setProgress(newRouteDistance)             
         

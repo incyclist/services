@@ -317,7 +317,6 @@ export class ActiveRidesService extends IncyclistService {
         
         const cnt = (this.others?.length??0) + 1
 
-        console.log('# nearby riders log', logInfo, all)
         const event = { message: 'NearbyRiders', activityId:this.activity?.id, title:this.activity?.route?.title, cnt , nearbyRiders: logInfo }               
         this.logEvent(event);
         this.prevLogTS = Date.now()
@@ -571,9 +570,14 @@ export class ActiveRidesService extends IncyclistService {
             const format = (v:number) => {
                 const [C,U] = this.getUnitConversionShortcuts()
                 let value = C( v, 'distance',{digits:1})
-                const unit = U('distance')
+                let unit = U('distance')
                 if (value>=10) {
                     value = Math.round(value)
+                }
+                if (value===0) {
+                    const units = this.getUnitConverter().getUnits()
+                    unit = units==='imperial' ? 'yd' :'m'
+                    C( v, 'distance',{digits:0, to:unit})
                 }
                 return {value,unit}
             }
@@ -1007,20 +1011,14 @@ export class ActiveRidesService extends IncyclistService {
                 
 
             this.coaches = coaches.map(c=>{
-                const props = c.getDisplayProperties()
-                const rideEntry:ActiveRideEntry = {
-                    id: `coach:${props.name}`,
-                    user: {
-                        name:props.name,
-                        id: `coach:${props.name}`,
-                    },
+                const props = c.getRidersListDisplayProperties() as ActiveRideEntry
+
+                let routeDistance = props.currentRideDistance
+
+                const entry:ActiveRideEntry = {...props,
                     ride: this.current?.ride,
-                    tsLastUpdate: Date.now(),
-                    currentRideDistance: c.getProgess(),
-                    currentPosition: c.getPosition(),
-                    isCoach:true
                 }
-                return rideEntry
+                return entry
             }) 
 
         }

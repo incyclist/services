@@ -20,6 +20,8 @@ import { CurrentRideDisplayProps, ICurrentRideService, PrevRidesDisplayProps, St
 import { RouteSettings } from "../../routes/list/cards/RouteCard";
 import { FreeRideOption } from "../../routes/list/types";
 import { RLVDisplayService } from "../route/RLVDisplayService";
+import { ActivityUpdate } from "../../activities/ride/types";
+import { getCoachesService } from "../../coaches";
 
 @Singleton
 export class RideDisplayService extends IncyclistService implements ICurrentRideService {
@@ -93,6 +95,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             // start devices and prepare ride ( load video/map/....)
             this.startDevices()
             this.startRide()
+            this.getCoaches().startRide(this.route)
+            
 
             this.setState('Starting')
             this.logEvent({message:'overlay shown',overlay:'start overlay' })
@@ -161,6 +165,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.logEvent({ message: "pause activity request",activity: this.activity?.id, userRequested: requester === 'user'});
 
             this.state = 'Paused'
+            this.getCoaches().pauseRide()
             if (requester==='user') {
                 this.getActivityRide().pause(false)
             }
@@ -184,6 +189,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
             this.isResuming = true
             this.state = 'Active'
+            this.getCoaches().resumeRide()
             
             if (requester==='user') {
                 this.getActivityRide().resume('user')
@@ -236,6 +242,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
         await this.stopRide({exit,noStateUpdates:true})
         this.getActivityRide().cleanup()
+        this.getCoaches().stopRide()
 
         delete this.type
 
@@ -630,7 +637,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
 
-    protected onActivityUpdate(data) {
+    protected onActivityUpdate() {
         if (this.state==='Active' ) {
             const currentValues = this.getActivityRide().getCurrentValues()
             if (!currentValues)
@@ -641,6 +648,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 this.isResuming = false        
                 delete this.pauseReason                
             }
+            const {time,speed,routeDistance,distance} = currentValues
+            const data:ActivityUpdate = {time,speed,routeDistance,distance}
 
             this.getRideModeService().onActivityUpdate(data,currentValues)
             this.observer.emit('data-update',data,currentValues )
@@ -1395,6 +1404,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     @Injectable
     protected getUIBinding(): INativeUI {
         return getBindings().ui
+    }
+
+    @Injectable
+    protected getCoaches() {
+        return getCoachesService()
     }
 
 }

@@ -3,6 +3,9 @@ import { CoachEditProps, CoachSettings } from "./types";
 import {AdapterFactory, DeviceProperties, DeviceSettings, INTERFACE, IncyclistDeviceAdapter} from 'incyclist-devices'
 import { RoutePoint } from "../routes/base/types";
 import { FormattedNumber, useUnitConverter } from "../i18n";
+import { ActiveRideEntry } from "../activities";
+import { Route } from "../routes/base/model/route";
+import { getPointAtDistance } from "../routes";
 
 interface SimulatorProperties extends DeviceProperties { 
     port?:string
@@ -19,6 +22,7 @@ export class Coach {
     protected simulator:IncyclistDeviceAdapter
     protected logger: EventLogger
     protected position: RoutePoint
+    protected route: Route
 
     constructor(settings:CoachSettings) {
         this._settings = settings
@@ -41,8 +45,28 @@ export class Coach {
         return lead
     }
 
+    setRoute(route:Route) {
+        this.route = route
+    }
+
     setProgress(routeDistance:number) {
-        this.routeDistance = routeDistance
+        try {
+            this.routeDistance = routeDistance
+            if (!this.route?.details?.points)
+                return
+                
+
+            const isLap  = this.route?.description?.isLoop
+            const totalDistance = this.route?.description?.distance
+
+            const lapDistance = isLap ? this.routeDistance%totalDistance : this.routeDistance
+            const position = getPointAtDistance(this.route, lapDistance, true)
+
+            this.setPosition(position)
+        }
+        catch(err) {
+            this.logger.logEvent({message:'error',fn:'setProgress',error:err.message, stack:err.stack})
+        }
     }
     getProgess() {
         return this.routeDistance
@@ -90,6 +114,24 @@ export class Coach {
         }
        
         return props
+    }
+
+    getRidersListDisplayProperties(): Partial<ActiveRideEntry> {
+
+        const {name} = this.settings
+        return  {
+            id: `coach:${name}`,
+            user: {
+                name:name,
+                id: `coach:${name}`,
+            },
+            tsLastUpdate: Date.now(),
+            currentRideDistance: this.getProgess(),
+            currentPosition: this.getPosition(),
+            isCoach:true
+        }
+
+
     }
 
     update(settings:CoachEditProps) {
@@ -164,6 +206,7 @@ export class Coach {
        
         this.simulator.stop()
         this.routeDistance = undefined
+        this.route = undefined
     }
 
     protected getUnitConversionShortcuts () {
