@@ -180,13 +180,13 @@ export class ActiveRidesService extends IncyclistService {
             if (!isOnline)
                 return
             
-            const activeRides = await this.getApi().getAll() 
+            const activeRides = (await this.getApi().getAll()).filter(ar=>ar.ride!==undefined && ar.ride!==null)
             
             const routes = this.getRouteList().getAllRoutes()
 
             const counts: ActiveRideCount[] = []
             routes.forEach( route => {
-                const routeRides = activeRides.filter( ar => ar.ride.routeHash === route.description.routeHash)??[]
+                const routeRides = activeRides.filter( ar => ar.ride?.routeHash && ar.ride?.routeHash === route.description?.routeHash)??[]
                 const count = routeRides.length
                
                 counts.push( {
@@ -850,8 +850,8 @@ export class ActiveRidesService extends IncyclistService {
     }
 
     protected async getRemoteActivityDetails( sessionId:string) {
-
         const items = await this.getApi().getBySessionId(sessionId)
+
         if (!items.length)
             return
 

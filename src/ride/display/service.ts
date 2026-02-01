@@ -243,10 +243,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         await this.stopRide({exit,noStateUpdates:true})
         this.getActivityRide().cleanup()
         this.getCoaches().stopRide()
-
-        delete this.type
-
-        
+       
     }
 
     toggleCyclingMode() {
@@ -416,16 +413,14 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             delete this.type
         }
 
-        if (!this.type) {
-            try {
-                this.type = this.detectRideType()
-            }
-            catch(err) {
-                this.logError(err,'getRideType')
-                this.type = prev
-            }
-            //catch { /* ignore error*/ }
+        try {
+            this.type = this.type??this.detectRideType()
         }
+        catch(err) {
+            this.logError(err,'getRideType')
+            this.type = prev
+        }
+        
         return this.type
     }
 
@@ -515,7 +510,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.logError(err,'stopRide')
         }
 
-        delete this.type
         delete this.displayService
 
     }
@@ -970,7 +964,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.logEvent({ message: 'Start activity', activityId: this.activity?.id, ...logProps,interface: this.getBikeInterface()});   
     }
 
-    protected startRide(retry?:boolean) { 
+    protected startRide(retry?:boolean) {
+        this.getRideType(true)        
         this.displayService.start(retry)
         
         this.displayService.on('state-update',this.stateUpdateHandler)
