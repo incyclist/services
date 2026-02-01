@@ -29,10 +29,11 @@ export const createUIActivitySummary = (summary:ActivitySummary):ActivitySummary
 }
 
 export const createUIActivityDetails =( details:ActivityDetails): ActivityDetailsUI => {
+    
     if (!details)
         return details
 
-    const ui = { ...details} as ActivityDetailsUI
+    const ui = structuredClone(details) as ActivityDetailsUI
     const [C,U] = getUnitConversionShortcuts()
 
     ui.distance = { value:C(details.distance,'distance', {digits:1}), unit:U('distance')}

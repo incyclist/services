@@ -1138,6 +1138,7 @@ export class ActivityRideService extends IncyclistService {
             const info = {summary,details:this.activity}
             this.tsPrevSave = Date.now()
             await this.getRepo().save(info,true)
+
         }
         catch (err) {
             this.logError(err,'_save')
@@ -1723,3 +1724,5 @@ export class ActivityRideService extends IncyclistService {
 }
 
 export const useActivityRide = ()=> new ActivityRideService()
+
+
