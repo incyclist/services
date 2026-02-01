@@ -1286,10 +1286,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected getStartOverlayProps = ():StartOverlayProps =>{
         const mode = this.getRideType()
         const readyToStart = this.isStartDeviceReadyToStart() && this.getRideModeService().isStartRideCompleted()
-        const devices = this.deviceInfo??[]
+        const devicesState = this.deviceInfo??[]
 
         const displayOverlayProps = this.getRideModeService().getStartOverlayProps()??{}
-        return {mode, rideState:this.state, devices, readyToStart, ...displayOverlayProps}
+        return {mode, rideState:this.state, devicesState, readyToStart, ...displayOverlayProps}
     }
 
     protected getDeviceStartSettings() {
