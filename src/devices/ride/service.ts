@@ -936,7 +936,7 @@ export class DeviceRideService  extends IncyclistService{
 
         this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData, stillHealthy:stillHealthy?.length, onSameInterface:adapters.length  })
 
-        if ( !stillHealthy?.length && adapters.length>1)  {
+        if ( !stillHealthy?.length && adapters.length>1 && ifName!=='ble')  {
             await this.reconnectInterface(ifName, adapters);
 
         }
