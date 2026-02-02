@@ -22,6 +22,7 @@ export class UserInterfaceServcie extends IncyclistService {
     protected isTerminating: boolean
     protected queuedMessages: Array< {topic:string, payload:object} > = []
     protected iv!: NodeJS.Timeout
+    protected heartbeatIv!: NodeJS.Timeout
 
     constructor() {
         super('Incyclist')
@@ -76,9 +77,11 @@ export class UserInterfaceServcie extends IncyclistService {
                 this.isTerminating = true
                 this.logEvent({message:'onAppExit called'})
 
+                this.startHeartbeatWorker()
                 this.sendAppExitMessage()
                 await useDevicePairing().exit()
                 await useDeviceAccess().disconnect()
+                
                 
 
 
@@ -107,9 +110,11 @@ export class UserInterfaceServcie extends IncyclistService {
             const id = this.getUserSettings().getValue('uuid',undefined)
             const {username,weight,ftp,gender} = user
             const topic = `incyclist/session/${this.session}/start`
+            const os = this.getBindings().appInfo?.getOS()?.platform
             const payload = {
                 user: {name:username,weight,ftp,gender,id},
                 platform: this.platform,
+                os,
                 version: this.version,
                 started: new Date().toISOString()
             }
@@ -131,10 +136,53 @@ export class UserInterfaceServcie extends IncyclistService {
         }
     }
 
+    protected startHeartbeatWorker() {
+        if (this.heartbeatIv)
+            return
+
+        // send heartbeat once a minute
+        this.heartbeatIv = setInterval( this.sendHeartbeat.bind(this), 60*1000)
+
+    }
+
+    protected stopHeartbeatWorker() {
+        if (!this.heartbeatIv)
+            return
+
+        clearInterval(this.heartbeatIv)
+        delete this.heartbeatIv
+    }
+
+    protected sendHeartbeat() {
+        try {
+            const user = this.getUserSettings().getValue('user',{})
+            const id = this.getUserSettings().getValue('uuid',undefined)
+            const {username,weight,ftp,gender} = user
+            const topic = `incyclist/session/${this.session}/heartbeat`
+            const payload = {
+                user: {name:username,weight,ftp,gender,id},
+                platform: this.platform,
+                os: this.getBindings().appInfo?.getOS()?.platform,
+                version: this.version,
+            }
+
+            
+            this.sendMessage(topic,payload)                
+
+        }
+        catch {
+            /* ignore */
+        }
+
+
+    }
+
     protected sendAppExitMessage() {
         if (!this.isOnline()) {
             return;
         }
+
+        this.logEvent({message:'sending app exit message'})
 
         const topic = `incyclist/session/${this.session}/app-exit`
         this.sendMessage(topic,{})                
