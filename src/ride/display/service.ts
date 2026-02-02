@@ -233,6 +233,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     async stop(exit:boolean = false) {
 
         this.getDeviceRide().enforceSimulator(false)
+        this.getDeviceRide().pause()
+        
         try {
             this.getRideModeService()?.onStopped()
         }
