@@ -732,12 +732,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.verifyRouteCountry(route);
             const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
 
-            const totalDistance = C(route.details.distance,'distance')
-            const totalElevation = C(route.details.elevation,'elevation')
+            const distance = route.details?.distance??route.description?.distance
+            const elevation = route.details?.elevation??route.description?.elevation
+
+            const totalDistance = distance===undefined ? undefined : {value: C(distance,'distance'), unit:U('distance')}
+            const totalElevation = elevation===undefined ?  undefined : {value: C(elevation,'elevation'), unit:U(elevation) }
+
             return {...route.details, totalDistance, totalElevation}
         }
         catch(err) {
-            this.logError(err,'getRouteDetails',id)
+            this.logError(err,'getRouteDetails',{id})
         }
     }
 
