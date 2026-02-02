@@ -77,7 +77,7 @@ export class UserInterfaceServcie extends IncyclistService {
                 this.isTerminating = true
                 this.logEvent({message:'onAppExit called'})
 
-                this.startHeartbeatWorker()
+                this.stopHeartbeatWorker()
                 this.sendAppExitMessage()
                 await useDevicePairing().exit()
                 await useDeviceAccess().disconnect()
@@ -103,6 +103,7 @@ export class UserInterfaceServcie extends IncyclistService {
         try {
             
             this.startQueueWorker();
+            this.startHeartbeatWorker()
 
             let sent = false
 
