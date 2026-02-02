@@ -831,13 +831,12 @@ export class DeviceRideService  extends IncyclistService{
             const isPaused = ai.adapter.isPaused()
             const prevStatus = ai.dataStatus
 
-            // paused or no data received yet => no need to check
-            if (isPaused || !tsLastData) {
+            // paused or no data received yet or just restarting => no need to check
+            if (isPaused || !tsLastData || ai.isRestarting) {
                 this.setLastDataTS(ai, tsNow)                
                 ai.dataStatus = 'green'
                 return;
             }
-
 
             const isAmber = (tsNow-tsLastData)>NO_DATA_THRESHOLD
             const isRed = (tsNow-tsLastData)>UNHEALTHY_THRESHOLD
@@ -922,13 +921,7 @@ export class DeviceRideService  extends IncyclistService{
             return;
         }
 
-        await sleep( 1000)
-
-        if (unhealthy.isHealthy || unhealthy.isRestarting) {
-            this.logEvent({message:'skipped reconnect', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData  })
-            return;
-        }       
-      
+        unhealthy.isRestarting = true
         // are all adapters on the same interface down?
         const ifName = unhealthy.adapter.getInterface()
         const adapters = this.rideAdapters?.filter( ai=> ai.adapter.getInterface()===ifName)
@@ -936,13 +929,18 @@ export class DeviceRideService  extends IncyclistService{
 
         this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData, stillHealthy:stillHealthy?.length, onSameInterface:adapters.length  })
 
-        if ( !stillHealthy?.length && adapters.length>1 && ifName!=='ble')  {
-            await this.reconnectInterface(ifName, adapters);
+        try {
+            if ( !stillHealthy?.length && adapters.length>1 && ifName!=='ble')  {
+                await this.reconnectInterface(ifName, adapters);
 
+            }
+            else {
+                await this.reconnectSingle(unhealthy);  
+                
+            }
         }
-        else {
-            await this.reconnectSingle(unhealthy);  
-            
+        catch(err) {
+            this.logError(err,'prepareReconnect')
         }
         unhealthy.isRestarting = false;       
     }
