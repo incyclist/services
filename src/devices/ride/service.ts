@@ -818,8 +818,9 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     startHealthCheck(ai: AdapterRideInfo) {
-        
+
         this.updateOnDatahandler(ai);
+        this.setLastDataTS(ai,Date.now())
 
         const check = ()=> {
             if (!ai.ivToCheck) // I have no clue why this is needed, but removing it would cause the check() function to be executed after the interval has been cleared
@@ -891,11 +892,13 @@ export class DeviceRideService  extends IncyclistService{
         this.logEvent({message:'init health check',device:ai.adapter.getName(), udid:ai.udid })
         this.unsubscribeDeviceEvents(ai.adapter)
         this.subscribeDeviceEvents(ai.adapter)
+
     }
 
     private removeOnDatahandler(ai: AdapterRideInfo) {
         this.logEvent({message:'cleanup health check', device:ai.adapter.getName(), udid:ai.udid })
         this.unsubscribeDeviceEvents(ai.adapter)            
+        this.clearLastDataTS(ai)
     }
 
     stopHealthCheck(ai: AdapterRideInfo) {
@@ -1268,7 +1271,6 @@ export class DeviceRideService  extends IncyclistService{
         const adapters = this.getRideAdapters();
 
         adapters?.forEach(ai=> {
-            ai.tsLastData = Date.now()
             ai.adapter.resume()
             this.startHealthCheck(ai)
         })
