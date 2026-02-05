@@ -14,6 +14,7 @@ import { Injectable } from "../base/decorators";
 import { RideDisplayService, useRideDisplay } from "../ride";
 import { useUnitConverter } from "../i18n";
 import { Route } from "../routes/base/model/route";
+import { sleep } from "../utils/sleep";
 
 @Singleton
 export class CoachesService extends IncyclistService {
@@ -108,14 +109,40 @@ export class CoachesService extends IncyclistService {
                 c.start(onDataUpdate)
             })        
 
-            const userRide = useActivityRide().getObserver()
-            userRide.on('data',this.onUserDataUpdate.bind(this))
-            userRide.on('paused',this.pauseRide.bind(this))
-            userRide.on('resumed',this.resumeRide.bind(this))
-            userRide.once('completed',this.stopRide.bind(this))
+            const setupListeners = (userRide:Observer)=> {
+                userRide.on('data',this.onUserDataUpdate.bind(this))
+                userRide.on('paused',this.pauseRide.bind(this))
+                userRide.on('resumed',this.resumeRide.bind(this))
+                userRide.once('completed',this.stopRide.bind(this))
+
+            }
 
 
-            waitNextTick().then( ()=>{this.observer.emit('started') })            
+            const link = async ()=> {
+                let success = false
+                let attempt = 0
+
+                while (!success && attempt<5) {
+                    const userRide = this.getActivityRide().getObserver()
+                    if (userRide) {
+                        setupListeners(userRide)
+                        success = true
+                    }
+                    else {
+                        attempt++
+                        await sleep(500)
+                    }
+
+                }
+
+            }
+
+
+
+            waitNextTick().then( ()=>{
+                link()
+                this.observer.emit('started') 
+            })            
     
         }
         catch(err) {
@@ -189,7 +216,8 @@ export class CoachesService extends IncyclistService {
     }
 
     protected onUserDataUpdate(data) {
-        this.updateRiderPosition(data.routeDistance)
+        if (data)
+            this.updateRiderPosition(data.routeDistance)
     }
 
 
@@ -272,6 +300,12 @@ export class CoachesService extends IncyclistService {
     @Injectable getUnitConverter() {
         return useUnitConverter()
     }
+
+    @Injectable
+    protected getActivityRide() {
+        return useActivityRide()
+    }
+
 
 
 }
