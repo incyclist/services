@@ -56,6 +56,10 @@ export class GoogleMapsService extends IncyclistService {
     onPersonalApiKeySet() {
         this.emit('reload')
     }
+    hasDevelopmentApiKey() {
+        const settings = this.getUserSettings()
+        return settings.get('mode', 'production')==='development';        
+    }
 
     getMapsDownloadUrl () {
         const settings = this.getUserSettings()
