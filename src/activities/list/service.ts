@@ -276,7 +276,7 @@ export class ActivityListService extends IncyclistService {
 
         }
         catch(err) {
-            this.logError(err,'delete')
+            this.logEvent({message:'could not delete activity',id, reason:err.message})
             return false
         }
     }

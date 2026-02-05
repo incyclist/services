@@ -223,11 +223,13 @@ export class ActivitiesRepository {
             this.write(true)
         }
 
+        
+
         const tcx = target.details?.tcxFileName
-        if (tcx) this.getBindings().fs.unlink(tcx)
+        if (tcx) this.getBindings().fs.unlink(tcx).catch(()=>{})
 
         const fit = target.details?.fitFileName
-        if (fit) this.getBindings().fs.unlink(fit)
+        if (fit) this.getBindings().fs.unlink(fit).catch(()=>{})
 
 
 
@@ -691,7 +693,7 @@ export class ActivitiesRepository {
     }
 
     protected getActivity(id:string) {
-        return this.activities.find( ai => ai.summary.id===id)
+        return this.activities?.find( ai => ai.summary.id===id)
     }
 
     protected logError(err:Error, fn:string, logProps?) {
