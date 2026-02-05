@@ -982,7 +982,7 @@ describe('ActivityListService',()=>{
 
 
             expect(updatedSpy).not.toHaveBeenCalled()
-            expect(spyLog).toHaveBeenCalledWith(expect.objectContaining({message:'Error',error:'XXX',fn:'delete'}))
+            expect(spyLog).toHaveBeenCalledWith(expect.objectContaining({message:'could not delete activity',reason:'XXX'}))
             
             
           

@@ -372,6 +372,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
             viewport,
             center,
             bounds,
+            
             viewportOverwrite,
             onViewportChange: this.onViewportChange,
             

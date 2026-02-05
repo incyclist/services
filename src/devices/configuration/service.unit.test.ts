@@ -6,6 +6,7 @@ import { DeviceConfigurationService } from "./service"
 import { DeviceConfigurationSettings,
          LegacySettings,LegacyGearSetting, LegacySerialPortInfo, LegacySerialSettings } from "./model";
 import UserSettingsMock from "../../settings/service/mock";
+import { Inject } from "../../base/decorators";
 
 
 const SampleSettings: DeviceConfigurationSettings= {                
@@ -122,14 +123,25 @@ describe( 'DeviceConfigurationService',()=>{
             s.emitInitialized = jest.fn()
             SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue( {})
 
+            Inject('AppState',{
+                getAppFeatures:()=> ({
+                    interfaces:'*',
+                    ble:'*'
+                }),
+                getChannel:()=>'desktop'
+            })
+
         }
         beforeEach( ()=>{            
             service = new DeviceConfigurationService()
             setupMocks(service)
+
+
         })
 
         afterEach( ()=>{
             AdapterFactory.reset()
+            Inject('AppState',null)
             service.reset()
         })
 

@@ -1043,10 +1043,11 @@ export class DeviceConfigurationService  extends IncyclistService{
             return features?.interfaces?.includes(i)
         }
 
-        this.settings.interfaces.push( {name:'ant', enabled: isEnabled('ant') ? false: true })
-        this.settings.interfaces.push( {name:'ble', enabled:isEnabled('ble')})
-        this.settings.interfaces.push( {name:'serial', enabled:isEnabled('serial') ? false: true, protocol:'Daum Classic'})
-        this.settings.interfaces.push( {name:'tcpip', enabled:isEnabled('tcpip') ? false: true, protocol:'Daum Premium', port:51955})
+        if (isEnabled('ant')) this.settings.interfaces.push( {name:'ant', enabled:true})
+        if (isEnabled('ble')) this.settings.interfaces.push( {name:'ble', enabled:true})
+        if (isEnabled('serial'))this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
+        if (isEnabled('tcpip'))this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
+
 
         this.initWifiInterface()
     }
