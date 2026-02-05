@@ -9,6 +9,7 @@ import { IncyclistService } from "../../base/service";
 import { Injectable,Singleton } from "../../base/decorators";
 import { getBindings } from "../../api";
 import semver from 'semver'
+import { useAppState } from "../../appstate";
 
 
 interface DeviceAdapterList {[index: string]: IncyclistDeviceAdapter}
@@ -1026,6 +1027,8 @@ export class DeviceConfigurationService  extends IncyclistService{
     }
 
     protected initInterfaces():void {
+
+        
         if (this.settings?.interfaces?.length>0)
             return;
 
@@ -1033,10 +1036,17 @@ export class DeviceConfigurationService  extends IncyclistService{
             this.settings = {}
         this.settings.interfaces = [];
 
-        this.settings.interfaces.push( {name:'ant', enabled:true})
-        this.settings.interfaces.push( {name:'ble', enabled:true})
-        this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
-        this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
+        const features = this.getAppState().getAppFeatures()
+        const isEnabled = (i) => {
+            if (features?.interfaces==='*')
+                return true
+            return features?.interfaces?.includes(i)
+        }
+
+        this.settings.interfaces.push( {name:'ant', enabled: isEnabled('ant') ? false: true })
+        this.settings.interfaces.push( {name:'ble', enabled:isEnabled('ble')})
+        this.settings.interfaces.push( {name:'serial', enabled:isEnabled('serial') ? false: true, protocol:'Daum Classic'})
+        this.settings.interfaces.push( {name:'tcpip', enabled:isEnabled('tcpip') ? false: true, protocol:'Daum Premium', port:51955})
 
         this.initWifiInterface()
     }
@@ -1046,6 +1056,16 @@ export class DeviceConfigurationService  extends IncyclistService{
     }
 
     protected doesAppSupportsWifi():boolean {
+        const features = this.getAppState().getAppFeatures()
+        const isEnabled = (i) => {
+            if (features?.interfaces==='*')
+                return true
+            return features?.interfaces?.includes(i)
+        }
+
+        if (this.getAppChannel()==='mobile')
+            return isEnabled('wifi')
+        
         try {
             const version = this.getAppVersion()
             return semver.gte(version,'0.9.10')    
@@ -1059,6 +1079,10 @@ export class DeviceConfigurationService  extends IncyclistService{
         const {appInfo} = getBindings()
         return appInfo?.getAppVersion()??'0.0.0'
     }
+    protected getAppChannel():string {
+        const {appInfo} = getBindings()
+        return appInfo?.getChannel()
+    }
 
     protected isWindows():boolean {
         const {appInfo} = getBindings()
@@ -1069,6 +1093,17 @@ export class DeviceConfigurationService  extends IncyclistService{
         }
         const os = appInfo.getOS()
         return os.platform==='win32'
+    }
+
+    protected isMobile():boolean {
+        const {appInfo} = getBindings()
+
+        // istanbul ignore next
+        if (!appInfo) {
+            return false
+        }
+        const channel = appInfo.getChannel()
+        return channel==='mobile'
     }
 
     protected addWifiInterface():void {
@@ -1271,6 +1306,11 @@ export class DeviceConfigurationService  extends IncyclistService{
     @Injectable
     protected getDirectConnectInterface() {
         return InterfaceFactory.create('wifi')
+    }
+
+    @Injectable
+    protected getAppState() {
+        return useAppState()
     }
 
 }

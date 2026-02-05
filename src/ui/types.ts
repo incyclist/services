@@ -1,1 +1,2 @@
-export type IncyclistPlatform = 'desktop' | 'mobile/webview' | 'web'
+export type IncyclistPlatform = 'desktop' | 'mobile/webview' | 'web' | 'mobile'
+

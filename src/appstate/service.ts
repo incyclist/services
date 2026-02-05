@@ -2,7 +2,7 @@ import { Injectable } from "../base/decorators";
 import { IncyclistService } from "../base/service";
 import { Singleton } from "../base/types";
 import { useUserSettings } from "../settings";
-import { AppFeature } from "./types";
+import { AppFeatures, FeatureToggle } from "./types";
 
 /**
  * This service is responsible for managing the application state.
@@ -22,14 +22,22 @@ import { AppFeature } from "./types";
 export class AppStateService extends IncyclistService {
 
     protected state: Record<string,any> = {}
-
+    protected appFeatures: AppFeatures
 
     constructor() {
         super('AppState')
     }
     
-    public hasFeature( feature:AppFeature) {
+    public hasFeature( feature:FeatureToggle) {
         return this.getSetting( feature, false)
+    }
+
+
+    public setAppFeatures( features:AppFeatures) {
+        this.appFeatures = features
+    }
+    public getAppFeatures():AppFeatures {
+        return this.appFeatures
     }
 
     /**
