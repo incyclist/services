@@ -12,6 +12,7 @@ import { useWorkoutList } from "../workouts";
 import { useActiveRides, useActivityList } from "../activities";
 import { IMessageQueueBinding } from "../api/mq";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../monitoring";
+import { AppFeatures, Interfaces, useAppState } from "../appstate";
 
 @Singleton
 export class UserInterfaceServcie extends IncyclistService {
@@ -23,12 +24,14 @@ export class UserInterfaceServcie extends IncyclistService {
     protected queuedMessages: Array< {topic:string, payload:object} > = []
     protected iv!: NodeJS.Timeout
     protected heartbeatIv!: NodeJS.Timeout
+    protected appFeatures!: AppFeatures
 
     constructor() {
         super('Incyclist')
 
         this.bindings = this.getBindings()
         this.isTerminating = false
+         
     }
 
     @Injectable
@@ -43,13 +46,19 @@ export class UserInterfaceServcie extends IncyclistService {
         }
     }
 
-    async onAppLaunch(platform:IncyclistPlatform, version:string) {
+    async onAppLaunch(platform:IncyclistPlatform, version:string, appFeatures?:AppFeatures) {
 
         try {
             this.platform = platform
             this.version = version
+            if (appFeatures) {
+                this.getAppState().setAppFeatures(appFeatures)                
+            }
+
+            this.appFeatures = appFeatures
+
             await this.initUserSettings()
-            await this.bindings.secret.init()
+            await this.bindings.secret?.init()
 
             this.initUser()
             this.initLogging()
@@ -58,8 +67,11 @@ export class UserInterfaceServcie extends IncyclistService {
             this.createUserStats()
             await this.initDeviceServices()
 
-            // trigger data preload, so that UI pages will start faster
-            this.preloadData()
+
+            if (platform!=='mobile') {
+                // trigger data preload, so that UI pages will start faster
+                this.preloadData()
+            }
 
             // after MQ has been initialized
             this.onSessionStart()
@@ -101,7 +113,6 @@ export class UserInterfaceServcie extends IncyclistService {
 
     protected onSessionStart() {
         try {
-            
             this.startQueueWorker();
             this.startHeartbeatWorker()
 
@@ -114,14 +125,14 @@ export class UserInterfaceServcie extends IncyclistService {
             const os = this.getBindings().appInfo?.getOS()?.platform
             const payload = {
                 user: {name:username,weight,ftp,gender,id},
-                platform: this.platform,
+                channel: this.platform,
                 os,
                 version: this.version,
                 started: new Date().toISOString()
             }
 
             
-            if (this.isOnline()) {
+            if (this.isMobile()|| this.isOnline()) {
                 this.sendMessage(topic,payload)                
             }
             
@@ -133,7 +144,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
         }
         catch ( err) {
-
+            this.logError(err,'onSessionStart')
         }
     }
 
@@ -233,6 +244,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
     protected sendMessage(topic:string, payload:object) {
         const mq = this.getMessageQueue();
+
         if (!mq?.enabled())
             return
 
@@ -267,6 +279,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
     protected initUser() {
         let uuid = this.getUserSettings().get('uuid',null);
+
         if (uuid === null || uuid === 'undefined' || uuid === 'reset') {
             uuid = generateUUID();
             this.getUserSettings().set('uuid', uuid);
@@ -274,34 +287,42 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
     protected initLogging() {
-
-        const appInfo =  this.getBindings().appInfo
-        const settings = this.getUserSettings()
-        const {createAdapter} = this.getBindings().logging
-
-        const mode = settings.getValue('mode','production');
-        const adapter = createAdapter({mode})
-
-        const LOG_BLACKLIST = [ 'user','auth','cacheDir','baseDir','pageDir','appDir']
-        EventLogger.setGlobalConfig('lazyLoading',true)
-        EventLogger.setKeyBlackList( LOG_BLACKLIST);
-        
-
-        if (adapter) {
-            EventLogger.registerAdapter(adapter);
-            if (mode==='development' && adapter===null) {
-                EventLogger.registerAdapter( new ConsoleAdapter( {depth:1}))   
-            }
-            
-        }
-
         this.logger = new EventLogger('Incyclist')
-        this.logger.setGlobal({
-            version:this.version,
-            appVersion: appInfo.getAppVersion(),
-            uuid:this.getUserSettings().get('uuid',undefined),
-            session: this.session
-        });
+
+        try {
+            const appInfo =  this.getBindings().appInfo
+            const settings = this.getUserSettings()
+            const {createAdapter} = this.getBindings().logging
+
+            const mode = settings.getValue('mode','production');
+            const adapter = createAdapter({mode})
+
+            const LOG_BLACKLIST = [ 'user','auth','cacheDir','baseDir','pageDir','appDir']
+            EventLogger.setGlobalConfig('lazyLoading',true)
+            EventLogger.setKeyBlackList( LOG_BLACKLIST);
+            
+
+            if (adapter) {
+                EventLogger.registerAdapter(adapter);
+                if (mode==='development' && adapter===null) {
+                    EventLogger.registerAdapter( new ConsoleAdapter( {depth:1}))   
+                }
+                
+            }
+
+
+            const globals ={
+                version:this.version,
+                appVersion: appInfo.getAppVersion(),
+                uuid:this.getUserSettings().get('uuid',undefined),
+                session: this.session
+            }
+            this.logger.logEvent( {message:'setting globals',...globals})
+            this.logger.setGlobal(globals);
+        }
+        catch(err) {
+            this.logError(err,'initLogging')
+        }
   
     }    
 
@@ -313,6 +334,9 @@ export class UserInterfaceServcie extends IncyclistService {
         return this.getUserSettings().get('uuid',null)
     }
 
+    protected isSupported( ifName: Interfaces) {
+        return this.appFeatures?.interfaces==='*' || this.appFeatures?.interfaces?.includes(ifName)
+    }
 
     async initDeviceServices() {
 
@@ -321,20 +345,35 @@ export class UserInterfaceServcie extends IncyclistService {
             const deviceAccess = useDeviceAccess();
 
             const {serial: serialFactory,ant,ble,wifi} = this.getBindings()
-            const serial = serialFactory.getSerialBinding('serial')
-            const tcpip =  serialFactory.getSerialBinding('tcpip')
-            SerialPortProvider.getInstance().setBinding('tcpip',serial)
-            SerialPortProvider.getInstance().setBinding('serial',tcpip)
+
+            let serial, tcpip
+            
+            if (this.isSupported('serial') ) {
+                serial = serialFactory.getSerialBinding('serial')
+                SerialPortProvider.getInstance().setBinding('serial',serial)
+            }
+
+            if (this.isSupported('tcpip') ) {
+                tcpip =  serialFactory.getSerialBinding('tcpip')
+                SerialPortProvider.getInstance().setBinding('tcpip',tcpip)
+            }
 
             await deviceConfiguration.init()
 
             deviceAccess.setDefaultInterfaceProperties({scanTimeout:30000})
 
-            this.configureInterface('ant',ant)
-            this.configureInterface('ble',ble)
-            this.configureInterface('serial',serial)
-            this.configureInterface('tcpip',tcpip)
-            this.configureInterface('wifi',wifi)
+            const configureInterface = (i,b) => {
+                if (this.isSupported(i) ) {
+                    this.configureInterface(i,b)
+                }
+
+            }
+
+            configureInterface('ant',ant)           
+            configureInterface('serial',serial)
+            configureInterface('tcpip',tcpip)
+            configureInterface('ble',ble)
+            configureInterface('wifi',wifi)
 
             deviceAccess.connect();
       
@@ -343,7 +382,19 @@ export class UserInterfaceServcie extends IncyclistService {
           this.logError(err, 'initDeviceServices')
         }
       
-    }  
+    } 
+    
+    protected isMobile():boolean {
+        const {appInfo} = getBindings()
+
+        // istanbul ignore next
+        if (!appInfo) {
+            return false
+        }
+        const channel = appInfo.getChannel()
+        return channel==='mobile'
+    }
+
 
     async preloadData() {
         try {
@@ -452,6 +503,11 @@ export class UserInterfaceServcie extends IncyclistService {
     @Injectable
     protected getOnlineStatusMonitoring ():OnlineStateMonitoringService {
         return useOnlineStatusMonitoring()
+    }
+
+    @Injectable
+    protected getAppState() {
+        return useAppState()
     }
 
 
