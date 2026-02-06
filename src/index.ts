@@ -20,8 +20,7 @@ export * from './utils'
 export * from './video'
 export * from './workouts'
 
-
-
+export type * from './types'
 export {CyclingModeProperyType} from 'incyclist-devices'
 
 

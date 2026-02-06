@@ -25,6 +25,7 @@ export class UserInterfaceServcie extends IncyclistService {
     protected iv!: NodeJS.Timeout
     protected heartbeatIv!: NodeJS.Timeout
     protected appFeatures!: AppFeatures
+    protected appState: 'Inactive'|'Active'|'Background'|'Stopped' = 'Inactive'
 
     constructor() {
         super('Incyclist')
@@ -56,13 +57,13 @@ export class UserInterfaceServcie extends IncyclistService {
             }
 
             this.appFeatures = appFeatures
-
+            console.log('# onAppLaunch ', platform, version, appFeatures)
             await this.initUserSettings()
             await this.bindings.secret?.init()
 
             this.initUser()
             this.initLogging()
-            this.logEvent( {message:'App mounted' });
+            this.logEvent( {message:'App mounted', channel:platform });
 
             this.createUserStats()
             await this.initDeviceServices()
@@ -75,6 +76,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
             // after MQ has been initialized
             this.onSessionStart()
+            this.appState = 'Active'
 
         }
         catch(err) {
@@ -93,8 +95,7 @@ export class UserInterfaceServcie extends IncyclistService {
                 this.sendAppExitMessage()
                 await useDevicePairing().exit()
                 await useDeviceAccess().disconnect()
-                
-                
+                this.appState = 'Stopped'
 
 
                 this.logEvent({message:'onAppExit finished'})
@@ -109,6 +110,32 @@ export class UserInterfaceServcie extends IncyclistService {
             return true;
         }        
 
+    }
+
+    async onAppPause() {
+        try {
+            this.appState = 'Background'
+            this.logEvent({message:'onAppPause called'})
+
+            this.stopHeartbeatWorker()
+        }
+        catch(err) {
+            this.logError(err,'onAppPause')
+        }        
+        return true;
+    }
+
+    async onAppResume() {
+        try {
+            this.appState = 'Active'
+            this.logEvent({message:'onAppResume called'})
+
+            this.startHeartbeatWorker()
+        }
+        catch(err) {
+            this.logError(err,'onAppPause')
+        }        
+        return true;
     }
 
     protected onSessionStart() {
@@ -339,7 +366,7 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
     async initDeviceServices() {
-
+        console.log('# initDeviceServices')
         try {
             const deviceConfiguration = useDeviceConfiguration()
             const deviceAccess = useDeviceAccess();
@@ -362,8 +389,11 @@ export class UserInterfaceServcie extends IncyclistService {
 
             deviceAccess.setDefaultInterfaceProperties({scanTimeout:30000})
 
+            console.log('# configuring interfaces ',this.appFeatures?.interfaces)
             const configureInterface = (i,b) => {
+                
                 if (this.isSupported(i) ) {
+                    console.log('# configure interface',i,b)
                     this.configureInterface(i,b)
                 }
 

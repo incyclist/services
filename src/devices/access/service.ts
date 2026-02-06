@@ -334,6 +334,7 @@ export class DeviceAccessService  extends IncyclistService{
                 return;
             }
    
+            console.log('# connect interface', ifaceName,this.interfaces[ifaceName]?.enabled)
             
             if (this.interfaces[ifaceName]?.enabled===false)
                 return

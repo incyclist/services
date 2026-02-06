@@ -5,11 +5,18 @@ import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdap
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
 import { IncyclistService } from "../../base/service";
-import { EnrichedInterfaceSetting } from "../access";
+import { EnrichedInterfaceSetting, InterfaceState } from "../access";
 import { sleep } from "../../utils/sleep";
-import { Injectable } from "../../base/decorators";
-import { FormattedNumber, useUnitConverter } from "../../i18n";
+import { Injectable, Singleton } from "../../base/decorators";
+import { useUnitConverter } from "../../i18n";
+import { IPageService } from "../../base/pages";
+import { Observer } from "../../base/types";
+import { IncyclistPageService } from "../../base/pages";
 
+import type { IObserver } from "../../base/types";
+import { InterfaceDisplayState, PairingDisplayProps, TDisplayCapability, TIncyclistCapability } from './types'
+
+import { CapabilityDisplayProps, InterfaceDisplayProps, PairingButtonProps } from "./types";
 
 const Units = [
     { capability:IncyclistCapability.HeartRate, unit:'bpm', value:'heartrate', decimals:0},
@@ -28,8 +35,9 @@ export interface Services{
     configuration?: DeviceConfigurationService
     access?: DeviceAccessService
     ride?: DeviceRideService
-
 }
+
+
 
 /**
  * Service to be used by device pairing screens
@@ -54,7 +62,9 @@ export interface Services{
  * @noInheritDoc
  * 
  */
-export class DevicePairingService  extends IncyclistService{
+
+@Singleton
+export class DevicePairingService extends IncyclistPageService{
 
     protected static _instance: DevicePairingService
     protected static checkCounter =0
@@ -81,6 +91,8 @@ export class DevicePairingService  extends IncyclistService{
     protected onInterfaceStateChangedHandler = this.onInterfaceStateChanged.bind(this)
     protected onDeviceDetectedHandler = this.onDeviceDetected.bind(this)
 
+    protected promiseOpen:Promise<void>|undefined
+
     static getInstance():DevicePairingService{
         if (!DevicePairingService._instance)
         DevicePairingService._instance = new DevicePairingService()
@@ -100,6 +112,155 @@ export class DevicePairingService  extends IncyclistService{
 
         this.state.initialized = false;
     }
+
+
+    openPage():IObserver {
+        super.openPage()
+
+        if (this.promiseOpen!==undefined) 
+            return this.getPageObserver()
+        
+        this.promiseOpen = new Promise<void> ((done)=> {
+
+            this.start( (newState:PairingState) => {
+                this.emit('page-update')
+            })
+            .catch( (err)=>{this.logError(err,'openPage')})
+            .finally(done)
+
+
+        })
+        .then( ()=>{delete this.promiseOpen})
+
+        return this.getPageObserver()
+
+    }
+
+    closePage() {
+        super.closePage()
+    }
+
+    pausePage() {
+
+    }
+    resumePage() {
+
+    }
+
+
+    getPageDisplayProperties():PairingDisplayProps {
+
+        const caps = this.state.capabilities??[]
+        const ifs = this.state.interfaces??[]
+
+        const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i) )
+        const capProps = caps.map( c=>this.getCapabilityDisplayProps( c ))
+
+        const loading = this.promiseOpen!=undefined
+        const title = 'Devices'
+
+
+        const CP = (cap:TIncyclistCapability) => capProps.find( c => c.capability===cap)
+
+        const top = [
+            CP('control'),
+            CP('power'),
+            CP('heartrate')
+        ]  
+        const bottom = [
+            CP('cadence'),
+            CP('speed'),
+            CP('app_control')
+
+        ]   // todo
+        const buttons = this.getButtonsDisplayProps()
+
+        return {
+            loading,
+            title,
+            capabilties: { top, bottom},
+            interfaces,
+            buttons
+        }
+    }
+
+
+
+    getCapabilityDisplayProps(data:CapabilityData):CapabilityDisplayProps {
+        const {capability:cap,deviceName, connectState,value,unit} = data
+
+        const capability = this.getTCapability(cap)
+
+        const header = { title:capability }
+        return {
+            header, capability,deviceName, connectState,value:value.toString(),unit
+        }
+
+    }
+
+    getInterfaceDisplayProps( info:EnrichedInterfaceSetting):InterfaceDisplayProps {
+        const {name,state} = info
+
+        const mapping:Record<InterfaceState,InterfaceDisplayState> = {
+            connected: 'idle',
+            connecting: "scanning",
+            disconnected: "idle",
+            disconnecting: 'idle',
+            unavailable: 'error',
+            unknown:'idle'
+        
+        }
+
+        return {
+            name, 
+            state: mapping[state],             
+        }
+
+    }
+
+    getDeviceListDisplayProps():any {
+
+    }
+
+    getButtonsDisplayProps() : PairingButtonProps{
+        return {
+            primary: 'skip',
+            showSkip: true,
+            showOK: false,
+            showExit: true,
+            showSimulate: false
+        }
+
+    }
+
+    protected getTCapability(capabability:IncyclistCapability):TIncyclistCapability {
+        
+        const mapping: Record<IncyclistCapability,TIncyclistCapability> = {
+            'app_control': 'app_control',
+            'cadence': 'cadence',
+            'control': 'control',
+            'heartrate' : 'heartrate',
+            'power': 'power',
+            'speed' : 'speed'
+        }
+        return mapping[capabability]
+
+    }
+
+    protected getDisplayCapability(capabability:IncyclistCapability):TDisplayCapability {
+        const mapping: Record<IncyclistCapability,TDisplayCapability> = {
+            'app_control': 'controller',
+            'cadence': 'cadence',
+            'control': 'resistance',
+            'heartrate' : 'heartrate',
+            'power': 'power',
+            'speed' : 'speed'
+        }
+        return mapping[capabability]
+
+    }
+
+
 
    /**
      * Starts the pairing process
@@ -621,7 +782,8 @@ export class DevicePairingService  extends IncyclistService{
         if (this.isScanning())
             await this.stopScanning();
 
-        this.state.capabilities.forEach(c => c.connectState='waiting')
+        const capabilities = this.state.capabilities??[]
+        capabilities.forEach(c => c.connectState='waiting')
         this.state.waiting = true;
     }
 
