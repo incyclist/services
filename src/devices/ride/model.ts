@@ -1,4 +1,4 @@
-import { DeviceProperties } from "incyclist-devices/lib/types/device";
+import { DeviceProperties } from "incyclist-devices";
 import { AdapterInfo, ExtendedIncyclistCapability } from "../configuration";
 import { Route } from "../../routes/base/model/route";
 import { RouteApiDetail } from "../../routes/base/api/types";

@@ -1,4 +1,3 @@
-import { SerialCommsState } from "incyclist-devices/lib/serial/kettler/comms"
 import { Inject } from "../../base/decorators/Injection"
 import { Observer } from "../../base/types"
 import { waitNextTick } from "../../utils"
