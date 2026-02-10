@@ -1,4 +1,4 @@
-import type { IObserver } from "../types"
+import { IObserver } from "../typedefs"
 
 export interface IPageService {
     openPage(): IObserver

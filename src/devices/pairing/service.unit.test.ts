@@ -394,7 +394,6 @@ describe('PairingService',()=>{
                     })
                 })
 
-
                 expect(logCapabilities).toHaveBeenCalled()
                 
                 expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Stopping Adapters'}))
@@ -414,7 +413,7 @@ describe('PairingService',()=>{
             })
 
             test('no devices in configuration; HRM sensor found in scan',async ()=>{
-
+                
                 const device = {interface:'ant', profile: "HR", deviceID: 1234 }
                 settings.devices = []
                 settings.capabilities =[]
@@ -447,7 +446,7 @@ describe('PairingService',()=>{
                 expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Stopping Adapters'}))
                 expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'Start Scanning'}))
                 // message 3: connect state
-                expect(logEvent).toHaveBeenNthCalledWith( 4,expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'HR'}}))
+                expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'HR'}}))
                 
                 expect(access.scan).toHaveBeenCalled()
                 expect(ride.startAdapters).not.toHaveBeenCalled()

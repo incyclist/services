@@ -19,5 +19,6 @@ export interface INativeUI  {
     showItemInFolder(fileName:string): void
     getPathForFile(file:string): string
     detectLanguage():Array<string>|string
+    openPage(route:string)
     
 }

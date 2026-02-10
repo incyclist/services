@@ -5,18 +5,11 @@ import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdap
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
 import { IncyclistService } from "../../base/service";
-import { EnrichedInterfaceSetting, InterfaceState } from "../access";
+import { EnrichedInterfaceSetting } from "../access";
 import { sleep } from "../../utils/sleep";
-import { Injectable, Singleton } from "../../base/decorators";
-import { useUnitConverter } from "../../i18n";
-import { IPageService } from "../../base/pages";
-import { Observer } from "../../base/types";
-import { IncyclistPageService } from "../../base/pages";
+import { Injectable } from "../../base/decorators";
+import { FormattedNumber, useUnitConverter } from "../../i18n";
 
-import type { IObserver } from "../../base/types";
-import { InterfaceDisplayState, PairingDisplayProps, TDisplayCapability, TIncyclistCapability } from './types'
-
-import { CapabilityDisplayProps, InterfaceDisplayProps, PairingButtonProps } from "./types";
 
 const Units = [
     { capability:IncyclistCapability.HeartRate, unit:'bpm', value:'heartrate', decimals:0},
@@ -35,9 +28,8 @@ export interface Services{
     configuration?: DeviceConfigurationService
     access?: DeviceAccessService
     ride?: DeviceRideService
+
 }
-
-
 
 /**
  * Service to be used by device pairing screens
@@ -62,9 +54,7 @@ export interface Services{
  * @noInheritDoc
  * 
  */
-
-@Singleton
-export class DevicePairingService extends IncyclistPageService{
+export class DevicePairingService  extends IncyclistService{
 
     protected static _instance: DevicePairingService
     protected static checkCounter =0
@@ -91,7 +81,7 @@ export class DevicePairingService extends IncyclistPageService{
     protected onInterfaceStateChangedHandler = this.onInterfaceStateChanged.bind(this)
     protected onDeviceDetectedHandler = this.onDeviceDetected.bind(this)
 
-    protected promiseOpen:Promise<void>|undefined
+    public usage: 'page' | 'direct' = 'direct'
 
     static getInstance():DevicePairingService{
         if (!DevicePairingService._instance)
@@ -103,164 +93,20 @@ export class DevicePairingService extends IncyclistPageService{
 
         super('Pairing')
 
-        // inject external dependencies
+        // inject external dependencies // LEGACY - remove !
         if (services) {
             this.configuration = services.configuration
             this.access = services.access
             this.rideService = services.ride
         }
+        else {
+            this.configuration = this.getDeviceConfiguration()
+            this.access = this.getDeviceAccess()
+            this.rideService = this.getDeviceRide()
+        }
 
         this.state.initialized = false;
     }
-
-
-    openPage():IObserver {
-        super.openPage()
-
-        if (this.promiseOpen!==undefined) 
-            return this.getPageObserver()
-        
-        this.promiseOpen = new Promise<void> ((done)=> {
-
-            this.start( (newState:PairingState) => {
-                this.emit('page-update')
-            })
-            .catch( (err)=>{this.logError(err,'openPage')})
-            .finally(done)
-
-
-        })
-        .then( ()=>{delete this.promiseOpen})
-
-        return this.getPageObserver()
-
-    }
-
-    closePage() {
-        super.closePage()
-    }
-
-    pausePage() {
-
-    }
-    resumePage() {
-
-    }
-
-
-    getPageDisplayProperties():PairingDisplayProps {
-
-        const caps = this.state.capabilities??[]
-        const ifs = this.state.interfaces??[]
-
-        const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i) )
-        const capProps = caps.map( c=>this.getCapabilityDisplayProps( c ))
-
-        const loading = this.promiseOpen!=undefined
-        const title = 'Devices'
-
-
-        const CP = (cap:TIncyclistCapability) => capProps.find( c => c.capability===cap)
-
-        const top = [
-            CP('control'),
-            CP('power'),
-            CP('heartrate')
-        ]  
-        const bottom = [
-            CP('cadence'),
-            CP('speed'),
-            CP('app_control')
-
-        ]   // todo
-        const buttons = this.getButtonsDisplayProps()
-
-        return {
-            loading,
-            title,
-            capabilties: { top, bottom},
-            interfaces,
-            buttons
-        }
-    }
-
-
-
-    getCapabilityDisplayProps(data:CapabilityData):CapabilityDisplayProps {
-        const {capability:cap,deviceName, connectState,value,unit} = data
-
-        const capability = this.getTCapability(cap)
-
-        const header = { title:capability }
-        return {
-            header, capability,deviceName, connectState,value:value.toString(),unit
-        }
-
-    }
-
-    getInterfaceDisplayProps( info:EnrichedInterfaceSetting):InterfaceDisplayProps {
-        const {name,state} = info
-
-        const mapping:Record<InterfaceState,InterfaceDisplayState> = {
-            connected: 'idle',
-            connecting: "scanning",
-            disconnected: "idle",
-            disconnecting: 'idle',
-            unavailable: 'error',
-            unknown:'idle'
-        
-        }
-
-        return {
-            name, 
-            state: mapping[state],             
-        }
-
-    }
-
-    getDeviceListDisplayProps():any {
-
-    }
-
-    getButtonsDisplayProps() : PairingButtonProps{
-        return {
-            primary: 'skip',
-            showSkip: true,
-            showOK: false,
-            showExit: true,
-            showSimulate: false
-        }
-
-    }
-
-    protected getTCapability(capabability:IncyclistCapability):TIncyclistCapability {
-        
-        const mapping: Record<IncyclistCapability,TIncyclistCapability> = {
-            'app_control': 'app_control',
-            'cadence': 'cadence',
-            'control': 'control',
-            'heartrate' : 'heartrate',
-            'power': 'power',
-            'speed' : 'speed'
-        }
-        return mapping[capabability]
-
-    }
-
-    protected getDisplayCapability(capabability:IncyclistCapability):TDisplayCapability {
-        const mapping: Record<IncyclistCapability,TDisplayCapability> = {
-            'app_control': 'controller',
-            'cadence': 'cadence',
-            'control': 'resistance',
-            'heartrate' : 'heartrate',
-            'power': 'power',
-            'speed' : 'speed'
-        }
-        return mapping[capabability]
-
-    }
-
-
 
    /**
      * Starts the pairing process
@@ -322,7 +168,11 @@ export class DevicePairingService extends IncyclistPageService{
             this.emitStateChange(this.state)
             this.emitStartStatus()
 
-            this.run()    
+            if (this.usage==='page')
+                this.emit('page-ready')
+            else {
+                this.run()    
+            }
             
     
         }
@@ -333,11 +183,11 @@ export class DevicePairingService extends IncyclistPageService{
 
     protected async loadConfiguration() {
         await this.waitForInit();
-        const { capabilities, interfaces } = this.configuration.load();
+        const { capabilities, interfaces } = this.getDeviceConfiguration().load();
 
         this.state.capabilities = this.mappedCapabilities(capabilities);
         this.state.interfaces = this.access.enrichWithAccessState(interfaces);
-        this.state.canStartRide = this.configuration.canStartRide();
+        this.state.canStartRide = this.getDeviceConfiguration().canStartRide();
         this.state.stopRequested = false;
         this.state.stopped = false;
 
@@ -345,13 +195,13 @@ export class DevicePairingService extends IncyclistPageService{
     }
 
     protected initConfigHandlers() {
-        this.configuration.on('interface-changed', this.onInterfaceConfigChangedHandler);
-        this.configuration.on('capability-changed', this.onConfigurationUpdateHandler);
+        this.getDeviceConfiguration().on('interface-changed', this.onInterfaceConfigChangedHandler);
+        this.getDeviceConfiguration().on('capability-changed', this.onConfigurationUpdateHandler);
         this.access.on('interface-changed', this.onInterfaceStateChangedHandler);
     }
     protected removeConfigHandlers() {
-        this.configuration.off('interface-changed', this.onInterfaceConfigChangedHandler);
-        this.configuration.off('capability-changed', this.onConfigurationUpdateHandler);
+        this.getDeviceConfiguration().off('interface-changed', this.onInterfaceConfigChangedHandler);
+        this.getDeviceConfiguration().off('capability-changed', this.onConfigurationUpdateHandler);
         this.access.off('interface-changed', this.onInterfaceStateChangedHandler);
     }
 
@@ -655,8 +505,8 @@ export class DevicePairingService extends IncyclistPageService{
     */
     async unselectDevices(capability:IncyclistCapability):Promise<void> { 
         try  {
-            const adapater = this.configuration.getSelected(capability)
-            this.configuration.unselect(capability,true)
+            const adapater = this.getDeviceConfiguration().getSelected(capability)
+            this.getDeviceConfiguration().unselect(capability,true)
 
             if (adapater?.isStarted()) {
                 this.restart()
@@ -698,7 +548,7 @@ export class DevicePairingService extends IncyclistPageService{
             if(!changed)
                 return
 
-            this.configuration.setInterfaceSettings(name,settings)
+            this.getDeviceConfiguration().setInterfaceSettings(name,settings)
 
             
         }
@@ -782,8 +632,7 @@ export class DevicePairingService extends IncyclistPageService{
         if (this.isScanning())
             await this.stopScanning();
 
-        const capabilities = this.state.capabilities??[]
-        capabilities.forEach(c => c.connectState='waiting')
+        this.state.capabilities.forEach(c => c.connectState='waiting')
         this.state.waiting = true;
     }
 
@@ -824,7 +673,7 @@ export class DevicePairingService extends IncyclistPageService{
             return
 
         this.state.capabilities = this.mappedCapabilities(capabilitiesLoaded)               
-        this.state.canStartRide = this.configuration.canStartRide()
+        this.state.canStartRide = this.getDeviceConfiguration().canStartRide()
         this.state.interfaces = this.access.enrichWithAccessState(interfacesLoaded)
         this.state.initialized = true;
 
@@ -838,21 +687,20 @@ export class DevicePairingService extends IncyclistPageService{
             return;
 
         return new Promise( done => {
-            this.configuration  = this.getDeviceConfiguration()            
             this.access = this.access || this.getDeviceAccess();
             this.rideService = this.rideService || this.getDeviceRide()
             this.onScanningDataHandler= this.rideService.onData.bind(this.rideService)
 
-            if (this.configuration.isInitialized()) {
+            if (this.getDeviceConfiguration().isInitialized()) {
                 this.state.initialized = true;
                 return done();
             }
             else {
-                this.configuration.once('initialized' ,(capabilitiesLoaded:DeviceConfigurationInfo, interfacesLoaded:Array<InterfaceSetting>)=>{
+                this.getDeviceConfiguration().once('initialized' ,(capabilitiesLoaded:DeviceConfigurationInfo, interfacesLoaded:Array<InterfaceSetting>)=>{
                     this.onConfigLoaded(capabilitiesLoaded,interfacesLoaded)
                     done()
                 })
-                this.configuration.init()
+                this.getDeviceConfiguration().init()
     
             }
             
@@ -892,6 +740,11 @@ export class DevicePairingService extends IncyclistPageService{
         // we don't want to share adapters with consumer
         const state= this.getExternaState(newState)
 
+        if (this.usage==='page') {
+            this.emit('state-update')
+        }
+        
+
         if (onStateChanged && typeof onStateChanged ==='function') {
             onStateChanged( {...state}) 
         }
@@ -903,6 +756,11 @@ export class DevicePairingService extends IncyclistPageService{
     protected emitStartStatus() {
         const {onStateChanged} = this.settings||{}
         const {canStartRide} = this.state
+
+        if (this.usage==='page') {
+            this.emit('state-update')
+        }
+
 
         if (onStateChanged && typeof onStateChanged ==='function') {
             onStateChanged( {canStartRide}) 
@@ -981,7 +839,7 @@ export class DevicePairingService extends IncyclistPageService{
 
     protected onConfigurationUpdate (update:DeviceConfigurationInfo) {
 
-        this.logEvent({message:'Capability Config changed', capabilities:update})
+        //this.logEvent({message:'Capability Config changed', capabilities:update})
 
         try {
             const {capabilities} = this.state||{};
@@ -990,7 +848,12 @@ export class DevicePairingService extends IncyclistPageService{
             keys.forEach( key => {
                 const capability = update[key]
                 const current = capabilities.find( c=>c.capability===key)
-                this.mergeState(current,this.mappedCapability(capability))
+                if (current)
+                    this.mergeState(current,this.mappedCapability(capability))
+                else {
+                    console.log('# capability not found ',key)
+                } 
+
             })
             this.updateCapabilityConfig()
 
@@ -1288,7 +1151,7 @@ export class DevicePairingService extends IncyclistPageService{
             const current = this.getDeviceAdapter(udid)?.getCapabilities().sort(alphabetical).join(';')
 
             if (known!==current) {
-                this.configuration.updateCapabilities(udid)
+                this.getDeviceConfiguration().updateCapabilities(udid)
             }
                 
             
@@ -1341,15 +1204,15 @@ export class DevicePairingService extends IncyclistPageService{
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
         
         try {
-            const udid = this.configuration.add(deviceSettings,{legacy:false})
-            this.logEvent({message:'device detected',device:deviceSettings,udid})
+            const udid = this.getDeviceConfiguration().add(deviceSettings,{legacy:false})
+            this.logEvent({message:'device detected',device:deviceSettings,udid, isScanning:this.isScanning()})
             
             if(!udid) {
                 this.logEvent({message:'device could not be added', reason:'add() failed'})
                 return;
             }
     
-            const adapter = this.configuration.getAdapter(udid)
+            const adapter = this.getDeviceConfiguration().getAdapter(udid)
             
             if (adapter) {
                 adapter.onScanStart()
@@ -1426,7 +1289,7 @@ export class DevicePairingService extends IncyclistPageService{
         try {
             const {capabilities} = this.state
 
-            capabilities.forEach(c => {
+            capabilities.filter(c=>!!c).forEach(c => {
                 if (c.connectState!=='connected' && c.selected && this.getDeviceAdapter(c.selected)?.isStarted() )
                     c.connectState = 'connected'
 
@@ -1454,11 +1317,11 @@ export class DevicePairingService extends IncyclistPageService{
         return this.state.canStartRide
     }
 
-    protected checkPairingSuccess():boolean {
+    checkPairingSuccess():boolean {
 
-        const configReadyToRide = this.configuration.canStartRide() // we either have a power or a conto
+        const configReadyToRide = this.getDeviceConfiguration().canStartRide() 
 
-        if (!configReadyToRide || this.isScanning())
+        if (!configReadyToRide || (this.isScanning() && this.usage!=='page' )) 
             return false;
         
         const control = this.getCapability(IncyclistCapability.Control)
@@ -1470,7 +1333,7 @@ export class DevicePairingService extends IncyclistPageService{
     }
 
 
-    private async stopScanning() {
+    async stopScanning() {
         const props = this.state.props || {}
         if (this.isScanning()) {
             this.removeScanningCallbacks()
@@ -1481,7 +1344,7 @@ export class DevicePairingService extends IncyclistPageService{
         }
     }
 
-    private async stopPairing() {
+    async stopPairing() {
         const props = this.state.props || {}
         if (this.isPairing()) {
             this.removePairingCallbacks()
@@ -1495,6 +1358,9 @@ export class DevicePairingService extends IncyclistPageService{
 
     protected async run(props:PairingProps={}):Promise<void> {
         
+        if (this.usage==='page')
+            return;
+
         this.emit('run')
 
         // pairing already ongoing ? stop previous paring
@@ -1513,14 +1379,14 @@ export class DevicePairingService extends IncyclistPageService{
 
         this.state.props= props 
 
-        const adapters = this.state.adapters = this.configuration.getAdapters(false)
+        const adapters = this.state.adapters = this.getDeviceConfiguration().getAdapters(false)
 
         const goodToGo = await this.rideService.waitForPreviousStartToFinish()
         if (!goodToGo)  {
             return;
         }
 
-        const configOKToStart = this.configuration.canStartRide()
+        const configOKToStart = this.getDeviceConfiguration().canStartRide()
 
 
         if (this.state.stopRequested || this.state.stopped) {
@@ -1536,9 +1402,7 @@ export class DevicePairingService extends IncyclistPageService{
                 await this.startPairing(adapters, props);
             else {
                 this.logEvent({message:'Pairing completed'})
-                this.initPairingCallbacks()
-                this.resumeAdapters()
-                this.emitStateChange()
+                this.prepareForRide()
             }
 
         }
@@ -1547,9 +1411,23 @@ export class DevicePairingService extends IncyclistPageService{
         }
     }
 
-    private async startPairing(adapters: AdapterInfo[], props: PairingProps) {
-        if (this.isPairing() ||  this.checkPairingSuccess()) 
+    getState() {
+        return this.state
+    }
+
+    prepareForRide() {
+        this.initPairingCallbacks()
+        this.resumeAdapters()
+        this.emitStateChange()
+
+    }
+
+    async startPairing(adapters: AdapterInfo[], props: PairingProps) {
+        if (this.isPairing() ||  this.checkPairingSuccess())  {
+            if (this.usage==='page')
+                this.emit('pairing-done');
             return;
+        }
 
         const preparing = DevicePairingService.checkCounter++
         this.state.check={preparing}   // will cause that next call to isPairing() will be true
@@ -1563,6 +1441,12 @@ export class DevicePairingService extends IncyclistPageService{
             this.logEvent({ message: 'Pairing: waiting for interfaces', interfaces:busyRequired?.name });
 
             this.state.check.to = setTimeout(() => {
+                if (this.usage==='page') {
+                    this.emit('pairing-done')
+                    delete this.state.check
+                    return;
+                }
+
 
                 if ( (!this.isPairing() || this.state.check.preparing===preparing) && !this.isScanning()) {
                     
@@ -1588,7 +1472,7 @@ export class DevicePairingService extends IncyclistPageService{
 
         const target = adapters.filter(ai => /*!ai.adapter.isStarted() &&*/ selected.includes(ai.udid));
 
-        if ( (this.isPairing() && this.state.check.preparing!==preparing) ){
+        if ( this.usage!=='page' && this.isPairing() && this.state.check.preparing!==preparing) {
             return;
         }
 
@@ -1605,7 +1489,7 @@ export class DevicePairingService extends IncyclistPageService{
         await this.state.check.promise;
 
         // if pairing was interrupted and a scan was started we don't need to continue here
-        if (this.isScanning())
+        if (this.usage!=='page' && this.isScanning())
             return;
 
         this.checkCanStart()
@@ -1618,6 +1502,10 @@ export class DevicePairingService extends IncyclistPageService{
         if (!this.checkPairingSuccess()) {
             this.logEvent({ message: 'Pairing done', adapters, props });
             await this.rideService.stop()
+
+            if (this.usage==='page')
+                return;
+
             await sleep(this.getPairingRetryDelay());
             if (!this.state.scan)
                 this.run();
@@ -1666,14 +1554,18 @@ export class DevicePairingService extends IncyclistPageService{
         });
     }
 
-    protected async startScanning(adapters: AdapterInfo[], props: PairingProps) {
+    async startScanning(adapters: AdapterInfo[], props: PairingProps) {
 
+        
         const interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
                             .map(i=>i.name)
 
 
-        if (this.isScanning())
+        if (this.isScanning()) {
+            if (this.usage==='page')
+                this.emit('scanning-done')
             return;
+        }
 
         const preparing = DevicePairingService.scanCounter++
         this.state.scan={preparing,adapters:[]}   // will cause that next call to isPairing() will be true
@@ -1685,6 +1577,12 @@ export class DevicePairingService extends IncyclistPageService{
 
             this.state.scanTo = setTimeout(() => {
                 delete this.state.scanTo
+                if (this.usage==='page') {
+                    this.emit('scanning-done')
+                    delete this.state.scan
+                    return;
+                }
+
                 if ( !this.isPairing() && (!this.isScanning()  || this.state.scan.preparing===preparing)) {
                     delete this.state.scan
                     this.run()
@@ -1702,7 +1600,7 @@ export class DevicePairingService extends IncyclistPageService{
 
         // multiple scans can be triggered within a few ms 
 
-        if (this.isScanning() && this.state.scan.preparing!==preparing)
+        if (this.usage!=='page' &&  this.isScanning() && this.state.scan.preparing!==preparing)
             return;
 
 
@@ -1735,9 +1633,13 @@ export class DevicePairingService extends IncyclistPageService{
         this.emitStateChange({capabilities:this.state.capabilities})
         
 
+        if (this.usage==='page') {
+            return;
+        }
         // after timeout, re-start to either trigger pairing or scan again
         // we don't do this for enforced scans, as the don't have timeouts, i.e. are always trigger manually
         if (!props.enforcedScan) {
+
             this.cleanupScan()
             await sleep(500)            
             this.run()
@@ -1883,10 +1785,10 @@ export class DevicePairingService extends IncyclistPageService{
                 .filter(d=>!this.isOnDeletedList(c,d.udid))
 
             if (!available?.length) {
-                this.configuration.unselect(c.capability, true);
+                this.getDeviceConfiguration().unselect(c.capability, true);
             }
             else {
-                this.configuration.select(available[0].udid, c.capability, { emit: true });
+                this.getDeviceConfiguration().select(available[0].udid, c.capability, { emit: true });
             }
         });
     }
@@ -1902,7 +1804,7 @@ export class DevicePairingService extends IncyclistPageService{
 
 
             if (available?.length>0) {
-                this.configuration.select(available[0].udid, c.capability, { emit: true });
+                this.getDeviceConfiguration().select(available[0].udid, c.capability, { emit: true });
             }
         });
     }
@@ -1939,10 +1841,10 @@ export class DevicePairingService extends IncyclistPageService{
         if (target?.adapter)
             return target?.adapter
 
-        if (this.configuration.getAdapter(udid)) {
+        if (this.getDeviceConfiguration().getAdapter(udid)) {
             // Pairing Service and Device Config are out of sync, reload adapaters
-            this.state.adapters = this.configuration.getAdapters(false)            
-            return this.configuration.getAdapter(udid)
+            this.state.adapters = this.getDeviceConfiguration().getAdapters(false)            
+            return this.getDeviceConfiguration().getAdapter(udid)
         }
     }
 
@@ -2051,7 +1953,7 @@ export class DevicePairingService extends IncyclistPageService{
         const c = this.getCapability(capability)
         const device = this.getCapabilityDevice(capability,udid)        
         c.value = device?.value
-        this.configuration.select(udid,capability,{emit:emitUpdate})
+        this.getDeviceConfiguration().select(udid,capability,{emit:emitUpdate})
 
         if (emitUpdate)
             this.emitStateChange( {capabilities:this.state.capabilities})
@@ -2070,17 +1972,17 @@ export class DevicePairingService extends IncyclistPageService{
 
         // device is currently selected
         if (c.selected===udid) {
-            this.configuration.unselect(capability,shouldEmit)
+            this.getDeviceConfiguration().unselect(capability,shouldEmit)
             c.value = undefined;
             c.connectState = undefined
         }
         
-        this.configuration.delete(udid,capability,shouldEmit)
+        this.getDeviceConfiguration().delete(udid,capability,shouldEmit)
         this.addToDeletedList(capability,udid)
         this.emitStateChange( {capabilities:this.state.capabilities})
     }
 
-    protected isScanning() {
+    isScanning() {
         return this.state.scan!==undefined && this.state.scan!==null
     }
 

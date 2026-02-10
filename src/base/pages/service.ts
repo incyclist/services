@@ -2,23 +2,29 @@ import { IncyclistService } from "../service";
 import { Observer } from "../types";
 
 import type { IPageService } from "./types";
-import type { IObserver} from "../types";
+import { Injectable } from "../decorators";
+import { useAppState } from "../../appstate";
+import { IObserver } from "../typedefs";
 
 export class IncyclistPageService extends IncyclistService implements IPageService {
 
     private pageObserver: Observer|undefined
+    
 
-    constructor( name:string) {
+    constructor( protected name:string) {
         super(name)
     }
 
     openPage(): IObserver {
         this.stopObserver()
         this.pageObserver = new Observer()
+
+        this.getAppState().setState('currentPage',this.name )
         return this.pageObserver
         
     }
     closePage(): void {
+        this.getAppState().setState('prevPage',this.name )
         this.stopObserver()
     }
     
@@ -39,6 +45,11 @@ export class IncyclistPageService extends IncyclistService implements IPageServi
             delete this.pageObserver
         }
 
+    }
+
+    @Injectable
+    protected getAppState() {
+        return useAppState()
     }
 
 

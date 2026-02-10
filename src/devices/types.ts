@@ -1,1 +1,1 @@
-export type * from './pairing/types'
+export type * from './page/types'
