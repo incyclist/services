@@ -416,7 +416,7 @@ export class MapArea implements IMapArea{
             return;
         let fullWay = this.getWay(way.id);
         
-        if (!fullWay.roundabout && position==='start' )  // entering normal street
+        if (!fullWay || (!fullWay.roundabout && position==='start' ))  // entering normal street
             return calculateHeaderFromPoints(way.path[0],way.path[1]);
         else if (position==='end') // leaving street
             return calculateHeaderFromPoints(way.path[way.path.length-2],way.path[way.path.length-1]);
