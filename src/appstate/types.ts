@@ -7,9 +7,7 @@ export type BLEFeatures = {
     characteristics:  Array<string>
 }
 
-export type WifiFeatures = BLEFeatures & {
-
-}
+export type WifiFeatures = BLEFeatures
 
 
 export type AppFeatures = {

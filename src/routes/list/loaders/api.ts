@@ -214,7 +214,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             const isUnique = (v,i,a)=> {
                 return a.findIndex( item => item.route.description.id===v.route.description.id)===i
             }
-            items = items.filter(isUnique )
+            items = items.filter( (v,i,a)=>isUnique(v,i,a) )
         }
         catch(err) {
             this.logger.logEvent({ message: 'error', fn:'loadDetails#unique',error: err.message, stack: err.stack })
