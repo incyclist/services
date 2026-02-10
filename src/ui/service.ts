@@ -57,7 +57,6 @@ export class UserInterfaceServcie extends IncyclistService {
             }
 
             this.appFeatures = appFeatures
-            console.log('# onAppLaunch ', platform, version, appFeatures)
             await this.initUserSettings()
             await this.bindings.secret?.init()
 
@@ -366,7 +365,6 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
     async initDeviceServices() {
-        console.log('# initDeviceServices')
         try {
             const deviceConfiguration = useDeviceConfiguration()
             const deviceAccess = useDeviceAccess();
@@ -389,11 +387,9 @@ export class UserInterfaceServcie extends IncyclistService {
 
             deviceAccess.setDefaultInterfaceProperties({scanTimeout:30000})
 
-            console.log('# configuring interfaces ',this.appFeatures?.interfaces)
             const configureInterface = (i,b) => {
                 
                 if (this.isSupported(i) ) {
-                    console.log('# configure interface',i,b)
                     this.configureInterface(i,b)
                 }
 
