@@ -372,7 +372,7 @@ export class RLVDisplayService extends RouteDisplayService {
 
     getLogProps(): object {
         const bikeProps = this.getBikeLogProps()
-        const {realityFactor,startPos,endPos,segment,showPrev} = this.startSettings 
+        const {realityFactor,startPos,endPos,segment,showPrev,loopOverwrite, nextOverwrite} = this.startSettings 
 
         return {
             mode: 'video',
@@ -382,6 +382,9 @@ export class RLVDisplayService extends RouteDisplayService {
             start: startPos,
             end:endPos,
             segment,
+            finishAtEndOfLoop: loopOverwrite,          
+            finishAtEndOfVideo: nextOverwrite,      
+
             ...bikeProps
 
         }

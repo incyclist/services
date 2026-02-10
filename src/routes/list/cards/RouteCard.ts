@@ -423,6 +423,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const [C,U] = getUnitConversionShortcuts()
 
         const settings =this.getSettings();
+        this.adjustStartPosAvi(settings)
+
         const uiSettings:UIRouteSettings = {
             ...settings,
             startPos: { value: C(settings.startPos,'distance',{digits:1}), unit: U('distance') },
@@ -462,7 +464,6 @@ export class RouteCard extends BaseCard implements Card<Route> {
         let showLoopOverwrite, showNextOverwrite;
         let hasWorkout=true
 
-        this.adjustStartPosAvi(settings)
 
         try {
             showLoopOverwrite = this.route?.description?.isLoop
@@ -519,7 +520,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const startPos = { value, unit: U('distance') }
 
         const updated = { ...data}
-        updated.startPos = startPos        
+        updated.startPos = startPos       
+        
+        this.adjustStartPosAvi(updated)
+        
         delete updated.endPos
         delete updated.segment
         return updated
@@ -539,22 +543,22 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             if (isUI) {
                 const  uiProps  = props as UIRouteSettings
-                const {realityFactor, segment, showPrev} = uiProps
+                const {realityFactor, segment, showPrev, loopOverwrite,nextOverwrite} = uiProps
 
                 const startPos= C(uiProps.startPos.value,'distance',{from:U('distance'), to:'m'})
                 const endPos= uiProps.endPos===undefined ? uiProps.endPos : C(uiProps.endPos.value,'distance',{from:U('distance'), to:'m'})
                 
                 this.startSettings = {
                     ...this.startSettings,
-                    startPos, endPos, realityFactor, segment, showPrev
+                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite
                 }
             }
             else {
-                const {startPos, endPos, realityFactor, segment, showPrev} = props as RouteSettings
+                const {startPos, endPos, realityFactor, segment, showPrev,loopOverwrite,nextOverwrite} = props as RouteSettings
 
                 this.startSettings = {
                     ...this.startSettings,
-                    startPos, endPos, realityFactor, segment, showPrev
+                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite
                 }
 
             }
@@ -576,7 +580,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             
     }
 
-    protected adjustStartPosAvi(settings:RouteSettings) {
+    protected adjustStartPosAvi(settings:RouteSettings|UIStartSettings) {
         try {
             if (this.route.description.videoFormat==='avi') {
                 settings.startPos = 0

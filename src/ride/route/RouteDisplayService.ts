@@ -194,7 +194,7 @@ export class RouteDisplayService extends RideModeService {
     getDisplayProperties(props: CurrentRideDisplayProps):RouteDisplayProps {
 
         
-        const {realityFactor,startPos,endPos} = this.startSettings
+        const {realityFactor,startPos,endPos, loopOverwrite=false} = this.startSettings
         const parent = super.getDisplayProperties(props)
         const map = this.getOverlayProps('map',props)
         const upcomingElevation = this.getOverlayProps('slope',props)
@@ -203,9 +203,11 @@ export class RouteDisplayService extends RideModeService {
 
         const [C,U] = this.getUnitConversionShortcuts()
 
+        const isLoop = this.currentRoute?.description?.isLoop
         const xScale = { value: C( 1,'distance', U('distance')), unit:U('distance') }
         const yScale = { value: C( 1,'elevation', U('elevation')), unit:U('elevation') }
-        
+
+        const mapStartPos = ( isLoop&& !loopOverwrite)  ? undefined : startPos
 
         return {
             ...parent,
@@ -213,7 +215,7 @@ export class RouteDisplayService extends RideModeService {
             sideViews: this.sideViews,
             route: this.getCurrentRoute(),
             realityFactor,
-            startPos,endPos,
+            startPos:mapStartPos,endPos,
             nearbyRides,
             xScale,yScale,
             map,upcomingElevation, totalElevation,
@@ -272,6 +274,7 @@ export class RouteDisplayService extends RideModeService {
         // cache the start settings as they can be changed during the ride, 
         // but might also be deleted when route is finished, but workout continues
         const prev = this._startSettings
+
         this._startSettings = this.getRouteList().getStartSettings() as RouteSettings ?? prev
 
         return this._startSettings

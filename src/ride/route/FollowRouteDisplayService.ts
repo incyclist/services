@@ -16,6 +16,7 @@ export class FollowRouteDisplayService extends GpxDisplayService {
             start: settings.startPos,
             realityFactor: `${settings.realityFactor}%`,
             showPrev: settings.showPrev,
+            finishAtEndOfLoop: settings.loopOverwrite,          
             ...bikeProps
         }
         
