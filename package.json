@@ -21,7 +21,7 @@
     "@typescript-eslint/eslint-plugin": "^8.55.0",
     "@typescript-eslint/parser": "^8.55.0",
     "dotenv": "^17.2.4",
-    "eslint": "^10.0.0",
+    "eslint": "^9.39.2",
     "formdata-node": "^6.0.3",
     "jest": "^30.2.0",
     "jsdoc": "^4.0.5",
