@@ -55,9 +55,14 @@ export class VideoSyncHelper extends IncyclistService{
         super('VideoSync')
         this.route = route;
 
-        this.validateMappings(route)
-        this.initCorrectedMapping(this.route?.details)        
-        this.init(startPos, props);
+        try {
+            this.validateMappings(route)
+            this.initCorrectedMapping(this.route?.details)        
+            this.init(startPos, props);
+        }
+        catch(err) {
+            this.logError(err,'VideoSync constructor')
+        }
     }
 
     logEvent(event: any): void {
@@ -683,35 +688,40 @@ export class VideoSyncHelper extends IncyclistService{
 
 
     protected init(startPos: number, props: { loopMode?: boolean; observer?: Observer; }) {
+        try {
+            this.rlvStatus = {
+                ts: Date.now(),
+                rate: 0,
+                time: this.getVideoTimeByPosition(startPos),
+                routeDistance: startPos,
+                speed: this.getMappingByDistance(startPos)?.videoSpeed,
+                lap: 1,
+            };
 
-        this.rlvStatus = {
-            ts: Date.now(),
-            rate: 0,
-            time: this.getVideoTimeByPosition(startPos),
-            routeDistance: startPos,
-            speed: this.getMappingByDistance(startPos)?.videoSpeed,
-            lap: 1,
-        };
+            this.activityStatus = {
+                ts: Date.now(),
+                routeDistance: startPos,
+                speed: 0,
+                lap: 1,
+            };
 
-        this.activityStatus = {
-            ts: Date.now(),
-            routeDistance: startPos,
-            speed: 0,
-            lap: 1,
-        };
+            this.loopMode = props?.loopMode ?? this.route.description.isLoop;
+            this.observer = props?.observer;
+            this.isPaused = true;
+            this.isStopped = false;
+            this.maxRate = MAX_PLAYBACK_RATE;
+            this.maxSuccessRate = MIN_PLAYBACK_RATE;
 
-        this.loopMode = props?.loopMode ?? this.route.description.isLoop;
-        this.observer = props?.observer;
-        this.isPaused = true;
-        this.isStopped = false;
-        this.maxRate = MAX_PLAYBACK_RATE;
-        this.maxSuccessRate = MIN_PLAYBACK_RATE;
+            this.cntWaitingEvents = 0;
+            this.maxDelta = 0;
+            delete this.tsStart;
+            this.cpuTime = 0;
+            this.id = generateUUID()
 
-        this.cntWaitingEvents = 0;
-        this.maxDelta = 0;
-        delete this.tsStart;
-        this.cpuTime = 0;
-        this.id = generateUUID()
+        }
+        catch(err) {
+            this.logError(err,'init')
+        }
     }
 
 
@@ -752,18 +762,24 @@ export class VideoSyncHelper extends IncyclistService{
 
 
     protected validateMappings(route:Route) {
-        const mappings = route?.details?.video?.mappings
-        if (!mappings || mappings?.length<2)
-            return;
+        try {
+            const mappings = route?.details?.video?.mappings
+            if (!mappings || mappings?.length<2)
+                return;
 
-        const first = mappings[0]
-        const second = mappings[1]
-        
-        if (first.distance !== 0) {
-            // insert new record into mappings with distance and time=0
-            const newMappings = [...mappings]
-            newMappings.unshift({distance:0,time:0,videoSpeed:second.videoSpeed})
-            route.details.video.mappings = newMappings
+            const first = mappings[0]
+            const second = mappings[1]
+            
+            if (first.distance !== 0) {
+                // insert new record into mappings with distance and time=0
+                const newMappings = [...mappings]
+                newMappings.unshift({distance:0,time:0,videoSpeed:second.videoSpeed})
+                route.details.video.mappings = newMappings
+            }
+
+        }
+        catch(err) {
+            this.logError(err,'validateMappings')
         }
 
     }
@@ -779,42 +795,49 @@ export class VideoSyncHelper extends IncyclistService{
             return;
         }
 
-        const mappings = routeData.video.mappings;
-        const totalDistance = routeData.distance;
-        const framerate = routeData.video.framerate
-        
-        const newMappings = [...mappings]
-        this.mapping = newMappings
+        try {
+            const mappings = routeData.video.mappings;
+            const totalDistance = routeData.distance;
+            const framerate = routeData.video.framerate
+            
+            const newMappings = [...mappings]
+            this.mapping = newMappings
 
-        let lastRecord = newMappings[newMappings.length-1]
-        let error
+            let lastRecord = newMappings[newMappings.length-1]
+            let error = false
 
-        // if the mappings do not cover the full distance, fill up with records containing constant speed (every 1s)
-        while (lastRecord.distance<totalDistance && lastRecord.videoSpeed && !error) {
-            try {
-                let time = Math.floor(lastRecord.time)+1
-                const t = time-lastRecord.time
-                const v = lastRecord.videoSpeed/3.6
-                const s = v*t
-                let distance = lastRecord.distance + s
+            // if the mappings do not cover the full distance, fill up with records containing constant speed (every 1s)
+            while (lastRecord?.distance<totalDistance && lastRecord?.videoSpeed && !error) {
+                try {
+                    let time = Math.floor(lastRecord.time)+1
+                    const t = time-lastRecord.time
+                    const v = lastRecord.videoSpeed/3.6
+                    const s = v*t
+                    let distance = lastRecord.distance + s
 
-                if (distance>totalDistance) {
-                    const s = totalDistance-lastRecord.distance
-                    const t = s/v
-                    time = lastRecord.time+t
-                    distance = totalDistance
+                    if (distance>totalDistance) {
+                        const s = totalDistance-lastRecord.distance
+                        const t = s/v
+                        time = lastRecord.time+t
+                        distance = totalDistance
 
-                }          
-                const frame =   Math.round(time*framerate)
-                newMappings.push({...lastRecord, frame, time, distance})
+                    }          
+                    const frame =   Math.round(time*framerate)
+                    newMappings.push({...lastRecord, frame, time, distance})
+                }
+                catch(err) {
+                    error = err
+                }
+                lastRecord = newMappings[newMappings.length-1]
             }
-            catch(err) {
-                error = err
-            }
-            lastRecord = newMappings[newMappings.length-1]
+
+            return newMappings;
+
+        }
+        catch(err) {
+            this.logError(err,'initCorrectedMapping')
         }
 
-        return newMappings;
     }
 
 
