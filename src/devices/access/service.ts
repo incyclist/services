@@ -333,9 +333,7 @@ export class DeviceAccessService  extends IncyclistService{
                 interfaces.forEach( name=> { if (name) this.connect(name)})
                 return;
             }
-   
-            console.log('# connect interface', ifaceName,this.interfaces[ifaceName]?.enabled)
-            
+               
             if (this.interfaces[ifaceName]?.enabled===false)
                 return
 
@@ -430,7 +428,6 @@ export class DeviceAccessService  extends IncyclistService{
      */
     async scan( filter:ScanFilter={},props:{timeout?:number,includeKnown?:boolean }={} ): Promise<DeviceSettings[]> {
         this.logEvent({message:'device scan start', filter,props} )
-        console.log('# device scan start',filter, props)
         const detected = [];
         const onDataHandlers:OnDataHandlersMap  = {}
         const {includeKnown=false} = props
