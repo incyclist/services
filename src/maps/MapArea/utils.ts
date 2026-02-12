@@ -49,9 +49,9 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
         try {
             data = JSON.parse(str);
         }
-        catch (error) {
+        catch (err) {
             const logger = new EventLogger('MapArea')
-            logger.logEvent({message:"_parse: parsing error:",error})
+            logger.logEvent({message:"_parse: parsing error:",error:err.message, stack:err.stack})
             return;
         }    
     }

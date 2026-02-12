@@ -9,6 +9,7 @@ import { MapArea } from "./MapArea";
 import { OptionManager } from "./options";
 import { OverpassApi } from "../../services/overpass";
 import { waitNextTick } from "../../utils";
+import { sleep } from "../../utils/sleep";
 
 const DEFAULT_TIMEOUT = 10000
 
@@ -146,31 +147,50 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
 
     async loadMap( location: IncyclistNode):Promise<IMapArea> {
         let ts
-        try {                       
-            const bounds = getBounds(location?.lat,location?.lng,this.radius)
-            const query = buildQuery(GET_WAYS_IN_AREA,bounds);
+        
+        for (let i=0;i<2;i++) {
+
+            try {                       
+                const bounds = getBounds(location?.lat,location?.lng,this.radius)
+                const query = buildQuery(GET_WAYS_IN_AREA,bounds);
 
 
-            const openmapData = await this.getOverpassAPI().query(query,DEFAULT_TIMEOUT);                  
-            if (!openmapData){
-                // TODO: offer retry
-                return
+                const openmapData = await this.getOverpassAPI().query(query,DEFAULT_TIMEOUT);                  
+                if (openmapData){
+
+                    const data = this.createMapData(openmapData);    
+                    if (data) {
+                        const map = new MapArea(data,location,bounds)
+                        this.addMap(map,location)
+                        this.getOptionManager().setMap(map)
+
+                        this.checkRadiusAdjustment(map);
+                        
+                        this.startGarbageCollection()
+
+                        return map
+                    }
+                }
+
+            }
+            catch (error) {
+                const duration = ts? Date.now()-ts : undefined
+                this.logEvent({message:'overpass query result',status:'failure',error:{code:error.code,response:error.response},duration});
             }
 
-            const data = this.createMapData(openmapData);    
-            const map = new MapArea(data,location,bounds)
-            this.addMap(map,location)
-            this.getOptionManager().setMap(map)
-
-            this.checkRadiusAdjustment(map);
-            
-            this.startGarbageCollection()
-
-            return map
+            // if we reach this point, then the map creation has failed, trigger next retry
+            await sleep(1000)
         }
-        catch (error) {
-            const duration = ts? Date.now()-ts : undefined
-            this.logEvent({message:'overpass query result',status:'failure',error:{code:error.code,response:error.response},duration});
+
+        // if we reach this point, then all retries have failed
+        try {
+            const record = {map:undefined,lastUsed:Date.now(), radius:this.radius}               
+            const mapInfo = `${location.lat},${location.lng},${getMapInfo(record)}`
+
+            this.logEvent({message:'Could not add map',map:mapInfo,cnt:Object.keys(this.maps).length,maps:Object.keys(this.maps).map(k=>getMapsInfo(this.maps,k))})                
+        }
+        catch (err) {
+            this.logError(err,'loadMap')
         }
 
     }
