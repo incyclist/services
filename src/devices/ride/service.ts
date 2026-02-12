@@ -629,7 +629,7 @@ export class DeviceRideService  extends IncyclistService{
    
     async startAdapters( adapters:AdapterRideInfo[], startType: 'start' | 'check' | 'pair',props?:RideServiceDeviceProperties ):Promise<boolean> {
     
-
+        
         const duplicates = this.checkAntSameDeviceID(adapters)
 
         this.startPromises = adapters?.map( async ai=> 
@@ -639,11 +639,16 @@ export class DeviceRideService  extends IncyclistService{
         if (!this.startPromises?.length)
             return true;
 
+        if (startType==='pair') {
+            this.registerOnDataHandler( adapters)
+        }
+
+
         const status = await Promise.all(this.startPromises)
         const allOK = status.find( s=>s===false)===undefined
         this.emit(`${startType}-result`, allOK)
 
-        if (allOK && (startType==='start' || startType==='pair')) {
+        if (allOK && (startType==='start' )) {
             this.registerOnDataHandler( adapters)
         }
 
@@ -1319,7 +1324,6 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     onData( deviceSettings:DeviceSettings, data:DeviceData) {
-
 
         const adapters = this.getRideAdapters();
         const config = this.getDeviceConfiguration()

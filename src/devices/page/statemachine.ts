@@ -1,7 +1,7 @@
 import { EventLogger } from 'gd-eventlog'
 import { Injectable } from '../../base/decorators'
 import { useDevicePairing } from '../pairing'
-import type {PageState} from './types'
+import type {PageState, SelectState} from './types'
 import { useDeviceConfiguration } from '../configuration'
 import { EventEmitter } from 'node:stream'
 
@@ -11,11 +11,16 @@ const SCANNING_RETRY_DELAY = 2000
 export class PairingPageStateMachine {
 
     protected _state: PageState = 'Closed'
+    protected _selectState: SelectState = 'Closed'
     protected logger: EventLogger
     protected eventHandlers: Record<string,any> = {}
     protected internalEvents: EventEmitter = new EventEmitter()
     protected stateChangeCallback: ()=>void
+    protected selectStateChangeCallback: ()=>void
     protected retryTimeout: NodeJS.Timeout|undefined
+    protected selectionTimeout: NodeJS.Timeout|undefined
+    
+
 
 
 
@@ -25,6 +30,9 @@ export class PairingPageStateMachine {
 
     get state():PageState {
         return this._state
+    }
+    get selectState():SelectState {
+        return this._selectState
     }
 
     start(  callback:()=>void ) {      
@@ -68,7 +76,7 @@ export class PairingPageStateMachine {
         if (this.state==='Pairing') {
             service.stopPairing()
         }
-        else if (this.state==='Scanning') {
+        else if (this.state==='Scanning' ) {
             service.stopScanning()
         }
 
@@ -146,42 +154,59 @@ export class PairingPageStateMachine {
     }
 
     protected onStateUpdate() {
-        if (this.stateChangeCallback)
-            this.stateChangeCallback()
-    }
 
-    protected performCheck() {
         
-        const oldState = this.state
-        const configuration = this.getDeviceConfiguration()
-        const service = this.getDevicePairing()
-
-        const hasDevices = configuration.canStartRide()
-        const adapters = configuration.getAdapters(false)
-
-        this.logger.logEvent({message:'check next action', hasDevices})
-        if (hasDevices) {
-
-            const pairingDone = service.checkPairingSuccess()
-
-            if (pairingDone) {
-                service.prepareForRide()
-                this.resetTimeouts()
-                this.setState('Done')
-            }
-            else {
-                this.setState('Pairing')
-                service.startPairing(adapters, {})
-            }
-
+        if (this.selectState==='Closed') {
+            if (this.stateChangeCallback)
+                this.stateChangeCallback()
         }
         else {
-            this.setState('Scanning')
-            service.startScanning(adapters, {})
-        }
+            if (this.selectStateChangeCallback)
+                this.selectStateChangeCallback
+        }   
+    }
 
-        if (this.state!==oldState)
-            this.logger.logEvent( {message:'state changed',stateTransition:{from:oldState,to:this.state} })
+    protected performCheck( prevState?:PageState) {
+        try  {
+            const oldState = this.state
+            const configuration = this.getDeviceConfiguration()
+            const service = this.getDevicePairing()
+
+            const hasDevices = configuration.canStartRide()
+            const adapters = configuration.getAdapters(false)
+
+            this.logger.logEvent({message:'check next action', hasDevices})
+
+            if (hasDevices && this.selectState==='Closed') {
+
+                const pairingDone = service.checkPairingComplete()
+
+                if (pairingDone) {
+                    //service.stopPairing
+                    service.prepareForRide()
+                    this.resetTimeouts()
+                    this.setState('Done')
+                    //this.setState('Idle')
+                }
+                else {
+                    this.setState('Pairing')
+                    service.startPairing(adapters, {})
+                }
+
+            }
+            else if (this.selectState==='Closed' || this.selectState==='Active'){
+                this.setState('Scanning')
+                service.startScanning(adapters, {})
+            }
+            
+
+            if (this.state!==oldState)
+                this.logger.logEvent( {message:'state changed',stateTransition:{from:oldState,to:this.state} })
+
+        }
+        catch(err) {
+            this.logError(err,'performCheck')
+        }
 
     }
 
@@ -191,21 +216,41 @@ export class PairingPageStateMachine {
             this.logError( new Error('Illegal state'),'onPairingStarted')
             return;
         }
+        this.sendUpdate()
+
     }
     protected onPairingFinished() {
         const prev = this.state
         this.setState('Idle')
 
-        this.logger.logEvent( {message:'setup retry timeout', delay:PAIRING_RETRY_DELAY})
+        // device selector was opened and is currently within or beyond 3s waiting period
+        if (this._selectState==='Waiting') {
+            // don't retry pairing
+            this.resetTimeouts()
 
-        this.retryTimeout = setTimeout( ()=>{
-            console.log('#emit retry')
-            this.onRetry()
-        },PAIRING_RETRY_DELAY )
-        this.logIncomingEvent('pairing-done',prev,this.state)
+            // if selection timeout already expired
+            if (!this.selectionTimeout) {                
+                // call perform Check which should trigger a scan
+                this.performCheck()
+            }
+            
+        }
+        else {
+            this.logger.logEvent( {message:'setup retry timeout', delay:PAIRING_RETRY_DELAY})
 
+            this.retryTimeout = setTimeout( ()=>{
+                this.onRetry(prev)
+            },PAIRING_RETRY_DELAY )
+
+            this.sendUpdate()
+            this.logIncomingEvent('pairing-done',prev,this.state)
+        }
     }
 
+    protected sendUpdate() {
+        if (this.stateChangeCallback)
+            this.stateChangeCallback()        
+    }
 
     protected onScanningStarted() {      
         // nothing to do for now just verify we are in the expected state
@@ -217,26 +262,96 @@ export class PairingPageStateMachine {
 
     protected onScanningFinished() {
         const prev = this.state
+
+
         this.setState('Idle')
         this.retryTimeout = setTimeout( ()=>{
-            this.onRetry()
+            this.onRetry( prev)
         },SCANNING_RETRY_DELAY )
+
+
         this.logIncomingEvent('started',prev,this.state)
 
     }
 
-    protected onRetry() {
-        console.log('# retry', this.state)
+    protected onRetry(prevState:PageState) {
 
         this.resetTimeouts()
         if (this.state!=='Idle') {
             return;
         }
+            
+        this.performCheck( prevState)
+    }
+
+
+    onDeviceSelectionOpened( onSelectionStateChanged:()=>void) {
+
+
+        if (this.state==='Pairing' )  {
+            this.startDeviceSelectionTimeout()
+            this._selectState = 'Waiting'
+        }
+        else {
+            this._selectState = 'Active'
+
+        }
+        this.logIncomingEvent('list-open',this.state, this.state)
+
+        if (this.state==='Idle' || this.state==='Done') {
+            this.performCheck()
+        }
+    }
+
+    async onDeviceSelectionClosed() {
+
+        const prev = this.state
+        this._selectState = 'Closed'
+        delete this.selectStateChangeCallback
+        this.stopDeviceSelectionTimeout()
+
+        if (this.state==='Pairing' )  {
+            await this.getDevicePairing().stopPairing()
+            this.setState('Idle')
+        }
+        else if (this.state==='Scanning' )  {
+            await this.getDevicePairing().stopScanning()
+            this.setState('Idle')
+        }
+
+        this.logIncomingEvent('list-close',prev, this.state)
         this.performCheck()
+        
+    }
+
+    protected startDeviceSelectionTimeout() {
+        this.stopDeviceSelectionTimeout()
+        this.selectionTimeout = setTimeout( this.onDeviceSelectionTimeout.bind(this), 3000)
+
+    }
+
+    protected stopDeviceSelectionTimeout() {
+        if (this.selectionTimeout) 
+            clearTimeout(this.selectionTimeout)
+        delete this.selectionTimeout
+    }
+
+
+    async onDeviceSelectionTimeout    () {
+        this.stopDeviceSelectionTimeout()
+
+        this.logIncomingEvent('list-timeout',this.state, this.state)
+        if (this.state==='Idle') {
+            this._selectState = 'Active'
+            this.performCheck()
+        }
+        else if(this.state==='Pairing') {
+            this.getDevicePairing().stopPairing()
+            this.selectionTimeout = setTimeout( this.onDeviceSelectionTimeout.bind(this), 1000)
+        }
     }
 
     protected resetTimeouts() {
-        console.log('# reset retry timeout')
 
         if (this.retryTimeout!==undefined) {
             clearTimeout(this.retryTimeout)

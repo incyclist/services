@@ -4,7 +4,7 @@ import { IncyclistPageService } from '../../base/pages'
 import { useDevicePairing } from '../pairing'
 
 import type { CapabilityDisplayProps, DeviceListDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, InterfaceDisplayProps, InterfaceDisplayState, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../types'
-import type { CapabilityData, InternalPairingState, PairingState} from '../pairing'
+import type { CapabilityData, DevicePairingData, InternalPairingState, PairingState} from '../pairing'
 import { PairingPageStateMachine } from './statemachine'
 import { PageLogObserver } from './logobserver'
 import { EnrichedInterfaceSetting, InterfaceState } from '../access'
@@ -20,8 +20,7 @@ export class DevicesPageService extends IncyclistPageService {
     protected promiseOpen:Promise<void>|undefined
     protected stateMachine: PairingPageStateMachine
     protected logObserver:PageLogObserver
-    protected activeSelection: IncyclistCapability|undefined
-    protected timeOutSelection: NodeJS.Timeout|undefined
+    protected openedCapability: IncyclistCapability|undefined
 
     constructor() {
         super('Pairing')
@@ -56,18 +55,19 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
     closePage() {
+        this.logEvent({message:'page closed', page:'Pairing'})        
+        EventLogger.setGlobalConfig('page',null)
         super.closePage()
         this.stop()
         this.stateMachine.stop()
     }
 
     pausePage() {
-        console.log('# pause Pairing Page')
+        this.logEvent({message:'page paused', page:'Pairing'})            
         this.stateMachine.pause()
-
     }
     resumePage() {
-        console.log('# resume Pairing Page')
+        this.logEvent({message:'page resumed', page:'Pairing'})                
         this.stateMachine.resume()
     }
 
@@ -75,7 +75,7 @@ export class DevicesPageService extends IncyclistPageService {
     getPageDisplayProperties():PairingDisplayProps {
 
         const caps = this.state.capabilities??[]
-        const ifs = this.state.interfaces
+        const ifs = this.state.interfaces??[]
 
         const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i) )
         const capProps = caps.map( c=>this.getCapabilityDisplayProps( c ))
@@ -115,22 +115,22 @@ export class DevicesPageService extends IncyclistPageService {
 
 
     protected getCapabilityDisplayProps(data:CapabilityData):CapabilityDisplayProps {
-        const {capability:cap,deviceName, connectState,value,unit} = data
+        const {capability:cap,deviceName, connectState,value,unit,disabled} = data
 
         const capability = this.getTCapability(cap)
 
-        const adapaters = this.state.adapters
+        const adapaters = this.state.adapters??[]
 
         const adapter = adapaters.find( ai=>data.selected && ai.udid===data.selected) 
         const ifName = adapter?.adapter?.getInterface()
 
 
-        const header = { title:capability }
+        const title = this.getDisplayCapability(cap)
         const onClick = ()=> { this.openDeviceSelection(cap)}
 
         
         return {
-            header, capability,deviceName, connectState,value:value?.toString(),unit,interface:ifName,
+            title, capability,deviceName:!disabled?deviceName:undefined, disabled, connectState,value:value?.toString(),unit,interface:ifName,
             onClick
         }
 
@@ -157,75 +157,85 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
     protected getDeviceListDisplayProps():DeviceSelectionProps|undefined {
-        if (!this.activeSelection)
+
+        if (!this.openedCapability)
             return 
 
         const all = this.state.capabilities??[]
-        const requested = all.find( c=>c.capability === this.activeSelection)
+        const requested = all.find( c=>c.capability === this.openedCapability)
+        const capDevices = requested?.devices??[]
 
-        const devices: Array<DeviceSelectionItemProps> = requested.devices.map( d=> ({
+        const devices: Array<DeviceSelectionItemProps> = capDevices.map( d=> ({
             connectState:d.connectState as TConnectState,
             deviceName: d.name,
             value: d.value,
             interface: d.interface,
             isSelected: d.selected,
-            onClick: ()=> { this.getDevicePairing().selectDevice( this.activeSelection, d.udid)}
+            onClick: (addAll:boolean)=> {this.onDeviceSelected(d,addAll) }
 
         }))
 
+        const disabled = devices.length>0 && !devices.find( d=> d.isSelected)
+
         return {
-            capability: this.activeSelection,            
+            capability: this.openedCapability,            
             devices,
-            isScanning: this.stateMachine.state==='CapabilityScan',
+            isScanning: this.stateMachine.selectState==='Active',
             changeForAll: false,
-            canSelectAll: this.activeSelection==='control',
+            canSelectAll: this.openedCapability==='control',
+            disabled,
             
-            onClose: ()=>{ this.onCloseDeviceSelection()}
+            onClose: (enabled)=>{ this.closeDeviceSelection(enabled)},
+            
 
         }
 
 
     }
 
-    protected startCapabilityScan( capability:IncyclistCapability) {
-
-    }
-
-    protected stopCapabilityScan() {
-
-    }
-
-
     protected updatePage() {
         this.getPageObserver().emit('page-update')        
     }
 
+    protected onEnableCapability(enabled:boolean) {
+        const all = this.state.capabilities??[]
+        const requested = all.find( c=>c.capability === this.openedCapability)
+        requested.disabled = !enabled
+        this.updatePage()
+        
+    }
+    
     protected openDeviceSelection(cap:IncyclistCapability) {
+        this.logEvent( {message:'capability clicked', capability:cap})
 
-        this.activeSelection = cap;
-        //this.getDevicePairing().startDeviceSelection(cap,(state)=> {
+        this.openedCapability = cap;
+        this.stateMachine.onDeviceSelectionOpened( ()=>{ this.updatePage() })       
         this.updatePage()
     }
 
-    protected startDeviceSelectionTimeout() {
-        this.stopDeviceSelectionTimeout()
-        this.timeOutSelection = setTimeout( this.onDeviceSelectionTimeout.bind(this), 3000)
+    protected onDeviceSelected (d:DevicePairingData,addAll?:boolean) { 
+        const capability = this.openedCapability
+        this.logEvent( {message:'device selected', capability, device:d.name})       
 
+        this.closeDeviceSelection(true)
+        this.getDevicePairing().selectDevice( capability, d.udid,addAll)
+
+        console.log( '# DevicePairing after select', structuredClone(this.getPageDisplayProperties()) )
+        this.updatePage()
     }
 
-    protected stopDeviceSelectionTimeout() {
-        if (this.timeOutSelection) 
-            clearTimeout(this.timeOutSelection)
-        delete this.timeOutSelection
-    }
 
-    protected onDeviceSelectionTimeout() {
-        delete this.timeOutSelection
-    }
+    protected async closeDeviceSelection( enabled: boolean) {
+        this.logEvent( {message:'capability closed', capability:this.openedCapability})
 
-    protected async onCloseDeviceSelection() {
-        this.activeSelection = undefined
-        //await this.getDevicePairing().stopDeviceSelection()
+        if (!enabled) {
+            const all = this.state.capabilities??[]
+            const requested = all.find( c=>c.capability === this.openedCapability)
+            this.getDevicePairing().unselectDevices(requested.capability)
+        }
+
+        this.openedCapability = undefined       
+        this.stateMachine.onDeviceSelectionClosed()
         this.updatePage()
     }
 
@@ -315,7 +325,9 @@ export class DevicesPageService extends IncyclistPageService {
 
     protected async start( ) { 
         this.getDevicePairing().usage = 'page'
-        await this.getDevicePairing().start( ()=>{})
+        this.getDevicePairing().start( ()=>{
+            this.updatePage()
+        })
     }
 
     async stop(adapters:Array<string>=[],forExit:boolean=false ):Promise<void> {

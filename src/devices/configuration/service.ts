@@ -1027,14 +1027,9 @@ export class DeviceConfigurationService  extends IncyclistService{
     }
 
     protected initInterfaces():void {
-
-        
-        if (this.settings?.interfaces?.length>0)
-            return;
-
         if (!this.settings)
             this.settings = {}
-        this.settings.interfaces = [];
+        this.settings.interfaces = this.settings.interfaces??[];
 
         const features = this.getAppState().getAppFeatures()
         const isEnabled = (i) => {
@@ -1043,13 +1038,24 @@ export class DeviceConfigurationService  extends IncyclistService{
             return features?.interfaces?.includes(i)
         }
 
-        if (isEnabled('ant')) this.settings.interfaces.push( {name:'ant', enabled:true})
-        if (isEnabled('ble')) this.settings.interfaces.push( {name:'ble', enabled:true})
-        if (isEnabled('serial'))this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
-        if (isEnabled('tcpip'))this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
+        const isConfigured = (name:string) =>{
+            return this.settings.interfaces.find( i=>i.name===name )
+        }
 
+        if (isEnabled('ant') && !isConfigured('ant')) 
+            this.settings.interfaces.push( {name:'ant', enabled:true})
 
-        this.initWifiInterface()
+        if (isEnabled('ble') && !isConfigured('ble')) 
+            this.settings.interfaces.push( {name:'ble', enabled:true})
+
+        if (isEnabled('serial') && !isConfigured('serial'))
+            this.settings.interfaces.push( {name:'serial', enabled:true, protocol:'Daum Classic'})
+
+        if (isEnabled('tcpip') && !isConfigured('tcpip'))
+            this.settings.interfaces.push( {name:'tcpip', enabled:false, protocol:'Daum Premium', port:51955})
+
+        if (isEnabled('wifi') && !isConfigured('wifi'))
+            this.initWifiInterface()
     }
 
     protected hasFTControllers():boolean {

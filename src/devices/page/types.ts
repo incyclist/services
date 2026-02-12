@@ -1,7 +1,8 @@
 import type { IncyclistCapability } from "incyclist-devices"
 import type { DevicePairingStatus } from "../pairing/model"
 
-export type PageState =   'Idle' | 'Scanning' | 'Pairing' | 'Done' | 'Closed' | 'CapabilityScan'
+export type PageState    =  'Idle' | 'Scanning' | 'Pairing' | 'Done' | 'Closed' 
+export type SelectState  =  'Closed' | 'Waiting' | 'Active' 
 
 export type PairingDisplayProps = {
     title: string|undefined
@@ -20,10 +21,11 @@ export type PairingDisplayProps = {
 export type DeviceSelectionProps = {
     capability: TIncyclistCapability
     devices: Array<DeviceSelectionItemProps>
+    disabled: boolean,
     isScanning: boolean
     changeForAll: boolean
-    canSelectAll
-    onClose
+    canSelectAll: boolean
+    onClose: (enabled:boolean)=>void    
 }
 
 export type TConnectState = 'failed' | 'connected' | 'connecting'
@@ -37,22 +39,16 @@ export type DeviceSelectionItemProps = {
     onDelete?
 }
 
-export type CapabilityTitle = {
-    title:string
-}
-export type CapabilityIcon = {
-    icon: TDisplayCapability
-}
-
 export type CapabilityDisplayProps = {
-    header:CapabilityTitle|CapabilityIcon    
+    title: string
     capability: TIncyclistCapability
     deviceName: string|undefined
     interface?: string,
     connectState?: DevicePairingStatus,   
     value?: string
     unit?: string
-    onClick: ()=>void
+    disabled?: boolean
+    onClick: (item:CapabilityDisplayProps)=>void
     onUnselect? 
 }
 
