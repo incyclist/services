@@ -548,7 +548,7 @@ export class RLVDisplayService extends RouteDisplayService {
 
     protected initVideoSource(video:VideoState) {
         const route = video.route
-        const videoFormat = route?.details?.video?.format
+        const videoFormat = route?.details?.video?.format??route.description.videoFormat
         const src = this.getVideoUrl(video)
 
 
@@ -556,11 +556,12 @@ export class RLVDisplayService extends RouteDisplayService {
             video.error = 'No video source found'
             return;
         }
-        if (videoFormat==='mp4') {
-            this.initMp4VideoSource(video)
-            return
+
+
+        if (videoFormat==='avi') {
+            return this.initAviVideoSource(video)
         }
-        return this.initAviVideoSource(video)
+        this.initMp4VideoSource(video)
     }
 
     protected initMp4VideoSource(video:VideoState):void {
