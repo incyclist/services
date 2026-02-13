@@ -11,6 +11,7 @@ import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../ac
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../configuration'
 import { getBindings } from '../../api'
+import { useIncyclist } from '../../ui'
 
 
 
@@ -29,104 +30,157 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
     openPage():IObserver {
+        try {
+            this.logEvent({message:'page shown', page:'Pairing'})
 
-        this.logEvent({message:'page shown', page:'Pairing'})
+            EventLogger.setGlobalConfig('page','Pairing')
+            super.openPage()
 
-        EventLogger.setGlobalConfig('page','Pairing')
-        super.openPage()
+            // shielding against duplicate calls
+            if (this.promiseOpen!==undefined)  {
+                return this.getPageObserver()
+            }
+        
+            this.stateMachine.start( ()=>{
+                this.getPageObserver().emit('page-update')
+            })
 
-        // shielding against duplicate calls
-        if (this.promiseOpen!==undefined)  {
-            return this.getPageObserver()
+            this.promiseOpen = new Promise<void> ((done)=> {
+                this.start()
+                .catch( (err)=>{this.logError(err,'openPage')})
+                .finally(done)
+            })
+            .then( ()=>{delete this.promiseOpen})
+
+
+            }
+        catch(err)  {
+            this.logError(err,'openPage')
+
         }
-       
-        this.stateMachine.start( ()=>{
-            this.getPageObserver().emit('page-update')
-        })
-
-        this.promiseOpen = new Promise<void> ((done)=> {
-            this.start()
-            .catch( (err)=>{this.logError(err,'openPage')})
-            .finally(done)
-        })
-        .then( ()=>{delete this.promiseOpen})
-
         return this.getPageObserver()
+
     }
 
     closePage() {
-        this.logEvent({message:'page closed', page:'Pairing'})        
-        EventLogger.setGlobalConfig('page',null)
-        super.closePage()
-        this.stop()
-        this.stateMachine.stop()
+        try {
+            this.logEvent({message:'page closed', page:'Pairing'})        
+            EventLogger.setGlobalConfig('page',null)
+            super.closePage()
+            this.stop()
+            this.stateMachine.stop()
+
+        }
+        catch(err) {
+            this.logError(err,'closePage')
+        }
     }
 
     async pausePage() {
-        await this.stateMachine.pause()
-        this.logEvent({message:'page paused', page:'Pairing'})            
+        try {
+            await this.stateMachine.pause()
+            this.logEvent({message:'page paused', page:'Pairing'})            
+        }
+        catch(err) {
+            this.logError(err,'pausePage')
+        }
     }
+
     async resumePage() {
-        this.stateMachine.resume()
+        try {
+            this.stateMachine.resume()
 
-        if (this.promiseOpen!==undefined)
-            return;
+            if (this.promiseOpen!==undefined)
+                return;
 
-        this.promiseOpen = new Promise<void> ((done)=> {
-            this.start()
-            .catch( (err)=>{this.logError(err,'openPage')})
-            .finally(done)
-        })
+            this.promiseOpen = new Promise<void> ((done)=> {
+                this.start()
+                .catch( (err)=>{this.logError(err,'openPage')})
+                .finally(done)
+            })
 
 
-        await this.promiseOpen
-        
-        delete this.promiseOpen
-        this.logEvent({message:'page resumed', page:'Pairing'})                
+            await this.promiseOpen
+            
+            delete this.promiseOpen
+            this.logEvent({message:'page resumed', page:'Pairing'})                
+
+        }
+        catch(err) {
+            this.logError(err,'pausePage')
+        }
 
     }
 
 
     getPageDisplayProperties():PairingDisplayProps {
 
-        const caps = this.state.capabilities??[]
-        const ifs = this.state.interfaces??[]
-        useDeviceAccess().enrichWithAccessState(ifs)
-
-        const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i) )
-        const capProps = caps.map( c=>this.getCapabilityDisplayProps( c ))
-
-        const loading = this.promiseOpen!=undefined
         const title = 'Devices'
 
-        const CP = (cap:TIncyclistCapability) => capProps.find( c => c.capability===cap)
-
-        const top = [
-            CP('control'),
-            CP('power'),
-            CP('heartrate')
-        ].filter( c=>c!==null && c!==undefined)
-        const bottom = [
-            CP('cadence'),
-            CP('speed'),
-            CP('app_control')
-        ].filter( c=>c!==null && c!==undefined)
-
-
-        const buttons = this.getButtonsDisplayProps()
-
         const onExit = ()=> {
-            console.log('# Exit button clicked')
+            try {
+                const ui = this.getBindings().ui
+                useIncyclist().onAppExit()
+                    .then( ()=>{
+                        ui.quit()                        
+                    })
+                    .catch( ()=>{})                
+            }
+            catch(err) {
+                this.logError(err,'onExit')
+            }
         }
-        return {
 
-            title,
-            capabilities: { top, bottom},
-            interfaces,
-            deviceSelection: this.getDeviceListDisplayProps(),
-            buttons,
-            onExit
+        try {
+            const caps = this.state.capabilities??[]
+            const ifs = this.state.interfaces??[]
+            useDeviceAccess().enrichWithAccessState(ifs)
+
+            const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i) )
+            const capProps = caps.map( c=>this.getCapabilityDisplayProps( c ))
+
+            const loading = this.promiseOpen!=undefined
+
+            const CP = (cap:TIncyclistCapability) => capProps.find( c => c.capability===cap)
+
+            const top = [
+                CP('control'),
+                CP('power'),
+                CP('heartrate')
+            ].filter( c=>c!==null && c!==undefined)
+            const bottom = [
+                CP('cadence'),
+                CP('speed'),
+                CP('app_control')
+            ].filter( c=>c!==null && c!==undefined)
+
+
+            const buttons = this.getButtonsDisplayProps()
+
+            return {
+
+                title,
+                capabilities: { top, bottom},
+                interfaces,
+                deviceSelection: this.getDeviceListDisplayProps(),
+                buttons,
+                onExit
+            }
+
+
+
         }
+        catch(err) {
+            return {
+                title,
+                capabilities: { top:[], bottom:[]},
+                interfaces:[],
+                buttons: [{ label:'Skip', primary:true, onClick:this.onSkip.bind(this) }],
+                onExit
+            }
+
+        }
+
     }
 
 
@@ -255,7 +309,7 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
     protected getButtonsDisplayProps() : PairingButtonProps{
-        if (this.state.canStartRide) 
+        if (this.state?.canStartRide) 
             return [
                 { label:'OK', primary:true, onClick:this.onOK.bind(this) }
             ]
@@ -372,6 +426,11 @@ export class DevicesPageService extends IncyclistPageService {
     protected getBindings() {
         return getBindings()
 
+    }
+
+    @Injectable
+    protected getIncyclist() {
+        return useIncyclist()
     }
 }
 
