@@ -7,7 +7,7 @@ import type { CapabilityDisplayProps, DeviceListDisplayProps, DeviceSelectionIte
 import type { CapabilityData, DevicePairingData, InternalPairingState, PairingState} from '../pairing'
 import { PairingPageStateMachine } from './statemachine'
 import { PageLogObserver } from './logobserver'
-import { EnrichedInterfaceSetting, InterfaceState } from '../access'
+import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../access'
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../configuration'
 import { getBindings } from '../../api'
@@ -62,13 +62,28 @@ export class DevicesPageService extends IncyclistPageService {
         this.stateMachine.stop()
     }
 
-    pausePage() {
+    async pausePage() {
+        await this.stateMachine.pause()
         this.logEvent({message:'page paused', page:'Pairing'})            
-        this.stateMachine.pause()
     }
-    resumePage() {
-        this.logEvent({message:'page resumed', page:'Pairing'})                
+    async resumePage() {
         this.stateMachine.resume()
+
+        if (this.promiseOpen!==undefined)
+            return;
+
+        this.promiseOpen = new Promise<void> ((done)=> {
+            this.start()
+            .catch( (err)=>{this.logError(err,'openPage')})
+            .finally(done)
+        })
+
+
+        await this.promiseOpen
+        
+        delete this.promiseOpen
+        this.logEvent({message:'page resumed', page:'Pairing'})                
+
     }
 
 
@@ -76,6 +91,7 @@ export class DevicesPageService extends IncyclistPageService {
 
         const caps = this.state.capabilities??[]
         const ifs = this.state.interfaces??[]
+        useDeviceAccess().enrichWithAccessState(ifs)
 
         const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i) )
         const capProps = caps.map( c=>this.getCapabilityDisplayProps( c ))
@@ -220,7 +236,6 @@ export class DevicesPageService extends IncyclistPageService {
         this.closeDeviceSelection(true)
         this.getDevicePairing().selectDevice( capability, d.udid,addAll)
 
-        console.log( '# DevicePairing after select', structuredClone(this.getPageDisplayProperties()) )
         this.updatePage()
     }
 

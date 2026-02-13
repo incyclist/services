@@ -326,6 +326,7 @@ export class DeviceAccessService  extends IncyclistService{
      * @returns true if the interface could be connected, otherwise false
      */
    async connect( ifaceName?:string):Promise<boolean> {
+
     
         try {
             if (!ifaceName) {
@@ -333,7 +334,7 @@ export class DeviceAccessService  extends IncyclistService{
                 interfaces.forEach( name=> { if (name) this.connect(name)})
                 return;
             }
-               
+
             if (this.interfaces[ifaceName]?.enabled===false)
                 return
 
@@ -346,8 +347,9 @@ export class DeviceAccessService  extends IncyclistService{
             }
     
             const prevState = this.interfaces[ifaceName].state
-            if (prevState==='connected')
+            if (prevState==='connected') {
                 return true;
+            }
     
             this.interfaces[ifaceName].state = 'connecting'
             this.emit('interface-changed',ifaceName,{...this.interfaces[ifaceName],state:'connecting'})    

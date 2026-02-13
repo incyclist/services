@@ -4,6 +4,7 @@ import { useDevicePairing } from '../pairing'
 import type {PageState, SelectState} from './types'
 import { useDeviceConfiguration } from '../configuration'
 import { EventEmitter } from 'node:stream'
+import { getBindings } from '../../api'
 
 const PAIRING_RETRY_DELAY = 2000
 const SCANNING_RETRY_DELAY = 2000
@@ -69,26 +70,32 @@ export class PairingPageStateMachine {
         }
     }
 
-    pause() {
+    async pause() {
         const prev = this._state
         const service = this.getDevicePairing()
 
         if (this.state==='Pairing') {
-            service.stopPairing()
+            await service.stopPairing()
         }
         else if (this.state==='Scanning' ) {
-            service.stopScanning()
+            await service.stopScanning()
         }
+        await service.stop([], true)
 
         this.resetTimeouts()
-        this.setState('Idle')      
+        this.setState('Closed')      
         
         this.logIncomingEvent('pause',prev,this.state)
+
+        
         
     }
 
     resume() {
-        this.performCheck()        
+        const prev = this._state
+        this.setState('Idle')
+        this.logIncomingEvent('resume',prev,this.state)
+
     }
 
     protected setState(state:PageState) {
@@ -370,6 +377,15 @@ export class PairingPageStateMachine {
     protected getDeviceConfiguration() {
         return useDeviceConfiguration()
     }
+
+    protected getBleBinding() {
+        return this.getBindings().ble as any
+    }
+    @Injectable
+    protected getBindings() {
+        return getBindings()
+    }
+
 
 
 

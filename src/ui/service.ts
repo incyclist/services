@@ -13,6 +13,7 @@ import { useActiveRides, useActivityList } from "../activities";
 import { IMessageQueueBinding } from "../api/mq";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../monitoring";
 import { AppFeatures, Interfaces, useAppState } from "../appstate";
+import { IncyclistPageService } from "../base/pages";
 
 @Singleton
 export class UserInterfaceServcie extends IncyclistService {
@@ -117,6 +118,10 @@ export class UserInterfaceServcie extends IncyclistService {
             this.logEvent({message:'onAppPause called'})
 
             this.stopHeartbeatWorker()
+
+            await IncyclistPageService.pausePage()
+            useDeviceAccess().disconnect()
+            
         }
         catch(err) {
             this.logError(err,'onAppPause')
@@ -128,6 +133,9 @@ export class UserInterfaceServcie extends IncyclistService {
         try {
             this.appState = 'Active'
             this.logEvent({message:'onAppResume called'})
+
+            useDeviceAccess().connect()
+            IncyclistPageService.resumePage()
 
             this.startHeartbeatWorker()
         }

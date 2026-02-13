@@ -139,6 +139,14 @@ export class DevicePairingService  extends IncyclistService{
             this.state.deleted = []
         }
 
+        
+
+
+        if (this.state.interfaces) {
+            this.initConfigHandlers();  
+
+            this.state.interfaces = this.access.enrichWithAccessState(this.state.interfaces);
+        }
 
         try {
             await this.loadConfiguration();
@@ -196,6 +204,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected initConfigHandlers() {
+        this.removeConfigHandlers()
         this.getDeviceConfiguration().on('interface-changed', this.onInterfaceConfigChangedHandler);
         this.getDeviceConfiguration().on('capability-changed', this.onConfigurationUpdateHandler);
         this.access.on('interface-changed', this.onInterfaceStateChangedHandler);
@@ -631,12 +640,14 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected async _stop() {
-      
 
-        if (this.isPairing())
-            await this.stopPairing();
-        if (this.isScanning())
-            await this.stopScanning();
+        if (this.usage!=='page') {
+            if (this.isPairing())
+                await this.stopPairing();
+            if (this.isScanning())
+                await this.stopScanning();
+
+        }
 
         this.state.capabilities.forEach(c => c.connectState='waiting')
         this.state.waiting = true;
@@ -1579,21 +1590,21 @@ export class DevicePairingService  extends IncyclistService{
             .filter(i => requiredInterfaces.includes(i.name))
             .find(i => i.enabled && i.state !== 'connected' && i.state !== 'unavailable');
 
-        const isReady = busyRequired === undefined;
+        const isReady = true //busyRequired === undefined;
 
         return { isReady, busyRequired };
     }
 
     private setPairingConnectState(adapters: AdapterInfo[]) {
         this.state.capabilities.forEach(c => {
-            c.connectState = 'waiting' 
+            c.connectState = c.connectState==='connected' ? 'connected' : 'waiting' 
         })
 
 
         const all = adapters??[]
         all.forEach(ai => {
 
-            if (ai.adapter.isStarted()) {
+            if (ai.adapter.isStarted() || ai.adapter.isPaused()) {
 
                 this.state.capabilities.forEach(c => {
                     if (c.selected === ai.udid)
