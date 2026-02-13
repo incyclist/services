@@ -1041,7 +1041,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected initScanningCallbacks():void {
-        this.removeScanningCallbacks()
+        
         this.access.on('device',this.onDeviceDetectedHandler)
         this.access.on('data', this.onDeviceDataHandler)
     }
