@@ -16,8 +16,10 @@ describe('PairingPage state machine',()=> {
             super()
         }
         pairingSuccess: boolean = true
+        pairingComplete: boolean = false
 
         checkPairingSuccess () { return this.pairingSuccess}
+        checkPairingComplete () { return this.pairingComplete}
         prepareForRide () {}
         startPairing () {} 
         startScanning () {}
@@ -56,7 +58,7 @@ describe('PairingPage state machine',()=> {
         cleanupMocks()
     })
 
-    test('config.canStartRide=>false: should trigger scan',async ()=> {
+    test('no devices should trigger scan',async ()=> {
         setupMocks()
 
         let callBack = jest.fn()
@@ -72,7 +74,7 @@ describe('PairingPage state machine',()=> {
     })
 
 
-    test('config.canStartRide=>true: should trigger pairing',async ()=> {
+    test('has devices should trigger pairing',async ()=> {
         setupMocks()
 
         let callBack = jest.fn()
@@ -83,7 +85,9 @@ describe('PairingPage state machine',()=> {
 
         // simulate an unsuccessfull pairing attempt
         configMock.canStartRide = jest.fn().mockReturnValue(true)        
+        configMock.getAdapters = jest.fn().mockReturnValue([])        
         pairingMock.pairingSuccess = false
+        pairingMock.pairingComplete = false
 
         sm.onPageReady()        
         expect(sm.state).toBe('Pairing')       
@@ -98,6 +102,7 @@ describe('PairingPage state machine',()=> {
         // simulate an unsuccessfull pairing attempt
         configMock.canStartRide = jest.fn().mockReturnValue(true)        
         pairingMock.pairingSuccess = false
+        pairingMock.pairingComplete = false
 
         sm.start(callBack);
         sm.onPageReady()        
