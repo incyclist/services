@@ -61,7 +61,7 @@ export class PairingPageStateMachine {
 
             this.resetTimeouts()
             this.setState('Closed')        
-            this.logIncomingEvent('stop()',prev,'Idle')
+            this.logIncomingEvent('stop',prev,'Idle')
 
         } 
         catch(err) {

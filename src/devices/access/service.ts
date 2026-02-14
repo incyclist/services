@@ -362,6 +362,12 @@ export class DeviceAccessService  extends IncyclistService{
             
             this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])
     
+            if (!connected) {
+                impl.once('connected',()=> {
+                    this.interfaces[ifaceName].state = 'connected'                    
+                    this.emit('interface-changed',ifaceName,this.interfaces[ifaceName])
+                })
+            }
             return connected
     
         }
@@ -405,6 +411,7 @@ export class DeviceAccessService  extends IncyclistService{
         }
 
         const impl = this.getInterface(ifaceName)
+        impl.removeAllListeners('connected')
         if (!impl)
             return true;
 

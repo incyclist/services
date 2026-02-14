@@ -243,7 +243,8 @@ export class DevicePairingService  extends IncyclistService{
             
             await this._stop();
 
-            this.pauseAdapters(this.state.adapters.filter( a=> !adapterFilter.includes(a.udid)));
+            const adapters = this.state?.adapters??[]
+            this.pauseAdapters(adapters.filter( a=> !adapterFilter.includes(a.udid)));
 
             this.removeConfigHandlers()
             this.settings = {}
@@ -251,6 +252,7 @@ export class DevicePairingService  extends IncyclistService{
             this.state.waiting = false;
             this.state.check = null;
             this.state.scan = null;
+            
             this.state.stopRequested = false;
             this.state.stopped = true
         }
@@ -1486,6 +1488,7 @@ export class DevicePairingService  extends IncyclistService{
 
         const preparing = DevicePairingService.checkCounter++
         this.state.check={preparing}   // will cause that next call to isPairing() will be true
+        this.state.interfaces = this.access.enrichWithAccessState(this.state.interfaces);
         
         this.emit('pairing-start');
         
@@ -1640,9 +1643,10 @@ export class DevicePairingService  extends IncyclistService{
     }    
 
     async startScanning(adapters: AdapterInfo[], props: PairingProps) {
+        this.state.interfaces = this.access.enrichWithAccessState(this.state.interfaces);
 
         
-        const interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
+        let interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
                             .map(i=>i.name)
 
 
@@ -1699,6 +1703,8 @@ export class DevicePairingService  extends IncyclistService{
         this.initScanningCallbacks()
         
         const timeout = props.enforcedScan ? 1000*60*60 /*1h*/ : undefined
+        interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
+                            .map(i=>i.name)
         const promise = this.access.scan({interfaces,excludeDisabled:true},{includeKnown:props.enforcedScan, timeout})
         this.state.scan = {promise, adapters:[]}
         this.onPairingStarted()

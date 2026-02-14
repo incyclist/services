@@ -212,7 +212,7 @@ export class DevicesPageService extends IncyclistPageService {
         const mapping:Record<InterfaceState,InterfaceDisplayState> = {
             connected: 'scanning',
             connecting: "idle",
-            disconnected: "idle",
+            disconnected: "error",
             disconnecting: 'idle',
             unavailable: 'error',
             unknown:'idle'
