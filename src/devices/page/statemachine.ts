@@ -169,7 +169,7 @@ export class PairingPageStateMachine {
         }
         else {
             if (this.selectStateChangeCallback)
-                this.selectStateChangeCallback
+                this.selectStateChangeCallback()
         }   
     }
 
