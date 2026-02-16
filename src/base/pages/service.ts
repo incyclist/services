@@ -12,6 +12,10 @@ export class IncyclistPageService extends IncyclistService implements IPageServi
 
     static currentPage: IPageService|undefined
 
+    static closePage() {
+        this.currentPage?.closePage()
+    }
+
     static async pausePage() {
         await this.currentPage?.pausePage()
     }

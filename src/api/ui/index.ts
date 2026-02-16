@@ -1,6 +1,7 @@
 
 export type SelectDirectoryResult = {   
-    selected: string
+    selected?: string
+    canceled?: boolean
 }
 
 export type TakeScreenshotProps = {
@@ -15,7 +16,7 @@ export interface INativeUI  {
     takeScreenshot(props:TakeScreenshotProps): Promise<string>
     openBrowserWindow(url:string): void
     openAppWindow(url:string): void
-    selectDirectory(): SelectDirectoryResult
+    selectDirectory(): Promise<SelectDirectoryResult>
     showItemInFolder(fileName:string): void
     getPathForFile(file:string): string
     detectLanguage():Array<string>|string

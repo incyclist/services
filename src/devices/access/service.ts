@@ -137,6 +137,10 @@ export class DeviceAccessService  extends IncyclistService{
                 return;
             }
            
+            existing.interface.removeAllListeners('disconnect')
+            existing.interface.on('disconnect',()=>{
+                this.emit('interface-changed', ifaceName,{...existing, state:'disconnected'})
+            })
 
             if ( existing.enabled && ( 
                  (existing.state==='connected' && existing?.interface?.isConnected()) || existing.state==='connecting' ))  {

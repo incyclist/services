@@ -53,7 +53,8 @@ export class PairingPageStateMachine {
             this.logError(err,'start')
         }
     }
-    stop() {      
+    stop() {     
+        console.log('# statemachin stop') 
         try {
             const prev = this.state
             this.unregisterServiceEventHandlers()
@@ -61,7 +62,7 @@ export class PairingPageStateMachine {
 
             this.resetTimeouts()
             this.setState('Closed')        
-            this.logIncomingEvent('stop',prev,'Idle')
+            this.logIncomingEvent('stop',prev,'Closed')
 
         } 
         catch(err) {

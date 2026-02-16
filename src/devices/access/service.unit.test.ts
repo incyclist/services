@@ -1,6 +1,7 @@
 import { Interface } from 'readline';
 import { DeviceAccessService } from './service';
 import { AntInterface, InterfaceFactory } from 'incyclist-devices';
+import { removeAllListeners } from 'cluster';
 
 const OC = expect.objectContaining
 
@@ -24,7 +25,9 @@ describe('DeviceAccessService', () => {
             InterfaceFactory: { create: jest.fn() },
             interface: {
                 setBinding:jest.fn(),
-                isConnected:jest.fn()
+                isConnected:jest.fn(),
+                removeAllListeners:jest.fn(),
+                on:jest.fn()
             }  
     
         }

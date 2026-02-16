@@ -3,7 +3,7 @@ import { Injectable, Singleton } from '../../base/decorators'
 import { IncyclistPageService } from '../../base/pages'
 import { useDevicePairing } from '../pairing'
 
-import type { CapabilityDisplayProps, DeviceListDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, InterfaceDisplayProps, InterfaceDisplayState, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../types'
+import type { CapabilityDisplayProps, DeviceListDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability, TInterface } from '../../types'
 import type { CapabilityData, DevicePairingData, InternalPairingState, PairingState} from '../pairing'
 import { PairingPageStateMachine } from './statemachine'
 import { PageLogObserver } from './logobserver'
@@ -12,6 +12,7 @@ import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../configuration'
 import { getBindings } from '../../api'
 import { useIncyclist } from '../../ui'
+import { Observer } from '../../base/types'
 
 
 
@@ -22,6 +23,8 @@ export class DevicesPageService extends IncyclistPageService {
     protected stateMachine: PairingPageStateMachine
     protected logObserver:PageLogObserver
     protected openedCapability: IncyclistCapability|undefined
+    protected openedInterfaceSettings!: TInterface
+    protected interfaceSettingsObserver: Observer|undefined
 
     constructor() {
         super('Pairing')
@@ -163,6 +166,7 @@ export class DevicesPageService extends IncyclistPageService {
                 capabilities: { top, bottom},
                 interfaces,
                 deviceSelection: this.getDeviceListDisplayProps(),
+                showInterfaceSettings: this.openedInterfaceSettings,                
                 buttons,
                 onExit
             }
@@ -176,12 +180,39 @@ export class DevicesPageService extends IncyclistPageService {
                 capabilities: { top:[], bottom:[]},
                 interfaces:[],
                 buttons: [{ label:'Skip', primary:true, onClick:this.onSkip.bind(this) }],
+                showInterfaceSettings: this.openedInterfaceSettings,                
                 onExit
             }
 
         }
 
     }
+
+
+    public getInterfaceSettingsObserver() {
+        this.interfaceSettingsObserver = this.interfaceSettingsObserver??new Observer()        
+
+    }
+
+    public getInterfaceSettingsDisplayProps():InterfaceSettingsDisplayProps {
+        if (!this.openedInterfaceSettings)
+            return 
+
+        const ifs = this.state.interfaces??[]
+        const info = ifs.find( isd => isd.name == this.openedInterfaceSettings)
+
+        return {
+            state: this.mapInterfaceState(info.state),   
+            enabled: info.enabled,            
+        }
+
+    }
+
+    enableInterface( i?:TInterface) {}
+    disableInterface( i?:TInterface) {}
+    reconnectInterface( i?:TInterface) {}
+    refreshInterface( i?:TInterface) {}
+
 
 
     protected getCapabilityDisplayProps(data:CapabilityData):CapabilityDisplayProps {
@@ -206,9 +237,7 @@ export class DevicesPageService extends IncyclistPageService {
 
     }
 
-    protected getInterfaceDisplayProps( info:EnrichedInterfaceSetting):InterfaceDisplayProps {
-        const {name,state} = info
-
+    protected mapInterfaceState( state:InterfaceState ):InterfaceDisplayState {
         const mapping:Record<InterfaceState,InterfaceDisplayState> = {
             connected: 'scanning',
             connecting: "idle",
@@ -216,12 +245,19 @@ export class DevicesPageService extends IncyclistPageService {
             disconnecting: 'idle',
             unavailable: 'error',
             unknown:'idle'
-        
         }
+
+        return mapping[state]
+    }
+
+    protected getInterfaceDisplayProps( info:EnrichedInterfaceSetting):InterfaceDisplayProps {
+
+        const {name,state} = info
 
         return {
             name, 
-            state: mapping[state],             
+            state: this.mapInterfaceState(state),         
+            onClick: ()=>{ this.openInterfaceSettings(name as TInterface)}    
         }
 
     }
@@ -267,6 +303,19 @@ export class DevicesPageService extends IncyclistPageService {
         this.getPageObserver().emit('page-update')        
     }
 
+    protected openInterfaceSettings( i:TInterface) {
+
+        const info = this.state.interfaces.find( id=>id.name === i)
+        console.log('# open interface settings',i,info)
+        this.openedInterfaceSettings = i
+        this.updatePage()
+    }
+    protected closeInterfaceSettings() {
+        this.openedInterfaceSettings = undefined
+        this.interfaceSettingsObserver?.stop()
+        this.updatePage()
+    }
+
     protected onEnableCapability(enabled:boolean) {
         const all = this.state.capabilities??[]
         const requested = all.find( c=>c.capability === this.openedCapability)
@@ -276,7 +325,7 @@ export class DevicesPageService extends IncyclistPageService {
     }
     
     protected openDeviceSelection(cap:IncyclistCapability) {
-        this.logEvent( {message:'capability clicked', capability:cap})
+        this.logEvent( {message:'capability clicked', capability:cap, eventSource:'user'})
 
         this.openedCapability = cap;
         this.stateMachine.onDeviceSelectionOpened( ()=>{ this.updatePage() })       

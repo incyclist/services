@@ -14,6 +14,7 @@ import { IMessageQueueBinding } from "../api/mq";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../monitoring";
 import { AppFeatures, Interfaces, useAppState } from "../appstate";
 import { IncyclistPageService } from "../base/pages";
+import { waitNextTick } from "../utils";
 
 @Singleton
 export class UserInterfaceServcie extends IncyclistService {
@@ -21,7 +22,8 @@ export class UserInterfaceServcie extends IncyclistService {
     public bindings: IncyclistBindings
     protected platform!: IncyclistPlatform
     protected version!: string
-    protected isTerminating: boolean
+    protected isTerminating: boolean 
+    protected isTerminated: boolean 
     protected queuedMessages: Array< {topic:string, payload:object} > = []
     protected iv!: NodeJS.Timeout
     protected heartbeatIv!: NodeJS.Timeout
@@ -33,6 +35,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
         this.bindings = this.getBindings()
         this.isTerminating = false
+        this.isTerminated = false
          
     }
 
@@ -49,6 +52,8 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
     async onAppLaunch(platform:IncyclistPlatform, version:string, appFeatures?:AppFeatures) {
+        this.isTerminated = false;
+        this.isTerminating = false;
 
         try {
             this.platform = platform
@@ -86,6 +91,9 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
     async onAppExit() {
+
+        if (this.isTerminated)
+            return;
         try {
             if (!this.isTerminating) {
                 this.isTerminating = true
@@ -93,12 +101,17 @@ export class UserInterfaceServcie extends IncyclistService {
 
                 this.stopHeartbeatWorker()
                 this.sendAppExitMessage()
+                IncyclistPageService.closePage()
+                await waitNextTick()
                 await useDevicePairing().exit()
                 await useDeviceAccess().disconnect()
                 this.appState = 'Stopped'
 
 
                 this.logEvent({message:'onAppExit finished'})
+                this.isTerminated = true
+
+                
                 return true
                 
             }
@@ -113,6 +126,9 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
     async onAppPause() {
+        if (this.isTerminated  || this.isTerminating)
+            return
+
         try {
             this.appState = 'Background'
             this.logEvent({message:'onAppPause called'})
@@ -130,6 +146,15 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
     async onAppResume() {
+
+        if (this.isTerminated) {
+            await this.onAppLaunch( this.platform, this.version, this.appFeatures)            
+            return;
+            
+        }
+        this.isTerminated = false;
+        this.isTerminating = false;
+
         try {
             this.appState = 'Active'
             this.logEvent({message:'onAppResume called'})

@@ -3,6 +3,7 @@ import type { DevicePairingStatus } from "../pairing/model"
 
 export type PageState    =  'Idle' | 'Scanning' | 'Pairing' | 'Done' | 'Closed' 
 export type SelectState  =  'Closed' | 'Waiting' | 'Active' 
+export type TInterface   = 'ble'|'wifi'
 
 export type PairingDisplayProps = {
     title: string|undefined
@@ -13,6 +14,8 @@ export type PairingDisplayProps = {
     interfaces?: Array<InterfaceDisplayProps>
     buttons?: PairingButtonProps
     deviceSelection? :DeviceSelectionProps
+    
+    showInterfaceSettings: TInterface|undefined
     showExit?: boolean,
     onExit?:()=>void
 
@@ -57,6 +60,13 @@ export type InterfaceDisplayProps = {
     name:string
     state: InterfaceDisplayState
     error?: string
+    onClick:()=>void
+}
+
+export type InterfaceSettingsDisplayProps = {
+    state?: InterfaceDisplayState
+    error?: string
+    enabled: boolean
 }
 
 export type NextPageAction = { nextPage:string}

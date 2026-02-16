@@ -262,7 +262,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     async exit() {
-        return this.stop([],true)
+        return await this.stop([],true)
     }
 
 
