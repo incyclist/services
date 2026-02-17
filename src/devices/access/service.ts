@@ -430,6 +430,22 @@ export class DeviceAccessService  extends IncyclistService{
 
         return disconnected
     }
+
+    async terminate(ifaceName?:string):Promise<void> { 
+
+        await this.disconnect(ifaceName);
+
+        if (!ifaceName) {
+            const promises = Object.keys(this.interfaces).map( i=> this.terminate(i))
+            await Promise.allSettled(promises)
+            return
+        }
+        
+        const impl = this.getInterface(ifaceName)
+        await impl.terminate()
+
+    }
+
     
     /**
      * Performs a device scan. 

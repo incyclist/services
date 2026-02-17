@@ -139,7 +139,7 @@ export class DevicesPageService extends IncyclistPageService {
             const ifs = this.state.interfaces??[]
             useDeviceAccess().enrichWithAccessState(ifs)
 
-            const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i) )
+            const interfaces = ifs.map( i=>{ return this.getInterfaceDisplayProps(i) })
             const capProps = caps.map( c=>this.getCapabilityDisplayProps( c ))
 
             const loading = this.promiseOpen!=undefined
@@ -189,8 +189,9 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
 
-    public getInterfaceSettingsObserver() {
+    public getInterfaceSettingsObserver():Observer {
         this.interfaceSettingsObserver = this.interfaceSettingsObserver??new Observer()        
+        return this.interfaceSettingsObserver
 
     }
 
@@ -212,6 +213,11 @@ export class DevicesPageService extends IncyclistPageService {
     disableInterface( i?:TInterface) {}
     reconnectInterface( i?:TInterface) {}
     refreshInterface( i?:TInterface) {}
+    closeInterfaceSettings() {
+        this.openedInterfaceSettings = undefined
+        this.interfaceSettingsObserver?.stop()
+        this.updatePage()
+    }
 
 
 
@@ -253,7 +259,6 @@ export class DevicesPageService extends IncyclistPageService {
     protected getInterfaceDisplayProps( info:EnrichedInterfaceSetting):InterfaceDisplayProps {
 
         const {name,state} = info
-
         return {
             name, 
             state: this.mapInterfaceState(state),         
@@ -305,14 +310,8 @@ export class DevicesPageService extends IncyclistPageService {
 
     protected openInterfaceSettings( i:TInterface) {
 
-        const info = this.state.interfaces.find( id=>id.name === i)
-        console.log('# open interface settings',i,info)
+        const info = this.state.interfaces.find( id=>id.name === i)        
         this.openedInterfaceSettings = i
-        this.updatePage()
-    }
-    protected closeInterfaceSettings() {
-        this.openedInterfaceSettings = undefined
-        this.interfaceSettingsObserver?.stop()
         this.updatePage()
     }
 

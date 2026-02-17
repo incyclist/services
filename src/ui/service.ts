@@ -104,7 +104,7 @@ export class UserInterfaceServcie extends IncyclistService {
                 IncyclistPageService.closePage()
                 await waitNextTick()
                 await useDevicePairing().exit()
-                await useDeviceAccess().disconnect()
+                await useDeviceAccess().terminate()
                 this.appState = 'Stopped'
 
 
