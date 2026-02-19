@@ -13,6 +13,6 @@ export interface IFileSystem {
     existsDir(path):Promise<boolean>
     mkdir(path):Promise<void>
     ensureDir(path):Promise<void>
-
+    readdir?(path:string, options:any):Promise<string[]>
 
 }

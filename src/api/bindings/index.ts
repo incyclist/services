@@ -1,16 +1,18 @@
 import {Singleton} from '../../base/types'
-import { IAppInfo } from '../appInfo'
-import { IDownloadManager } from '../download'
-import { IFormPostBinding } from '../form'
-import { IFileSystem } from '../fs'
-import { ILogBinding } from '../logging/types'
-import { IMessageQueueBinding } from '../mq'
-import { IPathBinding } from '../path'
-import { IFileLoader, IJsonRepositoryBinding } from '../repository'
-import { INativeUI } from '../ui'
-import { IVideoProcessor } from '../video'
-import { ISecretBinding } from '../secret'
-import { ISerialBinding } from '../serial/types'
+
+import type { IAppInfo } from '../appInfo'
+import type { IDownloadManager } from '../download'
+import type { IFormPostBinding } from '../form'
+import type { IFileSystem } from '../fs'
+import type { ILogBinding } from '../logging/types'
+import type { IMessageQueueBinding } from '../mq'
+import type { IPathBinding } from '../path'
+import type { IFileLoader, IJsonRepositoryBinding } from '../repository/types'
+import type { INativeUI } from '../ui'
+import type { IVideoProcessor } from '../video'
+import type { ISecretBinding } from '../secret'
+import type { ISerialBinding } from '../serial/types'
+import type { ICryptoBinding } from '../crypto/types'
 
 
 export interface IUserSettingsBinding {
@@ -37,6 +39,7 @@ export class IncyclistBindings {
     public settings: IUserSettingsBinding
     public logging: ILogBinding
     public serial: ISerialBinding
+    public crypto: ICryptoBinding
     public ant
     public ble
     public wifi

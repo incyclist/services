@@ -15,12 +15,6 @@ export interface IJsonRepositoryBinding {
     getPath(name:string):string
 
 }
-export abstract class AbstractJsonRepositoryBinding implements IJsonRepositoryBinding {
-    abstract create(name:string):Promise<JsonAccess|null>
-    abstract get(name:string):Promise<JsonAccess|null>
-    abstract release(name:string):Promise<boolean>
-    abstract getPath(name:string):string
-}
 
 export interface FileLoaderError {
     message: string

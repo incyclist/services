@@ -1,3 +1,4 @@
+import { getBindings } from "../../../api";
 import { geo } from "../../../utils";
 import clone from "../../../utils/clone";
 import { LatLng, calculateDistance, calculateHeaderFromPoints } from "../../../utils/geo";
@@ -5,7 +6,6 @@ import { valid } from "../../../utils/valid";
 import { RouteApiDetail } from "../api/types";
 import { Route } from "../model/route";
 import { RouteInfo, RoutePoint, RouteSegment } from "../types";
-import crypto from 'crypto'
 
 const MAX_LAPMODE_DISTANCE = 50;    // maximume distance between start and stop position
 
@@ -384,6 +384,10 @@ export const getTotalDistance = (route:RouteApiDetail):number =>{
 }
 
 export const getRouteHash = (route:RouteApiDetail):string => {
+    console.log('# getRouteHash', 'crypto binding:',getCryptoBinding())
+    const cryptoImpl = getCryptoBinding()??require('crypto')
+
+
     let json;
     if (!route?.points) {
 
@@ -403,7 +407,8 @@ export const getRouteHash = (route:RouteApiDetail):string => {
         json = { decoded:route.points.map( p => ({lat:p.lat, lng: p.lng})) }            
     }
 
-    const routeHash = crypto.createHash('md5').update(JSON.stringify(json)).digest('hex');
+    const routeHash = cryptoImpl.createHash('md5').update(JSON.stringify(json)).digest('hex').toString()
+    //const routeHash = ''
     return routeHash;
 }
 
@@ -797,4 +802,8 @@ export const hasNextVideo = (route:Route):boolean => {
 export const getNextVideoId = (route:Route):string => {
     const next = route?.details?.next??route?.details?.video?.next;
     return next
+}
+
+const getCryptoBinding = () => {
+    return getBindings().crypto
 }

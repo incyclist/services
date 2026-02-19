@@ -1,9 +1,7 @@
 export * from './rest/index'
 export * from './rest/types'
-export * from './repository'
-export * from './path'
 export * from './bindings'
+export * from './repository'
 
-
-export type * from './ui'
+export type * from './types'
 

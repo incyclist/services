@@ -7,7 +7,7 @@ export type ScreenshotProps = {
     size:string
 }
 
-export type ConvertProps = {
+export type VideoConvertProps = {
     outDir: string,
 }
 

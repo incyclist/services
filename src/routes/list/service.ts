@@ -12,7 +12,7 @@ import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard, SummaryCardDisplayProps } from "./cards/RouteCard";
-import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions } from "./types";
+import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
@@ -320,7 +320,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
 
-    searchRepo( requestedFilters?:SearchFilter ) {
+    searchRepo( requestedFilters?:SearchFilter ):SearchState {
         if (!this.observer) {
             this.observer = new RouteListObserver(this)
         }
@@ -331,9 +331,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             let routes:Array<SummaryCardDisplayProps> = Array.from(this.getAllSearchCards().map( c=> c.getDisplayProperties()))
             routes.sort( (a,b) => a.title>b.title? 1 : -1)
+            const units = this.getUnitConverter().getDefaultUnits()
 
             if (!filters) {                
-                return {routes,filters,observer:this.observer}
+                return {routes,filters,observer:this.observer,units}
             }
 
 
@@ -353,14 +354,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.setListTop('list',0)
             this.setListTop('tiles',0)
 
-            const units = this.getUnitConverter().getDefaultUnits()
           
             return {routes,cards,filters,observer:this.observer,units}
     
         }
         catch(err) {
             this.logError(err,'search')
-            return {routes:[], filters:{}}
+            return {routes:[], filters:{}, observer:this.observer}
 
         }
     }

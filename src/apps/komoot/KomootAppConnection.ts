@@ -1,7 +1,6 @@
 import { getBindings } from "../../api";
 import { Injectable, Singleton } from "../../base/decorators";
 import { valid } from "../../utils/valid";
-import crypto from 'crypto'
 import { KomootApi } from "../base/api";
 import { ConnectedAppService } from "../base/app";
 import { KomootAuth, KomootCredentials } from "./types";
@@ -189,7 +188,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
 
     // istanbul ignore next
     protected getCrypto() {        
-        return this.injected['Crypto']?? crypto        
+        return getBindings().crypto??require('crypto')
     }
 
 
@@ -198,11 +197,12 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
         if (!this.credentials)
             return null;
 
+        const crypto = this.getCrypto()
         const iv = crypto.randomBytes(16)
         
         const uuid = this.getUuid()
-        const key = `${uuid.substring(0,32)}`
-        
+        //const key = `${uuid.substring(0,32)}`
+        const key = Buffer.from(uuid.substring(0, 32), 'utf8');
         const cipher = crypto.createCipheriv(algo,key,iv);
         
         const {username,password,userid} = this.credentials
@@ -210,7 +210,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
         let ciphered
 
         ciphered = cipher.update(text, 'utf8', 'hex');        
-        ciphered += cipher.final('hex');
+        ciphered += cipher.final().toString('hex');
 
         const auth =  {
             id: iv.toString('hex'),
@@ -229,7 +229,9 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
 
         const iv = Buffer.from(id,'hex')
         const uuid = this.getUuid()
-        const key = `${uuid.substring(0,32)}`
+        //const key = `${uuid.substring(0,32)}`
+        const key = Buffer.from(uuid.substring(0, 32), 'utf8');
+        const crypto = this.getCrypto()
 
         try {
             
@@ -246,12 +248,12 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
         
                 // Decrypting
                 text = cipher.update(encTextBuff);
-                text += cipher.final('utf8');
+                text += cipher.final().toString('utf8');
             }
             else {
                 const cipher = crypto.createDecipheriv(algo,key,iv);
                 text = cipher.update(authKey, 'hex','utf8');                
-                text += cipher.final('utf8');    
+                text += cipher.final().toString('utf8');    
             }
             
             const credentials = JSON.parse(text)                        

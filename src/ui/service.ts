@@ -74,10 +74,9 @@ export class UserInterfaceServcie extends IncyclistService {
             await this.initDeviceServices()
 
 
-            if (platform!=='mobile') {
-                // trigger data preload, so that UI pages will start faster
+//                // trigger data preload, so that UI pages will start faster
                 this.preloadData()
-            }
+            //}
 
             // after MQ has been initialized
             this.onSessionStart()

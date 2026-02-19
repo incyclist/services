@@ -2,7 +2,7 @@ import {Step} from './Step'
 import {Segment} from './Segment'
 import { Category, DataType, PlanDefinition, ScheduledWorkout, SegmentDefinition, StepDefinition, WorkoutDefinition } from './types';
 import { valid } from '../../../utils/valid';
-import crypto from 'crypto'
+import { getBindings } from '../../../api';
 
 /** 
  * @public 
@@ -54,6 +54,7 @@ export class Workout extends Segment implements WorkoutDefinition {
 
         const {name,description,steps,repeat } = this
 
+        const crypto = getBindings().crypto?? require('crypto')
         this._hash = crypto.createHash('md5').update(JSON.stringify({name,description,steps,repeat })).digest('hex');     
         return this._hash
     }
@@ -125,6 +126,8 @@ export class Plan implements PlanDefinition {
         const {name,description,workouts } = this
 
         const data = JSON.stringify({name,description,workouts })
+        const crypto = getBindings().crypto?? require('crypto')
+
         this._hash = crypto.createHash('md5').update(data).digest('hex');     
 
         return this._hash

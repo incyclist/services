@@ -1,9 +1,10 @@
-import { FormattedNumber } from "../../i18n";
+import { Observer } from "../../base/types";
+import { Dimension, FormattedNumber, Unit } from "../../i18n";
 import { IncyclistNode } from "../../maps/MapArea/types";
 import { LatLng } from "../../utils/geo"
 import { RouteApiDetail } from "../base/api/types";
 import { RouteInfo, RoutePoint } from "../base/types";
-import { SummaryCardDisplayProps } from "./cards/RouteCard";
+import { RouteCard, SummaryCardDisplayProps } from "./cards/RouteCard";
 import { RouteCardType } from "./cards/types";
 
 export interface RouteStartSettings {
@@ -96,4 +97,12 @@ export type ActiveRideCount = {
 export type RouteDetailUIItem = RouteApiDetail & {
     totalDistance: FormattedNumber
     totalElevation: FormattedNumber
+}
+
+export type  SearchState = {
+    routes: Array<SummaryCardDisplayProps>
+    filters: SearchFilter
+    observer: Observer
+    cards?: Array<RouteCard>
+    units?: Record<Dimension,Unit>
 }

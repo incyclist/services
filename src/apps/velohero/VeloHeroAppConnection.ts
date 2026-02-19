@@ -1,7 +1,6 @@
-import { getBindings } from "../../api";
+import { getBindings, ICryptoBinding } from "../../api";
 import { Injectable, Singleton } from "../../base/decorators";
 import { valid } from "../../utils/valid";
-import crypto from 'crypto'
 import { VeloHeroApi } from "../base/api";
 import { ConnectedAppService } from "../base/app";
 import { VeloHeroAuth, VeloHeroCredentials } from "./types";
@@ -173,7 +172,14 @@ export class VeloHeroAppConnection extends ConnectedAppService<VeloHeroCredentia
 
     // istanbul ignore next
     protected getCrypto() {        
-        return this.injected['Crypto']?? crypto        
+
+        // if (getBindings().crypto)
+        //     return getBindings().crypto
+
+        // const crypto = require('crypto') as ICryptoBinding
+        // return crypto
+
+        return getBindings().crypto??require('crypto')
     }
 
 
@@ -182,10 +188,12 @@ export class VeloHeroAppConnection extends ConnectedAppService<VeloHeroCredentia
         if (!this.credentials)
             return null;
 
+        const crypto = this.getCrypto()
         const iv = crypto.randomBytes(16)
         
         const uuid = this.getUuid()
-        const key = `${uuid.substring(0,32)}`
+        //const key = `${uuid.substring(0,32)}`
+        const key = Buffer.from(uuid.substring(0, 32), 'utf8');
         
         const cipher = crypto.createCipheriv(algo,key,iv);
         
@@ -194,7 +202,7 @@ export class VeloHeroAppConnection extends ConnectedAppService<VeloHeroCredentia
         let ciphered
 
         ciphered = cipher.update(text, 'utf8', 'hex');        
-        ciphered += cipher.final('hex');
+        ciphered += cipher.final().toString('hex');
 
         const auth =  {
             id: iv.toString('hex'),
@@ -213,7 +221,9 @@ export class VeloHeroAppConnection extends ConnectedAppService<VeloHeroCredentia
 
         const iv = Buffer.from(id,'hex')
         const uuid = this.getUuid()
-        const key = `${uuid.substring(0,32)}`
+        //const key = `${uuid.substring(0,32)}`
+        const key = Buffer.from(uuid.substring(0, 32), 'utf8');
+        const crypto = this.getCrypto()
 
         try {
             
@@ -230,12 +240,12 @@ export class VeloHeroAppConnection extends ConnectedAppService<VeloHeroCredentia
         
                 // Decrypting
                 text = cipher.update(encTextBuff);
-                text += cipher.final('utf8');
+                text += cipher.final().toString('utf8');
             }
             else {
                 const cipher = crypto.createDecipheriv(algo,key,iv);
                 text = cipher.update(authKey, 'hex','utf8');                
-                text += cipher.final('utf8');    
+                text += cipher.final().toString('utf8');    
             }
             
             const credentials = JSON.parse(text)                        
