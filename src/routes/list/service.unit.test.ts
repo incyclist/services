@@ -130,6 +130,7 @@ describe('RouteListService',()=>{
 
         const MockUserSettings = {
             get: jest.fn().mockReturnValue({}),
+            getValue: jest.fn().mockReturnValue({}),
             set: jest.fn()
         }
 
