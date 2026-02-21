@@ -7,7 +7,6 @@ import { useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
 import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
-import { setInterval } from "timers";
 import { getRouteList } from "../../routes";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
