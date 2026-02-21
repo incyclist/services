@@ -21,7 +21,7 @@ type MapAreaRecord = {
 const MAX_MAPS = 5
 
 export const getMapInfo = (m:MapAreaRecord ) => {
-    if (!m)
+    if (!m?.map)
         return 'no map'
     try {
         const boundary = m.map.getBoundary()
