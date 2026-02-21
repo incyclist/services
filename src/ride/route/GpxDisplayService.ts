@@ -100,7 +100,8 @@ export class GpxDisplayService extends RouteDisplayService {
 
         return {
             mapType: rideView==='sv' ? 'StreetView' : 'SatelliteView',
-            mapState: this.mapLoaded ? 'Loaded' : 'Loading'
+            mapState: this.mapLoaded ? 'Loaded' : 'Loading',
+            mapStateError: this.mapError
         }
     }
 
