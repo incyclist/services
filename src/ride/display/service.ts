@@ -17,7 +17,7 @@ import { WorkoutDisplayService } from "../workout/WorkoutDisplayService";
 import { INativeUI } from "../../api/ui";
 import { getBindings } from "../../api";
 import { CurrentRideDisplayProps, ICurrentRideService, PrevRidesDisplayProps, StartOverlayProps } from "../base/types";
-import { RouteSettings } from "../../routes/list/cards/RouteCard";
+import { RouteSettings } from "../../routes/list/cards/types";
 import { FreeRideOption } from "../../routes/list/types";
 import { RLVDisplayService } from "../route/RLVDisplayService";
 import { ActivityUpdate } from "../../activities/ride/types";

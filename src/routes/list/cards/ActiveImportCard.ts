@@ -5,10 +5,12 @@ import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { Route } from "../../base/model/route";
 import { useRouteList } from "../service";
 import { BaseCard } from "./base";
-import { RouteCardType, DEFAULT_FILTERS, DEFAULT_TITLE, ActiveImportProps } from "./types";
+
 import { AppStatus } from "../../base/types";
 import { EventLogger } from "gd-eventlog";
 
+import type { RouteCardType, RouteActiveImportProps } from "./types";
+import { DEFAULT_FILTERS, DEFAULT_TITLE } from "./RouteCard";
 
 export class ActiveImportCard extends BaseCard implements Card<Route> {
 
@@ -94,7 +96,7 @@ export class ActiveImportCard extends BaseCard implements Card<Route> {
         return this.error ? `${DEFAULT_TITLE}:${this.getId()}:${this.error.message}` : `${DEFAULT_TITLE}:${this.getId()}`;
     }
 
-    getDisplayProperties(): ActiveImportProps {
+    getDisplayProperties(): RouteActiveImportProps {
         const name = this.file.name
         const error = this.error
         const observer = this.cardObserver

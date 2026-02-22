@@ -8,7 +8,7 @@ import { DeviceData, IncyclistCapability } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
 import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,DEFAULT_ACTIVITY_TITLE,ScreenShotInfo } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
-import { RouteSettings } from "../../routes/list/cards/RouteCard";
+import { RouteSettings } from "../../routes/list/cards/types";
 import { v4 as generateUUID } from 'uuid';
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
 import { ActivityState, ActivitySummaryDisplayProperties } from "./types";

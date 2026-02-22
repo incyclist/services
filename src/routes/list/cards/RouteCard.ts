@@ -7,9 +7,8 @@ import { RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo, RoutePoint,AppStatus  } from "../../base/types";
 import { BaseCard } from "./base";
-import { RouteCardType } from "./types";
+import { RouteCardProps, RouteCardType, RouteSettings, SummaryCardDisplayProps, UIRouteSettings, UIStartSettings } from "./types";
 import { getRouteList, useRouteList } from "../service";
-import { RouteStartSettings } from "../types";
 import { RoutesDbLoader } from "../loaders/db";
 import { valid } from "../../../utils/valid";
 import { waitNextTick } from "../../../utils";
@@ -23,71 +22,16 @@ import { useOnlineStatusMonitoring } from "../../../monitoring";
 import { distanceBetween } from "../../../utils/geo";
 import { getUnitConversionShortcuts, Unit } from "../../../i18n";
 
-export interface SummaryCardDisplayProps extends RouteInfo{
-    loaded:boolean
-    ready:boolean
-    state:string
-    visible:boolean
-    canDelete:boolean
-    observer:Observer
-    initialized:boolean;
-    loading?:boolean
-    isNew?:boolean
-    cntActive?:number
-    totalDistance: {value:number, unit:Unit},
-    totalElevation: {value:number, unit:Unit}
-}
 
-export interface DetailCardDisplayProps  {
-    
-}
+export const DEFAULT_TITLE = 'Import Route';
+export const DEFAULT_FILTERS = [
+    { name: 'Routes', extensions: ['gpx', 'epm', 'xml','rlv','pgmf'] },
+    { name: 'Tracks', extensions: ['gpx'] },
+    { name: 'RLV: ErgoPlanet', extensions: ['epm'] },
+    { name: 'RLV: Incyclist, KWT, Rouvy,Virtualtrainer ', extensions: ['xml'] },
+    { name: 'RLV: Tacx', extensions: ['rlv','pgmf'] }
 
-export interface StartSettings {
-    segment?:string
-    startPos:number,
-    endPos?:number,
-    realityFactor:number,
-    downloadProgress?:number,
-    convertProgress?:number,
-    loopOverwrite?: boolean,
-    nextOverwrite?:boolean,
-    showPrev?:boolean
-
-}
-export interface UIStartSettings {
-    segment?:string
-    startPos: { value:number,unit: Unit}
-    endPos?: { value:number,unit: Unit}
-    realityFactor:number,
-    downloadProgress?:number,
-    convertProgress?:number,
-    loopOverwrite?: boolean,
-    nextOverwrite?:boolean,
-    showPrev?:boolean
-
-}
-
-export type RouteSettings = StartSettings & RouteStartSettings
-export type UIRouteSettings = UIStartSettings & {
-    prevRides?:Array<any>
-}
-
-export type RouteCardProps = {
-    settings:UIRouteSettings,
-    showLoopOverwrite:boolean,
-    showNextOverwrite:boolean,
-    hasWorkout?:boolean
-    canStart?:boolean
-    videoMissing?:Promise<boolean>
-    videoChecking?:boolean
-    totalDistance: { value:number, unit:Unit},
-    totalElevation: { value:number, unit:Unit},
-    xScale?: { value:number, unit:Unit},
-    yScale?: { value:number, unit:Unit},
-    updateStartPos?: (updated:number)=>{ value:number, unit:Unit}
-    updateMarkers?: (settings: UIRouteSettings)=> UIRouteSettings
-}
-
+];
 
 class ConvertObserver extends Observer {  
 
@@ -139,7 +83,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
-    canStart(status:AppStatus) {
+    canStart(status?:AppStatus) {
         try {
             const {isOnline} = status
             const route = this.route.description

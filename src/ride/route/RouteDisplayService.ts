@@ -6,7 +6,7 @@ import { Injectable } from "../../base/decorators";
 import { useUserSettings } from "../../settings";
 import { getHeading, getNextPosition, getPosition, GetPositionProps, LapPoint, useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
-import { RouteSettings } from "../../routes/list/cards/RouteCard";
+import { RouteSettings } from "../../routes/list/cards/types";
 import { ActiveRideListDisplayItem, ScreenShotInfo, useActiveRides } from "../../activities";
 import { getBindings } from "../../api";
 import { ActivityUpdate } from "../../activities/ride/types";

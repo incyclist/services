@@ -4,7 +4,8 @@ import { DisplayExportInfo, DisplayUploadInfo, ActivityUploadStatus } from "../.
 import { ActivityInfo, DEFAULT_ACTIVITY_TITLE } from "../model";
 import { ActivitiesRepository, DB_VERSION } from "../repo";
 import { getBindings } from "../../../api";
-import { RouteCard, RouteSettings, UIRouteSettings } from "../../../routes/list/cards/RouteCard";
+import { RouteSettings } from "../../../routes/list/cards/types";
+import { RouteCard } from "../../../routes/list/cards/RouteCard";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../../../monitoring";
 import { useAppsService } from "../../../apps";
 import { Injectable } from "../../../base/decorators/Injection";

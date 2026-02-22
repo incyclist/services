@@ -11,7 +11,8 @@ import { RoutesApiLoader } from "./loaders/api";
 import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
-import { RouteCard, SummaryCardDisplayProps } from "./cards/RouteCard";
+import { RouteCard } from "./cards/RouteCard";
+import { SummaryCardDisplayProps } from "./cards/types";
 import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
@@ -777,13 +778,19 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    unselect() {
+    unselect() {        
+
+        console.log('# unselect')
         this.selectedRoute = null    
         this.startSettings = null;
+
+        this.observer.emit('selected', null)
     }
 
     select(route:Route) {
+        console.log('# select')
         this.selectedRoute = route
+        this.observer.emit('selected', route)
     }
 
     selectCard(card:Card<Route>) {

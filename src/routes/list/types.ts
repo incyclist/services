@@ -4,7 +4,8 @@ import { IncyclistNode } from "../../maps/MapArea/types";
 import { LatLng } from "../../utils/geo"
 import { RouteApiDetail } from "../base/api/types";
 import { RouteInfo, RoutePoint } from "../base/types";
-import { RouteCard, SummaryCardDisplayProps } from "./cards/RouteCard";
+import { RouteCard } from "./cards/RouteCard";
+import { SummaryCardDisplayProps } from "./cards/types";
 import { RouteCardType } from "./cards/types";
 
 export interface RouteStartSettings {
@@ -69,6 +70,8 @@ export interface SearchFilterOptions {
     contentTypes: Array<string>
     routeTypes: Array<string>
     routeSources: Array<string>
+    maxDistance?: FormattedNumber
+    maxElevation?: FormattedNumber
 }
 
 export interface RoutesRepoUpdates {

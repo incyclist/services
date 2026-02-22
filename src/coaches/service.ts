@@ -3,7 +3,7 @@ import { Singleton } from "../base/types";
 import { Observer } from "../base/types/observer";
 import { DeviceConfigurationService, DevicePairingService, DeviceRideService, useDeviceConfiguration, useDevicePairing, useDeviceRide } from "../devices";
 import { RouteListService, useRouteList } from "../routes";
-import { RouteSettings } from "../routes/list/cards/RouteCard";
+import { RouteSettings } from "../routes/list/cards/types";
 import { UserSettingsService, useUserSettings } from "../settings";
 import { waitNextTick } from "../utils";
 import { Coach } from "./coach";
