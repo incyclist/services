@@ -70,9 +70,16 @@ export const distanceBetween = (p1:LatLng|RoutePoint,p2:LatLng|RoutePoint,props=
  * @returns {LatLng} The resulting point
 **/
 export const getPointBetween = (p1:LatLng,p2:LatLng,offset:number):LatLng => {
+    if (p1===undefined||p1===null)
+        return p2
+    if (p2===undefined||p2===null)
+        return p1
+
+
     const distanceBetweenP1P2 = distanceBetween(p1,p2) ;
     if (offset>distanceBetweenP1P2)
         return p2;
+
 
     const m = offset/distanceBetweenP1P2;
     const lat= p1.lat + (p2.lat-p1.lat)*m;
