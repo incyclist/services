@@ -1,21 +1,35 @@
+import { EventLogger } from "gd-eventlog";
 import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistPageService } from "../../base/pages";
 import { IObserver } from "../../types";
 import { useRouteList } from "../list";
+import { SummaryCardDisplayProps } from "../list/cards/types";
 import { SearchFilter, SearchState } from "../list/types";
 import { IRoutePageService, RouteItemProps, RoutePageDisplayProps  } from "./types";
+import { useUserSettings } from "../../settings";
 
 @Singleton
-export class RoutePageService extends IncyclistPageService implements IRoutePageService {
+export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
 
     protected serviceState: SearchState
-    protected openedRoute: string|undefined
+    protected detailRouteId: string|undefined
+    
 
-    protected updateStateHandler
-    protected syncStartHandler
-    protected syncStopHandler
+    protected updateStateHandler    =  this.onStateUpdate.bind(this)
+    protected syncStartHandler      = this.onSycncStart.bind(this)
+    protected syncStopHandler       = this.onSyncStop.bind(this)
+    protected updateSelectStateHandler  = this.onSelecetStateUpdate.bind(this)
+
+    constructor()  {
+        super('RoutesPage')
+    }
 
     openPage(): IObserver {
+
+        this.logEvent({message:'page shown', page:'Routes'})
+        console.log( new Date().toISOString(), '# route page opened' )
+        EventLogger.setGlobalConfig('page','Routes')
+
         super.openPage()
 
         try {
@@ -28,12 +42,15 @@ export class RoutePageService extends IncyclistPageService implements IRoutePage
             }
         }
         catch(err) {
-
+            this.logError(err,'openPage')
         }
         return this.getPageObserver()
 
     }
     closePage(): void {
+        EventLogger.setGlobalConfig('page',null)
+        this.logEvent({message:'page closed', page:'Routes'})        
+
         super.closePage()
     }
     pausePage(): Promise<void> {
@@ -48,7 +65,6 @@ export class RoutePageService extends IncyclistPageService implements IRoutePage
 
     getPageDisplayProps():RoutePageDisplayProps {
         const service = this.getRouteList()
-        const {filters} = this.serviceState
 
         const displayType = service.getDisplayType()
         const showImport = false // TODO
@@ -58,16 +74,31 @@ export class RoutePageService extends IncyclistPageService implements IRoutePage
 
         const onImportClicked = this.onImportClicked.bind(this)
         const onFilterChanged = this.onFilterChanged.bind(this)
+        const onFilterVisibleChange = this.onFilterVisibleChange.bind(this)
 
+        const filterOptions = service.getFilterOptions()
+        
+        const detailRouteId = this.detailRouteId
+        const filterVisible = this.getUserSettings().getValue('preferences.search.filterVisible',false);
+        const filters = service.getFilters()
+        
         return {loading,synchronizing, routes,displayType,
-            onFilterChanged, onImportClicked}
+                filters,filterVisible, filterOptions,detailRouteId,
+                onFilterChanged, onImportClicked, onFilterVisibleChange}
         
     }
 
 
     onFilterChanged( filters:SearchFilter ) {
         this.serviceState = this.getRouteList().search(filters)
-        this.getPageObserver().emit('page-update')
+
+        this.updatePageDisplay()
+    }
+
+    onFilterVisibleChange(visible:boolean) {
+
+        console.log('# onFilterVisibleChange',visible)
+        this.getUserSettings().set('preferences.search.filterVisible',visible);
     }
 
     onImportClicked():void {
@@ -75,12 +106,8 @@ export class RoutePageService extends IncyclistPageService implements IRoutePage
     }
 
     onSelect(id:string):void {
-        this.openedRoute = id;
-
-        // const service = this.getRouteList()
-        // const card = service.getCard(id)
-      
-
+        this.detailRouteId = id;
+        this.updatePageDisplay()
     }
 
     onDelete(id:string):void {
@@ -90,12 +117,22 @@ export class RoutePageService extends IncyclistPageService implements IRoutePage
             card.delete()
     }
 
+    protected updatePageDisplay() {
+        this.getPageObserver().emit('page-update')
+    }
+
     protected getRoutesDisplayProps():Array<RouteItemProps> {
         const {routes} = this.serviceState
 
-        // TODO
+        const getRouteProps = (routeProps:SummaryCardDisplayProps) => {
+            return {
+                ...routeProps,
+                onSelect: this.onSelect.bind(this),
+                onDelete: this.onDelete.bind(this)
+            }
+        }
         
-        return routes as Array<RouteItemProps>
+        return routes.map( getRouteProps)
     }
 
     protected getSearchFilters():SearchFilter {
@@ -110,6 +147,7 @@ export class RoutePageService extends IncyclistPageService implements IRoutePage
         observer.on('updated', this.updateStateHandler)
         observer.on('sync-start', this.syncStartHandler)
         observer.on('sync-done', this.syncStopHandler)
+        observer.on('select-state-update', this.updateSelectStateHandler)
 
        
     }
@@ -124,9 +162,30 @@ export class RoutePageService extends IncyclistPageService implements IRoutePage
         observer.off('updated', this.updateStateHandler)
         observer.off('sync-start', this.syncStartHandler)
         observer.off('sync-done', this.syncStopHandler)
-
-
+        observer.off('selected', this.updateSelectStateHandler)
     }
+
+    protected onSycncStart() {
+        this.updatePageDisplay()
+    }
+
+    protected onSyncStop() {
+        this.updatePageDisplay()
+    }
+
+    protected onStateUpdate() {
+        this.updatePageDisplay()
+    }
+
+    protected onSelecetStateUpdate() {
+        
+        const route = this.getRouteList().getSelected()
+
+        console.log()
+        this.detailRouteId = route?.description?.id
+        this.updatePageDisplay()
+    }
+
 
 
     @Injectable
@@ -134,6 +193,12 @@ export class RoutePageService extends IncyclistPageService implements IRoutePage
         return useRouteList()
     }
 
-
+    @Injectable
+    protected getUserSettings() {
+        return useUserSettings()
+    }
 
 }
+
+
+export const getRoutesPageService = ()=> new RoutesPageService()
