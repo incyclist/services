@@ -1369,6 +1369,8 @@ export class DevicePairingService  extends IncyclistService{
         const control = this.getCapability(IncyclistCapability.Control)
         const power = this.getCapability(IncyclistCapability.Power)
 
+        console.log('# check pairing success', control?.connectState,power?.connectState)
+
         const success =   (control?.connectState==='connected' || power?.connectState==='connected')
         this.state.canStartRide = success
         return success
@@ -1491,6 +1493,8 @@ export class DevicePairingService  extends IncyclistService{
         this.state.interfaces = this.access.enrichWithAccessState(this.state.interfaces);
         
         this.emit('pairing-start');
+
+        console.log('# start pairing',         this.state.capabilities.map(c => `${c.capability}:${c.connectState}`))
         
         const { isReady, busyRequired } = this.isReadyToPair();
 
@@ -1603,12 +1607,13 @@ export class DevicePairingService  extends IncyclistService{
             c.connectState = c.connectState==='connected' ? 'connected' : 'waiting' 
         })
 
+        console.log('# setPairingConnectState',         this.state.capabilities.map(c => `${c.capability}:${c.connectState}`))
+
 
         const all = adapters??[]
         all.forEach(ai => {
 
-            if (ai.adapter.isStarted() || ai.adapter.isPaused()) {
-
+            if (ai.adapter.isStarted() ) {
                 this.state.capabilities.forEach(c => {
                     if (c.selected === ai.udid)
                         c.connectState = 'connected';
@@ -1616,10 +1621,8 @@ export class DevicePairingService  extends IncyclistService{
                     if (device)
                         device.connectState = 'connected';
                 });
-
             }
             else {
-                
                 this.state.capabilities.forEach(c => {
                     if (c.selected === ai.udid)
                         c.connectState = 'connecting';
@@ -1628,7 +1631,6 @@ export class DevicePairingService  extends IncyclistService{
                     if (device)
                         device.connectState = 'connecting';
                 });
-
             }
 
         });
