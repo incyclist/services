@@ -1,12 +1,15 @@
 import { EventLogger } from "gd-eventlog";
 import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistPageService } from "../../base/pages";
-import { IObserver } from "../../types";
+import { FileInfo, IObserver, RouteImportDialogDisplayProps, RouteImportDisplayProps } from "../../types";
 import { useRouteList } from "../list";
 import { SummaryCardDisplayProps } from "../list/cards/types";
 import { SearchFilter, SearchState } from "../list/types";
 import { IRoutePageService, RouteItemProps, RoutePageDisplayProps  } from "./types";
 import { useUserSettings } from "../../settings";
+import { Observer } from "../../base/types";
+import { v4 } from "uuid";
+import { sleep } from "../../utils/sleep";
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -18,7 +21,13 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     protected updateStateHandler    =  this.onStateUpdate.bind(this)
     protected syncStartHandler      = this.onSycncStart.bind(this)
     protected syncStopHandler       = this.onSyncStop.bind(this)
-    protected updateSelectStateHandler  = this.onSelecetStateUpdate.bind(this)
+    protected updateSelectStateHandler  = this.onDialogClosed.bind(this)
+
+    // Import Handlers
+    protected showImportDialog: boolean = false
+    protected importObserver: Observer|undefined
+    protected importProps: Array<RouteImportDisplayProps>
+    
 
     constructor()  {
         super('RoutesPage')
@@ -69,12 +78,8 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         const displayType = service.getDisplayType()
         const showImport = false // TODO
         const synchronizing = false // TODO
-        const loading = this.serviceState===undefined
+        const loading = this.serviceState===undefined || service.isStillLoading()
         const routes = this.getRoutesDisplayProps()
-
-        const onImportClicked = this.onImportClicked.bind(this)
-        const onFilterChanged = this.onFilterChanged.bind(this)
-        const onFilterVisibleChange = this.onFilterVisibleChange.bind(this)
 
         const filterOptions = service.getFilterOptions()
         
@@ -83,8 +88,8 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         const filters = service.getFilters()
         
         return {loading,synchronizing, routes,displayType,
-                filters,filterVisible, filterOptions,detailRouteId,
-                onFilterChanged, onImportClicked, onFilterVisibleChange}
+                filters,filterVisible, filterOptions,
+                detailRouteId, showImportDialog:this.showImportDialog}
         
     }
 
@@ -96,13 +101,12 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     onFilterVisibleChange(visible:boolean) {
-
-        console.log('# onFilterVisibleChange',visible)
         this.getUserSettings().set('preferences.search.filterVisible',visible);
     }
 
     onImportClicked():void {
-        // TODO
+        this.showImportDialog = true;
+        this.updatePageDisplay()
     }
 
     onSelect(id:string):void {
@@ -117,6 +121,45 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             card.delete()
     }
 
+    startImport(info:FileInfo|Array<FileInfo>): IObserver {
+        if (this.importObserver)
+            return this.importObserver;
+
+
+        this.importObserver = new Observer()
+
+        const imports: Array<FileInfo> = Array.isArray(info) ? info : [info]
+        this.importProps  = this.importProps ?? []
+
+        imports.forEach ( (i:FileInfo) => { 
+            this.prepareSingleImport(i)
+        })
+
+
+
+        return this.importObserver
+
+    }
+
+    onImportClosed(): void  {
+        if (this.importObserver)
+            this.importObserver.stop()
+
+        this.importObserver = undefined
+        this.importProps = undefined
+        this.showImportDialog = false
+        this.updatePageDisplay()
+    }
+
+    getImportDisplayProps(): RouteImportDialogDisplayProps {
+        console.log( '# [PageService] getImportDisplayProps',this.importProps)
+
+        return this.importProps
+    }
+
+
+
+
     protected updatePageDisplay() {
         this.getPageObserver().emit('page-update')
     }
@@ -127,8 +170,8 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         const getRouteProps = (routeProps:SummaryCardDisplayProps) => {
             return {
                 ...routeProps,
-                onSelect: this.onSelect.bind(this),
-                onDelete: this.onDelete.bind(this)
+                // onSelect: this.onSelect.bind(this),
+                // onDelete: this.onDelete.bind(this)
             }
         }
         
@@ -145,9 +188,10 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         if (!observer)
             return
         observer.on('updated', this.updateStateHandler)
+        observer.on('loaded', this.updateStateHandler)
         observer.on('sync-start', this.syncStartHandler)
         observer.on('sync-done', this.syncStopHandler)
-        observer.on('select-state-update', this.updateSelectStateHandler)
+        observer.on('selected', this.updateSelectStateHandler)
 
        
     }
@@ -160,6 +204,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         if (final)
             observer.stop()
         observer.off('updated', this.updateStateHandler)
+        observer.off('loaded', this.updateStateHandler)
         observer.off('sync-start', this.syncStartHandler)
         observer.off('sync-done', this.syncStopHandler)
         observer.off('selected', this.updateSelectStateHandler)
@@ -177,15 +222,54 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.updatePageDisplay()
     }
 
-    protected onSelecetStateUpdate() {
+    protected onDialogClosed() {
         
         const route = this.getRouteList().getSelected()
 
-        console.log()
-        this.detailRouteId = route?.description?.id
+        console.log('# [RoutePage] onSelecetStateUpdate',route?.description?.id)
+        this.detailRouteId = null
         this.updatePageDisplay()
     }
 
+    protected prepareSingleImport(file:FileInfo) {
+
+        console.log( '# [PageService] import',file)
+
+        const observer = new Observer();
+        const props:RouteImportDisplayProps = {
+            id: v4(),
+            status: 'idle',
+            fileName: file.name
+        }
+        this.importProps.push(props)
+      
+
+        observer.once( 'success', ()=> { 
+            props.status = 'success'
+            this.updateImportDialogDisplay()
+            observer.stop()
+        })
+        observer.once( 'error', (id:string, error:string)=> { 
+            props.status = 'error'
+            props.error = error;
+            this.updateImportDialogDisplay()
+            observer.stop()
+        } )
+
+
+        sleep(5).then( ()=> {
+            this.getRouteList().import(file,{importId:props.id,observer})
+            props.status = 'parsing'
+            this.updateImportDialogDisplay()
+
+        })
+    }
+
+
+
+    protected updateImportDialogDisplay() {
+        this.importObserver?.emit('update')
+    }
 
 
     @Injectable

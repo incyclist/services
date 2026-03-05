@@ -108,7 +108,7 @@ export class ActiveImportCard extends BaseCard implements Card<Route> {
         this.error = null;
         this.emitUpdate()
         
-        useRouteList().import( this.file, this)
+        useRouteList().import( this.file, {retry:this})
     }
 
     protected logError( err:Error, fn:string) {

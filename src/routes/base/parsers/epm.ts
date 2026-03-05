@@ -5,6 +5,7 @@ import { JSONObject } from '../../../utils/xml';
 import { BinaryReader } from './utils';
 import { XMLParser, XmlParserContext } from './xml';
 import { getFileName } from '../../../utils';
+import { AppChannel } from '../../../api/appInfo';
 
 export interface EpmParserContext extends XmlParserContext {
     noPositions?:boolean
@@ -64,7 +65,11 @@ export class EPMParser extends XMLParser{
 
         const file:FileInfo = {...fileInfo,ext:'epp',encoding:'binary'}
     
-        const fileName = fileInfo.name.replace('epm','epp')
+        let fullName = fileInfo.base??fileInfo.name
+        if (!fullName.includes('.epm')) {
+            fullName = fullName + '.epm'
+        }
+        const fileName = fullName.replace('epm','epp')
 
         if (fileName.startsWith('http')||fileName.startsWith('file')||fileName.startsWith('/')||fileName.startsWith('\\')||fileName.startsWith('.')) {
             file.type = 'file'
@@ -74,13 +79,15 @@ export class EPMParser extends XMLParser{
                 file.url = file.url.replace(fileInfo.name,fileName)
         }
         else {
-            file.filename = file.filename.replace(fileInfo.name,fileName)
+            file.filename = file.filename.replace(fullName,fileName)
 
         }
 
 
         const onError = ()=> {
-            throw new Error('Could not open EPP file: '+ getFileName(file))
+
+            const nameInfo   = this.getChannel()==='mobile' ? fileName : getFileName(file)
+            throw new Error('Could not open EPP file: '+ nameInfo)
         }
 
         const loader = getBindings().loader
@@ -91,7 +98,7 @@ export class EPMParser extends XMLParser{
             }
             return res.data
         }
-        catch {
+        catch (err) {
             onError()
         }
     }
@@ -302,6 +309,14 @@ export class EPMParser extends XMLParser{
         if (context.noPositions)
             route.gpxDisabled = true;
         
+    }
+
+    protected getChannel():AppChannel {
+        return this.getAppInfo()?.getChannel()
+    }
+
+    protected getAppInfo() {
+        return getBindings().appInfo
     }
 
 }

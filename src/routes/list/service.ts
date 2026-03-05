@@ -31,6 +31,7 @@ import { useAppsService } from "../../apps";
 import { useAppState } from "../../appstate";
 import { useUnitConverter } from "../../i18n";
 import clone from "../../utils/clone";
+import { IObserver } from "../../types";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -283,8 +284,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     search( requestedFilters?:SearchFilter ) {
         this.currentView = 'list'
-        if (!this.initialized)
+        if (!this.initialized) {            
             this.preload();
+        }
 
 
         const filters = requestedFilters || this.filters
@@ -780,7 +782,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     unselect() {        
 
-        console.log('# unselect')
         this.selectedRoute = null    
         this.startSettings = null;
 
@@ -788,7 +789,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     select(route:Route) {
-        console.log('# select')
         this.selectedRoute = route
         this.observer.emit('selected', route)
     }
@@ -802,13 +802,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.selectedRoute = undefined
     }
 
-    import( info:FileInfo|Array<FileInfo>, retry?:ActiveImportCard):void {
+    import( info:FileInfo|Array<FileInfo>, props?:{ retry?:ActiveImportCard, importId?:string, observer?:IObserver}):void {
         try {
             const files = Array.isArray(info) ? info : [info]
 
             const importCards: Array<ActiveImportCard> = []
+            const {retry, importId,observer} = props??{}
 
-            if (!retry) {
+            if (!retry && !importId) {
                 files.forEach( (file)=>{
                     if (!file)
                         return;
@@ -818,7 +819,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                     this.emitLists('updated')
                 })
             }
-            else {
+            else if (retry) {
                 importCards.push(retry)
             }
 
@@ -826,16 +827,22 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             files.forEach( async (file,idx)=>{
                 if (!file)
                     return;
-                const importCard = importCards[idx]
+                const importCard = importId? null : importCards[idx]
                 
                 const name = file.url??file.filename??file.name
             
                 try {
 
                     this.logEvent({message:'start import', name})
+                    if (importId&&observer)
+                        observer?.emit('parsing',importId)
 
                     const {data,details} = await RouteParser.parse(file)     
+                   
                     this.logEvent({message:'import completed', name})
+                    if (importId&&observer)
+                        observer?.emit('success',importId)
+
 
                     const route = new Route(data,details)
                     route.description.tsImported = Date.now()
@@ -856,7 +863,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                     
                     this.myRoutes.add( card, true )
 
-                    this.myRoutes.remove(importCard)
+                    if (importCard) {
+                        this.myRoutes.remove(importCard)
+                    }
                     card.enableDelete(true)              
                     this.emitLists('updated',{log:true})     
     
@@ -866,7 +875,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 }
                 catch(err) {
                     this.logEvent({message:'import failed', name, reason:err.message, stack:err.stack})
-                    importCard.setError(err)
+                    if (importId&&observer)
+                        observer?.emit('error',importId, err.message)
+                    if (importCard)
+                        importCard.setError(err)
                 }
         
                 
@@ -1057,7 +1069,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         await this.loadRoutesFromApi()
 
         
-        this.preloadDetails().then( ()=>{this.emitLists('loaded')})
+        this.preloadDetails().then( ()=>{
+            this.emitLists('loaded')
+        })
         this.startSync()
     }
 

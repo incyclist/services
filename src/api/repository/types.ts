@@ -31,10 +31,11 @@ export interface FileLoaderResult {
 export interface FileInfo {
     type:'url'|'file'
     url?:string,
-    name:string,        // just the name of the file
+    base?:string        // the name of the file with extension (index.html)
+    name:string,        // just the name of the file (index)
     filename?:string,   // full path
     dir:string,         // directory
-    ext:string,         // extensoin
+    ext:string,         // extension
     delimiter: string,
     encoding?
 }

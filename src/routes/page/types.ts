@@ -1,10 +1,12 @@
+import { FileInfo } from "../../api";
 import { IPageService } from "../../base/pages";
+import { IObserver, RouteImportStatus } from "../../types";
 import { SummaryCardDisplayProps } from "../list/cards/types";
 import { DisplayType, SearchFilter, SearchFilterOptions } from "../list/types";
 
 
 
-export interface RoutePageDisplayProps extends IPageCallBacks {
+export interface RoutePageDisplayProps  {
     loading: boolean            // indicates that the service is still loading the routes
     synchronizing?: boolean,    // indicates that a background synch is ongoing
     displayType?: DisplayType   // indicates the prefered display type (always 'list' for now)
@@ -14,12 +16,11 @@ export interface RoutePageDisplayProps extends IPageCallBacks {
     filterOptions: SearchFilterOptions
     routes?: Array<RouteItemProps>
     detailRouteId?: string    
+    showImportDialog?: boolean
 }
 
 
 export interface RouteItemProps extends SummaryCardDisplayProps {
-    onDelete: (id: string) => void;
-    onSelect: (id: string) => void;
 }
 
 
@@ -29,6 +30,19 @@ export interface IPageCallBacks  {
     onFilterVisibleChange(visible:boolean):void
 }
 
+export interface RouteImportDisplayProps {
+    id: string
+    status: RouteImportStatus
+    fileName?: string
+    error?: string
+}
+
+
+export type RouteImportDialogDisplayProps =  RouteImportDisplayProps|Array<RouteImportDisplayProps>
+
 export interface IRoutePageService extends IPageService, IPageCallBacks {
     getPageDisplayProps():RoutePageDisplayProps
+    startImport(info:FileInfo|Array<FileInfo>): IObserver
+    onImportClosed(): void   // called when user explicitly closes dialog
+    getImportDisplayProps(): RouteImportDialogDisplayProps
 }
