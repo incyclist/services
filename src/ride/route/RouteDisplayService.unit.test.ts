@@ -3,10 +3,10 @@ import sydney from '../../../__tests__/data/routes/sydney2.json'
 import { Inject } from '../../base/decorators'
 import { createFromJson } from '../../routes'
 import { RouteApiDetail } from '../../routes/base/api/types'
-import { RouteSettings } from '../../routes/list/cards/RouteCard'
 import { RouteDisplayService } from './RouteDisplayService'
 import { RideDisplayService} from '../display/service'
 import { Observer } from '../../base/types'
+import { RouteSettings } from '../../routes/list/cards/types'
 
 const OC = expect.objectContaining
 const CT = expect.closeTo
