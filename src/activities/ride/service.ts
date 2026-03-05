@@ -1043,7 +1043,7 @@ export class ActivityRideService extends IncyclistService {
                 }
             }
             else if (this.state==='paused') {
-                if ( (data.power>0||data.cadence>0) && this.current.isAutoResume) {
+                if ( (data.power>0|| (data.speed>0 && data.cadence>0)) && this.current.isAutoResume) {
                     this.resume('system')
                     return;
                 }
