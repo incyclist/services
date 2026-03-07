@@ -1,7 +1,7 @@
 import { sleep } from "../../utils/sleep";
 import { useDeviceAccess } from "../access/service";
 import {AdapterInfo,  IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
-import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./model";
+import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./types";
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
