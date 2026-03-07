@@ -11,10 +11,12 @@ const CRYPT_ALGO = 'aes256'
 export class KomootAppConnection extends ConnectedAppService<KomootCredentials> {
     protected _isConnecting
     protected api: KomootApi
-    protected credentials: KomootCredentials
 
     constructor() {
         super('KomootAppConnection','komoot')
+
+        this.api = new KomootApi()
+        this.iniAuth()
     }
 
     async connect( credentials:KomootCredentials):Promise<boolean> {
@@ -83,14 +85,21 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
         return this.credentials
     }
 
-    getApi() {
-        if (!this.api)
-            this.api = new KomootApi()
+    getApi() {        
         return this.api
     }
 
+    protected iniAuth():boolean { 
+        const api = this.getApi()
+        if (this.credentials) {
+            api.setAuth(this.credentials)
+            return true
+        }
+        return false
 
-    protected initAuth():boolean {
+    }
+
+    protected checkAuth():boolean {
         let isInitialized = false;
         let credentials;
 
@@ -113,7 +122,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
                 
             
             }
-            this.logEvent( {message:'Komoot init done', hasCredentials:(valid(this.credentials?.username)&& valid(this.credentials?.password))})
+            this.logEvent( {message:'Komoot init done', hasCredentials:(valid(credentials?.username)&& valid(credentials?.password))})
             isInitialized = true;           
 
         }
@@ -123,11 +132,8 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
         }
 
         this.setupEventListeners()
-        this.credentials = credentials
 
-        if (credentials) {
-            this.getApi().setAuth(credentials)
-        }
+        this.credentials = {...credentials}
    
         return isInitialized
 

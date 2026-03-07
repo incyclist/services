@@ -12,6 +12,7 @@ export class ConnectedAppService<C extends AppCredentials> extends IncyclistServ
 
     protected isInitialized: boolean
     protected id
+    protected credentials: C
 
     constructor(protected service, protected appKey:string) {
         super(service)
@@ -43,7 +44,15 @@ export class ConnectedAppService<C extends AppCredentials> extends IncyclistServ
         if (!this.getUserSettings().isInitialized)
             return false
 
-        this.isInitialized = this.initAuth();
+
+        try {
+            // sub class might have split check auth and init Auth in two separate methods
+            // in that case checkAuth is performed during constructor and initAuth will be performed later explicitly by the sub class
+            this.isInitialized = this.checkAuth()
+        }
+        catch {
+            this.isInitialized = this.initAuth();
+        }
 
         return this.isInitialized
     }    
@@ -68,6 +77,9 @@ export class ConnectedAppService<C extends AppCredentials> extends IncyclistServ
     }
 
     protected initAuth():boolean {
+        throw new Error('method not implemented')
+    }
+    protected checkAuth():boolean {
         throw new Error('method not implemented')
     }
 

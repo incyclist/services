@@ -11,7 +11,6 @@ const CRYPT_ALGO = 'aes256'
 export class VeloHeroAppConnection extends ConnectedAppService<VeloHeroCredentials> {
     protected _isConnecting
     protected api: VeloHeroApi
-    protected credentials: VeloHeroCredentials
 
     constructor() {
         super('VeloHeroAppConnection','velohero')
