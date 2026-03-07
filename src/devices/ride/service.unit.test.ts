@@ -1,6 +1,6 @@
 import { AntCadAdapter, AntDeviceSettings, AntFEAdapter, AntPwrAdapter, DeviceData, DeviceSettings, IncyclistCapability } from 'incyclist-devices'
 import {DeviceRideService} from './service'
-import { AdapterRideInfo, RideServiceDeviceProperties } from './model'
+import { AdapterRideInfo, RideServiceDeviceProperties } from './types'
 import { DeviceConfigurationService } from '../configuration'
 import { Inject } from '../../base/decorators'
 import { createFromJson } from '../../routes'
