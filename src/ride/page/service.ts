@@ -28,63 +28,83 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
 
     async initPage():Promise<RideType> {
-        const service = this.getRideDisplay()
-
-        await service.init()     
-        this.isInitialized = true  
-        return service.getRideType()
-    }
-
-    openPage(simulate?:boolean): IObserver {
-        this.logEvent({message:'page shown', page:'Rides'})
-        
-        EventLogger.setGlobalConfig('page','Rides')
-
-        super.openPage()
-
         try {
             const service = this.getRideDisplay()
 
-            if (!this.isInitialized) {
-                service.init()
-            }
-            this.registerEventHandlers()
-            service.start(simulate)
+            await service.init()     
+            this.isInitialized = true  
+            return service.getRideType()
+        }
+        catch(err) {
+            this.logError(err,'initPage')
+        }
+    }
 
-            sleep(5).then( ()=>{
-                this.updatePageDisplay()
-            })
+    openPage(simulate?:boolean): IObserver {
+        try {
+            this.logEvent({message:'page shown', page:'Rides'})
+            
+            EventLogger.setGlobalConfig('page','Rides')
+
+            super.openPage()
+
+            try {
+                const service = this.getRideDisplay()
+
+                if (!this.isInitialized) {
+                    service.init()
+                }
+                this.registerEventHandlers()
+                service.start(simulate)
+
+                sleep(5).then( ()=>{
+                    this.updatePageDisplay()
+                })
+            }
+            catch(err) {
+                this.logError(err,'openPage')
+            }
+            return this.getPageObserver()
         }
         catch(err) {
             this.logError(err,'openPage')
         }
-        return this.getPageObserver()
-
     }
     closePage(): void {
-        EventLogger.setGlobalConfig('page',null)
-        this.logEvent({message:'page closed', page:'Rides'})        
+        try {
+            EventLogger.setGlobalConfig('page',null)
+            this.logEvent({message:'page closed', page:'Rides'})        
 
-        this.getRideDisplay().stop()
-        this.menuProps = null
-        this.isInitialized = false
-        super.closePage()
+            this.getRideDisplay().stop()
+            this.menuProps = null
+            this.isInitialized = false
+            super.closePage()
+        }
+        catch(err) {
+            this.logError(err,'closePage')
+        }
     }
 
     pausePage(): Promise<void> {
-        this.backgroundTimer = setTimeout(()=> {
-            this.getRideDisplay().pause('user')
-            this.backgroundPausedByService = true
-        },BACKGROUND_PAUSE_TIMEOUT_MS)
+        try {
+            this.backgroundTimer = setTimeout(()=> {
+                this.getRideDisplay().pause('user')
+                this.backgroundPausedByService = true
+            },BACKGROUND_PAUSE_TIMEOUT_MS)
 
-        this.isInitialized = false
-        return super.pausePage()
+            this.isInitialized = false
+            return super.pausePage()
+        }
+        catch(err)  {
+            this.logError(err,'pausePage')
+        }
     }
 
     resumePage(): Promise<void>  {
-        if (this.backgroundTimer) {
-            clearTimeout(this.backgroundTimer)
-        }
+        try {
+            if (this.backgroundTimer) {
+                clearTimeout(this.backgroundTimer)
+            }
 
         // TODO:
         //   if backgroundPausedByService:
@@ -94,73 +114,116 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         //   else:
         //     // short interruption -- ride never paused, nothing to do        
 
-        return super.resumePage()
+            return super.resumePage()
+        } catch(err) {
+            this.logError(err,'resumePage')
+        }
     }    
 
     getRideObserver(): IObserver|null {
         return this.rideObserver
     }
     getPageDisplayProps(): AnyRidePageDisplayProps {
-        const rideType = this.getRideDisplay().getRideType()
+        try {
+            const rideType = this.getRideDisplay().getRideType()
 
-        switch (rideType) {
-            case 'Video':     return this.getVideoRideDisplayProps()
-            // case 'GPX':       return this.getGPXRideDisplayProps()
-            // case 'Free-Ride': return this.getFreeRideDisplayProps()
-            // case 'Workout':   return this.getWorkoutRideDisplayProps()
-            default:
-                return null
+            switch (rideType) {
+                case 'Video':     return this.getVideoRideDisplayProps()
+                // case 'GPX':       return this.getGPXRideDisplayProps()
+                // case 'Free-Ride': return this.getFreeRideDisplayProps()
+                // case 'Workout':   return this.getWorkoutRideDisplayProps()
+                default:
+                    return null
+            }
+
         }
-
-
+        catch(err) {
+            return null
+        }
 
     }
 
     onMenuOpen() {
-        const state = this.getRideDisplay().getState()
-        this.menuProps = { showResume: state==='Paused' }
-        this.updatePageDisplay()
-
+        try  {
+            const state = this.getRideDisplay().getState()
+            this.menuProps = { showResume: state==='Paused' }
+            this.updatePageDisplay()
+        }
+        catch(err) {
+            this.logError(err,'onMenuOpen')
+        }
     }
 
     onMenuClose() {
-        this.menuProps = null
-        this.updatePageDisplay()
+        try {
+            this.menuProps = null
+            this.updatePageDisplay()
+        }
+        catch(err) {
+            this.logError(err,'onMenuOpen')
+        }
     }
 
     onPause() {
-        this.getRideDisplay().pause('user')
-        this.menuProps = { showResume: false }  // menu stays open, now shows Resume
-        this.updatePageDisplay()
+        try {
+            this.getRideDisplay().pause('user')
+            this.menuProps = { showResume: true}  // menu stays open, now shows Resume
+            this.updatePageDisplay()
+        }
+        catch(err) {
+            this.logError(err,'onPause')
+        }
     }
 
     onResume() {
-        this.getRideDisplay().resume()
-        this.menuProps = null
-        this.updatePageDisplay()
+        try {
+            this.getRideDisplay().resume()
+            this.menuProps = null
+            this.updatePageDisplay()
+        }
+        catch(err) {
+            this.logError(err,'onResume')
+        }
     }
 
     onEndRide() {
-        this.getRideDisplay().stop()
-        this.moveToPreviousPage()
-        this.closePage()
+        try {
+            this.getRideDisplay().stop()
+            this.moveToPreviousPage()
+            this.closePage()
+        } catch(err) {
+            this.logError(err,'onEndRide')
+        }
     }
 
     onRetryStart() {
-        this.getRideDisplay().retryStart()
+        try {
+            this.getRideDisplay().retryStart()
+        } catch(err) {
+            this.logError(err,'onRetryStart')
+        }
     }
 
     onIgnoreStart() {
-        this.getRideDisplay().startWithMissingSensors();
+        try {
+            this.getRideDisplay().startWithMissingSensors();
+        }
+        catch(err)  {
+            this.logError(err,'onIgnoreStart')
+        }
     }
 
     async onCancelStart() {
-        this.rideObserver?.stop()
-        await this.getRideDisplay().cancelStart();
+        try {
+            this.rideObserver?.stop()
+            await this.getRideDisplay().cancelStart();
 
-        this.moveToPreviousPage()
-        this.closePage()
-
+            this.moveToPreviousPage()
+            this.closePage()
+        }
+        catch(err) {
+            this.logError(err,'onCancelStart')
+        }
     }
 
 
@@ -218,15 +281,15 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
 
     protected updatePageDisplay() {
-        this.getPageObserver().emit('page-update')
+        this.getPageObserver()?.emit('page-update')
     }    
     protected registerEventHandlers() {
         const events = Object.keys(this.eventHandler )
-        events.forEach( event=> { this.rideObserver.on(event,this.eventHandler[event])})        
+        events.forEach( event=> { this.rideObserver?.on(event,this.eventHandler[event])})        
     }
     protected unregisterEventHandlers() {
         const events = Object.keys(this.eventHandler )
-        events.forEach( event=> { this.rideObserver.off(event,this.eventHandler[event])})        
+        events.forEach( event=> { this.rideObserver?.off(event,this.eventHandler[event])})        
     }
 
     protected onDisplayStateUpdate( state:CurrentRideState, props:{pauseReason?:'user'|'device'} ) {
@@ -251,7 +314,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     protected get rideObserver () {
-        return this.getRideDisplay().getObserver()
+        try {
+            return this.getRideDisplay()?.getObserver()
+        }catch(err) {
+            this.logError(err,'get rideObserver')
+        }
     }
 
     protected get rideDisplayProps() {

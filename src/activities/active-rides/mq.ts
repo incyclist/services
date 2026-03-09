@@ -63,7 +63,8 @@ export class ActiveRideListMessageQueue extends IncyclistService{
     unsubscribeAll() {
         const topics = this.subscribed??[]
         const mq = this.getMessageQueue();
-        if (!mq?.enabled())
+
+        if (!mq || !mq.enabled())
             return
 
         topics.forEach( s => {mq.unsubscribe(s.topic)})
