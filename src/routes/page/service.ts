@@ -10,6 +10,7 @@ import { useUserSettings } from "../../settings";
 import { Observer } from "../../base/types";
 import { v4 } from "uuid";
 import { sleep } from "../../utils/sleep";
+import { useDevicePairing } from "../../devices";
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -119,6 +120,20 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         const card = service.getCard(id)
         if (card)
             card.delete()
+    }
+
+    start() {
+        const service = this.getRouteList()
+        const pairing = this.getDevicePairing()
+        
+        
+        const {id,title,videoUrl} = service.getStartSettings()??{} as any
+        this.logEvent( {message:'Attempting to start a ride',id,title,videoUrl,readyToStart:pairing.isReadyToStart(), } )
+        
+        service.close()       
+        const next =  pairing.isReadyToStart() ? '/rideDeviceOK'  : '/pairingStart' 
+        this.moveTo(next)
+
     }
 
     startImport(info:FileInfo|Array<FileInfo>): IObserver {
@@ -275,6 +290,11 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     @Injectable
     protected getRouteList() {
         return useRouteList()
+    }
+
+    @Injectable
+    protected getDevicePairing() {
+        return useDevicePairing()
     }
 
     @Injectable

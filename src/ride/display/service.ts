@@ -172,7 +172,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.getWorkoutRide().pause()   
             this.displayService.pause()  
 
-            this.observer?.emit('state-update',this.state)        
+            this.observer?.emit('state-update',this.state, {pauseReason:requester})
             this.pauseReason = requester
         }
         catch(err) {
@@ -634,6 +634,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 
     protected onActivityUpdate() {
+
         if (this.state==='Active' ) {
             const currentValues = this.getActivityRide().getCurrentValues()
             if (!currentValues)
@@ -1280,13 +1281,14 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         return mandatory.filter(d=>d.status==='Started').length == mandatory.length
     }
 
-    protected getStartOverlayProps = ():StartOverlayProps =>{
+    public getStartOverlayProps = ():StartOverlayProps =>{
         const mode = this.getRideType()
         const readyToStart = this.isStartDeviceReadyToStart() && this.getRideModeService().isStartRideCompleted()
         const devicesState = this.deviceInfo??[]
 
         const displayOverlayProps = this.getRideModeService().getStartOverlayProps()??{}
-        return {mode, rideState:this.state, devicesState, readyToStart, ...displayOverlayProps}
+        // TODO : Check where devicesState (incorrect) is used - replace with correct property devices
+        return {mode, rideState:this.state, devicesState,devices:devicesState,  readyToStart, ...displayOverlayProps}
     }
 
     protected getDeviceStartSettings() {

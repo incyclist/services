@@ -136,13 +136,13 @@ export class RLVDisplayService extends RouteDisplayService {
     pause() {
         super.pause()
 
-        this.currentVideo.syncHelper.pause()
+        this.currentVideo?.syncHelper.pause()
         this.isVideoPaused = true
     }
 
     resume() {
         super.resume()
-        this.currentVideo.syncHelper.resume()
+        this.currentVideo?.syncHelper.resume()
         this.isVideoPaused = false
         
     }
@@ -167,14 +167,14 @@ export class RLVDisplayService extends RouteDisplayService {
             const autoConvert = this.currentVideo?.playback==='converted'
 
             const video:VideoDisplayProps = {
-                src: this.currentVideo.source,
+                src: this.currentVideo?.source,
                 startTime,
                 autoConvert,
                 info:this.getInfotextDisplayProps(),
                 muted: true,
                 loop: this.isLoopEnabled() ? true : undefined,
-                playback: this.currentVideo.playback,
-                observer: this.currentVideo.observer,
+                playback: this.currentVideo?.playback,
+                observer: this.currentVideo?.observer,
                 onLoaded: this.onVideoLoaded.bind(this),
                 onLoadError: this.onVideoLoadError.bind(this),
                 onPlaybackError: this.onVideoPlaybackError.bind(this),
@@ -272,9 +272,9 @@ export class RLVDisplayService extends RouteDisplayService {
     protected onNextVideo() { 
 
         const old = this.currentVideo
-        const next = this.currentVideo.next
+        const next = this.currentVideo?.next
 
-        if (!next) 
+        if (!next || !old) 
             return
 
         old.isCurrent = false
@@ -312,7 +312,7 @@ export class RLVDisplayService extends RouteDisplayService {
 
 
         this.logEvent({message: 'switching to next video', route: this.getCurrentRoute().details.title,
-                       segment:this.currentVideo.route.description.title, offset: this.offset, segmentDistance: this.currentVideo.route.description.distance,
+                       segment:this.currentVideo?.route.description.title, offset: this.offset, segmentDistance: this.currentVideo?.route.description.distance,
                        totalDistance: this.getCurrentRoute().details.distance})
 
     }
@@ -321,7 +321,7 @@ export class RLVDisplayService extends RouteDisplayService {
         if (!this.currentVideo?.info)
             return
 
-        const info = this.currentVideo.info.find(i => i.start <= time && i.stop > time)
+        const info = this.currentVideo?.info.find(i => i.start <= time && i.stop > time)
         if (info) {
             this.infotext = info.props         
         }
@@ -397,7 +397,7 @@ export class RLVDisplayService extends RouteDisplayService {
 
     async stop() {
         try {
-            this.currentVideo.syncHelper.stop()
+            this.currentVideo?.syncHelper.stop()
             delete this.startTime
             await super.stop()
 
@@ -418,7 +418,7 @@ export class RLVDisplayService extends RouteDisplayService {
         if ( this.currentRoute?.description?.hasGpx && !this.currentRoute?.points?.length) {
             state = 'Start:Failed'
             const errMessage = 'Invalid route (GPX missing)'
-            if (!this.currentVideo.error) {
+            if (!this.currentVideo?.error) {
                 this.logError( new Error(errMessage), 'getVideoState',{route:this.currentVideo.route})
             }
             this.currentVideo.error = errMessage
@@ -438,7 +438,7 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
     protected getVideoLoadProgress() {
-        return {loaded:this.currentVideo?.loaded, bufferTime:this.currentVideo.bufferTime}
+        return {loaded:this.currentVideo?.loaded, bufferTime:this.currentVideo?.bufferTime}
     }
 
     protected onConvertUpdate(progress:number, frames:number, time:number) {
@@ -529,7 +529,7 @@ export class RLVDisplayService extends RouteDisplayService {
     protected onVideoEnded(video:VideoState = this.currentVideo) { 
         video.syncHelper.onVideoEnded()
 
-        if (this.currentVideo.next) {
+        if (this.currentVideo?.next) {
             this.onNextVideo()
         }
     }
@@ -541,7 +541,7 @@ export class RLVDisplayService extends RouteDisplayService {
         const {routeDistance,speed} = activityPos
 
         if (!this.isVideoPaused) {
-            this.currentVideo.syncHelper.onActivityUpdate(routeDistance-offset,speed)
+            this.currentVideo?.syncHelper.onActivityUpdate(routeDistance-offset,speed)
         }
     }
 
@@ -579,20 +579,23 @@ export class RLVDisplayService extends RouteDisplayService {
         const src = this.getVideoUrl(video)
         const remote = src?.startsWith('http')
 
-        switch (error.code) {
-            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-                if (error.message.includes('Format error'))
+        try {
+            switch (error.code) {
+                case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                    if (error.message.includes('Format error'))
+                        return remote ? 'Could not load video' : 'Could not open video file' ;
+                    return 'Could not decode video'
+
+                case MediaError.MEDIA_ERR_NETWORK:
                     return remote ? 'Could not load video' : 'Could not open video file' ;
-                return 'Could not decode video'
+                case MediaError.MEDIA_ERR_ABORTED:
+                    return 'The playback was canceled'
+                case MediaError.MEDIA_ERR_DECODE:
+                    return 'Could not decode video'
 
-            case MediaError.MEDIA_ERR_NETWORK:
-                return remote ? 'Could not load video' : 'Could not open video file' ;
-            case MediaError.MEDIA_ERR_ABORTED:
-                return 'The playback was canceled'
-            case MediaError.MEDIA_ERR_DECODE:
-                return 'Could not decode video'
-
+            }
         }
+        catch {}
         return error.message    
     }
 
@@ -665,11 +668,11 @@ export class RLVDisplayService extends RouteDisplayService {
             let distance = startPos
             if (startPos=== undefined) {
                 distance = this.isLoopEnabled() ? lapDistance : routeDistance-(this.offset??0)
-                if (distance>this.currentVideo.route.details.distance) {
+                if (distance>this.currentVideo?.route.details.distance) {
                     distance = 0
                 }
             }
-            const routeId = this.currentVideo.route.description.id
+            const routeId = this.currentVideo?.route.description.id
 
             this.getUserSettings().set(`routeSelection.video.prevSetting.${routeId}.startPos`,distance)
 

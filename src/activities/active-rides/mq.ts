@@ -44,11 +44,10 @@ export class ActiveRideListMessageQueue extends IncyclistService{
             if (existing.subscribed)
                 return
         }
-
-
-        this.getMessageQueue().subscribe(topic)
         if (!existing)
             this.subscribed.push( {topic,filter,handler})
+
+        this.getMessageQueue().subscribe(topic)
     }
 
     unsubscribe(topic:string) {
@@ -114,9 +113,13 @@ export class ActiveRideListMessageQueue extends IncyclistService{
 
 
     protected onTopicSubscribed(topic:string) {
-        const existing = this.subscribed.find( s=>s.topic===topic)
-
-        existing.subscribed = true
+        const subscribed = this.subscribed??[]
+        const existing = subscribed.find( s=>s.topic===topic)
+        if (existing)
+            existing.subscribed = true
+        else {
+            this.logEvent( { message: 'Warning: subscribe confirmation received but no existing record', topic, subscribed:subscribed.map(s=>s.topic).join('') })      
+        }
         this.logEvent( { message: 'Subscribed to topic', topic })
     }
 

@@ -3,14 +3,13 @@ import { Injectable, Singleton } from '../../base/decorators'
 import { IncyclistPageService } from '../../base/pages'
 import { useDevicePairing } from '../pairing'
 
-import type { CapabilityDisplayProps, DeviceListDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability, TInterface } from '../../types'
-import type { CapabilityData, DevicePairingData, InternalPairingState, PairingState} from '../pairing'
+import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability, TInterface } from '../../types'
+import type { CapabilityData, DevicePairingData, InternalPairingState } from '../pairing'
 import { PairingPageStateMachine } from './statemachine'
 import { PageLogObserver } from './logobserver'
 import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../access'
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../configuration'
-import { getBindings } from '../../api'
 import { useIncyclist } from '../../ui'
 import { Observer } from '../../base/types'
 
@@ -25,16 +24,18 @@ export class DevicesPageService extends IncyclistPageService {
     protected openedCapability: IncyclistCapability|undefined
     protected openedInterfaceSettings!: TInterface
     protected interfaceSettingsObserver: Observer|undefined
+    protected isPairingForRide: boolean = false
 
     constructor() {
-        super('Pairing')
+        super('pairing')
         this.stateMachine = new PairingPageStateMachine()
         this.logObserver = new PageLogObserver('Pairing')
     }
 
-    openPage():IObserver {
+    openPage(forRide?:boolean):IObserver {
         try {
-            this.logEvent({message:'page shown', page:'Pairing'})
+            this.logEvent({message:'page shown', page:'Pairing', forRide})
+            this.isPairingForRide = forRide??false
 
             EventLogger.setGlobalConfig('page','Pairing')
             super.openPage()
@@ -69,6 +70,7 @@ export class DevicesPageService extends IncyclistPageService {
         try {
             this.logEvent({message:'page closed', page:'Pairing'})        
             EventLogger.setGlobalConfig('page',null)
+            this.isPairingForRide =false
             super.closePage()
             this.stop()
             this.stateMachine.stop()
@@ -408,7 +410,19 @@ export class DevicesPageService extends IncyclistPageService {
         this.getDevicePairing().setReadyToStart()
         this.getAppState().setState('paired',true)
         
-        this.moveTo('/rideDeviceOK')
+        const prevContentPage = this.getPrevContentPage()
+        const prevPage = this.getAppState().getState('prevPage')
+        if (!prevPage) { // we just launched, go to content selection page
+            this.moveTo(prevContentPage)
+        }
+        else { // we were called from somewhere
+            if (this.isPairingForRide)
+                this.moveTo('/rideDeviceOK')
+            else 
+                this.moveTo(prevContentPage)
+
+        }
+
     }
 
     protected onSimulate():void {
@@ -416,26 +430,19 @@ export class DevicesPageService extends IncyclistPageService {
         const simulator = this.getDeviceConfiguration().getSimulatorAdapterId()
         this.getDevicePairing().prepareStart([simulator])
 
-        this.moveTo('/rideSimulate')
+        const prevContentPage = this.getPrevContentPage()
+        const prevPage = this.getAppState().getState('prevPage')
+
+        if (this.isPairingForRide)
+            this.moveTo('/rideSimulate')
+        else 
+            this.moveTo(prevContentPage)
     }
 
     protected onCancel():void {
         
         const nextPage = this.getAppState().getState('prevPage')
         this.moveTo(`/${nextPage}`)
-    }
-
-
-    protected moveTo( route:string, close:boolean=true) {
-        if (!this.getUIBinding()) {
-            console.log('# navigate to ',route)
-        }
-            
-
-        this.getUIBinding().openPage(route)
-        if (close) {
-            this.closePage()
-        }
     }
 
 
@@ -455,9 +462,6 @@ export class DevicesPageService extends IncyclistPageService {
         return this.getDevicePairing().getState()
     }
 
-    protected getUIBinding() {
-        return this.getBindings().ui
-    }
 
 
     @Injectable
@@ -470,11 +474,6 @@ export class DevicesPageService extends IncyclistPageService {
         return useDeviceConfiguration()
     }
 
-    @Injectable 
-    protected getBindings() {
-        return getBindings()
-
-    }
 
     @Injectable
     protected getIncyclist() {

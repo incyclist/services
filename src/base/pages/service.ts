@@ -5,6 +5,7 @@ import type { IPageService } from "./types";
 import { Injectable } from "../decorators";
 import { useAppState } from "../../appstate";
 import { IObserver } from "../typedefs";
+import { getBindings } from "../../api";
 
 export class IncyclistPageService extends IncyclistService implements IPageService {
 
@@ -63,6 +64,37 @@ export class IncyclistPageService extends IncyclistService implements IPageServi
         }
 
     }
+
+    protected getPrevContentPage():string {
+        const contentPage = this.getAppState().getPersistedState('page')
+        return contentPage ?? 'routes'
+    }
+
+    protected moveTo( route:string, close:boolean=true) {
+
+        if (route==='$contentPage') {
+            const prevContentPage = this.getPrevContentPage()
+            this.getUIBinding().openPage(prevContentPage)
+        }
+        else {
+            this.getUIBinding().openPage(route)
+        }
+
+        if (close) {
+            this.closePage()
+        }
+    }
+
+    protected getUIBinding() {
+        return this.getBindings().ui
+    }
+
+    @Injectable 
+    protected getBindings() {
+        return getBindings()
+
+    }
+
 
     @Injectable
     protected getAppState() {
