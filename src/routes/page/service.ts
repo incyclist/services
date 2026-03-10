@@ -37,7 +37,6 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     openPage(): IObserver {
 
         this.logEvent({message:'page shown', page:'Routes'})
-        console.log( new Date().toISOString(), '# route page opened' )
         EventLogger.setGlobalConfig('page','Routes')
 
         super.openPage()
@@ -160,6 +159,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         if (this.importObserver)
             this.importObserver.stop()
 
+        this.serviceState = this.getRouteList().search()
         this.importObserver = undefined
         this.importProps = undefined
         this.showImportDialog = false
@@ -167,8 +167,6 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     getImportDisplayProps(): RouteImportDialogDisplayProps {
-        console.log( '# [PageService] getImportDisplayProps',this.importProps)
-
         return this.importProps
     }
 
@@ -241,15 +239,11 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         
         const route = this.getRouteList().getSelected()
 
-        console.log('# [RoutePage] onSelecetStateUpdate',route?.description?.id)
         this.detailRouteId = null
         this.updatePageDisplay()
     }
 
     protected prepareSingleImport(file:FileInfo) {
-
-        console.log( '# [PageService] import',file)
-
         const observer = new Observer();
         const props:RouteImportDisplayProps = {
             id: v4(),

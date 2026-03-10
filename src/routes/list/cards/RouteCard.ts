@@ -21,6 +21,7 @@ import { checkIsNew } from "../utils";
 import { useOnlineStatusMonitoring } from "../../../monitoring";
 import { distanceBetween } from "../../../utils/geo";
 import { getUnitConversionShortcuts, Unit } from "../../../i18n";
+import { Injectable } from "../../../base/decorators";
 
 
 export const DEFAULT_TITLE = 'Import Route';
@@ -377,18 +378,30 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
 
         const workouts = getWorkoutList()
-        const isOnline = useOnlineStatusMonitoring().onlineStatus
+        const isOnline = this.getOnlineStatusMonitoring().onlineStatus
         let canStart = this.canStart( {isOnline})
         const descr  = this.getRouteDescription()
 
         let videoMissing;
         let videoChecking = false
 
-        if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) ) {            
-            canStart = false            
-            videoChecking = true
-            videoMissing = this.isVideoMissing()
+        if (this.isMobile() ) {
+
+            // TODO:  final solution
+
+            // temporary fix as long we haven't implemented a local 
+            canStart = canStart && (descr?.isLocal || (!descr.requiresDownload ||descr?.isDownloaded))
+
         }
+        else {
+            if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) ) {            
+                canStart = false            
+                videoChecking = true
+                videoMissing = this.isVideoMissing()
+            }
+
+        }
+        
 
         if (descr?.hasVideo && !descr.videoUrl) {
             const details = this.getRouteData()
@@ -1096,6 +1109,28 @@ export class RouteCard extends BaseCard implements Card<Route> {
             }
 
         }
+    }
+
+        
+    protected isMobile():boolean {
+        const {appInfo} = this.getBindings()
+
+        // istanbul ignore next
+        if (!appInfo) {
+            return false
+        }
+        const channel = appInfo.getChannel()
+        return channel==='mobile'
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
+    }
+
+    @Injectable
+    protected getOnlineStatusMonitoring() {
+        return useOnlineStatusMonitoring()
     }
 
 }

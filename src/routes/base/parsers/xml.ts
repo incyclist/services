@@ -204,7 +204,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
         
         let file,url
-        if (filePath.startsWith('http:')|| filePath.startsWith('file:') || filePath.startsWith('video:')) {
+        if (filePath.startsWith('http')|| filePath.startsWith('file:') || filePath.startsWith('video:')) {
             url = filePath            
         }
         else {
