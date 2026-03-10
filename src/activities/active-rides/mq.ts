@@ -47,16 +47,18 @@ export class ActiveRideListMessageQueue extends IncyclistService{
         if (!existing)
             this.subscribed.push( {topic,filter,handler})
 
-        this.getMessageQueue().subscribe(topic)
+        this.getMessageQueue()?.subscribe(topic)
     }
 
     unsubscribe(topic:string) {
         const mq = this.getMessageQueue();
-        if (!mq?.enabled())
+        if (!mq || !mq?.enabled())
             return
-        const s = this.subscribed.find( s=>s.topic===topic)
+        const subscribed = this.subscribed??[]
+
+        const s = subscribed.find( s=>s.topic===topic)
         mq.unsubscribe(s.topic)
-        this.subscribed.splice( this.subscribed.indexOf(s), 1)
+        subscribed.splice( subscribed.indexOf(s), 1)
 
     }
 
@@ -75,7 +77,7 @@ export class ActiveRideListMessageQueue extends IncyclistService{
 
     sendMessage(topic, payload) {
         const mq = this.getMessageQueue();
-        if (!mq?.enabled())
+        if (!mq || !mq?.enabled())
             return
 
         try {
@@ -96,6 +98,9 @@ export class ActiveRideListMessageQueue extends IncyclistService{
             return
 
         const mq = this.getMessageQueue();
+        if (!mq)
+            return;
+
         mq.on('mq-subscribed',this.onTopicSubscribedHandler)
         mq.on('mq-message',this.onTopicMessageHandler)
         this.subscribeEnabled = true
@@ -105,6 +110,8 @@ export class ActiveRideListMessageQueue extends IncyclistService{
         if (!this.subscribeEnabled)
             return
         const mq = this.getMessageQueue();
+        if (!mq)
+            return
         mq.off('mq-subscribed',this.onTopicSubscribedHandler)
         mq.off('mq-message',this.onTopicMessageHandler)
         this.subscribeEnabled = false

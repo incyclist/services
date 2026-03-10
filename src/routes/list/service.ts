@@ -649,6 +649,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                         this.preloadObserver?.stop()
                         process.nextTick( ()=>{delete this.preloadObserver})
                     })
+                    .finally(()=>{
+                        this.emit('load-done')
+                    })
             }
     
     

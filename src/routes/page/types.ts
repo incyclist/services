@@ -13,7 +13,7 @@ export interface RoutePageDisplayProps  {
     showImport?: boolean        // defines if the UI should render an Import button (always false for now)
     filters: SearchFilter;
     filterVisible: boolean;
-    filterOptions: SearchFilterOptions
+    filterOptions?: SearchFilterOptions
     routes?: Array<RouteItemProps>
     detailRouteId?: string    
     showImportDialog?: boolean

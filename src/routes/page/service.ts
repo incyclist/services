@@ -35,150 +35,246 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     openPage(): IObserver {
-
-        this.logEvent({message:'page shown', page:'Routes'})
-        EventLogger.setGlobalConfig('page','Routes')
-
-        super.openPage()
-
         try {
-            const service = useRouteList()
-            const filters = this.getSearchFilters()
+            this.logEvent({message:'page shown', page:'Routes'})
+            EventLogger.setGlobalConfig('page','Routes')
 
-            this.serviceState = service.search(filters)
-            if (this.serviceState.observer) {
-                this.startEventListener()
+            super.openPage()
+
+            try {
+                const service = useRouteList()
+                const filters = this.getSearchFilters()
+
+                const start = ()=> {
+                    this.serviceState = service.search(filters)
+                    if (this.serviceState.observer) {
+                        this.startEventListener()
+                    }
+                }
+
+                if (service.isStillLoading()) {                    
+                    service.once('load-done',()=> {
+                        start()
+                        sleep(5).then( ()=>{
+                            this.updatePageDisplay()
+                        })
+                      
+                    })
+                }
+                else {
+                    start()
+                }
+                
+
             }
-        }
+            catch(err) {
+                this.logError(err,'openPage')
+            }
+            return this.getPageObserver()
+        }   
         catch(err) {
             this.logError(err,'openPage')
-        }
-        return this.getPageObserver()
 
+        }
     }
     closePage(): void {
-        EventLogger.setGlobalConfig('page',null)
-        this.logEvent({message:'page closed', page:'Routes'})        
+        try {
+            EventLogger.setGlobalConfig('page',null)
+            this.logEvent({message:'page closed', page:'Routes'})        
 
-        super.closePage()
+            super.closePage()
+        }
+        catch(err) {
+            this.logError(err,'closePage')
+        }
     }
     pausePage(): Promise<void> {
-        this.stopEventListener()
-        return super.pausePage()
+        try {
+            this.stopEventListener()
+            return super.pausePage()
+        }
+        catch(err) {
+            this.logError(err,'pausePage')
+        }
     }
 
     resumePage(): Promise<void>  {
-        this.startEventListener()
-        return super.resumePage()
+        try {
+            this.startEventListener()
+            return super.resumePage()
+        }
+        catch(err) {
+            this.logError(err,'resumePage')
+        }
     }
 
     getPageDisplayProps():RoutePageDisplayProps {
-        const service = this.getRouteList()
+        try {
+            const service = this.getRouteList()
 
-        const displayType = service.getDisplayType()
-        const showImport = false // TODO
-        const synchronizing = false // TODO
-        const loading = this.serviceState===undefined || service.isStillLoading()
-        const routes = this.getRoutesDisplayProps()
+            const loading = this.serviceState===undefined || service.isStillLoading()
+            const displayType = service.getDisplayType()
+            const filterVisible = this.getUserSettings().getValue('preferences.search.filterVisible',false);
+            const filters = service.getFilters()
 
-        const filterOptions = service.getFilterOptions()
-        
-        const detailRouteId = this.detailRouteId
-        const filterVisible = this.getUserSettings().getValue('preferences.search.filterVisible',false);
-        const filters = service.getFilters()
-        
-        return {loading,synchronizing, routes,displayType,
-                filters,filterVisible, filterOptions,
-                detailRouteId, showImportDialog:this.showImportDialog}
-        
+            if (loading) {
+                return {loading,synchronizing:false, routes:[],displayType,
+                        filters,filterVisible, showImportDialog:false}
+            }
+            else {
+                const showImport = false // TODO
+                const synchronizing = false // TODO
+                
+                const routes = this.getRoutesDisplayProps()
+
+                const filterOptions = service.getFilterOptions()
+                
+                const detailRouteId = this.detailRouteId
+                
+                return {loading,synchronizing, routes,displayType,
+                        filters,filterVisible, filterOptions,
+                        detailRouteId, showImportDialog:this.showImportDialog}
+
+            }
+        }        
+        catch(err) {
+            this.logError(err,'getPageDisplayProps')
+            return {} as RoutePageDisplayProps
+        }
     }
 
 
     onFilterChanged( filters:SearchFilter ) {
-        this.serviceState = this.getRouteList().search(filters)
+        try {
+            this.serviceState = this.getRouteList().search(filters)
 
-        this.updatePageDisplay()
+            this.updatePageDisplay()
+        }
+        catch(err) {
+            this.logError(err,'onFilterChanged')
+        }
     }
 
     onFilterVisibleChange(visible:boolean) {
-        this.getUserSettings().set('preferences.search.filterVisible',visible);
+        try {
+            this.getUserSettings().set('preferences.search.filterVisible',visible);
+        }
+        catch(err) {
+            this.logError(err,'onFilterVisibleChange')
+        }
     }
 
     onImportClicked():void {
-        this.showImportDialog = true;
-        this.updatePageDisplay()
+        try {
+            this.showImportDialog = true;
+            this.updatePageDisplay()
+        }
+        catch(err) {
+            this.logError(err,'onImportClicked')
+        }
     }
 
     onSelect(id:string):void {
-        this.detailRouteId = id;
-        this.updatePageDisplay()
+        try {
+            this.detailRouteId = id;
+            this.updatePageDisplay()
+        }
+        catch(err) {
+            this.logError(err,'onSelect')
+        }
     }
 
     onDelete(id:string):void {
-        const service = this.getRouteList()
-        const card = service.getCard(id)
-        if (card)
-            card.delete()
+        try {
+            const service = this.getRouteList()
+            const card = service.getCard(id)
+            if (card)
+                card.delete()
+        }
+        catch(err) {
+            this.logError(err,'onDelete')
+        }
     }
 
     start() {
-        const service = this.getRouteList()
-        const pairing = this.getDevicePairing()
-        
-        
-        const {id,title,videoUrl} = service.getStartSettings()??{} as any
-        this.logEvent( {message:'Attempting to start a ride',id,title,videoUrl,readyToStart:pairing.isReadyToStart(), } )
-        
-        service.close()       
-        const next =  pairing.isReadyToStart() ? '/rideDeviceOK'  : '/pairingStart' 
-        this.moveTo(next)
+        try {
+            const service = this.getRouteList()
+            const pairing = this.getDevicePairing()
+            
+            
+            const {id,title,videoUrl} = service.getStartSettings()??{} as any
+            this.logEvent( {message:'Attempting to start a ride',id,title,videoUrl,readyToStart:pairing.isReadyToStart(), } )
+            
+            service.close()       
+            const next =  pairing.isReadyToStart() ? '/rideDeviceOK'  : '/pairingStart' 
+            this.moveTo(next)
+        }
+        catch(err) {
+            this.logError(err,'start')
+        }
 
     }
 
     startImport(info:FileInfo|Array<FileInfo>): IObserver {
-        if (this.importObserver)
-            return this.importObserver;
+        try {
+            if (this.importObserver)
+                return this.importObserver;
 
 
-        this.importObserver = new Observer()
+            this.importObserver = new Observer()
 
-        const imports: Array<FileInfo> = Array.isArray(info) ? info : [info]
-        this.importProps  = this.importProps ?? []
+            const imports: Array<FileInfo> = Array.isArray(info) ? info : [info]
+            this.importProps  = this.importProps ?? []
 
-        imports.forEach ( (i:FileInfo) => { 
-            this.prepareSingleImport(i)
-        })
+            imports.forEach ( (i:FileInfo) => { 
+                this.prepareSingleImport(i)
+            })
 
 
 
-        return this.importObserver
+            return this.importObserver
+        }
+        catch(err) {
+            this.logError(err,'start')
+        }
 
     }
 
     onImportClosed(): void  {
-        if (this.importObserver)
-            this.importObserver.stop()
+        try {
+            if (this.importObserver)
+                this.importObserver.stop()
 
-        this.serviceState = this.getRouteList().search()
-        this.importObserver = undefined
-        this.importProps = undefined
-        this.showImportDialog = false
-        this.updatePageDisplay()
+            this.serviceState = this.getRouteList().search()
+            this.importObserver = undefined
+            this.importProps = undefined
+            this.showImportDialog = false
+            this.updatePageDisplay()
+        }
+        catch(err) {
+            this.logError(err,'onImportClosed')
+        }
     }
 
     getImportDisplayProps(): RouteImportDialogDisplayProps {
-        return this.importProps
+        try {
+            return this.importProps
+        }
+        catch(err) {
+            this.logError(err,'getImportDisplayProps')
+        }
+
     }
 
 
 
 
     protected updatePageDisplay() {
-        this.getPageObserver().emit('page-update')
+        this.getPageObserver()?.emit('page-update')
     }
 
     protected getRoutesDisplayProps():Array<RouteItemProps> {
-        const {routes} = this.serviceState
+        const {routes} = this.serviceState??{}
 
         const getRouteProps = (routeProps:SummaryCardDisplayProps) => {
             return {

@@ -736,10 +736,10 @@ export class ActiveRidesService extends IncyclistService {
         const hash = this.current?.ride.routeHash
         const session = this.current?.sessionId
         const updateTopic = `incyclist/activity/+/${hash}/+`
-        this.getMessageQueue().subscribe(updateTopic,this.onActivityEvent.bind(this), 'incyclist/activity')
+        this.getMessageQueue()?.subscribe(updateTopic,this.onActivityEvent.bind(this), 'incyclist/activity')
 
         const infoTopic = `incyclist/session/${session}/info`
-        this.getMessageQueue().subscribe(infoTopic,this.onInfoEvent.bind(this), 'incyclist/session')
+        this.getMessageQueue()?.subscribe(infoTopic,this.onInfoEvent.bind(this), 'incyclist/session')
 
         this.isSubscribed = true
     }

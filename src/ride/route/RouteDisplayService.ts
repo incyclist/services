@@ -53,7 +53,7 @@ export class RouteDisplayService extends RideModeService {
     getDeviceStartSettings() {
         const startSettings:RouteSettings = this.getRouteList().getStartSettings() as RouteSettings
         const route = this.getRouteList().getSelected() 
-        const {realityFactor,startPos} = startSettings
+        const {realityFactor=100,startPos=0} = startSettings
 
         return {realityFactor,startPos,route}
     }
@@ -276,6 +276,9 @@ export class RouteDisplayService extends RideModeService {
         const prev = this._startSettings
 
         this._startSettings = this.getRouteList().getStartSettings() as RouteSettings ?? prev
+
+        this._startSettings.startPos = this._startSettings.startPos??0
+        this._startSettings.realityFactor = this._startSettings.realityFactor??100
 
         return this._startSettings
     }

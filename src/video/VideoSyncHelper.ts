@@ -291,7 +291,7 @@ export class VideoSyncHelper extends IncyclistService{
         // rate was requested might have caused the waiting event (too fast)
         if (this.rlvStatus.rateRequested) {
             if (this.rlvStatus.rateRequested>this.maxSuccessRate) { // we are beyond the fastest confirmed playback rate
-                this.maxRate = this.maxSuccessRate    
+                this.maxRate = Math.max(this.maxSuccessRate,0.5)
             }
             else {  // we are less or equal the fastest confirmed playback rate
                 // reduce maximum allowed rate for next updates
@@ -510,6 +510,12 @@ export class VideoSyncHelper extends IncyclistService{
         else {
             rate = Math.max(0, Math.min(requested, this.maxRate))
         }
+
+        if (rate===this.rlvStatus.rate)
+            return;
+
+        if (!!this.rlvStatus.rateRequested && rate===this.rlvStatus.rateRequested)
+            return
 
         this.logEvent({message:'video rate update requested', rate:Math.round(rate*100)/100})
         
