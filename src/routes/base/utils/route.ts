@@ -384,7 +384,6 @@ export const getTotalDistance = (route:RouteApiDetail):number =>{
 }
 
 export const getRouteHash = (route:RouteApiDetail):string => {
-    console.log('# getRouteHash', 'crypto binding:',getCryptoBinding())
     const cryptoImpl = getCryptoBinding()??require('crypto')
 
 

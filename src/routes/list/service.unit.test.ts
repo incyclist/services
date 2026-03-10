@@ -16,8 +16,6 @@ import { ParseResult, RouteInfo } from "../base/types";
 import { Observer } from "../../base/types/observer";
 import { useUserSettings } from "../../settings";
 import { Card } from "../../base/cardlist";
-import { waitNextTick } from "../../utils";
-import { sleep } from "../../utils/sleep";
 import { Inject } from "../../base/decorators";
 
 let cnt = 0
@@ -109,7 +107,8 @@ const prepareMock = ( database, props) => {
     }
 
     getBindings().appInfo = {
-        getAppDir:jest.fn().mockReturnValue(os.tmpdir())
+        getAppDir:jest.fn().mockReturnValue(os.tmpdir()),
+        getChannel: jest.fn().mockReturnValue('desktop')
     } as unknown as IAppInfo
     return service
 }

@@ -88,8 +88,9 @@ describe('RoutesApiLoader',()=>{
 
             const run1 = await run()
 
+
             expect(run1.routes.length).toBe(34)
-            expect(run1.updated).toBe(0) 
+            expect(run1.updated).toBe(34) 
             expect(service.save).toHaveBeenCalledTimes(34)
 
             

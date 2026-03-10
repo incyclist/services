@@ -214,7 +214,12 @@ export class DevicesPageService extends IncyclistPageService {
     enableInterface( i?:TInterface) {}
     disableInterface( i?:TInterface) {}
     reconnectInterface( i?:TInterface) {}
-    refreshInterface( i?:TInterface) {}
+
+    refreshInterface( i?:TInterface) {
+        
+    }
+
+
     closeInterfaceSettings() {
         this.openedInterfaceSettings = undefined
         this.interfaceSettingsObserver?.stop()

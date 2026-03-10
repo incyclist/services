@@ -7,7 +7,7 @@ import { RouteInfo } from "../../base/types";
 import { addDetails } from "../../base/utils/route";
 import { RoutesDbLoader } from "./db";
 import { Loader,LoadDetailsTargets } from "./types";
-import { waitNextTick } from "../../../utils";
+import { sleep } from "../../../utils/sleep";
 
 const valid = (v) => (v!==undefined && v!==null)
 
@@ -86,12 +86,15 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             }
             
         }
-        if (loadDetailRequired.length>0)
+        this.loadObserver.emit('loaded')
+
+        if (loadDetailRequired.length>0) {            
             await this.loadDetails(loadDetailRequired,true)
+        }
 
         this.loadObserver.emit('done')
 
-        await waitNextTick()        
+        await sleep(1)        
         this.loadObserver.stop()
         delete this.loadObserver        
         
@@ -146,10 +149,13 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         }
 
         if (!existing) {
-            if (isComplete)
-                this.emitRouteAdded(route)
-            else 
-                items.push({route,added:true})
+            this.emitRouteAdded(route)
+            items.push({route,added:true})
+            if (isComplete) { 
+                this.save(route,false)
+            }    
+             
+                
         }
         else {
             this.save(route,true)
@@ -159,6 +165,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     }
 
     stopLoad() {
+        this.loadObserver?.stop()
         delete this.loadObserver
     }
 
@@ -245,7 +252,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         for (const element of success) {
             const item = element
 //        success.forEach(item => {
-            this.emitRouteEvents(!item.added,item.route)
+            this.emitRouteEvents(item.added===true,item.route)
 
 
             await this.verifyCountry(item.route);

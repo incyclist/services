@@ -35,6 +35,8 @@ import { IObserver } from "../../types";
 
 
 const SYNC_INTERVAL = 5* 60*1000
+const PRELOAD_DESKTOP = 20
+const PRELOAD_MOBILE = 10
 
 @Singleton
 export class RouteListService  extends IncyclistService implements IRouteList {
@@ -337,7 +339,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const units = this.getUnitConverter().getDefaultUnits()
 
             if (!filters) {                
-                return {routes,filters,observer:this.observer,units}
+                const cards = routes.map( r => this.getCard(r.id))
+                return {routes,cards,filters,observer:this.observer,units}
             }
 
 
@@ -629,6 +632,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * @emits loaded    loading has been completed, provides lists as parameter
      */
     preload():PromiseObserver<void> {
+
+        if (this.preloadObserver) {
+            return this.preloadObserver
+        }
+
         try {
             this.logEvent( {message:'preload route list'})
             if (!this.isStillLoading()) {
@@ -641,16 +649,19 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                         
                         this.logEvent( {message:'preload route list completed'})
                         this.updateRepoStats()
-                        this.emitLists('loaded',{log:true})
-                        process.nextTick( ()=>{delete this.preloadObserver})
+                        sleep(0).then ( ()=>{
+                            delete this.preloadObserver
+                            this.emit('load-done')
+                            this.emitLists('loaded',{log:true})
+                        })
                     })
                     .catch( (err)=> {
                         this.logError(err,'preload')
                         this.preloadObserver?.stop()
-                        process.nextTick( ()=>{delete this.preloadObserver})
-                    })
-                    .finally(()=>{
-                        this.emit('load-done')
+                        sleep(0).then( ()=>{
+                            delete this.preloadObserver
+                            this.emit('load-done')
+                        })
                     })
             }
     
@@ -659,7 +670,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         catch(err) {
             this.logError(err,'preload')
             this.preloadObserver?.stop()
-            process.nextTick( ()=>{delete this.preloadObserver})
+            sleep(0).then( ()=>{delete this.preloadObserver})
         }
         return this.preloadObserver
     }
@@ -1014,8 +1025,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected addRoute(route:Route,source:'user'|'system'='system'):void {
 
         this.routes.push(route)
-        if (route.description?.isDeleted)
+        if (route.description?.isDeleted) {
             return;
+        }
 
         if (!route.description?.isDeleted) {
             if (source==='user') {
@@ -1068,7 +1080,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected async loadRoutes():Promise<void> {
         await this.loadRoutesFromRepo()
         await this.checkUIUpdateWithNoRepoStats();
-
         await this.loadRoutesFromApi()
 
         
@@ -1102,9 +1113,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             }) 
 
         }
+
+        const maxPreload = this.isMobile() ? PRELOAD_MOBILE : PRELOAD_DESKTOP
         
         cards.forEach( card => {
-            if (!card || promises.length>19)
+            if (!card || promises.length>maxPreload)
                 return;
             
             if (!card.getRouteData() ) {
@@ -1276,6 +1289,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             observer.on('route.added',add)
             observer.on('route.updated',update)
+            observer.on('loaded',done)
             observer.on('done',done)
     
         })
@@ -1654,6 +1668,18 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      
     }
 
+    protected isMobile():boolean {
+        const {appInfo} = this.getBindings()
+
+        // istanbul ignore next
+        if (!appInfo) {
+            return false
+        }
+        const channel = appInfo?.getChannel()
+        return channel==='mobile'
+    }
+
+
     @Injectable
     protected getUserSettings () {
         return useUserSettings()
@@ -1670,12 +1696,19 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
 
-    @Injectable getAppsService() {
+    @Injectable 
+    protected getAppsService() {
         return useAppsService()
     }
 
-    @Injectable getUnitConverter() {
+    @Injectable 
+    protected getUnitConverter() {
         return useUnitConverter()
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 
     reset() {

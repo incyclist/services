@@ -50,14 +50,15 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
                     if (this.serviceState.observer) {
                         this.startEventListener()
                     }
+                    sleep(5).then( ()=>{
+                            this.updatePageDisplay()
+                    })
+
                 }
 
                 if (service.isStillLoading()) {                    
                     service.once('load-done',()=> {
                         start()
-                        sleep(5).then( ()=>{
-                            this.updatePageDisplay()
-                        })
                       
                     })
                 }
