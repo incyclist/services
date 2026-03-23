@@ -1,4 +1,7 @@
-import { ICyclingMode,IncyclistDeviceAdapter  } from "incyclist-devices";
+import { IncyclistDeviceAdapter  } from "incyclist-devices";
+
+import type { ICyclingMode,CyclingModeProperty,CyclingModeProperyType,Settings  } from "incyclist-devices";
+
 import { ExtendedIncyclistCapability } from "../app";
 
 export interface AdapterInfo {
@@ -17,3 +20,5 @@ export interface DeviceModeInfo {
     settings: any
     options?: ICyclingMode[]
 }
+
+export type {ICyclingMode,CyclingModeProperty,CyclingModeProperyType,Settings }
