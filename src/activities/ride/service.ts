@@ -26,6 +26,8 @@ import { buildSummary } from "../base/utils";
 import { Injectable } from "../../base/decorators";
 import { useUnitConverter } from "../../i18n";
 import { createUIActivityDetails } from "../list/utils";
+import { sleep } from "../../utils/sleep";
+import { EventEmitter } from "node:events";
 
 const SAVE_INTERVAL = 5000;
 
@@ -656,7 +658,23 @@ export class ActivityRideService extends IncyclistService {
         }
 
         const run = async():Promise<boolean> => {
+
+            let cntCompleted = 0;
             let success = false;
+            const localEmitter = new EventEmitter()
+
+            const incCompleted = ()=> {
+                cntCompleted++;
+                if (cntCompleted>=2) {
+                    localEmitter.emit('completed')
+                }
+            }
+
+            localEmitter.once('completed',()=> {
+                sleep(0).then( ()=> { 
+                    delete this.saveObserver
+                })
+            })
 
             try {
                 emit('start',success)
@@ -668,13 +686,18 @@ export class ActivityRideService extends IncyclistService {
 
                 let uploadSuccess =false;
                 let convertSuccess= await  this.convert('TCX')
+                incCompleted()
 
                 if (convertSuccess) {
                     format = 'TCX'
+                    
                     this.convert('FIT')
+                        .then(incCompleted)
+                        .catch(incCompleted)
                 }
                 else {
                     convertSuccess= await this.convert('FIT')
+                    cntCompleted++;
                     if (convertSuccess)
                         format = 'FIT'
                 }
@@ -688,16 +711,11 @@ export class ActivityRideService extends IncyclistService {
 
             }
             catch {
-    
+                cntCompleted++;
                 success = false
             }
 
             emit('done',success)
-            waitNextTick().then( ()=> { 
-                
-                delete this.saveObserver
-            })
-
             return success
         }
 
@@ -1161,6 +1179,22 @@ export class ActivityRideService extends IncyclistService {
 
     }
 
+    protected async getTargetFileName(format:string):Promise<string> {
+        let fileName = this.activity.fileName.replace('json',format)
+
+        // mobile binding stores JSON files via mmkv
+        // convert mmkv:/db_activities/<id>.<format> to a real file path
+        if (fileName.startsWith('mmkv:/db_')) {
+            const fs = this.getFileSystemBinding()
+            const appDir = this.getBindings().appInfo.getAppDir()
+            const activitiesDir = this.getBindings().path.join(appDir, 'activities')
+            await fs.ensureDir(activitiesDir)
+            const baseName = fileName.split('/').pop()
+            fileName = this.getBindings().path.join(activitiesDir, baseName)
+        }
+        return fileName
+    }
+
     protected async convert(format:string):Promise<boolean> {
 
         const emit = (event,...args) =>{
@@ -1186,21 +1220,23 @@ export class ActivityRideService extends IncyclistService {
             emit('convert.done',format,true)
 
             if (format.toLowerCase()==='fit') {
-                const fileName = this.activity.fileName.replace('json','fit')
+                const fileName = await this.getTargetFileName('fit')
                 await fs.writeFile(fileName, Buffer.from (data ))   
                 this.activity.fitFileName = fileName
             }
 
             if (format.toLowerCase()==='tcx') {
-                const fileName = this.activity.fileName.replace('json','tcx')
+                const fileName = await this.getTargetFileName('tcx')
                 await fs.writeFile(fileName, Buffer.from (data ))   
                 this.activity.tcxFileName = fileName
             }
             await this._save()
+            emit('save.done',format,true)
 
             return true
         }
         catch(err) {
+            console.log('# convert error', err.message)
             emit('convert.error',format,err)
             return false
         }
@@ -1704,6 +1740,11 @@ export class ActivityRideService extends IncyclistService {
 
     protected getFileSystemBinding() {
         return getBindings().fs        
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 
     protected getUnitConversionShortcuts () {
