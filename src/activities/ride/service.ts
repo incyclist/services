@@ -355,20 +355,21 @@ export class ActivityRideService extends IncyclistService {
     
             const info = this.buildDashboardInfo(currentValues, avgMaxStats, display);
 
-            let showLog = true
+            let showLog = this.state!=='paused'
             // avoid logging if nothing has changed
             try {
                 const infoStr = JSON.stringify(info)
-                showLog = infoStr !== this.current.info
+                showLog = (showLog||this.current.isAutoResume)  && (infoStr !== this.current.info)
                 this.current.info = infoStr
 
             
             }
             catch {}
 
-            if (showLog)
+            if (showLog ) {
+                console.log('# here', this.state)
                 this.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value??''}:${i.data[1]?.value??''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
-                
+            }
 
             return info
     

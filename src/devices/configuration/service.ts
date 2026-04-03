@@ -707,6 +707,11 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.getUserSettings().set('wifiConfirmed',true)
     }
 
+    getEnabledInterfaces():Array<string> {
+        const config = this.settings?.interfaces??[]
+        return config.filter( i=> i?.enabled).map(i => i.name)
+    }
+
     getInterfaceSettings(ifName:string):InterfaceSetting {
         if (!this.settings) this.settings={interfaces:[]}
         if (!this.settings.interfaces) this.settings.interfaces=[]

@@ -311,7 +311,7 @@ export class DeviceAccessService  extends IncyclistService{
 
     }
 
-    protected getInterface( ifaceName:string):IncyclistInterface {
+    getInterface( ifaceName:string):IncyclistInterface {
         const info = this.interfaces[ifaceName] as InterfaceInfoInternal
         return info?.interface
     }

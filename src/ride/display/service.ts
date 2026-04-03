@@ -157,6 +157,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     pause(requester: 'user' | 'device'='user') {
+        console.log('# PAUSE', requester)
         
         try {
             if (this.state!=='Active')
@@ -168,6 +169,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.getCoaches().pauseRide()
             if (requester==='user') {
                 this.getActivityRide().pause(false)
+                this.getDeviceRide().pauseLogging()
             }
             this.getWorkoutRide().pause()   
             this.displayService.pause()  
@@ -195,6 +197,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 this.getActivityRide().resume('user')
                 // This will cause that Activity is still in paused state (autoResume)
                 // but display service is already on active state ( i.e. will close pause dialog)
+                this.getDeviceRide().resumeLogging()
             }
             
 

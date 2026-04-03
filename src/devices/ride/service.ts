@@ -6,7 +6,7 @@ import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
-import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { getRouteList } from "../../routes";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
@@ -52,6 +52,7 @@ export class DeviceRideService  extends IncyclistService{
     protected lastDataInfo: Record<string,number> = {}
     protected reconnectBusy: boolean
     protected prevUpdate: UpdateRequest
+    protected logPaused: boolean = false
 
     constructor() {
         super('DeviceRide')
@@ -103,6 +104,41 @@ export class DeviceRideService  extends IncyclistService{
 
     getData() {
         return this.data
+    }
+
+    pauseLogging() {
+
+        console.log('# PAUSE LOGGING')
+        this.logPaused = true
+        const interfaces = this.getEnabledInterfaces()
+        interfaces.forEach( i => i.pauseLogging())
+
+        this.getAllAdapters()
+            .map(ai=>ai.adapter)
+            .filter(a=>a!==undefined)
+            .forEach( a=> a.pauseLogging())
+            
+    }
+
+    resumeLogging() {
+        console.log('# RESUME LOGGING')
+        this.logPaused = false
+        const interfaces = this.getEnabledInterfaces()
+        interfaces.forEach( i => i.resumeLogging())
+
+        this.getAllAdapters()
+            .map(ai=>ai.adapter)
+            .filter(a=>a!==undefined)
+            .forEach( a=> a.resumeLogging())
+
+    }
+
+    protected getEnabledInterfaces(): Array<IncyclistInterface> {
+        const config = this.getDeviceConfiguration()
+        const access = this.getDeviceAccess()
+
+        const names = config.getEnabledInterfaces()??[]
+        return names.map ( i=> access.getInterface(i)).filter( n=>n!==undefined)
     }
 
     protected getRideAdapters():AdapterRideInfo[] {
@@ -1731,6 +1767,12 @@ export class DeviceRideService  extends IncyclistService{
 
         return useUserSettings().isNewUser()
         
+    }
+
+    logEvent(event: any): void {
+        if (this.logPaused)
+            return
+        super.logEvent(event)
     }
 
     protected cleanInternalCache() {
