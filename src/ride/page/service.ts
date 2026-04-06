@@ -1,10 +1,13 @@
 import { EventLogger } from "gd-eventlog";
-import { Singleton } from "../../base/decorators";
+import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistPageService } from "../../base/pages";
 import { CurrentRideDisplayProps, CurrentRideState, IObserver, RideType, RLVDisplayProps } from "../../types";
-import { AnyRidePageDisplayProps, IRidePageService, RideMenuProps, VideoRidePageDisplayProps } from "./types";
+import { AnyRidePageDisplayProps, IRidePageService, RideMenuProps, StartGateProps, VideoRidePageDisplayProps } from "./types";
 import { useRideDisplay } from "../display";
 import { sleep } from "../../utils/sleep";
+import { ISecretBinding } from "../../api/secret";
+import { getBindings } from "../../api";
+import { useOnlineStatusMonitoring } from "../../monitoring";
 
 const BACKGROUND_PAUSE_TIMEOUT_MS = 60000   
 
@@ -16,6 +19,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     protected backgroundPausedByService: boolean = false
     protected menuProps: RideMenuProps | null = null
     protected isInitialized: boolean = false
+    protected startGateProps: StartGateProps|null =  null
     
 
     constructor()  {
@@ -33,6 +37,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
             await service.init()     
             this.isInitialized = true  
+            
             return service.getRideType()
         }
         catch(err) {
@@ -143,6 +148,17 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     }
 
+    onRefreshSecrets(): void {
+        // Mobile will call initSecrets and then call this method when done.
+        // Dismiss the gate and proceed.
+        this.hideStartgate()
+    }
+
+    onContinueAnyway(): void {
+        this.hideStartgate()
+    }
+
+
     onMenuOpen() {
         try  {
             const state = this.getRideDisplay().getState()
@@ -233,23 +249,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         const rideType = this.getRideDisplay().getRideType()
         const isStarting = state==='Idle' || state==='Starting' || state==='Error' 
 
-        // export interface RidePageDisplayProps {
-        //     rideState:         CurrentRideState
-        //     rideType:          RideType
-        //     startOverlayProps: StartOverlayProps | GPXStartOverlayProps | VideoStartOverlayProps | null
-        //     menuProps:         RideMenuProps | null
-        // }
-
-        // // Video ride -- extends base with video-specific props
-        // export interface VideoRidePageDisplayProps extends RidePageDisplayProps {
-        //     video?:   VideoDisplayProps        // single video
-        //     videos?:  VideoDisplayProps[]      // next-video chain (all loaded, hidden except active)
-        // }
-
 
         const displayProps:VideoRidePageDisplayProps = {
             rideState: state,
             rideType,
+            startGateProps:this.startGateProps,
             startOverlayProps : isStarting ? this.getRideDisplay().getStartOverlayProps() : null,
             menuProps: this.menuProps,
             video:props.video,
@@ -262,6 +266,34 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
         
     }
+
+    protected async checkSecretValidity() {
+        if (this.getBindings().appInfo.getChannel()==='mobile') {
+            const secretsStatus = this.getSecretBinding().getSecretsStatus?.() 
+
+            if (secretsStatus === 'stale' || secretsStatus === 'missing' || secretsStatus===undefined) {
+
+                if (!this.getOnlineStatusMonitoring().onlineStatus)
+                    this.showStartGate()
+            }            
+        }
+    }
+
+
+    protected showStartGate(): void {
+        this.startGateProps = {
+            title: 'Session refresh needed',
+            body: 'Please connect to the internet before starting your ride',
+        }
+        this.updatePageDisplay()
+    }
+
+    protected hideStartgate()  {
+        this.startGateProps = null;
+        this.updatePageDisplay()
+    }
+
+    
 
     getRideType():RideType {
         return this.getRideDisplay().getRideType()
@@ -325,9 +357,23 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         return this.getRideDisplay().getDisplayProperties()
     }
 
-
+    @Injectable
     protected getRideDisplay() {
         return useRideDisplay()
+    }
+
+    protected getSecretBinding(): ISecretBinding {
+        return this.getBindings().secret
+    }
+
+    @Injectable
+    protected getindings() {
+        return getBindings()
+    }
+
+    @Injectable
+    protected getOnlineStatusMonitoring() {
+        return useOnlineStatusMonitoring()
     }
     
 

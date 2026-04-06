@@ -3,6 +3,11 @@ import { Route } from "../../routes/base/model/route"
 import { IObserver } from "../../types"
 import { CurrentRideState, GPXStartOverlayProps, RideType, StartOverlayProps, VideoDisplayProps, VideoStartOverlayProps } from "../types"
 
+
+export interface StartGateProps {
+    title: string
+    body: string
+}
 // Base -- common to all ride types
 export interface RidePageDisplayProps {
     rideState:         CurrentRideState
@@ -10,6 +15,7 @@ export interface RidePageDisplayProps {
     startOverlayProps: StartOverlayProps | GPXStartOverlayProps | VideoStartOverlayProps | null
     menuProps:         RideMenuProps | null
     route?:            Route
+    startGateProps:    StartGateProps | null  
 }
 
 // Video ride -- extends base with video-specific props
@@ -32,16 +38,18 @@ export interface RideMenuProps {
 }
 
 interface RidePageCallbacks {
-    onMenuOpen:    () => void
-    onMenuClose:   () => void
+    onMenuOpen    (): void
+    onMenuClose   (): void
 
-    onPause:       () => void
-    onResume:      () => void
-    onEndRide:     () => void
+    onPause       ():void
+    onResume      ():void
+    onEndRide     ():void
 
-    onRetryStart:  () => void
-    onIgnoreStart: () => void
-    onCancelStart: () => void
+    onRetryStart  ():void
+    onIgnoreStart ():void
+    onCancelStart ():void
+    onRefreshSecrets(): void
+    onContinueAnyway(): void
 }
 
 export interface IRidePageService extends RidePageCallbacks, IPageService{
