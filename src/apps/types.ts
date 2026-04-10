@@ -16,3 +16,6 @@ export interface IConnectedApp {
     init():boolean
 }
 
+export type * from './strava/types'
+export type * from './komoot/types'
+export type * from './intervals/types'
