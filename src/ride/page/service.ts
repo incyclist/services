@@ -1,8 +1,8 @@
 import { EventLogger } from "gd-eventlog";
 import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistPageService } from "../../base/pages";
-import { CurrentRideDisplayProps, CurrentRideState, IObserver, RideType, RLVDisplayProps } from "../../types";
-import { AnyRidePageDisplayProps, IRidePageService, RideMenuProps, StartGateProps, VideoRidePageDisplayProps } from "./types";
+import { CurrentRideDisplayProps, CurrentRideState, GpxDisplayProps, IObserver, RideType, RLVDisplayProps } from "../../types";
+import { AnyRidePageDisplayProps, GPXRidePageDisplayProps, IRidePageService, RideMenuProps, StartGateProps, VideoRidePageDisplayProps } from "./types";
 import { useRideDisplay } from "../display";
 import { sleep } from "../../utils/sleep";
 import { ISecretBinding } from "../../api/secret";
@@ -134,7 +134,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
             switch (rideType) {
                 case 'Video':     return this.getVideoRideDisplayProps()
-                // case 'GPX':       return this.getGPXRideDisplayProps()
+                case 'GPX':       return this.getGPXRideDisplayProps()
                 // case 'Free-Ride': return this.getFreeRideDisplayProps()
                 // case 'Workout':   return this.getWorkoutRideDisplayProps()
                 default:
@@ -267,6 +267,25 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         
     }
 
+    protected getGPXRideDisplayProps() {
+        const props: GpxDisplayProps = this.rideDisplayProps as CurrentRideDisplayProps & GpxDisplayProps
+        const state = this.getRideDisplay().getState()
+        const rideType = this.getRideDisplay().getRideType()
+        const isStarting = state==='Idle' || state==='Starting' || state==='Error' 
+    
+        const displayProps: GPXRidePageDisplayProps = {
+            rideState: state,
+            rideType,
+            startGateProps:this.startGateProps,
+            startOverlayProps : isStarting ? this.getRideDisplay().getStartOverlayProps() : null,
+            menuProps: this.menuProps,
+            gpx: props
+
+        }
+        return displayProps
+    }
+
+
     protected async checkSecretValidity() {
         if (this.getBindings().appInfo.getChannel()==='mobile') {
             const secretsStatus = this.getSecretBinding().getSecretsStatus?.() 
@@ -301,9 +320,6 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
 
-    // protected getGPXRideDisplayProps() {
-    //     // TODO
-    // }
     // protected getFreeRideDisplayProps() {
     //     // TODO
     // }
