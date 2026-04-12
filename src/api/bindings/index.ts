@@ -2,7 +2,7 @@ import {Singleton} from '../../base/types'
 
 import type { IAppInfo } from '../appInfo'
 import type { IDownloadManager } from '../download'
-import type { IFormPostBinding } from '../form'
+import type { IFormPostBinding } from '../form/types'
 import type { IFileSystem } from '../fs'
 import type { ILogBinding } from '../logging/types'
 import type { IMessageQueueBinding } from '../mq'

@@ -1,7 +1,8 @@
 import { AxiosInstance, AxiosResponse } from "axios";
-import { Form } from "../../../api/form";
 import { RestApiClient, getBindings } from "../../../api";
 import { useUserSettings } from "../../../settings";
+
+import type { Form } from "../../../api/form/types";
 
 export class AppApiBase {
     protected api: AxiosInstance
