@@ -110,9 +110,10 @@ export interface MapOverlayDisplayProps extends OverlayDisplayProps {
     onViewportChange?: (viewport: MapViewPort) => void
 }
 
+export type RideViewType = 'sv' | 'map' | 'sat'
 
 export interface GpxDisplayProps extends RouteDisplayProps {
-    rideView: 'sv' | 'map' | 'sat',
+    rideView: RideViewType,
 }
 
 export interface RouteOptionDisplayProps { 

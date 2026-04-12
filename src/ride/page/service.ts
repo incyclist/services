@@ -267,7 +267,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         
     }
 
-    protected getGPXRideDisplayProps() {
+    protected getGPXRideDisplayProps():GPXRidePageDisplayProps {
         const props: GpxDisplayProps = this.rideDisplayProps as CurrentRideDisplayProps & GpxDisplayProps
         const state = this.getRideDisplay().getState()
         const rideType = this.getRideDisplay().getRideType()
@@ -279,7 +279,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             startGateProps:this.startGateProps,
             startOverlayProps : isStarting ? this.getRideDisplay().getStartOverlayProps() : null,
             menuProps: this.menuProps,
-            gpx: props
+            rideView: props.rideView,
+            route: props.route
 
         }
         return displayProps

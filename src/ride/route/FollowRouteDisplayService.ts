@@ -6,7 +6,7 @@ export class FollowRouteDisplayService extends GpxDisplayService {
 
         const route = this.route
         const settings  = this.startSettings
-        const rideView = this.getUserSettings().get('preferences.rideView',undefined)??'sv(default)'
+        const rideView = this.getRideView()
         const bikeProps = this.getBikeLogProps()
 
         const props =  {

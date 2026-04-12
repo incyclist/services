@@ -1,7 +1,7 @@
 import { IPageService } from "../../base/pages"
 import { Route } from "../../routes/base/model/route"
 import { IObserver } from "../../types"
-import { CurrentRideState, GpxDisplayProps, GPXStartOverlayProps, RideType, StartOverlayProps, VideoDisplayProps, VideoStartOverlayProps } from "../types"
+import { CurrentRideState, GpxDisplayProps, GPXStartOverlayProps, RideType, RideViewType, StartOverlayProps, VideoDisplayProps, VideoStartOverlayProps } from "../types"
 
 
 export interface StartGateProps {
@@ -29,7 +29,7 @@ export interface VideoRidePageDisplayProps extends RidePageDisplayProps {
 // interface FreeRidePageDisplayProps extends RidePageDisplayProps { ... }
 
 export interface GPXRidePageDisplayProps extends RidePageDisplayProps {
-    gpx?:   GpxDisplayProps        // single video
+    rideView?:   RideViewType
 }
 
 // Union for consumers that need to handle all ride types

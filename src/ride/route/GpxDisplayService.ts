@@ -1,3 +1,4 @@
+import { getBindings } from "../../api";
 import { GoogleMapsService, useGoogleMaps } from "../../apps";
 import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
@@ -35,7 +36,7 @@ export class GpxDisplayService extends RouteDisplayService {
     protected initView() {
         try {
 
-            const rideView = this.getUserSettings().get('preferences.rideView','sv')
+            const rideView = this.getRideView()
             if ( rideView==='sv') {
                 const updateFreq = this.getDefaultUpdateFrequency();
                 const minimalPause = this.getMinimalPause()
@@ -93,19 +94,33 @@ export class GpxDisplayService extends RouteDisplayService {
     
 
     getStartOverlayProps() {
-        const rideView = this.getUserSettings().get('preferences.rideView','sv')
+        
+        
+        const rideView = this.getRideView()
+
+
         if (rideView === 'map') {
-            return {}
+            return {
+                mapType: this.getRideViewName(),
+                mapState: 'Loaded'
+            }
         }
 
         return {
-            mapType: rideView==='sv' ? 'StreetView' : 'SatelliteView',
+            mapType: this.getRideViewName(),
             mapState: this.mapLoaded ? 'Loaded' : 'Loading',
             mapStateError: this.mapError
         }
     }
 
     isStartRideCompleted(): boolean {
+        const rideView = this.getRideView()
+        if (rideView==='map') {
+            this.mapLoaded = true
+            return true;
+        }
+        
+
         return this.mapLoaded
     }
 
@@ -113,7 +128,7 @@ export class GpxDisplayService extends RouteDisplayService {
 
     getDisplayProperties(props:CurrentRideDisplayProps):GpxDisplayProps {
         let routeProps:RouteDisplayProps = super.getDisplayProperties(props)
-        const rideView = this.getUserSettings().get('preferences.rideView','sv')
+        const rideView = this.getRideView() as 'sv' | 'map' | 'sat'
 
         if (rideView==='sv') {
             routeProps = {...routeProps, ...this.getStreetViewProps(props)}
@@ -126,9 +141,29 @@ export class GpxDisplayService extends RouteDisplayService {
         }
 
         return {
-           rideView,
+           rideView ,
             ...routeProps            
         }    
+    }
+
+    protected getRideView():string {
+        if (this.isMobile()) 
+            return 'map'
+       
+        const rideView = this.getUserSettings().get('preferences.rideView','sv')       
+        return rideView
+
+    }
+    protected getRideViewName( ):string {
+
+        const rideView = this.getRideView()
+        const map = {
+            map: 'Map',
+            sv: 'Street View',
+            sat: 'Satellite View'
+        }
+        return map?.[rideView]??rideView
+
     }
 
     protected onSatelliteViewEvent(state:SatelliteViewEvent,error?:string) {
@@ -237,7 +272,7 @@ export class GpxDisplayService extends RouteDisplayService {
 
         const {route,position} = state??{}
 
-        const rideView = this.getUserSettings().getValue('preferences.rideView','sv')
+        const rideView = this.getRideView()
 
         if (rideView==='sv') {
             const sincePrev = Date.now()-(this.tsPrevSVUpdate??0) 
@@ -290,6 +325,10 @@ export class GpxDisplayService extends RouteDisplayService {
         catch {}
     }
 
+    protected isMobile() {
+        return this.getBindings().appInfo?.getChannel()==='mobile'
+    }
+
     @Injectable
     protected getUserSettings(): UserSettingsService {
         return useUserSettings()
@@ -298,6 +337,11 @@ export class GpxDisplayService extends RouteDisplayService {
     @Injectable
     protected getGoogleMaps():GoogleMapsService {
         return useGoogleMaps()
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 
     
