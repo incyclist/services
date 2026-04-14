@@ -794,7 +794,7 @@ export class DeviceRideService  extends IncyclistService{
                 if (modes.length > 0) {
                     mode = new modes[0](bike);
                     const modeInfo = config.getModeSettings(ai.udid, mode);
-                    settings = modeInfo.settings;
+                    settings = modeInfo?.settings;
                 }
             }
 

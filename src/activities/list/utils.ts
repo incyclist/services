@@ -31,6 +31,9 @@ export const createUIActivitySummary = (summary:ActivitySummary):ActivitySummary
 
 
 export const createUIActivityDetails =( details:ActivityDetails): ActivityDetailsUI => {
+    if (!details)
+        return details
+    
     const ui = { ...details } as ActivityDetailsUI  // shallow clone top level
     const [C,U] = getUnitConversionShortcuts()
     const formatSpeed = (v:number):FormattedNumber=> {
