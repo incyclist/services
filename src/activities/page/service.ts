@@ -12,21 +12,31 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
 
     protected listState: ActivityListDisplayProperties|undefined
     protected detailActivityId: string|undefined
+    protected isOpen: boolean = false
 
     constructor() {
         super('ActivitiesPage')
     }
 
     openPage(): IObserver { 
+
+        if (this.isOpen) {
+            this.getActivityList().closeList()
+            this.stopEventListener()
+
+        }
+            
+
         try {
-            this.logEvent({message:'page shown', page:'Routes'})
-            EventLogger.setGlobalConfig('page','Routes')
+            this.logEvent({message:'page shown', page:'Activities'})
+            EventLogger.setGlobalConfig('page','Activities')
 
             super.openPage()
 
             const service = this.getActivityList()
             this.listState = service.openList()
             this.startEventListener()
+            this.isOpen = true
 
             // give the client time to consume the observer, then emit initial state
             sleep(5).then( ()=>{
@@ -45,11 +55,12 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
     closePage(): void {
         try {
             EventLogger.setGlobalConfig('page',null)
-            this.logEvent({message:'page closed', page:'Routes'})        
+            this.logEvent({message:'page closed', page:'Activities'})        
 
             this.getActivityList().closeList()
             this.stopEventListener()
 
+            this.isOpen = false
             super.closePage()
         }
         catch(err) {
@@ -89,6 +100,7 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
 
     onOpenActivity(id:string|null):void {
         try {
+            this.getActivityList().select(id)
             this.detailActivityId = id===null ? undefined : id;
             this.updatePageDisplay()
         }
@@ -99,7 +111,7 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
 
     onCloseActivity():void { 
         try {
-            delete this.detailActivityId
+            this.detailActivityId = null
             this.updatePageDisplay()
         }
         catch(err) {

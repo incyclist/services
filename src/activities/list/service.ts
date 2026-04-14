@@ -6,7 +6,7 @@ import { Observer, PromiseObserver } from "../../base/types/observer";
 import { useUnitConverter } from "../../i18n";
 import { useRouteList } from "../../routes";
 import { RouteCard } from "../../routes/list/cards/RouteCard";
-import { waitNextTick } from "../../utils";
+import { sleep } from "../../utils/sleep";
 import { ActivitiesRepository, Activity, ActivitySearchCriteria } from "../base";
 import { ActivityInfo } from "../base/model";
 import { ActivityUploadFactory } from "../upload";
@@ -99,7 +99,7 @@ export class ActivityListService extends IncyclistService {
                             this.initialized = true
                             this.emitLists('loaded')
                                                         
-                            process.nextTick( ()=>{delete this.observers.preload})
+                            sleep(5).then( ()=>{delete this.observers.preload})
     
                         })
                     })
@@ -107,7 +107,7 @@ export class ActivityListService extends IncyclistService {
                         this.logError(err,'preload')
 
                         this.initialized = false
-                        process.nextTick( ()=>{delete this.observers.preload})
+                        sleep(5).then( ()=>{delete this.observers.preload})
                     })
             }
             else {
@@ -230,7 +230,7 @@ export class ActivityListService extends IncyclistService {
         try {
             const activity = this.getActivity(id)
             if (activity.details) {
-                waitNextTick().then( () => observer.emit('loaded', activity.details) )
+                sleep(5).then( () => observer.emit('loaded', activity.details) )
                 return observer;
             }
                 
