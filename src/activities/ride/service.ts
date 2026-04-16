@@ -658,6 +658,7 @@ export class ActivityRideService extends IncyclistService {
         }
 
         const run = async():Promise<boolean> => {
+            await sleep(5)  // give UI time to attach listeners before emitting
 
             let cntCompleted = 0;
             let success = false;
