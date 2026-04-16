@@ -367,7 +367,6 @@ export class ActivityRideService extends IncyclistService {
             catch {}
 
             if (showLog ) {
-                console.log('# here', this.state)
                 this.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value??''}:${i.data[1]?.value??''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
             }
 
