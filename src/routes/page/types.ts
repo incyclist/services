@@ -16,7 +16,9 @@ export interface RoutePageDisplayProps  {
     filterOptions?: SearchFilterOptions
     routes?: Array<RouteItemProps>
     detailRouteId?: string    
+    downloadRows?: DownloadRowDisplayProps[],
     showImportDialog?: boolean
+
 }
 
 
@@ -45,4 +47,13 @@ export interface IRoutePageService extends IPageService, IPageCallBacks {
     startImport(info:FileInfo|Array<FileInfo>): IObserver
     onImportClosed(): void   // called when user explicitly closes dialog
     getImportDisplayProps(): RouteImportDialogDisplayProps
+}
+
+export type DownloadStatus = 'downloading' | 'done' | 'failed' | 'required'
+
+export interface DownloadRowDisplayProps {
+    routeId: string
+    title: string
+    status: DownloadStatus
+    pct?: number      // 0–100, present when status === 'downloading'
 }

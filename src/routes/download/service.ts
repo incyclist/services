@@ -1,4 +1,5 @@
 import { getBindings } from "../../api";
+import { Singleton } from "../../base/decorators";
 import { IncyclistService } from "../../base/service";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
@@ -7,7 +8,7 @@ import { RoutesApiLoader } from "../list/loaders/api";
 import { RoutesDbLoader } from "../list/loaders/db";
 import { DownloadObserver } from "./types";
 
-
+@Singleton
 export class RouteDownloadService extends IncyclistService {
 
     protected downloads: Array< {route:Route,observer:DownloadObserver }>
@@ -27,6 +28,10 @@ export class RouteDownloadService extends IncyclistService {
         return new RoutesApiLoader()
     }
 
+    getActiveDownloads(): Array<{route: Route, observer: DownloadObserver}> {
+        return this.downloads
+    }    
+
     download( route:Route): DownloadObserver {
         const running = this.getObserver(route)
         if (running) {
@@ -35,6 +40,7 @@ export class RouteDownloadService extends IncyclistService {
 
         const observer = new DownloadObserver( this._download(route) )
         this.downloads.push( {route,observer})
+        this.emit('download-started', route, observer)
         
         return observer
     }
@@ -225,3 +231,5 @@ export class RouteDownloadService extends IncyclistService {
         observer.emit('progress',Number(pct))
     }
 }
+
+export const useRouteDownload = () => new RouteDownloadService()

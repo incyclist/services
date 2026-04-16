@@ -5,12 +5,15 @@ import { FileInfo, IObserver, RouteImportDialogDisplayProps, RouteImportDisplayP
 import { useRouteList } from "../list";
 import { SummaryCardDisplayProps } from "../list/cards/types";
 import { SearchFilter, SearchState } from "../list/types";
-import { IRoutePageService, RouteItemProps, RoutePageDisplayProps  } from "./types";
+import { DownloadRowDisplayProps, IRoutePageService, RouteItemProps, RoutePageDisplayProps  } from "./types";
 import { useUserSettings } from "../../settings";
 import { Observer } from "../../base/types";
 import { v4 } from "uuid";
 import { sleep } from "../../utils/sleep";
 import { useDevicePairing } from "../../devices";
+import { Route } from "../base/model/route";
+import { DownloadObserver } from "../download/types";
+import { useRouteDownload } from "../download/service";
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -28,10 +31,21 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     protected showImportDialog: boolean = false
     protected importObserver: Observer|undefined
     protected importProps: Array<RouteImportDisplayProps>
+
+    // downloads
+    protected downloadCache: Map<string, DownloadRowDisplayProps> 
+    protected downloadHandlers: Map<string, {
+        onProgress: (pct: number) => void
+        onDone: () => void
+        onError: () => void
+    }>
     
 
     constructor()  {
         super('RoutesPage')
+
+        this.downloadCache = new Map()
+        this.downloadHandlers = new Map()
     }
 
     openPage(): IObserver {
@@ -83,6 +97,8 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             EventLogger.setGlobalConfig('page',null)
             this.logEvent({message:'page closed', page:'Routes'})        
 
+            this.stopEventListener()
+            this.downloadCache.clear()
             super.closePage()
         }
         catch(err) {
@@ -120,7 +136,9 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
             if (loading) {
                 return {loading,synchronizing:false, routes:[],displayType,
-                        filters,filterVisible, showImportDialog:false}
+                        filters,filterVisible, 
+                        downloadRows: this.getDownloadDisplayProps(),
+                        showImportDialog:false}
             }
             else {
                 const showImport = false // TODO
@@ -134,7 +152,9 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
                 
                 return {loading,synchronizing, routes,displayType,
                         filters,filterVisible, filterOptions,
-                        detailRouteId, showImportDialog:this.showImportDialog}
+                        detailRouteId, 
+                        downloadRows: this.getDownloadDisplayProps(),
+                        showImportDialog:this.showImportDialog}
 
             }
         }        
@@ -267,6 +287,9 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
     }
 
+    protected getDownloadDisplayProps(): DownloadRowDisplayProps[] {        
+        return Array.from(this.downloadCache.values())
+    }
 
 
 
@@ -303,7 +326,11 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         observer.on('sync-done', this.syncStopHandler)
         observer.on('selected', this.updateSelectStateHandler)
 
-       
+        this.subscribeAllActiveDownloads()
+
+        // subscribe to future downloads started while the page is open
+        this.getRouteDownload().on('download-started', this.downloadStartedHandler)        
+        
     }
 
     protected stopEventListener(final?:boolean) {
@@ -318,6 +345,69 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         observer.off('sync-start', this.syncStartHandler)
         observer.off('sync-done', this.syncStopHandler)
         observer.off('selected', this.updateSelectStateHandler)
+
+        this.unsubscribeAllActiveDownloads()
+
+        this.getRouteDownload().off('download-started', this.downloadStartedHandler)
+    }
+
+
+    protected subscribeToActiveDownload(route: Route, observer: DownloadObserver) {
+        const routeId = route.description.id
+        const title = route.description.title
+
+        // avoid double-registration
+        if (this.downloadHandlers.has(routeId)) return
+
+        const onProgress = (pct: number) => {
+            this.downloadCache.set(routeId, { routeId, title, status: 'downloading', pct })
+            this.updatePageDisplay()
+        }
+        const onDone = () => {
+            this.downloadCache.set(routeId, { routeId, title, status: 'done' })
+            this.downloadHandlers.delete(routeId)
+            this.updatePageDisplay()        
+                }
+        const onError = () => {
+            this.downloadCache.set(routeId, { routeId, title, status: 'failed' })
+            this.downloadHandlers.delete(routeId)
+            this.updatePageDisplay()
+        }
+
+        this.downloadHandlers.set(routeId, { onProgress, onDone, onError })
+        this.downloadCache.set(routeId, { routeId, title, status: 'downloading' })
+
+        observer.on('progress', onProgress)
+        observer.on('done', onDone)
+        observer.on('error', onError)
+
+        this.updatePageDisplay()
+    }    
+
+    protected subscribeAllActiveDownloads() {
+        // pick up any downloads already in progress when the page opens
+        this.getRouteDownload().getActiveDownloads().forEach(({route, observer}) => {
+            this.subscribeToActiveDownload(route, observer)
+        })
+    }
+
+    protected unsubscribeAllActiveDownloads() {
+        // unregister all download observer listeners
+        const active = this.getRouteDownload().getActiveDownloads()
+        for (const {route, observer} of active) {
+            const routeId = route.description.id
+            const handlers = this.downloadHandlers.get(routeId)
+            if (handlers) {
+                observer.off('progress', handlers.onProgress)
+                observer.off('done', handlers.onDone)
+                observer.off('error', handlers.onError)
+            }
+        }
+        this.downloadHandlers.clear()        
+    }
+
+    protected downloadStartedHandler = (route: Route, observer: DownloadObserver) => {
+        this.subscribeToActiveDownload(route, observer)
     }
 
     protected onSycncStart() {
@@ -391,6 +481,11 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     @Injectable
     protected getUserSettings() {
         return useUserSettings()
+    }
+
+    @Injectable
+    protected getRouteDownload() {
+        return useRouteDownload()
     }
 
 }
