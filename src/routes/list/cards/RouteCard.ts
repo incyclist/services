@@ -13,7 +13,7 @@ import { RoutesDbLoader } from "../loaders/db";
 import { valid } from "../../../utils/valid";
 import { waitNextTick } from "../../../utils";
 import { DownloadObserver } from "../../download/types";
-import { RouteDownloadService } from "../../download/service";
+import { useRouteDownload } from "../../download/service";
 import { EventLogger } from "gd-eventlog";
 import { checkIsLoop, getNextVideoId, getPosition, updateSlopes} from "../../base/utils/route";
 import { getWorkoutList } from "../../../workouts";
@@ -767,7 +767,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
 
                 getRouteList().logEvent({message:'download started', route:routeDescr?.title, videoUrl:lv(routeDescr?.videoUrl), downloadUrl:lv(routeDescr?.downloadUrl)})
-                const dl = new RouteDownloadService()
+                const dl = this.getRouteDownload()
                 this.downloadObserver = dl.download(this.route)
                 this.downloadObserver
                     .on('done', this.onDownloadCompleted.bind(this))
@@ -786,20 +786,51 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     stopDownload(immediate:boolean = false) {
         try {
-            getRouteList().logEvent({message:'download stopped', route:this.route?.description?.title})
-            this.getCurrentDownload()?.stop()
+            getRouteList().logEvent({message:'download stopped', route:this.route?.description?.title, })
+
+            this.getRouteDownload().stopDownload( this.route)
+            
             
             if (immediate) {
                 delete this.downloadObserver
             }
             else {
-                waitNextTick().then( ()=>{ delete this.downloadObserver})
+                sleep(5).then( ()=>{ delete this.downloadObserver})
             }
         }
         catch(err) {
             this.logError(err,'stopDownload')
         }
         
+    }
+
+    async deleteDownload() {
+        try {
+            const descr = this.getRouteDescription()
+            const videoUrl = descr.videoUrl
+
+            if (videoUrl?.startsWith('video:///') || videoUrl?.startsWith('file:///')) {
+                const filePath = videoUrl.startsWith('video:///')
+                    ? videoUrl.replace('video:///', '')
+                    : videoUrl.replace('file:///', '')                
+
+                const fs = getBindings().fs
+                if (fs) {
+                    const exists = await this.fileExists(filePath)
+                    if (exists) {
+                        await fs.unlink(filePath)
+                    }
+                }
+            }
+
+            await this.resetDownload()
+        }
+        catch(err) {
+            this.logError(err, 'deleteDownload')
+        }
+
+
+
     }
 
     protected async onDownloadCompleted( url:string) {
@@ -819,7 +850,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.route.details.video.url = url;
 
             this.updateRoute( this.route)
-            waitNextTick().then( ()=>{ 
+            sleep(5).then( ()=>{ 
                 this.downloadObserver.reset()
                 delete this.downloadObserver
             })
@@ -856,7 +887,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             getRouteList().logEvent({message:'download failed', reason:err.message, route:this.route?.description?.title})
             this.downloadObserver.stop()
 
-            waitNextTick().then( ()=>{ 
+            sleep(5).then( ()=>{ 
                 this.downloadObserver.reset()
                 delete this.downloadObserver
             })
@@ -1131,6 +1162,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
     @Injectable
     protected getOnlineStatusMonitoring() {
         return useOnlineStatusMonitoring()
+    }
+
+    protected getRouteDownload() {
+        return useRouteDownload()
     }
 
 }

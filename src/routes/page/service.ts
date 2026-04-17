@@ -38,6 +38,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         onProgress: (pct: number) => void
         onDone: () => void
         onError: () => void
+        onStopped: () => void
     }>
     
 
@@ -374,12 +375,19 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             this.updatePageDisplay()
         }
 
-        this.downloadHandlers.set(routeId, { onProgress, onDone, onError })
+        const onStopped = () => {
+            this.downloadCache.delete(routeId)
+            this.downloadHandlers.delete(routeId)
+            this.updatePageDisplay()
+        }        
+
+        this.downloadHandlers.set(routeId, { onProgress, onDone, onError,onStopped })
         this.downloadCache.set(routeId, { routeId, title, status: 'downloading' })
 
         observer.on('progress', onProgress)
         observer.on('done', onDone)
         observer.on('error', onError)
+        observer.on('stopped', onStopped)
 
         this.updatePageDisplay()
     }    
@@ -401,6 +409,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
                 observer.off('progress', handlers.onProgress)
                 observer.off('done', handlers.onDone)
                 observer.off('error', handlers.onError)
+                observer.off('stopped', handlers.onStopped)
             }
         }
         this.downloadHandlers.clear()        

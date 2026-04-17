@@ -11,4 +11,5 @@ export interface IDownloadSession extends EventEmitter {
 
 export interface IDownloadManager {
     createSession(url:string,fileName:string,props?:DownloadProps):IDownloadSession 
+    getVideoDir?():string
 }

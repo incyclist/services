@@ -1,5 +1,5 @@
 import { getBindings } from "../../api";
-import { Singleton } from "../../base/decorators";
+import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistService } from "../../base/service";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
@@ -99,8 +99,16 @@ export class RouteDownloadService extends IncyclistService {
         }
    }
 
-    protected waitForVideoDir(observer:DownloadObserver) {
-        
+    protected waitForVideoDir(observer:DownloadObserver):Promise<string|undefined> {
+
+        if (this.isMobile()) {
+            try {
+                const videoDir = this.getBinding().downloadManager.getVideoDir()
+                return Promise.resolve(videoDir)
+            }
+            catch {}
+        } 
+
         const settings = useUserSettings()
 
         const videoDir = settings.get('videos.directory',null)
@@ -229,6 +237,16 @@ export class RouteDownloadService extends IncyclistService {
             this.progressLogTs[id] = ts
         }
         observer.emit('progress',Number(pct))
+    }
+
+    protected isMobile() {
+        return this.getBinding()?.appInfo?.getChannel()==='mobile'
+    }
+
+    @Injectable
+    protected getBinding() {
+        return getBindings()
+
     }
 }
 
