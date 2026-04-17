@@ -16,7 +16,7 @@ export interface RoutePageDisplayProps  {
     filterOptions?: SearchFilterOptions
     routes?: Array<RouteItemProps>
     detailRouteId?: string    
-    downloadRows?: DownloadRowDisplayProps[],
+    downloadObserver?: IObserver
     showImportDialog?: boolean
 
 }
@@ -27,7 +27,7 @@ export interface RouteItemProps extends SummaryCardDisplayProps {
 
 
 export interface IPageCallBacks  {
-    onFilterChanged( filters:SearchFilter )
+    onFilterChanged( filters:SearchFilter ):void
     onImportClicked():void
     onFilterVisibleChange(visible:boolean):void
 }

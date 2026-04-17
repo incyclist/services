@@ -36,7 +36,7 @@ export const DEFAULT_FILTERS = [
 
 class ConvertObserver extends Observer {  
 
-    protected conversion:Observer
+    protected conversion?:Observer
     constructor() {
         super()
     }
@@ -54,17 +54,17 @@ class ConvertObserver extends Observer {
 
 export class RouteCard extends BaseCard implements Card<Route> {
 
-    protected downloadObserver: DownloadObserver;
-    protected convertObserver: ConvertObserver;
+    protected downloadObserver?: DownloadObserver;
+    protected convertObserver?: ConvertObserver;
     protected route: Route
-    protected list:CardList<Route> 
+    protected list?:CardList<Route> 
     protected deleteable:boolean
-    protected startSettings:RouteSettings
+    protected startSettings?:RouteSettings
     protected cardObserver = new Observer()
-    protected deleteObserver: PromiseObserver<boolean>
+    protected deleteObserver?: PromiseObserver<boolean>
     protected ready:boolean
     protected logger:EventLogger
-    protected cntActive: number
+    protected cntActive: number=0
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
         super()
@@ -86,12 +86,14 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     canStart(status?:AppStatus) {
         try {
-            const {isOnline} = status
-            const route = this.route.description
+            const {isOnline} = status??{}
+            const route = this.route?.description
+            if (!route)
+                return false
 
             
 
-            if (!route.hasVideo || !(route.isLocal||route.isDownloaded) || route.videoUrl.startsWith('http')) 
+            if (!route.hasVideo || !(route.isLocal||route.isDownloaded) || route.videoUrl?.startsWith('http')) 
                 return isOnline 
 
             if (route.requiresDownload)
@@ -99,7 +101,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             return true
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err, 'canStart')
             return false
         }
@@ -117,7 +119,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (this.previewMissing())
                 this.createPreview()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'verify')
         }
     }
@@ -152,7 +154,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         return true;
     }
 
-    protected async fileExists(path):Promise<boolean> {
+    protected async fileExists(path:string):Promise<boolean> {
 
         const fs = getBindings().fs
         if (!fs) return true
@@ -173,7 +175,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             const descr = this.getRouteDescription()
             return descr.hasVideo && !valid(descr.previewUrl)
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'previewMissing')
         }
     }
@@ -185,7 +187,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (init && !prev)
                 this.emitUpdate()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'setInitialized')
         }
     
@@ -199,7 +201,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (visible!==prev)
                 this.emitUpdate()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'setVisible')
         }
     
@@ -211,7 +213,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 super.reset()
             this.cardObserver.reset()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'reset')
         }
 
@@ -233,7 +235,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 this.getRouteDescription().previewUrl = old.description.previewUrl
             }
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'setData')
         }
 
@@ -307,23 +309,27 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
                     observer:this.cardObserver, cntActive:this.cntActive}
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'getDisplayProperties')
+
+            // avoid linting issue
+            return null as any as SummaryCardDisplayProps
         }
         
     }
 
     getMarkers(settings?:RouteSettings):Array<RoutePoint> {
-        const markers = []
+        const markers:Array<RoutePoint> = []
         try {
             const startSettings = settings || this.getSettings()
             this.adjustStartPosAvi(startSettings)
 
             const startDistance = startSettings.startPos??0
             const startPos = getPosition(this.route, {distance:startDistance,nearest:true})
-            markers.push(startPos)
+            if (startPos)
+                markers.push(startPos)
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'getMarkers')            
         }
         return markers
@@ -333,15 +339,17 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const [C] = getUnitConversionShortcuts()
         
 
-        const markers = []
+        const markers:Array<RoutePoint> = []
         try {
             if (startPos!==undefined && startPos!==null) {
                 const startDistance = C( startPos.value,'distance', {from: startPos.unit,to:'m'} )
                 const position = getPosition(this.route, {distance:startDistance,nearest:true})
-                markers.push(position)
+                if (position) {
+                    markers.push(position)
+                }
             }
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'updateMarkers')            
         }
         return markers
@@ -350,7 +358,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     getId(): string {
-        return this.route?.description?.id
+        return this.route?.description?.id!
     }
 
     enableDelete(enabled:boolean=true) {
@@ -438,7 +446,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             }
 
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'openSettings')
         }
 
@@ -531,7 +539,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             userSettings.set( key+'.prevRides',null,true)
 
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'changeSettings')
         }
             
@@ -547,7 +555,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 settings.startPos = 0
             }
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'adjustStartPosAvi')
         }
     }
@@ -556,7 +564,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         try {
             return await this.getRepo().save(this.route)        
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'save')
         }
         
@@ -578,7 +586,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.deleteObserver = new PromiseObserver< boolean> ( this._delete(enforced,source) )
             return this.deleteObserver
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'delete')
         }
 
@@ -640,7 +648,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             deleted =  false
         }
         finally {
-            this.deleteObserver.emit('done',deleted)
+            this.deleteObserver?.emit('done',deleted)
             waitNextTick().then( ()=> { 
                 delete this.deleteObserver
                 this.emitUpdate()
@@ -666,7 +674,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.route.description.tsLastStart = Date.now()
             this.updateRoute(this.route)
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'start')
         }
     }
@@ -688,7 +696,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.route.description.tsLastStart = Date.now()
             this.updateRoute(this.route)
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'addWorkout')
         }
     }
@@ -704,7 +712,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (videoDir)
                 return videoDir
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'getVideoDir')
         }
     
@@ -714,7 +722,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             const settings = useUserSettings()
             settings.set('videos.directory',dir)
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'setVideoDir')
         }
 
@@ -759,7 +767,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 
                 const routeDescr = this.route?.description
 
-                const lv = (v) => {
+                const lv = (v:any) => {
                     if (v===null) return 'null'
                     if (v===undefined) return undefined
                     return v
@@ -776,10 +784,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
 
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'download')
         }
-        return this.downloadObserver;
+        return this.downloadObserver!;
     }
 
     
@@ -798,7 +806,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 sleep(5).then( ()=>{ delete this.downloadObserver})
             }
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'stopDownload')
         }
         
@@ -825,7 +833,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             await this.resetDownload()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err, 'deleteDownload')
         }
 
@@ -861,7 +869,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 getRouteList().addCardAgain(this)
             }
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onDownloadComplete')
         }
     }
@@ -892,7 +900,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 delete this.downloadObserver
             })
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onDownloadError')
         }
 
@@ -918,7 +926,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             process.nextTick( ()=>{this.convertObserver.emit('started') })
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'convert')
         }
 
@@ -933,7 +941,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.convertObserver.emit('done');
             setTimeout( ()=>{ this.convertObserver=undefined}, 200)
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'stopConversion')
         }
 
@@ -1014,7 +1022,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.save()
             this.emitUpdate()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'updateRoute')
         }
 
@@ -1113,7 +1121,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             }
         }
-        catch (err) {
+        catch(err:any) {
             this.logError(err, 'getSettings');
         }
         return this.startSettings

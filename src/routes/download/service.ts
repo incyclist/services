@@ -61,9 +61,9 @@ export class RouteDownloadService extends IncyclistService {
         if (file) {
             try {
                 const fs = getBindings().fs
-                fs.unlink(file)
+                fs?.unlink(file)
             }
-            catch(err) {
+            catch(err:any) {
                 this.logError(err, 'deleteIncompleteFile')
             }
 
@@ -80,19 +80,22 @@ export class RouteDownloadService extends IncyclistService {
         await waitNextTick()
 
         const observer = this.getObserver(route)
+        if (!observer)
+            return;
 
-
-        
-            
         
         try {
             const videoDir = await this.waitForVideoDir(observer)
-            observer.once( 'stopped',()=>{
+            if (videoDir) {
+                observer.once( 'stopped',()=>{
 
-                this.deleteIncompleteFile(route,videoDir)
-            })
-    
-            this.downloadRoute(route,videoDir,observer)
+                    this.deleteIncompleteFile(route,videoDir)
+                })
+                this.downloadRoute(route,videoDir,observer)
+            }    
+            else {
+                this.logEvent( {message:'could not start download', reason:'video dir not specified'})
+            }
         }
         catch(err) {
             observer.emit('error',err)
@@ -103,8 +106,12 @@ export class RouteDownloadService extends IncyclistService {
 
         if (this.isMobile()) {
             try {
-                const videoDir = this.getBinding().downloadManager.getVideoDir()
-                return Promise.resolve(videoDir)
+                const getVideoDir = this.getBindings()?.downloadManager?.getVideoDir
+                
+                if (getVideoDir)     {
+                    const videoDir = getVideoDir()
+                    return Promise.resolve(videoDir)
+                }
             }
             catch {}
         } 
@@ -121,7 +128,7 @@ export class RouteDownloadService extends IncyclistService {
 
             return new Promise( done=> {
                 
-                settingsObserver.on('changed', (dir) => {
+                settingsObserver.on('changed', (dir:string) => {
                     observer?.emit('videoDir.ok')
                     settings.stopNotifyOnChange(reqId)
                     done(dir)                
@@ -135,7 +142,7 @@ export class RouteDownloadService extends IncyclistService {
     }
 
     protected async getDownloadFileName(route:Route,targetDir:string): Promise<{file?:string, url?:string,error?:string}> {
-        let url:string, file:string, error
+        let url:string|undefined, file:string, error
         try {
             const {path} = getBindings()
             url = route?.description?.downloadUrl || route?.description?.videoUrl
@@ -170,14 +177,14 @@ export class RouteDownloadService extends IncyclistService {
 
             const {file,url,error} = await this.getDownloadFileName(route,targetDir)
             urlLog =url;
-            if (!file||error) {
+            if (!file||error||!url) {
                 observer.emit('error', new Error(error??'download not supported'))
                 return;
             }
             
             const {id,title} = route.description;
 
-            const {downloadManager} = getBindings()
+            const {downloadManager} = this.getBindings()
             if (!downloadManager) {
                 observer.emit('error', new Error('download not supported'))
                 return;
@@ -189,12 +196,12 @@ export class RouteDownloadService extends IncyclistService {
             }  
 
             observer.setSession(session)
-            const onError = (err) => { 
+            const onError = (err:any) => { 
                 this.logEvent({message:'download failed ',title, id,url,reason:err.message })
                 observer.emit('error', err)
             }
 
-            const onProgress = (pct,speed,bytes)=> { this.onDownloadProgress(id,observer,pct,speed,bytes)}
+            const onProgress = (pct:number,speed:number,bytes:number)=> { this.onDownloadProgress(id!,observer,pct,speed,bytes)}
 
             this.logEvent({message:'start download',title, id,url})
             session.on('started', ()=>{observer.emit('started') })
@@ -207,7 +214,7 @@ export class RouteDownloadService extends IncyclistService {
             })    
             session.start()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'downloadRoute',{url:urlLog})
             observer.emit('error',err)
         }        
@@ -217,6 +224,9 @@ export class RouteDownloadService extends IncyclistService {
 
     protected async restoreFromRepo(route:Route) {
         
+        if (!route?.description?.id)
+            return;
+
         await this.getRoutesApi().loadDetails([{route, added:false}],true)
 
         await waitNextTick()
@@ -229,22 +239,29 @@ export class RouteDownloadService extends IncyclistService {
 
     }
 
-    protected onDownloadProgress(id:string, observer:DownloadObserver, pct,speed,downloaded) {
-        const prev = this.progressLogTs[id]||0
-        const ts = Date.now()
-        if (ts-prev>1000) {
-            this.logEvent({message:'download progress', pctComplete:pct, downloaded, downloadSpeed: speed})                                            
-            this.progressLogTs[id] = ts
+    protected onDownloadProgress(id:string, observer:DownloadObserver, pct:number|string,speed:number|string,downloaded:number|string) {
+
+        // don't log on mobile devices, as the binding already does it
+        if (!this.isMobile()) {
+            const prev = this.progressLogTs[id]||0
+            const ts = Date.now()
+            if (ts-prev>5000) {
+                this.logEvent({message:'download progress', pctComplete:pct, downloaded, downloadSpeed: speed})                                            
+                this.progressLogTs[id] = ts
+            }
+
         }
+
+        // emit progress event
         observer.emit('progress',Number(pct))
     }
 
     protected isMobile() {
-        return this.getBinding()?.appInfo?.getChannel()==='mobile'
+        return this.getBindings()?.appInfo?.getChannel()==='mobile'
     }
 
     @Injectable
-    protected getBinding() {
+    protected getBindings() {
         return getBindings()
 
     }

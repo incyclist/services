@@ -2,6 +2,7 @@ import { ImportFilter } from "../../../base/cardlist/types";
 import { Observer } from "../../../base/types/observer";
 import { Unit } from "../../../i18n";
 import { RouteInfo } from "../../base/types";
+import { DownloadObserver } from "../../download/types";
 import { RouteStartSettings } from "../types";
 
 
@@ -33,8 +34,9 @@ export interface SummaryCardDisplayProps extends RouteInfo{
     loading?:boolean
     isNew?:boolean
     cntActive?:number
-    totalDistance: {value:number, unit:Unit},
-    totalElevation: {value:number, unit:Unit}
+    totalDistance?: {value:number, unit:Unit},
+    totalElevation?: {value:number, unit:Unit}
+    downloadObserver?: DownloadObserver
 }
 
 export interface DetailCardDisplayProps  {
