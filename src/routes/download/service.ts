@@ -105,13 +105,11 @@ export class RouteDownloadService extends IncyclistService {
     protected waitForVideoDir(observer:DownloadObserver):Promise<string|undefined> {
 
         if (this.isMobile()) {
+            this.logEvent({message:'setting fixed video dir on mobile'})
             try {
-                const getVideoDir = this.getBindings()?.downloadManager?.getVideoDir
-                
-                if (getVideoDir)     {
-                    const videoDir = getVideoDir()
-                    return Promise.resolve(videoDir)
-                }
+                const videoDir = this.getBindings()?.downloadManager?.getVideoDir?.()
+                this.logEvent({message:'video dir set', videoDir})
+                return Promise.resolve(videoDir)
             }
             catch {}
         } 
