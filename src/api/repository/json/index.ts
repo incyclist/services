@@ -16,9 +16,9 @@ export class JsonRepository {
     }
 
     protected name: string;
-    protected db: string
+    protected db?: string
     protected logger: EventLogger
-    protected access: JsonAccess
+    protected access?: JsonAccess
 
     constructor(repoName:string) {
         this.name  = repoName;
@@ -35,7 +35,11 @@ export class JsonRepository {
     }
 
     async write(objectName:string, data:JSONObject):Promise<boolean> {
+        
         await this.open()
+        if (!this.access)
+            return false
+
         const success = await this.access.write(this.toFileName(objectName), data)
 
         
@@ -48,6 +52,8 @@ export class JsonRepository {
 
     async read(objectName:string):Promise<JSONObject|undefined> {
         await this.open()
+        if (!this.access)
+            return;
 
         const fileName = this.toFileName(objectName)
 
@@ -77,6 +83,10 @@ export class JsonRepository {
     }
 
     async delete(objectName:string):Promise<boolean> {
+        await this.open()
+        if (!this.access)
+            return false;
+            
         const result = await this.access.delete(this.toFileName(objectName))
 
         if (objectName.includes(':'))
@@ -114,7 +124,11 @@ export class JsonRepository {
 
     }
 
-    async list( exclude?:string|Array<string>):Promise<Array<string>> {
+    async list( exclude?:string|Array<string>):Promise<Array<string>|null> {
+        await this.open()
+        if (!this.access)
+            return null;
+            
 
         try {
             
@@ -143,17 +157,13 @@ export class JsonRepository {
         const db = getBindings().db
  
         db.release(this.name)
-        this.access = null;
+        delete this.access
         return true
     }
 
 
     protected toFileName(objectName: string): string {
-        return objectName.replace(/:/g, '_')
-    }
-
-    protected toLegacyFileName(objectName: string): string {
-        return objectName  // original, with colon
+        return objectName.replaceAll(':', '_')
     }
 
 
