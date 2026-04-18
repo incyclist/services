@@ -94,7 +94,7 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
             // in some cases individual legs of a roundabout are tagged with highway=service, which would break the roundabout detection
             const isRoundabout = (element.tags?.junction==='roundabout' || element.tags?.roundabout==='true');
 
-            if ( isRoundabout || (type!==undefined && (filter===undefined || !filter.some( e => e===type))) ) {
+            if ( isRoundabout || (type!==undefined && (filter===undefined || !filter.includes(type))) ) {
 
                 way.nodes?.forEach( node => {
                     addNode(node, nodesLookup,id,path)

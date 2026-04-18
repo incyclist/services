@@ -680,7 +680,7 @@ export class DeviceRideService  extends IncyclistService{
 
 
         const status = await Promise.all(this.startPromises)
-        const allOK = !status.some( s=>s===false)
+        const allOK = !status.includes(false)
         this.emit(`${startType}-result`, allOK)
 
         if (allOK && (startType==='start' )) {
@@ -1466,7 +1466,7 @@ export class DeviceRideService  extends IncyclistService{
         if (this.simulatorEnforced) {
             enabledCapabilities = [IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed, IncyclistCapability.HeartRate, IncyclistCapability.Cadence];
         }
-        else if (duplicates.length > 0 && duplicates.some(d => d.udid === adapterInfo.udid)) {
+        else if (duplicates.some(d => d.udid === adapterInfo.udid)) {
 
 
             const selected = clone(selectedDevices);

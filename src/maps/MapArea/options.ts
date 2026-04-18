@@ -271,7 +271,7 @@ export class OptionManager {
                             nextPaths.forEach( (p) => {   
                                 
 
-                                if ( p[0].ways.some( wid => wid===w.id )) {
+                                if ( p[0].ways.includes(w.id) ) {
                                     expand = true;
 
                                     const wFull = {...this.map.getWay(wIdNext),path:p.slice(1)};
@@ -284,7 +284,7 @@ export class OptionManager {
 
                                     options.push(combined)
                                 }
-                                else if ( p.at(-1).ways.some( wid => wid===w.id )) {
+                                else if ( p.at(-1).ways.includes(w.id) ) {
                                     expand = true;
                                     p.reverse()
                                     const wFull = {...this.map.getWay(wIdNext),path:p};
