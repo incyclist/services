@@ -8,19 +8,16 @@
         "moduleResolution": "node",
         "declaration": true,
         "outDir": "lib",
-        "removeComments": true
+        "removeComments": true,
+        "types": ["jest", "node"]
     },
     "lib": ["ESNext.Array","ES2023.Array"],
     "include": [
         "src/**/*.js",
-        "src/**/*.ts"
+        "src/**/*.ts",
+        "__tests__/**/*.ts",
       ],
     "exclude": [
-      "src/**/*.spec.*",
-      "tools/**",
-      "__tests__/**/*.ts",
-      "src/**/*.test.*",
-        "src/**/*.tests.*",
         "./node_modules" 
       ]
 }

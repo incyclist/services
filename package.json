@@ -21,7 +21,7 @@
     "@typescript-eslint/eslint-plugin": "^8.58.2",
     "@typescript-eslint/parser": "^8.58.2",
     "dotenv": "^17.4.2",
-    "eslint": "^10.2.0",
+    "eslint": "^9.39.4",
     "formdata-node": "^6.0.3",
     "jest": "^30.3.0",
     "jsdoc": "^4.0.5",
@@ -29,7 +29,8 @@
     "typedoc": "^0.28.19",
     "typedoc-plugin-markdown": "^4.11.0",
     "typedoc-plugin-no-inherit": "^1.6.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.2"
   },
   "scripts": {
     "lint": "eslint . --ext .ts",
