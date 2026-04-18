@@ -128,10 +128,10 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
         
     }    
-
     getRideObserver(): IObserver|null {
         return this.rideObserver??null
     }
+
 
     getPageDisplayProps(): AnyRidePageDisplayProps {
 
@@ -382,11 +382,12 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.moveTo('$contentPage')        
     }
 
-    protected get rideObserver () {
+    protected get rideObserver (): IObserver|undefined {
         try {
             return this.getRideDisplay()?.getObserver()
         }catch(err:any) {
             this.logError(err,'get rideObserver')
+            return
         }
     }
 
