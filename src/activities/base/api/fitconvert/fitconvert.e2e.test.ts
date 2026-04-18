@@ -18,7 +18,8 @@ describe('FITConvert Api E2E',()=>{
                 getSourceDir: ()=>'/tmp',
                 getTempDir: ()=>'/tmp',
                 getUIVersion: ()=>'0.8',
-                isApp:()=>true
+                isApp:()=>true,
+                session:''
             }
         })
 

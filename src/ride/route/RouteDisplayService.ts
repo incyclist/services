@@ -9,26 +9,28 @@ import { Route } from "../../routes/base/model/route";
 import { RouteSettings } from "../../routes/list/cards/types";
 import { ActiveRideListDisplayItem, ScreenShotInfo, useActiveRides } from "../../activities";
 import { getBindings } from "../../api";
-import { ActivityUpdate } from "../../activities/ride/types";
+import { ActivityUpdate, CurrentActivityData } from "../../activities/ride/types";
 import clone from "../../utils/clone";
 import { useDeviceRide } from "../../devices";
-import { useUnitConverter } from "../../i18n";
+import { FormattedNumber, getUnitConversionShortcuts, useUnitConverter } from "../../i18n";
+import { RoutePoint } from "../../types";
+import { Observer } from "../../base/types";
 
 const MAX_INACTIVITY = 5000
 
 export class RouteDisplayService extends RideModeService {
-    protected prevRequestSlope: number
+    protected prevRequestSlope?: number
 
-    protected position: CurrentPosition    
-    protected sideViews: SideViewsShown
-    protected currentRoute: Route
+    protected position?: CurrentPosition    
+    protected sideViews?: SideViewsShown
+    protected currentRoute?: Route
 
     protected hasNearbyRides: boolean  = false 
     protected prevRequestedSlope:undefined = undefined
-    protected prevPowerTs: number
+    protected prevPowerTs?: number
 
-    protected nearbyRiders: ActiveRideListDisplayItem[]
-    protected _startSettings: RouteSettings
+    protected nearbyRiders?: ActiveRideListDisplayItem[]
+    protected _startSettings?: RouteSettings
 
 
 
@@ -43,7 +45,7 @@ export class RouteDisplayService extends RideModeService {
             this.position =  this.setInitialPosition()
             
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'init')
         }
     }
@@ -59,12 +61,12 @@ export class RouteDisplayService extends RideModeService {
     }
 
     
-    onActivityUpdate(activityPos:ActivityUpdate,data):void { 
+    onActivityUpdate(activityPos:ActivityUpdate,data:CurrentActivityData):void { 
 
-        if (data.power>0)
+        if ((data.power??0)>0)
             this.prevPowerTs = Date.now()
 
-        if (data.power===0 && (data.speed===0 ||  data.speed<5 && (Date.now()-(this.prevPowerTs??0))>MAX_INACTIVITY)) {
+        if (data.power===0 && (data.speed===0 ||  (data.speed??0)<5 && (Date.now()-(this.prevPowerTs??0))>MAX_INACTIVITY)) {
             return
         }
 
@@ -93,7 +95,7 @@ export class RouteDisplayService extends RideModeService {
 
     
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onActivityUpdate')
         }
 
@@ -102,11 +104,12 @@ export class RouteDisplayService extends RideModeService {
         super.onActivityUpdate(activityPos,data)
     }
 
-    protected onPositionUpdate(state) {
-
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    protected onPositionUpdate(_state:{route:Route, position:RoutePoint}) {
+        /* to be implemented by sub-class */
     }
 
-    onRideSettingsChanged(settings) {
+    onRideSettingsChanged(settings:any) {
         try {
             const {reality} = settings
 
@@ -114,7 +117,7 @@ export class RouteDisplayService extends RideModeService {
            
 
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onRideSettingsChanged')
         }
     }
@@ -125,7 +128,7 @@ export class RouteDisplayService extends RideModeService {
             this.sendUpdate(this.buildRequest())
             
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onStarted')
         }
 
@@ -136,7 +139,7 @@ export class RouteDisplayService extends RideModeService {
             this.cleanupActiveRides()
             delete this._startSettings
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onStopped')
         }
     }
@@ -158,10 +161,10 @@ export class RouteDisplayService extends RideModeService {
         })
 
         const markers = [...nearbyMarkers, ...prevRidesMarkers]
-        return markers
+        return markers as Array<RouteMarker>
     }
 
-    getOverlayProps(overlay, props: CurrentRideDisplayProps):OverlayDisplayProps {
+    getOverlayProps(overlay:string, props: CurrentRideDisplayProps):OverlayDisplayProps {
         const showMapEnabled = this.getUserSettings().get(`preferences.sideViews.${overlay}` ,true)
         const show = !props.hideAll 
         const minimized = !showMapEnabled
@@ -184,9 +187,9 @@ export class RouteDisplayService extends RideModeService {
 
             return nearbyRides
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'getNearbyRidesProps')
-            return {show:false,minimized:true, observer:null}
+            return {show:false,minimized:true, observer:null as unknown as Observer}
         }
     }
 
@@ -204,18 +207,20 @@ export class RouteDisplayService extends RideModeService {
         const [C,U] = this.getUnitConversionShortcuts()
 
         const isLoop = this.currentRoute?.description?.isLoop
-        const xScale = { value: C( 1,'distance', U('distance')), unit:U('distance') }
-        const yScale = { value: C( 1,'elevation', U('elevation')), unit:U('elevation') }
+        const xScale:FormattedNumber = { value: C( 1,'distance', {from:U('distance')}), unit:U('distance') }
+        const yScale:FormattedNumber = { value: C( 1,'elevation', {from:U('elevation')}), unit:U('elevation') }
 
         const mapStartPos = ( isLoop&& !loopOverwrite)  ? undefined : startPos
 
         return {
             ...parent,
-            position: this.position,markers: this.getMarkers(props),
+            position: this.position,
+            markers: this.getMarkers(props),
             sideViews: this.sideViews,
             route: this.getCurrentRoute(),
             realityFactor,
-            startPos:mapStartPos,endPos,
+            startPos:mapStartPos??0,
+            endPos,
             nearbyRides,
             xScale,yScale,
             map,upcomingElevation, totalElevation,
@@ -224,13 +229,13 @@ export class RouteDisplayService extends RideModeService {
     }
 
     getScreenshotInfo(fileName: string, time: number):ScreenShotInfo {
-        const {lat,lng,routeDistance,elevation} = this.position
-        const position = {lat,lng,routeDistance,elevation}
+        const {lat,lng,routeDistance,elevation} = this.position??{}
+        const position = this.position===undefined ? undefined : {lat,lng,routeDistance,elevation} as RoutePoint
         return {fileName, position, time}        
     }
 
 
-    getRoutePosition(distance:number):CurrentPosition {
+    getRoutePosition(distance:number):CurrentPosition|undefined {
 
         const {route} = this;
 
@@ -246,9 +251,12 @@ export class RouteDisplayService extends RideModeService {
             }
 
             const pos = getPosition(route, props) as CurrentPosition;
+            const totalDistance = route.description?.distance
+            if (!totalDistance)
+                return
 
             pos.distance = distance;
-            pos.lapDistance = pos.routeDistance%route.description.distance;
+            pos.lapDistance = pos.routeDistance%totalDistance;
             pos.heading = getHeading(route,pos);
             
             return pos;
@@ -285,10 +293,10 @@ export class RouteDisplayService extends RideModeService {
 
     protected buildRequest(props:{limits?: ActiveWorkoutLimit, reset?:boolean}={}): UpdateRequest { 
         const request = this._buildRequest(props)
-        return request
+        return request!
 
     }
-    protected _buildRequest(props:{limits?: ActiveWorkoutLimit, reset?:boolean}={}): UpdateRequest {
+    protected _buildRequest(props:{limits?: ActiveWorkoutLimit, reset?:boolean}={}): UpdateRequest|undefined {
         if (this.isStopped)
             return
 
@@ -305,14 +313,13 @@ export class RouteDisplayService extends RideModeService {
             }
 
             else {
-                //const hasSlopeChanged = this.prevRequestSlope===undefined || (this.prevRequestSlope !== this.position.slope)
                 const request:UpdateRequest = {slope:targetSlope} //(hasSlopeChanged||props?.reset) ?  : {refresh:true}
 
                 this.prevRequestSlope = targetSlope
                 return request
             }
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'buildRequest')        
             return {}
         }
@@ -325,7 +332,7 @@ export class RouteDisplayService extends RideModeService {
             const lapPoint =  getNextPosition (this.getCurrentRoute(), {routeDistance:this.startSettings?.startPos??0})
             return this.fromLapPoint(lapPoint)
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'setInitialPosition',{cntPoints:this.getCurrentRoute()?.points?.length,routeDistance:this.startSettings?.startPos??0 })
         }
     }
@@ -348,7 +355,7 @@ export class RouteDisplayService extends RideModeService {
 
             return this.position        
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'updatePosition',{currentRouteDistance, newRouteDistance, getNextPositionProps:props})
         }
     }
@@ -389,8 +396,15 @@ export class RouteDisplayService extends RideModeService {
     protected checkIsRouteFinished(position:CurrentPosition): boolean {
         if (this.isLoop() && !this.startSettings?.loopOverwrite) 
             return false
+
+        if (this.startSettings.endPos!==undefined && position.routeDistance>this.startSettings.endPos)
+            return true;
         
-        const finished =  position.routeDistance >= this.getCurrentRoute().description.distance   
+        const totalDistance = this.getCurrentRoute().description.distance   
+        if (totalDistance===undefined)
+            return false
+
+        const finished =  position.routeDistance >= totalDistance
         return finished
     }
 
@@ -422,7 +436,7 @@ export class RouteDisplayService extends RideModeService {
                  this.nearbyRiders = data.filter( ar=>!ar.isUser)
             })
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'prepareActiveRides')
         }
     }
@@ -431,13 +445,14 @@ export class RouteDisplayService extends RideModeService {
         try {
             this.getActiveRides().stop()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'cleanupActiveRides')
         }
 
     }
 
-    protected savePosition(startPos?:number) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    protected savePosition(_startPos?:number) {
         // should be implemented by sub classes, as location is ride mode specific
     }
 
@@ -478,10 +493,7 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected getUnitConversionShortcuts () {
-        const c = this.getUnitConverter()
-        const C = c.convert.bind(c)
-        const U = c.getUnit.bind(c)
-        return [C,U]
+        return getUnitConversionShortcuts()
     }
 
     @Injectable

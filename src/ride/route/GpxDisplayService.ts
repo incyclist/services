@@ -3,7 +3,9 @@ import { GoogleMapsService, useGoogleMaps } from "../../apps";
 import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
 import { getHeading } from "../../routes";
+import { Route } from "../../routes/base/model/route";
 import { UserSettingsService, useUserSettings } from "../../settings";
+import { RoutePoint } from "../../types";
 import { CurrentRideDisplayProps, GpxDisplayProps,  RouteDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 import { SatelliteViewEvent, StreetViewEvent } from "./types";
@@ -177,7 +179,8 @@ export class GpxDisplayService extends RouteDisplayService {
         this.emit('state-update')
 
     }
-    protected onMapViewEvent(state:SatelliteViewEvent,error?:string) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    protected onMapViewEvent(state:SatelliteViewEvent,_error?:string) {
         if (state==='Loaded') {
             this.mapLoaded = true
         }
@@ -267,7 +270,7 @@ export class GpxDisplayService extends RouteDisplayService {
         return prefDelay
     }
 
-    protected onPositionUpdate( state) {
+    protected onPositionUpdate( state:{route:Route, position:RoutePoint}) {
 
 
         const {route,position} = state??{}
@@ -309,7 +312,7 @@ export class GpxDisplayService extends RouteDisplayService {
         return this.getNumSetting('SV_MIN_DELAY') ?? SV_MIN_DELAY
     }
 
-    protected getNumSetting(key:string):number {
+    protected getNumSetting(key:string):number|undefined {
         try {
             const ret = this.getUserSettings().get(key,undefined)
             if (!ret)
@@ -322,7 +325,9 @@ export class GpxDisplayService extends RouteDisplayService {
             return val
 
         }
-        catch {}
+        catch {
+            // intentionally empty
+        } 
     }
 
     protected isMobile() {
