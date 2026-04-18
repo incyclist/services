@@ -17,9 +17,11 @@ export class OptionManager {
     }
 
     async getStartOptions( way:IncyclistWay, crossing:PathCrossingInfo ): Promise<Array<FreeRideContinuation>> {
+        
         const options: Array<FreeRideContinuation> = []
-        const parts = this.map.splitAtCrossingPoint(way,crossing)
-        const {segments,points} = this.map.buildSegmentInfo(way,parts)
+        const parts = this.map?.splitAtCrossingPoint(way,crossing)??[]
+
+        const {segments=[],points=[]} = this.map?.buildSegmentInfo(way,parts)??{}
         
 
         
@@ -54,7 +56,7 @@ export class OptionManager {
                 await waitNextTick()
     
             }
-            catch(err) {
+            catch(err:any) {
                 this.logError(err,'getStartOptions')
             }
 
@@ -99,7 +101,7 @@ export class OptionManager {
             const map = await this.service.load(location)
     
             if (!map)  {
-                if (!this.map)
+                if (!this.map?.isWithinBoundary(location))
                     return []
             }
             else {
@@ -115,13 +117,15 @@ export class OptionManager {
             let options:Array<FreeRideContinuation> = [];
     
             if (node!==undefined && remaining!==undefined ) {
-                node.ways.forEach( (wid) => {
+                
+                (node.ways??[]).forEach( (wid) => {
                     if ( wid===remaining.id) {
                         options.push(... this.getOptionsOnCurrentWay(node,remaining,options))
                     }
                     else {
                         const w = this.getWay(wid);
-                        options.push(... this.checkOptionsOnDifferentWay(node,w,options))
+                        if (w)
+                            options.push(... this.checkOptionsOnDifferentWay(node,w,options))
                     }
                 })
                     
@@ -130,10 +134,10 @@ export class OptionManager {
             options = removeDuplicatePaths(options)
             
 
-    
-            const currentDirection = this.map.getHeading(way, 'end');
+
+            const currentDirection = this.map?.getHeading(way, 'end')??0;
             options.forEach( (option) => {
-                const direction = this.map.getHeading(option as WayInfo, 'start');
+                const direction = this.map?.getHeading(option as WayInfo, 'start')??0;
                 option.direction = direction-currentDirection
                 if (option.direction>180) 
                     option.direction = option.direction-360;
@@ -154,7 +158,7 @@ export class OptionManager {
             return options;        
     
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'getNextOptions')
             return []
         }
@@ -194,7 +198,7 @@ export class OptionManager {
     }
 
     protected checkOptionsOnDifferentWay(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ):FreeRideContinuation[]{
-        if (!w?.path || !location) return;
+        if (!w?.path || !location) return [];
 
         let roundabout = isRoundabout(w);
         if (roundabout)
@@ -216,26 +220,29 @@ export class OptionManager {
 
 
     protected getOptionsFirstPoint(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ){ 
-        let result = this.map.splitAtFirstBranch(w);
+        let result = this.map?.splitAtFirstBranch(w);
         let expand = false;
 
+        if (!result?.path)
+            return
+
         // no crossing before end of path
-        if ( result.path.length === w.path.length) {
+        if ( result.path?.length === w.path.length) {
             const pLast = w.path[ w.path.length-1];
-            if ( pLast.ways.length===2 ) {
+            if ( pLast.ways?.length===2 ) {
                 const wIdNext = pLast.ways.find( wid => wid!==w.id )
-                const wNext = this.getWay(wIdNext) 
-                if (!isRoundabout(wNext)) {
+                const wNext = wIdNext ? this.getWay(wIdNext) : undefined
+                if (wNext && !isRoundabout(wNext)) {
                     
                     // if we are at the beginning or end of the next way
                     const pNextStart = wNext.path[0];
                     const pNextEnd = wNext.path[ wNext.path.length-1];
                     if ( pNextStart.id===pLast.id   ) {
                         expand = true;
-                        const segment = this.map.splitAtFirstBranch(wNext)
+                        const segment = this.map?.splitAtFirstBranch(wNext)
                         const combined  = { 
-                            id: segment.wayId,
-                            path: w.path.concat( segment.path.slice(1) ),
+                            id: segment?.wayId,
+                            path: segment?.path ? w.path.concat( segment.path.slice(1) ) : w.path,
                             map:this.map
                         }
                         options.push(combined)
@@ -244,15 +251,16 @@ export class OptionManager {
                         const wReverse = this.getRemaining(wNext);
                         if (wReverse?.path ) {
                             wReverse.path.reverse();
-                            const segment = this.map.splitAtFirstBranch(wNext)
+                            const segment = this.map?.splitAtFirstBranch(wNext)
                             const combined  = { 
-                                id: segment.wayId,
-                                path: w.path.concat( segment.path.slice(1) ),
+                                id: segment?.wayId,
+                                path: segment?.path ? w.path.concat( segment.path.slice(1) ) : w.path,
                                 map:this.map
                             }
                             options.push(combined)
                         }
                         else {
+                            
                             console.log(' ~~~~ unexpected', wNext, wReverse)
                         }
                     }
@@ -385,7 +393,7 @@ export class OptionManager {
      * @param props - either a string (way ID) or an object with id/path properties
      * @returns a clone of the way
      */
-    protected getWay( props:string|IncyclistWay):IncyclistWay {
+    protected getWay( props:string|IncyclistWay):IncyclistWay|undefined {
 
         if (!props) return;
 
@@ -394,7 +402,7 @@ export class OptionManager {
         }
         if ( props.id !==undefined) {
             const map = props.map??this.map
-            return clone(map.getWay(props.id));
+            return map ? clone(map.getWay(props.id)) : undefined;
         }
     }
 
@@ -432,7 +440,7 @@ export class OptionManager {
      * @returns The original way with the updated remaining path and a roundabout flag if applicable.
      */
 
-    protected getRemaining (partial:IncyclistWay): IncyclistWay {
+    protected getRemaining (partial:IncyclistWay): IncyclistWay|undefined {
 
         try {
             const originalWay= this.getWay(partial) 
@@ -480,7 +488,7 @@ export class OptionManager {
             return {...originalWay,path:newPath,roundabout};
     
         }
-        catch(err) {
+        catch(err:any) {
             const path = partial?.path??[]
             this.logError(err,'getRemaining',{id:partial?.id, path: path.map(p=>`${p?.id}`).join('|')})
             const p = partial??{} as IncyclistWay
@@ -510,6 +518,9 @@ export class OptionManager {
             if ( way.path.length>1) {
                 let prev = way.path[way.path.length-2];
                 const w = this.getWay(way)
+                if (!w)
+                    return []
+
                 if (w.roundabout) {
                     let branches = splitAtPoint(w,location);
                     branches.forEach ( b => {
@@ -520,8 +531,10 @@ export class OptionManager {
                     })    
                 }
                 else if ( w.path.length>1) {
-                    let result = this.map.splitAtFirstBranch(way);
-                    options.push({id:result.wayId, path:result.path,map:this.map});
+                    let result = this.map?.splitAtFirstBranch(way);
+                    if (result) {                        
+                        options.push({id:result.wayId, path:result.path??[],map:this.map});
+                    }
                 }
                 // don't add a single node way as option
                 
@@ -537,7 +550,7 @@ export class OptionManager {
     }
 
 
-    protected logError(err:Error, fn:string, args?) {
+    protected logError(err:Error, fn:string, args?:any) {
         const logInfo = args ?? {}
 
         this.logger.logEvent({message:'Error', fn, ...logInfo, error:err.message, stack:err.stack})

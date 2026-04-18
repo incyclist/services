@@ -8,16 +8,19 @@ import { RoutePoint } from "../../routes/base/types";
 
 
 export function addNode(node:number,nodesLookup:Record<string,IncyclistNode>,id:number,path:Array<IncyclistNode>):void {
-    let point = nodesLookup[node];
+    const point = nodesLookup[node];
 
-    if (point!==undefined )
+    if (point!==undefined ) {
         path.push ( point)
 
     
-    point.ways= point.ways??[];
-    let found = point.ways.find ( e=> (e.toString()===id.toString()) );
+        point.ways= point.ways??[];
+        let found = point.ways.find ( e=> (e.toString()===id.toString()) );
 
-    if (found===undefined) nodesLookup[node].ways.push(id.toString());
+        if (!found) {
+            point.ways.push(id.toString());
+        }
+    }
 }
 
 
@@ -49,7 +52,7 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
         try {
             data = JSON.parse(str);
         }
-        catch (err) {
+        catch(err:any) {
             const logger = new EventLogger('MapArea')
             logger.logEvent({message:"_parse: parsing error:",error:err.message, stack:err.stack})
             return;

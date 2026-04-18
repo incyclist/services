@@ -3,6 +3,7 @@ import any from 'promise.any'
 import { Singleton } from '../../base/types';
 import { sleep } from '../../utils/sleep';
 import { AppApiBase } from '../../apps/base/api/base';
+import { EventLogger } from 'gd-eventlog';
 
 const OVERPASS_URL_ALT1 = 'https://overpass.kumi.systems/api/interpreter'
 const OVERPASS_URL_ALT2 = 'https://lz4.overpass-api.de/api/interpreter';
@@ -34,11 +35,13 @@ export class OverpassApi extends AppApiBase {
 
     protected url:string
     protected mirrors:string[] = []
+    protected logger:EventLogger
 
-    constructor(props?) {
+    constructor(props?:{url:string}) {
         super()
         this.mirrors = [OVERPASS_URL_ALT1,OVERPASS_URL_ALT2,OVERPASS_URL_ALT3]    
         this.url = props?.url??  this.mirrors[0];
+        this.logger = new EventLogger('Overpass')
         if (props?.url) {
             if ( this.mirrors.indexOf(props.url)===-1) {
                 this.mirrors.push(props.url)
@@ -56,9 +59,11 @@ export class OverpassApi extends AppApiBase {
      * @param timeout the timeout in ms
      * @returns The result of the query as a JSON object or string
      */
-    async query( queryOL:string, timeout?:number):Promise<JSON|string> {
-        return this.bulkQuery(queryOL, timeout)
-            
+    async query( queryOL:string, timeout?:number):Promise<JSON|string|undefined> {
+        this.logger.logEvent({message:'query', queryOL, timeout})
+        const res = await this.bulkQuery(queryOL, timeout)
+        this.logger.logEvent({message:'query result', hasData: res!==undefined})
+        return res
     } 
 
     /**
@@ -94,7 +99,7 @@ export class OverpassApi extends AppApiBase {
         return '' // no base url as we want to switch between mirrors
     }
 
-    protected async bulkQuery( query:string, timeout?:number ):Promise<JSON|string> {
+    protected async bulkQuery( query:string, timeout?:number ):Promise<JSON|string|undefined> {
         
         const promises:Promise<JSON|string>[] = []
 

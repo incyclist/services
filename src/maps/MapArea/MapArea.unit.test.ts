@@ -1,16 +1,21 @@
-import fs from 'fs/promises';
-
 import {useMapArea} from './service';
-import testData from '../../../__tests__/data/overpass/MapArea-test1.json';
-import defaultData from '../../../__tests__/data/overpass/default-location.json';
-import roundaboutData from '../../../__tests__/data/overpass/roundabout-test.json';
-import roundaboutIssuesData from '../../../__tests__/data/overpass/roundabout-issues.json';
-import roundaboutIssue2 from '../../../__tests__/data/overpass/roundabout-issue2.json';
+import t1 from '../../../__tests__/data/overpass/MapArea-test1.json'
+import t2 from '../../../__tests__/data/overpass/default-location.json';
+import t3 from '../../../__tests__/data/overpass/roundabout-test.json';
+import t4 from '../../../__tests__/data/overpass/roundabout-issues.json';
+import t5 from '../../../__tests__/data/overpass/roundabout-issue2.json';
 
 import { MapArea } from './MapArea';
-import {  IncyclistNode, IncyclistWay, IncyclistWaySplit, PathCrossingInfo, WayInfo } from './types';
+import {  Boundary, IncyclistNode, IncyclistWay, IncyclistWaySplit, PathCrossingInfo, WayInfo } from './types';
 import { getPointCrossingPath, isOneWay } from './utils';
 import { DEFAULT_FILTER } from './consts';
+import { LatLng } from '../../utils/geo';
+
+const testData = t1 as unknown as JSON;
+const defaultData = t2 as unknown as JSON;
+const roundaboutData = t3 as unknown as JSON;
+const roundaboutIssuesData = t4 as unknown as JSON;
+const roundaboutIssue2 = t5 as unknown as JSON;
 
 
 const printWay = (way:WayInfo) => {
@@ -130,7 +135,7 @@ describe( 'MapArea', () => {
         
         let area: MapArea;
         let data
-        let testWays
+        let testWays: Array<any>
 
 
         
@@ -241,7 +246,7 @@ describe( 'MapArea', () => {
             jest.resetAllMocks()
         });
 
-        const addWay = (area,way) => {
+        const addWay = (area:any,way:any) => {
             
             area.data.waysLookup[way.id] = way
             area.data.ways.push(way)
@@ -304,7 +309,7 @@ describe( 'MapArea', () => {
     describe ( 'splitAtCrossingPoint', () => {
         
         let area: MapArea;
-        let data,location,boundary  
+        let data,location:LatLng,boundary:Boundary  
         
         beforeEach(() => {           
             // position and bounds are irrelevant for this test
@@ -497,9 +502,9 @@ describe( 'MapArea', () => {
     describe ( 'buidlSegmentInfo', () => {
         
         let area: MapArea;
-        let data,location,boundary  
+        let data,location:LatLng,boundary:Boundary
 
-        const prepareOptions = (wayId, crossingPoint, before,after) => {
+        const prepareOptions = (wayId:string, crossingPoint:IncyclistNode, before:Array<number>|null,after:Array<number>|null) => {
             const result:IncyclistWaySplit[] = []
             let path:Array<IncyclistNode> = []
             if (before) {

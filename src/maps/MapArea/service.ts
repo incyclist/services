@@ -7,7 +7,7 @@ import { buildQuery,getBounds, parseMapData } from "./utils";
 import { Injectable } from "../../base/decorators";
 import { MapArea } from "./MapArea";
 import { OptionManager } from "./options";
-import { OverpassApi } from "../../services/overpass";
+import { OverpassApi, useOverpassApi } from "../../services/overpass";
 import { waitNextTick } from "../../utils";
 import { sleep } from "../../utils/sleep";
 
@@ -54,10 +54,9 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     protected static consts = { DEFAULT_RADIUS,DEFAULT_MIN_WAYS,DEFAULT_MAX_WAYS,MAX_DISTANCE_FROM_PATH,GET_WAYS_IN_AREA }
 
 
-    protected overpass:OverpassApi
     protected loaded: 'success' | 'failure' |'unknown' = 'unknown'
-    protected observer: Observer
-    protected current: MapArea
+    protected observer?: Observer
+    protected current?: MapArea
     
     
     protected minWays: number
@@ -65,9 +64,9 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     protected radius: number
     protected filter:Array<string>
     protected maps: Record<string,MapAreaRecord> 
-    protected optionManager: OptionManager
-    protected iv: NodeJS.Timeout
-
+    protected optionManager?: OptionManager
+    protected iv?: NodeJS.Timeout
+    protected pending: Map<string, Promise<IMapArea|undefined>> = new Map()
 
     constructor () {
         super('MapArea')
@@ -84,19 +83,30 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
      * @param location - the location to load the map for
      * @returns a promise that resolves when the map is loaded, or rejects if the load fails
      */
-    async load( location: IncyclistNode):Promise<IMapArea> {
+    async load( location: IncyclistNode):Promise<IMapArea|undefined> {
+            const map = await this.findBestMap(location)
+            if (map) return map
 
-        const map = await this.findBestMap(location)
-        if (map) {
-            return map
-        }        
+            const key = this.mapsKey(location)
+            
+            // if already loading for this location, reuse the same promise
+            if (this.pending.has(key)) 
+                return this.pending.get(key)
 
-        return this.loadMap(location)
+            const promise = this.loadMap(location).finally(() => {
+                this.pending.delete(key)
+            })
+            this.pending.set(key, promise)
+            return promise
+
+
+
     }
 
-    getMap(location:IncyclistNode):IMapArea {
+    getMap(location:IncyclistNode):IMapArea|undefined {
         const maps = this.getAllMaps()??[]
-        return maps.find(m=>m.isWithinBoundary(location))        
+        const area = maps.find(m=>m.isWithinBoundary(location))
+        return area
     }
 
     getOptionManager():OptionManager {
@@ -105,7 +115,12 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     }
 
     setFilter(filter:Array<string>|null) {
-        this.filter = filter??undefined
+        if (filter===null) {
+            this.filter = []
+        }
+        else {
+            this.filter = filter
+        }
     }
 
 
@@ -123,7 +138,7 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
                 break
 
             const record = records.pop()
-            const {map,radius} = record
+            const {map,radius=DEFAULT_RADIUS} = record??{}
             if (!map)
                 continue
     
@@ -145,7 +160,7 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
         return best?.map
     }
 
-    async loadMap( location: IncyclistNode):Promise<IMapArea> {
+    async loadMap( location: IncyclistNode):Promise<IMapArea|undefined> {
         let ts
         
         for (let i=0;i<2;i++) {
@@ -173,9 +188,9 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
                 }
 
             }
-            catch (error) {
+            catch (err:any) {
                 const duration = ts? Date.now()-ts : undefined
-                this.logEvent({message:'overpass query result',status:'failure',error:{code:error.code,response:error.response},duration});
+                this.logEvent({message:'overpass query result',status:'failure',error:{code:err.code,response:err.response},duration});
             }
 
             // if we reach this point, then the map creation has failed, trigger next retry
@@ -184,12 +199,12 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
 
         // if we reach this point, then all retries have failed
         try {
-            const record = {map:undefined,lastUsed:Date.now(), radius:this.radius}               
-            const mapInfo = `${location.lat},${location.lng},${getMapInfo(record)}`
+            const record:Partial<MapAreaRecord> = {map:undefined,lastUsed:Date.now(), radius:this.radius}               
+            const mapInfo = `${location.lat},${location.lng},${getMapInfo(record as MapAreaRecord)}`
 
             this.logEvent({message:'Could not add map',map:mapInfo,cnt:Object.keys(this.maps).length,maps:Object.keys(this.maps).map(k=>getMapsInfo(this.maps,k))})                
         }
-        catch (err) {
+        catch (err:any) {
             this.logError(err,'loadMap')
         }
 
@@ -226,7 +241,7 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     }
 
 
-    createMapData( openmapData):FreeRideDataSet {
+    createMapData( openmapData:JSON|string):FreeRideDataSet {
         
 
         const data = parseMapData(openmapData,this.filter); 
@@ -285,6 +300,8 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     }
 
     protected garbageCollection() {
+        if (!this.current)
+            return
 
         const tsLastUsed = (m:MapAreaRecord) => m.map.getLastUsed()??m.lastUsed
 
@@ -305,12 +322,13 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
     }
 
 
+    protected get overpass ():OverpassApi {
+        return this.getOverpassAPI()
+    }
 
     @Injectable
     protected getOverpassAPI() {
-        this.overpass = this.overpass??new OverpassApi();
-        return this.overpass
-
+        return useOverpassApi()
     }
 
 

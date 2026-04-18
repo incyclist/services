@@ -1,18 +1,26 @@
 import {OptionManager} from "./options";
 import {useMapArea} from "./service"
 import {DEFAULT_POSITION, DEFAULT_RADIUS} from './consts'
-import defaultData from '../../../__tests__/data/overpass/default-location.json'
-import defaultData2 from '../../../__tests__/data/overpass/default-2.json'
-import defaultData3 from '../../../__tests__/data/overpass/default-3.json'
-import miamiData from '../../../__tests__/data/overpass/miami.json'
-import gardenData from '../../../__tests__/data/overpass/garden-issue1.json'
+import t1 from '../../../__tests__/data/overpass/default-location.json'
+import t2 from '../../../__tests__/data/overpass/default-2.json'
+import t3 from '../../../__tests__/data/overpass/default-3.json'
+import t4 from '../../../__tests__/data/overpass/miami.json'
+import t5 from '../../../__tests__/data/overpass/garden-issue1.json'
 
 import { MapArea } from "./MapArea";
 import { getBounds, getPointCrossingPath } from "./utils";
+import { LatLng } from "../../utils/geo";
+
+
+const defaultData = t1 as unknown as JSON
+const defaultData2 = t2 as unknown as JSON
+const defaultData3 = t3 as unknown as JSON
+const miamiData = t4 as unknown as JSON
+const gardenData = t5 as unknown as JSON
 
 describe('OptionManager',()=>{
 
-    const pathInfo = (path:any) => '['+path.map(p=>p.id??`{lat:${p.lat.toFixed(4)},lng:${p.lng.toFixed(4)}}`).join(',')+']'
+    const pathInfo = (path:any) => '['+path.map( (p:any)=>p.id??`{lat:${p.lat.toFixed(4)},lng:${p.lng.toFixed(4)}}`).join(',')+']'
 
 
 
@@ -27,7 +35,7 @@ describe('OptionManager',()=>{
 
             useMapArea().load = jest.fn( async (location) =>  {
                 if (maps?.[location.id??'']) {
-                    const d = maps[location.id??'']
+                    const d = maps[location.id??''] as JSON
                     return new MapArea(useMapArea().createMapData(d),location,boundary)                    
                 }
                 return new MapArea(mapData,location,boundary)
@@ -108,15 +116,15 @@ describe('OptionManager',()=>{
     describe ('getNextOptions',()=>{
 
         let manager: OptionManager
-        let map
+        let map: MapArea
 
-        const setup  = async (data,location,maps?:Record<string,object>)=> {
+        const setup  = async (data:JSON,location:LatLng,maps?:Record<string,object>)=> {
             const mapData = useMapArea().createMapData(data)
             const boundary = getBounds(location.lat,location.lng,DEFAULT_RADIUS)
 
             useMapArea().load = jest.fn( async (location) =>  {
                 if (maps?.[location.id??'']) {
-                    const d = maps[location.id??'']
+                    const d = maps[location.id??''] as JSON
                     return new MapArea(useMapArea().createMapData(d),location,boundary)                    
                 }
                 return new MapArea(mapData,location,boundary)

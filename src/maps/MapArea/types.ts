@@ -45,8 +45,8 @@ export type FreeRideContinuation = {
 }
 
 export interface IMapAreaService  {
-    load( location: IncyclistNode): Promise<IMapArea>
-    getMap(location:IncyclistNode):IMapArea 
+    load( location: IncyclistNode): Promise<IMapArea|undefined>
+    getMap(location:IncyclistNode):IMapArea|undefined 
 }
 
 

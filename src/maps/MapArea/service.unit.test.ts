@@ -1,6 +1,6 @@
 import { MapArea } from "./MapArea"
 import { MapAreaService, useMapArea } from "./service"
-import { FreeRideDataSet, IMapArea } from "./types"
+import { FreeRideDataSet, IMapArea, IncyclistNode } from "./types"
 
 describe('MapAreaService', () => {
 
@@ -8,21 +8,23 @@ describe('MapAreaService', () => {
 
         let service: MapAreaService
 
-        const setupMocks = (s,data) => {
+        const setupMocks = (s:any,data:Array<any>) => {
 
-            const addMap = (str,idx) :Partial<IMapArea> => {
+            const addMap = (str:string) :Partial<IMapArea> => {
                 const [location, radius, bounds] = str.split(':')  
+                const [lat,lng] = location.split(',')
+                const pos:IncyclistNode = {lat:Number(lat),lng:Number(lng)}
 
                 const [neLat,neLng,swLat,swLng] = bounds.replace('[','').replace(']','').split(',')
                 const data: Partial<FreeRideDataSet> = {}
                 const boundary = { northeast:{lat:Number(neLat),lng:Number(neLng)}, southwest:{lat:Number(swLat),lng:Number(swLng)} }
-                const map = new MapArea(data as FreeRideDataSet,location,boundary)
+                const map = new MapArea(data as FreeRideDataSet,pos,boundary)
                 s.maps[location] = {map,radius:Number(radius),lastUsed:Date.now()}  
                 return map
             }
 
             s.maps = {}
-            data.forEach((d,idx) => { addMap(d,idx) })  
+            data.forEach((d,idx) => { addMap(d) })  
             s.loadMap = jest.fn()
 
             return { loadMap:s.loadMap }
@@ -61,11 +63,30 @@ describe('MapAreaService', () => {
 
             service = new MapAreaService()
             const mocks = setupMocks(service,testData)
+            mocks.loadMap.mockResolvedValue(undefined)
+
             await service.load(location)
 
             expect(mocks.loadMap).toHaveBeenCalledTimes(1)
 
         })
+
+
+        test('concurrent loads for same location only trigger one loadMap call', async () => {  
+            const location = {lat:40.7127281,lng:-74.0060152}
+            const testData = [
+                "26.68537966608196,-80.03481961660725:1000:[26.69436287103533,-80.02476550851868,26.67639646112859,-80.04487372469582]",
+            ]
+
+            service = new MapAreaService()
+            const mocks = setupMocks(service,testData)
+            mocks.loadMap.mockResolvedValue(undefined)
+
+            // fire two concurrent loads for the same location           
+            await Promise.all([service.load(location), service.load(location)])
+
+            expect(mocks.loadMap).toHaveBeenCalledTimes(1)
+        })        
 
     })
 
