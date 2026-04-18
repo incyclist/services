@@ -31,7 +31,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
 
-    async initPage():Promise<RideType> {
+    async initPage():Promise<RideType|undefined> {
         try {
             const service = this.getRideDisplay()
 
@@ -40,7 +40,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             
             return service.getRideType()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'initPage')
         }
     }
@@ -66,15 +66,18 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                     this.updatePageDisplay()
                 })
             }
-            catch(err) {
+            catch(err:any) {
                 this.logError(err,'openPage')
             }
             return this.getPageObserver()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'openPage')
         }
+        return this.getPageObserver()
     }
+
+
     closePage(): void {
         try {
             EventLogger.setGlobalConfig('page',null)
@@ -85,12 +88,12 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.isInitialized = false
             super.closePage()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'closePage')
         }
     }
 
-    pausePage(): Promise<void> {
+    async pausePage(): Promise<void> {
         try {
             this.backgroundTimer = setTimeout(()=> {
                 this.getRideDisplay().pause('user')
@@ -100,12 +103,12 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.isInitialized = false
             return super.pausePage()
         }
-        catch(err)  {
+        catch(err:any)  {
             this.logError(err,'pausePage')
         }
     }
 
-    resumePage(): Promise<void>  {
+    async resumePage(): Promise<void>  {
         try {
             if (this.backgroundTimer) {
                 clearTimeout(this.backgroundTimer)
@@ -120,14 +123,16 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         //     // short interruption -- ride never paused, nothing to do        
 
             return super.resumePage()
-        } catch(err) {
+        } catch(err:any) {
             this.logError(err,'resumePage')
         }
+        
     }    
 
     getRideObserver(): IObserver|null {
-        return this.rideObserver
+        return this.rideObserver??null
     }
+
     getPageDisplayProps(): AnyRidePageDisplayProps {
         try {
             const rideType = this.getRideDisplay().getRideType()
@@ -142,7 +147,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             }
 
         }
-        catch(err) {
+        catch(err:any) {
             return null
         }
 
@@ -165,7 +170,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.menuProps = { showResume: state==='Paused' }
             this.updatePageDisplay()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onMenuOpen')
         }
     }
@@ -175,7 +180,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.menuProps = null
             this.updatePageDisplay()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onMenuOpen')
         }
     }
@@ -186,7 +191,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.menuProps = { showResume: true}  // menu stays open, now shows Resume
             this.updatePageDisplay()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onPause')
         }
     }
@@ -197,7 +202,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.menuProps = null
             this.updatePageDisplay()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onResume')
         }
     }
@@ -207,7 +212,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.getRideDisplay().stop()
             this.moveToPreviousPage()
             this.closePage()
-        } catch(err) {
+        } catch(err:any) {
             this.logError(err,'onEndRide')
         }
     }
@@ -215,7 +220,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     onRetryStart() {
         try {
             this.getRideDisplay().retryStart()
-        } catch(err) {
+        } catch(err:any) {
             this.logError(err,'onRetryStart')
         }
     }
@@ -224,20 +229,23 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         try {
             this.getRideDisplay().startWithMissingSensors();
         }
-        catch(err)  {
+        catch(err:any)  {
             this.logError(err,'onIgnoreStart')
         }
     }
 
-    async onCancelStart() {
+    onCancelStart() {
         try {
             this.rideObserver?.stop()
-            await this.getRideDisplay().cancelStart();
+            this.getRideDisplay().cancelStart()
+                .then( ()=> {
+                    this.moveToPreviousPage()
+                    this.closePage()
+                })
+                .catch( (err:any)=> {this.logError(err,'onCancelStart') } )
 
-            this.moveToPreviousPage()
-            this.closePage()
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'onCancelStart')
         }
     }
@@ -288,7 +296,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
 
     protected async checkSecretValidity() {
-        if (this.getBindings().appInfo.getChannel()==='mobile') {
+        if (this.getBindings().appInfo?.getChannel()==='mobile') {
             const secretsStatus = this.getSecretBinding().getSecretsStatus?.() 
 
             if (secretsStatus === 'stale' || secretsStatus === 'missing' || secretsStatus===undefined) {
@@ -365,7 +373,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     protected get rideObserver () {
         try {
             return this.getRideDisplay()?.getObserver()
-        }catch(err) {
+        }catch(err:any) {
             this.logError(err,'get rideObserver')
         }
     }
@@ -380,7 +388,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     protected getSecretBinding(): ISecretBinding {
-        return this.getBindings().secret
+        return this.getBindings().secret!
     }
 
     @Injectable

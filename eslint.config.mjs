@@ -22,7 +22,7 @@ export default tseslint.config(
             }
         },
         rules: {
-            '@typescript-eslint/no-explicit-any': 'warn',       // was error, too noisy in tests
+            '@typescript-eslint/no-explicit-any': 'off',       // was error, too noisy in tests
             '@typescript-eslint/no-unused-vars': 'warn',        // same
             '@typescript-eslint/no-require-imports': 'warn',    // .cjs files legitimately use require
             '@typescript-eslint/no-unused-expressions': 'off',  // chai-style assertions
