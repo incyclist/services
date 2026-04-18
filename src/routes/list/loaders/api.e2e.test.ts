@@ -1,9 +1,9 @@
 import IncyclistRoutesApi from '../../base/api'
-import { DEFAULT_ROUTE_API } from '../../base/api/consts'
 import { Route } from '../../base/model/route'
 import {RoutesApiLoader}  from './api'
 import { RouteListService } from '../service'
 import { waitNextTick } from '../../../utils'
+const DEFAULT_ROUTE_API = 'https://dlws.incyclist.com/api/v1/routes'
 
 describe('RouteApiLoader',()=>{
 

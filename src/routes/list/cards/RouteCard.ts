@@ -166,7 +166,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         try {
             path = decodeURIComponent(path)
         }
-        catch {}
+        catch { /**/ }
         return path
     }
 
@@ -289,7 +289,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 points = undefined
             }
 
-            let isNew = checkIsNew(descr);
+            const isNew = checkIsNew(descr);
             const loaded = details!==undefined
 
             const loading = this.deleteObserver!==undefined
@@ -358,7 +358,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     getId(): string {
-        return this.route?.description?.id!
+        return this.route?.description?.id
     }
 
     enableDelete(enabled:boolean=true) {
@@ -475,14 +475,13 @@ export class RouteCard extends BaseCard implements Card<Route> {
             value = p
         else  {
             const point:RoutePoint = p
-            value = C( point.routeDistance, 'distance')
+            value = C( point.routeDistance, 'distance')??0
         }
-        console.log('# update start pos',p)
 
         if (data?.startPos.value===value)
             return null;
 
-        const startPos = { value, unit: U('distance') }
+        const startPos = { value, unit: U('distance')??'m' }
 
         const updated = { ...data}
         updated.startPos = startPos       
@@ -504,14 +503,14 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         try {
             
-            delete props['prevRides']
+            delete (props as any).prevRides
 
             if (isUI) {
                 const  uiProps  = props as UIRouteSettings
                 const {realityFactor, segment, showPrev, loopOverwrite,nextOverwrite} = uiProps
 
-                const startPos= C(uiProps.startPos.value,'distance',{from:U('distance'), to:'m'})
-                const endPos= uiProps.endPos===undefined ? uiProps.endPos : C(uiProps.endPos.value,'distance',{from:U('distance'), to:'m'})
+                const startPos:number= C(uiProps.startPos.value,'distance',{from:U('distance'), to:'m'})??0
+                const endPos:number|undefined= uiProps.endPos===undefined ? undefined : C(uiProps.endPos.value,'distance',{from:U('distance'), to:'m'})
                 
                 this.startSettings = {
                     ...this.startSettings,

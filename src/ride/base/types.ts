@@ -60,7 +60,7 @@ export interface RouteDisplayProps extends IRideModeServiceDisplayProps {
     sideViews: SideViewsShown
     route: Route
     startPos: number,
-    endPos: number,
+    endPos: number|undefined,
     realityFactor: number
     nearbyRides: NearbyDisplayProps
     map?: MapOverlayDisplayProps    
@@ -106,7 +106,7 @@ export interface MapOverlayDisplayProps extends OverlayDisplayProps {
     viewport?: MapViewPort
     viewportOverwrite?: boolean
     center?: LatLng
-    bounds?: Number[][]
+    bounds?: number[][]
     onViewportChange?: (viewport: MapViewPort) => void
 }
 

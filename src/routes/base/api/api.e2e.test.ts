@@ -1,5 +1,6 @@
-import { DEFAULT_ROUTE_API } from './consts'
 import  IncyclistRoutesApi  from './index'
+
+const DEFAULT_ROUTE_API = 'https://dlws.incyclist.com/api/v1/routes'
 
 class Api extends IncyclistRoutesApi {
     getBaseUrl() {

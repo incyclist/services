@@ -65,7 +65,7 @@ export class UnitConverterService extends IncyclistService{
 
 
 
-    convert( value:number, dimension:Dimension, props?:ConvertProps ): number {
+    convert( value:number, dimension:Dimension, props?:ConvertProps ): number|undefined {
 
         if (value===undefined || value===null || Number.isNaN(value)) 
             return undefined
@@ -98,7 +98,7 @@ export class UnitConverterService extends IncyclistService{
             return props?.digits===undefined ? res : round(res,props.digits)        
 
         }
-        catch(err) {
+        catch(err:any) {
             const p = props??{}
             this.logError( err,'convert', {convertArgs: {value, dimension, ...p}})
             return value
@@ -110,7 +110,7 @@ export class UnitConverterService extends IncyclistService{
             const units = this.getUnits() === 'metric' ? this.metric : this.imperial
             return units[dimension]
         }
-        catch(err) {
+        catch(err:any) {
             this.logError(err,'getUnit')
             return
         }
@@ -143,9 +143,12 @@ export class UnitConverterService extends IncyclistService{
 export const useUnitConverter = ()=> new UnitConverterService()
 
 
-export const getUnitConversionShortcuts = ()=> {
+export const getUnitConversionShortcuts = (): [
+    typeof UnitConverterService.prototype.convert,
+    typeof UnitConverterService.prototype.getUnit
+] => {
     const c = useUnitConverter()
     const C = useUnitConverter().convert.bind(c)
     const U = useUnitConverter().getUnit.bind(c)
-    return [C,U]
+    return [C, U]
 }
