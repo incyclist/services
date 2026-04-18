@@ -60,7 +60,8 @@ export class AppStateService extends IncyclistService {
         try {
             this.getUserSettings().set(`state.${key}`,value)
         }
-        catch {}
+        catch { // ignore
+            }
 
     }
     /**

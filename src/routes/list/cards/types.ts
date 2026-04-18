@@ -39,9 +39,8 @@ export interface SummaryCardDisplayProps extends RouteInfo{
     downloadObserver?: DownloadObserver
 }
 
-export interface DetailCardDisplayProps  {
-    
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface DetailCardDisplayProps  {}
 
 export interface StartSettings {
     segment?:string

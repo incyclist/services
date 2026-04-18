@@ -138,7 +138,8 @@ export class RideModeService extends IncyclistService implements IRideModeServic
                 await this.getDeviceRide().sendUpdate(r)
                 await sleep(50)
             }
-            catch {}                
+            catch { // ignore
+            }                
             this.processing.shift()
 
 

@@ -72,6 +72,7 @@ export interface PathCrossingInfo {
 
 export type OverpassElementType = 'way' | 'node'
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export type OverpassTags = {}
 
 export type OverpassBounds = {

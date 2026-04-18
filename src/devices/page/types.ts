@@ -1,4 +1,3 @@
-import type { IncyclistCapability } from "incyclist-devices"
 import type { DevicePairingStatus } from "../pairing/model"
 
 export type PageState    =  'Idle' | 'Scanning' | 'Pairing' | 'Done' | 'Closed' 
@@ -80,9 +79,8 @@ type ButtonProps = {
 }
 export type PairingButtonProps = Array<ButtonProps>
 
-export type DeviceListDisplayProps = {
-
-}
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export type DeviceListDisplayProps = {}
 
 
 export type TIncyclistCapability = 'power' | 'speed' | 'cadence' | 'heartrate' | 'control' | 'app_control'

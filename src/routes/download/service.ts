@@ -111,7 +111,8 @@ export class RouteDownloadService extends IncyclistService {
                 this.logEvent({message:'video dir set', videoDir})
                 return Promise.resolve(videoDir)
             }
-            catch {}
+            catch { // ignore
+            }
         } 
 
         const settings = useUserSettings()

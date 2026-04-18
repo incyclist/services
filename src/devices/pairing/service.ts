@@ -1747,7 +1747,8 @@ export class DevicePairingService  extends IncyclistService{
                 a.adapter?.onScanStop()
                 a.adapter?.off('data',a.handler) 
             } 
-            catch {}
+            catch { // ignore
+            }
         })
 
         delete this.state.scan.adapters

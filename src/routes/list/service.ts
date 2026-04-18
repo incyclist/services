@@ -274,7 +274,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             }
         }
-        catch {}
+        catch { // ignore
+            }
 
         return this.filters
 

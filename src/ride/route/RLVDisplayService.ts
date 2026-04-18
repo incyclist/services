@@ -595,7 +595,8 @@ export class RLVDisplayService extends RouteDisplayService {
 
             }
         }
-        catch {}
+        catch { // ignore
+            }
         return error.message    
     }
 

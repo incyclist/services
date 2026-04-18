@@ -34,6 +34,7 @@ export interface IRideModeServiceDisplayProps {
     dbColumns?: number
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface WorkoutDisplayProps extends IRideModeServiceDisplayProps {}
 
 export interface CurrentPosition extends RoutePoint {

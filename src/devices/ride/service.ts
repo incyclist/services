@@ -1293,7 +1293,8 @@ export class DeviceRideService  extends IncyclistService{
             
             await this.sendUpdate({...resetRequest,slope:0,forced:true})
         }
-        catch { }
+        catch { // ignore
+            }
     }
 
     pause():void {
@@ -1503,7 +1504,8 @@ export class DeviceRideService  extends IncyclistService{
             try {
                 await Promise.allSettled( this.promiseSendUpdate)
             }
-            catch {}            
+            catch { // ignore
+            }            
         }
     }
 
