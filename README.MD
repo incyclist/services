@@ -11,6 +11,7 @@ import {useXXX, initXXX} from {incyclist-devices}
 
 ```
 
+
 - useXXX  can be used to consume a Service (e.g. `useDeviceConfiguration()` ) 
 - initXXX can be used to perform a lazy initialization of the Service (e.g. `initUserSettings(binding)` ) 
 
