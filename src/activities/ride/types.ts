@@ -1,5 +1,6 @@
 import { HealthStatus } from "../../devices"
 import { Dimension, Unit } from "../../i18n"
+import { RoutePoint } from "../../types"
 import { ActivityDetailsUI } from "../base"
 
 export type ActivityState = 'ininitalized' | 'active' | 'paused' | 'completed' | 'idle'
@@ -34,5 +35,20 @@ export interface ActivityDashboardItem {
     size?: number
     dataState?: HealthStatus
 }
+
+export interface CurrentActivityData { 
+    position?:RoutePoint, 
+    distance?:number, 
+    routeDistance?:number, 
+    time?:number, 
+    speed?:number, 
+    power?:number, 
+    slope?:number, 
+    heartrate?:number, 
+    cadence?:number, 
+    timeRemaining?:number, 
+    distanceRemaining?:number,
+    lap?:number, 
+    gear?:string }
 
 export type ActivityDashboardDisplayProperties = ActivityDashboardItem[]

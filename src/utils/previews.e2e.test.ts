@@ -1,12 +1,16 @@
-import previewsData from '/mnt/c/temp/Incyclist/previews.json'
 import fs from 'fs/promises'
 import { KWTParser } from '../routes/base/parsers'
 import { FileInfo } from '../api'
 import path from 'path'
 import { parseXml } from './xml'
 
-const XML_DIR = '/mnt/nas/data/videos/reallifevideo.de/XML'
-//const PREVIEW_DIR = '/mnt/nas/data/videos/reallifevideo.de/Previews'
+const DATA_FILE = process.env.DATA_FILE??'/mnt/c/temp/Incyclist/previews.json'
+const XML_DIR   = process.env.XML_DIR??'/mnt/nas/data/videos/reallifevideo.de/XML'
+
+const previewsData = await import(DATA_FILE, {with: {type: 'json'}}).catch(() => {
+    throw new Error('previews.json not found - run the preview generation script first')
+})
+
 
 describe.skip( 'previewlist',()=>{
 
