@@ -16,9 +16,9 @@ export class JsonRepository {
     }
 
     protected name: string;
-    protected db: string
+    protected db?: string
     protected logger: EventLogger
-    protected access: JsonAccess
+    protected access?: JsonAccess
 
     constructor(repoName:string) {
         this.name  = repoName;
@@ -35,33 +35,64 @@ export class JsonRepository {
     }
 
     async write(objectName:string, data:JSONObject):Promise<boolean> {
-        await this.open()
-
-        const success = await this.access.write(objectName,data)
-        return success
         
-
-    }
-    async read(objectName:string):Promise<JSONObject> {
         await this.open()
+        if (!this.access)
+            return false
 
+        const success = await this.access.write(this.toFileName(objectName), data)
 
-        const data = await this.access.read(objectName)
+        
+        // migrate legacy file if it exists
+        if (objectName.includes(':')) {
+            await this.access.delete(objectName).catch(() => { /* intentionally empty */ })
+        }
+        return success                
+    }
+
+    async read(objectName:string):Promise<JSONObject|undefined> {
+        await this.open()
+        if (!this.access)
+            return;
+
+        const fileName = this.toFileName(objectName)
+
+        let data 
 
         try {
+            data = await this.access.read(fileName)
+        }
+        catch {/* intentionally empty */}
+
+        // fall back to legacy filename if not found
+
+        try {
+            if (!data  && objectName.includes(':')) {
+                data = await this.access.read(objectName)
+            }
+
             const str = JSON.stringify(data)
-            if (str === '{}' || str.length<2)
-                return null
+            if (str === '{}' || str.length < 2)
+                return
         }
         catch {
-            return null
+            return
         }
         return data
 
     }
 
     async delete(objectName:string):Promise<boolean> {
-        return await this.access.delete(objectName)
+        await this.open()
+        if (!this.access)
+            return false;
+            
+        const result = await this.access.delete(this.toFileName(objectName))
+
+        if (objectName.includes(':'))
+            await this.access.delete(objectName).catch(() => { /* intentionally empty */ })
+
+        return result        
     }
 
 
@@ -93,7 +124,11 @@ export class JsonRepository {
 
     }
 
-    async list( exclude?:string|Array<string>):Promise<Array<string>> {
+    async list( exclude?:string|Array<string>):Promise<Array<string>|null> {
+        await this.open()
+        if (!this.access)
+            return null;
+            
 
         try {
             
@@ -122,12 +157,14 @@ export class JsonRepository {
         const db = getBindings().db
  
         db.release(this.name)
-        this.access = null;
+        delete this.access
         return true
     }
 
 
-
+    protected toFileName(objectName: string): string {
+        return objectName.replaceAll(':', '_')
+    }
 
 
 
