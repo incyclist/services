@@ -59,6 +59,7 @@ export class AppsService extends IncyclistService   {
 
         const success = await entry.connection.connect(credentials)
         this.emit('connected',app,success)
+        return success
         
     }
 

@@ -36,32 +36,53 @@ export class JsonRepository {
 
     async write(objectName:string, data:JSONObject):Promise<boolean> {
         await this.open()
+        const success = await this.access.write(this.toFileName(objectName), data)
 
-        const success = await this.access.write(objectName,data)
-        return success
         
-
+        // migrate legacy file if it exists
+        if (objectName.includes(':')) {
+            await this.access.delete(objectName).catch(() => { /* intentionally empty */ })
+        }
+        return success                
     }
-    async read(objectName:string):Promise<JSONObject> {
+
+    async read(objectName:string):Promise<JSONObject|undefined> {
         await this.open()
 
+        const fileName = this.toFileName(objectName)
 
-        const data = await this.access.read(objectName)
+        let data 
 
         try {
+            data = await this.access.read(fileName)
+        }
+        catch {/* intentionally empty */}
+
+        // fall back to legacy filename if not found
+
+        try {
+            if (!data  && objectName.includes(':')) {
+                data = await this.access.read(objectName)
+            }
+
             const str = JSON.stringify(data)
-            if (str === '{}' || str.length<2)
-                return null
+            if (str === '{}' || str.length < 2)
+                return
         }
         catch {
-            return null
+            return
         }
         return data
 
     }
 
     async delete(objectName:string):Promise<boolean> {
-        return await this.access.delete(objectName)
+        const result = await this.access.delete(this.toFileName(objectName))
+
+        if (objectName.includes(':'))
+            await this.access.delete(objectName).catch(() => { /* intentionally empty */ })
+
+        return result        
     }
 
 
@@ -127,7 +148,13 @@ export class JsonRepository {
     }
 
 
+    protected toFileName(objectName: string): string {
+        return objectName.replace(/:/g, '_')
+    }
 
+    protected toLegacyFileName(objectName: string): string {
+        return objectName  // original, with colon
+    }
 
 
 
