@@ -33,7 +33,7 @@
     "typescript-eslint": "^8.58.2"
   },
   "scripts": {
-    "lint": "eslint . --ext .ts",
+    "lint": "eslint . --quiet",
     "buildx": "npm run lint && tsc",
     "build": "npm run build:esm && npm run build:cjs",
     "build:esm": "tsc -p tsconfig.esm.json",

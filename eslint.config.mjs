@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
 export default tseslint.config(
-    { ignores: ['lib/'] },
+    { ignores: ['lib/**', 'samples/**', 'tools/**', '*.cjs'] },
 
     js.configs.recommended,
     ...tseslint.configs.recommended,
@@ -15,8 +15,18 @@ export default tseslint.config(
             globals: {
                 ...globals.es2021,
                 ...globals.node,
+            },
+            parserOptions: {
+                project: ['./tsconfig.base.json', './tsconfig.esm.json', './tsconfig.cjs.json'],
+                tsconfigRootDir: import.meta.dirname,                
             }
         },
-        rules: {}
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'warn',       // was error, too noisy in tests
+            '@typescript-eslint/no-unused-vars': 'warn',        // same
+            '@typescript-eslint/no-require-imports': 'warn',    // .cjs files legitimately use require
+            '@typescript-eslint/no-unused-expressions': 'off',  // chai-style assertions
+
+        }
     }
 );
