@@ -11,7 +11,7 @@ export interface DeviceListEntry {
     settings: IncyclistDeviceSettings,
     displayName?: string,
     mode?:string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     modes?:{ [index:string]:any  }
 }
 
@@ -26,7 +26,7 @@ export interface InterfaceSetting {
 export interface ModeListEntry {
     mid: string;
     mode: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     setting: any
 }
 

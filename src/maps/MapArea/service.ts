@@ -268,7 +268,7 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
         
         if (ways.length < this.minWays) {
             if (ways.length > 0) {
-                let gap = this.minWays / ways.length;
+                const gap = this.minWays / ways.length;
                 this.radius = this.radius * Math.sqrt(gap);
             }
             else {
@@ -276,7 +276,7 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
             }
         }
         else if (ways.length > this.maxWays) {
-            let gap = ways.length / this.maxWays;
+            const gap = ways.length / this.maxWays;
             this.radius = this.radius / Math.sqrt(gap);
         }
     }

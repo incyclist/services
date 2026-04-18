@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { UserSettingsBinding } from "./types";
 import fs from 'fs/promises'
 

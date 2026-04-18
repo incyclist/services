@@ -1013,7 +1013,7 @@ export class ActiveRidesService extends IncyclistService {
             this.coaches = coaches.map(c=>{
                 const props = c.getRidersListDisplayProperties() as ActiveRideEntry
 
-                let routeDistance = props.currentRideDistance
+                const routeDistance = props.currentRideDistance
 
                 const entry:ActiveRideEntry = {...props,
                     ride: this.current?.ride,

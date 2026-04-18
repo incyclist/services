@@ -50,7 +50,7 @@ export interface LegacyDeviceConnectionSettings {
 
 export interface IncyclistModeSettings {
     mode: string
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     settings: any 
 }
 

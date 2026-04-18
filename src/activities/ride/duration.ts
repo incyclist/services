@@ -78,7 +78,7 @@ export class ActivityDuration {
             this.checkIfCacheIsInvalid(routePos, route);
 
             if (this.cache) {
-                let updateFrequency = this.getUpdateFrequency(time); 
+                const updateFrequency = this.getUpdateFrequency(time); 
 
                 const timeSinceLastUpdate = Date.now()-this.cache.ts;
         

@@ -173,7 +173,7 @@ export const fixAnomaly  = ( anomaly:Anomaly, points: RoutePoint[]) => {
 export const fixAnomalies= (points: RoutePoint[], maxAttempts:number=1000) => { 
     let fixed = 0
     let anomalies = []
-    let tsStart = Date.now()
+    const tsStart = Date.now()
     let prev:Anomaly
     let stuck = false
     let error 
@@ -218,7 +218,7 @@ export const fixAnomalies= (points: RoutePoint[], maxAttempts:number=1000) => {
         error = err
     }
 
-    let tsStop = Date.now()
+    const tsStop = Date.now()
 
     return {fixed, time: tsStop-tsStart, fixedRecords,error}
 

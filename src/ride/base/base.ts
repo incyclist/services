@@ -212,7 +212,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
             return { bike: 'Simulator', interface: 'Simulator',bikeMode: 'Simulator' }  
         }
 
-        let bikeMode = mode?.getName()
+        const bikeMode = mode?.getName()
         const settings = mode?.getSettings()??{}
         const logProps = { bikeMode, ...settings}
         this.updatePropsForForcedERG(mode, logProps)

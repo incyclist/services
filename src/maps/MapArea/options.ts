@@ -200,7 +200,7 @@ export class OptionManager {
     protected checkOptionsOnDifferentWay(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ):FreeRideContinuation[]{
         if (!w?.path || !location) return [];
 
-        let roundabout = isRoundabout(w);
+        const roundabout = isRoundabout(w);
         if (roundabout)
             return this.getOptionsRoundabout(location,w,options);
         
@@ -220,7 +220,7 @@ export class OptionManager {
 
 
     protected getOptionsFirstPoint(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ){ 
-        let result = this.map?.splitAtFirstBranch(w);
+        const result = this.map?.splitAtFirstBranch(w);
         let expand = false;
 
         if (!result?.path)
@@ -325,7 +325,7 @@ export class OptionManager {
     }
 
     protected getOptionsMiddle(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ){ 
-        let ways = splitAtPoint(w,location);
+        const ways = splitAtPoint(w,location);
         if ( !ways[0].onewayReverse ) {
             const result = this.map.splitAtFirstBranch( ways[0]);
             options.push({id:result.wayId, path:result.path,map:this.map});
@@ -338,11 +338,11 @@ export class OptionManager {
     }
 
     protected getOptionsRoundabout(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ){
-        let r =  splitAtPoint(w,location);
+        const r =  splitAtPoint(w,location);
         if (!r?.length)
             return;
 
-        let path=[];
+        const path=[];
         
         r[0].path.forEach( (p,idx) => {
 
@@ -354,17 +354,17 @@ export class OptionManager {
             if (p.ways.length>1) {
                 p.ways.forEach ( owid => {
                     if (owid!==w.id) {
-                        let ow = clone(this.map?.getWay(owid));
+                        const ow = clone(this.map?.getWay(owid));
                         if (ow!==undefined) {
                             if ( !isAllowed(ow,p)) 
                                 return;
 
                             if ( ow.path.at(-1).id === p.id)
                                 ow.path.reverse();
-                            let optPath1 = this.map.splitAtFirstBranch(ow);
-                            let optPath  = [...path];
+                            const optPath1 = this.map.splitAtFirstBranch(ow);
+                            const optPath  = [...path];
                             optPath.push(...optPath1.path)
-                            let o = {
+                            const o = {
                                 roundabout:w.id,
                                 id: ow.id,
                                 path: optPath,
@@ -516,13 +516,13 @@ export class OptionManager {
 
         try {
             if ( way.path.length>1) {
-                let prev = way.path.at(-2);
+                const prev = way.path.at(-2);
                 const w = this.getWay(way)
                 if (!w)
                     return []
 
                 if (w.roundabout) {
-                    let branches = splitAtPoint(w,location);
+                    const branches = splitAtPoint(w,location);
                     branches.forEach ( b => {
                         if (b.path.length>1 && b.path[1].id !== prev.id) {
                             const {id,path} = b
@@ -531,7 +531,7 @@ export class OptionManager {
                     })    
                 }
                 else if ( w.path.length>1) {
-                    let result = this.map?.splitAtFirstBranch(way);
+                    const result = this.map?.splitAtFirstBranch(way);
                     if (result) {                        
                         options.push({id:result.wayId, path:result.path??[],map:this.map});
                     }

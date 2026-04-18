@@ -109,7 +109,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
         return
     }
     
-    let targetFileName = referenced.file;
+    const targetFileName = referenced.file;
     const regex = /([\\/])/g;
 
     if (targetFileName.startsWith('http://') || targetFileName.startsWith('https://')) { 

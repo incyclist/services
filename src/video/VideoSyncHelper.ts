@@ -150,7 +150,7 @@ export class VideoSyncHelper extends IncyclistService{
             this.rlvPrev = {...this.rlvStatus}
 
             this.tsStart = this.tsStart ??Date.now()
-            let updates:string[] = []
+            const updates:string[] = []
 
             if (e.bufferedTime!==undefined) {
                 this.setBufferedTime(e.bufferedTime)
@@ -321,7 +321,7 @@ export class VideoSyncHelper extends IncyclistService{
         const distance = Math.max(0, this.loopMode ? routeDistance % totalDistance : Math.min(routeDistance, totalDistance))
 
 
-        let updates:string[] = []
+        const updates:string[] = []
         if (distance<this.activityStatus.routeDistance-100) {
             updates.push('activity:lap')
             this.activityStatus.lap++
@@ -739,7 +739,7 @@ export class VideoSyncHelper extends IncyclistService{
 
     protected isNextLap(vt:number):boolean {
         try  {
-            let time = vt
+            const time = vt
             const totalTime = this.mapping.at(-1).time
             return  (time>totalTime && this.loopMode && !this.rlvStatus.lapRequested)
         }

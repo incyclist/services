@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 export function Singleton<T extends new (...args: any[]) => any>(originalConstructor: T,_context): T {

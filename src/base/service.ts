@@ -21,7 +21,7 @@ export class IncyclistService extends EventEmitter {
         const emitPayload = {...event}
         delete emitPayload.ts
         this.emit('log',emitPayload)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const w = global.window as any
     
         // if (this.debug || w?.SERVICE_DEBUG || process.env.DEBUG*/) 

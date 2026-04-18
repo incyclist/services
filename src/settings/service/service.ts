@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import {EventLogger} from 'gd-eventlog'
 import clone from '../../utils/clone';
 import { merge } from '../../utils/merge';

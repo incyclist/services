@@ -102,7 +102,6 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
     private async processRouteFromApi(descr,items) {
         let description;
-        let isUpdated = false
         const existing = this.getDescriptionFromDB(descr.routeId??descr.id)
 
         if (ExistingAndNotUpdated(existing, descr)) {

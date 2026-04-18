@@ -356,7 +356,7 @@ export class DeviceRideService  extends IncyclistService{
         const { points, totalDistance } = this.updatePointsFromStartPos(routeData,startPos, isLap );
 
         
-        let eppRoute:PreparedRoute = {
+        const eppRoute:PreparedRoute = {
             name: routeData.title,
             description: '',
             programId: eppPreferences.programId,
@@ -715,7 +715,7 @@ export class DeviceRideService  extends IncyclistService{
 
         const sType = (ai.isControl ) ? 'bike' : 'sensor'
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const logProps = {} as any
         logProps[sType] = ai.adapter.getUniqueName()
         logProps.cability = ai.adapter.getCapabilities().join('/')
@@ -1249,7 +1249,7 @@ export class DeviceRideService  extends IncyclistService{
         return true;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     registerOnDataHandler(adapters:AdapterRideInfo[]) {
         
         adapters?.forEach(ai=> {

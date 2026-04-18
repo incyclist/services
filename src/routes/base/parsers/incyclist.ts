@@ -77,7 +77,7 @@ export class IncyclistXMLParser extends XMLParser{
                     duration = Number(data['duration']);
                 }
             }
-            catch {}
+            catch { /* intentionally empty */}
 
             if (fileName.toLowerCase().endsWith('.json')) {
                 gpxFile.ext = 'json'
@@ -241,7 +241,6 @@ export class IncyclistXMLParser extends XMLParser{
         lastPoints.push(points.at(-1))
 
         let idx = 0;
-        let prev = undefined
         lastPoints.forEach( lp => {
             
             const lastIdx = lp.cnt;

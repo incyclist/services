@@ -7,7 +7,7 @@ export interface DeviceInformation {
     interface: string;
     selected: boolean;
     mode?: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     modeSetting?: any;
 }
 

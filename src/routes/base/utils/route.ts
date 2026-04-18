@@ -691,7 +691,7 @@ function searchNextPoint(route:Route,pPrev:LapPoint,props:GetNextPositionProps,s
     const {lap,targetRouteInLap,searchStart: searchStartIdx,distance} = searchTarget
     const points = route.points
 
-    let pSearchStart = pPrev
+    const pSearchStart = pPrev
 
     for ( let cnt = searchStartIdx;cnt<points.length;cnt++) {
         const p = points[cnt];

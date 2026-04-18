@@ -174,7 +174,7 @@ export class UserInterfaceServcie extends IncyclistService {
             this.startQueueWorker();
             this.startHeartbeatWorker()
 
-            let sent = false
+            const sent = false
 
             const user = this.getUserSettings().getValue('user',{})
             const id = this.getUserSettings().getValue('uuid',undefined)

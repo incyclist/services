@@ -472,7 +472,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             if (!device)
                 return;
 
-            let mode:string,settings, isERG, isSIM
+            let mode:string,settings
             let modeObj:CyclingMode
             let modes: typeof CyclingMode[] = []
 
@@ -504,8 +504,8 @@ export class DeviceConfigurationService  extends IncyclistService{
             }
 
             
-            isERG = modeObj?.isERG()===true
-            isSIM = modeObj?.isSIM()===true
+            const isERG = modeObj?.isERG()===true
+            const isSIM = modeObj?.isSIM()===true
 
             return {udid,mode,settings,isERG,isSIM,options} 
 

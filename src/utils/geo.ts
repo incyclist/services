@@ -185,13 +185,13 @@ const crossingParallel = (AB,CD,AC) =>{
             return undefined;
     }
 
-    let AD = Vector.add(AC,CD);
+    const AD = Vector.add(AC,CD);
 
     // CD is pointing in the oposite direction, D->C
     if (AB.isParallel(AD) && AB.len()>=AD.len() ){
         // we need to check if point D is closer to A than point C (ie. vector CD shows in the oposite direction)
-        let da = AD.len();
-        let dc = da-CD.len();
+        const da = AD.len();
+        const dc = da-CD.len();
         if ( dc>=0 ) 
             return AD
         else

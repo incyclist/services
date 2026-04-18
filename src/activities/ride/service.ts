@@ -555,7 +555,7 @@ export class ActivityRideService extends IncyclistService {
                 return true
             }
 
-            let trialGroup  = 'A';
+            const trialGroup: string  = 'A';
             // if (this.activity.user.uuid.startsWith('1') || this.activity.user.uuid.startsWith('a')) {
             //     trialGroup = 'A'
             // }
@@ -806,7 +806,7 @@ export class ActivityRideService extends IncyclistService {
             if (currentIdx<maxEntries-1) {
 
 
-                let deleted = props.splice(maxEntries-1)
+                const deleted = props.splice(maxEntries-1)
                 props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})
             }
             else if (currentIdx>maxEntries-1){
@@ -830,7 +830,7 @@ export class ActivityRideService extends IncyclistService {
                 props.splice( maxEntries-2, props.length-maxEntries)
             }
             else if (currentIdx===maxEntries-1) {
-                let deleted = props.splice( currentIdx+1, props.length-currentIdx)
+                const deleted = props.splice( currentIdx+1, props.length-currentIdx)
                 props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})   
                 props.splice( currentIdx-1, 1)
             }
@@ -885,7 +885,7 @@ export class ActivityRideService extends IncyclistService {
             const speed = { value:C(sameTime.speed, 'speed',{digits:1}), unit:U('speed')}
 
             // calculate time Gap, based on the record with same (or larger) distance
-            let sameDistance = this.getRecordWithSameOrBiggerDistance(logs,current)
+            const sameDistance = this.getRecordWithSameOrBiggerDistance(logs,current)
             if (!sameDistance)
                 return null
             const timeGap = this.calculateTimeGap(sameDistance,current)
@@ -980,7 +980,7 @@ export class ActivityRideService extends IncyclistService {
         sameDistance.time-=t;         
 
         const timeDelta = sameDistance.time-current.time
-        let prefix = Math.sign(timeDelta)>0 ? '+' : '-'
+        const prefix = Math.sign(timeDelta)>0 ? '+' : '-'
         const timeGap = prefix+ ( Math.abs(timeDelta)<60 ? `${Math.abs(timeDelta).toFixed(1)}s` : formatTime(Math.abs(timeDelta),true) )
 
         return timeGap
@@ -1215,20 +1215,19 @@ export class ActivityRideService extends IncyclistService {
         const fs = this.getFileSystemBinding()
         emit('convert.start',format)
         try {
-            let data
-            data = await ActivityConverter.convert(this.activity,format)
+            const data = await ActivityConverter.convert(this.activity,format)
 
             emit('convert.done',format,true)
 
             if (format.toLowerCase()==='fit') {
                 const fileName = await this.getTargetFileName('fit')
-                await fs.writeFile(fileName, Buffer.from (data ))   
+                await fs.writeFile(fileName, Buffer.from(data as ArrayBuffer))
                 this.activity.fitFileName = fileName
             }
 
             if (format.toLowerCase()==='tcx') {
                 const fileName = await this.getTargetFileName('tcx')
-                await fs.writeFile(fileName, Buffer.from (data ))   
+                await fs.writeFile(fileName, Buffer.from(data as string))
                 this.activity.tcxFileName = fileName
             }
             await this._save()
