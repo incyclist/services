@@ -382,13 +382,13 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.moveTo('$contentPage')        
     }
 
-    protected get rideObserver (): IObserver|undefined {
+    protected get rideObserver (): IObserver|null {
         try {
             return this.getRideDisplay()?.getObserver()
         }catch(err:any) {
             this.logError(err,'get rideObserver')
-            return
         }
+            return null
     }
 
     protected get rideDisplayProps() {
