@@ -2,7 +2,7 @@ import { EventLogger } from "gd-eventlog";
 import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistPageService } from "../../base/pages";
 import { CurrentRideDisplayProps, CurrentRideState, GpxDisplayProps, IObserver, RideType, RLVDisplayProps } from "../../types";
-import { AnyRidePageDisplayProps, GPXRidePageDisplayProps, IRidePageService, RideMenuProps, StartGateProps, VideoRidePageDisplayProps } from "./types";
+import { AnyRidePageDisplayProps, GPXRidePageDisplayProps, IRidePageService, RideMenuProps, RidePageDisplayProps, StartGateProps, VideoRidePageDisplayProps } from "./types";
 import { useRideDisplay } from "../display";
 import { sleep } from "../../utils/sleep";
 import { ISecretBinding } from "../../api/secret";
@@ -14,7 +14,7 @@ const BACKGROUND_PAUSE_TIMEOUT_MS = 60000
 @Singleton
 export class RidePageService extends IncyclistPageService implements IRidePageService {
 
-    protected eventHandler: Record<string,Function> = {}
+    protected eventHandler: Record<string,any> = {}
     protected backgroundTimer: NodeJS.Timeout | undefined
     protected backgroundPausedByService: boolean = false
     protected menuProps: RideMenuProps | null = null
@@ -134,6 +134,18 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     getPageDisplayProps(): AnyRidePageDisplayProps {
+
+        const startOverlayProps = this.getRideDisplay().getStartOverlayProps()
+
+        const noRideProps:RidePageDisplayProps = {
+            rideState:'Error',
+            startOverlayProps,
+            rideType: null as unknown as RideType,            
+            menuProps: null,
+            startGateProps: null
+            
+        }
+
         try {
             const rideType = this.getRideDisplay().getRideType()
 
@@ -143,12 +155,12 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                 // case 'Free-Ride': return this.getFreeRideDisplayProps()
                 // case 'Workout':   return this.getWorkoutRideDisplayProps()
                 default:
-                    return null
+                    return noRideProps
             }
 
         }
-        catch(err:any) {
-            return null
+        catch {
+            return noRideProps
         }
 
     }
@@ -297,7 +309,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     protected async checkSecretValidity() {
         if (this.getBindings().appInfo?.getChannel()==='mobile') {
-            const secretsStatus = this.getSecretBinding().getSecretsStatus?.() 
+            const secretsStatus = this.getSecretBinding()?.getSecretsStatus?.() 
 
             if (secretsStatus === 'stale' || secretsStatus === 'missing' || secretsStatus===undefined) {
 
@@ -349,7 +361,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         events.forEach( event=> { this.rideObserver?.off(event,this.eventHandler[event])})        
     }
 
-    protected onDisplayStateUpdate( state:CurrentRideState, props:{pauseReason?:'user'|'device'} ) {
+    protected onDisplayStateUpdate( state:CurrentRideState ) {
         switch(state) {
             case 'Paused': 
                 this.menuProps = { showResume:true}
@@ -387,8 +399,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         return useRideDisplay()
     }
 
-    protected getSecretBinding(): ISecretBinding {
-        return this.getBindings().secret!
+    protected getSecretBinding(): ISecretBinding|undefined {
+        return this.getBindings().secret
     }
 
     @Injectable
