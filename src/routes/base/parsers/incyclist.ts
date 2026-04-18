@@ -174,7 +174,7 @@ export class IncyclistXMLParser extends XMLParser{
 
         })
 
-        route.distance = route.points[route.points.length-1].routeDistance
+        route.distance = route.points.at(-1).routeDistance
 
     }
 
@@ -238,7 +238,7 @@ export class IncyclistXMLParser extends XMLParser{
         cuts.forEach(cut => {
             lastPoints.push( points[cut.cnt-1])
         })
-        lastPoints.push(points[points.length-1])
+        lastPoints.push(points.at(-1))
 
         let idx = 0;
         let prev = undefined

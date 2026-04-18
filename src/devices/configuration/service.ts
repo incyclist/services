@@ -593,7 +593,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             if (c.disabled || !c.selected)
                 return;
         
-            if (!devices.find( d=> d.udid===c.selected))
+            if (!devices.some( d=> d.udid===c.selected))
                 return;
 
             const adapter = this.adapters[c.selected]            
@@ -1026,7 +1026,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             this.settings.capabilities = [];
 
         target.forEach( capability => {
-            if (!this.settings.capabilities.find( c=> c.capability===capability ))
+            if (!this.settings.capabilities.some( c=> c.capability===capability ))
                 this.settings.capabilities.push({capability,devices:[],selected:undefined,disabled:false})
         })
     }

@@ -106,7 +106,7 @@ export class XmlJSON {
             if (keys.length===1 && `${keys[0]}s`===key) {
                 return item[keys[0]].map( i=> this.map(key,i.$))
             }
-            else if ( !keys.find( k=> isNaN(Number(k))) ) {
+            else if ( !keys.some( k=> Number.isNaN(Number(k))) ) {
                 const obj=[]
 
                 keys.forEach( key=> {

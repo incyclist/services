@@ -102,7 +102,7 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
         })
 
         const data:Partial<RouteInfo> = {
-            distance: json.geometry[json.geometry.length-1].distance,
+            distance: json.geometry.at(-1).distance,
             points,
             requiresDownload: false,
             hasGpx: true,

@@ -111,7 +111,7 @@ export class BikeLabParser extends XMLParser{
         }
 
         const fileParts = route.video.file.split('.');
-        const extension = fileParts[fileParts.length-1];            
+        const extension = fileParts.at(-1);            
         route.video.format = extension.toLowerCase()
 
         const videoPoints = data['VideoPoints']??[]

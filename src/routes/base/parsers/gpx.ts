@@ -104,7 +104,7 @@ export class GPXParser extends XMLParser {
 
     // adjust times based on average speed
     protected async adjustTimes (context:XmlParserContext) { 
-        const totalDistance = context.route.points.length>0 ? context.route.points[context.route.points.length-1].routeDistance : 0
+        const totalDistance = context.route.points.length>0 ? context.route.points.at(-1).routeDistance : 0
         const avgSpeed = totalDistance / this.props.duration; // m/s
 
         for (const p of context.route.points) {

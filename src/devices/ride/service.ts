@@ -204,7 +204,7 @@ export class DeviceRideService  extends IncyclistService{
     protected getAllAdapters():AdapterRideInfo[] {
             const config = this.getDeviceConfiguration()
             const adapters = config.getAllAdapters()?.map( ai=> ({...ai, isStarted:false}))
-            if (this.simulatorEnforced && !adapters.find( a=>a.adapter.getName()==='Simulator' )) {
+            if (this.simulatorEnforced && !adapters.some( a=>a.adapter.getName()==='Simulator' )) {
                 const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});
                 adapters.push({adapter,udid:'Simulator:'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false})
             }
@@ -680,7 +680,7 @@ export class DeviceRideService  extends IncyclistService{
 
 
         const status = await Promise.all(this.startPromises)
-        const allOK = status.find( s=>s===false)===undefined
+        const allOK = !status.some( s=>s===false)
         this.emit(`${startType}-result`, allOK)
 
         if (allOK && (startType==='start' )) {
@@ -693,7 +693,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     protected async startSingleAdapter(ai: AdapterRideInfo,duplicates:Array<DuplicateInfo>,props,startType: 'start' | 'check' | 'pair' ) {
-        if (duplicates.find(dai=>dai.info.udid===ai.udid))
+        if (duplicates.some(dai=>dai.info.udid===ai.udid))
             return;
 
         const startProps = clone(props??{})
@@ -813,7 +813,7 @@ export class DeviceRideService  extends IncyclistService{
         this.logEvent({ message: `${startType} ${sType} request failed`, ...logProps, reason: err.message });
 
         this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err);
-        if (duplicates.find(dai => dai.udid === ai.udid)) {
+        if (duplicates.some(dai => dai.udid === ai.udid)) {
             duplicates.forEach(dai => { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info)); });
         }
         if (startType === 'check' || startType === 'pair') {
@@ -825,7 +825,7 @@ export class DeviceRideService  extends IncyclistService{
 
     private async handleStartFailure(startType: string, ai: AdapterRideInfo, duplicates: DuplicateInfo[], sType: string, logProps: any) {
         this.emit(`${startType}-error`, this.getAdapterStateInfo(ai));
-        if (duplicates.find(dai => dai.udid === ai.udid)) {
+        if (duplicates.some(dai => dai.udid === ai.udid)) {
             duplicates.forEach(dai => { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info)); });
         }
 
@@ -838,7 +838,7 @@ export class DeviceRideService  extends IncyclistService{
 
     private async handleStartSuccess(startType: string, ai: AdapterRideInfo, duplicates: DuplicateInfo[], sType: string, logProps: any) {
         this.emit(`${startType}-success`, this.getAdapterStateInfo(ai));
-        if (duplicates.find(dai => dai.udid === ai.udid)) {
+        if (duplicates.some(dai => dai.udid === ai.udid)) {
             duplicates.forEach(dai => { this.emit(`${startType}-success`, this.getAdapterStateInfo(dai.info)); });
         }
         this.logEvent({ message: `${startType} ${sType} request finished`, ...logProps });
@@ -1466,7 +1466,7 @@ export class DeviceRideService  extends IncyclistService{
         if (this.simulatorEnforced) {
             enabledCapabilities = [IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed, IncyclistCapability.HeartRate, IncyclistCapability.Cadence];
         }
-        else if (duplicates.length > 0 && duplicates.find(d => d.udid === adapterInfo.udid)) {
+        else if (duplicates.length > 0 && duplicates.some(d => d.udid === adapterInfo.udid)) {
 
 
             const selected = clone(selectedDevices);

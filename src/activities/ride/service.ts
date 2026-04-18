@@ -443,7 +443,7 @@ export class ActivityRideService extends IncyclistService {
         }
 
         let distanceRemaining = (this.getTotalDistance()/1000-distance)
-        if (isNaN(distanceRemaining)) distanceRemaining=undefined
+        if (Number.isNaN(distanceRemaining)) distanceRemaining=undefined
         if (distanceRemaining<0) distanceRemaining=0
 
         let timeRemaining 
@@ -490,7 +490,7 @@ export class ActivityRideService extends IncyclistService {
             const cadenceDetails = { value: formatNumber(stats?.cadence?.avg, 0), label: 'avg' };
 
             let elevationGainRemaining = this.getTotalElevation() - (this.current.elevationGainDisplay ?? 0);
-            if (isNaN(elevationGainRemaining)) elevationGainRemaining = undefined;
+            if (Number.isNaN(elevationGainRemaining)) elevationGainRemaining = undefined;
             if (elevationGainRemaining < 0) elevationGainRemaining = 0;
             const value = elevationGainRemaining === undefined ?  undefined: `${C(elevationGainRemaining,'elevation').toFixed(0)}`
 
@@ -762,7 +762,7 @@ export class ActivityRideService extends IncyclistService {
         this.current.route.details.points = points
         validateRoute(this.current.route)
 
-        this.current.route.details.distance = points[points.length-1].routeDistance
+        this.current.route.details.distance = points.at(-1).routeDistance
         addDetails(this.current.route,this.current.route.details)
     }
 
@@ -926,7 +926,7 @@ export class ActivityRideService extends IncyclistService {
             }            
         }
         else {
-            res = clone(logs[logs.length-1])
+            res = clone(logs.at(-1))
         }
         
         return res
@@ -1268,7 +1268,7 @@ export class ActivityRideService extends IncyclistService {
 
     protected createLogRecord():ActivityLogRecord{
         const prevLogs = this.activity.logs
-        const prev = prevLogs?.length ? prevLogs[prevLogs.length-1] : undefined
+        const prev = prevLogs?.length ? prevLogs.at(-1) : undefined
         const time = this.activity.time
         const timeDelta = prev? time-prev.time : time
         const deviceData = this.current?.deviceData
@@ -1287,9 +1287,9 @@ export class ActivityRideService extends IncyclistService {
             slope: this.current.position?.slope,
             elevation: this.current.position?.elevation
         }
-        if (this.current?.position?.lat && !isNaN(this.current?.position?.lat))
+        if (this.current?.position?.lat && !Number.isNaN(this.current?.position?.lat))
             log.lat = this.current?.position?.lat
-        if (this.current?.position?.lng && !isNaN(this.current?.position?.lng)) {
+        if (this.current?.position?.lng && !Number.isNaN(this.current?.position?.lng)) {
             log.lng = this.current?.position?.lng
         }
 

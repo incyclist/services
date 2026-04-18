@@ -1003,7 +1003,7 @@ export class DevicePairingService  extends IncyclistService{
         if(name==='simulator' || name==='wifi')
             return true;
         const {interfaces } = this.state
-        return interfaces.find( i=> i.name===name && i.enabled && i.state!=='unavailable')!==undefined
+        return interfaces.some( i=> i.name===name && i.enabled && i.state!=='unavailable')
     }
 
     protected isInterfaceInUse(target:string|InterfaceSetting) {
@@ -1117,7 +1117,7 @@ export class DevicePairingService  extends IncyclistService{
                 return;
 
             if (!info.adapter.isStarted()) {
-                if (toBeStarted.find(ai => ai.udid === udid) === undefined)
+                if (!toBeStarted.some(ai => ai.udid === udid))
                     toBeStarted.push(info);
             }
             else {
@@ -1262,7 +1262,7 @@ export class DevicePairingService  extends IncyclistService{
     
                 if (this.isScanning() && this.state.scan.adapters) {
                     
-                    if ( this.state.scan.adapters.find( a=>a.udid===udid)===undefined  ) {
+                    if ( !this.state.scan.adapters.some( a=>a.udid===udid)  ) {
                         const handler = ( deviceSettings:DeviceSettings, data:DeviceData)=>{
                             this.onDeviceData(data,udid)
                         }
@@ -1950,7 +1950,7 @@ export class DevicePairingService  extends IncyclistService{
        
         // if one of the device is an Ant-Device, wee need to stop all other Ant-Devices
         // as Ant does not allow parallel scanning and pairing
-        if (target.find( ai=>ai.adapter.getInterface()==='ant'))
+        if (target.some( ai=>ai.adapter.getInterface()==='ant'))
             await this.stopAdaptersOnInterface('ant')
         
         const devicesToBeStopped =target
@@ -2123,7 +2123,7 @@ export class DevicePairingService  extends IncyclistService{
     protected isOnDeletedList(c:IncyclistCapability|CapabilityData,udid:string ):boolean {
         const capability = this.getCapability(c)        
 
-        return this.state.deleted.find( e=> e.capability===capability.capability && e.udid===udid)!==undefined
+        return this.state.deleted.some( e=> e.capability===capability.capability && e.udid===udid)
     }
 
     mappedCapability (c:CapabilityInformation):CapabilityData {

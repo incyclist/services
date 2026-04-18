@@ -129,7 +129,7 @@ export class Segment extends Step implements SegmentDefinition {
         
         const empty = this.steps.length===0;
         if (json.start===undefined && json.end===undefined) {
-            json.start = !empty ? this.steps[this.steps.length-1].end : 0;
+            json.start = !empty ? this.steps.at(-1).end : 0;
         }
         if ( empty) {
             this.start = 0;

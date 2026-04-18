@@ -214,7 +214,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         route.video = {
             file,
             url,
-            framerate: parseFloat(data['framerate']),                
+            framerate: Number.parseFloat(data['framerate']),                
             next: data['next-video'] ,
             mappings: [],
             format: undefined,
@@ -230,7 +230,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         }
     
         const fileParts = filePath.split('.');    
-        const extension = fileParts[fileParts.length-1];            
+        const extension = fileParts.at(-1);            
         route.video.format = extension.toLowerCase()
 
         this.parseVideoMappings(context);
@@ -243,8 +243,8 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
         if (mappings) {
 
-            const startFrame = parseInt(data['start-frame'] ?? 0);
-            const endFrame = data['end-frame'] ? parseInt(data['end-frame']) : undefined;
+            const startFrame = Number.parseInt(data['start-frame'] ?? 0);
+            const endFrame = data['end-frame'] ? Number.parseInt(data['end-frame']) : undefined;
 
             try {
                 let prev;
@@ -261,9 +261,9 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                 };
 
                 const initMapping =(mapping) =>{
-                    mapping.distance = (mapping.distance !== undefined && mapping.distance !== null) ? parseInt(mapping.distance) : undefined;
-                    mapping.dpf = (mapping.dpf !== undefined && mapping.dpf !== null) ? parseFloat(mapping.dpf) : undefined;
-                    mapping.frame = (mapping.frame !== undefined && mapping.frame !== null) ? parseInt(mapping.frame) : undefined;
+                    mapping.distance = (mapping.distance !== undefined && mapping.distance !== null) ? Number.parseInt(mapping.distance) : undefined;
+                    mapping.dpf = (mapping.dpf !== undefined && mapping.dpf !== null) ? Number.parseFloat(mapping.dpf) : undefined;
+                    mapping.frame = (mapping.frame !== undefined && mapping.frame !== null) ? Number.parseInt(mapping.frame) : undefined;
                 }
 
                 const  addMapping = (mapping: any, prev: any, idx: any, startFrame: number, prevTime: number) => {
@@ -342,7 +342,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
         const points = route.points
         if (points?.length>0) {
-            route.distance = points[points.length-1].routeDistance
+            route.distance = points.at(-1).routeDistance
         }
         updateSlopes(points)
         
@@ -454,11 +454,11 @@ function getAltitude( altitudes:Array<Altitude>, positions: Array<Position>, i:n
 
     if (altitudes && Array.isArray(altitudes)) {
 
-        if (altitudes[i] && parseInt(altitudes[i].distance) === parseInt(pos.distance)) {
+        if (altitudes[i] && Number.parseInt(altitudes[i].distance) === Number.parseInt(pos.distance)) {
             return height!==undefined ? Number(height) : prevAltitude
         }
         else {
-            const altFound = altitudes.find(a => parseInt(a.distance) === parseInt(pos.distance));
+            const altFound = altitudes.find(a => Number.parseInt(a.distance) === Number.parseInt(pos.distance));
             height = altFound?.height
             return  height!==undefined ? Number(height) : prevAltitude;
         }

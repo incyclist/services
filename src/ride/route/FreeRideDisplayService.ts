@@ -414,7 +414,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
         this.currentRoute.details.points = points
         validateRoute(this.currentRoute)
 
-        this.currentRoute.details.distance = points[points.length-1].routeDistance
+        this.currentRoute.details.distance = points.at(-1).routeDistance
         addDetails(this.currentRoute,this.currentRoute.details)
 
 

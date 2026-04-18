@@ -12,7 +12,7 @@ const MAX_DELTA = 200;
 const MAX_RATE_UPDATE = 500
 const MAX_FWD_FREQ = 60*1000    // once per minute
 
-const n = (v,i) => isNaN(v)||v===undefined ? '-' : Number(v.toFixed(i))
+const n = (v,i) => Number.isNaN(v)||v===undefined ? '-' : Number(v.toFixed(i))
 const f = (v) => n(v,0)
 
 
@@ -492,7 +492,7 @@ export class VideoSyncHelper extends IncyclistService{
     updateRate(requested:number) {
         if (requested===undefined)
             return
-        if (isNaN(requested)) {
+        if (Number.isNaN(requested)) {
             delete this.rlvStatus.rateRequested
             return
         }
@@ -575,7 +575,7 @@ export class VideoSyncHelper extends IncyclistService{
 
             // end of video reached ? last mapping record represents enf of video
             if ( distance===totalDistance)  {
-                return mappings[mappings.length-1].time
+                return mappings.at(-1).time
             }
 
             const mapping = this.getMappingByDistance(routeDistance)
@@ -619,7 +619,7 @@ export class VideoSyncHelper extends IncyclistService{
             const mappings = this.mapping
 
 
-            const totalTime = mappings[mappings.length-1].time
+            const totalTime = mappings.at(-1).time
             if (time>totalTime){
                 time = totalTime
             }
@@ -675,9 +675,9 @@ export class VideoSyncHelper extends IncyclistService{
         if (!mappings?.length)
             return undefined;
 
-        const totalTime = mappings[mappings.length-1].time
+        const totalTime = mappings.at(-1).time
         if (totalTime<=time) {
-            return mappings[mappings.length-1]
+            return mappings.at(-1)
         }
 
         
@@ -740,7 +740,7 @@ export class VideoSyncHelper extends IncyclistService{
     protected isNextLap(vt:number):boolean {
         try  {
             let time = vt
-            const totalTime = this.mapping[this.mapping.length-1].time
+            const totalTime = this.mapping.at(-1).time
             return  (time>totalTime && this.loopMode && !this.rlvStatus.lapRequested)
         }
         catch(err) {
@@ -751,12 +751,12 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     protected getTotalTime():number {
-        return this.mapping[this.mapping.length-1].time        
+        return this.mapping.at(-1).time        
     }
 
     protected getLapTime(vt:number):number {
         try  {
-            const totalTime = this.mapping[this.mapping.length-1].time
+            const totalTime = this.mapping.at(-1).time
             return  vt%totalTime
         }
         catch(err) {
@@ -809,7 +809,7 @@ export class VideoSyncHelper extends IncyclistService{
             const newMappings = [...mappings]
             this.mapping = newMappings
 
-            let lastRecord = newMappings[newMappings.length-1]
+            let lastRecord = newMappings.at(-1)
             let error = false
 
             // if the mappings do not cover the full distance, fill up with records containing constant speed (every 1s)
@@ -834,7 +834,7 @@ export class VideoSyncHelper extends IncyclistService{
                 catch(err) {
                     error = err
                 }
-                lastRecord = newMappings[newMappings.length-1]
+                lastRecord = newMappings.at(-1)
             }
 
             return newMappings;

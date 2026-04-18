@@ -293,7 +293,7 @@ export class DevicesPageService extends IncyclistPageService {
 
         }))
 
-        const disabled = devices.length>0 && !devices.find( d=> d.isSelected)
+        const disabled = devices.length>0 && !devices.some( d=> d.isSelected)
 
         return {
             capability: this.openedCapability,            

@@ -170,7 +170,7 @@ export class MapArea implements IMapArea{
                 const branch = this.getWay(wid);
 
                 // ignore one way streets that are crossing
-                if (isOneWay(branch) && branch.path[branch.path.length-1].id===node.id) 
+                if (isOneWay(branch) && branch.path.at(-1).id===node.id) 
                     return;
 
                 // we can specify ways to ignore 
@@ -286,7 +286,7 @@ export class MapArea implements IMapArea{
                 if (!optWay?.path?.length)
                     return;
 
-                if (optWay.path[optWay.path.length - 1].id === point.id)
+                if (optWay.path.at(-1).id === point.id)
                     optWay.path.reverse();
                 
                 else if (optWay.path[0].id !== point.id) {  // crossing in the middle of the street                    
@@ -313,7 +313,7 @@ export class MapArea implements IMapArea{
             else if (newPath.length>1) {
                 if (newPath.length===way.path.length && newPath[0].id===crossing.point.id && crossing.distance===0 &&
                     (newPath[0].id===way.path[0].id || 
-                    newPath[0].id===way.path[way.path.length-1].id)) {
+                    newPath[0].id===way.path.at(-1).id)) {
                         addWaysCrossing(res);                
                     }
 
@@ -340,7 +340,7 @@ export class MapArea implements IMapArea{
                 newPath.push(p);
             }
             else  {
-                if ( newPath?.length>0 && point.id!==newPath[newPath.length-1].id)
+                if ( newPath?.length>0 && point.id!==newPath.at(-1).id)
                     newPath.push( point);
 
                 if (!isOneWay(way)) {
@@ -419,7 +419,7 @@ export class MapArea implements IMapArea{
         if (!fullWay || (!fullWay.roundabout && position==='start' ))  // entering normal street
             return calculateHeaderFromPoints(way.path[0],way.path[1]);
         else if (position==='end') // leaving street
-            return calculateHeaderFromPoints(way.path[way.path.length-2],way.path[way.path.length-1]);
+            return calculateHeaderFromPoints(way.path.at(-2),way.path.at(-1));
         else {  // enteriong roundabout
             let heading = calculateHeaderFromPoints(way.path[0],way.path[1]);
 
@@ -482,7 +482,7 @@ export class MapArea implements IMapArea{
                             }
                         }
                         
-                        found = (way.path[0].id===way.path[way.path.length-1].id);
+                        found = (way.path[0].id===way.path.at(-1).id);
                         if (found) {
                             roundaboutsImplicit.push(way);
                         }
@@ -511,7 +511,7 @@ export class MapArea implements IMapArea{
                     let path = way.path;
                     path.forEach( n => {
                         if ( originalNodes.length===0 ||
-                                originalNodes[originalNodes.length-1]!==n.id)
+                                originalNodes.at(-1)!==n.id)
                             originalNodes.push(n.id)                    
                     })
                 })
@@ -614,7 +614,7 @@ export class MapArea implements IMapArea{
 
         }
         // crossing is last point of branch
-        else if (w.path[w.path.length-1].id===crossing.point.id) {
+        else if (w.path.at(-1).id===crossing.point.id) {
             w.path.reverse();
             const res = this.getUntilFirstBranch(w,{ignore:wayId})
             if (res.path.length>1)

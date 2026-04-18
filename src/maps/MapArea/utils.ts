@@ -94,7 +94,7 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
             // in some cases individual legs of a roundabout are tagged with highway=service, which would break the roundabout detection
             const isRoundabout = (element.tags?.junction==='roundabout' || element.tags?.roundabout==='true');
 
-            if ( isRoundabout || (type!==undefined && (filter===undefined || filter.find( e => e===type)===undefined)) ) {
+            if ( isRoundabout || (type!==undefined && (filter===undefined || !filter.some( e => e===type))) ) {
 
                 way.nodes?.forEach( node => {
                     addNode(node, nodesLookup,id,path)
@@ -217,7 +217,7 @@ export function isRoundabout(w:IncyclistWay, strictCheck=false) {
     if ( w.path===undefined || w.path.length<2)
         return false;
 
-    roundabout= (w.path[0].id===w.path[w.path.length-1].id);
+    roundabout= (w.path[0].id===w.path.at(-1).id);
     return roundabout;
 }
 
@@ -484,7 +484,7 @@ export function isAllowed( way:IncyclistWay, from:IncyclistNode, to?:IncyclistNo
         return true;
 
     const pWayStart = way.path[0];
-    const pWayEnd = way.path[way.path.length-1];
+    const pWayEnd = way.path.at(-1);
 
     // FROM is the first point of the way -> can be traversed (as this would be the last )
     if (from.id===pWayStart.id)
