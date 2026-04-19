@@ -78,7 +78,7 @@ export class BinaryReader {
             const c = part.readUInt16LE(i*2)
             if (c===0) 
                 return str
-            str+=String.fromCharCode(c)
+            str+=String.fromCodePoint(c)
             i++
         }
         return str

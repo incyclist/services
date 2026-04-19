@@ -334,7 +334,7 @@ export class RLVDisplayService extends RouteDisplayService {
         // replace \n with <br> in text
         let text = input                     
         if (text?.length) {
-            text = text.replace(/\\n/g, '<br>')
+            text = text.replaceAll('\\n', '<br>')
         }
 
         return text

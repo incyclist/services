@@ -16,7 +16,7 @@ export const formatDateTime = (date:Date, fstr='%Y%m%d%H%M%S', utc:boolean=false
 
     
     
-    return fstr.replace (/%[YmdHMS]/g, (m) => {
+    return fstr.replaceAll(/%[YmdHMS]/g, (m) => {
         switch (m) {
             case '%Y': return date[prefix + 'FullYear'] (); // no leading zeros required
             case '%m': m = 1 + date[prefix + 'Month'] (); break;

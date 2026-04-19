@@ -65,7 +65,7 @@ export default class JSONFileBindig extends UserSettingsBinding{
             this.settings = settings;
         }
 
-        if (this.savePromise) {// save is busy
+        if (this.savePromise != null) {// save is busy
             await this.waitForSaveFinished()
         }
 
@@ -86,7 +86,7 @@ export default class JSONFileBindig extends UserSettingsBinding{
     async waitForSaveFinished():Promise<void> {
         return new Promise<void> (done => {
             const iv = setInterval( ()=>{
-                if (this.savePromise) {
+                if (this.savePromise != null) {
                     clearInterval(iv)
                     done()
                 }

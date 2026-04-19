@@ -457,7 +457,7 @@ export class ActiveRidesService extends IncyclistService {
         const names = [ 'Alex', 'Bart', 'Cosmas', 'Dirk', 'Ernesto', 'Frank', 'Guido', 'Hans', 'Irene','John', 'Kai','Lorenzo', 'Martin', 'Naijb', 'Oswaldo', 'Pete', 'Quentin', 'Rachel', 'Sophia','Trevor', 'Ute', 'Vivian', 'Wil', 'Xaver', 'Younes', 'Zoe' ]
         
         const fnKey = id.charAt(0).toLowerCase()
-        const idx = !Number.isNaN(Number.parseInt(fnKey)) ? Number.parseInt(fnKey)  : fnKey.charCodeAt(0)-96
+        const idx = !Number.isNaN(Number.parseInt(fnKey)) ? Number.parseInt(fnKey)  : (fnKey.codePointAt(0) ?? 0)-96
 
         const lnKey = id.charAt(0).toUpperCase()
         const ln = !Number.isNaN(Number.parseInt(lnKey)) ? ''  : lnKey

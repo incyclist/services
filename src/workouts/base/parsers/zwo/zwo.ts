@@ -286,7 +286,7 @@ export class ZwoParser implements WorkoutParser<string>{
             let tag
             parser.parseString(data, (err:Error,result)=> {
                 if (err) {
-                    err.message = 'File contains error(s): '+ err.message.replace(/\n/g,' ');
+                    err.message = 'File contains error(s): '+ err.message.replaceAll('\n',' ');
                     this.logger.logEvent( {message: 'error', fn:'parse()', error: err.message, stack: err.stack})
                     return reject(err);
                 }
