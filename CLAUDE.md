@@ -106,7 +106,7 @@ Every domain module re-exports its public surface through `src/index.ts`. When a
 There is no auto-formatter (no Prettier). ESLint (`eslint.config.mjs`) enforces `js.configs.recommended` + `typescript-eslint` recommended rules. Run `npm run lint` before committing.
 
 - **Indentation**: 4 spaces (no tabs).
-- **Quotes**: Double quotes for import paths; single quotes are acceptable but double quotes are dominant.
+- **Quotes**: Single quotes for all strings and import paths.
 - **Semicolons**: Omitted on most statements and imports. Do not add them when writing new code.
 - **Trailing whitespace / blank lines**: One blank line between class members of different logical groups; no trailing whitespace.
 - **Imports**: Group as — external packages, then internal modules, then the file's own siblings — with no blank lines between groups inside a file unless it aids clarity.
@@ -116,6 +116,10 @@ There is no auto-formatter (no Prettier). ESLint (`eslint.config.mjs`) enforces 
 - Target is ES2024; avoid hacks for older targets.
 - No lax `any` — use proper types or `unknown`.
 - Types and interfaces live in `types.ts`; keep implementation files clean of type sprawl.
+
+### Documentation
+
+All publicly exported functions, methods, and classes must have a JSDoc comment. At minimum include a one-line description; add `@param` / `@returns` tags when the signature is not self-explanatory. Internal/private/protected members do not require JSDoc.
 
 ## Testing
 
