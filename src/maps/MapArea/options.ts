@@ -228,7 +228,7 @@ export class OptionManager {
 
         // no crossing before end of path
         if ( result.path?.length === w.path.length) {
-            const pLast = w.path.at(-1)!;
+            const pLast = w.path.at(-1);
             if ( pLast.ways?.length===2 ) {
                 const wIdNext = pLast.ways.find( wid => wid!==w.id )
                 const wNext = wIdNext ? this.getWay(wIdNext) : undefined
@@ -236,7 +236,7 @@ export class OptionManager {
                     
                     // if we are at the beginning or end of the next way
                     const pNextStart = wNext.path[0];
-                    const pNextEnd = wNext.path.at(-1)!;
+                    const pNextEnd = wNext.path.at(-1);
                     if ( pNextStart.id===pLast.id   ) {
                         expand = true;
                         const segment = this.map?.splitAtFirstBranch(wNext)

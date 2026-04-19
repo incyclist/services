@@ -234,7 +234,7 @@ export class FreeRideService extends IncyclistService {
         if ( fromWay.roundabout)
             return options;
 
-        const from = fromPath.at(-1)!;
+        const from = fromPath.at(-1);
 
         const filtered = options.filter( o => { 
             const way = {...map.getWay(o.id), path:o.path}

@@ -262,7 +262,7 @@ export const validateRoute = (route:Route|RouteApiDetail, reset:boolean=false):v
     }
         
 
-    route.distance = route.points.at(-1)!.routeDistance
+    route.distance = route.points.at(-1)?.routeDistance
 }
 
 export const validateDistance = (points:Array<RoutePoint>) => {
@@ -380,7 +380,7 @@ export const getTotalDistance = (route:RouteApiDetail):number =>{
     if (!route?.points?.length)
         return 0;
 
-    return route.points.at(-1)!.routeDistance
+    return route.points.at(-1)?.routeDistance
 }
 
 export const getRouteHash = (route:RouteApiDetail):string => {
