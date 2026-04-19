@@ -4,7 +4,7 @@ on:
   issues:
     types: [labeled]
   workflow_dispatch:
-  
+
 permissions:
   contents: write
   pull-requests: write
@@ -26,10 +26,19 @@ jobs:
 
       - run: npm ci
 
+      - name: Create branch
+        id: branch
+        run: |
+          SLUG=$(echo "${{ github.event.issue.title }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40)
+          BRANCH="claude/issue-${{ github.event.issue.number }}-${SLUG}"
+          git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
+          echo "name=$BRANCH" >> $GITHUB_OUTPUT
+
       - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           show_full_output: true
+          claude_args: "--dangerously-skip-permissions"
           prompt: |
             Process GitHub issue #${{ github.event.issue.number }}.
 
@@ -39,3 +48,26 @@ jobs:
             ${{ github.event.issue.body }}
 
             Follow the process defined in .github/instructions/claude-issue-processing.md exactly.
+
+            IMPORTANT:
+            - The branch has already been created for you. Do NOT run git checkout.
+            - Do NOT create a PR. The workflow handles that after you are done.
+            - DO run npm run lint, npx tsc --noEmit, and npm test and fix any errors before finishing.
+            - Only commit your changes when all checks pass.
+
+      - name: Push branch
+        run: |
+          git push -u origin "${{ steps.branch.outputs.name }}" 2>/dev/null || \
+            git push origin "${{ steps.branch.outputs.name }}"
+
+      - name: Create PR
+        run: |
+          gh pr create \
+            --title "${{ github.event.issue.title }}" \
+            --body "## Summary
+            Closes #${{ github.event.issue.number }}" \
+            --base main \
+            --head "${{ steps.branch.outputs.name }}" \
+          2>/dev/null || echo "PR already exists, skipping"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
