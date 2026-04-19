@@ -101,6 +101,16 @@ Every domain module re-exports its public surface through `src/index.ts`. When a
 | Constants | UPPER_SNAKE_CASE | `SYNC_INTERVAL` |
 | Private fields | `_` prefix or TypeScript access modifier | `_state`, `private observer` |
 
+### Formatting
+
+There is no auto-formatter (no Prettier). ESLint (`eslint.config.mjs`) enforces `js.configs.recommended` + `typescript-eslint` recommended rules. Run `npm run lint` before committing.
+
+- **Indentation**: 4 spaces (no tabs).
+- **Quotes**: Double quotes for import paths; single quotes are acceptable but double quotes are dominant.
+- **Semicolons**: Omitted on most statements and imports. Do not add them when writing new code.
+- **Trailing whitespace / blank lines**: One blank line between class members of different logical groups; no trailing whitespace.
+- **Imports**: Group as — external packages, then internal modules, then the file's own siblings — with no blank lines between groups inside a file unless it aids clarity.
+
 ### TypeScript
 
 - Target is ES2024; avoid hacks for older targets.
