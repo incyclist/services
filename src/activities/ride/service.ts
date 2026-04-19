@@ -1481,7 +1481,7 @@ export class ActivityRideService extends IncyclistService {
                 return 0;
 
             const isLoop = checkIsLoop(route)
-            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.[route.points.length-1]?.routeDistance
+            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.at(-1)?.routeDistance
             if (isLoop) {
                 const currentLap = Math.floor((this.current.routeDistance??0)/totalRouteDistance)
                 return totalRouteDistance-(this.activity.startPos??0)+currentLap*totalRouteDistance
@@ -1492,7 +1492,7 @@ export class ActivityRideService extends IncyclistService {
         }
         catch(err) {
             this.logError(err,'getTotalDistance')
-            return 0 
+            return 0
         }
     }
 
@@ -1503,8 +1503,8 @@ export class ActivityRideService extends IncyclistService {
                 return 0;
 
             const isLoop = checkIsLoop(route)
-            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.[route.points.length-1]?.routeDistance
-            let totalElevation = route.points?.[route.points.length-1]?.elevationGain??0
+            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.at(-1)?.routeDistance
+            let totalElevation = route.points?.at(-1)?.elevationGain??0
             if (this.current?.endPos!==undefined && route.points) {
                 const endPosPoint = route.points.find( p=> p.routeDistance>=this.current.endPos)
                 if (endPosPoint) {
