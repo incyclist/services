@@ -57,8 +57,8 @@ jobs:
 
       - name: Push branch
         run: |
-          git push -u origin "${{ steps.branch.outputs.name }}" 2>/dev/null || \
-            git push origin "${{ steps.branch.outputs.name }}"
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push -u origin "${{ steps.branch.outputs.name }}"
 
       - name: Create PR
         run: |
