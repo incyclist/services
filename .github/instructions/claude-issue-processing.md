@@ -20,13 +20,15 @@ Follow all conventions in `CLAUDE.md`:
 
 ## 3. Verify Quality
 
-Run each check and fix all issues before moving on to the next:
+If you changed any source code (anything under `src/`), run each check and fix all issues before moving on to the next:
 
 ```bash
 npm run lint        # fix all ESLint errors and warnings
 npx tsc --noEmit    # fix all TypeScript errors
 npm test            # fix all failing unit tests
 ```
+
+Skip this step if your changes are limited to non-source files (docs, workflows, config, etc.).
 
 Do not skip or suppress errors. If a check reveals a pre-existing unrelated issue, leave it as-is and note it in the PR description.
 

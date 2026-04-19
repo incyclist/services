@@ -52,7 +52,7 @@ jobs:
             IMPORTANT:
             - The branch has already been created for you. Do NOT run git checkout.
             - Do NOT create a PR. The workflow handles that after you are done.
-            - DO run npm run lint, npx tsc --noEmit, and npm test and fix any errors before finishing.
+            - If you changed any source code under src/, run npm run lint, npx tsc --noEmit, and npm test and fix any errors before finishing. Skip these checks if only non-source files were changed.
             - Only commit your changes when all checks pass.
 
       - name: Push branch
