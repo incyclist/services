@@ -1,7 +1,7 @@
 import { EventLogger } from "gd-eventlog";
 import { calculateHeaderFromPoints, LatLng } from "../../utils/geo";
 import { Boundary, FreeRideDataSet, IMapArea, IncyclistNode, IncyclistWay, IncyclistWaySplit, NearestPathInfo, PathCrossingInfo, SegmentInfo, SplitPointInfo, WayInfo } from "./types";
-import { distanceToPath, generateID, isOneWay, isRoundabout, isWay, isWithinBoundary, splitAtPoint, splitAtPointInfo } from "./utils";
+import { distanceToPath, generateID, isOneWay, isRoundabout, isWithinBoundary, splitAtPoint, splitAtPointInfo } from "./utils";
 import clone from "../../utils/clone";
 
 /**

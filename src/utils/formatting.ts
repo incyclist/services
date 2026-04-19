@@ -108,7 +108,7 @@ export const pad = (value:number,size:number=2) => {
 export const trimTrailingChars = (s:string, charToTrim:string) => {
     let c = charToTrim;
     if ( charToTrim===undefined) {
-        c = s.charAt(s.length-1)
+        c = s.at(-1) ?? ''
     }
     const regExp = new RegExp(c + "+$");
     const result = s.replace(regExp, "");

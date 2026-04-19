@@ -12,7 +12,6 @@ import { Injectable } from "../../../base/decorators/Injection";
 import { ActivityConverter } from "../convert";
 import { ActivityUploadFactory } from "../../upload";
 import { EventLogger } from "gd-eventlog";
-import { getUnitConversionShortcuts } from "../../../i18n";
 
 export class Activity implements ActivityInfo{
     

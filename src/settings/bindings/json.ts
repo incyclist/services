@@ -1,6 +1,6 @@
  
 import { UserSettingsBinding } from "./types";
-import fs from 'fs/promises'
+import fs from 'node:fs/promises'
 
 const DEFAULT_PATH = './settings.json'
 

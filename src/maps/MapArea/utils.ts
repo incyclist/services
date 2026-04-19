@@ -364,10 +364,10 @@ function splitRoundabout(way:IncyclistWay, point:IncyclistNode):Array<WayInfo> {
             const p = path[(idx+i)%len];
             const q = path[(idx-i+len)%len];
             if ( result[0].path.length===0 || 
-                    (p.id!==result[0].path[result[0].path.length-1].id && p.id!==result[0].path[0].id) )
+                    (p.id!==result[0].path.at(-1)!.id && p.id!==result[0].path[0].id) )
                 result[0].path.push(p);
-            if ( result[1].path.length===0 || 
-                    (q.id!==result[1].path[result[1].path.length-1].id && q.id!==result[1].path[0].id) )
+            if ( result[1].path.length===0 ||
+                    (q.id!==result[1].path.at(-1)!.id && q.id!==result[1].path[0].id) )
                 result[1].path.push(q);
         }
 

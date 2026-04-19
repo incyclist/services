@@ -4,7 +4,7 @@ import { Observer } from "../../../base/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo, RoutePoint } from "../../base/types";
 import { Loader, MinimalDescription } from "./types";
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { waitNextTick } from "../../../utils";
 import { calculateDistance } from "../../../utils/geo";
 import { useUserSettings } from "../../../settings";

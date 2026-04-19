@@ -1,5 +1,5 @@
 import { Singleton } from "../../../base/types"
-import { Observer, PromiseObserver } from "../../../base/types/observer"
+import { PromiseObserver } from "../../../base/types/observer"
 import { valid } from "../../../utils/valid"
 import { RouteInfo } from "../../base/types"
 import { RouteDBApiDescription } from "./types"

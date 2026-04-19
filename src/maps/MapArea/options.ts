@@ -150,7 +150,7 @@ export class OptionManager {
     
             // remove options that are pointing back to the origin
             if (options?.length) {
-                const fromNode = from.path?.[from.path.length-2];
+                const fromNode = from.path?.at(-2);
                 options = options.filter( o => o.path.length>0 && o.path[1].id!==fromNode.id)
             }
     
@@ -228,7 +228,7 @@ export class OptionManager {
 
         // no crossing before end of path
         if ( result.path?.length === w.path.length) {
-            const pLast = w.path[ w.path.length-1];
+            const pLast = w.path.at(-1)!;
             if ( pLast.ways?.length===2 ) {
                 const wIdNext = pLast.ways.find( wid => wid!==w.id )
                 const wNext = wIdNext ? this.getWay(wIdNext) : undefined
@@ -236,7 +236,7 @@ export class OptionManager {
                     
                     // if we are at the beginning or end of the next way
                     const pNextStart = wNext.path[0];
-                    const pNextEnd = wNext.path[ wNext.path.length-1];
+                    const pNextEnd = wNext.path.at(-1)!;
                     if ( pNextStart.id===pLast.id   ) {
                         expand = true;
                         const segment = this.map?.splitAtFirstBranch(wNext)

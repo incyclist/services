@@ -1,4 +1,4 @@
-import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle, InterfaceFactory, BleDeviceSettings, DeviceSettings } from "incyclist-devices"
+import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle, InterfaceFactory, BleDeviceSettings } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
 import { AdapterInfo, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting, 
          LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"

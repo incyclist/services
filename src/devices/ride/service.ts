@@ -4,7 +4,6 @@ import {AdapterInfo,  IncyclistDeviceSettings, useDeviceConfiguration} from "../
 import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./types";
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
-import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
 import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { getRouteList } from "../../routes";

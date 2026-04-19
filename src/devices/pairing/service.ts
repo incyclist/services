@@ -8,7 +8,7 @@ import { IncyclistService } from "../../base/service";
 import { EnrichedInterfaceSetting } from "../access";
 import { sleep } from "../../utils/sleep";
 import { Injectable } from "../../base/decorators";
-import { FormattedNumber, useUnitConverter } from "../../i18n";
+import { useUnitConverter } from "../../i18n";
 
 
 const Units = [
