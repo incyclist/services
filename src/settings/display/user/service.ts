@@ -52,10 +52,8 @@ export class UserSettingsDisplayService extends IncyclistService {
         const weightValue = user?.weight===undefined ? undefined : c.convert( user.weight, 'weight',{digits:1}) 
         const weightUnit = c.getUnit('weight')
 
-        let units, unitsOptions;
-
-        units = c.getUnits()==='metric' ? 'Metric' : 'Imperial'
-        unitsOptions = ['Metric', 'Imperial']
+        const units = c.getUnits()==='metric' ? 'Metric' : 'Imperial'
+        const unitsOptions = ['Metric', 'Imperial']
 
 
         return {

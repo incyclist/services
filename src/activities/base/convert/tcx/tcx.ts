@@ -106,7 +106,7 @@ export class TcxConverter implements IActivityConverter{
 
                 const points = trackPoints.filter( p=> p.Time>=lapStart && p.Time<lapEnd)
                 const lastPointBeforeLap = trackPoints.filter( p=> p.Time<lapStart)?.pop()
-                const lastPointInLap = points[points.length-1]
+                const lastPointInLap = points.at(-1)
                 const distanceStart = lastPointBeforeLap?.DistanceMeters ?? 0
 
                 // @build sum of points[].distance
@@ -158,7 +158,7 @@ export class TcxConverter implements IActivityConverter{
         if (!markers.length) {
             return [{start:0,end:activityDuration}]
         }
-        const final = steps[steps.length-1]
+        const final = steps.at(-1)
         if (final.end<activityDuration) {
             markers.push( {start:final.end, end:activityDuration})
         }
@@ -203,7 +203,7 @@ export class TcxConverter implements IActivityConverter{
             }
 
 
-            if (!isNaN(Number(lat ?? 'XX')) && !isNaN(Number(lng ?? 'XX')))
+            if (!Number.isNaN(Number(lat ?? 'XX')) && !Number.isNaN(Number(lng ?? 'XX')))
                 tp.Position = new Position(lat, lng)
 
 

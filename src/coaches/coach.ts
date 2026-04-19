@@ -40,7 +40,7 @@ export class Coach {
 
     get lead():number {
         const lead = this.routeDistance-this.riderPosition
-        if (isNaN(lead))
+        if (Number.isNaN(lead))
             return 0
         return lead
     }

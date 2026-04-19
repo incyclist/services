@@ -4,7 +4,7 @@ import { Observer } from "../../../base/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo, RoutePoint } from "../../base/types";
 import { Loader, MinimalDescription } from "./types";
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
 import { waitNextTick } from "../../../utils";
 import { calculateDistance } from "../../../utils/geo";
 import { useUserSettings } from "../../../settings";
@@ -169,7 +169,7 @@ export class StravaActivityLoader extends Loader< Activity >  {
         if (!points?.length)
             return;
 
-        const last = points[points.length - 1];
+        const last = points.at(-1);
         const first = points[0];
         const totalDistance = last.routeDistance;
         const totalElevation = last.elevationGain;

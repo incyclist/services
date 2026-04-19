@@ -15,7 +15,7 @@ export function addNode(node:number,nodesLookup:Record<string,IncyclistNode>,id:
 
     
         point.ways= point.ways??[];
-        let found = point.ways.find ( e=> (e.toString()===id.toString()) );
+        const found = point.ways.find ( e=> (e.toString()===id.toString()) );
 
         if (!found) {
             point.ways.push(id.toString());
@@ -33,7 +33,7 @@ export function addWay(w:IncyclistWay,ways:Array<IncyclistWay>,waysLookup:Record
 }
 
 export function updateTypeStats(types:Record<string,number>,type:string):void {
-    let t = (type ?? '-');
+    const t = (type ?? '-');
     if (types[t]!==undefined)   
         types[t]++;
     else   
@@ -64,10 +64,10 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
     if ( data.elements===undefined)
         return;
 
-    let nodesLookup:Record<string, IncyclistNode> = {};
-    let waysLookup:Record<string, IncyclistWay> = {}
-    let ways: Array<IncyclistWay> = []
-    let types: Record<string,number> = {}
+    const nodesLookup:Record<string, IncyclistNode> = {};
+    const waysLookup:Record<string, IncyclistWay> = {}
+    const ways: Array<IncyclistWay> = []
+    const types: Record<string,number> = {}
     let idx = 0;
     let id;
 
@@ -83,7 +83,7 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
     // 2nd pass search all ways, if node id is present, but lat/lon is missing enrich with node data
     idx=0;
     data.elements.forEach(element => {
-        let path = [];
+        const path = [];
         if (element.type==='way') {
 
             const way = element as OverpassWay
@@ -94,7 +94,7 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
             // in some cases individual legs of a roundabout are tagged with highway=service, which would break the roundabout detection
             const isRoundabout = (element.tags?.junction==='roundabout' || element.tags?.roundabout==='true');
 
-            if ( isRoundabout || (type!==undefined && (filter===undefined || filter.find( e => e===type)===undefined)) ) {
+            if ( isRoundabout || (type!==undefined && (filter===undefined || !filter.includes(type))) ) {
 
                 way.nodes?.forEach( node => {
                     addNode(node, nodesLookup,id,path)
@@ -113,8 +113,8 @@ export function parseMapData(str:JSON|string,filter):FreeRideDataSet {
 }
 
 export function splitAtIndex(way, idxSplit) {
-    let path=way.path;
-    let result= [ [],[]]
+    const path=way.path;
+    const result= [ [],[]]
     path.forEach( (p,idx)=> {
 
         if ( idx<=idxSplit) result[0].push(p);
@@ -171,8 +171,8 @@ export function splitAtPointInfo(way:WayInfo,split:SplitPointInfo):Array< Array<
     if (!way)
         return;
 
-    let path=way.path;
-    let result= [ [],[]]
+    const path=way.path;
+    const result= [ [],[]]
     let hasNextBranch=false;
     path.forEach( (node,idx)=> {
 
@@ -217,7 +217,7 @@ export function isRoundabout(w:IncyclistWay, strictCheck=false) {
     if ( w.path===undefined || w.path.length<2)
         return false;
 
-    roundabout= (w.path[0].id===w.path[w.path.length-1].id);
+    roundabout= (w.path[0].id===w.path.at(-1).id);
     return roundabout;
 }
 
@@ -343,8 +343,8 @@ export function splitAtPoint(way:IncyclistWay, point:IncyclistNode):Array<WayInf
  * @returns an array of two WaySplitInfo objects, each containing a part of the roundabout
  */
 function splitRoundabout(way:IncyclistWay, point:IncyclistNode):Array<WayInfo> {
-    let path=way.path;
-    let result= [ {id:way.id,path:[],onewayReverse:false},{id:way.id,path:[],onewayReverse:false}]
+    const path=way.path;
+    const result= [ {id:way.id,path:[],onewayReverse:false},{id:way.id,path:[],onewayReverse:false}]
     let found = false;
 
     // loop until point
@@ -360,14 +360,14 @@ function splitRoundabout(way:IncyclistWay, point:IncyclistNode):Array<WayInfo> {
     if (idx!==undefined) {
         let i;
         for (i=0;i<path.length;i++) {
-            let len = path.length;
-            let p = path[(idx+i)%len];
-            let q = path[(idx-i+len)%len];
+            const len = path.length;
+            const p = path[(idx+i)%len];
+            const q = path[(idx-i+len)%len];
             if ( result[0].path.length===0 || 
-                    (p.id!==result[0].path[result[0].path.length-1].id && p.id!==result[0].path[0].id) )
+                    (p.id!==result[0].path.at(-1)!.id && p.id!==result[0].path[0].id) )
                 result[0].path.push(p);
-            if ( result[1].path.length===0 || 
-                    (q.id!==result[1].path[result[1].path.length-1].id && q.id!==result[1].path[0].id) )
+            if ( result[1].path.length===0 ||
+                    (q.id!==result[1].path.at(-1)!.id && q.id!==result[1].path[0].id) )
                 result[1].path.push(q);
         }
 
@@ -392,7 +392,7 @@ export function  generateID   (ways)  {
     if (ways?.length===0) return;
     if (ways.length<2) return ways[0];
 
-    let w = [...ways];
+    const w = [...ways];
     w.sort((a, b) => a.localeCompare(b))
     const widStr = 'R:'+w.join(',');
 
@@ -484,7 +484,7 @@ export function isAllowed( way:IncyclistWay, from:IncyclistNode, to?:IncyclistNo
         return true;
 
     const pWayStart = way.path[0];
-    const pWayEnd = way.path[way.path.length-1];
+    const pWayEnd = way.path.at(-1);
 
     // FROM is the first point of the way -> can be traversed (as this would be the last )
     if (from.id===pWayStart.id)
@@ -520,7 +520,7 @@ export function isAllowed( way:IncyclistWay, from:IncyclistNode, to?:IncyclistNo
 export function isOneWay(way:IncyclistWay):boolean {
     if ( !way?.tags?.oneway)
         return false; 
-    let ow = way.tags.oneway; 
+    const ow = way.tags.oneway; 
     return (ow.toString()==='true' || ow==='yes')
 }
 
@@ -544,7 +544,7 @@ export function isOneWay(way:IncyclistWay):boolean {
  * @returns {Array<string>|undefined} - The array of additional elements or undefined if no additional elements are found.
  */
 export function findAdditional( a1:Array<string>, a2:Array<string>, id3:string, fnCompare) {
-    let res= [];
+    const res= [];
 
     a1.forEach ( e1 => {
         a2.forEach( e2 => {
@@ -566,9 +566,9 @@ export function findAdditional( a1:Array<string>, a2:Array<string>, id3:string, 
  * @returns {LatLng} The point on the line closest to the given point
  */
 export function getPointOnLine(point:LatLng,p1:LatLng,p2:LatLng):LatLng {
-    let bL = initialBearingTo(p1,p2);
-    let bP = bL+90;
-    let p3 = destinationPoint(point,100,bP);
+    const bL = initialBearingTo(p1,p2);
+    const bP = bL+90;
+    const p3 = destinationPoint(point,100,bP);
     
     return getCrossing( p1,p2,point,p3,false)
 }
@@ -590,15 +590,15 @@ export function isBetween(point:LatLng,p1:LatLng,p2:LatLng):{between:boolean, of
         p2.lat===undefined|| p2.lng===undefined 
         ) return undefined;
 
-    let d = geo.distanceBetween(p1,point);    
-    let bDest = initialBearingTo(p1,p2);
-    let bPoint = initialBearingTo(p1,point);
-    let angle = bPoint-bDest; 
+    const d = geo.distanceBetween(p1,point);    
+    const bDest = initialBearingTo(p1,p2);
+    const bPoint = initialBearingTo(p1,point);
+    const angle = bPoint-bDest; 
     if ( abs(angle) > 30) // more than 30 degree difference: point is not on path
         return {between:false, offset:d };
 
-    let dP2 = geo.distanceBetween(p1,p2);    
-    let offset = abs(d*sin(angle));
+    const dP2 = geo.distanceBetween(p1,p2);    
+    const offset = abs(d*sin(angle));
 
     if (offset<MAX_DISTANCE_FROM_PATH && dP2>d) {
         return {between:true, offset};
@@ -638,7 +638,7 @@ export function distanceToPath(point:LatLng,way:IncyclistWay) {
                 return;
     
             if (prev!==undefined) {
-                let res = isBetween(point,prev,element);
+                const res = isBetween(point,prev,element);
                 if (res?.between)  {
                     minDistance = res.offset;
                     foundExact = true;
@@ -646,7 +646,7 @@ export function distanceToPath(point:LatLng,way:IncyclistWay) {
                 }
             }
     
-            let distance = geo.distanceBetween(element,point);  
+            const distance = geo.distanceBetween(element,point);  
             if (minDistance===undefined || distance<minDistance) {
                 minDistance = distance;
                 minIdx = idx;
@@ -715,9 +715,9 @@ export function  isWithinRange(distance) {
 */
 
 export function getCrossing( A:LatLng,B:LatLng,C:LatLng,D:LatLng,exact=true):CrossingInfo { 
-    let AB = getVector(A,B)
-    let CD = getVector(C,D);
-    let AC = getVector(A,C);
+    const AB = getVector(A,B)
+    const CD = getVector(C,D);
+    const AC = getVector(A,C);
     
     const ciA = {...A, distance:0}
     const ciB = {...B, distance:geo.distanceBetween(A,B)}
@@ -741,8 +741,8 @@ export function getCrossing( A:LatLng,B:LatLng,C:LatLng,D:LatLng,exact=true):Cro
     const distance =V.len();
 
     if ( AB.isSameDirection(V) && ( distance<p1Len || isWithinRange(p1Len-distance))){
-        let X = geo.getPointBetween(A,B,distance);
-        let CX= getVector(C,X);
+        const X = geo.getPointBetween(A,B,distance);
+        const CX= getVector(C,X);
         if (!exact || (CX.len()<CD.len() ||isWithinRange(CD.len() -CX.len()))) {            
             return {...X,distance}
         }
@@ -770,7 +770,7 @@ export function getPointCrossingPath( point:LatLng,path:IncyclistNode[],closest=
         return undefined;
 
     path.forEach ( ( p,i ) =>{
-        let pDist =  abs(geo.distanceBetween(p,point));
+        const pDist =  abs(geo.distanceBetween(p,point));
         if (pDist===0) {
             pCrossing  = pClosest = { distance:0, point:p, idx:i}
             return 
@@ -779,9 +779,9 @@ export function getPointCrossingPath( point:LatLng,path:IncyclistNode[],closest=
             pClosest= { distance:pDist, point:p, idx:i}
         }
         if (pPrev!==undefined) {
-            let pX = getPointOnLine(point,pPrev,p);
+            const pX = getPointOnLine(point,pPrev,p);
             if (pX!==undefined) {
-                let dist = abs(geo.distanceBetween(pX,point))
+                const dist = abs(geo.distanceBetween(pX,point))
                 if ( pCrossing===undefined || (pCrossing.distance>dist) ) {
                     pCrossing = { point:pX, distance:dist,idx:i}
                 }
@@ -829,11 +829,11 @@ export function getVector( p1:LatLng, p2:LatLng) {
     if (p1===undefined) throw new Error("missing mandatory argument: p1");
     if (p2===undefined) throw new Error("missing mandatory argument: p2");
 
-    let distance = geo.distanceBetween(p1,p2);    
+    const distance = geo.distanceBetween(p1,p2);    
     if (distance===0) {
         return new Vector([0,0])
     }
-    let bearing = initialBearingTo(p1,p2);
+    const bearing = initialBearingTo(p1,p2);
 
     return new Vector( { path:{bearing,distance}} );
 }
@@ -843,7 +843,7 @@ export function getBounds( lat:number, lng:number, offset:number ):Boundary {
     const pi = Math.PI;
     const m =  (1 / ((2 * pi / 360) * RADIUS_EARTH)) / 1000;  //1 meter in degree;
     
-    let boundary = {
+    const boundary = {
         northeast:{lat:undefined, lng:undefined},
         southwest:{lat:undefined, lng:undefined}
     }    
@@ -935,7 +935,7 @@ export function alongTrackDistanceTo(point:LatLng, pathStart:LatLng, pathEnd:Lat
 
     const δat = Math.acos(Math.cos(δ13) / Math.abs(Math.cos(δxt)));
 
-    let d = δat*Math.sign(Math.cos(θ12-θ13)) * R;
+    const d = δat*Math.sign(Math.cos(θ12-θ13)) * R;
    
     return d;
 }

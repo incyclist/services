@@ -261,7 +261,7 @@ export class RLVDisplayService extends RouteDisplayService {
         // we need to see if there is a jump of elevation between last point of first route
         // and first point of second route. 
         // This jump needs to be corrected in the 2nd route
-        const pLastCurrent = currentPoints[currentPoints.length-1]
+        const pLastCurrent = currentPoints.at(-1)
         const pFirstNext  = nextPoints[0]
         const distance = distanceBetween(pLastCurrent,pFirstNext)
         const elevationGain = distance < 5 ? 0 : pLastCurrent.slope*distance/100
@@ -334,7 +334,7 @@ export class RLVDisplayService extends RouteDisplayService {
         // replace \n with <br> in text
         let text = input                     
         if (text?.length) {
-            text = text.replace(/\\n/g, '<br>')
+            text = text.replaceAll('\\n', '<br>')
         }
 
         return text
@@ -595,7 +595,8 @@ export class RLVDisplayService extends RouteDisplayService {
 
             }
         }
-        catch {}
+        catch { // ignore
+            }
         return error.message    
     }
 

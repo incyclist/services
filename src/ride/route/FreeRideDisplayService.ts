@@ -235,7 +235,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
         let idx = path.findIndex(p => p.routeDistance >= this.position.routeDistance);
         if (idx > 0) {
 
-            let point = path[idx];
+            const point = path[idx];
             atPoint = (point.routeDistance === this.position.routeDistance);
             if (point.routeDistance > this.position.routeDistance) {
                 idx--;
@@ -254,10 +254,10 @@ export class FreeRideDisplayService extends GpxDisplayService {
         this.currentRideDisplayProps = props ?? this.currentRideDisplayProps
 
         try {
-            let routeProps:GpxDisplayProps = super.getDisplayProperties(props)
+            const routeProps:GpxDisplayProps = super.getDisplayProperties(props)
             const options = this.getFreeRideService().buildUIOptions(this.currentOptions??[])
             
-            let distance = this.getRemainingDistance();
+            const distance = this.getRemainingDistance();
 
 
             const optionProps = {
@@ -414,7 +414,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
         this.currentRoute.details.points = points
         validateRoute(this.currentRoute)
 
-        this.currentRoute.details.distance = points[points.length-1].routeDistance
+        this.currentRoute.details.distance = points.at(-1).routeDistance
         addDetails(this.currentRoute,this.currentRoute.details)
 
 

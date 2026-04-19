@@ -78,7 +78,7 @@ export class BinaryReader {
             const c = part.readUInt16LE(i*2)
             if (c===0) 
                 return str
-            str+=String.fromCharCode(c)
+            str+=String.fromCodePoint(c)
             i++
         }
         return str
@@ -109,7 +109,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
         return
     }
     
-    let targetFileName = referenced.file;
+    const targetFileName = referenced.file;
     const regex = /([\\/])/g;
 
     if (targetFileName.startsWith('http://') || targetFileName.startsWith('https://')) { 

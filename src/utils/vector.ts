@@ -32,8 +32,8 @@ export class Vector {
         if (props.path ) {
             if (props.path.bearing===undefined || props.path.distance===undefined) 
                 throw new Error("incorrect value of: props.path")
-            let d = props.path.distance;
-            let alpha = props.path.bearing;
+            const d = props.path.distance;
+            const alpha = props.path.bearing;
             this._x = d*sin(alpha);
             this._y = d*cos(alpha);
         }
@@ -93,8 +93,8 @@ export class Vector {
 
         let v2 = v;
         if (!Vector.isVector(v)) v2 = new Vector(v);
-        let bearer1 = this.angle();
-        let bearer2 = v2.angle();
+        const bearer1 = this.angle();
+        const bearer2 = v2.angle();
         return Math.sign(bearer1)===Math.sign(bearer2) 
     }
 
@@ -149,13 +149,13 @@ export class Vector {
    }
 
     static add(v1,v2) {
-        let v = new Vector(v1);
+        const v = new Vector(v1);
         v.add(v2);
         return v;   
     }
 
     static min(v1,v2) {
-        let v = new Vector(v1);
+        const v = new Vector(v1);
         v.min(v2);
         return v;   
     }
@@ -163,7 +163,7 @@ export class Vector {
     static multiply(v1,v2) {
         if ( typeof v1==='number') {
             if (Vector.isVector(v2) || Array.isArray(v2))  {
-                let v = new Vector(v2)
+                const v = new Vector(v2)
                 return v.multiply(v1)
             }
             else {
@@ -174,7 +174,7 @@ export class Vector {
         if (Vector.isVector(v1))
             return v1.multiply(v2);   
         if (Array.isArray(v1)) {
-            let v = new Vector(v1);
+            const v = new Vector(v1);
             return v.multiply(v2)
         }
         throw new Error("invalid argument")
@@ -186,7 +186,7 @@ export class Vector {
         if (Vector.isVector(v1))
             return v1.eq(v2);   
         if (Array.isArray(v1)) {
-            let v = new Vector(v1);
+            const v = new Vector(v1);
             return v.eq(v2)
         }
         throw new Error("invalid argument")
@@ -197,7 +197,7 @@ export class Vector {
         if (Vector.isVector(v1))
             return v1.isParallel(v2);   
         if (Array.isArray(v1)) {
-            let v = new Vector(v1);
+            const v = new Vector(v1);
             return v.isParallel(v2)
         }
         throw new Error("invalid argument")

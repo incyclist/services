@@ -1,4 +1,4 @@
-import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle, InterfaceFactory, BleDeviceSettings, DeviceSettings } from "incyclist-devices"
+import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle, InterfaceFactory, BleDeviceSettings } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
 import { AdapterInfo, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting, 
          LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"
@@ -472,7 +472,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             if (!device)
                 return;
 
-            let mode:string,settings, isERG, isSIM
+            let mode:string,settings
             let modeObj:CyclingMode
             let modes: typeof CyclingMode[] = []
 
@@ -504,8 +504,8 @@ export class DeviceConfigurationService  extends IncyclistService{
             }
 
             
-            isERG = modeObj?.isERG()===true
-            isSIM = modeObj?.isSIM()===true
+            const isERG = modeObj?.isERG()===true
+            const isSIM = modeObj?.isSIM()===true
 
             return {udid,mode,settings,isERG,isSIM,options} 
 
@@ -593,7 +593,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             if (c.disabled || !c.selected)
                 return;
         
-            if (!devices.find( d=> d.udid===c.selected))
+            if (!devices.some( d=> d.udid===c.selected))
                 return;
 
             const adapter = this.adapters[c.selected]            
@@ -1026,7 +1026,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             this.settings.capabilities = [];
 
         target.forEach( capability => {
-            if (!this.settings.capabilities.find( c=> c.capability===capability ))
+            if (!this.settings.capabilities.some( c=> c.capability===capability ))
                 this.settings.capabilities.push({capability,devices:[],selected:undefined,disabled:false})
         })
     }

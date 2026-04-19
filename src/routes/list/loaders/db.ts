@@ -1,6 +1,6 @@
 import { JsonRepository } from "../../../api"
 import { Singleton } from "../../../base/types"
-import { Observer, PromiseObserver } from "../../../base/types/observer"
+import { PromiseObserver } from "../../../base/types/observer"
 import { Route } from "../../base/model/route"
 import { RouteInfo } from "../../base/types"
 import { RoutesLegacyDbLoader } from "./LegacyDB"

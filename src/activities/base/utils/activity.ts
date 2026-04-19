@@ -12,7 +12,6 @@ import { Injectable } from "../../../base/decorators/Injection";
 import { ActivityConverter } from "../convert";
 import { ActivityUploadFactory } from "../../upload";
 import { EventLogger } from "gd-eventlog";
-import { getUnitConversionShortcuts } from "../../../i18n";
 
 export class Activity implements ActivityInfo{
     
@@ -118,7 +117,7 @@ export class Activity implements ActivityInfo{
 
         const formats = ['tcx','fit']
 
-        for (let type of formats) {
+        for (const type of formats) {
             
             const details = this.details??{}
 
@@ -157,12 +156,11 @@ export class Activity implements ActivityInfo{
         }
 
         try {
-            let data
             const converter = this.getActivityConverter()
-            data = await converter.convert(this.details,format)
-            
+            const data: any = await converter.convert(this.details,format)
+
             const fileName = this.details.fileName.replace('.json',`.${format}`)
-            await fs.writeFile(fileName, Buffer.from (data ))   
+            await fs.writeFile(fileName, Buffer.from(data))
             this.details[`${format}FileName`] = fileName
 
             await this.save(true)

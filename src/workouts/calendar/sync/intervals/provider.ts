@@ -194,7 +194,7 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
         // if this is not the first sync then check for deleted workouts
         if (this.lastSyncTS) {
 
-            const deletedWorkouts = this.workouts.filter(w => !events.find(e => e.id.toString() === w.workoutId))
+            const deletedWorkouts = this.workouts.filter(w => !events.some(e => e.id.toString() === w.workoutId))
             for (const w of deletedWorkouts) {
                 this.observer.emit('deleted', w, 'intervals')
             }

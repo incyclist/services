@@ -22,8 +22,7 @@ export interface RoutePageDisplayProps  {
 }
 
 
-export interface RouteItemProps extends SummaryCardDisplayProps {
-}
+export type RouteItemProps = SummaryCardDisplayProps
 
 
 export interface IPageCallBacks  {

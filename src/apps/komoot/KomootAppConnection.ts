@@ -194,7 +194,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
 
     // istanbul ignore next
     protected getCrypto() {        
-        return getBindings().crypto??require('crypto')
+        return getBindings().crypto??require('node:crypto')
     }
 
 

@@ -1,7 +1,7 @@
 import { EventLogger } from "gd-eventlog";
 import { calculateHeaderFromPoints, LatLng } from "../../utils/geo";
 import { Boundary, FreeRideDataSet, IMapArea, IncyclistNode, IncyclistWay, IncyclistWaySplit, NearestPathInfo, PathCrossingInfo, SegmentInfo, SplitPointInfo, WayInfo } from "./types";
-import { distanceToPath, generateID, isOneWay, isRoundabout, isWay, isWithinBoundary, splitAtPoint, splitAtPointInfo } from "./utils";
+import { distanceToPath, generateID, isOneWay, isRoundabout, isWithinBoundary, splitAtPoint, splitAtPointInfo } from "./utils";
 import clone from "../../utils/clone";
 
 /**
@@ -123,10 +123,10 @@ export class MapArea implements IMapArea{
             return;
 
         let w;
-        let min = { path:undefined, distance:undefined, way:undefined  };
+        const min = { path:undefined, distance:undefined, way:undefined  };
         
         for ( w of ways) {
-            let distance = distanceToPath(point,w)
+            const distance = distanceToPath(point,w)
             if (distance!==undefined && (min.distance===undefined || distance<min.distance))  {
                 min.distance = distance; 
                 min.path = w.path
@@ -170,7 +170,7 @@ export class MapArea implements IMapArea{
                 const branch = this.getWay(wid);
 
                 // ignore one way streets that are crossing
-                if (isOneWay(branch) && branch.path[branch.path.length-1].id===node.id) 
+                if (isOneWay(branch) && branch.path.at(-1).id===node.id) 
                     return;
 
                 // we can specify ways to ignore 
@@ -221,7 +221,7 @@ export class MapArea implements IMapArea{
             }
         }
 
-        let result:IncyclistWaySplit = {
+        const result:IncyclistWaySplit = {
             wayId: way.id,
             branches: []
         }
@@ -286,7 +286,7 @@ export class MapArea implements IMapArea{
                 if (!optWay?.path?.length)
                     return;
 
-                if (optWay.path[optWay.path.length - 1].id === point.id)
+                if (optWay.path.at(-1).id === point.id)
                     optWay.path.reverse();
                 
                 else if (optWay.path[0].id !== point.id) {  // crossing in the middle of the street                    
@@ -302,7 +302,7 @@ export class MapArea implements IMapArea{
         }
 
         const addOption = (newPath:IncyclistNode[], res:Array<IncyclistWaySplit>, reverse:boolean) =>{
-            let optWay = way;
+            const optWay = way;
             let path = []
 
             // in case the crossing point is exactly at the beginning or end of a way ( i.e. street)
@@ -313,7 +313,7 @@ export class MapArea implements IMapArea{
             else if (newPath.length>1) {
                 if (newPath.length===way.path.length && newPath[0].id===crossing.point.id && crossing.distance===0 &&
                     (newPath[0].id===way.path[0].id || 
-                    newPath[0].id===way.path[way.path.length-1].id)) {
+                    newPath[0].id===way.path.at(-1).id)) {
                         addWaysCrossing(res);                
                     }
 
@@ -340,7 +340,7 @@ export class MapArea implements IMapArea{
                 newPath.push(p);
             }
             else  {
-                if ( newPath?.length>0 && point.id!==newPath[newPath.length-1].id)
+                if ( newPath?.length>0 && point.id!==newPath.at(-1).id)
                     newPath.push( point);
 
                 if (!isOneWay(way)) {
@@ -391,7 +391,7 @@ export class MapArea implements IMapArea{
 
             if (path) {
                 const wayOption = { ...wayOriginal, path};            
-                let res = this.splitAtFirstBranch(wayOption)
+                const res = this.splitAtFirstBranch(wayOption)
                 segments.push( {id:res.wayId,path:res.path})    
                 points.push( ...res.path );    
             }
@@ -414,12 +414,12 @@ export class MapArea implements IMapArea{
 
         if ( way?.path?.length<2)
             return;
-        let fullWay = this.getWay(way.id);
+        const fullWay = this.getWay(way.id);
         
         if (!fullWay || (!fullWay.roundabout && position==='start' ))  // entering normal street
             return calculateHeaderFromPoints(way.path[0],way.path[1]);
         else if (position==='end') // leaving street
-            return calculateHeaderFromPoints(way.path[way.path.length-2],way.path[way.path.length-1]);
+            return calculateHeaderFromPoints(way.path.at(-2),way.path.at(-1));
         else {  // enteriong roundabout
             let heading = calculateHeaderFromPoints(way.path[0],way.path[1]);
 
@@ -447,19 +447,19 @@ export class MapArea implements IMapArea{
      * during the map loading process.
      */
     protected correctRoundabouts():void {
-        let multiWayRoundabouts = [];   // roundabout is tagged as roundabout in OpenMap and consist of multiple ways
-        let roundaboutsImplicit = [];   // roundabout with single way having first and last point are equal / may  not be tagged as roundabout
+        const multiWayRoundabouts = [];   // roundabout is tagged as roundabout in OpenMap and consist of multiple ways
+        const roundaboutsImplicit = [];   // roundabout with single way having first and last point are equal / may  not be tagged as roundabout
       
 
         try {
             // retrieve all roundabouts
             this.data?.ways.forEach( way => {
                 if ( isRoundabout(way,true) ) {
-                    let ways = this.collectRoundaboutWays(way);
+                    const ways = this.collectRoundaboutWays(way);
                     if (ways?.length<2)  {
                         return;
                     }
-                    let id = generateID(ways);
+                    const id = generateID(ways);
                     let found =  multiWayRoundabouts.find( e => e.id===id)
                     if (!found) {
 
@@ -482,7 +482,7 @@ export class MapArea implements IMapArea{
                             }
                         }
                         
-                        found = (way.path[0].id===way.path[way.path.length-1].id);
+                        found = (way.path[0].id===way.path.at(-1).id);
                         if (found) {
                             roundaboutsImplicit.push(way);
                         }
@@ -498,35 +498,35 @@ export class MapArea implements IMapArea{
 
             multiWayRoundabouts.forEach( ri => {
 
-                let originalNodes = [];
+                const originalNodes = [];
                 if (ri.ways.length<2) {
                     return
                 }
 
                 // 1st pass: collect nodes
                 ri.ways.forEach( (wid,i) => {
-                    let way = this.getWay(wid);
+                    const way = this.getWay(wid);
                     if (way===undefined)
                         return;
-                    let path = way.path;
+                    const path = way.path;
                     path.forEach( n => {
                         if ( originalNodes.length===0 ||
-                                originalNodes[originalNodes.length-1]!==n.id)
+                                originalNodes.at(-1)!==n.id)
                             originalNodes.push(n.id)                    
                     })
                 })
 
                 // 2nd pass: replace way IDs and collect original Ways
                 ri.ways.forEach( (wid,i) => {
-                    let way = this.getWay(wid)
+                    const way = this.getWay(wid)
                     this.replaceWayID(way,ri.id,i===0) 
                 })
 
                 // 3nd pass: combine nodes
-                let roundabout = this.getWay(ri.id)
+                const roundabout = this.getWay(ri.id)
                 roundabout.path = [];
                 originalNodes.forEach( nid => {
-                    let node = this.getNode(nid)
+                    const node = this.getNode(nid)
                     roundabout.path.push(node);
                 })
 
@@ -558,7 +558,7 @@ export class MapArea implements IMapArea{
             return undefined;
             
         const contains = (ways,wid) => {
-            let found =  ways.find( id=> id===wid);
+            const found =  ways.find( id=> id===wid);
             return found!==undefined;
         }
 
@@ -567,7 +567,7 @@ export class MapArea implements IMapArea{
 
             crossings.forEach( n => {
                 n.ways.forEach( wid => {
-                    let w = this.getWay(wid)
+                    const w = this.getWay(wid)
                     if ( isRoundabout(w,true) && wid!==way.id && !contains(ways,wid)) {
                         ways.push(wid);
                         addNodes(ways,w)
@@ -576,7 +576,7 @@ export class MapArea implements IMapArea{
             })    
         }
 
-        let ways = [way.id];
+        const ways = [way.id];
         addNodes(ways,way);
         return ways;
     };
@@ -597,7 +597,7 @@ export class MapArea implements IMapArea{
      */
     protected getBranch(crossing:SplitPointInfo,wayId:string, targetId:string ) { 
 
-        let w = clone(this.getWay(targetId));
+        const w = clone(this.getWay(targetId));
 
         // nothing to do: it is the same way (i.e. was already added)
         if ( w?.id===wayId)
@@ -614,14 +614,14 @@ export class MapArea implements IMapArea{
 
         }
         // crossing is last point of branch
-        else if (w.path[w.path.length-1].id===crossing.point.id) {
+        else if (w.path.at(-1).id===crossing.point.id) {
             w.path.reverse();
             const res = this.getUntilFirstBranch(w,{ignore:wayId})
             if (res.path.length>1)
                 return res
         }
         else { // crossing somwhere in the middle 
-            let branches = splitAtPoint(w,crossing.point)
+            const branches = splitAtPoint(w,crossing.point)
 
             let res = this.getUntilFirstBranch(branches[0],{ignore:wayId})
             if (res.path.length>1)
@@ -645,8 +645,8 @@ export class MapArea implements IMapArea{
     protected replaceWayID   (way:IncyclistWay,newId:string,replaceLookup:boolean=true):IncyclistWay  {
         if (way===undefined || newId===undefined || way.id===undefined || way.path===undefined || !this.data) return;
 
-        let oldId = way.id;
-        let w = this.getWay(oldId)
+        const oldId = way.id;
+        const w = this.getWay(oldId)
 
         if (oldId===newId)
             return w;
@@ -655,7 +655,7 @@ export class MapArea implements IMapArea{
         w.id = newId;
         w.path.forEach( (nx,j) => {
             w.path[j] = this.getNode(nx.id);
-            let n = w.path[j];
+            const n = w.path[j];
             n.ways.forEach( (wid,i) => { if (wid===oldId) n.ways[i] = newId })
             // remove duplicates
             n.ways = [ ...new Set(n.ways)]
@@ -683,7 +683,7 @@ export class MapArea implements IMapArea{
             path = w.path;
         }
 
-        let piBranch = this.getFirstBranch(w,ignore);
+        const piBranch = this.getFirstBranch(w,ignore);
 
 
         if (piBranch!== undefined) {

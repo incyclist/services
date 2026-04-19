@@ -93,12 +93,12 @@ export class VideoConversion extends IncyclistService {
             let seconds = 0
             if (parts.length === 3) {
                 const [h, m, s] = parts
-                seconds = Number(h) * 3600 + Number(m) * 60 + parseFloat(s)
+                seconds = Number(h) * 3600 + Number(m) * 60 + Number.parseFloat(s)
             } else if (parts.length === 2) {
                 const [m, s] = parts
-                seconds = Number(m) * 60 + parseFloat(s)
+                seconds = Number(m) * 60 + Number.parseFloat(s)
             } else {
-                seconds = parseFloat(clean)
+                seconds = Number.parseFloat(clean)
             }
             if (Number.isNaN(seconds)) return undefined
 

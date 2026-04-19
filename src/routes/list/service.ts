@@ -182,7 +182,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     private resetLists() {
 
         const screenProps = this.getScreenProps()??{}
-        let maxVisible = screenProps.itemsFit? screenProps.itemsFit+1:0
+        const maxVisible = screenProps.itemsFit? screenProps.itemsFit+1:0
         
 
         this.getLists(false)?.forEach(list => {
@@ -274,7 +274,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             }
         }
-        catch {}
+        catch { // ignore
+            }
 
         return this.filters
 
@@ -599,7 +600,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     onCarouselUpdated(list) {
 
         try {
@@ -1448,7 +1449,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         let existingPreview:string
         let fileUrl = false
         try {
-            let {dir,name} = path.parse(videoUrl)??{}
+            let {dir} = path.parse(videoUrl)??{}
+            const {name} = path.parse(videoUrl)??{}
             if (!dir.startsWith('htttp')) {
                 if (dir.startsWith('video:')) {                    
                     dir = dir.replace('video:', 'file:')                    
@@ -1594,7 +1596,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             }
         
             const lists = [this.selectedRoutes,this.alternatives, ...this.custom??[] ]         
-            for (let list of lists) {
+            for (const list of lists) {
                 card = list.getCards().find(c=>c.getData()?.description?.id===id) as RouteCard
                 if (card)
                     return {card,list}

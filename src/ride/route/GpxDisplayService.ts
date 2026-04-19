@@ -318,7 +318,7 @@ export class GpxDisplayService extends RouteDisplayService {
             if (!ret)
                 return
             const val = Number(ret)
-            if (isNaN(val)) {
+            if (Number.isNaN(val)) {
                 this.logEvent({message:'invalid setting', key,ret})
                 return
             }

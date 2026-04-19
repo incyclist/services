@@ -463,7 +463,7 @@ export class DeviceAccessService  extends IncyclistService{
 
     
         const isKnown = (adapters, deviceSettings)=> {
-            if (adapters.find(a=> a.isEqual(deviceSettings))) {
+            if (adapters.some(a=> a.isEqual(deviceSettings))) {
                 return true;
             }
 

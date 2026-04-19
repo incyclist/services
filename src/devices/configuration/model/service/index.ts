@@ -16,7 +16,7 @@ export interface DeviceModeInfo {
     mode: string
     isERG?: boolean,
     isSIM?: boolean
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     settings: any
     options?: ICyclingMode[]
 }

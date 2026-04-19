@@ -413,7 +413,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     getRideType(overwrite?:boolean):RideType {
-        let prev = this.type
+        const prev = this.type
         if (overwrite) {
             delete this.type
         }
@@ -1311,7 +1311,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected getBike() {
         const devices = this.getDeviceConfiguration()
-        let adapter = devices.getSelected(IncyclistCapability.Control) ?? devices.getSelected(IncyclistCapability.Power) ?? devices.getSelected(IncyclistCapability.Speed) 
+        const adapter = devices.getSelected(IncyclistCapability.Control) ?? devices.getSelected(IncyclistCapability.Power) ?? devices.getSelected(IncyclistCapability.Speed) 
         return adapter?.getUniqueName()
     }
 

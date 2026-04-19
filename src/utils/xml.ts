@@ -23,7 +23,7 @@ export const removeUTFBom = (str:string) => {
         return str
     }
 
-    while (str.charCodeAt(0)===0 || str.charCodeAt(0)===0xFEFF || str.charCodeAt(0)===0xFFFD)
+    while (str.codePointAt(0)===0 || str.codePointAt(0)===0xFEFF || str.codePointAt(0)===0xFFFD)
         str = str.substring(1);
 
     return str
@@ -106,7 +106,7 @@ export class XmlJSON {
             if (keys.length===1 && `${keys[0]}s`===key) {
                 return item[keys[0]].map( i=> this.map(key,i.$))
             }
-            else if ( !keys.find( k=> isNaN(Number(k))) ) {
+            else if ( !keys.some( k=> Number.isNaN(Number(k))) ) {
                 const obj=[]
 
                 keys.forEach( key=> {

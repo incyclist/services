@@ -145,7 +145,7 @@ export class IntervalsApi extends AppApiBase{
             }
         }
         
-        let url = `/athlete/0/activities${this.getUploadParams(request)}`
+        const url = `/athlete/0/activities${this.getUploadParams(request)}`
 
         const form =await this.createForm(url,{file:request.file},reqOpts)
         const response = await this.postForm(form)

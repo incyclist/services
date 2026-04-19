@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 
 /**
  * Clones the content of the object ( excluding functions )

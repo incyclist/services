@@ -364,7 +364,8 @@ export class ActivityRideService extends IncyclistService {
 
             
             }
-            catch {}
+            catch { // ignore            
+            }
 
             if (showLog ) {
                 this.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value??''}:${i.data[1]?.value??''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
@@ -443,7 +444,7 @@ export class ActivityRideService extends IncyclistService {
         }
 
         let distanceRemaining = (this.getTotalDistance()/1000-distance)
-        if (isNaN(distanceRemaining)) distanceRemaining=undefined
+        if (Number.isNaN(distanceRemaining)) distanceRemaining=undefined
         if (distanceRemaining<0) distanceRemaining=0
 
         let timeRemaining 
@@ -490,7 +491,7 @@ export class ActivityRideService extends IncyclistService {
             const cadenceDetails = { value: formatNumber(stats?.cadence?.avg, 0), label: 'avg' };
 
             let elevationGainRemaining = this.getTotalElevation() - (this.current.elevationGainDisplay ?? 0);
-            if (isNaN(elevationGainRemaining)) elevationGainRemaining = undefined;
+            if (Number.isNaN(elevationGainRemaining)) elevationGainRemaining = undefined;
             if (elevationGainRemaining < 0) elevationGainRemaining = 0;
             const value = elevationGainRemaining === undefined ?  undefined: `${C(elevationGainRemaining,'elevation').toFixed(0)}`
 
@@ -555,7 +556,7 @@ export class ActivityRideService extends IncyclistService {
                 return true
             }
 
-            let trialGroup  = 'A';
+            const trialGroup: string  = 'A';
             // if (this.activity.user.uuid.startsWith('1') || this.activity.user.uuid.startsWith('a')) {
             //     trialGroup = 'A'
             // }
@@ -762,7 +763,7 @@ export class ActivityRideService extends IncyclistService {
         this.current.route.details.points = points
         validateRoute(this.current.route)
 
-        this.current.route.details.distance = points[points.length-1].routeDistance
+        this.current.route.details.distance = points.at(-1).routeDistance
         addDetails(this.current.route,this.current.route.details)
     }
 
@@ -806,7 +807,7 @@ export class ActivityRideService extends IncyclistService {
             if (currentIdx<maxEntries-1) {
 
 
-                let deleted = props.splice(maxEntries-1)
+                const deleted = props.splice(maxEntries-1)
                 props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})
             }
             else if (currentIdx>maxEntries-1){
@@ -830,7 +831,7 @@ export class ActivityRideService extends IncyclistService {
                 props.splice( maxEntries-2, props.length-maxEntries)
             }
             else if (currentIdx===maxEntries-1) {
-                let deleted = props.splice( currentIdx+1, props.length-currentIdx)
+                const deleted = props.splice( currentIdx+1, props.length-currentIdx)
                 props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})   
                 props.splice( currentIdx-1, 1)
             }
@@ -849,7 +850,8 @@ export class ActivityRideService extends IncyclistService {
                       + props.map(buildLog).join(',')
 
         }
-        catch {}
+        catch { // ignore            
+        }
         this.logEvent({message:'PrevRides', prevRides:logInfo})
         
 
@@ -885,7 +887,7 @@ export class ActivityRideService extends IncyclistService {
             const speed = { value:C(sameTime.speed, 'speed',{digits:1}), unit:U('speed')}
 
             // calculate time Gap, based on the record with same (or larger) distance
-            let sameDistance = this.getRecordWithSameOrBiggerDistance(logs,current)
+            const sameDistance = this.getRecordWithSameOrBiggerDistance(logs,current)
             if (!sameDistance)
                 return null
             const timeGap = this.calculateTimeGap(sameDistance,current)
@@ -926,7 +928,7 @@ export class ActivityRideService extends IncyclistService {
             }            
         }
         else {
-            res = clone(logs[logs.length-1])
+            res = clone(logs.at(-1))
         }
         
         return res
@@ -980,7 +982,7 @@ export class ActivityRideService extends IncyclistService {
         sameDistance.time-=t;         
 
         const timeDelta = sameDistance.time-current.time
-        let prefix = Math.sign(timeDelta)>0 ? '+' : '-'
+        const prefix = Math.sign(timeDelta)>0 ? '+' : '-'
         const timeGap = prefix+ ( Math.abs(timeDelta)<60 ? `${Math.abs(timeDelta).toFixed(1)}s` : formatTime(Math.abs(timeDelta),true) )
 
         return timeGap
@@ -1215,20 +1217,19 @@ export class ActivityRideService extends IncyclistService {
         const fs = this.getFileSystemBinding()
         emit('convert.start',format)
         try {
-            let data
-            data = await ActivityConverter.convert(this.activity,format)
+            const data = await ActivityConverter.convert(this.activity,format)
 
             emit('convert.done',format,true)
 
             if (format.toLowerCase()==='fit') {
                 const fileName = await this.getTargetFileName('fit')
-                await fs.writeFile(fileName, Buffer.from (data ))   
+                await fs.writeFile(fileName, Buffer.from(data as ArrayBuffer))
                 this.activity.fitFileName = fileName
             }
 
             if (format.toLowerCase()==='tcx') {
                 const fileName = await this.getTargetFileName('tcx')
-                await fs.writeFile(fileName, Buffer.from (data ))   
+                await fs.writeFile(fileName, Buffer.from(data as string))
                 this.activity.tcxFileName = fileName
             }
             await this._save()
@@ -1268,7 +1269,7 @@ export class ActivityRideService extends IncyclistService {
 
     protected createLogRecord():ActivityLogRecord{
         const prevLogs = this.activity.logs
-        const prev = prevLogs?.length ? prevLogs[prevLogs.length-1] : undefined
+        const prev = prevLogs?.length ? prevLogs.at(-1) : undefined
         const time = this.activity.time
         const timeDelta = prev? time-prev.time : time
         const deviceData = this.current?.deviceData
@@ -1287,9 +1288,9 @@ export class ActivityRideService extends IncyclistService {
             slope: this.current.position?.slope,
             elevation: this.current.position?.elevation
         }
-        if (this.current?.position?.lat && !isNaN(this.current?.position?.lat))
+        if (this.current?.position?.lat && !Number.isNaN(this.current?.position?.lat))
             log.lat = this.current?.position?.lat
-        if (this.current?.position?.lng && !isNaN(this.current?.position?.lng)) {
+        if (this.current?.position?.lng && !Number.isNaN(this.current?.position?.lng)) {
             log.lng = this.current?.position?.lng
         }
 
@@ -1480,7 +1481,7 @@ export class ActivityRideService extends IncyclistService {
                 return 0;
 
             const isLoop = checkIsLoop(route)
-            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.[route.points.length-1]?.routeDistance
+            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.at(-1)?.routeDistance
             if (isLoop) {
                 const currentLap = Math.floor((this.current.routeDistance??0)/totalRouteDistance)
                 return totalRouteDistance-(this.activity.startPos??0)+currentLap*totalRouteDistance
@@ -1491,7 +1492,7 @@ export class ActivityRideService extends IncyclistService {
         }
         catch(err) {
             this.logError(err,'getTotalDistance')
-            return 0 
+            return 0
         }
     }
 
@@ -1502,8 +1503,8 @@ export class ActivityRideService extends IncyclistService {
                 return 0;
 
             const isLoop = checkIsLoop(route)
-            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.[route.points.length-1]?.routeDistance
-            let totalElevation = route.points?.[route.points.length-1]?.elevationGain??0
+            const totalRouteDistance = this.current?.endPos ?? route.distance ?? route.points?.at(-1)?.routeDistance
+            let totalElevation = route.points?.at(-1)?.elevationGain??0
             if (this.current?.endPos!==undefined && route.points) {
                 const endPosPoint = route.points.find( p=> p.routeDistance>=this.current.endPos)
                 if (endPosPoint) {

@@ -16,7 +16,7 @@ export const formatDateTime = (date:Date, fstr='%Y%m%d%H%M%S', utc:boolean=false
 
     
     
-    return fstr.replace (/%[YmdHMS]/g, (m) => {
+    return fstr.replaceAll(/%[YmdHMS]/g, (m) => {
         switch (m) {
             case '%Y': return date[prefix + 'FullYear'] (); // no leading zeros required
             case '%m': m = 1 + date[prefix + 'Month'] (); break;
@@ -65,7 +65,7 @@ export const formatTime = ( seconds:number, cutMissing:boolean ) =>{
  * @returns {string} The formatted number string.
  */
 export const formatNumber = ( value:number,maxDigits:number, maxLength:number=-1 ):string =>{
-    if (value===undefined || value===null || isNaN(value))
+    if (value===undefined || value===null || Number.isNaN(value))
         return ''
 
     if (maxLength===-1)
@@ -108,7 +108,7 @@ export const pad = (value:number,size:number=2) => {
 export const trimTrailingChars = (s:string, charToTrim:string) => {
     let c = charToTrim;
     if ( charToTrim===undefined) {
-        c = s.charAt(s.length-1)
+        c = s.at(-1) ?? ''
     }
     const regExp = new RegExp(c + "+$");
     const result = s.replace(regExp, "");

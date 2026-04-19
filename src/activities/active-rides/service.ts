@@ -457,10 +457,10 @@ export class ActiveRidesService extends IncyclistService {
         const names = [ 'Alex', 'Bart', 'Cosmas', 'Dirk', 'Ernesto', 'Frank', 'Guido', 'Hans', 'Irene','John', 'Kai','Lorenzo', 'Martin', 'Naijb', 'Oswaldo', 'Pete', 'Quentin', 'Rachel', 'Sophia','Trevor', 'Ute', 'Vivian', 'Wil', 'Xaver', 'Younes', 'Zoe' ]
         
         const fnKey = id.charAt(0).toLowerCase()
-        const idx = !isNaN(parseInt(fnKey)) ? parseInt(fnKey)  : fnKey.charCodeAt(0)-96
+        const idx = !Number.isNaN(Number.parseInt(fnKey)) ? Number.parseInt(fnKey)  : (fnKey.codePointAt(0) ?? 0)-96
 
         const lnKey = id.charAt(0).toUpperCase()
-        const ln = !isNaN(parseInt(lnKey)) ? ''  : lnKey
+        const ln = !Number.isNaN(Number.parseInt(lnKey)) ? ''  : lnKey
 
         return `${names[idx]}${ln}`
 
@@ -679,7 +679,7 @@ export class ActiveRidesService extends IncyclistService {
         if ( !logs.length)
             return 
 
-        const point = logs[logs.length-1]
+        const point = logs.at(-1)
         const {lat,lng,elevation,slope} = point
         return {lat,lng,elevation,slope }
     }
@@ -1013,7 +1013,7 @@ export class ActiveRidesService extends IncyclistService {
             this.coaches = coaches.map(c=>{
                 const props = c.getRidersListDisplayProperties() as ActiveRideEntry
 
-                let routeDistance = props.currentRideDistance
+                const routeDistance = props.currentRideDistance
 
                 const entry:ActiveRideEntry = {...props,
                     ride: this.current?.ride,

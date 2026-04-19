@@ -111,7 +111,7 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
         const text = step.text
         const work = step.intensity==='active' || step.intensity==='interval' 
         const steady = !step.ramp
-        let cooldown = this.isCoolDown(step)
+        const cooldown = this.isCoolDown(step)
 
         let power,cadence,hrm;
         if (!step.freeride) {

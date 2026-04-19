@@ -407,7 +407,8 @@ export class WorkoutRide extends IncyclistService{
                 ts = this.trainingTime
                 limits = this.workout?.getLimits(ts,true)
             }
-            catch {}
+            catch { // ignore
+            }
             this.logError(err,'backward',{ts,limits})
         }
 

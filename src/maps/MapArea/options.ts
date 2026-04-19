@@ -44,7 +44,7 @@ export class OptionManager {
                         options[0].path.forEach( (point,j) => {
                             if (j===0)
                                 return;
-                            foundSameSegment =  (points.find ( pAll => pAll.id===point.id)!==undefined)
+                            foundSameSegment =  points.some( pAll => pAll.id===point.id)
                         } )
                         if ( !foundSameSegment) {
                             concatPaths( path, opts[0].path,'after',opts[0].id )        
@@ -72,7 +72,7 @@ export class OptionManager {
             }
 
             // handle special case: way is a continuation (appending a single option) from the original  way
-            const lastPoint = from.path.length>0 ? from.path[from.path.length-1] : undefined
+            const lastPoint = from.path.length>0 ? from.path.at(-1) : undefined
             const fromWayId = lastPoint?.wayId ?? from.id
             let originalWay = this.getWay(fromWayId) 
 
@@ -88,10 +88,10 @@ export class OptionManager {
             const way = {...originalWay,path:from.path}
     
             // get last location of way, if it has no id, get second to last 
-            let location = way.path[way.path.length-1];
+            let location = way.path.at(-1);
             if (location.id===undefined) {
                 if (way.path.length>1)
-                    location = way.path[way.path.length-2];
+                    location = way.path.at(-2);
                 else {
                     return []
                 }
@@ -150,7 +150,7 @@ export class OptionManager {
     
             // remove options that are pointing back to the origin
             if (options?.length) {
-                const fromNode = from.path?.[from.path.length-2];
+                const fromNode = from.path?.at(-2);
                 options = options.filter( o => o.path.length>0 && o.path[1].id!==fromNode.id)
             }
     
@@ -191,7 +191,7 @@ export class OptionManager {
             const p1 = path[i];
             const p2 = path[i + 1];
             const s = calculateDistance(p1.lat,p1.lng,p2.lat,p2.lng);
-            if (s!==undefined && !isNaN(s)) 
+            if (s!==undefined && !Number.isNaN(s)) 
                 distance += s;
         }
         return distance;
@@ -200,14 +200,14 @@ export class OptionManager {
     protected checkOptionsOnDifferentWay(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ):FreeRideContinuation[]{
         if (!w?.path || !location) return [];
 
-        let roundabout = isRoundabout(w);
+        const roundabout = isRoundabout(w);
         if (roundabout)
             return this.getOptionsRoundabout(location,w,options);
         
         if (w.path[0].id===location.id ) {
             this.getOptionsFirstPoint(location,w,options);
         }
-        else if (w.path[w.path.length-1].id===location.id) {
+        else if (w.path.at(-1).id===location.id) {
             this.getOptionsLastPoint(location,w,options);
         }
         else {
@@ -220,7 +220,7 @@ export class OptionManager {
 
 
     protected getOptionsFirstPoint(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ){ 
-        let result = this.map?.splitAtFirstBranch(w);
+        const result = this.map?.splitAtFirstBranch(w);
         let expand = false;
 
         if (!result?.path)
@@ -228,7 +228,7 @@ export class OptionManager {
 
         // no crossing before end of path
         if ( result.path?.length === w.path.length) {
-            const pLast = w.path[ w.path.length-1];
+            const pLast = w.path.at(-1);
             if ( pLast.ways?.length===2 ) {
                 const wIdNext = pLast.ways.find( wid => wid!==w.id )
                 const wNext = wIdNext ? this.getWay(wIdNext) : undefined
@@ -236,7 +236,7 @@ export class OptionManager {
                     
                     // if we are at the beginning or end of the next way
                     const pNextStart = wNext.path[0];
-                    const pNextEnd = wNext.path[ wNext.path.length-1];
+                    const pNextEnd = wNext.path.at(-1);
                     if ( pNextStart.id===pLast.id   ) {
                         expand = true;
                         const segment = this.map?.splitAtFirstBranch(wNext)
@@ -271,7 +271,7 @@ export class OptionManager {
                             nextPaths.forEach( (p) => {   
                                 
 
-                                if ( p[0].ways.find( wid => wid===w.id )) {
+                                if ( p[0].ways.includes(w.id) ) {
                                     expand = true;
 
                                     const wFull = {...this.map.getWay(wIdNext),path:p.slice(1)};
@@ -284,7 +284,7 @@ export class OptionManager {
 
                                     options.push(combined)
                                 }
-                                else if ( p[p.length-1].ways.find( wid => wid===w.id )) {
+                                else if ( p.at(-1).ways.includes(w.id) ) {
                                     expand = true;
                                     p.reverse()
                                     const wFull = {...this.map.getWay(wIdNext),path:p};
@@ -325,7 +325,7 @@ export class OptionManager {
     }
 
     protected getOptionsMiddle(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ){ 
-        let ways = splitAtPoint(w,location);
+        const ways = splitAtPoint(w,location);
         if ( !ways[0].onewayReverse ) {
             const result = this.map.splitAtFirstBranch( ways[0]);
             options.push({id:result.wayId, path:result.path,map:this.map});
@@ -338,11 +338,11 @@ export class OptionManager {
     }
 
     protected getOptionsRoundabout(location:IncyclistNode,w:IncyclistWay,options:FreeRideContinuation[] ){
-        let r =  splitAtPoint(w,location);
+        const r =  splitAtPoint(w,location);
         if (!r?.length)
             return;
 
-        let path=[];
+        const path=[];
         
         r[0].path.forEach( (p,idx) => {
 
@@ -354,17 +354,17 @@ export class OptionManager {
             if (p.ways.length>1) {
                 p.ways.forEach ( owid => {
                     if (owid!==w.id) {
-                        let ow = clone(this.map?.getWay(owid));
+                        const ow = clone(this.map?.getWay(owid));
                         if (ow!==undefined) {
                             if ( !isAllowed(ow,p)) 
                                 return;
 
-                            if ( ow.path[ow.path.length-1].id === p.id)
+                            if ( ow.path.at(-1).id === p.id)
                                 ow.path.reverse();
-                            let optPath1 = this.map.splitAtFirstBranch(ow);
-                            let optPath  = [...path];
+                            const optPath1 = this.map.splitAtFirstBranch(ow);
+                            const optPath  = [...path];
                             optPath.push(...optPath1.path)
-                            let o = {
+                            const o = {
                                 roundabout:w.id,
                                 id: ow.id,
                                 path: optPath,
@@ -455,8 +455,8 @@ export class OptionManager {
     
             let newPath = path;
         
-            const last = partial.path[partial.path.length-1];
-            const prev = partial.path[partial.path.length-2];
+            const last = partial.path.at(-1);
+            const prev = partial.path.at(-2);
     
             const idxLast = path.findIndex( (p) => pointEquals(p,last) )
             let idxPrev = path.findIndex( (p) => pointEquals(p,prev) )
@@ -469,7 +469,7 @@ export class OptionManager {
                 lastOriginal = originalWay.path[0];
             }
             else  {
-                lastOriginal = originalWay.path[originalWay.path.length-1];
+                lastOriginal = originalWay.path.at(-1);
             }       
             if (last.id===lastOriginal.id) {
                 return {...originalWay,path:[],roundabout:false}
@@ -516,13 +516,13 @@ export class OptionManager {
 
         try {
             if ( way.path.length>1) {
-                let prev = way.path[way.path.length-2];
+                const prev = way.path.at(-2);
                 const w = this.getWay(way)
                 if (!w)
                     return []
 
                 if (w.roundabout) {
-                    let branches = splitAtPoint(w,location);
+                    const branches = splitAtPoint(w,location);
                     branches.forEach ( b => {
                         if (b.path.length>1 && b.path[1].id !== prev.id) {
                             const {id,path} = b
@@ -531,7 +531,7 @@ export class OptionManager {
                     })    
                 }
                 else if ( w.path.length>1) {
-                    let result = this.map?.splitAtFirstBranch(way);
+                    const result = this.map?.splitAtFirstBranch(way);
                     if (result) {                        
                         options.push({id:result.wayId, path:result.path??[],map:this.map});
                     }

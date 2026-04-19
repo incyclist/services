@@ -347,7 +347,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
      * all cards will be made visible
      * 
      */
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     onCarouselUpdated(list,item,itemsInSlide) {
         try {
             const cards = list.getCards()??[]
@@ -799,7 +799,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     protected selectList(item:WP):CardList<WP> { 
         
         if (item.type==='workout') {

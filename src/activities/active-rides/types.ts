@@ -53,6 +53,7 @@ export type ActiveRideEntry = {
 
 export type ActiveRideListMessageHandler = (topic:string, message:ActiveRideListMessage) => void
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface ActiveRideListMessage {}
 
 export interface ActivityStartMessage extends ActiveRideListMessage {

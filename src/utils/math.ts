@@ -56,7 +56,7 @@ export function abs(num) {
  */
 export const num = (value: string|number) => {
     const res = Number(value)
-    if ( isNaN(res)) {
+    if ( Number.isNaN(res)) {
         return
     }
     return res

@@ -1136,9 +1136,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 return;
 
             const p0 = points[0]
-            const pN = points[points.length-1]
+            const pN = points.at(-1)
             const distance = Math.abs(distanceBetween(p0,pN))
-            const slope = (points[0].elevation-points[points.length-1].elevation)/ distance * 100
+            const slope = (points[0].elevation-points.at(-1).elevation)/ distance * 100
 
             if (Math.abs(slope)>1){
                 this.logger.logEvent({message:'Loop elevation profile adjusted', route: route.description.title})

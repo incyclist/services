@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import {EventLogger} from 'gd-eventlog'
 import clone from '../../utils/clone';
 import { merge } from '../../utils/merge';
@@ -64,7 +64,7 @@ export class UserSettingsService {
         if (this.isInitialized)
             return true;
 
-        if (this.initPromise)
+        if (this.initPromise != null)
             return await this.initPromise;
 
         const binding = this.binding||UserSettingsService._defaultBinding;
@@ -241,7 +241,7 @@ export class UserSettingsService {
         if (!this.isInitialized) 
             throw new Error('Settings are not yet initialized')
 
-        if (this.savePromise) {
+        if (this.savePromise != null) {
             this.isDirty = true;
             return;
         }

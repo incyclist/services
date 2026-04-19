@@ -240,7 +240,7 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
     protected async adddRouteDetails( route:Route, coordinates:Array<KomootCoordinate> ): Promise<void> {
         const points = this.buildRoutePoints(coordinates, [])
 
-        const last = points[points.length - 1];
+        const last = points.at(-1);
         const first = points[0];
         const totalDistance = last.routeDistance;
         const totalElevation = last.elevationGain;

@@ -9,10 +9,11 @@ import { ignoreEmpty } from '../../../../utils';
 
 const parser = new xml2js.Parser({explicitChildren :true,preserveChildrenOrder :true,mergeAttrs :false} );
 
+const valid = (v:any) => v!==null && v!==undefined
 
-const intVal = v=>!!v ? Number.parseInt(v) : undefined;
-const floatVal = v=>!!v ? Number.parseFloat(v) : undefined;
-const pVal   = v => !!v ? floatVal(v)*100 : undefined
+const intVal = v=> valid(v) ? Number.parseInt(v) : undefined;
+const floatVal = v=>valid(v) ? Number.parseFloat(v) : undefined;
+const pVal   = v => valid(v) ? floatVal(v)*100 : undefined
 
 const setPowerValues = (power,powerTarget) => {
     if (power.max === undefined && power.min === undefined) {
@@ -115,7 +116,7 @@ export class ZwoParser implements WorkoutParser<string>{
             setPowerValues(power,powerTarget);
         }        
 
-        if ( !!this.context.ftpOverride) {
+        if ( valid(this.context.ftpOverride)) {
             power.max = power.max ? Math.round(this.context.ftpOverride * power.max/100) : undefined
             power.min = power.min ? Math.round(this.context.ftpOverride * power.min/100) : undefined
             power.type = 'watt'
@@ -285,7 +286,7 @@ export class ZwoParser implements WorkoutParser<string>{
             let tag
             parser.parseString(data, (err:Error,result)=> {
                 if (err) {
-                    err.message = 'File contains error(s): '+ err.message.replace(/\n/g,' ');
+                    err.message = 'File contains error(s): '+ err.message.replaceAll('\n',' ');
                     this.logger.logEvent( {message: 'error', fn:'parse()', error: err.message, stack: err.stack})
                     return reject(err);
                 }

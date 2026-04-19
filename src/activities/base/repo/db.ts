@@ -158,7 +158,7 @@ export class ActivitiesRepository {
 
     async migrateDB() {
 
-        let deleted = []
+        const deleted = []
         try {
             const promises = []
             this.activities.forEach( activity => {

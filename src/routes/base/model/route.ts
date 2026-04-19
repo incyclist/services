@@ -45,7 +45,7 @@ export class Route {
         const points = this._details?.points ?? this._description?.points ?? []
         if (!points?.length)
             return null
-        return points[points.length-1].routeDistance
+        return points.at(-1).routeDistance
             
     }
 

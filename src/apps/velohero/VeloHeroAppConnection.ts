@@ -1,4 +1,4 @@
-import { getBindings, ICryptoBinding } from "../../api";
+import { getBindings } from "../../api";
 import { Injectable, Singleton } from "../../base/decorators";
 import { valid } from "../../utils/valid";
 import { VeloHeroApi } from "../base/api";
@@ -178,7 +178,7 @@ export class VeloHeroAppConnection extends ConnectedAppService<VeloHeroCredentia
         // const crypto = require('crypto') as ICryptoBinding
         // return crypto
 
-        return getBindings().crypto??require('crypto')
+        return getBindings().crypto??require('node:crypto')
     }
 
 

@@ -95,7 +95,7 @@ export class CoachesService extends IncyclistService {
                     pos = startSettings.startPos
                 }           
 
-                const lead = (isNaN(c.settings?.lead) ? 0 : c.settings?.lead)??0
+                const lead = (Number.isNaN(c.settings?.lead) ? 0 : c.settings?.lead)??0
                 c.setRoute(route)
                 c.setProgress(lead+pos)
                 c.setRiderPosition(pos)

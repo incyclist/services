@@ -10,7 +10,7 @@ const score = (r:RouteInfo):number =>{
     const tsAction = (Date.now()-Math.max(r.tsImported||0,r.tsLastStart||0))/1000/3600/24      // days since last action
 
     if (r.hasVideo || (1-tsAction)>0) val+=1
-    if (!isNaN(tsAction) && tsAction>=0 && tsAction<365 ) {
+    if (!Number.isNaN(tsAction) && tsAction>=0 && tsAction<365 ) {
         if ((7-tsAction)>0 )
             val+=1
         val += Math.log10(365-tsAction)

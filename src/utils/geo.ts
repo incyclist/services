@@ -44,7 +44,8 @@ export const calculateDistance = (lat1:number, lon1:number, lat2:number, lon2:nu
  * @returns {LatLng} The resulting distance (in meters)
 **/
 
-export const distanceBetween = (p1:LatLng|RoutePoint,p2:LatLng|RoutePoint,props={abs:true,latLng:true}):number => {
+const DEFAULT_DISTANCE_PROPS = {abs:true,latLng:true}
+export const distanceBetween = (p1:LatLng|RoutePoint,p2:LatLng|RoutePoint,props=DEFAULT_DISTANCE_PROPS):number => {
     if (p1===undefined)
         return 0;
 
@@ -185,13 +186,13 @@ const crossingParallel = (AB,CD,AC) =>{
             return undefined;
     }
 
-    let AD = Vector.add(AC,CD);
+    const AD = Vector.add(AC,CD);
 
     // CD is pointing in the oposite direction, D->C
     if (AB.isParallel(AD) && AB.len()>=AD.len() ){
         // we need to check if point D is closer to A than point C (ie. vector CD shows in the oposite direction)
-        let da = AD.len();
-        let dc = da-CD.len();
+        const da = AD.len();
+        const dc = da-CD.len();
         if ( dc>=0 ) 
             return AD
         else

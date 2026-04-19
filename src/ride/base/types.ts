@@ -4,7 +4,7 @@ import { ActivityUpdate } from "../../activities/ride/types"
 import { Observer } from "../../base/types"
 import { RoutePoint } from "../../routes/base/types"
 import { Route } from "../../routes/base/model/route"
-import { EventEmitter } from "events"
+import { EventEmitter } from "node:events"
 import { ActiveRideListAvatar, ActivityDetails, PrevRidesListDisplayProps, ScreenShotInfo } from "../../activities"
 import { Workout } from "../../workouts"
 import { FreeRideOption } from "../../routes/list/types"
@@ -34,6 +34,7 @@ export interface IRideModeServiceDisplayProps {
     dbColumns?: number
 }
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface WorkoutDisplayProps extends IRideModeServiceDisplayProps {}
 
 export interface CurrentPosition extends RoutePoint {

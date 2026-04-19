@@ -174,7 +174,7 @@ export class UserInterfaceServcie extends IncyclistService {
             this.startQueueWorker();
             this.startHeartbeatWorker()
 
-            let sent = false
+            const sent = false
 
             const user = this.getUserSettings().getValue('user',{})
             const id = this.getUserSettings().getValue('uuid',undefined)
@@ -290,9 +290,8 @@ export class UserInterfaceServcie extends IncyclistService {
 
             this.queuedMessages.push( ...failed)
         }
-        catch (err) {
-
-        }
+        catch  { // ignore
+            }
     }
 
     protected isOnline( ) {
@@ -522,7 +521,8 @@ export class UserInterfaceServcie extends IncyclistService {
                 try {
                     recoveredStr = recovered ? new Date(recovered).toISOString() : undefined
                     createdStr = created ? new Date(created).toISOString() : undefined
-                } catch { }
+                } catch { // ignore
+            }
 
                 this.logEvent({ message: 'recovered user', recovered: recoveredStr, created: createdStr })
             }

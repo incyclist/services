@@ -39,7 +39,7 @@ export const checkIsLoop = (_route:Route|Array<RoutePoint>):boolean =>  {
     
     const maxDistance = MAX_LAPMODE_DISTANCE
     const p1 = points[0];
-    const p2 = points[points.length-1];
+    const p2 = points.at(-1);
 
     if (p1===undefined || p2===undefined) {
         return false;
@@ -62,20 +62,20 @@ export const updateSlopes = (points: Array<RoutePoint>, validateOnly=false):void
     if (!validateOnly) {
         const lapMode = checkIsLoop(points)
         if (lapMode) {
-            const distance = geo.distanceBetween(points[0], points[points.length-1]);
+            const distance = geo.distanceBetween(points[0], points.at(-1));
             let elevationShift
             if (distance === 0) {
-                elevationShift = points[0].elevation - points[points.length-1].elevation;
+                elevationShift = points[0].elevation - points.at(-1).elevation;
             }
             else {
-                const distanceLast = geo.distanceBetween(points[points.length-2], points[points.length-1]);
-                const slopeLast = (points[points.length-1].elevation - points[points.length-2].elevation) / distanceLast * 100;
+                const distanceLast = geo.distanceBetween(points.at(-2), points.at(-1));
+                const slopeLast = (points.at(-1).elevation - points.at(-2).elevation) / distanceLast * 100;
                 const targetElevationLast = points[0].elevation - slopeLast * distance/100;
-                elevationShift = targetElevationLast-points[points.length-1].elevation;
+                elevationShift = targetElevationLast-points.at(-1).elevation;
             }
     
             validateDistance(points)
-            const totalDistance = points[points.length-1].routeDistance
+            const totalDistance = points.at(-1).routeDistance
             points.forEach( (point) => { 
                 point.elevation += elevationShift*(point.routeDistance/totalDistance)
             })
@@ -155,8 +155,8 @@ export const getSegments = (route:Route):Array<RouteSegment> => {
 
             const additional = sx.segment.map ( s => { 
                 const segment = s['$'] 
-                if (segment.start!==undefined) segment.start = parseInt(segment.start);
-                if (segment.end!==undefined) segment.end = parseInt(segment.end);
+                if (segment.start!==undefined) segment.start = Number.parseInt(segment.start);
+                if (segment.end!==undefined) segment.end = Number.parseInt(segment.end);
                 return segment;
             }) 
             segments.push( ...additional);
@@ -183,7 +183,7 @@ const addGenericDetails = (details: RouteApiDetail, route: Route) => {
 
     route.details = details;
     route.description.points = details.points;
-    route.description.distance = details.distance ?? points[points.length - 1].routeDistance;
+    route.description.distance = details.distance ?? points.at(-1).routeDistance;
     route.description.isLoop = checkIsLoop(route.description.points);
 
     if (!valid(route.description.routeHash))
@@ -215,7 +215,7 @@ const addVideoDetails = (route: Route, details: RouteApiDetail)  => {
         route.description.previewUrl = details.previewUrl;
     }
 
-    route.description.hasGpx = details.points.find(p => p.lat && p.lng) !== undefined;
+    route.description.hasGpx = details.points.some(p => p.lat && p.lng);
     route.description.next = details.video?.next;
 }
 
@@ -262,7 +262,7 @@ export const validateRoute = (route:Route|RouteApiDetail, reset:boolean=false):v
     }
         
 
-    route.distance = route.points[ route.points.length-1].routeDistance
+    route.distance = route.points.at(-1)?.routeDistance
 }
 
 export const validateDistance = (points:Array<RoutePoint>) => {
@@ -311,7 +311,7 @@ export const getTotalElevation = (route:RouteApiDetail):number =>{
     if (!route?.points?.length)
         return 0;
 
-    const lastPoint = route.points[route.points.length-1]
+    const lastPoint = route.points.at(-1)
     if (lastPoint.elevationGain===undefined)
         updateElevationGain(route.points)
     
@@ -326,7 +326,7 @@ export const getElevationGainAt = (route:Route, routeDistance:number):number => 
 
     let distance = routeDistance
     let elevationGain = 0;
-    const lastPoint = route.points[route.points.length-1]
+    const lastPoint = route.points.at(-1)
 
     const isLoop = checkIsLoop(route)
     const totalDistance = lastPoint.routeDistance
@@ -380,11 +380,11 @@ export const getTotalDistance = (route:RouteApiDetail):number =>{
     if (!route?.points?.length)
         return 0;
 
-    return route.points[ route.points.length-1].routeDistance
+    return route.points.at(-1)?.routeDistance
 }
 
 export const getRouteHash = (route:RouteApiDetail):string => {
-    const cryptoImpl = getCryptoBinding()??require('crypto')
+    const cryptoImpl = getCryptoBinding()??require('node:crypto')
 
 
     let json;
@@ -691,7 +691,7 @@ function searchNextPoint(route:Route,pPrev:LapPoint,props:GetNextPositionProps,s
     const {lap,targetRouteInLap,searchStart: searchStartIdx,distance} = searchTarget
     const points = route.points
 
-    let pSearchStart = pPrev
+    const pSearchStart = pPrev
 
     for ( let cnt = searchStartIdx;cnt<points.length;cnt++) {
         const p = points[cnt];
@@ -708,7 +708,7 @@ function searchNextPoint(route:Route,pPrev:LapPoint,props:GetNextPositionProps,s
         return {pSearchStart,point}        
     }
     else {
-        const point = updatePoint(points[points.length-1], points[points.length-1], props,  distance, targetRouteInLap, route, lap);
+        const point = updatePoint(points.at(-1), points.at(-1), props,  distance, targetRouteInLap, route, lap);
         return {pSearchStart,point}        
 
     }

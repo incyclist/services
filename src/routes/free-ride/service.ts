@@ -178,9 +178,9 @@ export class FreeRideService extends IncyclistService {
             if (!path[0].id) {
                 map = from.map ?? this.getMapArea().getMap(path[0])
                 const way = map.getWay(currentSegment.id)
-                const end = path[path.length-1]
+                const end = path.at(-1)
                 let newSegment:FreeRideContinuation
-                if (end.id===way.path[way.path.length-1].id) { 
+                if (end.id===way.path.at(-1).id) { 
                     path = way.path 
                     path.reverse()
                     newSegment = {...way,path}
@@ -234,7 +234,7 @@ export class FreeRideService extends IncyclistService {
         if ( fromWay.roundabout)
             return options;
 
-        const from = fromPath[ fromPath.length-1];
+        const from = fromPath.at(-1);
 
         const filtered = options.filter( o => { 
             const way = {...map.getWay(o.id), path:o.path}
@@ -329,7 +329,7 @@ export class FreeRideService extends IncyclistService {
             if (!o?.path?.length)
                 return o?.id+':no path'
 
-            return `${o.id}:(${o.path.length}):${o.path[0].id}->${o.path[o.path.length-1].id}`
+            return `${o.id}:(${o.path.length}):${o.path[0].id}->${o.path.at(-1).id}`
         }
 
         // run in sequence to not overload overpass servers
@@ -360,7 +360,7 @@ export class FreeRideService extends IncyclistService {
         
                         // remove option that poins back to the originating point
                         if (segment.options?.length > 0) {
-                            segment.options = segment.options.filter( o => o.path[o.path.length-1].id !== originatingPoint.id);
+                            segment.options = segment.options.filter( o => o.path.at(-1).id !== originatingPoint.id);
                         }
     
                     }
@@ -394,7 +394,7 @@ export class FreeRideService extends IncyclistService {
     
                         const way = map?.getWay(segment.id)
     
-                        if ( !isOneWay(way) ||  isAllowed(way, newPath[0], newPath[newPath.length-1])) {
+                        if ( !isOneWay(way) ||  isAllowed(way, newPath[0], newPath.at(-1))) {
                             segment = {
                                 id:o.id,
                                 map:o.map,                            
@@ -442,7 +442,7 @@ export class FreeRideService extends IncyclistService {
             return 
         }
 
-        return `${opt.id}:${opt.path[0].id??'crossing'}-${opt.path[opt.path.length-1].id??'crossing'}`        
+        return `${opt.id}:${opt.path[0].id??'crossing'}-${opt.path.at(-1).id??'crossing'}`        
     }
 
     getOptions():FreeRideContinuation[] {
@@ -619,7 +619,7 @@ export class FreeRideService extends IncyclistService {
     protected getDefaultStartPosition():IncyclistNode {
         try {
             const position = this.getUserSettings().get('routeSelection.freeRide.position',DEFAULT_POSITION)
-            if (position.lat===undefined || isNaN(position.lat) || position.lng===undefined|| isNaN(position.lng)) {
+            if (position.lat===undefined || Number.isNaN(position.lat) || position.lng===undefined|| Number.isNaN(position.lng)) {
                 return DEFAULT_POSITION
             }
             return position

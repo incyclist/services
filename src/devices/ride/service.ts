@@ -4,7 +4,6 @@ import {AdapterInfo,  IncyclistDeviceSettings, useDeviceConfiguration} from "../
 import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./types";
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
-import { EventLogger } from 'gd-eventlog';
 import { getLegacyInterface } from "../../utils/logging";
 import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
 import { getRouteList } from "../../routes";
@@ -204,7 +203,7 @@ export class DeviceRideService  extends IncyclistService{
     protected getAllAdapters():AdapterRideInfo[] {
             const config = this.getDeviceConfiguration()
             const adapters = config.getAllAdapters()?.map( ai=> ({...ai, isStarted:false}))
-            if (this.simulatorEnforced && !adapters.find( a=>a.adapter.getName()==='Simulator' )) {
+            if (this.simulatorEnforced && !adapters.some( a=>a.adapter.getName()==='Simulator' )) {
                 const adapter = AdapterFactory.create({interface:'simulator', name:'Simulator'});
                 adapters.push({adapter,udid:'Simulator:'+Date.now(), capabilities:adapter.getCapabilities(),isStarted:false})
             }
@@ -356,7 +355,7 @@ export class DeviceRideService  extends IncyclistService{
         const { points, totalDistance } = this.updatePointsFromStartPos(routeData,startPos, isLap );
 
         
-        let eppRoute:PreparedRoute = {
+        const eppRoute:PreparedRoute = {
             name: routeData.title,
             description: '',
             programId: eppPreferences.programId,
@@ -680,7 +679,7 @@ export class DeviceRideService  extends IncyclistService{
 
 
         const status = await Promise.all(this.startPromises)
-        const allOK = status.find( s=>s===false)===undefined
+        const allOK = !status.includes(false)
         this.emit(`${startType}-result`, allOK)
 
         if (allOK && (startType==='start' )) {
@@ -693,7 +692,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     protected async startSingleAdapter(ai: AdapterRideInfo,duplicates:Array<DuplicateInfo>,props,startType: 'start' | 'check' | 'pair' ) {
-        if (duplicates.find(dai=>dai.info.udid===ai.udid))
+        if (duplicates.some(dai=>dai.info.udid===ai.udid))
             return;
 
         const startProps = clone(props??{})
@@ -715,7 +714,7 @@ export class DeviceRideService  extends IncyclistService{
 
         const sType = (ai.isControl ) ? 'bike' : 'sensor'
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const logProps = {} as any
         logProps[sType] = ai.adapter.getUniqueName()
         logProps.cability = ai.adapter.getCapabilities().join('/')
@@ -813,7 +812,7 @@ export class DeviceRideService  extends IncyclistService{
         this.logEvent({ message: `${startType} ${sType} request failed`, ...logProps, reason: err.message });
 
         this.emit(`${startType}-error`, this.getAdapterStateInfo(ai), err);
-        if (duplicates.find(dai => dai.udid === ai.udid)) {
+        if (duplicates.some(dai => dai.udid === ai.udid)) {
             duplicates.forEach(dai => { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info)); });
         }
         if (startType === 'check' || startType === 'pair') {
@@ -825,7 +824,7 @@ export class DeviceRideService  extends IncyclistService{
 
     private async handleStartFailure(startType: string, ai: AdapterRideInfo, duplicates: DuplicateInfo[], sType: string, logProps: any) {
         this.emit(`${startType}-error`, this.getAdapterStateInfo(ai));
-        if (duplicates.find(dai => dai.udid === ai.udid)) {
+        if (duplicates.some(dai => dai.udid === ai.udid)) {
             duplicates.forEach(dai => { this.emit(`${startType}-error`, this.getAdapterStateInfo(dai.info)); });
         }
 
@@ -838,7 +837,7 @@ export class DeviceRideService  extends IncyclistService{
 
     private async handleStartSuccess(startType: string, ai: AdapterRideInfo, duplicates: DuplicateInfo[], sType: string, logProps: any) {
         this.emit(`${startType}-success`, this.getAdapterStateInfo(ai));
-        if (duplicates.find(dai => dai.udid === ai.udid)) {
+        if (duplicates.some(dai => dai.udid === ai.udid)) {
             duplicates.forEach(dai => { this.emit(`${startType}-success`, this.getAdapterStateInfo(dai.info)); });
         }
         this.logEvent({ message: `${startType} ${sType} request finished`, ...logProps });
@@ -1249,7 +1248,7 @@ export class DeviceRideService  extends IncyclistService{
         return true;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+     
     registerOnDataHandler(adapters:AdapterRideInfo[]) {
         
         adapters?.forEach(ai=> {
@@ -1293,7 +1292,8 @@ export class DeviceRideService  extends IncyclistService{
             
             await this.sendUpdate({...resetRequest,slope:0,forced:true})
         }
-        catch { }
+        catch { // ignore
+            }
     }
 
     pause():void {
@@ -1466,7 +1466,7 @@ export class DeviceRideService  extends IncyclistService{
         if (this.simulatorEnforced) {
             enabledCapabilities = [IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed, IncyclistCapability.HeartRate, IncyclistCapability.Cadence];
         }
-        else if (duplicates.length > 0 && duplicates.find(d => d.udid === adapterInfo.udid)) {
+        else if (duplicates.some(d => d.udid === adapterInfo.udid)) {
 
 
             const selected = clone(selectedDevices);
@@ -1503,7 +1503,8 @@ export class DeviceRideService  extends IncyclistService{
             try {
                 await Promise.allSettled( this.promiseSendUpdate)
             }
-            catch {}            
+            catch { // ignore
+            }            
         }
     }
 
