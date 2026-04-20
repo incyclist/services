@@ -1,21 +1,21 @@
 import { Encoder, Profile } from '@garmin/fitsdk'
 import { EventLogger } from 'gd-eventlog'
-import { ActivityDetails, FitExportActivity, FitLogEntry } from '../../model'
-import { RemoteFitConverter } from './remote-fit'
+import { ActivityDetails, ActivityLogRecord, FitExportActivity, FitLogEntry } from '../../model'
+import { useUserSettings } from '../../../../settings'
+import { Injectable } from '../../../../base/decorators'
 
 const DEG_TO_SEMICIRCLES = (2 ** 31) / 180
 
 /**
  * Converts activity data into FIT format locally using the @garmin/fitsdk Encoder.
  *
- * Extends RemoteFitConverter to reuse the field-mapping methods
- * (getFitActivity, mapLogToFit) and replaces only the encoding step,
- * eliminating the dependency on the remote Java microservice.
+ * Replaces the remote Java microservice previously used for FIT encoding.
  */
-export class LocalFitConverter extends RemoteFitConverter {
+export class LocalFitConverter {
+
+    protected logger: EventLogger
 
     constructor() {
-        super()
         this.logger = new EventLogger('LocalFitExporter')
     }
 
@@ -39,6 +39,32 @@ export class LocalFitConverter extends RemoteFitConverter {
             this.logger.logEvent({ message: 'convert result', format: 'FIT', result: 'error', reason: err.message })
             throw err
         }
+    }
+
+    protected getFitActivity(activity: ActivityDetails): FitExportActivity {
+        const { id, title, time, timeTotal, timePause, distance } = activity
+        const status = 'created'
+
+        const startTime = new Date(activity.startTime).toISOString()
+        const logs = activity.logs.map(this.mapLogToFit.bind(this))
+        const screenshots = [] // TODO
+        const laps = [] // TODO
+        const user = {
+            id: this.getUserSettings().get('uuid', undefined),
+            weight: activity.user.weight
+        }
+
+        return { id, title, status, logs, laps, startTime, time, timeTotal, timePause, distance, user, screenshots }
+    }
+
+    protected mapLogToFit(log: ActivityLogRecord): FitLogEntry {
+        const { time, speed, slope, cadence: cadenceOrg, heartrate: heartrateOrg, distance, power: powerOrg, lat, lng, elevation } = log
+
+        const cadence = Math.round(cadenceOrg)
+        const heartrate = Math.round(heartrateOrg)
+        const power = Math.round(powerOrg)
+
+        return { time, speed, slope, cadence, heartrate, distance, power, lat, lon: lng, elevation }
     }
 
     /**
@@ -132,5 +158,11 @@ export class LocalFitConverter extends RemoteFitConverter {
 
         const uint8Array = encoder.close()
         return uint8Array.buffer as ArrayBuffer
+    }
+
+    // istanbul ignore next
+    @Injectable
+    protected getUserSettings() {
+        return useUserSettings()
     }
 }

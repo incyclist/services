@@ -9,6 +9,8 @@ import activityData from '../../../../../__tests__/data/activities/activity.json
 import bostonData from '../../../../../__tests__/data/activities/boston.json'
 import palmcoveData from '../../../../../__tests__/data/activities/palmcove.json'
 import laptestData from '../../../../../__tests__/data/activities/laptest.json'
+import { UserSettingsService } from '../../../../settings'
+import { Inject } from '../../../../base/decorators'
 
 const fixtures: Array<{ name: string; data: unknown }> = [
     { name: 'fittest',      data: fittestData },
@@ -23,14 +25,17 @@ const fixtures: Array<{ name: string; data: unknown }> = [
 describe('LocalFitConverter', () => {
     let converter: LocalFitConverter
 
+    const UserSettingsMock: Partial<UserSettingsService> = {
+        get: jest.fn((_key: string, defValue: unknown) => defValue),
+    }
+
     beforeEach(() => {
         converter = new LocalFitConverter()
-        ;(converter as unknown as Record<string, unknown>).getUserSettings = jest.fn().mockReturnValue({
-            get: jest.fn((_key: string, defValue: unknown) => defValue),
-        })
+        Inject('UserSettings', UserSettingsMock)
     })
 
     afterEach(() => {
+        Inject('UserSettings', null)
         jest.clearAllMocks()
     })
 
