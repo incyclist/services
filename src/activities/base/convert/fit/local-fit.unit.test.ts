@@ -150,6 +150,42 @@ describe('LocalFitConverter', () => {
         })
     })
 
+    describe('encode — laps', () => {
+        test('one LAP message is written per lap', async () => {
+            const activityStart = new Date('2024-01-01T10:00:00Z')
+            const lap1Start = activityStart.getTime()
+            const lap2Start = activityStart.getTime() + 600 * 1000
+
+            const activity = {
+                ...vancouverData,
+                laps: [
+                    { num: 1, startPos: 0,    distance: 5000, startTime: lap1Start, rideTime: 600 },
+                    { num: 2, startPos: 5000,  distance: 9000, startTime: lap2Start, rideTime: 360 },
+                ],
+            } as unknown as ActivityDetails
+
+            const result = await converter.convert(activity)
+            const bytes = Array.from(new Uint8Array(result as ArrayBuffer))
+            const { messages } = new Decoder(Stream.fromByteArray(bytes)).read()
+            const laps = messages.lapMesgs as Array<Record<string, unknown>>
+
+            expect(laps).toHaveLength(2)
+            expect(laps[0].totalDistance).toBeCloseTo(5000, 0)
+            expect(laps[0].totalTimerTime).toBeCloseTo(600, 0)
+            expect(laps[1].totalDistance).toBeCloseTo(4000, 0)  // 9000 - 5000
+            expect(laps[1].totalTimerTime).toBeCloseTo(360, 0)
+        })
+
+        test('single summary LAP message is written when no laps present', async () => {
+            const activity = vancouverData as unknown as ActivityDetails
+            const result = await converter.convert(activity)
+            const bytes = Array.from(new Uint8Array(result as ArrayBuffer))
+            const { messages } = new Decoder(Stream.fromByteArray(bytes)).read()
+
+            expect(messages.lapMesgs).toHaveLength(1)
+        })
+    })
+
     describe('encode — integer rounding', () => {
         test('non-integer cadence, heartrate, and power are rounded to integers', async () => {
             const activity = vancouverData as unknown as ActivityDetails

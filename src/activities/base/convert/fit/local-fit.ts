@@ -1,6 +1,6 @@
 import { Encoder, Profile } from '@garmin/fitsdk'
 import { EventLogger } from 'gd-eventlog'
-import { ActivityDetails, ActivityLogRecord, FitExportActivity, FitLogEntry } from '../../model'
+import { ActivityDetails, ActivityLogRecord, FitExportActivity, FitLapEntry, FitLogEntry, LapSummary } from '../../model'
 import { useUserSettings } from '../../../../settings'
 import { Injectable } from '../../../../base/decorators'
 
@@ -47,14 +47,30 @@ export class LocalFitConverter {
 
         const startTime = new Date(activity.startTime).toISOString()
         const logs = activity.logs.map(this.mapLogToFit.bind(this))
-        const screenshots = [] 
-        const laps = [] 
+        const screenshots = []
+        const laps = this.mapLapsToFit(activity.laps ?? [], activity.startTime)
         const user = {
             id: this.getUserSettings().get('uuid', undefined),
             weight: activity.user.weight
         }
 
         return { id, title, status, logs, laps, startTime, time, timeTotal, timePause, distance, user, screenshots }
+    }
+
+    protected mapLapsToFit(laps: LapSummary[], activityStartTime: string): FitLapEntry[] {
+        const activityStartMs = new Date(activityStartTime).getTime()
+        return laps.map((lap, i) => {
+            const prevDistance = i > 0 ? laps[i - 1].distance : 0
+            return {
+                lapNo: lap.num,
+                startTime: new Date(lap.startTime).toISOString(),
+                stopTime: new Date(lap.startTime + lap.rideTime * 1000).toISOString(),
+                lapDistance: lap.distance - prevDistance,
+                totalDistance: lap.distance,
+                lapTime: lap.rideTime,
+                totalTime: (lap.startTime - activityStartMs) / 1000 + lap.rideTime,
+            }
+        })
     }
 
     protected mapLogToFit(log: ActivityLogRecord): FitLogEntry {
@@ -125,15 +141,31 @@ export class LocalFitConverter {
             data: 0,
         })
 
-        encoder.onMesg(Profile.MesgNum.LAP, {
-            timestamp: endTime,
-            startTime,
-            totalElapsedTime: activity.timeTotal,
-            totalTimerTime: activity.time,
-            totalDistance: activity.distance,
-            event: 'lap',
-            eventType: 'stop',
-        })
+        if (activity.laps.length > 0) {
+            activity.laps.forEach(lap => {
+                const lapStart = new Date(lap.startTime)
+                const lapEnd = new Date(lap.stopTime)
+                encoder.onMesg(Profile.MesgNum.LAP, {
+                    timestamp: lapEnd,
+                    startTime: lapStart,
+                    totalElapsedTime: lap.lapTime,
+                    totalTimerTime: lap.lapTime,
+                    totalDistance: lap.lapDistance,
+                    event: 'lap',
+                    eventType: 'stop',
+                })
+            })
+        } else {
+            encoder.onMesg(Profile.MesgNum.LAP, {
+                timestamp: endTime,
+                startTime,
+                totalElapsedTime: activity.timeTotal,
+                totalTimerTime: activity.time,
+                totalDistance: activity.distance,
+                event: 'lap',
+                eventType: 'stop',
+            })
+        }
 
         encoder.onMesg(Profile.MesgNum.SESSION, {
             timestamp: endTime,
