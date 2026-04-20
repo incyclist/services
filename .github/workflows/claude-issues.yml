@@ -58,8 +58,10 @@ jobs:
             - Only commit your changes when all checks pass.
 
       - name: Push branch
+        env:
+          GH_TOKEN : ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git remote set-url origin "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git"
           git push -u origin "${{ steps.branch.outputs.name }}"
 
       - name: Create PR
