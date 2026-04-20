@@ -27,9 +27,11 @@ jobs:
       - run: npm ci
 
       - name: Create branch
+        env:
+          PR_TITLE: ${{ github.event.issue.title }}
         id: branch
         run: |
-          SLUG=$(echo "${{ github.event.issue.title }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40)
+          SLUG=$(echo "$PR_TITLE" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40)
           BRANCH="claude/issue-${{ github.event.issue.number }}-${SLUG}"
           git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
           echo "name=$BRANCH" >> $GITHUB_OUTPUT
@@ -61,9 +63,11 @@ jobs:
           git push -u origin "${{ steps.branch.outputs.name }}"
 
       - name: Create PR
+        env:
+          PR_TITLE: ${{ github.event.issue.title }}
         run: |
           gh pr create \
-            --title "${{ github.event.issue.title }}" \
+            --title "$PR_TITLE" \
             --body "## Summary
             Closes #${{ github.event.issue.number }}" \
             --base main \
