@@ -47,8 +47,8 @@ export class LocalFitConverter {
 
         const startTime = new Date(activity.startTime).toISOString()
         const logs = activity.logs.map(this.mapLogToFit.bind(this))
-        const screenshots = [] // TODO
-        const laps = [] // TODO
+        const screenshots = [] 
+        const laps = [] 
         const user = {
             id: this.getUserSettings().get('uuid', undefined),
             weight: activity.user.weight
