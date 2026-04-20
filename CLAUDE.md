@@ -61,7 +61,7 @@ export const useMyService = () => new MyService()
 ```
 
 - `@Singleton` — enforces a single instance; `new MyService()` always returns the same object.
-- `@Injectable` — marks getter methods so tests can swap them with `Inject('MyService')`.
+- `@Injectable` — marks getter methods for other services so tests can swap them with `Inject('MyService')`. Every `protected` getter that returns an other service of this library or dependency **must** be decorated with `@Injectable`; the decorator derives the injection key by stripping the leading `get` (e.g. `getApi` → `'Api'`, `getUserSettings` → `'UserSettings'`).
 - `IncyclistService` extends `EventEmitter` and exposes `this.logEvent(...)` / `this.logError(err, method, context)` via `gd-eventlog`.
 
 ### Observer Pattern for Async Operations
@@ -129,8 +129,36 @@ Guidelines from `.github/instructions/tests.instructions.md`:
 - One `describe` block per method; `test` blocks for individual cases.
 - Test case names describe the behavior being tested — do **not** start with "should".
 - Mock all external dependencies; clear all mocks in `afterEach` / `afterAll`.
-- Singletons are tagged `@Singleton`. Use `Inject('ClassName')` in tests to inject mock dependencies into `@Injectable` methods.
 - Protected methods are tested indirectly through the public method flows that exercise them.
 - Test data goes in a `__tests__/` subdirectory, organised by what it represents (user, routes, workouts, …).
 - Imports order: external libraries → internal libraries → module under test.
 - Tests must be deterministic; do not use random data or rely on external state.
+
+- If the service reacts on messages sent to observers, simulate the message flow and verify expected outcome.  Especially on page services (extending `IncyclistPageService`) you need to verify the `getPageDisplayProps()` in case the message handler emits a `page-update`event
+
+### Mocking Singleton Dependencies
+
+Singleton services accessed via `@Injectable` getter methods must be injected using `Inject` from `base/decorators` — **never** by monkey-patching the getter directly on the service instance.
+
+```typescript
+import { Inject } from '<path>/base/decorators'
+import { UserSettingsService } from '<path>/settings'
+
+const UserSettingsMock: Partial<UserSettingsService> = {
+    get: jest.fn((_key: string, defValue: unknown) => defValue),
+}
+
+beforeEach(() => {
+    service = new MyService()
+    Inject('UserSettings', UserSettingsMock)   // name matches the singleton registration
+})
+
+afterEach(() => {
+    Inject('UserSettings', null)               // restore so other tests are not affected
+    jest.clearAllMocks()
+})
+```
+
+- The first argument to `Inject` is the singleton's registered name (e.g. `'UserSettings'`, not `'UserSettingsService'`).
+- Type the mock as `Partial<ServiceClass>` so only the methods exercised by the test need to be provided.
+- Always restore with `Inject('ServiceName', null)` in `afterEach` to prevent state leaking between tests.

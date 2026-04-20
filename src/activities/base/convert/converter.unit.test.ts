@@ -1,6 +1,6 @@
 import { ActivityDetails } from "../model";
 import { ActivityConverter } from "./converter";
-import { RemoteFitConverter } from "./fit";
+import { LocalFitConverter } from "./fit";
 import { TcxConverter } from "./tcx";
 
 // Mocking dependencies
@@ -20,7 +20,7 @@ const activity: ActivityDetails = {
 describe('ActivityConverter', () => {
 
     beforeEach( ()=>{
-        RemoteFitConverter.prototype.convert = jest.fn().mockResolvedValue('FIT converted data')
+        LocalFitConverter.prototype.convert = jest.fn().mockResolvedValue('FIT converted data')
         TcxConverter.prototype.convert=jest.fn().mockResolvedValue('TCX converted data');
 
     })
@@ -47,7 +47,7 @@ describe('ActivityConverter', () => {
     });
 
     test('converter throws error', async () => {
-        RemoteFitConverter.prototype.convert = jest.fn().mockRejectedValue(new Error('XXX'))
+        LocalFitConverter.prototype.convert = jest.fn().mockRejectedValue(new Error('XXX'))
 
         await expect( async()=>{await ActivityConverter.convert(activity, 'fit')}).rejects.toThrow('XXX')
     });

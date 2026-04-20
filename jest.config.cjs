@@ -2,10 +2,11 @@ module.exports = {
     roots: ['<rootDir>/src'],
     transform: {
       '^.+\\.tsx?$': 'ts-jest',
+      '^.+\\.js$': ['ts-jest', { diagnostics: false }],
     },
-    // transformIgnorePatterns: [
-    //     "/node_modules/(?!uuid)" 
-    // ],
+    transformIgnorePatterns: [
+        '/node_modules/(?!@garmin/fitsdk)',
+    ],
     moduleNameMapper: {
         // Force Jest to use the CommonJS version of uuid
         //'^uuid$': require.resolve('uuid'),
