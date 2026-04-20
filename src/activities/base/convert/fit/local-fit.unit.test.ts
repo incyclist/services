@@ -1,5 +1,3 @@
-import * as fs from 'fs'
-import * as path from 'path'
 import { Decoder, Stream } from '@garmin/fitsdk'
 import { ActivityDetails } from '../../model'
 import { LocalFitConverter } from './index'
@@ -11,8 +9,6 @@ import activityData from '../../../../../__tests__/data/activities/activity.json
 import bostonData from '../../../../../__tests__/data/activities/boston.json'
 import palmcoveData from '../../../../../__tests__/data/activities/palmcove.json'
 import laptestData from '../../../../../__tests__/data/activities/laptest.json'
-
-const FIXTURES_DIR = path.resolve(__dirname, '../../../../../__tests__/data/activities')
 
 const fixtures: Array<{ name: string; data: unknown }> = [
     { name: 'fittest',      data: fittestData },
@@ -59,14 +55,12 @@ describe('LocalFitConverter', () => {
                 expect(messages.activityMesgs).toHaveLength(1)
             })
 
-            test(`${name} — matches reference FIT file`, async () => {
+            test(`${name} — matches reference FIT snapshot`, async () => {
                 const activity = data as unknown as ActivityDetails
                 const result = await converter.convert(activity)
 
-                const refPath = path.join(FIXTURES_DIR, `${name}.fit`)
-                const reference = fs.readFileSync(refPath)
-
-                expect(Buffer.from(result as ArrayBuffer)).toEqual(reference)
+                const base64 = Buffer.from(result as ArrayBuffer).toString('base64')
+                expect(base64).toMatchSnapshot()
             })
 
             test(`${name} — session summary fields match input`, async () => {
