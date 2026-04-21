@@ -7,7 +7,7 @@
   "dependencies": {
     "@garmin/fitsdk": "^21.200.0",
     "axios": "^1.15.0",
-    "incyclist-devices": "^3.0.12",
+    "incyclist-devices": "^3.0.13",
     "promise.any": "^2.0.6",
     "semver": "^7.7.4",
     "tcx-builder": "^1.1.1",
