@@ -1,5 +1,5 @@
 export * from './activity'
-import { ActivityDetails, ActivitySummary, DEFAULT_ACTIVITY_TITLE } from "../model"
+import { ActivityDetails, ActivitySummary, DEFAULT_ACTIVITY_TITLE, DEFAULT_SPORT_ACTIVITY_TITLE } from "../model"
 
 export const buildSummary = (activity:ActivityDetails,proposedName?:string):ActivitySummary =>{
     const {id, route,screenshots,startTime: startTimeUTC,time: rideTime,distance,startPos,endPos, realityFactor=100,links,laps,fileName} = activity
@@ -14,7 +14,8 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
     
     let title = activity.title
 
-    if (title=== DEFAULT_ACTIVITY_TITLE)  {
+    const sport = activity.sport??'cycling'
+    if (title=== DEFAULT_ACTIVITY_TITLE || title===DEFAULT_SPORT_ACTIVITY_TITLE[sport])  {
         if (activity.routeType==='Video' && activity.route) 
             title = activity.route.title??activity.route.name
         else if ( activity.route) 

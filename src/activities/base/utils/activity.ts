@@ -1,7 +1,7 @@
 import { Observer, PromiseObserver } from "../../../base/types";
 import { useRouteList } from "../../../routes";
 import { DisplayExportInfo, DisplayUploadInfo, ActivityUploadStatus } from "../../list";
-import { ActivityInfo, DEFAULT_ACTIVITY_TITLE } from "../model";
+import { ActivityInfo, DEFAULT_ACTIVITY_TITLE, DEFAULT_SPORT_ACTIVITY_TITLE } from "../model";
 import { ActivitiesRepository, DB_VERSION } from "../repo";
 import { getBindings } from "../../../api";
 import { RouteSettings } from "../../../routes/list/cards/types";
@@ -74,7 +74,8 @@ export class Activity implements ActivityInfo{
 
     getTitle():string {
         let title = this.info.summary.title
-        if (title===DEFAULT_ACTIVITY_TITLE) {
+        const sport = this.details?.sport??'cycling'
+        if (title===DEFAULT_ACTIVITY_TITLE || title===DEFAULT_SPORT_ACTIVITY_TITLE[sport]) {
             if (this.details?.route?.title) {
                 title = this.details?.route.title
             }

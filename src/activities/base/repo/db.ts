@@ -12,7 +12,7 @@ import { ActivitiesDBMigratorFactory } from "./migration/factory";
 import { Injectable } from "../../../base/decorators/Injection";
 import { useUnitConverter } from "../../../i18n";
 
-export const DB_VERSION = '4'
+export const DB_VERSION = '5'
 export const DB_NAME = 'db'
 
 /**

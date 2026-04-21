@@ -56,7 +56,7 @@ export class RemoteFitConverter {
      * Converts the provided activity into a format required by the API
      */    
     protected getFitActivity(activity:ActivityDetails): FitExportActivity {
-        const {id,title, time,timeTotal,timePause,distance } = activity
+        const {id,title, time,timeTotal,timePause,distance,sport='cycling' } = activity
         const status = 'created'
 
         const startTime = new Date(activity.startTime).toISOString()
@@ -68,7 +68,7 @@ export class RemoteFitConverter {
             weight: activity.user.weight
         }
 
-        return {id,title,status,logs,laps,startTime, time, timeTotal, timePause, distance, user, screenshots}
+        return {id,title,status,logs,laps,startTime, time, timeTotal, timePause, distance, user, screenshots,sport}
    }
 
     protected mapLogToFit(log:ActivityLogRecord): FitLogEntry {

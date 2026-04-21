@@ -5,7 +5,7 @@ import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServ
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { getLegacyInterface } from "../../utils/logging";
-import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, SerialIncyclistDevice, UpdateRequest } from "incyclist-devices";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, ITrainer, SerialIncyclistDevice, Sport, UpdateRequest } from "incyclist-devices";
 import { getRouteList } from "../../routes";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
@@ -106,8 +106,6 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     pauseLogging() {
-
-        console.log('# PAUSE LOGGING')
         this.logPaused = true
         const interfaces = this.getEnabledInterfaces()
         interfaces.forEach( i => i.pauseLogging())
@@ -120,7 +118,6 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     resumeLogging() {
-        console.log('# RESUME LOGGING')
         this.logPaused = false
         const interfaces = this.getEnabledInterfaces()
         interfaces.forEach( i => i.resumeLogging())
@@ -1196,6 +1193,21 @@ export class DeviceRideService  extends IncyclistService{
         this.storeOriginalCyclingMode()
         
         return this.startAdapters( adapters,'start',props)
+    }
+
+    getSport():Sport {
+        try {
+            const info = this.getControlAdapter()
+            const adapter = info?.adapter as ITrainer
+            const sports = adapter?.getSupportedSports?.()??['cycling']
+
+            this.logEvent( {message:'[DeviceRide] getSports', adapter:info.adapter.getName(), sports:sports.join(',')})
+            return sports[0];
+        }
+        catch(err) {
+            this.logError(err,'getSports')
+            return 'cycling';
+        }
     }
 
     async startRetry( props:RideServiceDeviceProperties  ):Promise<boolean> {

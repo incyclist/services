@@ -3,6 +3,7 @@ import { EventLogger } from 'gd-eventlog'
 import { ActivityDetails, ActivityLogRecord, FitExportActivity, FitLapEntry, FitLogEntry, LapSummary } from '../../model'
 import { useUserSettings } from '../../../../settings'
 import { Injectable } from '../../../../base/decorators'
+import { Sport } from 'incyclist-devices'
 
 const DEG_TO_SEMICIRCLES = (2 ** 31) / 180
 
@@ -42,7 +43,7 @@ export class LocalFitConverter {
     }
 
     protected getFitActivity(activity: ActivityDetails): FitExportActivity {
-        const { id, title, time, timeTotal, timePause, distance } = activity
+        const { id, title, time, timeTotal, timePause, distance,sport='cycling' } = activity
         const status = 'created'
 
         const startTime = new Date(activity.startTime).toISOString()
@@ -54,7 +55,7 @@ export class LocalFitConverter {
             weight: activity.user.weight
         }
 
-        return { id, title, status, logs, laps, startTime, time, timeTotal, timePause, distance, user, screenshots }
+        return { id, title, status, logs, laps, startTime, time, timeTotal, timePause, distance, user, screenshots,sport }
     }
 
     protected mapLapsToFit(laps: LapSummary[], activityStartTime: string): FitLapEntry[] {
@@ -173,7 +174,7 @@ export class LocalFitConverter {
             totalElapsedTime: activity.timeTotal,
             totalTimerTime: activity.time,
             totalDistance: activity.distance,
-            sport: 'cycling',
+            sport: this.mapSport(activity.sport),
             subSport: 'virtualActivity',
             event: 'session',
             eventType: 'stopDisableAll',
@@ -190,6 +191,16 @@ export class LocalFitConverter {
 
         const uint8Array = encoder.close()
         return uint8Array.buffer as ArrayBuffer
+    }
+
+    protected mapSport(incyclistSport:Sport):string  {
+        if( !incyclistSport || incyclistSport==='cycling') 
+            return 'cycling'
+        if( incyclistSport==='running') 
+            return 'running'
+        if( incyclistSport==='rowing') 
+            return 'rowing'
+
     }
 
     // istanbul ignore next

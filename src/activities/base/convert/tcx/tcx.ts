@@ -7,6 +7,7 @@ import { TcxLapMarker } from './types'
 import { Step } from '../../../../workouts'
 import { getBindings } from '../../../../api'
 import { Injectable } from '../../../../base/decorators'
+import { Sport } from 'incyclist-devices'
 
 
 export class IncyclistAttribution extends AbstractSource {
@@ -74,7 +75,9 @@ export class TcxConverter implements IActivityConverter{
             const trackPoints =  this.creatTrackPoints(activity, startTime)
             const laps = this.createLaps(startTime, activity, trackPoints)
             const creator = new IncyclistAttribution()
-            const tcxActivity = new Activity( 'Biking', {Id:startTime, Notes:'Incyclist Ride', Laps:laps, Creator:creator}  )
+
+            const sport = this.mapSport( activity.sport)
+            const tcxActivity = new Activity( sport, {Id:startTime, Notes:'Incyclist Ride', Laps:laps, Creator:creator}  )
             const activityList = new ActivityList({ activity: [tcxActivity] });  
             const tcxObj = new TrainingCenterDatabase({ activities: activityList });
     
@@ -88,6 +91,16 @@ export class TcxConverter implements IActivityConverter{
             this.logger.logEvent({message:'convert result',format:'TCX',result:'error',error:err.message})
             throw err
         }
+    }
+
+    protected mapSport(incyclistSport:Sport):'Running'|'Biking'|'Other' {
+        if( !incyclistSport || incyclistSport==='cycling') 
+            return 'Biking'
+        if( incyclistSport==='running') 
+            return 'Running'
+        if( incyclistSport==='rowing') 
+            return 'Other'
+
     }
 
     protected createLaps(startTime: Date, activity: ActivityDetails, trackPoints: TrackPoint[]):ActivityLap[] {

@@ -4,14 +4,14 @@ import { Observer, PromiseObserver } from "../../base/types/observer";
 import { useRouteList } from "../../routes";
 import { useUserSettings } from "../../settings";
 import { formatDateTime, formatNumber, formatTime, getLegacyInterface, waitNextTick } from "../../utils";
-import { DeviceData, IncyclistCapability } from "incyclist-devices";
+import { DeviceData, IncyclistCapability, Sport } from "incyclist-devices";
 import { ExtendedIncyclistCapability, HealthStatus, useDeviceConfiguration, useDeviceRide } from "../../devices";
-import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,DEFAULT_ACTIVITY_TITLE,ScreenShotInfo } from "../base";
+import { ActivitiesRepository, ActivityConverter, ActivityConverterFactory, ActivityDetails, ActivityInfo, ActivityLogRecord, ActivityRoute, ActivityRouteType,  DB_VERSION,DEFAULT_ACTIVITY_TITLE,DEFAULT_SPORT_ACTIVITY_TITLE,ScreenShotInfo } from "../base";
 import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/types";
 import { RouteSettings } from "../../routes/list/cards/types";
 import { v4 as generateUUID } from 'uuid';
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
-import { ActivityState, ActivitySummaryDisplayProperties } from "./types";
+import { ActivityDashboardDataItem, ActivityState, ActivitySummaryDisplayProperties } from "./types";
 import { addDetails, checkIsLoop, getElevationGainAt, getNextPosition, getPosition, getRouteHash, validateRoute } from "../../routes/base/utils/route";
 import { Route } from "../../routes/base/model/route";
 import { RouteApiDetail } from "../../routes/base/api/types";
@@ -24,10 +24,9 @@ import { useAvatars } from "../../avatars";
 import clone from "../../utils/clone";
 import { buildSummary } from "../base/utils";
 import { Injectable } from "../../base/decorators";
-import { useUnitConverter } from "../../i18n";
+import { FormattedNumber, useUnitConverter } from "../../i18n";
 import { createUIActivityDetails } from "../list/utils";
 import { sleep } from "../../utils/sleep";
-import { EventEmitter } from "node:events";
 
 const SAVE_INTERVAL = 5000;
 
@@ -123,6 +122,14 @@ export class ActivityRideService extends IncyclistService {
     protected deviceDataHandler = this.onDeviceData.bind(this)
     protected gearChangeHandler = this.onGearChange.bind(this)
     protected dataHealthHandler = this.onDeviceHealthUpdate.bind(this)
+
+    protected speedHandler: Record<Sport,(speed:number)=>ActivityDashboardDataItem> = {
+        'cycling' : this.getCyclingSpeed.bind(this),
+        'rowing' : this.getRowingPace.bind(this),
+        'running': this.getRunningPace.bind(this)
+
+    }
+
 
     protected current: {
         route?:Route
@@ -236,7 +243,7 @@ export class ActivityRideService extends IncyclistService {
             this.isDonateShown = false
             this.isSummaryShown = false
     
-            this.logEvent({message:'activity started' })
+            this.logEvent({message:'activity started', sport:this.activity.sport??'cycling' })
             this.startWorker()
             this.enableDeviceHealthCheck()
     
@@ -381,6 +388,34 @@ export class ActivityRideService extends IncyclistService {
     }
 
 
+    protected getRowingPace(speed:number):ActivityDashboardDataItem {
+        if (speed>0) {
+            const value = 30/speed
+            const min = Math.floor(value)
+            const sec = Math.floor((value-min)*60)
+            const p = sec<10 ? '0':''
+            return { value: `${min}:${p}${sec}`, unit:'' }
+        }
+        else {
+            return { value:'', unit:''}
+        }
+    }
+    protected getRunningPace(speed:number):ActivityDashboardDataItem {
+        if (speed>0) {
+            const value = 60/speed
+            const min = Math.floor(value)
+            const sec = Math.floor((value-min)*60)
+            const p = sec<10 ? '0':''
+            return { value: `${min}:${p}${sec}`, unit:'' }
+        }
+        else {
+            return { value:'', unit:''}
+        }
+    }
+    protected getCyclingSpeed(speed:number):ActivityDashboardDataItem { 
+        const [C,U] = this.getUnitConversionShortcuts()
+        return { value: C(speed, 'speed')?.toFixed(1)??'', unit: U('speed') }
+    }
 
     protected buildDashboardInfo(currentValues, avgMaxStats, display) {
 
@@ -403,12 +438,14 @@ export class ActivityRideService extends IncyclistService {
                 { value: distanceRemaining === undefined ? undefined : `-${C(distanceRemaining,'distance',{from:'km'}).toFixed(2) }`}] 
             });
 
+        const sport = this.activity.sport??'cycling'
         info.push({ title: 'Speed', 
                 data: [
-                    { value: C(speed, 'speed')?.toFixed(1)??'', unit: U('speed') }, 
+                    this.speedHandler[sport](speed),
                     speedDetails], 
                 dataState: this.current.dataState?.speed 
         });
+
 
         info.push({ title: 'Power', data: [{ value: formatNumber(power, 0), unit: 'W' }, powerDetails], dataState: this.current.dataState?.power });
         if (this.activity?.routeType !== 'Free-Ride' && this.activity?.routeType !== 'None') {
@@ -417,7 +454,10 @@ export class ActivityRideService extends IncyclistService {
             info.push({ title: 'Slope', data: [{ value: formatNumber(slope, 1), unit: '%', info: slopeInfo }, elevationGain] });
         }
         info.push({ title: 'Heartrate', data: [{ value: formatNumber(heartrate, 0), unit: 'bpm' }, heartrateDetails], dataState: this.current.dataState?.heartrate });
-        info.push({ title: 'Cadence', data: [{ value: formatNumber(cadence, 0), unit: 'rpm' }, cadenceDetails], dataState: this.current.dataState?.cadence });
+
+        const cadenceUnit = this.activity.sport==='rowing' ? 'spm' : 'rpm'
+        const cadenceInfo = { title: 'Cadence', data: [{ value: formatNumber(cadence, 0), unit: cadenceUnit }, cadenceDetails], dataState: this.current.dataState?.cadence }
+        info.push(cadenceInfo);
 
         if (gear) {
             info.push({ title: 'Gear', data: [{ value: gear }] });
@@ -464,7 +504,13 @@ export class ActivityRideService extends IncyclistService {
 
             const stats = this.activity?.stats
             const maxSpeed = stats?.speed?.max
-            const speedDetails = { value: formatNumber(C(maxSpeed,'speed'),1), label: 'max' };
+            const sport = this.activity.sport??'cycling'
+            const data = this.speedHandler[sport](maxSpeed)
+
+            const speedDetails = this.activity.sport==='cycling' ?
+                { value: formatNumber(C(maxSpeed,'speed'),1), label: 'max' }:
+                { value: data.value, label:'max'  };
+
             const powerDetails = { value: formatNumber(stats?.power?.max, 0), label: 'max' };
             const heartrateDetails = { value: formatNumber(stats?.hrm?.max, 0), label: 'max' };
             const cadenceDetails = { value: formatNumber(stats?.cadence?.max, 0), label: 'max' };
@@ -485,7 +531,13 @@ export class ActivityRideService extends IncyclistService {
             const stats = this.activity?.stats
             const avgSpeed = stats?.speed?.avg
 
-            const speedDetails = { value: formatNumber(C(avgSpeed, 'speed'),1), label: 'avg' };
+            const sport = this.activity.sport??'cycling'
+            const data = this.speedHandler[sport](avgSpeed)
+
+            const speedDetails = this.activity.sport==='cycling' ?
+                { value: formatNumber(C(avgSpeed,'speed'),1), label: 'avg' }:
+                { value: data.value, label:'max'  };
+
             const powerDetails = { value: formatNumber(stats?.power?.avg, 0), label: 'avg' };
             const heartrateDetails = { value: formatNumber(stats?.hrm?.avg, 0), label: 'avg' };
             const cadenceDetails = { value: formatNumber(stats?.cadence?.avg, 0), label: 'avg' };
@@ -661,59 +713,21 @@ export class ActivityRideService extends IncyclistService {
         const run = async():Promise<boolean> => {
             await sleep(5)  // give UI time to attach listeners before emitting
 
-            let cntCompleted = 0;
             let success = false;
-            const localEmitter = new EventEmitter()
-
-            const incCompleted = ()=> {
-                cntCompleted++;
-                if (cntCompleted>=2) {
-                    localEmitter.emit('completed')
-                }
-            }
-
-            localEmitter.once('completed',()=> {
-                sleep(0).then( ()=> { 
-                    delete this.saveObserver
-                })
-            })
 
             try {
                 emit('start',success)
 
                 await this._save()
-            
-                let format = undefined;
+                success = await this._convertAndUpload()
 
-
-                let uploadSuccess =false;
-                let convertSuccess= await  this.convert('TCX')
-                incCompleted()
-
-                if (convertSuccess) {
-                    format = 'TCX'
-                    
-                    this.convert('FIT')
-                        .then(incCompleted)
-                        .catch(incCompleted)
-                }
-                else {
-                    convertSuccess= await this.convert('FIT')
-                    cntCompleted++;
-                    if (convertSuccess)
-                        format = 'FIT'
-                }
-        
-                if (convertSuccess) {
-                    uploadSuccess = await this.upload(format)
-                }
-
-                success = convertSuccess && uploadSuccess
+                sleep(0).then( ()=> { 
+                    delete this.saveObserver
+                })
                 this.isSaveDone = true;
 
             }
             catch {
-                cntCompleted++;
                 success = false
             }
 
@@ -1166,6 +1180,39 @@ export class ActivityRideService extends IncyclistService {
         }
     }
 
+    protected async _convertAndUpload():Promise<boolean> {
+
+        const successes: Array<string> = [] 
+
+        const promises = [
+            this.convert('TCX').then( ()=>successes.push('tcx')),
+            this.convert('FIT').then( ()=>successes.push('fit')),
+        ]
+
+        await Promise.allSettled( promises)
+        this.logEvent( {message:'conversion finished, '})
+
+        const convertSuccess = successes.length>0
+        let uploadSuccess:boolean
+
+        let format:string = 'tcx'
+        if (this.activity.sport==='rowing' ) {
+            if (successes.some(e=>e==='fit'))
+                format = 'fit'
+        }
+        else if (!successes.some(e=>e==='tcx')) {
+            format = 'fit'
+        }
+
+
+        if (convertSuccess) {
+            uploadSuccess = await this.upload(format)
+        }
+
+        return convertSuccess && uploadSuccess
+
+    }
+
     protected getSaveInterval():number{
         return SAVE_INTERVAL
     }
@@ -1369,12 +1416,16 @@ export class ActivityRideService extends IncyclistService {
                     this.current.position = undefined
                 }
         }
-        const title = DEFAULT_ACTIVITY_TITLE
+
+        const sport = this.getDeviceRide().getSport()??'cycling'
+        const title = DEFAULT_SPORT_ACTIVITY_TITLE[sport];
         const id = requestedId ?? generateUUID()
         const date = formatDateTime (new Date (), "%Y%m%d%H%M%S", false)
         const name = `${title}-${date}`
         const fileName = this.getRepo().getFilename(name)
         const route:ActivityRoute = {name:routeName, hash:routeHash, title:routeTitle}
+
+        
 
         if (routeId)
             route.id = routeId
@@ -1400,7 +1451,8 @@ export class ActivityRideService extends IncyclistService {
             totalElevation:0,
             logs:[],
             startPos,endPos,segment,realityFactor,
-            fileName
+            fileName,
+            sport
         }
 
         return activity

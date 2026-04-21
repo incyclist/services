@@ -21,7 +21,6 @@ export * from './video'
 export * from './workouts'
 
 export type * from './types'
-export {CyclingModeProperyType} from 'incyclist-devices'
-
+export {CyclingModeProperyType,Sport} from 'incyclist-devices'
 
 

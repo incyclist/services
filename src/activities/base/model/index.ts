@@ -1,8 +1,15 @@
+import { Sport } from "incyclist-devices"
 import { FormattedNumber } from "../../../i18n"
 import { RoutePoint } from "../../../routes/base/types"
 import { Workout } from "../../../workouts"
 
 export const DEFAULT_ACTIVITY_TITLE = 'Incyclist Ride'
+
+export const DEFAULT_SPORT_ACTIVITY_TITLE:Record<Sport,string> = {
+    cycling: 'Incyclist Ride',
+    rowing: 'Incyclist Rowing',
+    running: 'Incyclist Run'
+}
 
 export type ActivityUser = {
     uuid?:string
@@ -187,13 +194,14 @@ export type FitExportActivity = {
     href?: string
     user: FitUser
     screenshots: Array<FitScreenshots>
+    sport:Sport
 }
 
 interface ActivityDetailsBase  {
     /** file type - always has to be "IncyclistActivity" */    
     type?: ActivityType     
 
-    /** file version - at the moment always "3" */    
+    /** file version - at the moment always "5" */    
     version?: string;
 
     /** name of the activity */
@@ -267,6 +275,8 @@ interface ActivityDetailsBase  {
     links?: ActivityAppLinks
 
     workout?: Workout
+
+    sport?: Sport
 }
 
 export interface ActivityDetails extends ActivityDetailsBase {
