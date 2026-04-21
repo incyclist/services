@@ -207,8 +207,8 @@ export class RouteDisplayService extends RideModeService {
         const [C,U] = this.getUnitConversionShortcuts()
 
         const isLoop = this.currentRoute?.description?.isLoop
-        const xScale:FormattedNumber = { value: C( 1,'distance', {from:U('distance')}), unit:U('distance') }
-        const yScale:FormattedNumber = { value: C( 1,'elevation', {from:U('elevation')}), unit:U('elevation') }
+        const xScale:FormattedNumber = { value: C( 1,'distance', {from:'m'}), unit:U('distance') }
+        const yScale:FormattedNumber = { value: C( 1,'elevation', {from:'m'}), unit:U('elevation') }
 
         const mapStartPos = ( isLoop&& !loopOverwrite)  ? undefined : startPos
 
