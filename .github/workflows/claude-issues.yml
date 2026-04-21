@@ -67,6 +67,7 @@ jobs:
       - name: Create PR
         env:
           PR_TITLE: ${{ github.event.issue.title }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr create \
             --title "$PR_TITLE" \
@@ -75,5 +76,3 @@ jobs:
             --base main \
             --head "${{ steps.branch.outputs.name }}" \
           2>/dev/null || echo "PR already exists, skipping"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
