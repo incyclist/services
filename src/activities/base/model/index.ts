@@ -194,7 +194,7 @@ export type FitExportActivity = {
     href?: string
     user: FitUser
     screenshots: Array<FitScreenshots>
-    sport:Sport
+    sport?:Sport
 }
 
 interface ActivityDetailsBase  {

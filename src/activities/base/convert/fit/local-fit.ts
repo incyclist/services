@@ -193,7 +193,7 @@ export class LocalFitConverter {
         return uint8Array.buffer as ArrayBuffer
     }
 
-    protected mapSport(incyclistSport:Sport):string  {
+    protected mapSport(incyclistSport?:Sport):string  {
         if( !incyclistSport || incyclistSport==='cycling') 
             return 'cycling'
         if( incyclistSport==='running') 

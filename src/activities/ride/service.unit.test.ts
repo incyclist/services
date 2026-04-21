@@ -53,7 +53,8 @@ describe('ActivityRideService',()=>{
 
             return {
                 on: jest.fn(emitter.on.bind(emitter)),
-                off: jest.fn(emitter.off.bind(emitter))
+                off: jest.fn(emitter.off.bind(emitter)),
+                getSport: jest.fn()
             }
         })
 
