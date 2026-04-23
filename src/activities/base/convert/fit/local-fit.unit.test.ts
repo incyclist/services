@@ -32,11 +32,13 @@ describe('LocalFitConverter', () => {
     beforeEach(() => {
         converter = new LocalFitConverter()
         Inject('UserSettings', UserSettingsMock)
+        jest.spyOn(Math, 'random').mockReturnValue(0.5)
     })
 
     afterEach(() => {
         Inject('UserSettings', null)
         jest.clearAllMocks()
+        jest.restoreAllMocks()
     })
 
     describe('convert', () => {
@@ -183,6 +185,43 @@ describe('LocalFitConverter', () => {
             const { messages } = new Decoder(Stream.fromByteArray(bytes)).read()
 
             expect(messages.lapMesgs).toHaveLength(1)
+        })
+    })
+
+    describe('encode — FILE_ID device identity', () => {
+        test('defaults to garmin manufacturer and Edge 1040 product when settings absent', async () => {
+            const activity = vancouverData as unknown as ActivityDetails
+            const result = await converter.convert(activity)
+
+            const bytes = Array.from(new Uint8Array(result as ArrayBuffer))
+            const { messages } = new Decoder(Stream.fromByteArray(bytes)).read()
+            const fileId = (messages.fileIdMesgs as Array<Record<string, unknown>>)?.[0]
+
+            expect(fileId).toBeDefined()
+            expect(fileId.manufacturer).toBe('garmin')
+            expect(fileId.garminProduct).toBe('edge1040')
+            expect(fileId.serialNumber).toBeDefined()
+        })
+
+        test('uses manufacturer and product from fitexport settings when present', async () => {
+            const SettingsMock: Partial<UserSettingsService> = {
+                get: jest.fn((key: string, defValue: unknown) => {
+                    if (key === 'fitexport.manufacturer') return 'development'
+                    if (key === 'fitexport.device') return 0
+                    return defValue
+                }),
+            }
+            Inject('UserSettings', SettingsMock)
+
+            const activity = vancouverData as unknown as ActivityDetails
+            const result = await converter.convert(activity)
+
+            const bytes = Array.from(new Uint8Array(result as ArrayBuffer))
+            const { messages } = new Decoder(Stream.fromByteArray(bytes)).read()
+            const fileId = (messages.fileIdMesgs as Array<Record<string, unknown>>)?.[0]
+
+            expect(fileId).toBeDefined()
+            expect(fileId.manufacturer).toBe('development')
         })
     })
 

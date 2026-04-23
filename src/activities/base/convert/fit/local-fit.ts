@@ -93,10 +93,15 @@ export class LocalFitConverter {
         const encoder = new Encoder()
         const startTime = new Date(activity.startTime)
 
+        const manufacturer = this.getUserSettings().get('fitexport.manufacturer', 'garmin')
+        const product = this.getUserSettings().get('fitexport.device', 3843)
+        const serialNumber = (Math.random() * 0xFFFFFFFF) >>> 0
+
         encoder.onMesg(Profile.MesgNum.FILE_ID, {
             type: 'activity',
-            manufacturer: 'development',
-            product: 0,
+            manufacturer,
+            product,
+            serialNumber,
             timeCreated: startTime,
         })
 
