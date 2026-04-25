@@ -15,15 +15,8 @@ import { MapViewPort } from "./types";
 import { ActivityUpdate } from "../../activities/ride/types";
 import { waitNextTick } from "../../utils";
 import { Unit } from "../../i18n";
-
-
-const pathInfo = (path) => {
-    return path.map(p => {
-        const pp = p as IncyclistNode & RoutePoint
-        const id = pp.id??'{lat:'+Number(p.lat).toFixed(4)+',lng:'+Number(p.lng).toFixed(4)+'}'
-        return `${p.cnt},${p.routeDistance.toFixed(0)},${id})`
-    })    
-}
+import EventEmitter from "node:events";
+import { sleep } from "../../utils/sleep";
 
 const DEFAULT_OPTIONS_DELAY = 5000
 export class FreeRideDisplayService extends GpxDisplayService {
@@ -49,6 +42,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
     protected onViewportChange? = this.saveViewport.bind(this)
     protected onOptionsVisibleChangedHandler? = this.onOptionsVisibleChanged.bind(this)
     protected onTurnHandler? = this.onTurn.bind(this)
+    protected internalEmitter:EventEmitter = new EventEmitter()
 
 
 
@@ -514,26 +508,50 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
     protected getNextOptions(forStart?:boolean):Promise<void> {
 
-        return new Promise (done => {
-            const freeRide = this.getFreeRideService()
+        let options;
+        const freeRide = this.getFreeRideService()
 
-            freeRide.getNextOptions(forStart)
-            .catch(err => {
-                this.logError(err,'getNextOptions')
-                done()
-            })
+        const getOptions = async ():Promise<void> => {
+
+            let finished = false
+
+            const setFinished = ()=> {finished=true}
+
+            this.internalEmitter.on('stop-query',setFinished)
+
+                do {
+                    try {
+                        options = await freeRide.getNextOptions(forStart)
+                    }
+                    catch(err) {
+                        this.logError(err,'getNextOptions')
+                        options = undefined
+                    }
+
+                    if (!options?.length && !finished && !forStart) {
+                        this.logEvent( {message:'no options available - retry in 3000ms', })
+                        await sleep(3000)
+                    }
+
+                } while (!options?.length && !finished && !forStart)
+
+            this.internalEmitter.off('stop-query',setFinished)
+
+        }
+
+        return new Promise (done => {
+
+            getOptions()
             .then( () => { 
-   
-                done()
-    
-                if (this.isStarting) {
-                    this.isStarting = false    
-                    this.emit('state-update')
-                }
-                else {
-                    this.emitRouteUpdate()
-                }
-    
+                    done()
+        
+                    if (this.isStarting) {
+                        this.isStarting = false    
+                        this.emit('state-update')
+                    }
+                    else {
+                        this.emitRouteUpdate()
+                    }
                 
             }) 
     
@@ -622,9 +640,18 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
                 let route = this.route
                 if ( newRouteDistance>route.description.distance) { 
+
+                    // stop query retry
+                    this.internalEmitter.emit('stop-query')
+
                     route = this.route.clone()                  
                     const selectedOption = this.getFreeRideService().getSelectedOption()
-                    this.appendOption(route, selectedOption);
+                    if (selectedOption)
+                        this.appendOption(route, selectedOption);
+                    else {
+                        this.logEvent( {message:'no continuation available'})
+                        return this.position
+                    }
                 }
 
                 const nextPos = getNextPosition(route,{routeDistance:activityPos.routeDistance,prev})

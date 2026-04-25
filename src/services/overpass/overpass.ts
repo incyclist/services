@@ -60,9 +60,10 @@ export class OverpassApi extends AppApiBase {
      * @returns The result of the query as a JSON object or string
      */
     async query( queryOL:string, timeout?:number):Promise<JSON|string|undefined> {
-        this.logger.logEvent({message:'query', queryOL, timeout})
+        const ts = Date.now()
+        this.logger.logEvent({message:'query', queryOL, queryId:ts, timeout})
         const res = await this.bulkQuery(queryOL, timeout)
-        this.logger.logEvent({message:'query result', hasData: res!==undefined})
+        this.logger.logEvent({message:'query result', queryId:ts, hasData: res!==undefined, duration: Date.now()-ts})
         return res
     } 
 

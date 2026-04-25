@@ -156,7 +156,7 @@ export class FreeRideService extends IncyclistService {
     private evaluateOptions(original: FreeRideContinuation[], from: FreeRideContinuation) {
 
         let opts = original
-        if (!opts?.length) {
+        if (!opts?.length && from!=null) {
             opts = this.addLastSegmentReverse(opts,from);
         }
 
@@ -176,7 +176,7 @@ export class FreeRideService extends IncyclistService {
 
             // starting point from route selectoin (without node ID?)
             if (!path[0].id) {
-                map = from.map ?? this.getMapArea().getMap(path[0])
+                map = from?.map ?? this.getMapArea().getMap(path[0])
                 const way = map.getWay(currentSegment.id)
                 const end = path.at(-1)
                 let newSegment:FreeRideContinuation
