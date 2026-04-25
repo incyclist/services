@@ -29,7 +29,12 @@ declare module '@garmin/fitsdk' {
 
     export const Profile: {
         MesgNum: Record<string, number>
-        types: { mesgNum: Record<number, string> }
+        types: { 
+            mesgNum: Record<number, string> 
+            sport: Record<number, string> 
+            manufacturer: Record<number, string> 
+            garminProduct: Record<number, string> 
+        }
     }
 
     export const Utils: {
