@@ -6,12 +6,12 @@
   },
   "dependencies": {
     "@garmin/fitsdk": "^21.200.0",
-    "axios": "^1.15.0",
+    "axios": "^1.15.2",
     "incyclist-devices": "^3.0.13",
     "promise.any": "^2.0.6",
     "semver": "^7.7.4",
     "tcx-builder": "^1.1.1",
-    "uuid": "^13.0.0",
+    "uuid": "^14.0.0",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
