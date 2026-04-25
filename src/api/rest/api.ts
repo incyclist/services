@@ -23,16 +23,22 @@ export class ApiClient {
      *
      */
     init(props: ApiClientInitProps): void {
-        const { uuid, apiKey, requestLog = true, version, appVersion, channel = 'desktop' } = props;
+        const { uuid, apiKey, requestLog = true, version, appVersion, channel = 'desktop', platform } = props;
 
 
-        const headers = {
+        const headers:Record<string,any> = {
             "X-uuid": uuid,
             "X-API-Key": apiKey,
             "x-app-channel": channel,
             "x-app-version": appVersion,
             "x-react-version": version
         };
+
+        if (platform) {
+            headers['x-app-platform'] = platform
+        }
+
+        console.log('# init API', platform, props, headers)
 
 
         this.axios = axios.create({ headers });

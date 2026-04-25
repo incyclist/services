@@ -60,6 +60,7 @@ export class IncyclistRestApiClient  {
             channel: appInfo?.getChannel(),
             appVersion: appInfo?.getAppVersion(),
             version: appInfo?.getUIVersion(),
+            platform: appInfo?.getOS()?.platform,
             requestLog: requestLog ?? true,
             apiKey,
             uuid

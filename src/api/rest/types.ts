@@ -7,4 +7,5 @@ export type ApiClientInitProps = {
     appVersion:string
     requestLog?:boolean,
     channel?: AppChannel
+    platform?: string
 }
