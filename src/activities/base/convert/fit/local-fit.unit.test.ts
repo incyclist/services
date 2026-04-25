@@ -27,12 +27,13 @@ describe('LocalFitConverter', () => {
 
     const UserSettingsMock: Partial<UserSettingsService> = {
         get: jest.fn((_key: string, defValue: unknown) => defValue),
+        set: jest.fn()
     }
 
     beforeEach(() => {
         converter = new LocalFitConverter()
         Inject('UserSettings', UserSettingsMock)
-        jest.spyOn(Math, 'random').mockReturnValue(0.5)
+        jest.spyOn(converter as any,'buildSerialNo').mockReturnValue(0.5*0xFFFFFFFF >>> 0)
     })
 
     afterEach(() => {
@@ -210,6 +211,7 @@ describe('LocalFitConverter', () => {
                     if (key === 'fitexport.device') return 0
                     return defValue
                 }),
+                set: jest.fn()
             }
             Inject('UserSettings', SettingsMock)
 

@@ -6,6 +6,7 @@ import { Injectable } from '../../../../base/decorators'
 import { Sport } from 'incyclist-devices'
 
 const DEG_TO_SEMICIRCLES = (2 ** 31) / 180
+const DEFAULT_PRODUCT = 3843
 
 /**
  * Converts activity data into FIT format locally using the @garmin/fitsdk Encoder.
@@ -84,6 +85,16 @@ export class LocalFitConverter {
         return { time, speed, slope, cadence, heartrate, distance, power, lat, lon: lng, elevation }
     }
 
+    protected buildSerialNo() {
+        return Date.now() & 0xFFFFFFFF;
+    }
+
+    protected findProduct(name:string):number {
+        const entry = Object.entries(Profile.types.garminProduct)
+            .find(([, value]) => value === name);
+        return entry ? Number(entry[0]) : DEFAULT_PRODUCT;        
+    }
+
     /**
      * Encodes a FitExportActivity into a FIT binary using the @garmin/fitsdk Encoder.
      * @param {FitExportActivity} activity - Pre-mapped activity data.
@@ -94,8 +105,22 @@ export class LocalFitConverter {
         const startTime = new Date(activity.startTime)
 
         const manufacturer = this.getUserSettings().get('fitexport.manufacturer', 'garmin')
-        const product = this.getUserSettings().get('fitexport.device', 3843)
-        const serialNumber = (Math.random() * 0xFFFFFFFF) >>> 0
+        const productIdentifier = this.getUserSettings().get('fitexport.device', 'edge1040')
+
+        const storedSerial = this.getUserSettings().get('fitexport.serialNo', undefined)
+        const serialNumber = storedSerial ?? this.buildSerialNo()
+
+        if (!storedSerial) {
+            this.getUserSettings().set('fitexport.serialNo',serialNumber)
+        }
+
+        let product
+        if (Number.isNaN(Number(productIdentifier))) {
+            product = this.findProduct(productIdentifier)
+        }
+        else {
+            product = productIdentifier
+        }
 
         encoder.onMesg(Profile.MesgNum.FILE_ID, {
             type: 'activity',
