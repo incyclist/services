@@ -18,8 +18,8 @@ interface ILibraryRouteList {
     addRoute(record: RouteRecord): Promise<void>
 }
 
-const VIDEO_EXTENSIONS = ['mp4', 'mov', 'mkv', 'm4v', 'mpg', 'mpeg', 'wmv', 'avi']
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp']
+const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'mkv', 'm4v', 'mpg', 'mpeg', 'wmv', 'avi'])
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'])
 
 /**
  * Core service for scanning folder trees to discover importable routes and ingesting
@@ -145,22 +145,22 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         // Check video file is present and not AVI
         let hasVideo = false
-        const hasThumbnail = folderFiles.some(f => IMAGE_EXTENSIONS.includes(this.getExtension(f.name).toLowerCase()))
+        const hasThumbnail = folderFiles.some(f => IMAGE_EXTENSIONS.has(this.getExtension(f.name).toLowerCase()))
 
         if (importable) {
             const videoFiles = folderFiles.filter(f =>
-                VIDEO_EXTENSIONS.includes(this.getExtension(f.name).toLowerCase())
+                VIDEO_EXTENSIONS.has(this.getExtension(f.name).toLowerCase())
             )
             const nonAviVideo = videoFiles.find(f => this.getExtension(f.name).toLowerCase() !== 'avi')
 
             if (videoFiles.length === 0) {
                 importable = false
                 skipReason = 'No video file found in folder'
-            } else if (!nonAviVideo) {
+            } else if (nonAviVideo) {
+                hasVideo = true
+            } else {
                 importable = false
                 skipReason = 'Only AVI video format found; AVI is not supported'
-            } else {
-                hasVideo = true
             }
         }
 
@@ -259,7 +259,7 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         const entries = await fs.readdir(folderUri, { extended: true })
         const thumbnailFile = entries.find(
-            e => !e.isDirectory && IMAGE_EXTENSIONS.includes(this.getExtension(e.name).toLowerCase())
+            e => !e.isDirectory && IMAGE_EXTENSIONS.has(this.getExtension(e.name).toLowerCase())
         )
         if (!thumbnailFile)
             return undefined
