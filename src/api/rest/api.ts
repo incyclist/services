@@ -38,9 +38,6 @@ export class ApiClient {
             headers['x-app-platform'] = platform
         }
 
-        console.log('# init API', platform, props, headers)
-
-
         this.axios = axios.create({ headers });
 
         if (requestLog) {
