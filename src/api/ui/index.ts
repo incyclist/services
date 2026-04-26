@@ -1,7 +1,8 @@
 
-export type SelectDirectoryResult = {   
+export type SelectDirectoryResult = {
     selected?: string
     canceled?: boolean
+    displayName?: string
 }
 
 export type TakeScreenshotProps = {
