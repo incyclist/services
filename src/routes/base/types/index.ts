@@ -126,12 +126,13 @@ export interface    RouteInfo extends RouteBase{
     tsReleased?:number,
     next?:string,
     legacyId?:string,
-    isDownloaded?:boolean  
-    isDeleted?:boolean  
-    originalName?:string 
-    version?:number,    
+    isDownloaded?:boolean
+    isDeleted?:boolean
+    originalName?:string
+    version?:number,
     source?:string,
     isLoopVerified?:boolean
+    sourceTreeUri?: string
 }
 
 

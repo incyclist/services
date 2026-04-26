@@ -32,6 +32,7 @@ import { useAppState } from "../../appstate";
 import { useUnitConverter } from "../../i18n";
 import clone from "../../utils/clone";
 import { IObserver } from "../../types";
+import { RouteRecord } from "../library/types";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -1023,11 +1024,47 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
 
-    protected addRoute(route:Route,source:'user'|'system'='system'):void {
+    /**
+     * Returns `true` if any route in the current route list has a `sourceTreeUri` or
+     * `videoUrl` matching the given URI.
+     *
+     * Used by `RouteLibraryScannerService` to populate the `alreadyImported` flag on
+     * a discovered route before the ingest phase begins.
+     *
+     * @param uri URI to check against each route's `sourceTreeUri` and `videoUrl` fields.
+     */
+    async existsBySourceUri(uri: string): Promise<boolean> {
+        return this.routes.some(r =>
+            r.description?.sourceTreeUri === uri ||
+            r.description?.videoUrl === uri
+        )
+    }
 
+    /**
+     * Persists a route record imported from a local library scan and emits a list-updated
+     * event so the UI refreshes automatically.
+     *
+     * @param record Route record produced by the library ingest phase.
+     */
+    addRoute(record: RouteRecord): Promise<void>
+
+    /**
+     * Adds an in-memory `Route` object to the route lists and emits a list-updated event.
+     *
+     * @param route Route to add.
+     * @param source Whether the addition originated from a user action or the system.
+     */
+    addRoute(route: Route, source?: 'user'|'system'): void
+
+    addRoute(routeOrRecord: Route | RouteRecord, source: 'user'|'system' = 'system'): void | Promise<void> {
+        if (!(routeOrRecord instanceof Route)) {
+            return this.addLibraryRouteRecord(routeOrRecord)
+        }
+
+        const route = routeOrRecord
         this.routes.push(route)
         if (route.description?.isDeleted) {
-            return;
+            return
         }
 
         if (!route.description?.isDeleted) {
@@ -1042,7 +1079,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                     })
             }
         }
-        
 
         const list = this.selectList(route)
 
@@ -1050,10 +1086,25 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         card.verify()
         list.add( card)
         if ( list.getId()==='myRoutes')
-            card.enableDelete(true)    
-        
-        this.emitLists('updated',{source})                
+            card.enableDelete(true)
 
+        this.emitLists('updated',{source})
+    }
+
+    private async addLibraryRouteRecord(record: RouteRecord): Promise<void> {
+        const info: RouteInfo = {
+            id: record.id,
+            title: record.name,
+            videoUrl: record.videoUri,
+            sourceTreeUri: record.sourceTreeUri,
+            previewUrl: record.thumbnailPath,
+            hasVideo: !!record.videoUri,
+            isLocal: true,
+            tsImported: Date.now()
+        }
+        const route = new Route(info)
+        await this.db.save(route)
+        this.addRoute(route, 'system')
     }
 
     protected async verifyPoints(card:RouteCard, route:Route):Promise<void> {
