@@ -1,8 +1,9 @@
 import { FileInfo, getBindings } from "../../../api";
 import { RouteApiDetail } from "../api/types";
-import { ParseResult, Parser } from "../types";
 import { XmlJSON, parseXml } from "../../../utils/xml";
 import { XMLParser } from "./xml";
+
+import type  { ParseResult, Parser } from "./types";
 
 export class MultipleXMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
@@ -25,6 +26,14 @@ export class MultipleXMLParser implements Parser<XmlJSON,RouteApiDetail> {
     supportsExtension(extension: string): boolean {
         return extension?.toLowerCase()==='xml'
     }
+    getPrimaryExtension(): string {
+        return 'xml'
+    }
+    getCompanionExtensions(): string[]    {
+        return []
+    }
+
+
     supportsContent(): boolean {
         return true
     }

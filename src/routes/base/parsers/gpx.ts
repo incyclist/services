@@ -28,6 +28,12 @@ export class GPXParser extends XMLParser {
         this.props = props;
     }
 
+    getPrimaryExtension(): string {
+        return 'gpx'
+    }
+    getCompanionExtensions(): string[]    {
+        return []
+    }
 
 
     supportsExtension(extension) {

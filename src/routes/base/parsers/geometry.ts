@@ -1,7 +1,9 @@
 import { FileInfo, getBindings } from "../../../api"
 import { Injectable } from "../../../base/decorators"
 import { getFileName } from "../../../utils"
-import { Parser, ParseResult, RouteBase, RouteInfo, RoutePoint, VideoMapping } from "../types"
+import { RouteBase, RouteInfo, RoutePoint, VideoMapping } from "../types"
+
+import type { Parser, ParseResult } from "./types"
 
 export type Geometry = {
     
@@ -35,6 +37,14 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
         return await this.parse(file,geometry)        
 
     }
+
+    getPrimaryExtension(): string {
+        return 'xml'
+    }
+    getCompanionExtensions(): string[]    {
+        return []
+    }
+    
     supportsExtension(extension: string): boolean {
         return extension.toLowerCase()==='json'
     }
@@ -121,7 +131,7 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
         
         
     }
-
+ 
     @Injectable
     protected getLoader() {
         return getBindings().loader

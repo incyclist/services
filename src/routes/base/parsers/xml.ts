@@ -1,13 +1,14 @@
 import { EventLogger } from 'gd-eventlog';
 import { JSONObject, XmlJSON, parseXml, toXml } from '../../../utils/xml';
 import { RouteApiDetail } from '../api/types';
-import { ParseResult, Parser, RouteInfo, RoutePoint } from '../types';
+import { RouteInfo, RoutePoint } from '../types';
 import { FileInfo, getBindings } from '../../../api';
 import { checkIsLoop, getRouteHash, getTotalElevation,getTotalDistance, updateSlopes, validateRoute } from '../utils/route'
 import { Position, Altitude } from './types';
 import { getReferencedFileInfo, parseInformations } from './utils';
 import { getFileName } from '../../../utils';
 
+import type { ParseResult, Parser } from './types';
 
 export interface  XmlParserContext  {
    fileInfo: FileInfo,
@@ -31,6 +32,13 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         const C = this.constructor as typeof XMLParser     
             
         return C['SCHEME']        
+    }
+    
+    getPrimaryExtension(): string {
+        return 'xml'
+    }
+    getCompanionExtensions(): string[]    {
+        return []
     }
 
     
