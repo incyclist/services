@@ -12,11 +12,14 @@ import { Route } from "../base/model/route";
 import { RouteCard } from "./cards/RouteCard";
 import { RouteParser } from "../base/parsers";
 import { RouteApiDetail } from "../base/api/types";
-import { ParseResult, RouteInfo } from "../base/types";
+import { RouteInfo } from "../base/types";
 import { Observer } from "../../base/types/observer";
 import { useUserSettings } from "../../settings";
 import { Card } from "../../base/cardlist";
 import { Inject } from "../../base/decorators";
+
+import type { ParseResult } from "../types";
+
 
 let cnt = 0
 
