@@ -306,7 +306,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.toggleOverlay('sv-left')
     }
     
-    hideRightSideView() {
+    toggleRightSideView() {
         this.toggleOverlay('sv-right')
         
     }
