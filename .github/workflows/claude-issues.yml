@@ -15,10 +15,10 @@ permissions:
 
 jobs:
   process:
-    # Run on:
-    #   - issue labeled 'claude'          → fresh run
-    #   - issue comment starting /retry   → fresh run, optional model override
-    #   - issue comment starting /correction → resume previous session
+    # Runs on:
+    #   issues labeled 'claude'              -> fresh run
+    #   issue comment starting /retry        -> fresh run, optional model override
+    #   issue comment starting /correction   -> resume previous session
     if: |
       (github.event_name == 'issues' && github.event.label.name == 'claude') ||
       (github.event_name == 'issue_comment' && (
@@ -39,7 +39,7 @@ jobs:
 
       - run: npm ci
 
-      # ── Determine run mode ────────────────────────────────────────────────
+      # -- Determine run mode ------------------------------------------------
       - name: Parse trigger
         id: trigger
         run: |
@@ -61,23 +61,18 @@ jobs:
             fi
 
           else
-            # Label trigger or workflow_dispatch → fresh run
             echo "mode=fresh" >> $GITHUB_OUTPUT
             echo "model=sonnet" >> $GITHUB_OUTPUT
             echo "instruction=" >> $GITHUB_OUTPUT
           fi
 
-      # ── Resolve issue number (works for both issue and comment events) ────
+      # -- Resolve issue number ----------------------------------------------
       - name: Resolve issue number
         id: issue
         run: |
-          if [ "${{ github.event_name }}" == "issue_comment" ]; then
-            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          else
-            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          fi
+          echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
 
-      # ── Create or checkout the branch ────────────────────────────────────
+      # -- Create or checkout branch -----------------------------------------
       - name: Create or checkout branch
         id: branch
         env:
@@ -90,13 +85,13 @@ jobs:
             BRANCH="claude/issue-${{ steps.issue.outputs.number }}-${SLUG}"
             git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
           else
-            # retry or correction — find the existing branch via the open PR
+            # retry or correction -- find the existing branch via open PR
             BRANCH=$(gh pr list \
               --search "closes #${{ steps.issue.outputs.number }} is:open" \
               --json headRefName --jq '.[0].headRefName' 2>/dev/null || true)
 
             if [ -z "$BRANCH" ]; then
-              # Fallback: reconstruct the branch name
+              # Fallback: reconstruct branch name from issue title
               SLUG=$(echo "$PR_TITLE" | tr '[:upper:]' '[:lower:]' \
                 | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40)
               BRANCH="claude/issue-${{ steps.issue.outputs.number }}-${SLUG}"
@@ -108,10 +103,9 @@ jobs:
 
           echo "name=$BRANCH" >> $GITHUB_OUTPUT
 
-      # ── Restore session cache (correction only) ───────────────────────────
+      # -- Restore session cache (correction only) ---------------------------
       - name: Restore session cache
         if: steps.trigger.outputs.mode == 'correction'
-        id: cache_restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -121,13 +115,14 @@ jobs:
           restore-keys: |
             claude-session-issue-${{ steps.issue.outputs.number }}-
 
-      # ── Read session ID from restored cache ───────────────────────────────
+      # -- Read session state ------------------------------------------------
       - name: Read session state
         id: session
         run: |
           if [ -f "/tmp/claude-state/session-id" ]; then
             SESSION_ID=$(cat /tmp/claude-state/session-id)
-            COMPLETED=$(cat /tmp/claude-state/completed-files 2>/dev/null | tr '\n' ',' | sed 's/,$//')
+            COMPLETED=$(cat /tmp/claude-state/completed-files 2>/dev/null \
+              | tr '\n' ',' | sed 's/,$//')
             echo "found=true" >> $GITHUB_OUTPUT
             echo "id=$SESSION_ID" >> $GITHUB_OUTPUT
             echo "completed=$COMPLETED" >> $GITHUB_OUTPUT
@@ -137,17 +132,17 @@ jobs:
             echo "completed=" >> $GITHUB_OUTPUT
           fi
 
-      # ── Resolve model string ──────────────────────────────────────────────
+      # -- Resolve model string ----------------------------------------------
       - name: Resolve model
         id: model
         run: |
           case "${{ steps.trigger.outputs.model }}" in
-            opus)   echo "str=claude-opus-4-6"    >> $GITHUB_OUTPUT ;;
-            sonnet) echo "str=claude-sonnet-4-6"  >> $GITHUB_OUTPUT ;;
-            *)      echo "str=claude-sonnet-4-6"  >> $GITHUB_OUTPUT ;;
+            opus)   echo "str=claude-opus-4-6"   >> $GITHUB_OUTPUT ;;
+            sonnet) echo "str=claude-sonnet-4-6" >> $GITHUB_OUTPUT ;;
+            *)      echo "str=claude-sonnet-4-6" >> $GITHUB_OUTPUT ;;
           esac
 
-      # ── Build Claude args ─────────────────────────────────────────────────
+      # -- Build Claude args -------------------------------------------------
       - name: Build Claude args
         id: claude_args
         run: |
@@ -158,49 +153,54 @@ jobs:
           if [ "$MODE" == "correction" ] && [ "${{ steps.session.outputs.found }}" == "true" ]; then
             echo "args=$BASE --resume ${{ steps.session.outputs.id }}" >> $GITHUB_OUTPUT
           else
-            # fresh or retry (or correction with no cached session → treat as retry)
             echo "args=$BASE" >> $GITHUB_OUTPUT
           fi
 
-      # ── Build prompt ──────────────────────────────────────────────────────
+      # -- Build prompt file -------------------------------------------------
       - name: Build prompt
-        id: prompt
         run: |
           MODE="${{ steps.trigger.outputs.mode }}"
+          SESSION_FOUND="${{ steps.session.outputs.found }}"
           ISSUE_NUMBER="${{ steps.issue.outputs.number }}"
           COMPLETED="${{ steps.session.outputs.completed }}"
           INSTRUCTION="${{ steps.trigger.outputs.instruction }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
 
-          if [ "$MODE" == "correction" ] && [ "${{ steps.session.outputs.found }}" == "true" ]; then
-            cat << 'EOF' > /tmp/prompt.txt
+          mkdir -p /tmp/claude-state
+
+          if [ "$MODE" == "correction" ] && [ "$SESSION_FOUND" == "true" ]; then
+
+            cat > /tmp/prompt.txt << EOF
           This is a correction run continuing a previous session.
-          Your session history already contains full context — do not re-read
-          files you already processed.
+          Your session history already contains full context from the previous run.
+          Do not re-read files you already processed.
 
-          Files already committed in previous run(s): COMPLETED_PLACEHOLDER
+          Files already committed in previous run(s):
+          ${COMPLETED}
 
-          Correction instruction: INSTRUCTION_PLACEHOLDER
+          Correction instruction:
+          ${INSTRUCTION}
 
-          Check git log --oneline -10 and git status to orient yourself,
-          then apply the correction. Follow the process in
-          .github/instructions/claude-issue-processing.md (Section 5).
+          Run git log --oneline -10 and git status to orient yourself,
+          then apply the correction.
+
+          Follow .github/instructions/claude-issue-processing.md (Section 5).
           EOF
-            sed -i "s|COMPLETED_PLACEHOLDER|${COMPLETED}|g" /tmp/prompt.txt
-            sed -i "s|INSTRUCTION_PLACEHOLDER|${INSTRUCTION}|g" /tmp/prompt.txt
 
           else
-            # fresh or retry
-            BODY=$(cat << 'ISSUEBODY'
+
+            # Write issue body to a temp file to avoid heredoc quoting issues
+            cat > /tmp/issue-body.txt << 'BODY_EOF'
           ${{ github.event.issue.body }}
-          ISSUEBODY
-          )
-            cat << EOF > /tmp/prompt.txt
+          BODY_EOF
+
+            cat > /tmp/prompt.txt << EOF
           Process GitHub issue #${ISSUE_NUMBER}.
 
-          Title: ${{ github.event.issue.title }}
+          Title: ${ISSUE_TITLE}
 
           Body:
-          ${BODY}
+          $(cat /tmp/issue-body.txt)
 
           Follow the process defined in
           .github/instructions/claude-issue-processing.md exactly.
@@ -209,14 +209,10 @@ jobs:
           - The branch has already been created for you. Do NOT run git checkout.
           - Do NOT create a PR. The workflow handles that after you are done.
           EOF
+
           fi
 
-          # Export prompt content for the action
-          # (write to file; action reads via prompt_file if supported,
-          #  otherwise inline below)
-          echo "file=/tmp/prompt.txt" >> $GITHUB_OUTPUT
-
-      # ── Run Claude ────────────────────────────────────────────────────────
+      # -- Run Claude --------------------------------------------------------
       - name: Run Claude
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -224,9 +220,9 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           show_full_output: true
           claude_args: ${{ steps.claude_args.outputs.args }}
-          prompt: ${{ steps.trigger.outputs.mode == 'correction' && steps.session.outputs.found == 'true' && format('This is a correction run continuing a previous session. Files already committed: {0}. Correction instruction: {1}. Check git log and git status to orient yourself, then apply the correction. Follow .github/instructions/claude-issue-processing.md Section 5.', steps.session.outputs.completed, steps.trigger.outputs.instruction) || format('Process GitHub issue #{0}. Title: {1}. Body: {2}. Follow the process defined in .github/instructions/claude-issue-processing.md exactly. IMPORTANT: The branch has already been created for you. Do NOT run git checkout. Do NOT create a PR. The workflow handles that after you are done.', steps.issue.outputs.number, github.event.issue.title, github.event.issue.body) }}
+          prompt_file: /tmp/prompt.txt
 
-      # ── Save partial progress if Claude failed ────────────────────────────
+      # -- Save partial progress if Claude failed ----------------------------
       - name: Save partial progress on failure
         if: failure()
         run: |
@@ -234,7 +230,7 @@ jobs:
           git diff --cached --quiet || \
             git commit -m "wip: partial progress on #${{ steps.issue.outputs.number }} [incomplete]"
 
-      # ── Save session state to cache ───────────────────────────────────────
+      # -- Save session state to cache ---------------------------------------
       - name: Save session cache
         if: always()
         uses: actions/cache/save@v4
@@ -244,7 +240,7 @@ jobs:
             /tmp/claude-state
           key: claude-session-issue-${{ steps.issue.outputs.number }}-${{ github.run_id }}
 
-      # ── Write job summary ─────────────────────────────────────────────────
+      # -- Write job summary -------------------------------------------------
       - name: Write job summary
         if: always()
         run: |
@@ -253,38 +249,38 @@ jobs:
           MODE="${{ steps.trigger.outputs.mode }}"
           MODEL="${{ steps.model.outputs.str }}"
 
-          cat << EOF >> $GITHUB_STEP_SUMMARY
+          cat >> $GITHUB_STEP_SUMMARY << EOF
           ## Claude Session Summary
 
           | Field | Value |
           |-------|-------|
           | Issue | #${{ steps.issue.outputs.number }} |
-          | Mode | ${MODE} |
-          | Model | ${MODEL} |
-          | Session ID | \`${SESSION_ID}\` |
+          | Mode | \${MODE} |
+          | Model | \${MODEL} |
+          | Session ID | \`\${SESSION_ID}\` |
           | Cache key | \`claude-session-issue-${{ steps.issue.outputs.number }}-${{ github.run_id }}\` |
 
           ## Files completed this run
           \`\`\`
-          ${COMPLETED}
+          \${COMPLETED}
           \`\`\`
 
           ## How to continue
 
-          To start fresh (optionally with a different model):
+          Start fresh (optionally with a stronger model):
           \`\`\`
           /retry
           /retry model=opus
           \`\`\`
 
-          To continue from where this run left off:
+          Continue from where this run left off:
           \`\`\`
           /correction <your instructions here>
           /correction model=opus <your instructions here>
           \`\`\`
           EOF
 
-      # ── Push branch ───────────────────────────────────────────────────────
+      # -- Push branch -------------------------------------------------------
       - name: Push branch
         if: always()
         env:
@@ -294,7 +290,7 @@ jobs:
             "https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git"
           git push -u origin "${{ steps.branch.outputs.name }}" || true
 
-      # ── Create PR (idempotent) ────────────────────────────────────────────
+      # -- Create PR (idempotent) --------------------------------------------
       - name: Create PR
         if: always()
         env:
