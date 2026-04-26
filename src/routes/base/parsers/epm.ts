@@ -18,6 +18,13 @@ export class EPMParser extends XMLParser{
         return extension.toLowerCase() === 'epm';
     }
 
+    getPrimaryExtension(): string {
+        return 'epm'
+    }
+    getCompanionExtensions(): string[]    {
+        return ['epp']
+    }
+
     protected async loadPoints(context: EpmParserContext) { 
         const {data,route} = context
 

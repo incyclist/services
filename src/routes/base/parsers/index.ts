@@ -6,11 +6,12 @@ import { GPXParser } from './gpx'
 import { IncyclistXMLParser } from './incyclist'
 import { KWTParser } from './kwt'
 import { MultipleXMLParser } from './multixml'
-import { ParseResult } from '../types'
 import { RouteApiDetail } from '../api/types'
 import { BikeLabParser } from './bikelab'
 import { EPMParser } from './epm'
 import { TacxParser } from './tacx/TacxParser'
+
+import type { ParseResult } from './types'
 
 export const useParsers = () => {
 

@@ -3,11 +3,13 @@ import { getFileName } from "../../../../utils";
 import clone from "../../../../utils/clone";
 import { RouteApiDetail } from "../../api/types";
 import { DISTANCE_PROGRAM, PgmfFile, RlvCourseInfo, RlvFile, SLOPE_PROGRAM } from "../../model/tacx";
-import { Parser, ParseResult, RouteInfo, RoutePoint, VideoMapping } from "../../types";
+import { RouteInfo, RoutePoint, VideoMapping } from "../../types";
 import { getRouteHash, validateRoute } from "../../utils/route";
 import { PGMFFileReader } from "./pgmf";
 import { RLVFileReader } from "./rlv";
 import { TacxFileReader } from "./TacxReader";
+
+import type { Parser, ParseResult } from "../types";
 
 export interface TacxParserContext {
     rlvFile: FileInfo
@@ -53,6 +55,14 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
     supportsContent(data: ArrayBuffer): boolean {
         return TacxFileReader.isValid(data)
     }
+
+    getPrimaryExtension(): string {
+        return 'rlv'
+    }
+    getCompanionExtensions(): string[]    {
+        return ['pgmf']
+    }
+
 
     protected buildContext(file: FileInfo): TacxParserContext {
 

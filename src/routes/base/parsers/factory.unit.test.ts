@@ -1,4 +1,11 @@
+import { BikeLabParser } from './bikelab'
+import { EPMParser } from './epm'
 import {ParserFactory} from './factory'
+import { GPXParser } from './gpx'
+import { IncyclistXMLParser } from './incyclist'
+import { KWTParser } from './kwt'
+import { MultipleXMLParser } from './multixml'
+import { TacxParser } from './tacx/TacxParser'
 describe ('ParserFactory',()=> {
 
     describe( 'add',()=>{
@@ -146,5 +153,36 @@ describe ('ParserFactory',()=> {
 
 
     })
+
+
+    describe( 'isPrimaryExtension',()=>{
+        let p
+        let parsers:ParserFactory
+
+        beforeEach( ()=>{
+            p = parsers = ParserFactory.getInstance()
+            parsers.add( new MultipleXMLParser([KWTParser,IncyclistXMLParser,BikeLabParser]) )
+            parsers.add( new EPMParser())
+            parsers.add( new TacxParser() )
+            parsers.add( new GPXParser())
+
+        })
+
+        afterEach( ()=>{
+            p?.reset()
+        })
+
+        test('correct selection of primary parser',()=>{            
+            expect(parsers.isPrimaryExtension('epm')).toBeTruthy()
+            expect(parsers.isPrimaryExtension('epp')).toBeFalsy()
+            expect(parsers.isPrimaryExtension('gpx')).toBeTruthy()
+            expect(parsers.isPrimaryExtension('rlv')).toBeTruthy()
+            expect(parsers.isPrimaryExtension('pgmf')).toBeFalsy()
+            expect(parsers.isPrimaryExtension('xml')).toBeTruthy()
+
+        })
+
+    })
+
 
 })

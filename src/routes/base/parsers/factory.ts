@@ -1,4 +1,4 @@
-import { Parser } from "../types"
+import type { Parser } from "./types"
 
 export class ParserFactory {
 
@@ -33,6 +33,11 @@ export class ParserFactory {
         return matching
     }
 
+    isPrimaryExtension(extension: string): boolean {
+        const ext = extension.toLowerCase()
+        const isPrimary = this.parsers.some( p=> p.getPrimaryExtension()===ext)
+        return isPrimary
+    }
 
     findMatching( extension:string, data?:unknown ) {
         const matching = this.parsers
