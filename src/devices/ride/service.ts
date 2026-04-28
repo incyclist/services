@@ -709,6 +709,9 @@ export class DeviceRideService  extends IncyclistService{
             this.initForStart(ai, startProps, route, startPos, realityFactor, rideMode);
         }
 
+        ai.adapter.resumeLogging()
+        this.resumeLogging()
+
         const sType = (ai.isControl ) ? 'bike' : 'sensor'
 
          
