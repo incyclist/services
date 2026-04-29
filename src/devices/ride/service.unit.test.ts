@@ -73,6 +73,7 @@ describe('DeviceRideService',()=>{
             on:jest.fn(),
             off:jest.fn(),
             removeAllListeners:jest.fn(),
+            
             getModeSettings:jest.fn().mockReturnValue({}),
             getSelectedDevices: jest.fn(()=>
                     [{capability:IncyclistCapability.Cadence,selected:'2'},
@@ -109,6 +110,7 @@ describe('DeviceRideService',()=>{
         beforeEach( ()=>{
             service = new DeviceRideService()
             service.inject('DeviceConfiguration', mockConfig)
+            service.resumeLogging = jest.fn()
         })
 
         afterEach( ()=>{                
