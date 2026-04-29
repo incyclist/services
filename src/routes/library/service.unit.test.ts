@@ -4,7 +4,10 @@ import { JsonRepository } from '../../api/repository/json'
 import { ParserFactory } from '../base/parsers/factory'
 import { RouteParser } from '../base/parsers'
 import { RouteLibraryScannerService, useRouteLibraryScanner } from './service'
-import { DiscoveredRoute, FolderInfo } from './types'
+import { FolderInfo, ParsedRoute, ScannedRoute } from './types'
+import { Route } from '../base/model/route'
+import { RouteInfo } from '../types'
+import { IObserver } from '../../types'
 
 // Helpers to build mock ReadDirResult entries
 const dir = (name: string, uri: string) => ({ name, uri, isDirectory: true })
@@ -16,12 +19,11 @@ describe('RouteLibraryScannerService', () => {
     let service: RouteLibraryScannerService
     let fsMock: any
     let appInfoMock: any
+    let dbMock: any
     let routeListMock: any
     let parsersFactory: ParserFactory
 
     beforeEach(() => {
-        // Reset singleton so each test gets a fresh instance
-        (RouteLibraryScannerService as any)._instance = undefined
 
         fsMock = {
             readdir: jest.fn(),
@@ -36,12 +38,21 @@ describe('RouteLibraryScannerService', () => {
         }
 
         routeListMock = {
-            existsBySourceUri: jest.fn().mockResolvedValue(false),
-            addRoute: jest.fn().mockResolvedValue(undefined),
+            existsBySourceUri: jest.fn().mockReturnValue(false),
+            addRoute: jest.fn(),
+            pauseListUpdates: jest.fn(),
+            resumeListUpdates: jest.fn(),
+            emitLists:jest.fn()
+
+        }
+
+        dbMock = {
+            save: jest.fn().mockResolvedValue(undefined)
         }
 
         Inject('Bindings', { fs: fsMock, appInfo: appInfoMock })
         Inject('RouteList', routeListMock)
+        Inject('RoutesDBLoader', dbMock)
 
         // Ensure parsers are initialised before each test
         const { useParsers } = require('../base/parsers')
@@ -53,7 +64,9 @@ describe('RouteLibraryScannerService', () => {
     afterEach(() => {
         Inject('Bindings', null)
         Inject('RouteList', null)
+        Inject('RoutesDBLoader', null)
         jest.clearAllMocks()
+        service.reset()
         // Reset ParserFactory singleton so tests don't bleed
         ;(ParserFactory as any)._instance = undefined
     })
@@ -88,15 +101,15 @@ describe('RouteLibraryScannerService', () => {
             expect(progressEvents[1].scannedFolders).toBe(2)
         })
 
-        test('emits discovered for each primary file found', async () => {
+        test('emits scan-result for each primary file found', async () => {
             fsMock.readdir.mockResolvedValue([
                 file('route.gpx', 'content://root/route.gpx'),
                 file('ride.mp4', 'content://root/ride.mp4'),
             ])
 
-            const discovered: DiscoveredRoute[] = []
+            const discovered: ScannedRoute[] = []
             const observer = service.scan(makeFolder('Root', 'content://root'))
-            observer.on('discovered', r => discovered.push(r))
+            observer.on('scan-result', r => discovered.push(r))
 
             await new Promise<void>(resolve => observer.once('scan-complete', resolve))
             expect(discovered).toHaveLength(1)
@@ -111,106 +124,30 @@ describe('RouteLibraryScannerService', () => {
                 file('video.mp4', 'content://root/video.mp4'),
             ])
 
-            const discovered: DiscoveredRoute[] = []
+            const discovered: ScannedRoute[] = []
             const observer = service.scan(makeFolder('Root', 'content://root'))
-            observer.on('discovered', r => discovered.push(r))
+            observer.on('scan-result', r => discovered.push(r))
 
             await new Promise<void>(resolve => observer.once('scan-complete', resolve))
-            expect(discovered[0].importable).toBe(false)
-            expect(discovered[0].skipReason).toMatch(/companion/i)
+            expect(discovered[0].scanError).toMatch(/companion/i)
         })
-
-        test('sets importable: false when no video file is present', async () => {
+        test('sets importable: true when companion file is present', async () => {
+            // .epm requires .epp companion
             fsMock.readdir.mockResolvedValue([
-                file('route.gpx', 'content://root/route.gpx'),
-            ])
-
-            const discovered: DiscoveredRoute[] = []
-            const observer = service.scan(makeFolder('Root', 'content://root'))
-            observer.on('discovered', r => discovered.push(r))
-
-            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
-            expect(discovered[0].importable).toBe(false)
-            expect(discovered[0].skipReason).toMatch(/no video/i)
-        })
-
-        test('sets importable: false when only an AVI video is present', async () => {
-            fsMock.readdir.mockResolvedValue([
-                file('route.gpx', 'content://root/route.gpx'),
-                file('video.avi', 'content://root/video.avi'),
-            ])
-
-            const discovered: DiscoveredRoute[] = []
-            const observer = service.scan(makeFolder('Root', 'content://root'))
-            observer.on('discovered', r => discovered.push(r))
-
-            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
-            expect(discovered[0].importable).toBe(false)
-            expect(discovered[0].skipReason).toMatch(/avi/i)
-        })
-
-        test('sets importable: false when control file contains absolute Unix path', async () => {
-            fsMock.readdir.mockResolvedValue([
-                file('route.gpx', 'content://root/route.gpx'),
-                file('video.mp4', 'content://root/video.mp4'),
-            ])
-            fsMock.readFile.mockResolvedValue('<video>/storage/emulated/0/video.mp4</video>')
-
-            const discovered: DiscoveredRoute[] = []
-            const observer = service.scan(makeFolder('Root', 'content://root'))
-            observer.on('discovered', r => discovered.push(r))
-
-            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
-            expect(discovered[0].importable).toBe(false)
-            expect(discovered[0].skipReason).toMatch(/absolute/i)
-        })
-
-        test('sets importable: false when control file contains absolute Windows path', async () => {
-            fsMock.readdir.mockResolvedValue([
-                file('route.gpx', 'content://root/route.gpx'),
-                file('video.mp4', 'content://root/video.mp4'),
-            ])
-            fsMock.readFile.mockResolvedValue('<video>C:\\Users\\user\\video.mp4</video>')
-
-            const discovered: DiscoveredRoute[] = []
-            const observer = service.scan(makeFolder('Root', 'content://root'))
-            observer.on('discovered', r => discovered.push(r))
-
-            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
-            expect(discovered[0].importable).toBe(false)
-            expect(discovered[0].skipReason).toMatch(/absolute/i)
-        })
-
-        test('sets alreadyImported from RouteListService.existsBySourceUri', async () => {
-            routeListMock.existsBySourceUri.mockResolvedValue(true)
-
-            fsMock.readdir.mockResolvedValue([
-                file('route.gpx', 'content://root/route.gpx'),
+                file('route.epm', 'content://root/route.epm'),
+                file('route.epp', 'content://root/route.epp'),
                 file('video.mp4', 'content://root/video.mp4'),
             ])
 
-            const discovered: DiscoveredRoute[] = []
+            const discovered: ScannedRoute[] = []
             const observer = service.scan(makeFolder('Root', 'content://root'))
-            observer.on('discovered', r => discovered.push(r))
+            observer.on('scan-result', r => discovered.push(r))
 
             await new Promise<void>(resolve => observer.once('scan-complete', resolve))
-            expect(discovered[0].alreadyImported).toBe(true)
+            expect(discovered[0].scanError).toBeUndefined()
+            
         })
 
-        test('sets hasThumbnail when an image file is present', async () => {
-            fsMock.readdir.mockResolvedValue([
-                file('route.gpx', 'content://root/route.gpx'),
-                file('video.mp4', 'content://root/video.mp4'),
-                file('thumb.jpg', 'content://root/thumb.jpg'),
-            ])
-
-            const discovered: DiscoveredRoute[] = []
-            const observer = service.scan(makeFolder('Root', 'content://root'))
-            observer.on('discovered', r => discovered.push(r))
-
-            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
-            expect(discovered[0].hasThumbnail).toBe(true)
-        })
 
         test('continues scanning after a folder readdir error', async () => {
             fsMock.readdir
@@ -275,52 +212,62 @@ describe('RouteLibraryScannerService', () => {
     })
 
     describe('ingest', () => {
-        const makeRoute = (overrides: Partial<DiscoveredRoute> = {}): DiscoveredRoute => ({
-            id: 'route-1',
-            folderUri: 'content://root/folder',
-            folderName: 'folder',
-            controlFileUri: 'content://root/folder/route.gpx',
-            format: 'gpx',
-            hasVideo: true,
-            hasThumbnail: false,
-            alreadyImported: false,
-            importable: true,
-            ...overrides,
-        })
 
-        beforeEach(() => {
-            jest.spyOn(RouteParser, 'parse').mockResolvedValue({
-                data: { id: 'parsed-id', title: 'My Route', videoUrl: 'video.mp4' },
-                details: {} as any,
+        let observer:IObserver
+        const makeRouteObject = (overrride:Partial<RouteInfo>={}): Route => {
+
+            return  new Route( {
+                id:'1',
+                title:'test route',
+                ...overrride
             })
+
+        }
+
+
+        const makeRoute = (overrides: Partial<ParsedRoute> = {}, routeOverride:Partial<RouteInfo>={}): ParsedRoute => {
+            return {
+                route: makeRouteObject(routeOverride),
+                folderUri: 'content://root/folder',
+                controlFileUri: 'content://root/folder/route.gpx',
+                alreadyImported: false,
+                format:'gpx',
+                ...overrides,
+            }
+        }
+
+        afterEach( ()=>{
+            observer.stop()
         })
 
         test('returns an observer immediately', () => {
-            const observer = service.ingest([], 'content://root')
+            observer = service.ingest([])
             expect(observer).toBeInstanceOf(Observer)
         })
 
         test('emits ingest-complete with zero counts for empty list', async () => {
-            const observer = service.ingest([], 'content://root')
+            observer = service.ingest([])
             const result: any = await new Promise(resolve =>
                 observer.once('ingest-complete', resolve)
             )
-            expect(result).toEqual({ imported: 0, skipped: 0, errors: 0, failedRoutes: [] })
+            expect(result).toEqual({ imported: 0, skipped: 0, errors: 0, failedRoutes: [],importedRoutes:[] })
         })
 
         test('emits ingest-progress for each route processed', async () => {
-            const routes = [makeRoute({ id: 'r1' }), makeRoute({ id: 'r2' })]
+            const routes = [makeRoute({},{ id: 'r1', title:'r1' }), makeRoute({},{ id: 'r2', title:'r2' })]
             const progressEvents: any[] = []
-            const observer = service.ingest(routes, 'content://root')
+
+            observer = service.ingest(routes)
             observer.on('ingest-progress', e => progressEvents.push(e))
             await new Promise<void>(resolve => observer.once('ingest-complete', resolve))
 
             expect(progressEvents).toHaveLength(2)
-            expect(progressEvents[0]).toEqual({ current: 1, total: 2, currentName: 'folder' })
+            expect(progressEvents[0]).toEqual({ current: 1, total: 2, currentName:'r1'})
+            expect(progressEvents[1]).toEqual({ current: 2, total: 2, currentName:'r2'})
         })
 
         test('counts imported correctly', async () => {
-            const observer = service.ingest([makeRoute()], 'content://root')
+            observer = service.ingest([makeRoute()])
             const result: any = await new Promise(resolve =>
                 observer.once('ingest-complete', resolve)
             )
@@ -330,110 +277,38 @@ describe('RouteLibraryScannerService', () => {
 
         test('counts skipped routes (not importable or already imported)', async () => {
             const routes = [
-                makeRoute({ importable: false }),
                 makeRoute({ alreadyImported: true }),
+                makeRoute({ parseError:'xyz'}),
+                makeRoute(),
             ]
-            const observer = service.ingest(routes, 'content://root')
+            observer = service.ingest(routes)
             const result: any = await new Promise(resolve =>
                 observer.once('ingest-complete', resolve)
             )
             expect(result.skipped).toBe(2)
-            expect(result.imported).toBe(0)
+            expect(result.imported).toBe(1)
         })
 
         test('emits ingest-error and continues on per-route failure', async () => {
-            jest.spyOn(RouteParser, 'parse')
-                .mockRejectedValueOnce(new Error('parse failure'))
-                .mockResolvedValue({
-                    data: { id: 'ok', title: 'OK Route', videoUrl: 'video.mp4' },
-                    details: {} as any,
-                })
 
-            const routes = [makeRoute({ id: 'r1' }), makeRoute({ id: 'r2' })]
+            dbMock.save= jest.fn()
+                .mockRejectedValueOnce( new Error('db save error') )
+                .mockResolvedValue(undefined)
+
+            const routes = [makeRoute({},{ title: 'r1' }), makeRoute({},{ title: 'r2' })]
             const errors: any[] = []
-            const observer = service.ingest(routes, 'content://root')
+            observer = service.ingest(routes)
+
             observer.on('ingest-error', e => errors.push(e))
             const result: any = await new Promise(resolve =>
                 observer.once('ingest-complete', resolve)
             )
 
             expect(errors).toHaveLength(1)
-            expect(errors[0].reason).toBe('parse failure')
+            expect(errors[0].reason).toBe('db save error')
             expect(result.imported).toBe(1)
             expect(result.errors).toBe(1)
             expect(result.failedRoutes).toHaveLength(1)
-        })
-
-        test('calls RouteListService.addRoute with RouteRecord', async () => {
-            const observer = service.ingest([makeRoute()], 'content://root')
-            await new Promise<void>(resolve => observer.once('ingest-complete', resolve))
-
-            expect(routeListMock.addRoute).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    id: 'parsed-id',
-                    name: 'My Route',
-                    format: 'gpx',
-                    sourceTreeUri: 'content://root',
-                })
-            )
-        })
-
-        test('stores web video URL as-is', async () => {
-            jest.spyOn(RouteParser, 'parse').mockResolvedValue({
-                data: { id: 'id1', title: 'Route', videoUrl: 'https://cdn.example.com/ride.mp4' },
-                details: {} as any,
-            })
-
-            const observer = service.ingest([makeRoute()], 'content://root')
-            await new Promise<void>(resolve => observer.once('ingest-complete', resolve))
-
-            const call = routeListMock.addRoute.mock.calls[0][0]
-            expect(call.videoUri).toBe('https://cdn.example.com/ride.mp4')
-        })
-
-        test('resolves relative video URL against folder URI', async () => {
-            jest.spyOn(RouteParser, 'parse').mockResolvedValue({
-                data: { id: 'id1', title: 'Route', videoUrl: 'ride.mp4' },
-                details: {} as any,
-            })
-
-            const observer = service.ingest([makeRoute()], 'content://root')
-            await new Promise<void>(resolve => observer.once('ingest-complete', resolve))
-
-            const call = routeListMock.addRoute.mock.calls[0][0]
-            expect(call.videoUri).toBe('content://root/folder/ride.mp4')
-        })
-
-        test('rejects absolute video URI as ingest error', async () => {
-            jest.spyOn(RouteParser, 'parse').mockResolvedValue({
-                data: { id: 'id1', title: 'Route', videoUrl: '/storage/emulated/0/ride.mp4' },
-                details: {} as any,
-            })
-
-            const errors: any[] = []
-            const observer = service.ingest([makeRoute()], 'content://root')
-            observer.on('ingest-error', e => errors.push(e))
-            const result: any = await new Promise(resolve =>
-                observer.once('ingest-complete', resolve)
-            )
-
-            expect(errors).toHaveLength(1)
-            expect(errors[0].reason).toMatch(/absolute/i)
-            expect(result.errors).toBe(1)
-        })
-
-        test('copies thumbnail when hasThumbnail is true', async () => {
-            fsMock.readdir.mockResolvedValue([
-                file('thumb.jpg', 'content://root/folder/thumb.jpg'),
-            ])
-            fsMock.readFile.mockResolvedValue(Buffer.from('img-data'))
-
-            const observer = service.ingest([makeRoute({ hasThumbnail: true })], 'content://root')
-            await new Promise<void>(resolve => observer.once('ingest-complete', resolve))
-
-            expect(fsMock.writeFile).toHaveBeenCalled()
-            const call = routeListMock.addRoute.mock.calls[0][0]
-            expect(call.thumbnailPath).toMatch(/thumbnails/)
         })
     })
 

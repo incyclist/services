@@ -344,7 +344,7 @@ describe('RouteListService',()=>{
             const details: RouteApiDetail= {  id:'test', title:'test'}
             const result: ParseResult<RouteApiDetail> = { data,details}
 
-            
+
             RouteParser.parse = jest.fn()
             .mockResolvedValueOnce( result)
             .mockRejectedValueOnce( new Error('Some Error'))
@@ -367,5 +367,40 @@ describe('RouteListService',()=>{
 
 
     })
+
+    describe('existsBySourceUri', () => {
+        let service: MockeableService
+        let dbSaveSpy: jest.SpyInstance
+
+        beforeAll(() => {
+            service = prepareMock(null, {mockLoad: true})
+        })
+
+        afterEach(() => {
+            service.reset()
+        })
+
+        afterAll(() => {
+            dbSaveSpy?.mockRestore()
+        })
+
+        test('returns false when no route has the given URI', async () => {
+            const result = await service.existsBySourceUri('content://com.example/nonexistent')
+            expect(result).toBe(false)
+        })
+
+        test('returns true when a route has a matching sourceTreeUri', async () => {
+
+            const routes = (service as any).routes
+            const last:Route = routes.at(-1)
+
+            last.description.sourceTreeUri = 'content://com.example/tree/primary:MyRoutes'
+
+            const result = await service.existsBySourceUri('content://com.example/tree/primary:MyRoutes')
+            expect(result).toBe(true)
+        })
+
+    })
+
 
 })

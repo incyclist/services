@@ -54,9 +54,11 @@ jobs:
       # -- Determine run mode ------------------------------------------------
       - name: Parse trigger
         id: trigger
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
           if [ "${{ github.event_name }}" == "issue_comment" ]; then
-            COMMENT="${{ github.event.comment.body }}"
+            COMMENT="$COMMENT_BODY"
 
             if echo "$COMMENT" | grep -q "^/retry"; then
               echo "mode=retry" >> $GITHUB_OUTPUT
@@ -170,13 +172,15 @@ jobs:
 
       # -- Build prompt file -------------------------------------------------
       - name: Build prompt
+        env:
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           MODE="${{ steps.trigger.outputs.mode }}"
           SESSION_FOUND="${{ steps.session.outputs.found }}"
           ISSUE_NUMBER="${{ steps.issue.outputs.number }}"
           COMPLETED="${{ steps.session.outputs.completed }}"
           INSTRUCTION="${{ steps.trigger.outputs.instruction }}"
-          ISSUE_TITLE="${{ github.event.issue.title }}"
 
           mkdir -p /tmp/claude-state
 
