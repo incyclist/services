@@ -19,12 +19,24 @@ jobs:
     #   issues labeled 'claude'              -> fresh run
     #   issue comment starting /retry        -> fresh run, optional model override
     #   issue comment starting /correction   -> resume previous session
+    #
+    # Explicitly excluded:
+    #   comments by bots (prevents Claude's own comments re-triggering the workflow)
+    #   issue_comment events that don't start with /retry or /correction
     if: |
-      (github.event_name == 'issues' && github.event.label.name == 'claude') ||
-      (github.event_name == 'issue_comment' && (
-        startsWith(github.event.comment.body, '/retry') ||
-        startsWith(github.event.comment.body, '/correction')
-      )) ||
+      (
+        github.event_name == 'issues' &&
+        github.event.label.name == 'dev-agent'
+      ) || (
+        github.event_name == 'issue_comment' &&
+        github.actor != 'github-actions[bot]' &&
+        github.actor != 'claude[bot]' &&
+        !endsWith(github.actor, '[bot]') &&
+        (
+          startsWith(github.event.comment.body, '/retry') ||
+          startsWith(github.event.comment.body, '/correction')
+        )
+      ) ||
       github.event_name == 'workflow_dispatch'
 
     runs-on: ubuntu-latest
@@ -74,31 +86,31 @@ jobs:
         run: |
           echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
 
-      # -- Create or checkout branch -----------------------------------------
+      # -- Create or checkout branch (all modes) ----------------------------
+      # We always manage the branch ourselves and pass it to the action via
+      # CLAUDE_BRANCH so the action never creates its own branch.
       - name: Create or checkout branch
         id: branch
         env:
-          PR_TITLE: ${{ github.event.issue.title }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event.issue.title }}
         run: |
-          if [ "${{ steps.trigger.outputs.mode }}" == "fresh" ]; then
+          BRANCH=""
+
+          # For retry/correction: find the existing open PR branch
+          if [ "${{ steps.trigger.outputs.mode }}" != "fresh" ]; then
+            BRANCH=$(gh pr list \
+              --search "closes #${{ steps.issue.outputs.number }} is:open" \
+              --json headRefName --jq '.[0].headRefName' 2>/dev/null || true)
+          fi
+
+          # For fresh runs (or correction with no existing PR): create branch
+          if [ -z "$BRANCH" ]; then
             SLUG=$(echo "$PR_TITLE" | tr '[:upper:]' '[:lower:]' \
               | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40)
             BRANCH="claude/issue-${{ steps.issue.outputs.number }}-${SLUG}"
             git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
           else
-            # retry or correction -- find the existing branch via open PR
-            BRANCH=$(gh pr list \
-              --search "closes #${{ steps.issue.outputs.number }} is:open" \
-              --json headRefName --jq '.[0].headRefName' 2>/dev/null || true)
-
-            if [ -z "$BRANCH" ]; then
-              # Fallback: reconstruct branch name from issue title
-              SLUG=$(echo "$PR_TITLE" | tr '[:upper:]' '[:lower:]' \
-                | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | cut -c1-40)
-              BRANCH="claude/issue-${{ steps.issue.outputs.number }}-${SLUG}"
-            fi
-
             git fetch origin "$BRANCH"
             git checkout "$BRANCH"
           fi
@@ -193,8 +205,9 @@ jobs:
 
           else
 
-            # Write issue body to a temp file via env var to avoid script injection
-            printf '%s\n' "$ISSUE_BODY" > /tmp/issue-body.txt
+            cat > /tmp/issue-body.txt << 'BODY_EOF'
+          ${{ github.event.issue.body }}
+          BODY_EOF
 
             cat > /tmp/prompt.txt << EOF
           Process GitHub issue #${ISSUE_NUMBER}.
@@ -208,16 +221,22 @@ jobs:
           .github/instructions/claude-issue-processing.md exactly.
 
           IMPORTANT:
-          - The branch has already been created for you. Do NOT run git checkout.
+          - The branch has already been created and checked out for you.
+            Do NOT run git checkout or git checkout -b under any circumstances.
+            Verify the current branch with git branch --show-current if needed.
           - Do NOT create a PR. The workflow handles that after you are done.
           EOF
 
           fi
 
       # -- Run Claude --------------------------------------------------------
+      # CLAUDE_BRANCH tells the action to use our pre-created branch instead
+      # of creating its own. This prevents duplicate branches.
       - name: Run Claude
         id: claude
         uses: anthropics/claude-code-action@v1
+        env:
+          CLAUDE_BRANCH: ${{ steps.branch.outputs.name }}
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           show_full_output: true
@@ -251,36 +270,36 @@ jobs:
           MODE="${{ steps.trigger.outputs.mode }}"
           MODEL="${{ steps.model.outputs.str }}"
 
-          cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## Claude Session Summary
-
-          | Field | Value |
-          |-------|-------|
-          | Issue | #${{ steps.issue.outputs.number }} |
-          | Mode | \${MODE} |
-          | Model | \${MODEL} |
-          | Session ID | \`\${SESSION_ID}\` |
-          | Cache key | \`claude-session-issue-${{ steps.issue.outputs.number }}-${{ github.run_id }}\` |
-
-          ## Files completed this run
-          \`\`\`
-          \${COMPLETED}
-          \`\`\`
-
-          ## How to continue
-
-          Start fresh (optionally with a stronger model):
-          \`\`\`
-          /retry
-          /retry model=opus
-          \`\`\`
-
-          Continue from where this run left off:
-          \`\`\`
-          /correction <your instructions here>
-          /correction model=opus <your instructions here>
-          \`\`\`
-          EOF
+          {
+            echo "## Claude Session Summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Issue | #${{ steps.issue.outputs.number }} |"
+            echo "| Mode | ${MODE} |"
+            echo "| Model | ${MODEL} |"
+            echo "| Session ID | \`${SESSION_ID}\` |"
+            echo "| Cache key | \`claude-session-issue-${{ steps.issue.outputs.number }}-${{ github.run_id }}\` |"
+            echo ""
+            echo "## Files completed this run"
+            echo "\`\`\`"
+            echo "${COMPLETED}"
+            echo "\`\`\`"
+            echo ""
+            echo "## How to continue"
+            echo ""
+            echo "Start fresh (optionally with a stronger model):"
+            echo "\`\`\`"
+            echo "/retry"
+            echo "/retry model=opus"
+            echo "\`\`\`"
+            echo ""
+            echo "Continue from where this run left off:"
+            echo "\`\`\`"
+            echo "/correction <your instructions here>"
+            echo "/correction model=opus <your instructions here>"
+            echo "\`\`\`"
+          } >> $GITHUB_STEP_SUMMARY
 
       # -- Push branch -------------------------------------------------------
       - name: Push branch
@@ -296,13 +315,20 @@ jobs:
       - name: Create PR
         if: always()
         env:
-          PR_TITLE: ${{ github.event.issue.title }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_TITLE: ${{ github.event.issue.title }}
+          BRANCH_NAME: ${{ steps.branch.outputs.name }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
         run: |
+          if [ -z "$BRANCH_NAME" ]; then
+            echo "Branch name is empty, skipping PR creation"
+            exit 0
+          fi
           gh pr create \
             --title "$PR_TITLE" \
             --body "## Summary
-          Closes #${{ steps.issue.outputs.number }}" \
+          Closes #${ISSUE_NUMBER}" \
             --base main \
-            --head "${{ steps.branch.outputs.name }}" \
-          2>/dev/null || echo "PR already exists, skipping"
+            --head "$BRANCH_NAME" \
+          2>&1 | grep -v "already exists" || true
+          echo "PR step complete"
