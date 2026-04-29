@@ -345,7 +345,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                     uri: this.getBindings().path.join( uri, f)
                 }
             }
-            else return f as ReadDirResult
+            else return f
         })
 
         for (const file of primaryFiles) {

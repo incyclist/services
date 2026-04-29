@@ -1,14 +1,13 @@
 import { EventLogger } from "gd-eventlog";
 import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistPageService } from "../../base/pages";
-import { FileInfo, FolderInfo, ImportDisplayProps, IObserver, ParsedRoute, RouteImportDisplayProps, ScannedRoute } from "../../types";
+import { FileInfo, FolderInfo, ImportDisplayProps, IObserver, ParsedRoute, ScannedRoute } from "../../types";
 import { useRouteList } from "../list";
 import { SummaryCardDisplayProps } from "../list/cards/types";
 import { SearchFilter, SearchState } from "../list/types";
 import { DownloadRowDisplayProps, IRoutePageService, RouteItemProps, RoutePageDisplayProps  } from "./types";
 import { useUserSettings } from "../../settings";
 import { Observer } from "../../base/types";
-import { v4 } from "uuid";
 import { sleep } from "../../utils/sleep";
 import { useDevicePairing } from "../../devices";
 import { Route } from "../base/model/route";

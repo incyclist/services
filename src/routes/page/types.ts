@@ -1,4 +1,3 @@
-import { FileInfo } from "../../api";
 import { IPageService } from "../../base/pages";
 import { ImportDisplayProps, IObserver, RouteImportStatus } from "../../types";
 import { SummaryCardDisplayProps } from "../list/cards/types";
