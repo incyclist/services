@@ -380,3 +380,5 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
     }
 
 }
+
+export const useRoutesDbLoader = ()=> new RoutesDbLoader()

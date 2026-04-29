@@ -1,6 +1,6 @@
 import { FileInfo } from "../../api";
 import { IPageService } from "../../base/pages";
-import { IObserver, RouteImportStatus } from "../../types";
+import { ImportDisplayProps, IObserver, RouteImportStatus } from "../../types";
 import { SummaryCardDisplayProps } from "../list/cards/types";
 import { DisplayType, SearchFilter, SearchFilterOptions } from "../list/types";
 
@@ -39,13 +39,11 @@ export interface RouteImportDisplayProps {
 }
 
 
-export type RouteImportDialogDisplayProps =  RouteImportDisplayProps|Array<RouteImportDisplayProps>
 
 export interface IRoutePageService extends IPageService, IPageCallBacks {
     getPageDisplayProps():RoutePageDisplayProps
-    startImport(info:FileInfo|Array<FileInfo>): IObserver
     onImportClosed(): void   // called when user explicitly closes dialog
-    getImportDisplayProps(): RouteImportDialogDisplayProps
+    getImportDisplayProps(): ImportDisplayProps
 }
 
 export type DownloadStatus = 'downloading' | 'done' | 'failed' | 'required'

@@ -1,7 +1,7 @@
 import { EventLogger } from "gd-eventlog";
 import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistPageService } from "../../base/pages";
-import { FileInfo, IObserver, RouteImportDialogDisplayProps, RouteImportDisplayProps } from "../../types";
+import { FileInfo, FolderInfo, ImportDisplayProps, IObserver, ParsedRoute, RouteImportDisplayProps, ScannedRoute } from "../../types";
 import { useRouteList } from "../list";
 import { SummaryCardDisplayProps } from "../list/cards/types";
 import { SearchFilter, SearchState } from "../list/types";
@@ -14,6 +14,7 @@ import { useDevicePairing } from "../../devices";
 import { Route } from "../base/model/route";
 import { DownloadObserver } from "../download/types";
 import { useRouteDownload } from "../download/service";
+import { useRouteLibraryScanner } from "../library/service";
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -30,7 +31,6 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     // Import Handlers
     protected showImportDialog: boolean = false
     protected importObserver: Observer|undefined
-    protected importProps: Array<RouteImportDisplayProps>|undefined
 
     // downloads
     protected downloadCache: Map<string, DownloadRowDisplayProps> 
@@ -145,7 +145,6 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
                         showImportDialog:false}
             }
             else {
-                const showImport = false // TODO
                 const synchronizing = false // TODO
                 
                 const routes = this.getRoutesDisplayProps()
@@ -192,12 +191,118 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     onImportClicked():void {
         try {
             this.showImportDialog = true;
+            this.getRouteLibraryScanner().prepare()
             this.updatePageDisplay()
         }
         catch(err:any) {
             this.logError(err,'onImportClicked')
         }
     }
+
+
+    /**
+     * 
+     * Imports a single GPX or video route control file. 
+     * 
+     * Observer events:
+     * 'parsing'
+     * 'success' (routeName: string)
+     * 'error' (reason: string)     * 
+     * 
+     * @param fileInfo file to import
+     * @returns Observer that emits the events listed above
+     */
+
+
+    importSingleRoute(fileInfo: FileInfo): IObserver {
+        try {
+            return this.getRouteLibraryScanner().importSingle(fileInfo)
+        }
+        catch(err) {
+            this.logError(err, 'importSingleRoute')
+        }
+
+    }
+
+    /**
+     * Scans a folder tree for importable routes, streaming results as they are discovered.
+     *
+     * @param folderInfo Folder to scan (uri + displayName).
+     * @returns Observer that emits `'discovered'`, `'scan-progress'`, and `'scan-complete'` events.
+     */
+
+    startLibraryScan(folderInfo: FolderInfo): IObserver {
+        try {
+            return this.getRouteLibraryScanner().scan(folderInfo)
+        }
+        catch(err) {
+            this.logError(err, 'startLibraryScan')
+        }
+    }
+
+    /**
+     * Parses a list of discovered routes sequentially, streaming results as they are parsed.
+     *
+     * @param folderInfo Folder to scan (uri + displayName).
+     * @returns Observer that emits `'parse-result'`, `'parse-complete'` events.
+     */
+
+    startLibraryParse(scannedRoutes: ScannedRoute[]): IObserver {
+        try {
+            
+            return this.getRouteLibraryScanner().parse(scannedRoutes)
+        }
+        catch(err) {
+            this.logError(err, 'startLibraryParse')
+        }
+
+    }
+
+    importSelected(routes: ParsedRoute[]): IObserver {
+        
+        try {
+            return this.getRouteLibraryScanner().ingest(routes)            
+        }
+        catch(err) {
+            this.logError(err, 'startLibraryParse')
+        }
+    }
+
+    cancelLibraryImport(): void {
+        try {
+            return this.getRouteLibraryScanner().cancel()
+        }
+        catch(err) {
+            this.logError(err, 'cancelLibraryImport')
+        }
+
+    }
+
+    getImportDisplayProps(): ImportDisplayProps {
+        return this.getRouteLibraryScanner().getDisplayProps()
+    }
+
+    onImportClosed(): void  {
+        try {
+            if (this.importObserver)
+                this.importObserver.stop()
+
+            this.getRouteLibraryScanner().done()
+
+            this.importObserver = undefined
+            this.showImportDialog = false
+            this.getPageObserver().emit('import-closed')
+            
+            this.serviceState = this.getRouteList().search()
+            this.updatePageDisplay()
+            
+        }
+        catch(err:any) {
+            this.logError(err,'onImportClosed')
+        }
+    }
+
+
 
     onSelect(id:string):void {
         try {
@@ -240,49 +345,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
     }
 
-    startImport(info:FileInfo|Array<FileInfo>): IObserver {
-        try {
-            if (this.importObserver)
-                return this.importObserver;
 
-
-            this.importObserver = new Observer()
-
-            const imports: Array<FileInfo> = Array.isArray(info) ? info : [info]
-            this.importProps  = this.importProps ?? []
-
-            imports.forEach ( (i:FileInfo) => { 
-                this.prepareSingleImport(i)
-            })
-
-
-        }
-        catch(err:any) {
-            this.logError(err,'start')
-        }
-
-        return this.importObserver!
-    }
-
-    onImportClosed(): void  {
-        try {
-            if (this.importObserver)
-                this.importObserver.stop()
-
-            this.serviceState = this.getRouteList().search()
-            this.importObserver = undefined
-            this.importProps = undefined
-            this.showImportDialog = false
-            this.updatePageDisplay()
-        }
-        catch(err:any) {
-            this.logError(err,'onImportClosed')
-        }
-    }
-
-    getImportDisplayProps(): RouteImportDialogDisplayProps {
-        return this.importProps!
-    }
 
     protected getDownloadDisplayProps(): DownloadRowDisplayProps[] {        
         return Array.from(this.downloadCache.values())
@@ -446,46 +509,6 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.updatePageDisplay()
     }
 
-    protected prepareSingleImport(file:FileInfo) {
-        const observer = new Observer();
-        const props:RouteImportDisplayProps = {
-            id: v4(),
-            status: 'idle',
-            fileName: file.name
-        }
-        
-        this.importProps=this.importProps??[]
-        this.importProps.push(props)
-     
-
-        observer.once( 'success', ()=> { 
-            props.status = 'success'
-            this.updateImportDialogDisplay()
-            observer.stop()
-        })
-        observer.once( 'error', (id:string, error:string)=> { 
-            props.status = 'error'
-            props.error = error;
-            this.updateImportDialogDisplay()
-            observer.stop()
-        } )
-
-
-        sleep(5).then( ()=> {
-            this.getRouteList().import(file,{importId:props.id,observer})
-            props.status = 'parsing'
-            this.updateImportDialogDisplay()
-
-        })
-    }
-
-
-
-    protected updateImportDialogDisplay() {
-        this.importObserver?.emit('update')
-    }
-
-
     @Injectable
     protected getRouteList() {
         return useRouteList()
@@ -504,6 +527,11 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     @Injectable
     protected getRouteDownload() {
         return useRouteDownload()
+    }
+
+    @Injectable
+    protected getRouteLibraryScanner() {
+        return useRouteLibraryScanner()
     }
 
 }

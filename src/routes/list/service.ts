@@ -32,7 +32,6 @@ import { useAppState } from "../../appstate";
 import { useUnitConverter } from "../../i18n";
 import clone from "../../utils/clone";
 import { IObserver } from "../../types";
-import { RouteRecord } from "../library/types";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -67,6 +66,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected syncInfo:  {iv?: NodeJS.Timeout, observer?: Observer} 
     protected currentView: 'list'|'grid'|'routes'
     protected stats
+    protected isListUpdatePaused: boolean = false
 
     constructor () {
         super('RouteList')
@@ -907,7 +907,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
+    pauseListUpdates() {
+        this.isListUpdatePaused = true
+    }
+    resumeListUpdates() {
+        this.isListUpdatePaused = false        
+    }
+
     emitLists( event:'loaded'|'updated',props?:{log?:boolean, source?:'user'|'system'}) {
+
+        if (this.isListUpdatePaused)
+            return
 
         try {
 
@@ -1021,8 +1031,27 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-
-
+    /**
+     * Returns `true` if any route in the current route list has a `sourceTreeUri` or
+     * `videoUrl` matching the given URI.
+     *
+     * Used by `RouteLibraryScannerService` to populate the `alreadyImported` flag on
+     * a discovered route before the ingest phase begins.
+     *
+     * @param uri URI to check against each route's `sourceTreeUri` and `videoUrl` fields.
+     */
+    existsBySourceUri(uri: string): boolean {
+        try {
+            return this.routes.some(r =>
+                r.description?.sourceTreeUri === uri ||
+                r.description?.videoUrl === uri
+            )
+        }
+        catch(err) {
+            this.logError(err,'existsBySourceUri',{uri})
+            return false;
+        }
+    }    
 
     /**
      * Returns `true` if any route in the current route list has a `sourceTreeUri` or
@@ -1033,20 +1062,18 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      *
      * @param uri URI to check against each route's `sourceTreeUri` and `videoUrl` fields.
      */
-    async existsBySourceUri(uri: string): Promise<boolean> {
-        return this.routes.some(r =>
-            r.description?.sourceTreeUri === uri ||
-            r.description?.videoUrl === uri
-        )
-    }
+    getBySourceUri(uri: string): Route {
+        try {
+            return this.routes.find(r =>
+                r.description?.sourceTreeUri === uri ||
+                r.description?.videoUrl === uri
+            )
+        }
+        catch(err) {
+            this.logError(err,'getBySourceUri',{uri})
+        }
+    }    
 
-    /**
-     * Persists a route record imported from a local library scan and emits a list-updated
-     * event so the UI refreshes automatically.
-     *
-     * @param record Route record produced by the library ingest phase.
-     */
-    addRoute(record: RouteRecord): Promise<void>
 
     /**
      * Adds an in-memory `Route` object to the route lists and emits a list-updated event.
@@ -1054,14 +1081,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * @param route Route to add.
      * @param source Whether the addition originated from a user action or the system.
      */
-    addRoute(route: Route, source?: 'user'|'system'): void
 
-    addRoute(routeOrRecord: Route | RouteRecord, source: 'user'|'system' = 'system'): void | Promise<void> {
-        if (!(routeOrRecord instanceof Route)) {
-            return this.addLibraryRouteRecord(routeOrRecord)
-        }
+    public addRoute(route:Route,source:'user'|'system'='system'):void {
 
-        const route = routeOrRecord
         this.routes.push(route)
         if (route.description?.isDeleted) {
             return
@@ -1086,25 +1108,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         card.verify()
         list.add( card)
         if ( list.getId()==='myRoutes')
-            card.enableDelete(true)
+            card.enableDelete(true)    
+        
+        this.emitLists('updated',{source})                
 
-        this.emitLists('updated',{source})
-    }
-
-    private async addLibraryRouteRecord(record: RouteRecord): Promise<void> {
-        const info: RouteInfo = {
-            id: record.id,
-            title: record.name,
-            videoUrl: record.videoUri,
-            sourceTreeUri: record.sourceTreeUri,
-            previewUrl: record.thumbnailPath,
-            hasVideo: !!record.videoUri,
-            isLocal: true,
-            tsImported: Date.now()
-        }
-        const route = new Route(info)
-        await this.db.save(route)
-        this.addRoute(route, 'system')
     }
 
     protected async verifyPoints(card:RouteCard, route:Route):Promise<void> {

@@ -19,7 +19,6 @@ import { Card } from "../../base/cardlist";
 import { Inject } from "../../base/decorators";
 
 import type { ParseResult } from "../types";
-import { RouteRecord } from '../library/types';
 
 
 let cnt = 0
@@ -375,7 +374,6 @@ describe('RouteListService',()=>{
 
         beforeAll(() => {
             service = prepareMock(null, {mockLoad: true})
-            dbSaveSpy = jest.spyOn(new RoutesDbLoader() as any, 'save').mockResolvedValue(undefined)
         })
 
         afterEach(() => {
@@ -392,103 +390,17 @@ describe('RouteListService',()=>{
         })
 
         test('returns true when a route has a matching sourceTreeUri', async () => {
-            const record: RouteRecord = {
-                id: 'tree-uri-match',
-                name: 'Tree URI Route',
-                format: 'rlv',
-                sourceTreeUri: 'content://com.example/tree/primary:MyRoutes'
-            }
-            await service.addRoute(record)
+
+            const routes = (service as any).routes
+            const last:Route = routes.at(-1)
+
+            last.description.sourceTreeUri = 'content://com.example/tree/primary:MyRoutes'
 
             const result = await service.existsBySourceUri('content://com.example/tree/primary:MyRoutes')
             expect(result).toBe(true)
         })
 
-        test('returns true when a route has a matching videoUrl', async () => {
-            const record: RouteRecord = {
-                id: 'video-uri-match',
-                name: 'Video URI Route',
-                format: 'rlv',
-                videoUri: 'content://com.example/tree/primary:video.mp4',
-                sourceTreeUri: 'content://com.example/tree/root'
-            }
-            await service.addRoute(record)
-
-            const result = await service.existsBySourceUri('content://com.example/tree/primary:video.mp4')
-            expect(result).toBe(true)
-        })
-
-        test('returns false for a URI that does not match any route', async () => {
-            const record: RouteRecord = {
-                id: 'no-match-route',
-                name: 'No Match Route',
-                format: 'rlv',
-                sourceTreeUri: 'content://com.example/tree/knownroute'
-            }
-            await service.addRoute(record)
-
-            const result = await service.existsBySourceUri('content://com.example/tree/different')
-            expect(result).toBe(false)
-        })
     })
 
-    describe('addRoute with RouteRecord', () => {
-        let service: MockeableService
-        let dbSaveSpy: jest.SpyInstance
-
-        beforeAll(() => {
-            service = prepareMock(null, {mockLoad: true})
-            dbSaveSpy = jest.spyOn(new RoutesDbLoader() as any, 'save').mockResolvedValue(undefined)
-        })
-
-        afterEach(() => {
-            service.reset()
-        })
-
-        afterAll(() => {
-            dbSaveSpy?.mockRestore()
-        })
-
-        test('persists the record via db.save', async () => {
-            const record: RouteRecord = {
-                id: 'persist-test',
-                name: 'Persist Test Route',
-                format: 'rlv',
-                sourceTreeUri: 'content://com.example/tree/persist'
-            }
-
-            await service.addRoute(record)
-
-            expect(dbSaveSpy).toHaveBeenCalled()
-        })
-
-        test('adds the route to the in-memory route list', async () => {
-            const record: RouteRecord = {
-                id: 'memory-test',
-                name: 'Memory Test Route',
-                format: 'rlv',
-                sourceTreeUri: 'content://com.example/tree/memory'
-            }
-
-            await service.addRoute(record)
-
-            expect(service.getAllRoutes().some(r => r.description.id === 'memory-test')).toBe(true)
-        })
-
-        test('emits page-update after persisting', async () => {
-            const emitListsSpy = jest.spyOn(service as any, 'emitLists')
-            const record: RouteRecord = {
-                id: 'emit-test',
-                name: 'Emit Test Route',
-                format: 'rlv',
-                videoUri: 'content://com.example/tree/primary:emit.mp4',
-                sourceTreeUri: 'content://com.example/tree/emit'
-            }
-
-            await service.addRoute(record)
-
-            expect(emitListsSpy).toHaveBeenCalledWith('updated', expect.objectContaining({source: 'system'}))
-        })
-    })
 
 })

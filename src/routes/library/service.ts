@@ -11,15 +11,13 @@ import { ParserFactory } from '../base/parsers/factory'
 import { RouteParser, useParsers } from '../base/parsers'
 import { useRouteList } from '../list/service'
 import { waitNextTick } from '../../utils'
-import { DiscoveredRoute, FailedRoute, FolderInfo, ImportedLibrary, RouteRecord } from './types'
+import { FailedRoute, FolderInfo, ImportDisplayProps, ImportedLibrary, ParsedRoute, RouteDisplayItem, ScannedRoute  } from './types'
+import { useRoutesDbLoader } from '../list/loaders/db'
+import { RouteApiDetail } from '../types'
+import { Route } from '../base/model/route'
+import { sleep } from '../../utils/sleep'
+import { useUnitConverter } from '../../i18n'
 
-interface ILibraryRouteList {
-    existsBySourceUri(uri: string): Promise<boolean>
-    addRoute(record: RouteRecord): Promise<void>
-}
-
-const VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'mkv', 'm4v', 'mpg', 'mpeg', 'wmv', 'avi'])
-const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'])
 
 /**
  * Core service for scanning folder trees to discover importable routes and ingesting
@@ -28,8 +26,54 @@ const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'])
 @Singleton
 export class RouteLibraryScannerService extends IncyclistService {
 
+    private isCancelled: boolean = false
+    private scanResult: ScannedRoute[] = []
+    private importProps: ImportDisplayProps|undefined
+
     constructor() {
         super('RouteLibraryScanner')
+    }
+
+    prepare() {
+        this.importProps= {
+            phase:'landing',
+            routes:[]
+        }
+    }
+
+    done() {
+        this.importProps = undefined
+    }
+
+    getDisplayProps():ImportDisplayProps {
+        return this.importProps
+    }
+
+
+
+
+    importSingle(fileInfo: FileInfo):IObserver {
+
+        const observer = new Observer()
+        this.isCancelled = false
+       
+        this.importRoute(fileInfo, observer).catch(err => {
+            this.logError(err, 'importSingle', { file: fileInfo?.filename })
+            observer.emit('error', err.message)
+        })
+
+        observer.on('success',(route:Route)=> {
+            this.importProps.phase = 'result'
+            this.importProps.resultSuccess= { routeName: route.title}
+
+        })
+        observer.on('error',(error:string)=> {
+            this.importProps.phase = 'result'
+            this.importProps.error = error
+
+        })
+
+        return observer
     }
 
     /**
@@ -39,40 +83,229 @@ export class RouteLibraryScannerService extends IncyclistService {
      * @returns Observer that emits `'discovered'`, `'scan-progress'`, and `'scan-complete'` events.
      */
     scan(folderInfo: FolderInfo): IObserver {
+        
+        if (!this.importProps)
+            this.prepare()
+
+        // reset cancel flag
+        this.isCancelled = false
+        this.scanResult = []
+
+        this.importProps.phase = 'scanning'
+
         const observer = new Observer()
         this._scan(folderInfo, observer).catch(err => {
             this.logError(err, 'scan', { uri: folderInfo.uri })
             observer.emit('error', err.message)
         })
+
+        observer.on('scan-progress',(progress:{scannedFolders:number})=>{
+            this.importProps.scanProgress = progress
+        })
+
         return observer
     }
+
+    /**
+     * Parses a list of discovered routes sequentially, streaming results as they are parsed.
+     *
+     * @param folderInfo Folder to scan (uri + displayName).
+     * @returns Observer that emits `'parse-result'`, `'parse-progress'`, `'parse-error'`, and `'parse-complete'` events.
+     */
+    parse(scannedRoutes: ScannedRoute[]): IObserver {
+        const observer = new Observer()
+
+        if (!this.importProps)
+            this.prepare()
+
+        this._parse(scannedRoutes, observer).catch(err => {
+            this.logError(err, 'parse')
+            observer.emit('error', err.message)
+        })
+
+        observer.on('parse-progress',(progress:{ parsed: number, total:number})=>{
+            const {parsed, total} = progress
+            this.importProps.parseProgress = {parsed, total}
+        })
+
+        observer.on('parse-result',(route:ParsedRoute)=>{
+            this.importProps.routes.push( this.buildRouteDisplayItem(route) )
+        })
+
+        observer.on('parse-complete',()=>{
+            this.importProps.phase= 'selecting'
+        })
+
+        return observer
+    }
+
 
     /**
      * Ingests a list of discovered routes into the route library sequentially.
      *
      * @param routes List of discovered routes to ingest.
-     * @param treeUri URI of the root folder tree being imported.
      * @returns Observer that emits `'ingest-progress'`, `'ingest-error'`, and `'ingest-complete'` events.
      */
-    ingest(routes: DiscoveredRoute[], treeUri: string): IObserver {
+    ingest(routes: ParsedRoute[]): IObserver {
         const observer = new Observer()
-        this._ingest(routes, treeUri, observer).catch(err => {
-            this.logError(err, 'ingest', { treeUri })
-            observer.emit('error', err.message)
-        })
+
+        if (!this.importProps)
+            this.prepare()
+
+
+        // don't emit route list update after every individual route import (which would trigger page re-render)
+        const list = this.getRouteList()
+        list.pauseListUpdates()
+
+        this.importProps.phase = 'ingesting'
+        
+        this._ingest(routes,  observer)
+            .catch(err => {
+                this.logError(err, 'ingest')
+                observer.emit('error', err.message)
+            })
+            .finally( ()=> {
+                list.resumeListUpdates()
+                // emit one final route list update 
+                list.emitLists('updated',{source:'system'})
+            })
+
+            observer.on('ingest-progress',( progress:{ current:number, total:number, currentName: string})=> {
+                const {current,total,currentName} = progress
+                this.importProps.ingestProgress = {current,total,currentName}
+            })
+
+            observer.on( 'ingest-complete',(status:{ imported:number, skipped:number, errors:number, failedRoutes:FailedRoute[],importedRoutes:Route[] })=>{
+                this.importProps.phase = 'complete'
+                const {imported,skipped,errors,failedRoutes} = status
+                this.importProps.completionSummary = {imported,skipped,errors,failedRoutes}
+            })
+
         return observer
     }
 
+    
+
+    cancel() {
+        this.isCancelled = true
+        this.importProps.phase = 'landing'
+
+    }
+
+    private async importRoute  (fileInfo: FileInfo, observer:IObserver) {
+        
+        await sleep(0)
+       
+        observer.emit('parsing')
+        this.importProps.phase = 'parsing'
+        
+        if (fileInfo?.ext==='gpx') {
+            return this.importSingleGpxRoute(fileInfo,observer)
+        }
+        else {
+            return this.importSingleVideoRoute(fileInfo,observer)
+        }
+    }
+
+
+    // simple single GPX file import
+    private async importSingleGpxRoute  (fileInfo: FileInfo, observer:IObserver) {
+        const list = this.getRouteList()
+        const db = this.getRoutesDBLoader()
+        
+        try {
+            const {data,details} = await RouteParser.parse(fileInfo)
+            const route = new Route(data,details)
+            route.description.tsImported = Date.now()
+            await db.save(route,true)
+            list.addRoute(route,'user')
+
+
+            observer.emit('success',route)
+        }
+        catch(err:any) {
+            observer.emit('error', err.message)
+        }
+
+    }
+
+
+    private async importSingleVideoRoute  (fileInfo: FileInfo, observer:IObserver) {
+        const parsers = this.getParsers()
+        const {dir,ext,delimiter} = fileInfo
+        const folderUri = dir.endsWith(delimiter??'/') ? dir.slice(0, -delimiter.length) : dir     
+        
+        try {
+
+            if (!parsers.isPrimaryExtension(ext)) {
+                observer.emit('error','not a route control file')
+                return
+            }
+
+            const scanObserver = new Observer()
+            await this.scanFolder( folderUri, folderUri,scanObserver,parsers,{ scannedFolders: 0}, { value: 0 },false )
+            const files = this.scanResult
+
+            this.scanResult = []
+            scanObserver.stop()
+
+            if (files[0].scanError) {
+                observer.emit('error',files[0].scanError)
+                return                    
+            }
+            else {
+                
+                // filter out the selected file                    
+                const file = files.find( file => file.controlFileUri.includes( fileInfo.base))
+                const parseObserver = this.parse([file])
+
+                parseObserver.on('parse-result',(result:ParsedRoute)=>{                    
+
+                    parseObserver.stop()
+                    if (result.parseError) {
+                        observer.emit('error',result.parseError)
+                        return                    
+                    }
+
+                    const ingest = this.ingest([result])
+
+                    let ingestError:string
+                    ingest.once('ingest-error',(_:string,reason:string
+                    )=>{
+                        ingest.stop()
+                        observer.emit('error',reason)
+                        ingestError = reason
+                    })
+                    ingest.once('ingest-complete',(summary:any)=>{
+                        ingest.stop()
+                        if (!ingestError && summary.imported>0)  {
+                            observer.emit('success',summary.importedRoutes?.[0]?.title)
+                        }
+                        else if (!ingestError && summary.imported===0)  { 
+                            observer.emit('error','not imported')
+                        }
+                    })
+
+                })
+            }
+        }
+        catch(err) {
+            observer.emit('error', err.message)
+        }
+    }
+
+
+
     private async _scan(folderInfo: FolderInfo, observer: Observer): Promise<void> {
         await waitNextTick()
-        const parsers = useParsers()
+        const parsers = this.getParsers()
         const progress = { scannedFolders: 0 }
         const discoveredCount = { value: 0 }
 
         await this.scanFolder(folderInfo.uri, folderInfo.displayName, observer, parsers, progress, discoveredCount)
         await this.upsertImportHistory(folderInfo, discoveredCount.value)
 
-        observer.emit('scan-complete')
+        observer.emit('scan-complete',this.scanResult)
     }
 
     private async scanFolder(
@@ -81,13 +314,14 @@ export class RouteLibraryScannerService extends IncyclistService {
         observer: Observer,
         parsers: ParserFactory,
         progress: { scannedFolders: number },
-        discoveredCount: { value: number }
+        discoveredCount: { value: number },
+        recursive:boolean = true
     ): Promise<void> {
         const fs = this.getBindings().fs
 
         let entries: ReadDirResult[]
         try {
-            entries = await fs.readdir(uri, { extended: true })
+            entries = await fs.readdir(uri, { recursive:false,extended: true })
         } catch (err) {
             this.logError(err, 'scanFolder', { uri })
             return
@@ -99,20 +333,36 @@ export class RouteLibraryScannerService extends IncyclistService {
         const files = entries.filter(e => !e.isDirectory)
         const dirs = entries.filter(e => e.isDirectory)
 
-        const primaryFiles = files.filter(f => {
-            const ext = this.getExtension(f.name)
+        const primaryFiles = files.filter( (f:string|ReadDirResult) => {
+            const name = typeof(f)==='string' ? f : f.name
+            const ext = this.getExtension(name)
             return ext && parsers.isPrimaryExtension(ext)
+        }).map( (f:string|ReadDirResult) => {
+            if (typeof f==='string') {
+                return {
+                    name:f,
+                    isDirectory:false,
+                    uri: this.getBindings().path.join( uri, f)
+                }
+            }
+            else return f as ReadDirResult
         })
 
         for (const file of primaryFiles) {
-            const route = await this.buildDiscoveredRoute(file, files, uri, folderName, parsers)
-            discoveredCount.value++
-            observer.emit('discovered', route)
+            if (!this.isCancelled) {
+                const routeAnnouncement = await this.buildDiscoveredRoute(file, files, uri, folderName, parsers)
+                discoveredCount.value++
+                observer.emit('scan-result', routeAnnouncement)
+                this.scanResult.push(routeAnnouncement)
+            }
         }
 
         for (const dir of dirs) {
-            await this.scanFolder(dir.uri, dir.name, observer, parsers, progress, discoveredCount)
+            if (!this.isCancelled && recursive) {
+                await this.scanFolder(dir.uri, dir.name, observer, parsers, progress, discoveredCount)
+            }
         }
+
     }
 
     private async buildDiscoveredRoute(
@@ -121,11 +371,10 @@ export class RouteLibraryScannerService extends IncyclistService {
         folderUri: string,
         folderName: string,
         parsers: ParserFactory
-    ): Promise<DiscoveredRoute> {
+    ): Promise<ScannedRoute> {
         const ext = this.getExtension(controlFile.name)
         const baseName = controlFile.name.slice(0, controlFile.name.length - ext.length - 1)
 
-        let importable = true
         let skipReason: string | undefined
 
         // Check companion files are present
@@ -137,142 +386,148 @@ export class RouteLibraryScannerService extends IncyclistService {
                     f.name.toLowerCase().startsWith(baseName.toLowerCase())
             )
             if (!hasCompanion) {
-                importable = false
                 skipReason = `Missing companion file (.${compExt})`
                 break
             }
         }
 
-        // Check video file is present and not AVI
-        let hasVideo = false
-        const hasThumbnail = folderFiles.some(f => IMAGE_EXTENSIONS.has(this.getExtension(f.name).toLowerCase()))
-
-        if (importable) {
-            const videoFiles = folderFiles.filter(f =>
-                VIDEO_EXTENSIONS.has(this.getExtension(f.name).toLowerCase())
-            )
-            const nonAviVideo = videoFiles.find(f => this.getExtension(f.name).toLowerCase() !== 'avi')
-
-            if (videoFiles.length === 0) {
-                importable = false
-                skipReason = 'No video file found in folder'
-            } else if (nonAviVideo) {
-                hasVideo = true
-            } else {
-                importable = false
-                skipReason = 'Only AVI video format found; AVI is not supported'
-            }
-        }
-
-        // Quick-read control file header to detect absolute video path references
-        if (importable) {
-            try {
-                const fs = this.getBindings().fs
-                const content = await fs.readFile(controlFile.uri)
-                const text = typeof content === 'string' ? content : content?.toString?.('utf8') ?? ''
-                if (this.containsAbsolutePath(text.slice(0, 4096))) {
-                    importable = false
-                    skipReason = 'Route references an absolute video path'
-                }
-            } catch {
-                // If the file cannot be read, do not block the import
-            }
-        }
-
-        // Determine if already imported
-        const alreadyImported = await this.getRouteList()
-            .existsBySourceUri(controlFile.uri)
-            .catch(() => false)
 
         return {
-            id: uuidv4(),
             folderUri,
             folderName,
             controlFileUri: controlFile.uri,
             format: ext,
-            hasVideo,
-            hasThumbnail,
-            alreadyImported,
-            importable,
-            skipReason
+            scanError: skipReason
         }
     }
 
-    private async _ingest(routes: DiscoveredRoute[], treeUri: string, observer: Observer): Promise<void> {
-        await waitNextTick()
-        const importable = routes.filter(r => r.importable && !r.alreadyImported)
-        const total = importable.length
-        let imported = 0
-        let errors = 0
-        const failedRoutes: FailedRoute[] = []
 
-        for (let i = 0; i < importable.length; i++) {
-            const route = importable[i]
+    private async _parse(scannedRoutes: ScannedRoute[], observer: IObserver):Promise<void> {
+        const service = this.getRouteList()
 
-            observer.emit('ingest-progress', { current: i + 1, total, currentName: route.folderName })
+        
+        const targets = scannedRoutes.filter( r=>!r.scanError  )
+        const total = targets.length
 
-            try {
-                await this.ingestRoute(route, treeUri)
-                imported++
-            } catch (err: any) {
-                const reason = err?.message ?? String(err)
-                errors++
-                failedRoutes.push({ name: route.folderName, reason })
-                observer.emit('ingest-error', { name: route.folderName, reason })
+        for (let i = 0; i < targets.length; i++) {
+
+            const target = targets[i] 
+            if (this.isCancelled)
+                continue;
+
+            const parsed = i+1;
+            observer.emit('parse-progress', { current: parsed, parsed, total, currentFolder: target.folderName})
+
+            let result
+
+            if (service.existsBySourceUri(target.controlFileUri)) {
+                const info:ParsedRoute = {
+                    alreadyImported:true,
+                    route: service.getBySourceUri(target.controlFileUri),
+                    folderUri:target.folderUri,
+                    controlFileUri: target.controlFileUri,
+                    format:target.format
+                }
+                observer.emit( 'parse-result',info)
+            }
+            else {
+                const file = this.buildFileInfo(target.controlFileUri, target.format)
+                try {
+
+                    try {
+                        result = await RouteParser.parse(file )
+                    }
+                    catch(err) {
+                        throw new Error(`Could not parse: [${err.message}]`)
+                    }
+
+                    if (result.data.hasVideo) {
+                        this.validateVideoUrl(result.details, target.folderUri)
+                    }
+
+                    const info:ParsedRoute = {
+                        alreadyImported:false,
+                        route: new Route( result.data, result.details),
+                        folderUri:target.folderUri,
+                        controlFileUri: target.controlFileUri,
+                        format:target.format
+
+                    }
+                    observer.emit( 'parse-result',info)
+                }
+                catch(err) {
+                    const reason = err?.message ?? String(err)
+
+                    const info:ParsedRoute = {
+                        alreadyImported:false,
+                        route: result ?  new Route( result.data, result.details) : undefined,
+                        folderUri:target.folderUri,
+                        controlFileUri: target.controlFileUri,
+                        format:target.format,
+                        parseError: reason
+                    }
+                    observer.emit('parse-result', info)
+                }
+
+            }
+
+        }
+        
+        observer.emit('parse-complete')
+
+    }
+
+    private validateVideoUrl(routeDetail:RouteApiDetail,folderUri:string) {
+        if (this.isMobile()) {
+            if (routeDetail.video.format==='avi') {
+                throw new Error('AVI video not supported')
             }
         }
-
-        const skipped = routes.length - importable.length
-        observer.emit('ingest-complete', { imported, skipped, errors, failedRoutes })
-    }
-
-    private async ingestRoute(route: DiscoveredRoute, treeUri: string): Promise<void> {
-        const { format, controlFileUri, folderUri } = route
-
-        const fileInfo = this.buildFileInfo(controlFileUri, format)
-        const { data } = await RouteParser.parse(fileInfo)
-
-        let thumbnailPath: string | undefined
-        if (route.hasThumbnail) {
-            thumbnailPath = await this.copyThumbnail(route, folderUri).catch(() => undefined)
+        if (routeDetail.video.file) {
+            routeDetail.video.file = this.resolveVideoUri(routeDetail.video.file,folderUri)
         }
+    }
 
-        const videoUri = data.videoUrl ? this.resolveVideoUri(data.videoUrl, folderUri) : undefined
+    private async _ingest(routes:ParsedRoute[], observer: Observer): Promise<void> {
 
-        const record: RouteRecord = {
-            id: data.id ?? uuidv4(),
-            name: data.title ?? route.folderName,
-            format,
-            thumbnailPath,
-            videoUri,
-            sourceTreeUri: treeUri
+        await waitNextTick()
+
+        const service = this.getRouteList()
+        const db = this.getRoutesDBLoader()
+
+        const target = routes.filter( r=>!r.alreadyImported && !r.parseError)
+
+        const total = target.length
+        let errors = 0
+        const failedRoutes: FailedRoute[] = []
+        const importedRoutes: Route[] = []
+
+        for (let i = 0; i < target.length; i++) {
+            if (this.isCancelled)
+                continue
+
+            const {route} = target[i]??{};
+
+            try {
+
+                observer.emit('ingest-progress', { current: i + 1, total, currentName: route.title})
+                await db.save(route,true)
+                service.addRoute(route,'user')
+                importedRoutes.push(route)                
+            }
+            catch(err:any) {
+                const reason = err?.message ?? String(err)
+                errors++
+                failedRoutes.push({ name: route.title, reason })
+                observer.emit('ingest-error', { name: route.title, reason })
+
+            }
         }
-
-        await this.getRouteList().addRoute(record)
+        const skipped = routes.length - target.length
+        observer.emit('ingest-complete', { imported:importedRoutes.length, skipped, errors, failedRoutes,importedRoutes })
     }
 
-    private async copyThumbnail(route: DiscoveredRoute, folderUri: string): Promise<string | undefined> {
-        const { fs, appInfo } = this.getBindings()
 
-        if (!fs || !appInfo)
-            return undefined
-
-        const entries = await fs.readdir(folderUri, { extended: true })
-        const thumbnailFile = entries.find(
-            e => !e.isDirectory && IMAGE_EXTENSIONS.has(this.getExtension(e.name).toLowerCase())
-        )
-        if (!thumbnailFile)
-            return undefined
-
-        const destDir = `${appInfo.getAppDir()}/thumbnails`
-        await fs.ensureDir(destDir)
-
-        const srcContent = await fs.readFile(thumbnailFile.uri)
-        const destPath = `${destDir}/${route.id}.${this.getExtension(thumbnailFile.name)}`
-        await fs.writeFile(destPath, srcContent)
-
-        return destPath
-    }
 
     private resolveVideoUri(videoRef: string, folderUri: string): string {
         if (videoRef.startsWith('http://') || videoRef.startsWith('https://')) {
@@ -284,7 +539,9 @@ export class RouteLibraryScannerService extends IncyclistService {
         }
 
         if (videoRef.startsWith('/') || /^[A-Za-z]:[/\\]/.test(videoRef)) {
-            throw new Error('Absolute video path references are not supported during ingest')
+            if (this.isMobile()) 
+                throw new Error('Absolute video path references are not supported during ingest')
+            return videoRef
         }
 
         // Relative reference - resolve against folder content URI
@@ -331,6 +588,28 @@ export class RouteLibraryScannerService extends IncyclistService {
         }
     }
 
+    private buildRouteDisplayItem(parsed:ParsedRoute):RouteDisplayItem {
+        const {route,alreadyImported,parseError,format} = parsed
+        const descr = route?.description??{}
+
+        const [C,U] = this.getUnitConversionShortcuts()
+        const distance = descr.distance===undefined ? undefined : {
+                value: C( descr.distance,'distance',{digits:1}),
+                unit: U('distance')
+            }
+
+        return {
+            id:route.description.id,
+            distance,
+            label: route.title,
+            alreadyImported,
+            importable: parseError!=null,
+            format,
+            errorReason:parseError
+        }
+
+    }
+
     private getCompanionExts(parsers: ParserFactory, primaryExt: string): string[] {
         try {
             const matching = parsers.suppertsExtension(primaryExt)
@@ -354,15 +633,39 @@ export class RouteLibraryScannerService extends IncyclistService {
         return false
     }
 
+    private isMobile():boolean {
+        return this.getBindings()?.appInfo?.getChannel()==='mobile'
+    }
+
     @Injectable
-    protected getRouteList(): ILibraryRouteList {
-        return useRouteList() as unknown as ILibraryRouteList
+    protected getRouteList() {
+        return useRouteList()
     }
 
     @Injectable
     protected getBindings() {
         return getBindings()
     }
+
+    @Injectable 
+    protected getRoutesDBLoader() {
+        return useRoutesDbLoader() 
+    }
+
+    @Injectable
+    protected getParsers() {
+        return useParsers()
+    }
+
+    protected getUnitConversionShortcuts() {
+        return this.getUnitConverter().getUnitConversionShortcuts()
+    }
+
+    @Injectable
+    protected getUnitConverter() {
+        return useUnitConverter()
+    }
+
 }
 
 /** Returns the singleton RouteLibraryScannerService instance. */
