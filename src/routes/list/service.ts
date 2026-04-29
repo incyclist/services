@@ -66,6 +66,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected syncInfo:  {iv?: NodeJS.Timeout, observer?: Observer} 
     protected currentView: 'list'|'grid'|'routes'
     protected stats
+    protected isListUpdatePaused: boolean = false
 
     constructor () {
         super('RouteList')
@@ -906,7 +907,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
+    pauseListUpdates() {
+        this.isListUpdatePaused = true
+    }
+    resumeListUpdates() {
+        this.isListUpdatePaused = false        
+    }
+
     emitLists( event:'loaded'|'updated',props?:{log?:boolean, source?:'user'|'system'}) {
+
+        if (this.isListUpdatePaused)
+            return
 
         try {
 
@@ -1020,14 +1031,62 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
+    /**
+     * Returns `true` if any route in the current route list has a `sourceTreeUri` or
+     * `videoUrl` matching the given URI.
+     *
+     * Used by `RouteLibraryScannerService` to populate the `alreadyImported` flag on
+     * a discovered route before the ingest phase begins.
+     *
+     * @param uri URI to check against each route's `sourceTreeUri` and `videoUrl` fields.
+     */
+    existsBySourceUri(uri: string): boolean {
+        try {
+            return this.routes.some(r =>
+                r.description?.sourceTreeUri === uri ||
+                r.description?.videoUrl === uri
+            )
+        }
+        catch(err) {
+            this.logError(err,'existsBySourceUri',{uri})
+            return false;
+        }
+    }    
+
+    /**
+     * Returns `true` if any route in the current route list has a `sourceTreeUri` or
+     * `videoUrl` matching the given URI.
+     *
+     * Used by `RouteLibraryScannerService` to populate the `alreadyImported` flag on
+     * a discovered route before the ingest phase begins.
+     *
+     * @param uri URI to check against each route's `sourceTreeUri` and `videoUrl` fields.
+     */
+    getBySourceUri(uri: string): Route {
+        try {
+            return this.routes.find(r =>
+                r.description?.sourceTreeUri === uri ||
+                r.description?.videoUrl === uri
+            )
+        }
+        catch(err) {
+            this.logError(err,'getBySourceUri',{uri})
+        }
+    }    
 
 
+    /**
+     * Adds an in-memory `Route` object to the route lists and emits a list-updated event.
+     *
+     * @param route Route to add.
+     * @param source Whether the addition originated from a user action or the system.
+     */
 
-    protected addRoute(route:Route,source:'user'|'system'='system'):void {
+    public addRoute(route:Route,source:'user'|'system'='system'):void {
 
         this.routes.push(route)
         if (route.description?.isDeleted) {
-            return;
+            return
         }
 
         if (!route.description?.isDeleted) {
@@ -1042,7 +1101,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                     })
             }
         }
-        
 
         const list = this.selectList(route)
 
