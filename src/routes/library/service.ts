@@ -404,77 +404,66 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     private async _parse(scannedRoutes: ScannedRoute[], observer: IObserver):Promise<void> {
         const service = this.getRouteList()
-
-        
-        const targets = scannedRoutes.filter( r=>!r.scanError  )
+        const targets = scannedRoutes.filter( r=>!r.scanError )
         const total = targets.length
 
         for (let i = 0; i < targets.length; i++) {
-
-            const target = targets[i] 
             if (this.isCancelled)
                 continue;
 
             const parsed = i+1;
+            const target = targets[i]
             observer.emit('parse-progress', { current: parsed, parsed, total, currentFolder: target.folderName})
-
-            let result
-
-            if (service.existsBySourceUri(target.controlFileUri)) {
-                const info:ParsedRoute = {
-                    alreadyImported:true,
-                    route: service.getBySourceUri(target.controlFileUri),
-                    folderUri:target.folderUri,
-                    controlFileUri: target.controlFileUri,
-                    format:target.format
-                }
-                observer.emit( 'parse-result',info)
-            }
-            else {
-                const file = this.buildFileInfo(target.controlFileUri, target.format)
-                try {
-
-                    try {
-                        result = await RouteParser.parse(file )
-                    }
-                    catch(err) {
-                        throw new Error(`Could not parse: [${err.message}]`)
-                    }
-
-                    if (result.data.hasVideo) {
-                        this.validateVideoUrl(result.details, target.folderUri)
-                    }
-
-                    const info:ParsedRoute = {
-                        alreadyImported:false,
-                        route: new Route( result.data, result.details),
-                        folderUri:target.folderUri,
-                        controlFileUri: target.controlFileUri,
-                        format:target.format
-
-                    }
-                    observer.emit( 'parse-result',info)
-                }
-                catch(err) {
-                    const reason = err?.message ?? String(err)
-
-                    const info:ParsedRoute = {
-                        alreadyImported:false,
-                        route: result ?  new Route( result.data, result.details) : undefined,
-                        folderUri:target.folderUri,
-                        controlFileUri: target.controlFileUri,
-                        format:target.format,
-                        parseError: reason
-                    }
-                    observer.emit('parse-result', info)
-                }
-
-            }
-
+            await this._parseTarget(target, service, observer)
         }
-        
-        observer.emit('parse-complete')
 
+        observer.emit('parse-complete')
+    }
+
+    private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver):Promise<void> {
+        if (service.existsBySourceUri(target.controlFileUri)) {
+            observer.emit('parse-result', {
+                alreadyImported: true,
+                route: service.getBySourceUri(target.controlFileUri),
+                folderUri: target.folderUri,
+                controlFileUri: target.controlFileUri,
+                format: target.format
+            } as ParsedRoute)
+            return
+        }
+
+        let result: Awaited<ReturnType<typeof RouteParser.parse>> | undefined
+        const file = this.buildFileInfo(target.controlFileUri, target.format)
+        try {
+            try {
+                result = await RouteParser.parse(file)
+            }
+            catch(err) {
+                throw new Error(`Could not parse: [${err.message}]`)
+            }
+
+            if (result.data.hasVideo) {
+                this.validateVideoUrl(result.details, target.folderUri)
+            }
+
+            observer.emit('parse-result', {
+                alreadyImported: false,
+                route: new Route(result.data, result.details),
+                folderUri: target.folderUri,
+                controlFileUri: target.controlFileUri,
+                format: target.format
+            } as ParsedRoute)
+        }
+        catch(err) {
+            observer.emit('parse-result', {
+                alreadyImported: false,
+                route: result ? new Route(result.data, result.details) : undefined,
+                folderUri: target.folderUri,
+                controlFileUri: target.controlFileUri,
+                format: target.format,
+                parseError: err?.message ?? String(err)
+            } as ParsedRoute)
+        }
     }
 
     private validateVideoUrl(routeDetail:RouteApiDetail,folderUri:string) {
