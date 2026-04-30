@@ -1,3 +1,4 @@
+import { ReadDirResult } from "../../api"
 import { FormattedNumber } from "../../i18n"
 import { Route } from "../base/model/route"
 
@@ -15,6 +16,7 @@ export interface ScannedRoute {
     folderName: string       // display name of the folder
     format: RouteFormat      // 'xml' | 'epm' | 'rlv' | 'gpx'
     scanError?: string       // set if companion file missing
+    files: ReadDirResult[]
 }
 
 export type RouteFormat = string

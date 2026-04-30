@@ -395,6 +395,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         return {
             folderUri,
             folderName,
+            files:folderFiles,
             controlFileUri: controlFile.uri,
             format: ext,
             scanError: skipReason
@@ -443,7 +444,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             }
 
             if (result.data.hasVideo) {
-                this.validateVideoUrl(result.details, target.folderUri)
+                this.validateVideoUrl(result.details, target.folderUri, target.files)
             }
 
             observer.emit('parse-result', {
@@ -466,14 +467,14 @@ export class RouteLibraryScannerService extends IncyclistService {
         }
     }
 
-    private validateVideoUrl(routeDetail:RouteApiDetail,folderUri:string) {
+    private validateVideoUrl(routeDetail:RouteApiDetail,folderUri:string, folderFiles:ReadDirResult[]) {
         if (this.isMobile()) {
             if (routeDetail.video.format==='avi') {
                 throw new Error('AVI video not supported')
             }
         }
         if (routeDetail.video.file) {
-            routeDetail.video.file = this.resolveVideoUri(routeDetail.video.file,folderUri)
+            routeDetail.video.file = this.resolveVideoUri(routeDetail.video.file,folderUri,folderFiles)
         }
     }
 
@@ -518,24 +519,26 @@ export class RouteLibraryScannerService extends IncyclistService {
 
 
 
-    private resolveVideoUri(videoRef: string, folderUri: string): string {
+    private resolveVideoUri(videoRef: string, folderUri: string, folderFiles: ReadDirResult[]): string {
         if (videoRef.startsWith('http://') || videoRef.startsWith('https://')) {
             return videoRef
         }
-
         if (videoRef.startsWith('content://')) {
             return videoRef
         }
-
         if (videoRef.startsWith('/') || /^[A-Za-z]:[/\\]/.test(videoRef)) {
-            if (this.isMobile()) 
-                throw new Error('Absolute video path references are not supported during ingest')
+            if (this.isMobile())
+                throw new Error('Absolute video path references are not supported')
             return videoRef
         }
+        // Relative reference — look up the file URI from the folder listing
+        const match = folderFiles.find(f => f.name.toLowerCase() === videoRef.toLowerCase())
+        if (!match)
+            throw new Error(`Video file not found in folder: ${videoRef}`)
+        return match.uri
+    }    
 
-        // Relative reference - resolve against folder content URI
-        return `${folderUri}/${videoRef}`
-    }
+
 
     private async upsertImportHistory(folderInfo: FolderInfo, routeCount: number): Promise<void> {
         try {
@@ -592,7 +595,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             distance,
             label: route.title,
             alreadyImported,
-            importable: parseError!=null,
+            importable: parseError==null,
             format,
             errorReason:parseError
         }
@@ -612,14 +615,6 @@ export class RouteLibraryScannerService extends IncyclistService {
     private getExtension(filename: string): string {
         const dot = filename.lastIndexOf('.')
         return dot >= 0 ? filename.slice(dot + 1).toLowerCase() : ''
-    }
-
-    private containsAbsolutePath(content: string): boolean {
-        // Unix absolute paths embedded in XML attributes or element content
-        if (/[>"']\//m.test(content)) return true
-        // Windows absolute paths (e.g. C:\ or C:/)
-        if (/[A-Za-z]:[/\\]/m.test(content)) return true
-        return false
     }
 
     private isMobile():boolean {
