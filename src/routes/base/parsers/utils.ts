@@ -94,7 +94,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
 
     // Do we check against a local file ? 
     if (info.type!=='url') {
-        return buildFromFile(info,referenced, scheme)
+        return buildFromFile(info,referenced)
     }
 
 
@@ -107,6 +107,10 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
         // Target is neither defined as file or URL 
         // -> no need to build a target path
         return
+    }
+
+    if (referenced.file && info.filename?.startsWith('content://')) {
+        return `${info.dir}${info.delimiter}${referenced.file}`
     }
     
     const targetFileName = referenced.file;
@@ -127,9 +131,9 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
     }
 }
 
-const buildFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}, scheme:string='file') => { 
+const buildFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}) => { 
     if (referenced.file) {
-        const fileName = info.filename?.replace(info.name,referenced.file)
+        const fileName = info.filename?.replace(info.base,referenced.file)
         return `file:///${fileName}`;
     }
     return referenced.url;
@@ -140,9 +144,8 @@ const buildAbsolutePathTarget = (fileName: string, info: FileInfo, scheme: strin
     const inputUrl = info.url;
 
     if (  inputUrl.startsWith('incyclist:') || inputUrl.startsWith('file:')) {
-        const target:{ file?:string, url?:string} = {}
         const parts = inputUrl.split('://');
-        const targetPath = parts[1].replace(info.name,fileName)
+        const targetPath = parts[1].replace(info.base,fileName)
         return  `${scheme}://${targetPath}`
     }
 

@@ -188,6 +188,10 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     onImportClicked():void {
+        // dialog is already open, avoid duplicate initialization
+        if (this.showImportDialog)
+            return;
+
         try {
             this.showImportDialog = true;
             this.getRouteLibraryScanner().prepare()
@@ -215,7 +219,9 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
     importSingleRoute(fileInfo: FileInfo): IObserver {
         try {
-            return this.getRouteLibraryScanner().importSingle(fileInfo)
+            const observer = this.getRouteLibraryScanner().importSingle(fileInfo)
+            this.updatePageDisplay()
+            return observer
         }
         catch(err) {
             this.logError(err, 'importSingleRoute')
@@ -283,13 +289,14 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
     onImportClosed(): void  {
         try {
+            this.showImportDialog = false
+
             if (this.importObserver)
                 this.importObserver.stop()
 
             this.getRouteLibraryScanner().done()
 
             this.importObserver = undefined
-            this.showImportDialog = false
             this.getPageObserver().emit('import-closed')
             
             this.serviceState = this.getRouteList().search()

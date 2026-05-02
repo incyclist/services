@@ -44,8 +44,10 @@ export class IncyclistXMLParser extends XMLParser{
         
         const gpxFile = {...fileInfo}
 
-        const xmlName = fileInfo.name
-        const fileName = data['gpx-file-path']?? xmlName.replace('xml','gpx')
+        
+        const xmlBase = fileInfo.base  // 'Stellenbosch.xml' 
+        const fileName = data['gpx-file-path'] ?? xmlBase.replace('.xml', '.gpx')
+
 
         if (fileName.startsWith('file')||fileName.startsWith('/')||fileName.startsWith('\\')||fileName.startsWith('.')) {
             gpxFile.type = 'file'
@@ -56,13 +58,12 @@ export class IncyclistXMLParser extends XMLParser{
             gpxFile.url = fileName
         }
         else if (fileInfo.type==='url') {
-                gpxFile.url = gpxFile.url.replace(xmlName,fileName)
+                gpxFile.url = gpxFile.url.replace(xmlBase,fileName)
         }
         else {
-            gpxFile.filename = gpxFile.filename.replace(xmlName,fileName)
+            gpxFile.filename = gpxFile.filename.replace(xmlBase,fileName)
 
         }
-
 
         try {
 

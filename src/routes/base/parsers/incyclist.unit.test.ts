@@ -42,12 +42,14 @@ describe('IncyclistParser',()=>{
     
             })
     
-            const run = async  (name,mocks?) => {
+            const run = async  (base,mocks?) => {
                 const dir = './__tests__/data/rlv'
-                const filename = `${dir}/${name}`
+                const filename = `${dir}/${base}`
+                const name = path.basename(base, path.extname(base))
                 getBindings().loader = { open: load}                
                 fs.existsFile =  jest.fn().mockResolvedValue(mocks?.existsFile??false)
-                const fileInfo:FileInfo = {type:'file', filename, name, ext:'xml',dir,url:undefined, delimiter:'/'}
+                const fileInfo:FileInfo = {type:'file', filename, name, base, ext:'xml',dir,url:undefined, delimiter:'/'}
+
                 return await parser.import(fileInfo)
     
             }

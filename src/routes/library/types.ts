@@ -1,5 +1,6 @@
 import { ReadDirResult } from "../../api"
 import { FormattedNumber } from "../../i18n"
+import { IObserver } from "../../types"
 import { Route } from "../base/model/route"
 
 // The result of the user selecting a root folder
@@ -30,6 +31,7 @@ export interface ParsedRoute {
     alreadyImported: boolean // set via RouteListService.existsBySourceUri()
     parseError?: string      // set if AVI, no video, parse failure
     format: RouteFormat      // 'xml' | 'epm' | 'rlv' | 'gpx'
+    observer:IObserver
 }
 
 // A display-ready row in the route selection list.
@@ -42,6 +44,7 @@ export interface RouteDisplayItem {
     alreadyImported: boolean
     importable: boolean             // false if scanError or parseError is set
     errorReason?: string            // human-readable, shown inline when importable=false
+    observer:IObserver
 }
 
 

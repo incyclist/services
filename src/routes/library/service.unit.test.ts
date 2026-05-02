@@ -103,7 +103,7 @@ describe('RouteLibraryScannerService', () => {
 
         test('emits scan-result for each primary file found', async () => {
             fsMock.readdir.mockResolvedValue([
-                file('route.gpx', 'content://root/route.gpx'),
+                file('route.xml', 'content://root/route.xml'),
                 file('ride.mp4', 'content://root/ride.mp4'),
             ])
 
@@ -113,8 +113,8 @@ describe('RouteLibraryScannerService', () => {
 
             await new Promise<void>(resolve => observer.once('scan-complete', resolve))
             expect(discovered).toHaveLength(1)
-            expect(discovered[0].format).toBe('gpx')
-            expect(discovered[0].controlFileUri).toBe('content://root/route.gpx')
+            expect(discovered[0].format).toBe('xml')
+            expect(discovered[0].controlFileUri).toBe('content://root/route.xml')
         })
 
         test('sets importable: false when companion file is missing', async () => {
@@ -229,9 +229,10 @@ describe('RouteLibraryScannerService', () => {
             return {
                 route: makeRouteObject(routeOverride),
                 folderUri: 'content://root/folder',
-                controlFileUri: 'content://root/folder/route.gpx',
+                controlFileUri: 'content://root/folder/route.xml',
                 alreadyImported: false,
-                format:'gpx',
+                format:'xml',
+                observer:new Observer(),
                 ...overrides,
             }
         }

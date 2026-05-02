@@ -46,10 +46,8 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
     getDisplayProps():ImportDisplayProps {
-        return this.importProps
+        return {...this.importProps}
     }
-
-
 
 
     importSingle(fileInfo: FileInfo):IObserver {
@@ -99,9 +97,15 @@ export class RouteLibraryScannerService extends IncyclistService {
             observer.emit('error', err.message)
         })
 
-        observer.on('scan-progress',(progress:{scannedFolders:number})=>{
-            this.importProps.scanProgress = progress
-        })
+        observer
+            .on('scan-progress',(progress:{scannedFolders:number})=>{
+                this.importProps.scanProgress = progress
+            })
+            .on('scan-complete',()=>{
+                console.log('# scan-complete')
+                this.importProps.phase= 'parsing'
+                
+            })
 
         return observer
     }
@@ -118,6 +122,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         if (!this.importProps)
             this.prepare()
 
+
         this._parse(scannedRoutes, observer).catch(err => {
             this.logError(err, 'parse')
             observer.emit('error', err.message)
@@ -129,10 +134,20 @@ export class RouteLibraryScannerService extends IncyclistService {
         })
 
         observer.on('parse-result',(route:ParsedRoute)=>{
-            this.importProps.routes.push( this.buildRouteDisplayItem(route) )
+            const idx = this.importProps.routes.findIndex( r=> r.id===route.controlFileUri)
+            if (idx!==-1) {
+                const observer = this.importProps.routes[idx].observer
+                const displayProps = this.buildRouteDisplayItem(route,observer)                 
+                this.importProps.routes[idx]= displayProps
+                if (observer) {
+                    observer.emit('updated',displayProps)
+                }
+            }
+            
         })
 
         observer.on('parse-complete',()=>{
+            console.log('# parse-complete')
             this.importProps.phase= 'selecting'
         })
 
@@ -336,7 +351,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         const primaryFiles = files.filter( (f:string|ReadDirResult) => {
             const name = typeof(f)==='string' ? f : f.name
             const ext = this.getExtension(name)
-            return ext && parsers.isPrimaryExtension(ext)
+            return ext && ext!=='gpx' && parsers.isPrimaryExtension(ext)
         }).map( (f:string|ReadDirResult) => {
             if (typeof f==='string') {
                 return {
@@ -352,6 +367,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             if (!this.isCancelled) {
                 const routeAnnouncement = await this.buildDiscoveredRoute(file, files, uri, folderName, parsers)
                 discoveredCount.value++
+                console.log('added', routeAnnouncement, this.scanResult.length)
                 observer.emit('scan-result', routeAnnouncement)
                 this.scanResult.push(routeAnnouncement)
             }
@@ -391,7 +407,6 @@ export class RouteLibraryScannerService extends IncyclistService {
             }
         }
 
-
         return {
             folderUri,
             folderName,
@@ -408,6 +423,21 @@ export class RouteLibraryScannerService extends IncyclistService {
         const targets = scannedRoutes.filter( r=>!r.scanError )
         const total = targets.length
 
+
+        targets.forEach( target=> {
+            const file = this.buildFileInfo(target.controlFileUri, target.format)            
+            this.importProps.routes.push( {
+                format: target.format,
+                importable: false,
+                label: file.base,
+                id: target.controlFileUri,
+                alreadyImported:false,
+                observer:new Observer()
+            })
+        })
+
+        observer.emit('parse-start')
+
         for (let i = 0; i < targets.length; i++) {
             if (this.isCancelled)
                 continue;
@@ -415,13 +445,13 @@ export class RouteLibraryScannerService extends IncyclistService {
             const parsed = i+1;
             const target = targets[i]
             observer.emit('parse-progress', { current: parsed, parsed, total, currentFolder: target.folderName})
-            await this._parseTarget(target, service, observer)
+            await this._parseTarget(target, service, observer,i )
         }
 
         observer.emit('parse-complete')
     }
 
-    private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver):Promise<void> {
+    private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver,idx:number):Promise<void> {
         if (service.existsBySourceUri(target.controlFileUri)) {
             observer.emit('parse-result', {
                 alreadyImported: true,
@@ -563,25 +593,22 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
     private buildFileInfo(uri: string, ext: string): FileInfo {
-        const lastSlash = Math.max(uri.lastIndexOf('/'), uri.lastIndexOf('\\'))
-        const dir = uri.slice(0, lastSlash)
-        const base = uri.slice(lastSlash + 1)
-        const name = base.slice(0, base.length - ext.length - 1)
-
+        const { dir, base, name } = this.getBindings().path.parse(uri)
+        
         return {
-            type: 'url',
+            type: 'file',
             url: uri,
             filename: uri,
             base,
             name,
             dir,
             ext,
-            delimiter: '/'
+            delimiter: uri.startsWith('content://') ? '%2F' : '/'
         }
     }
 
-    private buildRouteDisplayItem(parsed:ParsedRoute):RouteDisplayItem {
-        const {route,alreadyImported,parseError,format} = parsed
+    private buildRouteDisplayItem(parsed:ParsedRoute, observer?:IObserver):RouteDisplayItem {
+        const {route,alreadyImported,parseError,format,controlFileUri} = parsed
         const descr = route?.description??{}
 
         const [C,U] = this.getUnitConversionShortcuts()
@@ -590,14 +617,19 @@ export class RouteLibraryScannerService extends IncyclistService {
                 unit: U('distance')
             }
 
+
+        const path = this.getBindings().path
+        const info = path.parse(controlFileUri)
+
         return {
-            id:route.description.id,
+            id:route?.description?.id??info?.base,
             distance,
-            label: route.title,
+            label: route?.title??info?.base,
             alreadyImported,
             importable: parseError==null,
             format,
-            errorReason:parseError
+            errorReason:parseError,
+            observer: observer??new Observer()
         }
 
     }

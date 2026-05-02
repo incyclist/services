@@ -38,7 +38,7 @@ describe('IncyclistParser',()=>{
     
                 
                 getBindings().loader = { open: load}
-                const fileInfo:FileInfo = {type:'file', filename:file, name:'San_Leo.epm', ext:'epm',dir:'./__tests__/data/rlv',url:undefined, delimiter:'/'}
+                const fileInfo:FileInfo = {type:'file', filename:file, name:'San_Leo', base:'San_Leo.epm', ext:'epm',dir:'./__tests__/data/rlv',url:undefined, delimiter:'/'}
                 const {data,details} = await parser.import(fileInfo)
                     
                 expect(data.localizedTitle).toEqual( {en:'San_Leo'})
@@ -64,7 +64,7 @@ describe('IncyclistParser',()=>{
     
                 
                 getBindings().loader = { open: load}
-                const fileInfo:FileInfo = {type:'file', filename:file, name:'DE_Rad-am-Ring.epm', ext:'epm',dir:'./__tests__/data/rlv',url:undefined, delimiter:'/'}
+                const fileInfo:FileInfo = {type:'file', filename:file, name:'DE_Rad-am-Ring', base:'DE_Rad-am-Ring.epm', ext:'epm',dir:'./__tests__/data/rlv',url:undefined, delimiter:'/'}
                 const {data} = await parser.import(fileInfo)
                     
                 expect(data.localizedTitle).toEqual( {en:'Rad-am-Ring'})
@@ -80,7 +80,7 @@ describe('IncyclistParser',()=>{
     
                 
                 getBindings().loader = { open: load}
-                const fileInfo:FileInfo = {type:'file', filename:file, name:'Aigen.epm', ext:'epm',dir:'./__tests__/data/rlv',url:undefined, delimiter:'/'}
+                const fileInfo:FileInfo = {type:'file', filename:file, name:'Aigen', base:'Aigen.epm', ext:'epm',dir:'./__tests__/data/rlv',url:undefined, delimiter:'/'}
                 const {data,details} = await parser.import(fileInfo)
                     
                 expect(data.localizedTitle).toEqual( {en:'Aigen'})
