@@ -324,8 +324,9 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         try {
             const service = this.getRouteList()
             const card = service.getCard(id)
-            if (card)
+            if (card) {
                 card.delete()
+            }
         }
         catch(err:any) {
             this.logError(err,'onDelete')

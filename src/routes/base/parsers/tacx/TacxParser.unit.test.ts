@@ -49,7 +49,7 @@ describe('TacxParser',()=>{
         const ext = 'rlv'
         const dir = './__tests__/data/rlv'
         const file = `${dir}/${name}.${ext}`
-        const fileInfo:FileInfo = {type:'file', filename:file, name:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
+        const fileInfo:FileInfo = {type:'file', filename:file, name, base:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
 
         const {data,details} = await parser.import(fileInfo)
 
@@ -72,7 +72,7 @@ describe('TacxParser',()=>{
         const ext = 'pgmf'
         const dir = './__tests__/data/rlv'
         const file = `${dir}/${name}.${ext}`
-        const fileInfo:FileInfo = {type:'file', filename:file, name:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
+        const fileInfo:FileInfo = {type:'file', filename:file, name, base:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
 
         const {data,details} = await parser.import(fileInfo)
 
@@ -97,7 +97,7 @@ describe('TacxParser',()=>{
         const ext = 'epp'
         const dir = './__tests__/data/rlv'
         const file = `${dir}/${name}.${ext}`
-        const fileInfo:FileInfo = {type:'file', filename:file, name:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
+        const fileInfo:FileInfo = {type:'file', filename:file, name, base:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
 
         await expect( async()=>{ await parser.import(fileInfo)}).rejects.toThrow('Unsupported file type epp')
     })
@@ -111,7 +111,7 @@ describe('TacxParser',()=>{
         const ext = 'rlv'
         const dir = './__tests__/data/rlv'
         const file = `${dir}/${name}.${ext}`
-        const fileInfo:FileInfo = {type:'file', filename:file, name:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
+        const fileInfo:FileInfo = {type:'file', filename:file, name, base:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
 
         const {data,details} = await parser.import(fileInfo)
 
@@ -136,7 +136,7 @@ describe('TacxParser',()=>{
         const ext = 'rlv'
         const dir = './__tests__/data/rlv'
         const file = `${dir}/${name}.${ext}`
-        const fileInfo:FileInfo = {type:'file', filename:file, name:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
+        const fileInfo:FileInfo = {type:'file', filename:file, name, base:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
 
         const {details} = await parser.import(fileInfo)
         

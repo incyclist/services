@@ -448,34 +448,31 @@ export class RouteLibraryScannerService extends IncyclistService {
         observer.emit('parse-complete')
     }
 
+
     private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver,idx:number):Promise<void> {
         let result: Awaited<ReturnType<typeof RouteParser.parse>> | undefined
         const file = this.buildFileInfo(target.controlFileUri, target.format)
         try {
             result = await RouteParser.parse(file)
 
+            const route= new Route(result.data, result.details)
+
             if (result.data.hasVideo) {
-                this.validateVideoUrl(result.details, target.folderUri, target.files)
+                this.validateVideoUrl(route, target.folderUri, target.files)
             }
 
             const parsed:ParsedRoute = {
                 alreadyImported: false,
-                route: new Route(result.data, result.details),
+                route,
                 folderUri: target.folderUri,
                 controlFileUri: target.controlFileUri,
                 format: target.format
             }
 
-            if (service.getRoute(parsed.route.description.id)) {
+            if (service.getRoute(route.description.id)) {
                 parsed.alreadyImported = true;
             }
             observer.emit('parse-result', parsed)
-
-            const video:any = {...parsed.route.details.video}
-            delete video.mappings
-            delete video.segments
-
-
         }
         catch(err) {
             const parsed:ParsedRoute = {
@@ -486,19 +483,48 @@ export class RouteLibraryScannerService extends IncyclistService {
                 format: target.format,
                 parseError: err?.message ?? String(err)
             }            
+            this.logEvent({message:'could not parse route file',file:file.base, reason:err.message})
             observer.emit('parse-result', parsed)
         }
     }
 
-    private validateVideoUrl(routeDetail:RouteApiDetail,folderUri:string, folderFiles:ReadDirResult[]) {
+    private validateVideoUrl(route:Route,folderUri:string, folderFiles:ReadDirResult[]) {
+        const routeDetail = route.details
+        const routeDescr = route.description
         if (this.isMobile()) {
             if (routeDetail.video.format==='avi') {
-                throw new Error('AVI video not supported')
+                const mp4Url = this.findMatchinMp4(routeDetail.video.url, folderFiles)
+                if (mp4Url) {
+                    routeDetail.video.format = 'mp4'
+                    routeDetail.video.url = mp4Url
+                    routeDescr.videoFormat = 'mp4'
+
+                    console.log('#Video replaced',routeDetail.video.url, route)
+                }
+                else {
+                    throw new Error('AVI video not supported')
+                }
             }
         }
         if (routeDetail.video.file) {
             routeDetail.video.file = this.resolveVideoUri(routeDetail.video.file,folderUri,folderFiles)
+            
         }
+    }
+
+    private findMatchinMp4( videoUrl:string, folderFiles:ReadDirResult[]):string|undefined {
+
+        console.log('# find matching mp4', videoUrl, folderFiles)
+        const path = this.getBindings().path
+        const fileName = path.parse(videoUrl)?.base
+        const target = fileName.replace('.avi', '.mp4')
+        const folderFile = folderFiles.find( file => file.name===target)
+        if (!folderFile)
+            return;
+
+        const info = path.parse(videoUrl)
+        return videoUrl.replace( info.base,folderFile.name )
+        
     }
 
     private async _ingest(routes:ParsedRoute[], observer: Observer): Promise<void> {
