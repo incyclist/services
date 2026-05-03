@@ -31,7 +31,7 @@ export interface ParsedRoute {
     alreadyImported: boolean // set via RouteListService.existsBySourceUri()
     parseError?: string      // set if AVI, no video, parse failure
     format: RouteFormat      // 'xml' | 'epm' | 'rlv' | 'gpx'
-    observer:IObserver
+    observer?:IObserver
 }
 
 // A display-ready row in the route selection list.

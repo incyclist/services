@@ -23,8 +23,7 @@ export interface FileLoaderError {
 
 export interface FileLoaderResult {
     error?:FileLoaderError,
-    data?,
-    epmEpp?
+    data?:string|Buffer,
 }
 
 

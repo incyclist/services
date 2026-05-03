@@ -95,7 +95,9 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
         if (res.error) {
             throw new Error('Could not open file')
         }        
-        return res.data
+        const resData:string = typeof(res.data)==='string' ? res.data : res.data.toString('utf-8')
+        return resData
+
 
     }
 

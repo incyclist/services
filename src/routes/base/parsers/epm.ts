@@ -103,9 +103,10 @@ export class EPMParser extends XMLParser{
             if (res.error) {
                 onError()
             }
-            return res.data
+            return res.data as Buffer
         }
         catch (err) {
+            this.logger.logEvent({message:'could not load EPP file', reason:err.message})
             onError()
         }
     }

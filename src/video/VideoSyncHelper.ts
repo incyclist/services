@@ -57,7 +57,7 @@ export class VideoSyncHelper extends IncyclistService{
 
         try {
             this.validateMappings(route)
-            this.initCorrectedMapping(this.route?.details)        
+            this.initCorrectedMapping(this.route?.details)    
             this.init(startPos, props);
         }
         catch(err) {
@@ -236,6 +236,11 @@ export class VideoSyncHelper extends IncyclistService{
                     this.rlvStatus.lapRequested = true
                 }       
 
+                // this.rlvStatus.speed should be set by now. If not: log an error, as this might lead to incorrect rate updates
+                if (this.rlvStatus.speed==null) {
+                    this.logError( new Error('RLV Speed undefined'), 'onVideoPlaybackUpdate',{mapping})
+                }
+
                 updates.push('rlv:lap')
                 
             }           
@@ -308,7 +313,6 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     onActivityUpdate(routeDistance:number,speed:number) {
-
         if (routeDistance==this.activityStatus.routeDistance && speed==this.activityStatus.speed) {
             return;            
         }
@@ -332,6 +336,11 @@ export class VideoSyncHelper extends IncyclistService{
         if (speed!==this.activityStatus.speed) {
             updates.push('activity:speed')
         }
+
+        if (speed>0 && (this.isPaused||this.rlvStatus.speed===undefined)) {
+            this.resume()
+        }
+
         this.activityStatus.ts = Date.now()
         this.activityStatus.routeDistance = distance
         this.activityStatus.speed = speed      
@@ -348,7 +357,6 @@ export class VideoSyncHelper extends IncyclistService{
         if (!updates?.length)
             return
 
-
         try {
             const tsStart = Date.now()
             
@@ -357,7 +365,7 @@ export class VideoSyncHelper extends IncyclistService{
             const sRlv = (source:'rlv' | 'activity') => {
                 const tDelta = (source==='rlv' ? Date.now()-this.rlvStatus.ts : Date.now()-this.activityStatus.ts)/1000
                 const s0 = source==='rlv' ? this.rlvStatus.routeDistance : this.activityStatus.routeDistance
-                const v = source==='rlv' ? this.rlvStatus.speed/3.6*(this.rlvStatus.rate??1) : this.activityStatus.speed/3.6
+                const v = source==='rlv' ? (this.rlvStatus.speed??0)/3.6*(this.rlvStatus.rate??1) : (this.activityStatus.speed??0)/3.6
                 return s0 + (tDelta)*v            
             }
 
@@ -457,6 +465,8 @@ export class VideoSyncHelper extends IncyclistService{
                     if (delta===0) {
                         if (updates.includes('activity:speed') || updates.includes('rlv:speed') ) {
                             const rate = this.rlvStatus.speed ? this.activityStatus.speed/this.rlvStatus.speed : 1
+
+                            
                             this.updateRate(rate)
                         }
                         this.cpuTime = (this.cpuTime??0) + (Date.now()-tsStart)
@@ -468,8 +478,15 @@ export class VideoSyncHelper extends IncyclistService{
                     const maxCorrection = Math.max(20,this.rlvStatus.time<100 ? 15 : (this.bufferedTime??0)/2.5*15) // max correction in m withing tTarget
                     const correction = Math.sign(delta)*Math.min(Math.abs(delta),maxCorrection)
 
-                    const rate=(this.activityStatus.speed-correction/tTarget*3.6)/this.rlvStatus.speed
-                    this.updateRate(rate)
+                    if (this.rlvStatus.speed) {
+                        const rate=(this.activityStatus.speed-correction/tTarget*3.6)/this.rlvStatus.speed
+                        this.updateRate(rate)
+                    }
+                    else {
+                        this.updateRate(1)
+                    }
+                    
+                    
                     
                 }
 
@@ -490,6 +507,7 @@ export class VideoSyncHelper extends IncyclistService{
     }
 
     updateRate(requested:number) {
+
         if (requested===undefined)
             return
         if (Number.isNaN(requested)) {
@@ -530,6 +548,7 @@ export class VideoSyncHelper extends IncyclistService{
 
         this.rlvStatus.rateRequested = rate
         this.rlvStatus.tsLastRateRequest = Date.now()
+
         this.send('rate-update', rate)                
 
     }

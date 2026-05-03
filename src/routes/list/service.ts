@@ -1084,6 +1084,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     public addRoute(route:Route,source:'user'|'system'='system'):void {
 
+        // route already present
+        if (this.getRoute(route.description.id)) {
+            return;
+        }
+        
         this.routes.push(route)
         if (route.description?.isDeleted) {
             return

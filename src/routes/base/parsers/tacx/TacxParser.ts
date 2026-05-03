@@ -45,7 +45,11 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
             if (res.error) {
                 onError()
             }
-            return res.data  as ArrayBuffer
+
+            const buf = Buffer.isBuffer(res.data) ? res.data : Buffer.from(res.data as string, 'binary')
+            const data: ArrayBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+
+            return data
         }
         catch {
             onError()
@@ -70,26 +74,19 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
         if (file.ext === 'rlv') {
             const pgmfFile = clone(file)
-            pgmfFile.ext = 'pgmf'     
-            pgmfFile.name = pgmfFile.name.replace('.rlv','.pgmf')      
-            pgmfFile.filename = `${dir}${d}${pgmfFile.name}`
-            pgmfFile.url = `file:///${dir}${d}${pgmfFile.name}`
-
-            return {
-                rlvFile: file,
-                pgmfFile
-            }                
+            pgmfFile.ext = 'pgmf'
+            pgmfFile.base = pgmfFile.base.replace('.rlv', '.pgmf')
+            pgmfFile.filename = `${dir}${d}${pgmfFile.base}`
+            pgmfFile.url = `file:///${dir}${d}${pgmfFile.base}`
+            return { rlvFile: file, pgmfFile }
         }
         else if (file.ext === 'pgmf') {
             const rlvFile = clone(file)
             rlvFile.ext = 'rlv'
-            rlvFile.name = rlvFile.name.replace('.pgmf','.rlv')      
-            rlvFile.filename = `${dir}${d}${rlvFile.name}`
-            rlvFile.url = `file:///${dir}${d}${rlvFile.name}`
-            return {
-                rlvFile,
-                pgmfFile: file
-            }
+            rlvFile.base = rlvFile.base.replace('.pgmf', '.rlv')
+            rlvFile.filename = `${dir}${d}${rlvFile.base}`
+            rlvFile.url = `file:///${dir}${d}${rlvFile.base}`
+            return { rlvFile, pgmfFile: file }
         }
         else {
             throw new Error(`Unsupported file type ${file.ext}`)

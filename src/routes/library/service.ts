@@ -102,7 +102,6 @@ export class RouteLibraryScannerService extends IncyclistService {
                 this.importProps.scanProgress = progress
             })
             .on('scan-complete',()=>{
-                console.log('# scan-complete')
                 this.importProps.phase= 'parsing'
                 
             })
@@ -147,7 +146,6 @@ export class RouteLibraryScannerService extends IncyclistService {
         })
 
         observer.on('parse-complete',()=>{
-            console.log('# parse-complete')
             this.importProps.phase= 'selecting'
         })
 
@@ -367,7 +365,6 @@ export class RouteLibraryScannerService extends IncyclistService {
             if (!this.isCancelled) {
                 const routeAnnouncement = await this.buildDiscoveredRoute(file, files, uri, folderName, parsers)
                 discoveredCount.value++
-                console.log('added', routeAnnouncement, this.scanResult.length)
                 observer.emit('scan-result', routeAnnouncement)
                 this.scanResult.push(routeAnnouncement)
             }
@@ -452,48 +449,44 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
     private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver,idx:number):Promise<void> {
-        if (service.existsBySourceUri(target.controlFileUri)) {
-            observer.emit('parse-result', {
-                alreadyImported: true,
-                route: service.getBySourceUri(target.controlFileUri),
-                folderUri: target.folderUri,
-                controlFileUri: target.controlFileUri,
-                format: target.format
-            } as ParsedRoute)
-            return
-        }
-
         let result: Awaited<ReturnType<typeof RouteParser.parse>> | undefined
         const file = this.buildFileInfo(target.controlFileUri, target.format)
         try {
-            try {
-                result = await RouteParser.parse(file)
-            }
-            catch(err) {
-                throw new Error(`Could not parse: [${err.message}]`)
-            }
+            result = await RouteParser.parse(file)
 
             if (result.data.hasVideo) {
                 this.validateVideoUrl(result.details, target.folderUri, target.files)
             }
 
-            observer.emit('parse-result', {
+            const parsed:ParsedRoute = {
                 alreadyImported: false,
                 route: new Route(result.data, result.details),
                 folderUri: target.folderUri,
                 controlFileUri: target.controlFileUri,
                 format: target.format
-            } as ParsedRoute)
+            }
+
+            if (service.getRoute(parsed.route.description.id)) {
+                parsed.alreadyImported = true;
+            }
+            observer.emit('parse-result', parsed)
+
+            const video:any = {...parsed.route.details.video}
+            delete video.mappings
+            delete video.segments
+
+
         }
         catch(err) {
-            observer.emit('parse-result', {
+            const parsed:ParsedRoute = {
                 alreadyImported: false,
                 route: result ? new Route(result.data, result.details) : undefined,
                 folderUri: target.folderUri,
                 controlFileUri: target.controlFileUri,
                 format: target.format,
                 parseError: err?.message ?? String(err)
-            } as ParsedRoute)
+            }            
+            observer.emit('parse-result', parsed)
         }
     }
 

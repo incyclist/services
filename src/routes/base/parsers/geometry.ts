@@ -64,12 +64,9 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
             if (res.error) {
                 onError()                
             }
+            const resData:string = typeof(res.data)==='string' ? res.data : res.data.toString('utf-8')
 
-            if ((typeof res.data)==='string') {
-                return JSON.parse(res.data) as unknown as Geometry
-            }
-
-            return res.data
+            return JSON.parse(resData) as unknown as Geometry
         }
         catch {
             onError()

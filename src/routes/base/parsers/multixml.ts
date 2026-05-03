@@ -47,7 +47,9 @@ export class MultipleXMLParser implements Parser<XmlJSON,RouteApiDetail> {
         if (res.error) {
             throw new Error('Could not open file')
         }
-        const xml = await parseXml(res.data)
+        const resData:string = typeof(res.data)==='string' ? res.data : res.data.toString('utf-8')
+
+        const xml = await parseXml(resData)
         return xml
     }
 

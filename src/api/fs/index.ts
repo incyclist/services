@@ -6,7 +6,7 @@ export interface ReadDirResult {
 
 export interface IFileSystem {
     writeFile(...args)
-    readFile(...args)
+    readFile(...args):Promise<string|Buffer>
     appendFile(...args)
     deleteFile(path)
     createWriteStream(...args)

@@ -648,7 +648,9 @@ export class RLVDisplayService extends RouteDisplayService {
         
         if ( fileName.startsWith('file:') || fileName.startsWith('http:') || fileName.startsWith('https:') || fileName.startsWith('/') )
             return fileName;
-          
+        
+        if ( fileName.startsWith('content:'))
+            return fileName
         
         return `./${fileName}`;
        
