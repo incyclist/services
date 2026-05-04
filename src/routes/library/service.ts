@@ -463,9 +463,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             const route= new Route(result.data, result.details)
             
             // is the same route already in the list (duplicate file in different folder, or two files pointing to the same route)
-            this.logEvent({message:'_parseTarget:existing check', target:target.controlFileUri})        
             const existing = this.importProps.routes.find( ri=> ri.id===route.description.id)
-            this.logEvent({message:'_parseTarget:existing check done', target:target.controlFileUri})        
             if (existing) {                
                 result  = undefined
                 throw new Error(`Duplicate of ${existing.label}`)
@@ -483,12 +481,10 @@ export class RouteLibraryScannerService extends IncyclistService {
                 format: target.format
             }
 
-            this.logEvent({message:'_parseTarget:service check existing', target:target.controlFileUri})        
             if (service.getRoute(route.description.id)) {
                 parsed.alreadyImported = true;
             }
-            this.logEvent({message:'_parseTarget:service check existing done', target:target.controlFileUri})        
-            
+           
             observer.emit('parse-result', parsed)
         }
         catch(err) {
@@ -503,7 +499,6 @@ export class RouteLibraryScannerService extends IncyclistService {
             this.logEvent({message:'could not parse route file',file:file.base, reason:err.message, stack:err.stack})
             observer.emit('parse-result', parsed)
         }
-        this.logEvent({message:'_parseTarget done', target:target.controlFileUri})        
     }
 
     private validateVideoUrl(route:Route,folderUri:string, folderFiles:ReadDirResult[]) {
@@ -511,14 +506,34 @@ export class RouteLibraryScannerService extends IncyclistService {
         const routeDescr = route.description
         if (this.isMobile()) {
             if (routeDetail.video.format==='avi') {
-                const mp4Url = this.findMatchinMp4(routeDetail.video.url, folderFiles)
-                if (mp4Url) {
-                    routeDetail.video.format = 'mp4'
-                    routeDetail.video.url = mp4Url
-                    routeDescr.videoFormat = 'mp4'
+
+                const hasUrl = routeDetail.video.url!=null
+                const url = routeDetail.video.url ?? routeDetail.video.file
+
+                this.logEvent({message:'# here',url})
+                try {
+                    if (url) {
+                        const mp4Url = this.findMatchingMp4(url, folderFiles)
+                        if (mp4Url) {
+                            routeDetail.video.format = 'mp4'
+                            if (hasUrl)
+                                routeDetail.video.url = mp4Url
+                            else 
+                                routeDetail.video.file = mp4Url
+                            routeDescr.videoFormat = 'mp4'
+                        }
+                        else {
+                            throw new Error('AVI video not supported')
+                        }
+                    }
+                    else {
+                        this.logEvent({message:'video file not found',video:routeDetail.video})
+                        throw new Error('no video found')
+                    }
                 }
-                else {
-                    throw new Error('AVI video not supported')
+                catch(err) {
+                    this.logEvent({message:'video check failed',url})
+                    throw err
                 }
             }
         }
@@ -528,7 +543,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         }
     }
 
-    private findMatchinMp4( videoUrl:string, folderFiles:ReadDirResult[]):string|undefined {
+    private findMatchingMp4( videoUrl:string, folderFiles:ReadDirResult[]):string|undefined {
         const path = this.getBindings().path
         const fileName = path.parse(videoUrl)?.base
         const target = fileName.replace('.avi', '.mp4')

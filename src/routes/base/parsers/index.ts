@@ -12,6 +12,8 @@ import { EPMParser } from './epm'
 import { TacxParser } from './tacx/TacxParser'
 
 import type { ParseResult } from './types'
+import { fixIncorrectFileInfo } from './utils'
+import { EventLogger } from 'gd-eventlog'
 
 export const useParsers = () => {
 
@@ -30,6 +32,10 @@ export const useParsers = () => {
 
 export class RouteParser {
     static async parse (info:FileInfo) : Promise<ParseResult<RouteApiDetail>> {
+
+        const logger = new EventLogger('RouteParser')
+
+        fixIncorrectFileInfo(info)
         const parsers = useParsers();
         
         const formatParsers = parsers.suppertsExtension(info.ext)
@@ -47,8 +53,12 @@ export class RouteParser {
         const res = await Promise.allSettled(promises) 
         const matching = res.map( promise => promise.status==='fulfilled' ? promise.value:undefined).find(p=>p!==undefined)
 
-        if (matching)
-            return await matching.parser.import(info,matching.data)
+        if (matching) {
+            logger.logEvent({message:'before import'})    
+            const res = await matching.parser.import(info,matching.data)
+            logger.logEvent({message:'after import'})    
+            return res
+        }
         
         if (formatParsers.length===0)            
             throw new Error('no matching parser found')

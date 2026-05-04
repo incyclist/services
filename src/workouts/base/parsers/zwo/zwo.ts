@@ -6,6 +6,7 @@ import xml2js from 'xml2js';
 import { Limit, PowerLimit, SegmentDefinition, StepDefinition } from '../../model/types';
 import { parseXml } from '../../../../utils/xml';
 import { ignoreEmpty } from '../../../../utils';
+import { getUtf8Data } from '../../../../routes/base/parsers/utils';
 
 const parser = new xml2js.Parser({explicitChildren :true,preserveChildrenOrder :true,mergeAttrs :false} );
 
@@ -92,9 +93,8 @@ export class ZwoParser implements WorkoutParser<string>{
             throw new Error('Could not open file')
         }        
         
-        const resData:string = typeof(res.data)==='string' ? res.data : res.data.toString('utf-8')
-        return resData
-
+        const cleaned = getUtf8Data(res.data)
+        return cleaned
     }
 
 

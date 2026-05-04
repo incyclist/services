@@ -4,6 +4,7 @@ import { getFileName } from "../../../utils"
 import { RouteBase, RouteInfo, RoutePoint, VideoMapping } from "../types"
 
 import type { Parser, ParseResult } from "./types"
+import { getUtf8Data } from "./utils"
 
 export type Geometry = {
     
@@ -64,9 +65,9 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
             if (res.error) {
                 onError()                
             }
-            const resData:string = typeof(res.data)==='string' ? res.data : res.data.toString('utf-8')
+            const cleaned = getUtf8Data(res.data)
 
-            return JSON.parse(resData) as unknown as Geometry
+            return JSON.parse(cleaned) as unknown as Geometry
         }
         catch {
             onError()

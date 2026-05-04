@@ -286,6 +286,9 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     getImportDisplayProps(): ImportDisplayProps {
         return this.getRouteLibraryScanner().getDisplayProps()
     }
+    onImportCancelled(): void  { 
+        this.getRouteLibraryScanner().done()
+    }
 
     onImportClosed(): void  {
         try {

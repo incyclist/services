@@ -186,3 +186,55 @@ export const parseInformations =( informations?:Array<JSONObject>):Array<RouteIn
 
 }
 
+export const fixIncorrectFileInfo = (file:FileInfo) => {
+    if (!file.base) {
+        file.base = file.name
+        file.name = file.base.replace( `.${file.ext}`, '')
+    }
+}
+
+const decodeUtf16Be = (data: Buffer): string => {
+    const swapped = Buffer.alloc(data.length);
+    for (let i = 0; i + 1 < data.length; i += 2) {
+        swapped[i] = data[i + 1];
+        swapped[i + 1] = data[i];
+    }
+    return Buffer.from(swapped.toString('utf16le')).toString('utf-8');
+};
+
+export const getUtf8Data = (res: string | Buffer): string => {
+    // Use 'binary' so each char maps 1:1 to a byte, allowing BOM detection
+    // regardless of whether res was already decoded as a string or not.
+    const buf = Buffer.isBuffer(res) ? res : Buffer.from(res, 'binary');
+
+    // UTF-16 BE BOM: FE FF
+    if (buf[0] === 0xFE && buf[1] === 0xFF) {
+        return decodeUtf16Be(buf.subarray(2));
+    }
+
+    // UTF-16 LE BOM: FF FE
+    if (buf[0] === 0xFF && buf[1] === 0xFE) {
+        return Buffer.from(buf.subarray(2).toString('utf16le')).toString('utf-8');
+    }
+
+    // Mangled BOM: FE FF or FF FE bytes were decoded as UTF-8 replacement chars (U+FFFD)
+    // and re-encoded via 'binary', producing 0xFD 0xFD. Distinguish BE vs LE by null-byte position.
+    if (buf[0] === 0xFD && buf[1] === 0xFD) {
+        if (buf[2] === 0x00 && buf[3] === 0x3C) { // UTF-16 BE: <?
+            return decodeUtf16Be(buf.subarray(2));
+        }
+        if (buf[2] === 0x3C && buf[3] === 0x00) { // UTF-16 LE: <?
+            return Buffer.from(buf.subarray(2).toString('utf16le')).toString('utf-8');
+        }
+    }
+
+    // No UTF-16 BOM — treat as UTF-8, stripping the optional UTF-8 BOM.
+    // Two cases:
+    //   - string properly decoded as UTF-8: BOM appears as single U+FEFF codepoint
+    //   - string decoded as binary/latin1: BOM appears as three raw bytes EF BB BF
+    const str = typeof res === 'string' ? res : buf.toString('utf-8');
+    if (str.charCodeAt(0) === 0xFEFF) return str.slice(1);
+    if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) return buf.subarray(3).toString('utf-8');
+    return str;
+    
+}

@@ -4,6 +4,7 @@ import { XmlJSON, parseXml } from "../../../utils/xml";
 import { XMLParser } from "./xml";
 
 import type  { ParseResult, Parser } from "./types";
+import { getUtf8Data } from "./utils";
 
 export class MultipleXMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
@@ -17,7 +18,7 @@ export class MultipleXMLParser implements Parser<XmlJSON,RouteApiDetail> {
         })
 
     }
-    async import(file:FileInfo, data?: XmlJSON): Promise<ParseResult<RouteApiDetail>> {       
+    async import(file:FileInfo, data?: XmlJSON): Promise<ParseResult<RouteApiDetail>> {   
         const xmlJson = await this.getData(file,data)
         const parser = this.parsers.find( p=> p.supportsContent(xmlJson))
         return await parser.import(file,xmlJson)
@@ -47,9 +48,9 @@ export class MultipleXMLParser implements Parser<XmlJSON,RouteApiDetail> {
         if (res.error) {
             throw new Error('Could not open file')
         }
-        const resData:string = typeof(res.data)==='string' ? res.data : res.data.toString('utf-8')
-
-        const xml = await parseXml(resData)
+        const cleaned = getUtf8Data(res.data)
+        
+        const xml = await parseXml(cleaned)
         return xml
     }
 

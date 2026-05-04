@@ -5,7 +5,7 @@ import { RouteInfo, RoutePoint } from '../types';
 import { FileInfo, getBindings } from '../../../api';
 import { checkIsLoop, getRouteHash, getTotalElevation,getTotalDistance, updateSlopes, validateRoute } from '../utils/route'
 import { Position, Altitude } from './types';
-import { getReferencedFileInfo, parseInformations } from './utils';
+import { getReferencedFileInfo, getUtf8Data, parseInformations } from './utils';
 import { getFileName } from '../../../utils';
 
 import type { ParseResult, Parser } from './types';
@@ -60,6 +60,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             throw new Error('Could not open file: '+ getFileName(file))
         }
 
+        let cleaned
         const loader = getBindings().loader
         try {
             const res = await loader.open(file)
@@ -67,12 +68,13 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                 onError()                
             }
 
-            const resData:string = typeof(res.data)==='string' ? res.data : res.data.toString('utf-8')
-
+            const resData:string = getUtf8Data(res.data)
             const xml = await parseXml(resData)
+            
             return xml
         }
         catch {
+            console.log('# failed', Buffer.from (cleaned??'').toString('hex'))
             onError()
         }
     }

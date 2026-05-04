@@ -1,4 +1,5 @@
 import { FileInfo, getBindings } from "../../../../api";
+import { getUtf8Data } from "../../../../routes/base/parsers/utils";
 import { valid } from "../../../../utils/valid";
 import { Workout } from "../../model/Workout";
 import { WorkoutParser } from "../types";
@@ -65,8 +66,9 @@ export class JsonParser implements WorkoutParser<string>{
         if (res.error) {
             throw new Error('Could not open file')
         }        
-        const resData:string = typeof(res.data)==='string' ? res.data : res.data.toString('utf-8')
-        return resData
+        const cleaned = getUtf8Data(res.data)
+
+        return cleaned
 
     }
 }
