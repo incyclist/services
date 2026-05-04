@@ -13,7 +13,6 @@ import { useRouteList } from '../list/service'
 import { waitNextTick } from '../../utils'
 import { FailedRoute, FolderInfo, ImportDisplayProps, ImportedLibrary, ParsedRoute, RouteDisplayItem, ScannedRoute  } from './types'
 import { useRoutesDbLoader } from '../list/loaders/db'
-import { RouteApiDetail } from '../types'
 import { Route } from '../base/model/route'
 import { sleep } from '../../utils/sleep'
 import { useUnitConverter } from '../../i18n'
@@ -43,6 +42,7 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     done() {
         this.importProps = undefined
+        this.scanResult = []
     }
 
     getDisplayProps():ImportDisplayProps {
@@ -201,8 +201,8 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     cancel() {
         this.isCancelled = true
-        this.importProps.phase = 'landing'
-
+        this.done()
+        this.prepare()
     }
 
     private async importRoute  (fileInfo: FileInfo, observer:IObserver) {
@@ -450,12 +450,26 @@ export class RouteLibraryScannerService extends IncyclistService {
 
 
     private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver,idx:number):Promise<void> {
+
+        this.logEvent({message:'_parseTarget', target:target.controlFileUri})        
+
         let result: Awaited<ReturnType<typeof RouteParser.parse>> | undefined
         const file = this.buildFileInfo(target.controlFileUri, target.format)
         try {
+            this.logEvent({message:'_parseTarget:parse', target:target.controlFileUri})        
             result = await RouteParser.parse(file)
+            this.logEvent({message:'_parseTarget:parse done', target:target.controlFileUri})        
 
             const route= new Route(result.data, result.details)
+            
+            // is the same route already in the list (duplicate file in different folder, or two files pointing to the same route)
+            this.logEvent({message:'_parseTarget:existing check', target:target.controlFileUri})        
+            const existing = this.importProps.routes.find( ri=> ri.id===route.description.id)
+            this.logEvent({message:'_parseTarget:existing check done', target:target.controlFileUri})        
+            if (existing) {                
+                result  = undefined
+                throw new Error(`Duplicate of ${existing.label}`)
+            }
 
             if (result.data.hasVideo) {
                 this.validateVideoUrl(route, target.folderUri, target.files)
@@ -469,9 +483,12 @@ export class RouteLibraryScannerService extends IncyclistService {
                 format: target.format
             }
 
+            this.logEvent({message:'_parseTarget:service check existing', target:target.controlFileUri})        
             if (service.getRoute(route.description.id)) {
                 parsed.alreadyImported = true;
             }
+            this.logEvent({message:'_parseTarget:service check existing done', target:target.controlFileUri})        
+            
             observer.emit('parse-result', parsed)
         }
         catch(err) {
@@ -483,9 +500,10 @@ export class RouteLibraryScannerService extends IncyclistService {
                 format: target.format,
                 parseError: err?.message ?? String(err)
             }            
-            this.logEvent({message:'could not parse route file',file:file.base, reason:err.message})
+            this.logEvent({message:'could not parse route file',file:file.base, reason:err.message, stack:err.stack})
             observer.emit('parse-result', parsed)
         }
+        this.logEvent({message:'_parseTarget done', target:target.controlFileUri})        
     }
 
     private validateVideoUrl(route:Route,folderUri:string, folderFiles:ReadDirResult[]) {
@@ -498,8 +516,6 @@ export class RouteLibraryScannerService extends IncyclistService {
                     routeDetail.video.format = 'mp4'
                     routeDetail.video.url = mp4Url
                     routeDescr.videoFormat = 'mp4'
-
-                    console.log('#Video replaced',routeDetail.video.url, route)
                 }
                 else {
                     throw new Error('AVI video not supported')
@@ -513,8 +529,6 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
     private findMatchinMp4( videoUrl:string, folderFiles:ReadDirResult[]):string|undefined {
-
-        console.log('# find matching mp4', videoUrl, folderFiles)
         const path = this.getBindings().path
         const fileName = path.parse(videoUrl)?.base
         const target = fileName.replace('.avi', '.mp4')
@@ -523,8 +537,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             return;
 
         const info = path.parse(videoUrl)
-        return videoUrl.replace( info.base,folderFile.name )
-        
+        return videoUrl.replace( info.base,folderFile.name )        
     }
 
     private async _ingest(routes:ParsedRoute[], observer: Observer): Promise<void> {
@@ -622,7 +635,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             name,
             dir,
             ext,
-            delimiter: uri.startsWith('content://') ? '%2F' : '/'
+            delimiter: uri?.startsWith('content://') ? '%2F' : '/'
         }
     }
 

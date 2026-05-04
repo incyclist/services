@@ -67,6 +67,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected currentView: 'list'|'grid'|'routes'
     protected stats
     protected isListUpdatePaused: boolean = false
+    protected cardLookup: Record<string,{ card:RouteCard, list:CardList<Route>}> = {}
 
     constructor () {
         super('RouteList')
@@ -336,7 +337,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             const filters = requestedFilters ?? this.filters
 
-            let routes:Array<SummaryCardDisplayProps> = Array.from(this.getAllSearchCards().map( c=> c.getDisplayProperties()))
+            const allCards = this.getAllSearchCards()
+            let routes:Array<SummaryCardDisplayProps> = allCards.map( c=> c.getDisplayProperties())
+
             routes.sort( (a,b) => a.title>b.title? 1 : -1)
             const units = this.getUnitConverter().getDefaultUnits()
 
@@ -346,8 +349,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             }
 
 
-            if (!filters.includeDeleted)
+            if (!filters.includeDeleted) {
                 routes = routes.filter( r =>  !r?.isDeleted)
+            }
 
             routes = this.applyTitleFilter(filters, routes);
             routes = this.applyDistanceFilter(filters, routes);
@@ -357,11 +361,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             routes = this.applyRouteTypeFilter(filters, routes);
             routes = this.applySourceFilter(filters,routes) as SummaryCardDisplayProps[]
 
-            const cards = routes.map( r => this.getCard(r.id))
+            const routeIdSet = new Set(routes.map(r => r.id))
+            const cards = allCards.filter(c => routeIdSet.has(c.getId()))
 
             this.setListTop('list',0)
             this.setListTop('tiles',0)
-
           
             return {routes,cards,filters,observer:this.observer,units}
     
@@ -878,12 +882,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                     card.enableDelete()
                     
                     this.myRoutes.add( card, true )
+                    this.cardLookup[route.description.id] = { card, list:this.myRoutes};
+
+                   
 
                     if (importCard) {
                         this.myRoutes.remove(importCard)
                     }
                     card.enableDelete(true)              
                     this.emitLists('updated',{log:true})     
+
+
     
                     this.verifyPoints(card,route)
     
@@ -1088,7 +1097,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (this.getRoute(route.description.id)) {
             return;
         }
-        
+
         this.routes.push(route)
         if (route.description?.isDeleted) {
             return
@@ -1102,6 +1111,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             if (!route.description.country) {
                 route.updateCountryFromPoints()
                     .then( ()=> {
+                        this.logEvent({message:'route updated (country)',route:route.title})
                         this.db.save(route,false)
                     })
             }
@@ -1110,6 +1120,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const list = this.selectList(route)
 
         const card = new RouteCard(route,{list})
+
+        this.cardLookup[route.description.id] = { card, list};
+
         card.verify()
         list.add( card)
         if ( list.getId()==='myRoutes')
@@ -1128,11 +1141,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     protected async addFromApi(route:Route):Promise<void> {
-
-        const existing = this.findCard(route)
-        if (existing) 
-            return;
+        this.logEvent({message:'add route from Api', route:route.title})
         this.addRoute(route,'system')
+        this.logEvent({message:'add route from Api done', route:route.title})
     }
 
     protected async update(route:Route,source:'user'|'system'='user'):Promise<void> { 
@@ -1154,19 +1165,27 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     protected async preloadDetails() {
+        this.logEvent({message:'preload route details: searchRepo' })
         const {cards=[]} = this.searchRepo()
+        this.logEvent({message:'preload route details: searchRepo done' })
 
         const promises = []
 
         const loadDetails = (card):Promise<void> => {
+
+            this.logEvent({message:'preload route details', route:card?.getData()?.title})
             return this.db.getDetails( card.getId() )
             .then( details => { 
+                this.logEvent({message:'preload route details done', route:card?.getData()?.title})
+
                 card.setRouteData(details)
 
                 const route = card.getData()
+
                 if (!route.description.country) {
                     route.updateCountryFromPoints()
                         .then( ()=> {
+                            this.logEvent({message:'preload route updated (country)', route:card?.getData()?.title})
                             this.db.save(route,false)
                         })
                 }
@@ -1303,6 +1322,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     // with the current timestamp minus one minute. 
     // This will ensure that any new routes added to the repo will show up as "New" in the UI for those users, which otherwise would not happen
     protected async checkUIUpdateWithNoRepoStats() {
+        if (this.isMobile())
+            return;
+
+        this.logEvent({message:'checkUIUpdateWithNoRepoStats'})
+
         const repoUpdate = this.getRepoUpdates();
         if (this.routes.length > 0 && repoUpdate.initial === undefined) {
 
@@ -1315,6 +1339,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             await sleep(5); // just to make sure that any following route import will have a different tsImported
 
         }
+
+        this.logEvent({message:'checkUIUpdateWithNoRepoStats done'})
+
     }
 
     protected getRepoUpdates() {
@@ -1332,14 +1359,23 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     protected async loadRoutesFromRepo():Promise<void> {
 
+
         return new Promise<void> ( done => {
+
+            this.logEvent( {message:'loadRoutesFromRepo start'})
+
             const observer = this.db.load()
             const add = this.addRoute.bind(this)
             const update = this.update.bind(this)
+
+            const completed = ()=> {
+                this.logEvent( {message:'loadRoutesFromRepo done'})
+                done()
+            }
     
             observer.on('route.added',add)
             observer.on('route.updated',update)
-            observer.on('done',done)
+            observer.on('done',completed)
     
         })
 
@@ -1347,14 +1383,22 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected async loadRoutesFromApi():Promise<void> {
 
         return new Promise<void> ( done => {
+            this.logEvent( {message:'loadRoutesFromApi start'})
+
+
             const observer = this.api.load()
             const add = this.addFromApi.bind(this)
             const update = this.update.bind(this)
 
+            const completed = ()=> {
+                this.logEvent( {message:'loadRoutesFromApi done'})
+                done()
+            }
+
             observer.on('route.added',add)
             observer.on('route.updated',update)
-            observer.on('loaded',done)
-            observer.on('done',done)
+            observer.on('loaded',completed)
+            observer.on('done',completed)
     
         })
 
@@ -1640,6 +1684,12 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             if (!id && !legacyId) {
                 return;
             }
+
+            const res = this.cardLookup[id] 
+            if (res?.card) {
+                return res
+            }
+
 
 
             let card =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===id || c.getData()?.description?.legacyId===id ) as RouteCard

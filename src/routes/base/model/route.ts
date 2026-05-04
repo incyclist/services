@@ -63,9 +63,9 @@ export class Route {
     }
 
     getLocalizedTitle(language:string) {
-        if (this._details)
-            return getLocalizedText(this._details.localizedTitle,language)??this._details.title
-        else 
+        // if (this._details)
+        //     return getLocalizedText(this._details.localizedTitle,language)??this._details.title
+        // else 
             return getLocalizedText(this._description.localizedTitle,language)??this._description.title
     }
 
