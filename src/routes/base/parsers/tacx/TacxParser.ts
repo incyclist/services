@@ -10,6 +10,7 @@ import { RLVFileReader } from "./rlv";
 import { TacxFileReader } from "./TacxReader";
 
 import type { Parser, ParseResult } from "../types";
+import { fixIncorrectFileInfo } from "../utils";
 
 export interface TacxParserContext {
     rlvFile: FileInfo
@@ -70,22 +71,26 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
     protected buildContext(file: FileInfo): TacxParserContext {
 
-        const {dir,delimiter: d} = file
+        fixIncorrectFileInfo(file)
+
+        const from = file.base
 
         if (file.ext === 'rlv') {
+            const to = from.replace('.rlv', '.pgmf')
             const pgmfFile = clone(file)
             pgmfFile.ext = 'pgmf'
-            pgmfFile.base = pgmfFile.base.replace('.rlv', '.pgmf')
-            pgmfFile.filename = `${dir}${d}${pgmfFile.base}`
-            pgmfFile.url = `file:///${dir}${d}${pgmfFile.base}`
+            pgmfFile.base = to
+            pgmfFile.filename = pgmfFile.filename.replace(from,to)
+            pgmfFile.url = pgmfFile.url.replace(from,to)
             return { rlvFile: file, pgmfFile }
         }
         else if (file.ext === 'pgmf') {
+            const to = from.replace('.pgmf','.rlv' )
             const rlvFile = clone(file)
             rlvFile.ext = 'rlv'
-            rlvFile.base = rlvFile.base.replace('.pgmf', '.rlv')
-            rlvFile.filename = `${dir}${d}${rlvFile.base}`
-            rlvFile.url = `file:///${dir}${d}${rlvFile.base}`
+            rlvFile.base = to
+            rlvFile.filename = rlvFile.filename.replace(from,to)
+            rlvFile.url = rlvFile.url.replace(from,to)
             return { rlvFile, pgmfFile: file }
         }
         else {

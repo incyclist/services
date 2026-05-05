@@ -2,6 +2,7 @@ import { FileInfo,  getBindings} from "../../../api";
 import { RouteInfoText } from "../types";
 import { JSONObject } from "../../../utils/xml";
 import { LocalizedText } from "../../../i18n";
+import { EventLogger } from "gd-eventlog";
 
 export class BinaryReader {
     protected pos:number
@@ -92,6 +93,10 @@ export class BinaryReader {
 
 export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, url?:string}, scheme:string='file'):string=> {
 
+
+    const logger = new EventLogger('Incyclist')
+    logger.logEvent({message:'getReferencedFileInfo', info,referenced})
+
     // Do we check against a local file ? 
     if (info.type!=='url') {
         return buildFromFile(info,referenced)
@@ -138,6 +143,10 @@ const buildFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}) =
         }
 
         const fileName = info.filename?.replace(info.base,referenced.file)
+
+        if (fileName.startsWith('file://')) {
+            return fileName
+        }
         return `file:///${fileName}`;
     }
     return referenced.url;

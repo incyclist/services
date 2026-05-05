@@ -853,13 +853,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             
                 try {
 
-                    this.logEvent({message:'start import', name})
                     if (importId&&observer)
                         observer?.emit('parsing',importId)
 
                     const {data,details} = await RouteParser.parse(file)     
                    
-                    this.logEvent({message:'import completed', name})
                     if (importId&&observer)
                         observer?.emit('success',importId)
 
@@ -1141,9 +1139,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     protected async addFromApi(route:Route):Promise<void> {
-        this.logEvent({message:'add route from Api', route:route.title})
         this.addRoute(route,'system')
-        this.logEvent({message:'add route from Api done', route:route.title})
     }
 
     protected async update(route:Route,source:'user'|'system'='user'):Promise<void> { 
@@ -1165,18 +1161,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     protected async preloadDetails() {
-        this.logEvent({message:'preload route details: searchRepo' })
         const {cards=[]} = this.searchRepo()
-        this.logEvent({message:'preload route details: searchRepo done' })
-
         const promises = []
 
         const loadDetails = (card):Promise<void> => {
 
-            this.logEvent({message:'preload route details', route:card?.getData()?.title})
             return this.db.getDetails( card.getId() )
             .then( details => { 
-                this.logEvent({message:'preload route details done', route:card?.getData()?.title})
 
                 card.setRouteData(details)
 
@@ -1325,8 +1316,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (this.isMobile())
             return;
 
-        this.logEvent({message:'checkUIUpdateWithNoRepoStats'})
-
         const repoUpdate = this.getRepoUpdates();
         if (this.routes.length > 0 && repoUpdate.initial === undefined) {
 
@@ -1339,9 +1328,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             await sleep(5); // just to make sure that any following route import will have a different tsImported
 
         }
-
-        this.logEvent({message:'checkUIUpdateWithNoRepoStats done'})
-
     }
 
     protected getRepoUpdates() {
@@ -1362,20 +1348,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         return new Promise<void> ( done => {
 
-            this.logEvent( {message:'loadRoutesFromRepo start'})
-
             const observer = this.db.load()
             const add = this.addRoute.bind(this)
             const update = this.update.bind(this)
 
-            const completed = ()=> {
-                this.logEvent( {message:'loadRoutesFromRepo done'})
-                done()
-            }
-    
             observer.on('route.added',add)
             observer.on('route.updated',update)
-            observer.on('done',completed)
+            observer.on('done',done)
     
         })
 
@@ -1390,8 +1369,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const add = this.addFromApi.bind(this)
             const update = this.update.bind(this)
 
+            let isCompleted = false
             const completed = ()=> {
-                this.logEvent( {message:'loadRoutesFromApi done'})
+                if (isCompleted)
+                    return
+                isCompleted = true
                 done()
             }
 
