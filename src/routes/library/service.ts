@@ -244,6 +244,8 @@ export class RouteLibraryScannerService extends IncyclistService {
 
 
     private async importSingleVideoRoute  (fileInfo: FileInfo, observer:IObserver) {
+
+        this.logEvent({message:'importSingleVideoRoute', fileInfo})
         const parsers = this.getParsers()
         const {dir,ext,delimiter} = fileInfo
         const folderUri = dir.endsWith(delimiter??'/') ? dir.slice(0, -delimiter.length) : dir     
@@ -261,6 +263,10 @@ export class RouteLibraryScannerService extends IncyclistService {
 
             this.scanResult = []
             scanObserver.stop()
+
+            if (!files.length) {
+                observer.emit('error','no file found')
+            }
 
             if (files[0].scanError) {
                 observer.emit('error',files[0].scanError)
@@ -331,6 +337,9 @@ export class RouteLibraryScannerService extends IncyclistService {
         recursive:boolean = true
     ): Promise<void> {
         const fs = this.getBindings().fs
+
+        this.logEvent({message:'scanFolder', uri, folderName})
+
 
         let entries: ReadDirResult[]
         try {
@@ -510,7 +519,6 @@ export class RouteLibraryScannerService extends IncyclistService {
                 const hasUrl = routeDetail.video.url!=null
                 const url = routeDetail.video.url ?? routeDetail.video.file
 
-                this.logEvent({message:'# here',url})
                 try {
                     if (url) {
                         const mp4Url = this.findMatchingMp4(url, folderFiles)
