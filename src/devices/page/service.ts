@@ -12,6 +12,7 @@ import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../configuration'
 import { useIncyclist } from '../../ui'
 import { Observer } from '../../base/types'
+import { useDeviceRide } from '../ride'
 
 
 
@@ -369,10 +370,17 @@ export class DevicesPageService extends IncyclistPageService {
                 { label:'OK', primary:true, onClick:this.onOK.bind(this) }
             ]
 
-        
-        return [
+        if (this.getDeviceRide().canEnforceSimulator()) {
+            return [
+                { label:'Simulate', primary:true, onClick:this.onSimulate.bind(this) },
+                { label:'Skip', primary:false, onClick:this.onSkip.bind(this) }
+            ]
+        }
+
+        return  [
             { label:'Skip', primary:true, onClick:this.onSkip.bind(this) }
         ]
+        
 
     }
 
@@ -436,7 +444,6 @@ export class DevicesPageService extends IncyclistPageService {
         this.getDevicePairing().prepareStart([simulator])
 
         const prevContentPage = this.getPrevContentPage()
-        const prevPage = this.getAppState().getState('prevPage')
 
         if (this.isPairingForRide)
             this.moveTo('/rideSimulate')
@@ -472,6 +479,10 @@ export class DevicesPageService extends IncyclistPageService {
     @Injectable
     protected getDevicePairing() {
         return useDevicePairing()
+    }
+    @Injectable
+    protected getDeviceRide() {
+        return useDeviceRide()
     }
 
     @Injectable
