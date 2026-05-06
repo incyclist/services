@@ -9,5 +9,5 @@ export const getFileName = (file: FileInfo) => {
         return file.url
     }
 
-    return file.filename??file.url.replace('file:///','')
+    return file.filename??file.url?.replace('file:///','')
 }
