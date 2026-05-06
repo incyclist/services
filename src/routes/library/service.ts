@@ -212,6 +212,8 @@ export class RouteLibraryScannerService extends IncyclistService {
         observer.emit('parsing')
         this.importProps.phase = 'parsing'
 
+        this.logEvent({message:'import single',fileInfo})
+
         if (this.isMobile() && this.getBindings().appInfo?.getOS().platform==='ios') {
             return this.importSingleGpxRoute(fileInfo,observer)
 
