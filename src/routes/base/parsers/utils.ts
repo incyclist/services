@@ -99,7 +99,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
 
     // Do we check against a local file ? 
     if (info.type!=='url') {
-        return buildFromFile(info,referenced)
+        return buildUrlFromFile(info,referenced)
     }
 
 
@@ -136,7 +136,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
     }
 }
 
-const buildFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}) => { 
+const buildUrlFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}) => { 
     if (referenced.file) {
         if (info.filename?.startsWith('content://')) {
             return `${info.dir}${info.delimiter}${referenced.file}`
@@ -145,9 +145,26 @@ const buildFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}) =
         const fileName = info.filename?.replace(info.base,referenced.file)
 
         if (fileName.startsWith('file://')) {
-            return fileName
+            let cleanPath = fileName;
+            try {
+                // Try to decode in case it's already encoded
+                cleanPath = decodeURIComponent(fileName.replace(/^file:\/\/\/?/, ''));
+            } catch  {
+                // If decoding fails (malformed %), use the filename as-is
+                cleanPath = fileName.replace(/^file:\/\/\/?/, '');
+            }
+            return `file:///${encodeURI(cleanPath)}`;
         }
-        return `file:///${fileName}`;
+
+        let cleanPath = fileName;
+        try {
+            // Try to decode in case it's already encoded
+            cleanPath = decodeURIComponent(fileName);
+        } catch  {
+            /* we use the origianl filename*/
+        }
+
+        return `file:///${cleanPath}`;
     }
     return referenced.url;
 

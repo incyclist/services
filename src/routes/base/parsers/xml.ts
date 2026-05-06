@@ -237,6 +237,8 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         route.next = route.video.next
 
         const videoUrl = this.getVideoUrl(fileInfo,route)
+
+        this.logger.logEvent({message:'[Parser] video url set', videoUrl})
         if (videoUrl) {
             route.video.file = undefined;
             route.video.url = videoUrl
