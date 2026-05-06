@@ -222,7 +222,7 @@ export const fixIncorrectFileInfo = (file:FileInfo) => {
         file.filename = file.url.replace('file:///','')
     }
     if (!file.filename && file.dir && file.base) {
-        file.filename = `${file.dir}/${file.base}`
+        file.filename = `file:///${file.dir}/${file.base}`
     }
 }
 
