@@ -238,7 +238,11 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
         const videoUrl = this.getVideoUrl(fileInfo,route)
 
+        if (!this.logger) {
+            this.logger = new EventLogger('Incyclist')
+        }
         this.logger.logEvent({message:'[Parser] video url set', videoUrl})
+        
         if (videoUrl) {
             route.video.file = undefined;
             route.video.url = videoUrl
