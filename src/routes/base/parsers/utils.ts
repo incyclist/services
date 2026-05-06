@@ -164,7 +164,7 @@ const buildUrlFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}
             /* we use the origianl filename*/
         }
 
-        return `file:///${cleanPath}`;
+        return `file://${cleanPath}`;
     }
     return referenced.url;
 
@@ -219,10 +219,10 @@ export const fixIncorrectFileInfo = (file:FileInfo) => {
     }
 
     if (!file.filename && file.url) {
-        file.filename = file.url.replace('file:///','')
+        file.filename = file.url.replace('file://','')
     }
     if (!file.filename && file.dir && file.base) {
-        file.filename = `file:///${file.dir}/${file.base}`
+        file.filename = `file://${file.dir}/${file.base}`
     }
 }
 
