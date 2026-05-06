@@ -221,6 +221,9 @@ export const fixIncorrectFileInfo = (file:FileInfo) => {
     if (!file.filename && file.url) {
         file.filename = file.url.replace('file:///','')
     }
+    if (!file.filename && file.dir && file.base) {
+        file.filename = `${file.dir}/${file.base}`
+    }
 }
 
 const decodeUtf16Be = (data: Buffer): string => {
