@@ -211,6 +211,11 @@ export class RouteLibraryScannerService extends IncyclistService {
        
         observer.emit('parsing')
         this.importProps.phase = 'parsing'
+
+        if (this.isMobile() && this.getBindings().appInfo?.getOS().platform==='ios') {
+            return this.importSingleGpxRoute(fileInfo,observer)
+
+        }
         
         if (fileInfo?.ext==='gpx') {
             return this.importSingleGpxRoute(fileInfo,observer)
@@ -247,13 +252,18 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         this.logEvent({message:'importSingleVideoRoute', fileInfo})
         const parsers = this.getParsers()
-        const {dir,ext,delimiter} = fileInfo
+        const {dir,delimiter} = fileInfo
+        let {ext}= fileInfo
+
+        if (ext.startsWith('.')) ext = ext.slice(1)
+
         const folderUri = dir.endsWith(delimiter??'/') ? dir.slice(0, -delimiter.length) : dir     
         
         try {
 
             if (!parsers.isPrimaryExtension(ext)) {
-                observer.emit('error','not a route control file')
+
+                observer.emit('error','not a route control file',ext)
                 return
             }
 
@@ -324,6 +334,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         await this.scanFolder(folderInfo.uri, folderInfo.displayName, observer, parsers, progress, discoveredCount)
         await this.upsertImportHistory(folderInfo, discoveredCount.value)
 
+        this.logEvent({message:'video scan result', scannedFolders: this.importProps.scanProgress.scannedFolders, files:this.scanResult.length})
         observer.emit('scan-complete',this.scanResult)
     }
 
