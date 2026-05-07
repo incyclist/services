@@ -518,6 +518,11 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
     private validateVideoUrl(route:Route,folderUri:string, folderFiles:ReadDirResult[]) {
+
+        const {video}= route?.details??{}
+        const {file,url,format} = video??{}
+        this.logEvent( {message:'validateVideoUrl',route:{file,url,format}, folderUri, folderFiles})
+
         const routeDetail = route.details
         const routeDescr = route.description
         if (this.isMobile()) {
@@ -550,6 +555,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                     this.logEvent({message:'video check failed',url})
                     throw err
                 }
+                return;
             }
         }
         if (routeDetail.video.file) {
