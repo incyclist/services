@@ -541,6 +541,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                             else 
                                 routeDetail.video.file = mp4Url
                             routeDescr.videoFormat = 'mp4'
+                            routeDescr.videoUrl = mp4Url
                         }
                         else {
                             throw new Error('AVI video not supported')
