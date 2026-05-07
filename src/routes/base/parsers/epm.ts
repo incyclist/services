@@ -2,7 +2,7 @@ import { FileInfo, getBindings } from '../../../api';
 import { RouteApiDetail } from '../api/types';
 import { DaumEpp, DaumEppProgramEntry, RouteInfo, RoutePoint} from '../types';
 import { JSONObject } from '../../../utils/xml';
-import { BinaryReader } from './utils';
+import { BinaryReader, fixIncorrectFileInfo } from './utils';
 import { XMLParser, XmlParserContext } from './xml';
 import { getFileName } from '../../../utils';
 import { AppChannel } from '../../../api/appInfo';
@@ -68,45 +68,38 @@ export class EPMParser extends XMLParser{
 
     protected async loadEpp(context:EpmParserContext):Promise<Buffer> {
         const {fileInfo} = context
-        
+
+        fixIncorrectFileInfo(fileInfo)
 
         const file:FileInfo = {...fileInfo,ext:'epp',encoding:'binary'}
     
-        let fullName = fileInfo.base??fileInfo.name
-        if (!fullName.includes('.epm')) {
-            fullName = fullName + '.epm'
+        let base = fileInfo.base
+        if (!base.includes('.epm')) {
+            base = base + '.epm'
         }
-        const fileName = fullName.replace('epm','epp')
-
-        if (fileName.startsWith('http')||fileName.startsWith('file')||fileName.startsWith('/')||fileName.startsWith('\\')||fileName.startsWith('.')) {
-            file.type = 'file'
-            file.filename = fileName
-        }
-        else if (fileInfo.type==='url') {
-                file.url = file.url.replace(fileInfo.name,fileName)
-        }
-        else {
-            file.filename = file.filename.replace(fullName,fileName)
-
-        }
-
-
+        file.base = base.replace('.epm','.epp')
+        if (file.filename)
+            file.filename = fileInfo.filename.replace(base,file.base)
+        if (file.url)
+            file.url = fileInfo.url.replace(base,file.base)
+  
         const onError = ()=> {
 
-            const nameInfo   = this.getChannel()==='mobile' ? fileName : getFileName(file)
+            const nameInfo   = this.getChannel()==='mobile' ? base : getFileName(file)
             throw new Error('Could not open EPP file: '+ nameInfo)
         }
-
+        
         const loader = getBindings().loader
         try {
             const res = await loader.open(file)
             if (res.error) {
+                this.logger.logEvent({message:'could not load EPP file', file,reason:res.error})
                 onError()
             }
             return res.data as Buffer
         }
         catch (err) {
-            this.logger.logEvent({message:'could not load EPP file', reason:err.message})
+            this.logger.logEvent({message:'could not load EPP file', file,reason:err.message})
             onError()
         }
     }
