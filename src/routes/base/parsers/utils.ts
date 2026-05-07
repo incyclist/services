@@ -224,6 +224,10 @@ export const fixIncorrectFileInfo = (file:FileInfo) => {
     if (!file.filename && file.dir && file.base) {
         file.filename = `file://${file.dir}/${file.base}`
     }
+
+    if (!file.type) {
+        file.type == file.url&& file.url.startsWith('http') ? 'url' : 'file'
+    }
 }
 
 const decodeUtf16Be = (data: Buffer): string => {
