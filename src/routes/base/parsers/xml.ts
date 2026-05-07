@@ -56,15 +56,17 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         if (data)
             return data
 
+        this.getLogger().logEvent({message:'[Parser] getData', file})
         const onError = ()=> {
             throw new Error('Could not open file: '+ getFileName(file))
         }
 
-        let cleaned
         const loader = getBindings().loader
         try {
             const res = await loader.open(file)
             if (res.error) {
+                this.getLogger().logEvent({message:'[Parser] getData error', error:res.error})
+
                 onError()                
             }
 
@@ -73,8 +75,8 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             
             return xml
         }
-        catch {
-            console.log('# failed', Buffer.from (cleaned??'').toString('hex'))
+        catch (err:any) {
+            this.getLogger().logEvent({message:'[Parser] getData error', error:err.message})
             onError()
         }
     }
@@ -238,10 +240,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
         const videoUrl = this.getVideoUrl(fileInfo,route)
 
-        if (!this.logger) {
-            this.logger = new EventLogger('Incyclist')
-        }
-        this.logger.logEvent({message:'[Parser] video url set', videoUrl})
+        this.getLogger().logEvent({message:'[Parser] video url set', videoUrl})
         
         if (videoUrl) {
             route.video.file = undefined;

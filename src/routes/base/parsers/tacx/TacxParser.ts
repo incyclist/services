@@ -80,8 +80,8 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
             const pgmfFile = clone(file)
             pgmfFile.ext = 'pgmf'
             pgmfFile.base = to
-            pgmfFile.filename = pgmfFile.filename.replace(from,to)
-            pgmfFile.url = pgmfFile.url.replace(from,to)
+            pgmfFile.filename = pgmfFile.filename?.replace(from,to)
+            pgmfFile.url = pgmfFile.url?.replace(from,to)
             return { rlvFile: file, pgmfFile }
         }
         else if (file.ext === 'pgmf') {
@@ -89,8 +89,8 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
             const rlvFile = clone(file)
             rlvFile.ext = 'rlv'
             rlvFile.base = to
-            rlvFile.filename = rlvFile.filename.replace(from,to)
-            rlvFile.url = rlvFile.url.replace(from,to)
+            rlvFile.filename = rlvFile.filename?.replace(from,to)
+            rlvFile.url = rlvFile.url?.replace(from,to)
             return { rlvFile, pgmfFile: file }
         }
         else {
