@@ -226,7 +226,7 @@ export const fixIncorrectFileInfo = (file:Partial<FileInfo>) => {
     }
 
     if (!file.type) {
-        file.type == file.url&& file.url.startsWith('http') ? 'url' : 'file'
+        file.type = file.url?.startsWith('http') ? 'url' : 'file'
     }
 }
 

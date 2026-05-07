@@ -212,14 +212,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         observer.emit('parsing')
         this.importProps.phase = 'parsing'
 
-        this.logEvent({message:'import single',fileInfo})
-
-        if (this.isMobile() && this.getBindings().appInfo?.getOS().platform==='ios') {
-            return this.importSingleGpxRoute(fileInfo,observer)
-
-        }
-        
-        if (fileInfo?.ext==='gpx') {
+        if (fileInfo?.ext==='gpx' ) {
             return this.importSingleGpxRoute(fileInfo,observer)
         }
         else {
@@ -230,6 +223,7 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     // simple single GPX file import
     private async importSingleGpxRoute  (fileInfo: FileInfo, observer:IObserver) {
+        this.logEvent({message:'import single GPX route'})
         const list = this.getRouteList()
         const db = this.getRoutesDBLoader()
         
@@ -252,7 +246,7 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     private async importSingleVideoRoute  (fileInfo: FileInfo, observer:IObserver) {
 
-        this.logEvent({message:'importSingleVideoRoute', fileInfo})
+        this.logEvent({message:'import single video route', fileInfo})
         const parsers = this.getParsers()
         const {dir,delimiter} = fileInfo
         let {ext}= fileInfo
