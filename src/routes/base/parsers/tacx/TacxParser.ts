@@ -12,6 +12,7 @@ import { TacxFileReader } from "./TacxReader";
 import type { Parser, ParseResult } from "../types";
 import { fixIncorrectFileInfo } from "../utils";
 import { EventLogger } from "gd-eventlog";
+import { Injectable } from "../../../../base/decorators";
 
 export interface TacxParserContext {
     rlvFile: FileInfo
@@ -35,7 +36,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
     }
 
     async getData(info: FileInfo, data?: ArrayBuffer): Promise<ArrayBuffer> {
-        const {loader} = getBindings()
+        const loader = this.getBindings().loader
         info.encoding = 'binary'
 
         this.logger.logEvent({message:'[Parser] getData', file:info})
@@ -239,9 +240,17 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         if (!fileName) 
             return
 
-        const {path,fs} = getBindings()
+        const {path,fs} = this.getBindings()
 
-        const file = path.parse(fileName);
+        const file = path.parse(fileName) as Partial<FileInfo>
+
+        if (this.isMobile()) {
+            fixIncorrectFileInfo(file);
+            data.videoUrl = context.pgmfFile.filename.replace(context.pgmfFile.base, file.base )
+            return;
+        }
+
+
         data.videoFormat = file.ext.split('.').pop().toLowerCase();
 
         const winFile = file.name.split('\\');
@@ -351,7 +360,17 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
     }
 
+
     supportsExtension(extension: string): boolean {
         return (extension.toLowerCase() === 'pgmf' || extension.toLowerCase() === 'rlv');
+    }
+
+    protected isMobile():boolean {
+        return this.getBindings().appInfo?.getChannel()==='mobile'
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 }

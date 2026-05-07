@@ -212,7 +212,7 @@ export const parseInformations =( informations?:Array<JSONObject>):Array<RouteIn
 
 }
 
-export const fixIncorrectFileInfo = (file:FileInfo) => {
+export const fixIncorrectFileInfo = (file:Partial<FileInfo>) => {
     if (!file.base) {
         file.base = file.name
         file.name = file.base.replace( `.${file.ext}`, '')
