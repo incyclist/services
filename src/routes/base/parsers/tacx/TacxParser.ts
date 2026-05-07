@@ -348,9 +348,9 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         })
 
         route.video = {
-            file:data.videoUrl,
+            file:undefined,
             format: data.videoFormat,
-            url:undefined,
+            url:data.videoUrl,
             framerate,
             mappings,
             selectableSegments:data.segments
