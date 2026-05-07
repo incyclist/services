@@ -11,6 +11,7 @@ import { TacxFileReader } from "./TacxReader";
 
 import type { Parser, ParseResult } from "../types";
 import { fixIncorrectFileInfo } from "../utils";
+import { EventLogger } from "gd-eventlog";
 
 export interface TacxParserContext {
     rlvFile: FileInfo
@@ -22,6 +23,7 @@ export interface TacxParserContext {
 
 export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
+    protected logger = new EventLogger('TacxParser')
 
     async import(file: FileInfo, data?: ArrayBuffer): Promise<ParseResult<RouteApiDetail>> {
         const context = this.buildContext(file)
@@ -36,6 +38,8 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         const {loader} = getBindings()
         info.encoding = 'binary'
 
+        this.logger.logEvent({message:'[Parser] getData', file:info})
+
         const onError = ()=> {
             throw new Error(`Could not open file: ${getFileName(info)}` )
         }
@@ -44,6 +48,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         try {
             const res = await loader.open(info)
             if (res.error) {
+                this.logger.logEvent({message:'[Parser] getData error', error:res.error})
                 onError()
             }
 
@@ -52,7 +57,9 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
             return data
         }
-        catch {
+        catch (err:any) {
+            this.logger.logEvent({message:'[Parser] getData error', error:err.message})
+
             onError()
         }
     }
