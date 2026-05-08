@@ -13,7 +13,6 @@ import { TacxParser } from './tacx/TacxParser'
 
 import type { ParseResult } from './types'
 import { fixIncorrectFileInfo } from './utils'
-import { EventLogger } from 'gd-eventlog'
 
 export const useParsers = () => {
 

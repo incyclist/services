@@ -117,7 +117,7 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
     let effectiveScheme = scheme;
     if (scheme === 'file' && info.url) {
         // Only extract scheme from URL if using default scheme (to preserve schemes like 'incyclist://')
-        const schemeMatch = info.url.match(/^([a-z]+):/);
+        const schemeMatch = /^([a-z]+):/.exec(info.url);
         if (schemeMatch && schemeMatch[1] !== 'file') {
             effectiveScheme = schemeMatch[1];
         }
@@ -150,62 +150,50 @@ const isAbsolutePath = (path: string): boolean => {
     return false;
 }
 
+const tryDecode = (path: string): string => {
+    try {
+        return decodeURIComponent(path);
+    } catch {
+        return path;
+    }
+}
+
+const handleFileUrlPath = (fileName: string): string => {
+    const cleanPath = tryDecode(fileName.replace(/^file:\/\/\/?/, ''));
+    return `file://${encodeURI(cleanPath)}`;
+}
+
+const buildFileUrl = (normalizedPath: string): string => {
+    if (isAbsolutePath(normalizedPath)) {
+        if (/^[A-Za-z]:/.exec(normalizedPath)) {
+            return `file:///${encodeURI(normalizedPath)}`;
+        }
+        return `file://${encodeURI(normalizedPath)}`;
+    }
+    return `file://${encodeURI(normalizedPath)}`;
+}
+
 const buildUrlFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}) => {
-    // URL takes precedence over file
     if (referenced.url) {
         return referenced.url;
     }
 
-    if (referenced.file) {
-        if (info.filename?.startsWith('content://')) {
-            return `${info.dir}${info.delimiter}${referenced.file}`
-        }
-
-        const fileName = info.filename?.replace(info.base, referenced.file)
-
-        if (fileName.startsWith('file://')) {
-            let cleanPath = fileName;
-            try {
-                // Try to decode in case it's already encoded
-                cleanPath = decodeURIComponent(fileName.replace(/^file:\/\/\/?/, ''));
-            } catch  {
-                // If decoding fails (malformed %), use the filename as-is
-                cleanPath = fileName.replace(/^file:\/\/\/?/, '');
-            }
-            return `file://${encodeURI(cleanPath)}`;
-        }
-
-        let cleanPath = fileName;
-        try {
-            // Try to decode in case it's already encoded
-            cleanPath = decodeURIComponent(fileName);
-        } catch  {
-            /* we use the original filename*/
-        }
-
-        // Note: Path normalization (./ and ../) is not performed at this stage
-        // Paths are returned as-is to preserve the original reference format
-        const normalizedPath = cleanPath;
-
-        // Always return a URL with file:// scheme
-        if (isAbsolutePath(normalizedPath)) {
-            // For absolute paths, use proper file:// URL syntax
-            // Unix paths: file:// + /path = file:///path
-            // Windows paths: file:// + / + C:/path = file:///C:/path
-            if (normalizedPath.match(/^[A-Za-z]:/)) {
-                // Windows drive letter path needs an extra slash
-                return `file:///${encodeURI(normalizedPath)}`;
-            } else {
-                // Unix absolute path already starts with /
-                return `file://${encodeURI(normalizedPath)}`;
-            }
-        } else {
-            // For relative paths (e.g., ./__tests__/data/file.gpx), use file:// + relative path
-            return `file://${encodeURI(normalizedPath)}`;
-        }
+    if (!referenced.file) {
+        return undefined;
     }
-    return undefined;
 
+    if (info.filename?.startsWith('content://')) {
+        return `${info.dir}${info.delimiter}${referenced.file}`
+    }
+
+    const fileName = info.filename?.replace(info.base, referenced.file)
+
+    if (fileName.startsWith('file://')) {
+        return handleFileUrlPath(fileName);
+    }
+
+    const normalizedPath = tryDecode(fileName);
+    return buildFileUrl(normalizedPath);
 }
 
 const buildAbsolutePathTarget = (fileName: string, info: FileInfo, scheme: string) => {
