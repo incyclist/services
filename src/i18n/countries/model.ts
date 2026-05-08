@@ -5,14 +5,18 @@ export type CountryList = {
     countries: { [index:string]:CountryDefinition  }
 }
 
-export type CountryOverpassElement = { 
-    type: string
-    id: number,
-    tags: { [index:string]:string}
+export type CountryOverpassElement = {
+    type: 'relation';
+    id: number;
+    tags: {
+        'ISO3166-1:alpha2'?: string;
+        'boundary'?: string;
+        'admin_level'?: string;
+        [key: string]: string | undefined;
+    }
 }
 
-
 export type CountryOverpassResult = {
-    version,
-    elements:Array<CountryOverpassElement>
+    version: number;
+    elements: Array<CountryOverpassElement>;
 }
