@@ -250,6 +250,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         const {path,fs} = this.getBindings()
 
         const file = path.parse(fileName) as Partial<FileInfo>
+        data.videoFormat = file.ext.split('.').pop().toLowerCase();
 
         if (this.isMobile()) {
             fixIncorrectFileInfo(file);
@@ -258,7 +259,6 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         }
 
 
-        data.videoFormat = file.ext.split('.').pop().toLowerCase();
 
         const winFile = file.name.split('\\');
         const uxFile = file.name.split('/');

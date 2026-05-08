@@ -527,12 +527,23 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         const {video}= route?.details??{}
         const {file,url,format} = video??{}
+
+
         this.logEvent( {message:'validateVideoUrl',route:{file,url,format}, folderUri, folderFiles})
+
+        let videoFormat = format 
+        try {
+            if (videoFormat===undefined) {
+                const info = this.getBindings().path.parse(url??file)
+                videoFormat = info.ext.toLowerCase()
+            }
+        }
+        catch { /* ignore */}
 
         const routeDetail = route.details
         const routeDescr = route.description
         if (this.isMobile()) {
-            if (routeDetail.video.format==='avi') {
+            if (format==='avi') {
 
                 const hasUrl = routeDetail.video.url!=null
                 const url = routeDetail.video.url ?? routeDetail.video.file
@@ -550,11 +561,15 @@ export class RouteLibraryScannerService extends IncyclistService {
                             routeDescr.videoUrl = mp4Url
                         }
                         else {
+                            if ( format===undefined) {
+                                this.logEvent({message:'video file not found',url})
+                                throw new Error('no video found')
+                            }
                             throw new Error('AVI video not supported')
                         }
                     }
                     else {
-                        this.logEvent({message:'video file not found',video:routeDetail.video})
+                        this.logEvent({message:'video file not found',url})
                         throw new Error('no video found')
                     }
                 }
@@ -564,6 +579,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                 }
                 return;
             }
+            
         }
         if (routeDetail.video.file) {
             routeDetail.video.file = this.resolveVideoUri(routeDetail.video.file,folderUri,folderFiles)
