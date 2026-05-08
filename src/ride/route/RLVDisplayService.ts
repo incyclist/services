@@ -1,4 +1,5 @@
 import { ActivityUpdate } from "../../activities/ride/types";
+import { getBindings } from "../../api";
 import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
 import { getCoachesService } from "../../coaches";
@@ -640,7 +641,7 @@ export class RLVDisplayService extends RouteDisplayService {
         if ( fileName.startsWith('video:') && !lc.endsWith('.avi') )
             return fileName.replace('video:','file:');
         
-        if ( fileName.startsWith('file:') && !lc.endsWith('.avi') )
+        if ( fileName.startsWith('file:') && !lc.endsWith('.avi') && !this.isMobile())
             return fileName.replace('file:','video:');
         
         if ( fileName.startsWith('video:') && lc.endsWith('.avi') )
@@ -721,6 +722,15 @@ export class RLVDisplayService extends RouteDisplayService {
         this.addVideo( nextRoute, false,current)
         return true
 
+    }
+
+    protected isMobile() {
+        return this.getBindings()?.appInfo?.getChannel()==='mobile'
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 
     @Injectable

@@ -2229,13 +2229,13 @@ exports[`BikeLabParser import valid file 1`] = `
         "slope": 0.5354494253730665,
       },
     ],
-    "previewUrl": null,
+    "previewUrl": undefined,
     "requiresDownload": false,
     "routeHash": "d3fe29ae2af56ea604f5ad28dfb29702",
     "segments": undefined,
     "title": "Randa",
     "videoFormat": "mp4",
-    "videoUrl": "file:///./__tests__/data/rlv/Randa.xml",
+    "videoUrl": "file://./__tests__/data/rlv/Randa.xml",
   },
   "details": {
     "country": undefined,
@@ -4458,7 +4458,7 @@ exports[`BikeLabParser import valid file 1`] = `
         "slope": 0.5354494253730665,
       },
     ],
-    "previewUrl": null,
+    "previewUrl": undefined,
     "routeHash": "d3fe29ae2af56ea604f5ad28dfb29702",
     "title": "Randa",
     "video": {
@@ -4538,7 +4538,7 @@ exports[`BikeLabParser import valid file 1`] = `
       ],
       "next": undefined,
       "selectableSegments": undefined,
-      "url": "file:///./__tests__/data/rlv/Randa.xml",
+      "url": "file://./__tests__/data/rlv/Randa.xml",
     },
   },
 }

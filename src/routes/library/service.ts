@@ -16,6 +16,7 @@ import { useRoutesDbLoader } from '../list/loaders/db'
 import { Route } from '../base/model/route'
 import { sleep } from '../../utils/sleep'
 import { useUnitConverter } from '../../i18n'
+import { fixIncorrectFileInfo } from '../base/parsers/utils'
 
 
 /**
@@ -90,7 +91,8 @@ export class RouteLibraryScannerService extends IncyclistService {
         this.scanResult = []
 
         this.importProps.phase = 'scanning'
-
+        this.importProps.scanProgress = {scannedFolders:0}
+        
         const observer = new Observer()
         this._scan(folderInfo, observer).catch(err => {
             this.logError(err, 'scan', { uri: folderInfo.uri })
@@ -211,8 +213,8 @@ export class RouteLibraryScannerService extends IncyclistService {
        
         observer.emit('parsing')
         this.importProps.phase = 'parsing'
-        
-        if (fileInfo?.ext==='gpx') {
+
+        if (fileInfo?.ext==='gpx' ) {
             return this.importSingleGpxRoute(fileInfo,observer)
         }
         else {
@@ -223,6 +225,7 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     // simple single GPX file import
     private async importSingleGpxRoute  (fileInfo: FileInfo, observer:IObserver) {
+        this.logEvent({message:'import single GPX route'})
         const list = this.getRouteList()
         const db = this.getRoutesDBLoader()
         
@@ -245,15 +248,20 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     private async importSingleVideoRoute  (fileInfo: FileInfo, observer:IObserver) {
 
-        this.logEvent({message:'importSingleVideoRoute', fileInfo})
+        this.logEvent({message:'import single video route', fileInfo})
         const parsers = this.getParsers()
-        const {dir,ext,delimiter} = fileInfo
+        const {dir,delimiter} = fileInfo
+        let {ext}= fileInfo
+
+        if (ext.startsWith('.')) ext = ext.slice(1)
+
         const folderUri = dir.endsWith(delimiter??'/') ? dir.slice(0, -delimiter.length) : dir     
         
         try {
 
             if (!parsers.isPrimaryExtension(ext)) {
-                observer.emit('error','not a route control file')
+
+                observer.emit('error','not a route control file',ext)
                 return
             }
 
@@ -324,6 +332,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         await this.scanFolder(folderInfo.uri, folderInfo.displayName, observer, parsers, progress, discoveredCount)
         await this.upsertImportHistory(folderInfo, discoveredCount.value)
 
+        this.logEvent({message:'video scan result', scannedFolders: this.importProps.scanProgress.scannedFolders, files:this.scanResult.length})
         observer.emit('scan-complete',this.scanResult)
     }
 
@@ -451,23 +460,27 @@ export class RouteLibraryScannerService extends IncyclistService {
             const parsed = i+1;
             const target = targets[i]
             observer.emit('parse-progress', { current: parsed, parsed, total, currentFolder: target.folderName})
-            await this._parseTarget(target, service, observer,i )
+            let fileName = target.controlFileUri
+            try {
+                const info = this.getBindings().path.parse(fileName)
+                fixIncorrectFileInfo(info)
+                fileName = info.base
+            } catch { /*ignore*/ }
+            this.logEvent({message:'parsing route', fileName})
+            await this._parseTarget(target, service, observer )
+            this.logEvent({message:'parsing route done', fileName})
         }
 
         observer.emit('parse-complete')
     }
 
 
-    private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver,idx:number):Promise<void> {
-
-        this.logEvent({message:'_parseTarget', target:target.controlFileUri})        
+    private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver):Promise<void> {
 
         let result: Awaited<ReturnType<typeof RouteParser.parse>> | undefined
         const file = this.buildFileInfo(target.controlFileUri, target.format)
         try {
-            this.logEvent({message:'_parseTarget:parse', target:target.controlFileUri})        
             result = await RouteParser.parse(file)
-            this.logEvent({message:'_parseTarget:parse done', target:target.controlFileUri})        
 
             const route= new Route(result.data, result.details)
             
@@ -511,6 +524,11 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
     private validateVideoUrl(route:Route,folderUri:string, folderFiles:ReadDirResult[]) {
+
+        const {video}= route?.details??{}
+        const {file,url,format} = video??{}
+        this.logEvent( {message:'validateVideoUrl',route:{file,url,format}, folderUri, folderFiles})
+
         const routeDetail = route.details
         const routeDescr = route.description
         if (this.isMobile()) {
@@ -529,6 +547,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                             else 
                                 routeDetail.video.file = mp4Url
                             routeDescr.videoFormat = 'mp4'
+                            routeDescr.videoUrl = mp4Url
                         }
                         else {
                             throw new Error('AVI video not supported')
@@ -543,6 +562,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                     this.logEvent({message:'video check failed',url})
                     throw err
                 }
+                return;
             }
         }
         if (routeDetail.video.file) {

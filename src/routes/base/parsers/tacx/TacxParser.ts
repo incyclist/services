@@ -11,6 +11,8 @@ import { TacxFileReader } from "./TacxReader";
 
 import type { Parser, ParseResult } from "../types";
 import { fixIncorrectFileInfo } from "../utils";
+import { EventLogger } from "gd-eventlog";
+import { Injectable } from "../../../../base/decorators";
 
 export interface TacxParserContext {
     rlvFile: FileInfo
@@ -22,6 +24,7 @@ export interface TacxParserContext {
 
 export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
+    protected logger = new EventLogger('TacxParser')
 
     async import(file: FileInfo, data?: ArrayBuffer): Promise<ParseResult<RouteApiDetail>> {
         const context = this.buildContext(file)
@@ -32,8 +35,8 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         return this.buildResult(context)
     }
 
-    async getData(info: FileInfo, data?: ArrayBuffer): Promise<ArrayBuffer> {
-        const {loader} = getBindings()
+    async getData(info: FileInfo, _data?: ArrayBuffer): Promise<ArrayBuffer> {
+        const loader = this.getBindings().loader
         info.encoding = 'binary'
 
         const onError = ()=> {
@@ -44,6 +47,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         try {
             const res = await loader.open(info)
             if (res.error) {
+                this.logger.logEvent({message:'[Parser] getData error', error:res.error})
                 onError()
             }
 
@@ -52,7 +56,9 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
             return data
         }
-        catch {
+        catch (err:any) {
+            this.logger.logEvent({message:'[Parser] getData error', error:err.message})
+
             onError()
         }
     }
@@ -80,8 +86,8 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
             const pgmfFile = clone(file)
             pgmfFile.ext = 'pgmf'
             pgmfFile.base = to
-            pgmfFile.filename = pgmfFile.filename.replace(from,to)
-            pgmfFile.url = pgmfFile.url.replace(from,to)
+            pgmfFile.filename = pgmfFile.filename?.replace(from,to)
+            pgmfFile.url = pgmfFile.url?.replace(from,to)
             return { rlvFile: file, pgmfFile }
         }
         else if (file.ext === 'pgmf') {
@@ -89,8 +95,8 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
             const rlvFile = clone(file)
             rlvFile.ext = 'rlv'
             rlvFile.base = to
-            rlvFile.filename = rlvFile.filename.replace(from,to)
-            rlvFile.url = rlvFile.url.replace(from,to)
+            rlvFile.filename = rlvFile.filename?.replace(from,to)
+            rlvFile.url = rlvFile.url?.replace(from,to)
             return { rlvFile, pgmfFile: file }
         }
         else {
@@ -119,9 +125,18 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         if (!title)
             return
 
-        if (title.match(/^[A-z]{2}[-_].*/g)) {            
+        if (title.match(/^[A-z]{2}[-_].*/g)) {
             return title.substring(0,2)
         }
+    }
+
+    protected buildVideoUrl(filePath: string): string {
+        // Absolute paths (Unix /path or Windows C:\path): use 3 slashes
+        // Relative paths (./path or ../path): use 2 slashes
+        if (filePath.startsWith('/') || /^[A-Za-z]:/.test(filePath)) {
+            return `video:///${filePath}`
+        }
+        return `video://${filePath}`
     }
 
 
@@ -147,8 +162,8 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         const {title,originalName,localizedTitle,country,distance,elevation,points,videoUrl, videoFormat} =data
 
         const route:RouteApiDetail = { id:title, title,originalName,localizedTitle,country,distance,elevation,
-                                       points, gpxDisabled:true, 
-                                       video: {url:videoUrl,file:undefined,format:videoFormat,mappings:[],framerate:25,selectableSegments:undefined} }
+                                       points, gpxDisabled:true,
+                                       video: {url:videoUrl,file:videoUrl,format:videoFormat,mappings:[],framerate:25,selectableSegments:undefined} }
 
         const routeHash = getRouteHash(route)
         route.id = data.id = routeHash
@@ -232,9 +247,17 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         if (!fileName) 
             return
 
-        const {path,fs} = getBindings()
+        const {path,fs} = this.getBindings()
 
-        const file = path.parse(fileName);
+        const file = path.parse(fileName) as Partial<FileInfo>
+
+        if (this.isMobile()) {
+            fixIncorrectFileInfo(file);
+            data.videoUrl = context.pgmfFile.filename.replace(context.pgmfFile.base, file.base )
+            return;
+        }
+
+
         data.videoFormat = file.ext.split('.').pop().toLowerCase();
 
         const winFile = file.name.split('\\');
@@ -252,10 +275,16 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
         }
 
-        data.videoUrl = `video:///${fileName}` 
+        data.videoUrl = this.buildVideoUrl(fileName)
         const exists = await fs.existsFile(fileName)
-        if (!exists)
-            data.videoUrl = `video:///${path.join(context.pgmfFile.dir, name)}`
+        if (!exists) {
+            let fallbackPath = path.join(context.pgmfFile.dir, name)
+            // Restore leading ./ if it was normalized away by path.join
+            if (context.pgmfFile.dir.startsWith('./') && !fallbackPath.startsWith('.')) {
+                fallbackPath = './' + fallbackPath
+            }
+            data.videoUrl = this.buildVideoUrl(fallbackPath)
+        }
         
         
 
@@ -334,7 +363,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         route.video = {
             file:data.videoUrl,
             format: data.videoFormat,
-            url:undefined,
+            url:data.videoUrl,
             framerate,
             mappings,
             selectableSegments:data.segments
@@ -344,7 +373,17 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
     }
 
+
     supportsExtension(extension: string): boolean {
         return (extension.toLowerCase() === 'pgmf' || extension.toLowerCase() === 'rlv');
+    }
+
+    protected isMobile():boolean {
+        return this.getBindings().appInfo?.getChannel()==='mobile'
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 }

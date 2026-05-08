@@ -2,7 +2,6 @@ import { FileInfo,  getBindings} from "../../../api";
 import { RouteInfoText } from "../types";
 import { JSONObject } from "../../../utils/xml";
 import { LocalizedText } from "../../../i18n";
-import { EventLogger } from "gd-eventlog";
 
 export class BinaryReader {
     protected pos:number
@@ -93,10 +92,6 @@ export class BinaryReader {
 
 export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, url?:string}, scheme:string='file'):string=> {
 
-
-    const logger = new EventLogger('Incyclist')
-    logger.logEvent({message:'getReferencedFileInfo', info,referenced})
-
     // Do we check against a local file ? 
     if (info.type!=='url') {
         return buildUrlFromFile(info,referenced)
@@ -117,78 +112,118 @@ export const getReferencedFileInfo = (info:FileInfo, referenced:{ file?:string, 
     if (referenced.file && info.filename?.startsWith('content://')) {
         return `${info.dir}${info.delimiter}${referenced.file}`
     }
-    
+
+    // Determine effective scheme: use passed scheme parameter, unless it's default 'file' and input URL has a different scheme
+    let effectiveScheme = scheme;
+    if (scheme === 'file' && info.url) {
+        // Only extract scheme from URL if using default scheme (to preserve schemes like 'incyclist://')
+        const schemeMatch = /^([a-z]+):/.exec(info.url);
+        if (schemeMatch && schemeMatch[1] !== 'file') {
+            effectiveScheme = schemeMatch[1];
+        }
+    }
+
     const targetFileName = referenced.file;
     const regex = /([\\/])/g;
 
-    if (targetFileName.startsWith('http://') || targetFileName.startsWith('https://')) { 
-        return targetFileName 
+    if (targetFileName.startsWith('http://') || targetFileName.startsWith('https://')) {
+        return targetFileName
     }
     else if (targetFileName.search(regex)===-1) {
-        return buildAbsolutePathTarget(targetFileName,info,scheme)
+        return buildAbsolutePathTarget(targetFileName,info,effectiveScheme)
 
     }
     else if (targetFileName.startsWith('.')) {
-        return buildRelativePathTarget(targetFileName,info,scheme)
+        return buildRelativePathTarget(targetFileName,info,effectiveScheme)
     }
     else {
-        return `${scheme}:///${targetFileName}`
+        return `${effectiveScheme}:///${targetFileName}`
     }
 }
 
-const buildUrlFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}) => { 
-    if (referenced.file) {
-        if (info.filename?.startsWith('content://')) {
-            return `${info.dir}${info.delimiter}${referenced.file}`
-        }
-
-        const fileName = info.filename?.replace(info.base,referenced.file)
-
-        if (fileName.startsWith('file://')) {
-            let cleanPath = fileName;
-            try {
-                // Try to decode in case it's already encoded
-                cleanPath = decodeURIComponent(fileName.replace(/^file:\/\/\/?/, ''));
-            } catch  {
-                // If decoding fails (malformed %), use the filename as-is
-                cleanPath = fileName.replace(/^file:\/\/\/?/, '');
-            }
-            return `file:///${encodeURI(cleanPath)}`;
-        }
-
-        let cleanPath = fileName;
-        try {
-            // Try to decode in case it's already encoded
-            cleanPath = decodeURIComponent(fileName);
-        } catch  {
-            /* we use the origianl filename*/
-        }
-
-        return `file:///${cleanPath}`;
-    }
-    return referenced.url;
-
+const isAbsolutePath = (path: string): boolean => {
+    if (!path) return false;
+    // Unix absolute path
+    if (path.startsWith('/')) return true;
+    // Windows absolute path (C:\ or C:/)
+    if (/^[A-Za-z]:[/\\]/.test(path)) return true;
+    return false;
 }
 
-const buildAbsolutePathTarget = (fileName: string, info: FileInfo, scheme: string) => { 
+const tryDecode = (path: string): string => {
+    try {
+        return decodeURIComponent(path);
+    } catch {
+        return path;
+    }
+}
+
+const handleFileUrlPath = (fileName: string): string => {
+    const cleanPath = tryDecode(fileName.replace(/^file:\/\/\/?/, ''));
+    return `file://${encodeURI(cleanPath)}`;
+}
+
+const buildFileUrl = (normalizedPath: string): string => {
+    if (isAbsolutePath(normalizedPath)) {
+        if (/^[A-Za-z]:/.exec(normalizedPath)) {
+            return `file:///${encodeURI(normalizedPath)}`;
+        }
+        return `file://${encodeURI(normalizedPath)}`;
+    }
+    return `file://${encodeURI(normalizedPath)}`;
+}
+
+const buildUrlFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}) => {
+    if (referenced.url) {
+        return referenced.url;
+    }
+
+    if (!referenced.file) {
+        return undefined;
+    }
+
+    if (info.filename?.startsWith('content://')) {
+        return `${info.dir}${info.delimiter}${referenced.file}`
+    }
+
+    const fileName = info.filename?.replace(info.base, referenced.file)
+
+    if (fileName.startsWith('file://')) {
+        return handleFileUrlPath(fileName);
+    }
+
+    const normalizedPath = tryDecode(fileName);
+    return buildFileUrl(normalizedPath);
+}
+
+const buildAbsolutePathTarget = (fileName: string, info: FileInfo, scheme: string) => {
     const inputUrl = info.url;
 
-    if (  inputUrl.startsWith('incyclist:') || inputUrl.startsWith('file:')) {
+    if (inputUrl.startsWith('incyclist:') || inputUrl.startsWith('file:')) {
         const parts = inputUrl.split('://');
-        const targetPath = parts[1].replace(info.base,fileName)
-        return  `${scheme}://${targetPath}`
+        const targetPath = parts[1].replace(info.base, fileName)
+        // Proper file URL syntax: scheme + :// + path (path already starts with /)
+        return `${scheme}://${targetPath}`
     }
 
 }
 
 const buildRelativePathTarget = (fileName: string, info: FileInfo, scheme: string) => {
-    const target:{ file?:string, url?:string} = {}
-    
+    const target: { file?: string, url?: string } = {}
+
     const path = getBindings().path;
-    //videoFile = joinPath( info.dir, videoFile, delimiter)
     fileName = path.join(info.dir, fileName);
     target.file = fileName;
-    target.url = `${scheme}:///${fileName}`;
+
+    // If the result is still a relative path (e.g., ./__tests__/...), return as-is
+    // Only use file:// URL scheme if path is absolute
+    if (isAbsolutePath(fileName)) {
+        // Use proper file URL syntax: scheme + :// + path (path already starts with /)
+        target.url = `${scheme}://${fileName}`;
+    } else {
+        // Return relative path without file:// scheme
+        target.url = fileName;
+    }
 
     return target.url;
 }
@@ -212,10 +247,21 @@ export const parseInformations =( informations?:Array<JSONObject>):Array<RouteIn
 
 }
 
-export const fixIncorrectFileInfo = (file:FileInfo) => {
+export const fixIncorrectFileInfo = (file:Partial<FileInfo>) => {
     if (!file.base) {
         file.base = file.name
         file.name = file.base.replace( `.${file.ext}`, '')
+    }
+
+    if (!file.filename && file.url) {
+        file.filename = file.url.replace('file://','')
+    }
+    if (!file.filename && file.dir && file.base) {
+        file.filename = `file://${file.dir}/${file.base}`
+    }
+
+    if (!file.type) {
+        file.type = file.url?.startsWith('http') ? 'url' : 'file'
     }
 }
 

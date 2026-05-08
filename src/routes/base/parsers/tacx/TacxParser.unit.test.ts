@@ -61,7 +61,7 @@ describe('TacxParser',()=>{
         expect(details.title).toBe('West')
         expect(details.country).toBe('IS')
         expect(details.video?.mappings).toBeDefined()
-        expect(details.video?.file).toBe(`video:///__tests__/data/rlv/${name}.avi`)    
+        expect(details.video?.file).toBe(`video://./__tests__/data/rlv/${name}.avi`)    
         expect(details.video?.format).toBe('avi')
         
     })
@@ -84,7 +84,7 @@ describe('TacxParser',()=>{
         expect(details.title).toBe('West')
         expect(details.country).toBe('IS')
         expect(details.video?.mappings).toBeDefined()
-        expect(details.video?.file).toBe(`video:///__tests__/data/rlv/${name}.avi`)    
+        expect(details.video?.file).toBe(`video://./__tests__/data/rlv/${name}.avi`)    
         expect(details.video?.format).toBe('avi')
         
     })
@@ -141,7 +141,7 @@ describe('TacxParser',()=>{
         const {details} = await parser.import(fileInfo)
         
 
-        expect(details.video?.file).toBe(`video:///__tests__/data/rlv/ES_Andalusia-1.avi`)    
+        expect(details.video?.file).toBe(`video://./__tests__/data/rlv/ES_Andalusia-1.avi`)
 
     })
 

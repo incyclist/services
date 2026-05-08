@@ -13099,7 +13099,7 @@ exports[`IncyclistParser GPX import valid file 1`] = `
     ],
     "title": "San_Leo",
     "videoFormat": "avi",
-    "videoUrl": "file:///./__tests__/data/rlv/San_Leo.avi",
+    "videoUrl": "file://./__tests__/data/rlv/San_Leo.avi",
   },
   "details": {
     "country": undefined,
@@ -40317,7 +40317,7 @@ exports[`IncyclistParser GPX import valid file 1`] = `
           "start": "0",
         },
       ],
-      "url": "file:///./__tests__/data/rlv/San_Leo.avi",
+      "url": "file://./__tests__/data/rlv/San_Leo.avi",
     },
   },
 }

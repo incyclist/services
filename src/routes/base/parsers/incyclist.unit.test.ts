@@ -93,7 +93,7 @@ describe('IncyclistParser',()=>{
                 expect(data.distance).toBeCloseTo(22100,-2)
                 expect(data.elevation).toBeCloseTo(459,0)
                 expect(data.hasVideo).toBe(true)
-                expect(data.previewUrl).toBe(`file:///./__tests__/data/rlv/FR_Source_Drome_Part_1.png`)
+                expect(data.previewUrl).toBe(`file://./__tests__/data/rlv/FR_Source_Drome_Part_1.png`)
                 expect(data.videoFormat).toBe('mp4')
                 expect(data.isLocal).toBe(true)
                 expect(data.id).toBe('e60beaa7-1238-41c9-adbb-6be022de73ca')
