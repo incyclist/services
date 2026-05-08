@@ -1,5 +1,5 @@
 import { Inject } from '../../base/decorators'
-import { Countries } from './index'
+import { Countries } from './service'
 import { CountryOverpassResult } from './model'
 
 const makeResult = (isos: (string | undefined)[]): CountryOverpassResult => ({

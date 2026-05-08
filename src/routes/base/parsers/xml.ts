@@ -56,7 +56,6 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         if (data)
             return data
 
-        this.getLogger().logEvent({message:'[Parser] getData', file})
         const onError = ()=> {
             throw new Error('Could not open file: '+ getFileName(file))
         }
@@ -239,9 +238,6 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         route.next = route.video.next
 
         const videoUrl = this.getVideoUrl(fileInfo,route)
-
-        this.getLogger().logEvent({message:'[Parser] video url set', videoUrl})
-        
         if (videoUrl) {
             route.video.file = undefined;
             route.video.url = videoUrl
@@ -428,7 +424,12 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
 
 
 const  getPreviewUrl = async (info:FileInfo,route: RouteApiDetail):Promise<string> => {
-    const url = route?.previewUrl 
+    // Preserve explicitly set previewUrl value from route (may be null or a string)
+    if (route?.previewUrl !== undefined) {
+        return route.previewUrl
+    }
+
+    const url = route?.previewUrl
     let file = route?.previewUrlLocal
 
     if (file) {

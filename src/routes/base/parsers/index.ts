@@ -33,8 +33,6 @@ export const useParsers = () => {
 export class RouteParser {
     static async parse (info:FileInfo) : Promise<ParseResult<RouteApiDetail>> {
 
-        const logger = new EventLogger('RouteParser')
-
         fixIncorrectFileInfo(info)
         const parsers = useParsers();
         
@@ -54,9 +52,7 @@ export class RouteParser {
         const matching = res.map( promise => promise.status==='fulfilled' ? promise.value:undefined).find(p=>p!==undefined)
 
         if (matching) {
-            logger.logEvent({message:'before import',info})    
             const res = await matching.parser.import(info,matching.data)
-            logger.logEvent({message:'after import',info})    
             return res
         }
         

@@ -16,6 +16,7 @@ import { useRoutesDbLoader } from '../list/loaders/db'
 import { Route } from '../base/model/route'
 import { sleep } from '../../utils/sleep'
 import { useUnitConverter } from '../../i18n'
+import { fixIncorrectFileInfo } from '../base/parsers/utils'
 
 
 /**
@@ -90,7 +91,8 @@ export class RouteLibraryScannerService extends IncyclistService {
         this.scanResult = []
 
         this.importProps.phase = 'scanning'
-
+        this.importProps.scanProgress = {scannedFolders:0}
+        
         const observer = new Observer()
         this._scan(folderInfo, observer).catch(err => {
             this.logError(err, 'scan', { uri: folderInfo.uri })
@@ -458,23 +460,27 @@ export class RouteLibraryScannerService extends IncyclistService {
             const parsed = i+1;
             const target = targets[i]
             observer.emit('parse-progress', { current: parsed, parsed, total, currentFolder: target.folderName})
-            await this._parseTarget(target, service, observer,i )
+            let fileName = target.controlFileUri
+            try {
+                const info = this.getBindings().path.parse(fileName)
+                fixIncorrectFileInfo(info)
+                fileName = info.base
+            } catch { /*ignore*/ }
+            this.logEvent({message:'parsing route', fileName})
+            await this._parseTarget(target, service, observer )
+            this.logEvent({message:'parsing route done', fileName})
         }
 
         observer.emit('parse-complete')
     }
 
 
-    private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver,idx:number):Promise<void> {
-
-        this.logEvent({message:'_parseTarget', target:target.controlFileUri})        
+    private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver):Promise<void> {
 
         let result: Awaited<ReturnType<typeof RouteParser.parse>> | undefined
         const file = this.buildFileInfo(target.controlFileUri, target.format)
         try {
-            this.logEvent({message:'_parseTarget:parse', target:target.controlFileUri})        
             result = await RouteParser.parse(file)
-            this.logEvent({message:'_parseTarget:parse done', target:target.controlFileUri})        
 
             const route= new Route(result.data, result.details)
             

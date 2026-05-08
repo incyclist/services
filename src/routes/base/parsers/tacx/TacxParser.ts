@@ -35,11 +35,9 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         return this.buildResult(context)
     }
 
-    async getData(info: FileInfo, data?: ArrayBuffer): Promise<ArrayBuffer> {
+    async getData(info: FileInfo, _data?: ArrayBuffer): Promise<ArrayBuffer> {
         const loader = this.getBindings().loader
         info.encoding = 'binary'
-
-        this.logger.logEvent({message:'[Parser] getData', file:info})
 
         const onError = ()=> {
             throw new Error(`Could not open file: ${getFileName(info)}` )
@@ -127,9 +125,18 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         if (!title)
             return
 
-        if (title.match(/^[A-z]{2}[-_].*/g)) {            
+        if (title.match(/^[A-z]{2}[-_].*/g)) {
             return title.substring(0,2)
         }
+    }
+
+    protected buildVideoUrl(filePath: string): string {
+        // Absolute paths (Unix /path or Windows C:\path): use 3 slashes
+        // Relative paths (./path or ../path): use 2 slashes
+        if (filePath.startsWith('/') || /^[A-Za-z]:/.test(filePath)) {
+            return `video:///${filePath}`
+        }
+        return `video://${filePath}`
     }
 
 
@@ -155,8 +162,8 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         const {title,originalName,localizedTitle,country,distance,elevation,points,videoUrl, videoFormat} =data
 
         const route:RouteApiDetail = { id:title, title,originalName,localizedTitle,country,distance,elevation,
-                                       points, gpxDisabled:true, 
-                                       video: {url:videoUrl,file:undefined,format:videoFormat,mappings:[],framerate:25,selectableSegments:undefined} }
+                                       points, gpxDisabled:true,
+                                       video: {url:videoUrl,file:videoUrl,format:videoFormat,mappings:[],framerate:25,selectableSegments:undefined} }
 
         const routeHash = getRouteHash(route)
         route.id = data.id = routeHash
@@ -268,10 +275,16 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
         }
 
-        data.videoUrl = `video:///${fileName}` 
+        data.videoUrl = this.buildVideoUrl(fileName)
         const exists = await fs.existsFile(fileName)
-        if (!exists)
-            data.videoUrl = `video:///${path.join(context.pgmfFile.dir, name)}`
+        if (!exists) {
+            let fallbackPath = path.join(context.pgmfFile.dir, name)
+            // Restore leading ./ if it was normalized away by path.join
+            if (context.pgmfFile.dir.startsWith('./') && !fallbackPath.startsWith('.')) {
+                fallbackPath = './' + fallbackPath
+            }
+            data.videoUrl = this.buildVideoUrl(fallbackPath)
+        }
         
         
 
@@ -348,7 +361,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         })
 
         route.video = {
-            file:undefined,
+            file:data.videoUrl,
             format: data.videoFormat,
             url:data.videoUrl,
             framerate,

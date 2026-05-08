@@ -48304,7 +48304,7 @@ exports[`IncyclistParser Incyclist-XML import valid file 1`] = `
     "segments": undefined,
     "title": "Triathlon Wörrstadt",
     "videoFormat": "mp4",
-    "videoUrl": "file:///./__tests__/data/rlv/Triathlon_Woerrstadt_Loop.mp4",
+    "videoUrl": "file://./__tests__/data/rlv/Triathlon_Woerrstadt_Loop.mp4",
   },
   "details": {
     "country": "DE",
@@ -122945,7 +122945,7 @@ exports[`IncyclistParser Incyclist-XML import valid file 1`] = `
       ],
       "next": undefined,
       "selectableSegments": undefined,
-      "url": "file:///./__tests__/data/rlv/Triathlon_Woerrstadt_Loop.mp4",
+      "url": "file://./__tests__/data/rlv/Triathlon_Woerrstadt_Loop.mp4",
     },
   },
 }

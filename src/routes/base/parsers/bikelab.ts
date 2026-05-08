@@ -67,7 +67,7 @@ export class BikeLabParser extends XMLParser{
             localizedTitle: value('Description') ?? value('Name'),
             country: value('CountryCode'),
             id: value('id'),
-            previewUrl: value('previewURL'),
+            previewUrl: value('previewURL')??undefined,
             distance:0,
             elevation:0,
             points:[],
