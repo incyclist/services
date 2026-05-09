@@ -13,6 +13,11 @@ export interface  IncyclistParserContext  extends XmlParserContext {
     mapping?: Array<VideoMapping>
 }
 
+/**
+ * Parser for Incyclist XML route format. Extends XMLParser to handle Incyclist-specific
+ * features including GPS track loading from companion GPX files, video timing adjustments,
+ * elevation corrections, and route cut processing. Supports both GPX and GeoJSON geometry sources.
+ */
 export class IncyclistXMLParser extends XMLParser{
     static readonly SCHEME = 'gpx-import'
 
@@ -21,13 +26,13 @@ export class IncyclistXMLParser extends XMLParser{
         this.logger = new EventLogger('IncyclistParser')
     }
 
-    
+
     protected async loadDescription(context: IncyclistParserContext): Promise<void> {
         await super.loadDescription(context)
 
         const title = context.data['title']
         if (title) {
-            
+
             if (typeof title==='string') {
                 context.route.title = title
             }
@@ -35,17 +40,17 @@ export class IncyclistXMLParser extends XMLParser{
                  const language = Object.keys(title)[0]
                  context.route.title = title[language]
              }
-            
+
         }
     }
 
     protected async loadPoints(context: IncyclistParserContext): Promise<void> {
         const {data,fileInfo,route} = context
-        
+
         const gpxFile = {...fileInfo}
 
-        
-        const xmlBase = fileInfo.base  // 'Stellenbosch.xml' 
+
+        const xmlBase = fileInfo.base  // 'Stellenbosch.xml'
         const fileName = data['gpx-file-path'] ?? xmlBase.replace('.xml', '.gpx')
 
 
@@ -71,7 +76,7 @@ export class IncyclistXMLParser extends XMLParser{
             let duration;
 
             try {
-                if (data['framerate'] && data['end-frame']) { 
+                if (data['framerate'] && data['end-frame']) {
                     duration = Number(data['end-frame'])/Number(data['framerate']);
                 }
                 else if (data['duration']) {
@@ -89,15 +94,15 @@ export class IncyclistXMLParser extends XMLParser{
             }
             else {
                 const gpx = await new GPXParser({addTime:true,duration}).import(gpxFile)
-                points = [...gpx.details.points]    
+                points = [...gpx.details.points]
             }
 
 
             if (context.data['autoCorrect']) {
                 const gpx = await new GPXParser({addTime:true, keepZero:true,duration}).import(gpxFile)
                 const points = [...gpx.details.points]
-    
-                const {fixed,time,error} = fixAnomalies(points)  
+
+                const {fixed,time,error} = fixAnomalies(points)
                 this.logger.logEvent({message: 'gpx file autocorrect',cntFixed:fixed,duration:time, error:error?.message})
 
                 if (error) {
@@ -113,19 +118,25 @@ export class IncyclistXMLParser extends XMLParser{
             }
             else {
                 route.points = points
-                
+
             }
-            
+
         }
-        catch(err) {            
+        catch(err) {
             if (!data['gpx-file-path'])
-                throw new Error('<gpx-file-path> missing in XML')    
+                throw new Error('<gpx-file-path> missing in XML')
             throw err
         }
 
     }
 
-    protected processCuts(data:JSONObject,route:RouteApiDetail):void { 
+    /**
+     * Processes route cuts (segments to remove from video playback).
+     * Adjusts route distances and video mappings to account for cut sections.
+     * @param data The parsed XML data containing cut information
+     * @param route The route to process cuts for
+     */
+    protected processCuts(data:JSONObject,route:RouteApiDetail):void {
         const cuts = data['cuts']
         cuts?.forEach( cut => {
             const timeStr = cut['time']
@@ -140,7 +151,7 @@ export class IncyclistXMLParser extends XMLParser{
             const mappingAtCutIdx = mappings.findIndex( p => p.time===cutInfo.time)
             const mappingAtCut = mappings[mappingAtCutIdx]
             const mappingBeforeCut = mappings[mappingAtCutIdx-1]
-            
+
             // find nearest point in points based on route.routeDistance and mappings.distance
             const distanceToCut = points.map( (p,index)=> {
                 const distance = Math.abs(p.routeDistance-mappingAtCut.distance)
@@ -166,12 +177,12 @@ export class IncyclistXMLParser extends XMLParser{
 
 
             mappingBeforeCut.videoSpeed = mappingAtCut.videoSpeed
-            mappings.forEach( (m,idx) => { 
+            mappings.forEach( (m,idx) => {
                 if (idx>=mappingAtCutIdx) {
                     m.distance-=Math.round(offset)
                 }
             })
-            
+
 
         })
 
@@ -196,10 +207,10 @@ export class IncyclistXMLParser extends XMLParser{
 
             route.video.mappings =  points.map( (p,idx) => {
                 const time = p.time
-                
+
                 let videoSpeed;
                 if (idx!==points.length-1) {
-                        videoSpeed = (points[idx+1].routeDistance-p.routeDistance)/(points[idx+1].time-p.time)*3.6;                
+                        videoSpeed = (points[idx+1].routeDistance-p.routeDistance)/(points[idx+1].time-p.time)*3.6;
                 }
                 else {
                     videoSpeed = points[idx-1].videoSpeed
@@ -210,7 +221,7 @@ export class IncyclistXMLParser extends XMLParser{
 
                 delete p.time;
 
-                return {time,videoSpeed,distance,frame};            
+                return {time,videoSpeed,distance,frame};
             })
 
         }
@@ -223,14 +234,20 @@ export class IncyclistXMLParser extends XMLParser{
 
         if (data['elevation-shift'])
             this.processElevationShift( Number(data['elevation-shift']) ,route.points)
-        
+
 
 
     }
 
-    protected processElevationShift(elevationShift:number,points:RoutePoint[]):void { 
+    /**
+     * Shifts elevation values along the route by a specified number of points.
+     * Used to correct elevation timing misalignment in video playback.
+     * @param elevationShift The number of points to shift elevation data
+     * @param points The route points to apply the shift to
+     */
+    protected processElevationShift(elevationShift:number,points:RoutePoint[]):void {
 
-        
+
         if (!elevationShift ||!points || points.length<2 || points.length<elevationShift)
             return;
 
@@ -243,7 +260,7 @@ export class IncyclistXMLParser extends XMLParser{
 
         let idx = 0;
         lastPoints.forEach( lp => {
-            
+
             const lastIdx = lp.cnt;
             const lastSlope = lp.slope
             let lastElevation = lp.elevation
@@ -253,7 +270,7 @@ export class IncyclistXMLParser extends XMLParser{
                 points[idx].elevationGain = points[idx+elevationShift].elevationGain
                 idx++
             }
-            while(idx<=lastIdx) {                
+            while(idx<=lastIdx) {
                 points[idx].elevation = lastElevation+lastSlope*points[idx].distance/100;
                 points[idx].elevationGain += (points[idx].elevation-lastElevation)
                 lastElevation = points[idx].elevation
@@ -261,8 +278,7 @@ export class IncyclistXMLParser extends XMLParser{
             }
         })
 
-        
+
     }
-   
 
 }

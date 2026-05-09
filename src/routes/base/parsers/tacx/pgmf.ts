@@ -4,6 +4,20 @@ import { TacxFileReader } from "./TacxReader";
 
 // see https://web.archive.org/web/20111022163034/http://www.whitepeak.org/FortiusFile.aspx?file=.pgmf
 
+/**
+ * Parser for Tacx PGMF (Program/Profile) files.
+ *
+ * PGMF files contain course program data including:
+ * - General course information (name, start altitude, brake category)
+ * - Program type indicator (slope, watts, or pulse-based)
+ * - Sequence of program records with duration, distance, and load values
+ *
+ * Works in conjunction with RLV files to provide complete route data.
+ * The program type determines interpretation of load values: slope percentage,
+ * power in watts, or heart rate in beats per minute.
+ *
+ * Extends TacxFileReader to provide PGMF-specific block parsing logic.
+ */
 export class PGMFFileReader extends TacxFileReader<PgmfFile> {
     
 

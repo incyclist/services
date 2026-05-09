@@ -11,21 +11,40 @@ export interface EpmParserContext extends XmlParserContext {
     noPositions?:boolean
 }
 
+/**
+ * Parser for EPM (Daum Electronic PowerMedia) route format. Handles parsing
+ * EPM XML files along with their companion EPP (program) files containing
+ * elevation and performance data.
+ */
 export class EPMParser extends XMLParser{
     static readonly SCHEME = 'roadmovie'
-    
+
+    /**
+     * Checks if the given file extension is supported by this parser.
+     * @param extension The file extension to check
+     * @returns True if the extension is 'epm' (case-insensitive), false otherwise
+     */
     supportsExtension(extension) {
         return extension.toLowerCase() === 'epm';
     }
 
+    /**
+     * Returns the primary file extension supported by this parser.
+     * @returns 'epm'
+     */
     getPrimaryExtension(): string {
         return 'epm'
     }
+
+    /**
+     * Returns companion file extensions that should be imported with EPM files.
+     * @returns Array containing 'epp' (the elevation program file)
+     */
     getCompanionExtensions(): string[]    {
         return ['epp']
     }
 
-    protected async loadPoints(context: EpmParserContext) { 
+    protected async loadPoints(context: EpmParserContext) {
         const {data,route} = context
 
         route.points=[]
@@ -40,9 +59,9 @@ export class EPMParser extends XMLParser{
                 pos.lon = pos.lon.replace(',','.')
             if (typeof pos.distance ==='string' && pos.distance.includes(',') &&!pos.distance.includes('.') )
                 pos.distance = pos.distance.replace(',','.')
-            
+
             const point = {
-                lat:Number(pos.lat), 
+                lat:Number(pos.lat),
                 lng:Number(pos.lon),
                 routeDistance:Number(pos.distance),
                 distance:undefined,
@@ -54,7 +73,7 @@ export class EPMParser extends XMLParser{
                 point.distance=0;
                 prevDistance = 0;
             }
-            else {                        
+            else {
                 point.distance = point.routeDistance-prevDistance;
                 prevDistance = point.routeDistance;
             }
@@ -72,7 +91,7 @@ export class EPMParser extends XMLParser{
         fixIncorrectFileInfo(fileInfo)
 
         const file:FileInfo = {...fileInfo,ext:'epp',encoding:'binary'}
-    
+
         let base = fileInfo.base
         if (!base.includes('.epm')) {
             base = base + '.epm'
@@ -82,13 +101,13 @@ export class EPMParser extends XMLParser{
             file.filename = fileInfo.filename.replace(base,file.base)
         if (file.url)
             file.url = fileInfo.url.replace(base,file.base)
-  
+
         const onError = ()=> {
 
             const nameInfo   = this.getChannel()==='mobile' ? base : getFileName(file)
             throw new Error('Could not open EPP file: '+ nameInfo)
         }
-        
+
         const loader = getBindings().loader
         try {
             const res = await loader.open(file)
@@ -107,7 +126,7 @@ export class EPMParser extends XMLParser{
     protected getV7Program(reader:BinaryReader,json):DaumEpp {
 
         const num = (reader.length-388)/12;
-    
+
         reader.ReadString(4);
         json.min = reader.ReadUint32();
         json.max = reader.ReadUint32();
@@ -147,11 +166,11 @@ export class EPMParser extends XMLParser{
     protected combineEpmWithEpp(route:RouteApiDetail, epp:DaumEpp) {
         if (!route?.points || route.points.length===0)
             return;
-    
+
         let j=0;
 
         const prevInfo ={ distance:0, elevation:0, slope:0}
-        
+
         // enrich points with elevation data from Epp
         for (let i=0;i<route.points.length;i++) {
             if (i===0) {
@@ -160,17 +179,17 @@ export class EPMParser extends XMLParser{
                 prevInfo.slope = route.points[i].slope
             }
             else {
-                j = this.getNextProgramIdx(j, epp, route.points[i]);                
-                 
+                j = this.getNextProgramIdx(j, epp, route.points[i]);
+
                 if (j<epp.programData.length) {
                     this.copyEppElevationProfile(epp.programData[j], prevInfo, route.points, i);
                 }
                 else {
-                    this.setFinalElevationProfile(prevInfo, route.points[i]);    
+                    this.setFinalElevationProfile(prevInfo, route.points[i]);
                 }
             }
         }
-    
+
         // enrich points with video speed data
         this.addVideoSpeed(route)
     }
@@ -181,7 +200,7 @@ export class EPMParser extends XMLParser{
             j++;
         return j;
     }
-    
+
     private copyEppElevationProfile(eppRecord: DaumEppProgramEntry,prevInfo, points: RoutePoint[], i: number) {
         const {distance: prevDistance, elevation: prevElevation} = prevInfo
         const distance = eppRecord.distance - prevDistance;
@@ -198,12 +217,12 @@ export class EPMParser extends XMLParser{
         }
 
         prevInfo.distance = points[i].routeDistance;
-        prevInfo.elevation = points[i].elevation;    
-        prevInfo.slope = points[i].slope;    
+        prevInfo.elevation = points[i].elevation;
+        prevInfo.slope = points[i].slope;
 
     }
-    
-    private setFinalElevationProfile( prevInfo, point: RoutePoint) { 
+
+    private setFinalElevationProfile( prevInfo, point: RoutePoint) {
         const {distance: prevDistance, elevation: prevElevation, slope:prevSlope} = prevInfo
 
         point.slope = prevSlope;
@@ -229,29 +248,29 @@ export class EPMParser extends XMLParser{
                     p.videoSpeed = prevSpeed;
                     p.videoTime = prevTime;
                 }
-    
-                while (videoIdx<route.video.mappings.length && p.routeDistance>route.video.mappings[videoIdx].distance) 
+
+                while (videoIdx<route.video.mappings.length && p.routeDistance>route.video.mappings[videoIdx].distance)
                     videoIdx++;
-                
+
                 if (videoIdx<route.video.mappings.length) {
-                    
+
                     p.videoSpeed = route.video.mappings[videoIdx].videoSpeed;
                     const v = p.videoSpeed/3.6;
-    
+
                     p.videoTime = route.video.mappings[videoIdx].time - (route.video.mappings[videoIdx].distance-p.routeDistance)/v;
                     prevSpeed = p.videoSpeed;
-                    prevTime = p.videoTime; 
+                    prevTime = p.videoTime;
                 }
-        
-            }
-    
-        })
-    }    
 
-    
+            }
+
+        })
+    }
+
+
     protected parseEpp( data, route:RouteApiDetail ) {
 
-        
+
         const json:JSONObject = {}
         const reader = new BinaryReader(data);
 
@@ -265,26 +284,26 @@ export class EPMParser extends XMLParser{
         if (json.version!==7 && json.version!==6)
             throw new Error ('Invalid File Version '+json.version);
 
-        
+
         json.time =  reader.ReadUint64()
         json.name = reader.ReadString(64).trim();
         json.description = reader.ReadString(256).trim();
-        json.programType = reader.ReadUint32(); 
+        json.programType = reader.ReadUint32();
 
         if (json.version===7)
             route.epp = this.getV7Program(reader,json);
         if (json.version===6)
-            route.epp = this.getV6Program(reader,json);    
-    
-            
+            route.epp = this.getV6Program(reader,json);
+
+
         if ( route.points===undefined || route.points.length===0) {
-            this.createNoGpxRouteFromEpmEpp(route,route.epp)    
-                    
+            this.createNoGpxRouteFromEpmEpp(route,route.epp)
+
         }
         else {
             this.combineEpmWithEpp(route,route.epp);
         }
- 
+
     }
 
     protected async parseVideo(context: EpmParserContext): Promise<void> {
@@ -296,20 +315,24 @@ export class EPMParser extends XMLParser{
         this.validate(context)
     }
 
-    protected async buildInfo ( context:EpmParserContext):Promise<RouteInfo> { 
+    protected async buildInfo ( context:EpmParserContext):Promise<RouteInfo> {
         const info = await super.buildInfo(context)
         if (context.noPositions)
             info.hasGpx = false
         return info
     }
 
+    /**
+     * Validates the parsed EPM route data and ensures required fields are set.
+     * @param context The parser context containing the route data to validate
+     */
     validate(context: EpmParserContext): void {
         super.validate(context)
 
         const {route} = context
         if (context.noPositions)
             route.gpxDisabled = true;
-        
+
     }
 
     protected getChannel():AppChannel {
@@ -321,6 +344,5 @@ export class EPMParser extends XMLParser{
     }
 
 }
-
 
 

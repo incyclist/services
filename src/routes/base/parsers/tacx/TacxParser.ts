@@ -14,18 +14,47 @@ import { fixIncorrectFileInfo } from "../utils";
 import { EventLogger } from "gd-eventlog";
 import { Injectable } from "../../../../base/decorators";
 
+/**
+ * Context object used internally during Tacx file parsing.
+ *
+ * Holds references to file information, parsed data from both RLV and PGMF files,
+ * and the resulting route details.
+ */
 export interface TacxParserContext {
+    /** File information for the RLV file */
     rlvFile: FileInfo
+    /** File information for the PGMF file */
     pgmfFile: FileInfo
-    route?: RouteApiDetail       
-    rlvData?:RlvFile
-    pgmfData?:PgmfFile
+    /** Parsed route details (populated during parsing) */
+    route?: RouteApiDetail
+    /** Parsed RLV file data (route profile and video information) */
+    rlvData?: RlvFile
+    /** Parsed PGMF file data (slope program and distance) */
+    pgmfData?: PgmfFile
 }
 
+/**
+ * Parser for Tacx training files (RLV/PGMF format).
+ *
+ * Handles parsing of Tacx route files which consist of two complementary files:
+ * - RLV file: Contains route profile, video mapping, and course information
+ * - PGMF file: Contains slope program and distance information
+ *
+ * The parser extracts route data including elevation profile, video information,
+ * video-to-route synchronization mappings, and segment information.
+ */
 export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
     protected logger = new EventLogger('TacxParser')
 
+    /**
+     * Imports and parses a Tacx route file.
+     *
+     * @param file - File information for the RLV or PGMF file to parse
+     * @param data - Optional pre-loaded file data as ArrayBuffer
+     * @returns Parsed route data and route details
+     * @throws Error if files don't contain required slope or distance information
+     */
     async import(file: FileInfo, data?: ArrayBuffer): Promise<ParseResult<RouteApiDetail>> {
         const context = this.buildContext(file)
         
@@ -35,6 +64,14 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         return this.buildResult(context)
     }
 
+    /**
+     * Loads raw file data and converts it to an ArrayBuffer.
+     *
+     * @param info - File information including filename and location
+     * @param _data - Unused parameter (for Parser interface compatibility)
+     * @returns File data as ArrayBuffer
+     * @throws Error if file cannot be opened or read
+     */
     async getData(info: FileInfo, _data?: ArrayBuffer): Promise<ArrayBuffer> {
         const loader = this.getBindings().loader
         info.encoding = 'binary'
@@ -63,13 +100,42 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
         }
     }
 
+    /**
+     * Checks if the provided data is a valid Tacx file format.
+     *
+     * @param data - File data to validate
+     * @returns True if data is a valid Tacx file format, false otherwise
+     */
     supportsContent(data: ArrayBuffer): boolean {
         return TacxFileReader.isValid(data)
     }
 
+    /**
+     * Checks if the parser supports the given file extension.
+     *
+     * @param extension - File extension to check (case-insensitive)
+     * @returns True if extension is 'rlv' or 'pgmf', false otherwise
+     */
+    supportsExtension(extension: string): boolean {
+        return (extension.toLowerCase() === 'pgmf' || extension.toLowerCase() === 'rlv');
+    }
+
+    /**
+     * Returns the primary file extension for Tacx route files.
+     *
+     * @returns Primary extension: 'rlv'
+     */
     getPrimaryExtension(): string {
         return 'rlv'
     }
+    /**
+     * Returns companion file extensions required for parsing.
+     *
+     * Tacx routes require both RLV and PGMF files; this returns the companion
+     * extensions beyond the primary RLV file.
+     *
+     * @returns Array of companion extensions: ['pgmf']
+     */
     getCompanionExtensions(): string[]    {
         return ['pgmf']
     }
@@ -195,7 +261,6 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
             title: context.pgmfData?.generalInfo?.courseName
         };
 
-        let country;
         const countryPrefix = this.getCountryPrefix(data.title);
         if (countryPrefix) {
             data.title = data.title.substring(3);
@@ -373,10 +438,6 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
     }
 
-
-    supportsExtension(extension: string): boolean {
-        return (extension.toLowerCase() === 'pgmf' || extension.toLowerCase() === 'rlv');
-    }
 
     protected isMobile():boolean {
         return this.getBindings().appInfo?.getChannel()==='mobile'

@@ -29,28 +29,32 @@ const addVideoSpeed = (points:Array<RoutePoint>,mappings:Array<MappingRecord>):A
                 p.videoTime = prevTime;
             }
 
-            while (videoIdx<mappings.length && p.routeDistance>mappings[videoIdx].distance) 
+            while (videoIdx<mappings.length && p.routeDistance>mappings[videoIdx].distance)
                 videoIdx++;
-            
+
             if (videoIdx<mappings.length) {
-                
+
                 p.videoSpeed = mappings[videoIdx].videoSpeed;
                 const v = p.videoSpeed/3.6;
 
                 p.videoTime = mappings[videoIdx].time - (mappings[videoIdx].distance-p.routeDistance)/v;
                 prevSpeed = p.videoSpeed;
-                prevTime = p.videoTime; 
+                prevTime = p.videoTime;
             }
-    
+
         }
         return p;
 
     })
 }
 
+/**
+ * Parser for Bikelab XML route format. Handles loading route descriptions, points,
+ * and video data from Bikelab track files.
+ */
 export class BikeLabParser extends XMLParser{
     static readonly SCHEME = 'Track'
-    
+
     protected async loadDescription(context: XmlParserContext): Promise<void> {
         const {data} = context
 
@@ -60,7 +64,7 @@ export class BikeLabParser extends XMLParser{
                 return null;
             return val
         }
-        
+
 
         context.route= {
             title: value('Description') ?? value('Name'),
@@ -80,7 +84,7 @@ export class BikeLabParser extends XMLParser{
         if (typeof context.route.localizedTitle==='string' ) {
             const lt = context.route.localizedTitle;
             context.route.localizedTitle= { en: lt}
-        }        
+        }
     }
 
 
@@ -111,7 +115,7 @@ export class BikeLabParser extends XMLParser{
         }
 
         const fileParts = route.video.file.split('.');
-        const extension = fileParts.at(-1);            
+        const extension = fileParts.at(-1);
         route.video.format = extension.toLowerCase()
 
         const videoPoints = data['VideoPoints']??[]
@@ -121,7 +125,7 @@ export class BikeLabParser extends XMLParser{
             const mapping:MappingRecord = {
                 time:Number(m.VideoTime),
                 distance:Number(m.Distance),
-               
+
             }
             if (prev && prev.time!==undefined && prev.distance!==undefined)
                 mapping.videoSpeed  = (mapping.distance-prev.distance) / (mapping.time - prev.time) * 3.6;

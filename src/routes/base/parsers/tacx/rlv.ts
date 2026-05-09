@@ -3,6 +3,17 @@ import { TacxFileReader } from "./TacxReader"
 
 // see https://web.archive.org/web/20111022163034/http://www.whitepeak.org/FortiusFile.aspx?file=.rlv
 
+/**
+ * Parser for Tacx RLV (Route/Video) files.
+ *
+ * RLV files contain route profile data including:
+ * - Video file reference and playback information (framerate, offsets)
+ * - Frame-to-distance mappings for video synchronization
+ * - Route segments (course info) with names and descriptions
+ * - Optional info boxes for route annotations
+ *
+ * Extends TacxFileReader to provide RLV-specific block parsing logic.
+ */
 export class RLVFileReader extends TacxFileReader<RlvFile> {
 
     protected readHeader():void {
