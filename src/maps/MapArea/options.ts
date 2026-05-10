@@ -35,13 +35,13 @@ export class OptionManager {
                 if (opts?.length===1) {
 
                     // same route, just extend path
-                    if ( opts[0].id !== segment.id) { 
+                    if ( opts[0].id === segment.id) { 
                         concatPaths( path, opts[0].path,'after',opts[0].id )    
                     }
                     else {
                         // different route, which might include a point we already have
                         let foundSameSegment = false;
-                        options[0].path.forEach( (point,j) => {
+                        opts[0].path.forEach( (point,j) => {
                             if (j===0)
                                 return;
                             foundSameSegment =  points.some( pAll => pAll.id===point.id)
@@ -521,14 +521,14 @@ export class OptionManager {
                 if (!w)
                     return []
 
-                if (w.roundabout) {
+                if (isRoundabout(w) && w.path[0].id!==w.path.at(-1).id) {
                     const branches = splitAtPoint(w,location);
                     branches.forEach ( b => {
                         if (b.path.length>1 && b.path[1].id !== prev.id) {
                             const {id,path} = b
                             options.push({id,path,map:this.map})
                         }
-                    })    
+                    })
                 }
                 else if ( w.path.length>1) {
                     const result = this.map?.splitAtFirstBranch(way);
