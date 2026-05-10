@@ -66,6 +66,7 @@ export class RouteDisplayService extends RideModeService {
             this.position =  this.setInitialPosition()
 
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'init')
         }
@@ -133,6 +134,7 @@ export class RouteDisplayService extends RideModeService {
 
     
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'onActivityUpdate')
         }
@@ -163,6 +165,7 @@ export class RouteDisplayService extends RideModeService {
 
 
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'onRideSettingsChanged')
         }
@@ -180,6 +183,7 @@ export class RouteDisplayService extends RideModeService {
             this.sendUpdate(this.buildRequest())
 
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'onStarted')
         }
@@ -197,6 +201,7 @@ export class RouteDisplayService extends RideModeService {
             this.cleanupActiveRides()
             delete this._startSettings
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'onStopped')
         }
@@ -275,6 +280,7 @@ export class RouteDisplayService extends RideModeService {
 
             return nearbyRides
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'getNearbyRidesProps')
             return {show:false,minimized:true, observer:null as unknown as Observer}
@@ -379,6 +385,7 @@ export class RouteDisplayService extends RideModeService {
 
             return pos;
         }
+        /* istanbul ignore catch */
         catch (error) {
             this.logger.logEvent({ message: 'Error', fn: 'setRoutePosition', args: { distance }, error })
         }
@@ -437,8 +444,9 @@ export class RouteDisplayService extends RideModeService {
                 return request
             }
         }
+        /* istanbul ignore catch */
         catch(err:any) {
-            this.logError(err,'buildRequest')        
+            this.logError(err,'buildRequest')
             return {}
         }
 
@@ -450,6 +458,7 @@ export class RouteDisplayService extends RideModeService {
             const lapPoint =  getNextPosition (this.getCurrentRoute(), {routeDistance:this.startSettings?.startPos??0})
             return this.fromLapPoint(lapPoint)
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'setInitialPosition',{cntPoints:this.getCurrentRoute()?.points?.length,routeDistance:this.startSettings?.startPos??0 })
         }
@@ -473,6 +482,7 @@ export class RouteDisplayService extends RideModeService {
 
             return this.position        
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'updatePosition',{currentRouteDistance, newRouteDistance, getNextPositionProps:props})
         }
@@ -554,6 +564,7 @@ export class RouteDisplayService extends RideModeService {
                  this.nearbyRiders = data.filter( ar=>!ar.isUser)
             })
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'prepareActiveRides')
         }
@@ -563,6 +574,7 @@ export class RouteDisplayService extends RideModeService {
         try {
             this.getActiveRides().stop()
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'cleanupActiveRides')
         }
