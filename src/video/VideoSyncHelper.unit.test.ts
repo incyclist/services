@@ -85,7 +85,6 @@ describe('VideoSyncHelper',()=>{
             const videoSyncHelper = new VideoSyncHelper(route,0,{loopMode:true})
             const totalDistance = route.description.distance??0
             
-            console.log(totalDistance)
             initMock(videoSyncHelper, { routeDistance:3, speed:30, rate:1, time:9000}, {routeDistance:8296, speed:30})
             videoSyncHelper.onUpdate(['activity:lap','activity:sped'])           
             expect(videoSyncHelper.logEvent).toHaveBeenCalledWith( expect.objectContaining({delta:4.9}))

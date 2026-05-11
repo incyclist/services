@@ -209,11 +209,11 @@ export function isRoundabout(w:IncyclistWay, strictCheck=false) {
     if (!w)
         return;
 
-    let roundabout  = (w.tags!==undefined && (w.tags.roundabout===true || w.tags.junction==='roundabout'));
+    let roundabout  = (w.tags!==undefined && (w.tags.roundabout===true || w.tags.junction==='roundabout' || w.tags.junction==='circular'));
     if ( roundabout) return true;
 
     if (strictCheck) return false;
-    
+
     if ( w.path===undefined || w.path.length<2)
         return false;
 

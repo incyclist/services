@@ -18,6 +18,20 @@ import { Observer } from "../../base/types";
 
 const MAX_INACTIVITY = 5000
 
+/**
+ * Service for managing route-based ride display and tracking.
+ *
+ * Extends RideModeService to provide route-specific functionality including:
+ * - Position tracking along a route
+ * - Lap completion detection
+ * - Route distance and elevation calculations
+ * - Display properties for route visualization (markers, overlays, etc.)
+ * - Integration with nearby rides and previous ride data
+ *
+ * The service tracks user position on the selected route and manages display elements
+ * like maps, elevation profiles, and nearby rider markers. It handles both loop and
+ * linear routes, with configurable start/end positions and reality factor adjustments.
+ */
 export class RouteDisplayService extends RideModeService {
     protected prevRequestSlope?: number
 
@@ -34,6 +48,13 @@ export class RouteDisplayService extends RideModeService {
 
 
 
+    /**
+     * Initializes the route display service with a current ride service instance.
+     *
+     * Sets up the route, initial position, and views. Must be called before other operations.
+     *
+     * @param service - The current ride service providing observer and lifecycle callbacks
+     */
     init(service: ICurrentRideService) {
         try {
             super.init(service)
@@ -43,8 +64,9 @@ export class RouteDisplayService extends RideModeService {
 
 
             this.position =  this.setInitialPosition()
-            
+
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'init')
         }
@@ -52,16 +74,33 @@ export class RouteDisplayService extends RideModeService {
 
 
 
+    /**
+     * Gets the device start settings for the route ride.
+     *
+     * Returns route-specific settings including reality factor and starting position
+     * to be sent to the device at the beginning of a ride.
+     *
+     * @returns Object containing realityFactor (0-100), startPos (meters), and the selected route
+     */
     getDeviceStartSettings() {
         const startSettings:RouteSettings = this.getRouteList().getStartSettings() as RouteSettings
-        const route = this.getRouteList().getSelected() 
+        const route = this.getRouteList().getSelected()
         const {realityFactor=100,startPos=0} = startSettings
 
         return {realityFactor,startPos,route}
     }
 
     
-    onActivityUpdate(activityPos:ActivityUpdate,data:CurrentActivityData):void { 
+    /**
+     * Handles activity updates during the ride.
+     *
+     * Updates the user's position on the route, detects lap completions, and emits
+     * position update events. Ignores updates when the user is inactive (low power and speed).
+     *
+     * @param activityPos - Current activity update with ride metrics including route distance
+     * @param data - Additional activity data including power and speed
+     */
+    onActivityUpdate(activityPos:ActivityUpdate,data:CurrentActivityData):void {
 
         if ((data.power??0)>0)
             this.prevPowerTs = Date.now()
@@ -95,6 +134,7 @@ export class RouteDisplayService extends RideModeService {
 
     
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'onActivityUpdate')
         }
@@ -109,45 +149,77 @@ export class RouteDisplayService extends RideModeService {
         /* to be implemented by sub-class */
     }
 
+    /**
+     * Handles changes to ride settings during an active ride.
+     *
+     * Updates the reality factor based on settings changes, which affects the slope
+     * adjustments sent to the device.
+     *
+     * @param settings - Updated ride settings object containing reality factor
+     */
     onRideSettingsChanged(settings:any) {
         try {
             const {reality} = settings
 
             this.startSettings.realityFactor = reality
-           
+
 
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'onRideSettingsChanged')
         }
     }
 
+    /**
+     * Called when the ride has started.
+     *
+     * Initializes nearby rides tracking and sends the initial device update request
+     * with the starting slope and reality factor settings.
+     */
     onStarted() {
         try {
             this.prepareActiveRides()
             this.sendUpdate(this.buildRequest())
-            
+
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'onStarted')
         }
 
     }
 
+    /**
+     * Called when the ride has stopped.
+     *
+     * Cleans up nearby rides tracking and clears cached start settings, allowing
+     * fresh settings to be loaded if the ride is resumed or a new ride is started.
+     */
     onStopped() {
         try {
             this.cleanupActiveRides()
             delete this._startSettings
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'onStopped')
         }
     }
 
+    /**
+     * Gets route markers for nearby and previous ride data.
+     *
+     * Combines nearby active riders and previous ride data into route markers
+     * that can be displayed on the route map.
+     *
+     * @param props - Current ride display properties containing previous rides data
+     * @returns Array of route markers with position and avatar information
+     */
     getMarkers(props: CurrentRideDisplayProps):Array<RouteMarker> {
 
         const nearby:ActiveRideListDisplayItem[] = this.nearbyRiders??[]
-        
+
         const nearbyMarkers = nearby.map( m=> {
             const {lat,lng,lapDistance: routeDistance,avatar} = m
             return {lat,lng,routeDistance,avatar}
@@ -164,14 +236,35 @@ export class RouteDisplayService extends RideModeService {
         return markers as Array<RouteMarker>
     }
 
+    /**
+     * Gets display properties for a specific overlay.
+     *
+     * Determines whether an overlay (map, elevation, slope, etc.) should be shown
+     * and whether it should be displayed minimized based on user preferences and
+     * current display state.
+     *
+     * @param overlay - The overlay type (e.g., 'map', 'slope', 'elevation')
+     * @param props - Current ride display properties with hideAll flag
+     * @returns Overlay display properties with show and minimized flags
+     */
     getOverlayProps(overlay:string, props: CurrentRideDisplayProps):OverlayDisplayProps {
         const showMapEnabled = this.getUserSettings().get(`preferences.sideViews.${overlay}` ,true)
-        const show = !props.hideAll 
+        const show = !props.hideAll
         const minimized = !showMapEnabled
         return {show,minimized}
     }
 
-    getNearbyRidesProps(props: CurrentRideDisplayProps):NearbyDisplayProps { 
+    /**
+     * Gets display properties for nearby rides overlay.
+     *
+     * Determines whether to show the nearby rides panel based on whether active rides
+     * are available and the current display state. Emits an overlay-update event if
+     * the nearby rides availability has changed.
+     *
+     * @param props - Current ride display properties with hideAll flag
+     * @returns Nearby rides display properties with show flag, minimized state, and observer
+     */
+    getNearbyRidesProps(props: CurrentRideDisplayProps):NearbyDisplayProps {
         try {
             const {minimized} = this.getOverlayProps('',props)
             const hasNearbyRides  = this.getActiveRides().get()?.length > 0
@@ -187,6 +280,7 @@ export class RouteDisplayService extends RideModeService {
 
             return nearbyRides
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'getNearbyRidesProps')
             return {show:false,minimized:true, observer:null as unknown as Observer}
@@ -194,9 +288,19 @@ export class RouteDisplayService extends RideModeService {
     }
 
 
+    /**
+     * Gets complete display properties for rendering the route ride UI.
+     *
+     * Assembles all display data including position, route, markers, elevation scales,
+     * overlay states, and nearby rides. Handles route-specific configuration like loop
+     * routes and custom start/end positions.
+     *
+     * @param props - Current ride display properties controlling visibility and layout
+     * @returns Complete route display properties for UI rendering
+     */
     getDisplayProperties(props: CurrentRideDisplayProps):RouteDisplayProps {
 
-        
+
         const {realityFactor,startPos,endPos, loopOverwrite=false} = this.startSettings
         const parent = super.getDisplayProperties(props)
         const map = this.getOverlayProps('map',props)
@@ -224,17 +328,37 @@ export class RouteDisplayService extends RideModeService {
             nearbyRides,
             xScale,yScale,
             map,upcomingElevation, totalElevation,
-            
-        }    
+
+        }
     }
 
+    /**
+     * Gets screenshot metadata for capturing the current route state.
+     *
+     * Creates metadata including the current position on the route, filename, and timestamp
+     * for saving screenshots during the ride.
+     *
+     * @param fileName - Name of the screenshot file to be created
+     * @param time - Ride time in milliseconds when the screenshot was taken
+     * @returns Screenshot information with position data and metadata
+     */
     getScreenshotInfo(fileName: string, time: number):ScreenShotInfo {
         const {lat,lng,routeDistance,elevation} = this.position??{}
         const position = this.position===undefined ? undefined : {lat,lng,routeDistance,elevation} as RoutePoint
-        return {fileName, position, time}        
+        return {fileName, position, time}
     }
 
 
+    /**
+     * Gets the position information at a specific distance along the route.
+     *
+     * Calculates geographic coordinates, heading, and lap-relative distance for any
+     * point on the route. Useful for previewing route positions or finding coordinates
+     * at specific distances.
+     *
+     * @param distance - Total distance in meters from the route start
+     * @returns Position object with coordinates, heading, and lap information, or undefined if invalid
+     */
     getRoutePosition(distance:number):CurrentPosition|undefined {
 
         const {route} = this;
@@ -258,9 +382,10 @@ export class RouteDisplayService extends RideModeService {
             pos.distance = distance;
             pos.lapDistance = pos.routeDistance%totalDistance;
             pos.heading = getHeading(route,pos);
-            
+
             return pos;
         }
+        /* istanbul ignore catch */
         catch (error) {
             this.logger.logEvent({ message: 'Error', fn: 'setRoutePosition', args: { distance }, error })
         }
@@ -319,8 +444,9 @@ export class RouteDisplayService extends RideModeService {
                 return request
             }
         }
+        /* istanbul ignore catch */
         catch(err:any) {
-            this.logError(err,'buildRequest')        
+            this.logError(err,'buildRequest')
             return {}
         }
 
@@ -332,6 +458,7 @@ export class RouteDisplayService extends RideModeService {
             const lapPoint =  getNextPosition (this.getCurrentRoute(), {routeDistance:this.startSettings?.startPos??0})
             return this.fromLapPoint(lapPoint)
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'setInitialPosition',{cntPoints:this.getCurrentRoute()?.points?.length,routeDistance:this.startSettings?.startPos??0 })
         }
@@ -355,6 +482,7 @@ export class RouteDisplayService extends RideModeService {
 
             return this.position        
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'updatePosition',{currentRouteDistance, newRouteDistance, getNextPositionProps:props})
         }
@@ -436,6 +564,7 @@ export class RouteDisplayService extends RideModeService {
                  this.nearbyRiders = data.filter( ar=>!ar.isUser)
             })
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'prepareActiveRides')
         }
@@ -445,6 +574,7 @@ export class RouteDisplayService extends RideModeService {
         try {
             this.getActiveRides().stop()
         }
+        /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'cleanupActiveRides')
         }
@@ -456,10 +586,26 @@ export class RouteDisplayService extends RideModeService {
         // should be implemented by sub classes, as location is ride mode specific
     }
 
+    /**
+     * Gets the original selected route from the route list.
+     *
+     * Returns the unmodified route selected by the user, as opposed to the cached
+     * current route which may be a clone used during ride tracking.
+     *
+     * @returns The selected route from the route list
+     */
     getOriginalRoute():Route {
         return this.route
     }
 
+    /**
+     * Gets the current route being used for ride tracking.
+     *
+     * Returns the cached route clone that was initialized during service setup.
+     * This is the route used for position tracking and display calculations.
+     *
+     * @returns The current route object with all point and metadata information
+     */
     getCurrentRoute():Route {
         return this.currentRoute
     }
@@ -467,35 +613,42 @@ export class RouteDisplayService extends RideModeService {
 
 
 
+    /* istanbul ignore next */
     @Injectable
     protected getUserSettings() {
         return useUserSettings()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getRouteList() {
         return useRouteList()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getActiveRides() {
         return useActiveRides()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getDeviceRide() {
-        return useDeviceRide() 
+        return useDeviceRide()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getAppInfo() {
-        return getBindings().appInfo    
+        return getBindings().appInfo
     }
 
+    /* istanbul ignore next */
     protected getUnitConversionShortcuts () {
         return getUnitConversionShortcuts()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getUnitConverter() {
         return useUnitConverter()

@@ -18,30 +18,56 @@ interface GPXParserProps {
     duration?: number
 }
 
-export class GPXParser extends XMLParser { 
+/**
+ * Parser for GPX (GPS Exchange Format) route files. Handles parsing standard GPX tracks
+ * with support for timestamps, elevation data, and route analysis (loops, headings, etc.).
+ * Can optionally add timing information based on duration or track timestamps.
+ */
+export class GPXParser extends XMLParser {
     protected static SCHEME = 'gpx'
 
     protected props:GPXParserProps
 
+    /**
+     * Creates a new GPXParser with optional configuration properties.
+     * @param props Configuration options for parsing behavior
+     * @param props.addTime Whether to add time information to route points
+     * @param props.keepZero Whether to keep zero-distance points
+     * @param props.duration Optional duration in seconds to use for timing calculations
+     */
     constructor(props:GPXParserProps={} ) {
         super()
         this.props = props;
     }
 
+    /**
+     * Returns the primary file extension supported by this parser.
+     * @returns 'gpx'
+     */
     getPrimaryExtension(): string {
         return 'gpx'
     }
+
+    /**
+     * Returns companion file extensions that may be imported with GPX files.
+     * @returns Empty array as GPX files typically stand alone
+     */
     getCompanionExtensions(): string[]    {
         return []
     }
 
 
+    /**
+     * Checks if the given file extension is supported by this parser.
+     * @param extension The file extension to check
+     * @returns True if the extension is 'gpx' (case-insensitive), false otherwise
+     */
     supportsExtension(extension) {
         return extension.toLowerCase() === 'gpx';
     }
 
     protected async loadDescription(context:XmlParserContext) {
-        const data = context.data 
+        const data = context.data
 
         const metadata = data['metadata'] ?? {}
         const track = Array.isArray(data['trk']) ? data['trk'][0] : data['trk']
@@ -67,8 +93,8 @@ export class GPXParser extends XMLParser {
         }
     }
 
-    protected getNumberOfPoints(context:XmlParserContext):number { 
-        const data = context.data 
+    protected getNumberOfPoints(context:XmlParserContext):number {
+        const data = context.data
         const track = Array.isArray(data['trk']) ? data['trk'][0] : data['trk']
 
         const segments = Array.isArray(track.trkseg) ? track.trkseg : [track.trkseg]
@@ -82,12 +108,12 @@ export class GPXParser extends XMLParser {
                 pts = keys.length
             }
             return sum + pts
-        },0) 
+        },0)
 
     }
 
     protected hasTimestamps(context:XmlParserContext):boolean {
-        const data = context.data 
+        const data = context.data
         const track = Array.isArray(data['trk']) ? data['trk'][0] : data['trk']
 
         const segments = Array.isArray(track.trkseg) ? track.trkseg : [track.trkseg]
@@ -99,7 +125,7 @@ export class GPXParser extends XMLParser {
             if ( typeof(segment?.trkpt)==='object' && Object.keys(segment?.trkpt ) ) {
                 const keys = Object.keys(segment?.trkpt)
                 points = keys.map( key=>segment?.trkpt[key])
-            }   
+            }
             if (points?.some( (p) => p.time )) {
                 return true
             }
@@ -108,8 +134,7 @@ export class GPXParser extends XMLParser {
         return false
     }
 
-    // adjust times based on average speed
-    protected async adjustTimes (context:XmlParserContext) { 
+    protected async adjustTimes (context:XmlParserContext) {
         const totalDistance = context.route.points.length>0 ? context.route.points.at(-1).routeDistance : 0
         const avgSpeed = totalDistance / this.props.duration; // m/s
 
@@ -121,7 +146,7 @@ export class GPXParser extends XMLParser {
 
 
     protected async loadPoints(context: XmlParserContext) {
-        const data = context.data 
+        const data = context.data
         const track = Array.isArray(data['trk']) ? data['trk'][0] : data['trk']
 
         const segments = Array.isArray(track.trkseg) ? track.trkseg : [track.trkseg]
@@ -130,7 +155,7 @@ export class GPXParser extends XMLParser {
         let stepSize = 1
         let useAverageSpeed = false
 
-        if (this.props.duration) { 
+        if (this.props.duration) {
 
 
 
@@ -144,8 +169,8 @@ export class GPXParser extends XMLParser {
             }
         }
 
-        
-    
+
+
         segments.forEach( segment => {
             let points = []
             if (Array.isArray(segment?.trkpt))
@@ -172,7 +197,7 @@ export class GPXParser extends XMLParser {
                     this.logger.logEvent({ message:'error', fn:'loadPoints',reason:'unvalid point', info})
                     return
                 }
-                
+
                 if (this.props.addTime) {
 
                     if (startTime===null) {
@@ -180,14 +205,14 @@ export class GPXParser extends XMLParser {
                         startTime = gpxPt.time ? Date.parse(gpxPt.time) : Date.now();
                     }
                     else {
-                        const gpxTime = gpxPt.time ? (Date.parse(gpxPt.time)-startTime)/1000 : null;                       
+                        const gpxTime = gpxPt.time ? (Date.parse(gpxPt.time)-startTime)/1000 : null;
                         point.time = gpxTime ?? prev.time+stepSize
                     }
 
 
                 }
 
-                
+
                 if (prev) {
                     const ignore = this.caclulateDistance(point,prev)
                     if (ignore && !this.props.keepZero) {
@@ -199,7 +224,7 @@ export class GPXParser extends XMLParser {
                 point.cnt = context.route.points.length
                 context.route.points.push(point)
                 prev = point
-                
+
             })
         })
 
@@ -213,10 +238,10 @@ export class GPXParser extends XMLParser {
 
     protected caclulateDistance(point:RoutePoint,prev:RoutePoint):boolean {
 
-        
+
         if (prev) {
             const s = Math.abs(geo.calculateDistance( prev.lat, prev.lng, point.lat, point.lng));
-            
+
             point.distance+=s;
             point.distance = s;
             point.routeDistance =  prev.routeDistance +s;
@@ -262,16 +287,16 @@ export class GPXParser extends XMLParser {
             prevHeading = p.heading
         })
     }
-    
+
     protected async buildInfo ( context:XmlParserContext):Promise<RouteInfo> {
         const {route} = context
 
         route.routeHash = getRouteHash(route)
         if (!route.id)
             route.id = route.routeHash
-        
+
         const isLoop = checkIsLoop(route.points);
-        const localizedTitle = typeof(route.localizedTitle)==='string' ? {en:route.localizedTitle} : route.localizedTitle 
+        const localizedTitle = typeof(route.localizedTitle)==='string' ? {en:route.localizedTitle} : route.localizedTitle
 
         const info:RouteInfo ={
             id:route.id,
@@ -287,7 +312,7 @@ export class GPXParser extends XMLParser {
             isDemo: false,
             isLocal: true,
             isLoop,
-            previewUrl: undefined    
+            previewUrl: undefined
         }
 
         this.addHeadings(route.points,isLoop)

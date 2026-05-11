@@ -19,6 +19,22 @@ import EventEmitter from "node:events";
 import { sleep } from "../../utils/sleep";
 
 const DEFAULT_OPTIONS_DELAY = 5000
+
+/**
+ * Service for managing free-ride display with dynamic route building and decision points.
+ *
+ * Extends GpxDisplayService to add free-ride mode functionality, enabling users to dynamically
+ * build routes by selecting from available options at decision points. Key features:
+ * - Dynamic route building: routes are created on-the-fly as users select continuation paths
+ * - Decision point handling: detects when riders reach decision points and offers alternative paths
+ * - Turn detection: identifies when riders need to turn and manages the turn process
+ * - Map viewport management: tracks separate viewports for ride view vs. preview view
+ * - Option visibility: manages when options are displayed on the map
+ * - Remaining distance tracking: updates distance and time remaining to next decision point
+ *
+ * Inherits Street View, Satellite View, and Map View support from GpxDisplayService.
+ * Listens to 'options-update' events from FreeRideService and emits corresponding events on the ride observer.
+ */
 export class FreeRideDisplayService extends GpxDisplayService {
 
     protected initialPosition: LatLng
@@ -46,6 +62,13 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
 
 
+    /**
+     * Starts a free ride with the configured start option.
+     *
+     * Initializes event listeners, applies the start option from route settings, and begins
+     * loading the first set of continuation options. Emits 'state-update' once options are loaded.
+     * Until options load, isStartRideCompleted() returns false.
+     */
     start() {
         try {
             super.start()
@@ -57,71 +80,101 @@ export class FreeRideDisplayService extends GpxDisplayService {
             this.getFreeRideService().applyStartOption(startSettings.option)
 
             this.tsLastOptionChange = Date.now()
-            delete this.viewportPreview // force UI to 
+            delete this.viewportPreview // force UI to
 
             this.getNextOptions(true)
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'start')
         }
     }
 
+    /**
+     * Checks if free ride start is completed.
+     *
+     * Returns true when the first set of continuation options have been loaded.
+     * Until options are available, returns false.
+     *
+     * @returns True if options are available, false if still loading
+     */
     isStartRideCompleted(): boolean {
         return this.currentOptions!==undefined
     }
 
-    selectOption(option:FreeRideOption|string) { 
+    /**
+     * Selects a continuation option for the next ride segment.
+     *
+     * Delegates to FreeRideService to select the option and returns the current options
+     * formatted for UI display. Option can be selected by object reference, id string, or numeric index.
+     *
+     * @param option - The option to select (FreeRideOption object, id string, or 1-based index)
+     * @returns Array of UI-formatted options
+     */
+    selectOption(option:FreeRideOption|string) {
         try {
             this.getFreeRideService().selectOption(option)
             return this.getFreeRideService().buildUIOptions(this.currentOptions)
-    
+
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'selectOption')
         }
     }
 
 
-    continueWithSelectedOption():boolean { 
+    /**
+     * Applies the selected continuation option to the route.
+     *
+     * Appends the selected option's path to the current route, loads the next set of options
+     * from that decision point, and schedules turn enabling after a 5-second delay.
+     * Protects against concurrent updates by returning early if already updating.
+     * Free rides never finish, so always returns false.
+     *
+     * @returns False (free rides never finish)
+     */
+    continueWithSelectedOption():boolean {
         try {
             if (this.isUpdating)
                 return;
-    
-            
+
+
             const freeRide = this.getFreeRideService()
             const selectedOption = freeRide.getSelectedOption()
-    
-            
+
+
             // no option available
             if (!selectedOption?.path?.length) {
                 this.onTurn()
                 return;
             }
-        
+
             const finished = this.updateRouteWithSelectedOption()
             freeRide.applyOption(selectedOption)
-            delete this.viewportPreview 
-    
-    
+            delete this.viewportPreview
+
+
             if (!finished) {
-                
+
                 this.getNextOptions().then( ()=>{
-                    
+
                     const currentSegment = this.getFreeRideService().getCurrentSegment()
-                    const way = currentSegment?.map?.getWay(currentSegment?.id)                   
+                    const way = currentSegment?.map?.getWay(currentSegment?.id)
 
                     const turnEnabled = !isOneWay(way)
 
                     if (turnEnabled) {
-                        // wait 5 seconds before enabling turn 
+                        // wait 5 seconds before enabling turn
                         setTimeout( () =>{this.isTurnEnabled = turnEnabled} , DEFAULT_OPTIONS_DELAY)
                     }
-                    
+
                 })
             }
             return finished
-    
+
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'continueWithSelectedOption')
         }
@@ -243,6 +296,19 @@ export class FreeRideDisplayService extends GpxDisplayService {
         return {prevPointIdx, atPoint, found};
     }
 
+    /**
+     * Gets complete display properties for the free ride with options and map overlays.
+     *
+     * Extends GpxDisplayService properties to include free ride option selection UI:
+     * - Current route with dynamically added segments
+     * - Available continuation options formatted for UI
+     * - Option properties: callbacks, delay, distance remaining, turn status, nearby state
+     * - Map overlays with viewport/bounds/center based on options visibility
+     * - Elevation layers hidden (free rides don't show upcoming/total elevation)
+     *
+     * @param props - Current ride display properties controlling visibility and layout
+     * @returns Complete free ride display properties with options and map overlays
+     */
     getDisplayProperties(props:CurrentRideDisplayProps):FreeRideDisplayProps {
 
         this.currentRideDisplayProps = props ?? this.currentRideDisplayProps
@@ -250,20 +316,20 @@ export class FreeRideDisplayService extends GpxDisplayService {
         try {
             const routeProps:GpxDisplayProps = super.getDisplayProperties(props)
             const options = this.getFreeRideService().buildUIOptions(this.currentOptions??[])
-            
+
             const distance = this.getRemainingDistance();
 
 
             const optionProps = {
-                onOptionsVisibleChanged: this.onOptionsVisibleChangedHandler,     
-                onTurn: this.onTurnHandler,       
-                optionsDelay: DEFAULT_OPTIONS_DELAY,            
+                onOptionsVisibleChanged: this.onOptionsVisibleChangedHandler,
+                onTurn: this.onTurnHandler,
+                optionsDelay: DEFAULT_OPTIONS_DELAY,
                 optionsId: this.getOptionsId(),
                 distance ,
                 isNearby: this.isNearbyOption && distance!==undefined,
                 turn: this.isTurnEnabled
             }
-    
+
             return {
                 ...routeProps,
                 route:this.currentRoute,
@@ -271,14 +337,28 @@ export class FreeRideDisplayService extends GpxDisplayService {
                 optionProps,
                 upcomingElevation: {show:false},
                 totalElevation: {show:false},
-            }    
+            }
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'getDisplayProperties')
             return props as unknown as  FreeRideDisplayProps
         }
     }
 
+    /**
+     * Gets map overlay properties for the specified overlay type.
+     *
+     * For 'map' overlays, adds free ride-specific viewport and bounds:
+     * - Uses saved ride viewport when options are hidden
+     * - Calculates bounds covering all option paths when options visible
+     * - Centers on first point of first option when options visible
+     * - Marks viewport as overwrite to position map according to free ride state
+     *
+     * @param overlay - The overlay type ('map', 'street-view', etc.)
+     * @param props - Optional display properties (uses last used properties if not provided)
+     * @returns Map overlay configuration with position, bounds, and viewport
+     */
     getOverlayProps(overlay, props?: CurrentRideDisplayProps):MapOverlayDisplayProps {
         try {
             const overlayProps:MapOverlayDisplayProps = super.getOverlayProps(overlay,props??this.currentRideDisplayProps)
@@ -288,24 +368,33 @@ export class FreeRideDisplayService extends GpxDisplayService {
                 this.mapProps = {...overlayProps,...mapProps }
                 return this.mapProps
             }
-            return overlayProps    
+            return overlayProps
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'getOverlayProps')
-            return {} 
+            return {}
         }
-
 
     }
 
-    onActivityUpdate(activityPos:ActivityUpdate,data):void { 
+    /**
+     * Handles activity/position updates during a free ride.
+     *
+     * Updates distance and time remaining to the next decision point, sets nearby flag when
+     * rider is within 6 seconds of the next option. Skips position update entirely when a turn
+     * is in progress (turnPosition is set) to avoid conflicting position changes.
+     *
+     * @param activityPos - Current activity update with position and metrics
+     * @param data - Additional activity data including distance and time remaining
+     */
+    onActivityUpdate(activityPos:ActivityUpdate,data):void {
 
         // if we are currently busy with a turn, don't update position
         if (this.turnPosition)
             return
 
         try {
-
 
             super.onActivityUpdate(activityPos, data);
 
@@ -317,8 +406,9 @@ export class FreeRideDisplayService extends GpxDisplayService {
                 delete this.tsLastTurn
             }
 
-    
+
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'onActivityUpdate')
         }
@@ -326,6 +416,13 @@ export class FreeRideDisplayService extends GpxDisplayService {
     }
 
 
+    /**
+     * Gets logging properties for analytics and diagnostics.
+     *
+     * Returns ride mode, view type, starting position coordinates, and bike/device configuration.
+     *
+     * @returns Object with mode, rideView, lat/lng, and bike settings
+     */
     getLogProps(): object {
         try {
 
@@ -339,9 +436,10 @@ export class FreeRideDisplayService extends GpxDisplayService {
                 lat,lng,
                 ...bikeProps
             }
-            
+
             return props
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'getLogProps')
             return {}
@@ -420,8 +518,9 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
             this.currentRoute = this.createRoute(position,option)
             this.initialPosition = position
-            
+
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'init')
         }
@@ -444,11 +543,11 @@ export class FreeRideDisplayService extends GpxDisplayService {
         try{
 
             let routeDistance:number
-            
+
             let pPrev;
             const points:RoutePoint[] = option.path.map( (p,idx)=> {
                 const distance = idx===0 ? 0 : (p.distance?? distanceBetween(pPrev,p))
-                routeDistance  = idx===0 ? 0 : routeDistance+distance;            
+                routeDistance  = idx===0 ? 0 : routeDistance+distance;
                 pPrev = p
                 return {...p,distance:distance??0,routeDistance, elevation:0}
             } )
@@ -473,16 +572,17 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
             }
             const route =  new Route( description,details)
-            validateRoute(route)        
+            validateRoute(route)
 
             route.description.distance = route.details.distance = getTotalDistance(details)
             route.updateCountryFromPoints()
 
             return route
         }
+        /* istanbul ignore catch */
         catch(err) {
             console.log('# error',err)
-        }        
+        }
 
     }
 
@@ -672,9 +772,10 @@ export class FreeRideDisplayService extends GpxDisplayService {
     protected appendOption(route: Route, selectedOption: FreeRideContinuation) {
         try {
             concatPaths(route.points, selectedOption.path, 'after');
-            
+
             validateRoute(route,true);
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'appendOption',{selectedOption})
         }
@@ -686,19 +787,27 @@ export class FreeRideDisplayService extends GpxDisplayService {
         validateRoute(route,true)        
     }
 
-    protected savePosition() {        
+    protected savePosition() {
 
         try {
-            const {lat,lng} = this.position           
+            const {lat,lng} = this.position
             this.getUserSettings().set(`routeSelection.freeRide.position`,{lat,lng})
         }
+        /* istanbul ignore catch */
         catch (err) {
             this.logError(err,'savePosition')
         }
 
-
     }
 
+    /**
+     * Gets the current dynamically-built free ride route.
+     *
+     * Returns the route that has been constructed so far, including the starting path
+     * and all selected option segments that have been applied during the ride.
+     *
+     * @returns The current route with all applied segments
+     */
     getCurrentRoute():Route {
         return this.currentRoute
     }
@@ -754,14 +863,16 @@ export class FreeRideDisplayService extends GpxDisplayService {
     }
 
 
+    /* istanbul ignore next */
     @Injectable
-    getFreeRideService(): FreeRideService { 
+    getFreeRideService(): FreeRideService {
         return useFreeRideService()
     }
 
+    /* istanbul ignore next */
     @Injectable
     getActivityRide(): ActivityRideService {
         return useActivityRide()
     }
-    
+
 }

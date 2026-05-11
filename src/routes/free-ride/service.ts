@@ -40,7 +40,7 @@ export class FreeRideService extends IncyclistService {
 
         const map = await this.getMapArea().load(this.startPosition)
        
-        await this.getStartOptions(map,true)
+        await this.getStartOptions(map)
 
         return this.getRouteDefinitionDisplayProps()
     }
@@ -169,45 +169,68 @@ export class FreeRideService extends IncyclistService {
     protected addLastSegmentReverse(original: FreeRideContinuation[],from: FreeRideContinuation):FreeRideContinuation[] {
         const options = original??[]
         const currentSegment = from??this.currentSegment
-        let map
 
-        if (currentSegment?.path?.length>0) {
+        try {
+            if (!currentSegment?.path?.length) {
+                return options
+            }
+
             let path = [...currentSegment.path]
+            let map: IMapArea
 
-            // starting point from route selectoin (without node ID?)
             if (!path[0].id) {
                 map = from?.map ?? this.getMapArea().getMap(path[0])
-                const way = map.getWay(currentSegment.id)
-                const end = path.at(-1)
-                let newSegment:FreeRideContinuation
-                if (end.id===way.path.at(-1).id) { 
-                    path = way.path 
-                    path.reverse()
-                    newSegment = {...way,path}
-
-                }
-                else {
-                    newSegment = {...way}
-                }
-                const result = map.splitAtFirstBranch(newSegment)
-                path = result?.path??[]
-            }
-            else {
+                path = this.processPathWithoutNodeId(map, currentSegment.id, path)
+            } else {
                 map = currentSegment.map
                 path.reverse()
             }
-            
-            const wayId = path[0].ways?.length===1  ?  path[0].ways[0] : path[1].ways[0]
-            const way = map?.getWay(wayId)     
-            if ( way && isOneWay(way) && way.path[0].id!==path[0].id) {
-                // don't add if we are not allowed to ride in this direction
-                return
+
+            const option = this.validateAndAddWay(path, map, currentSegment)
+            if (option) {
+                options.push(option)
             }
-            
-            const option = { ...currentSegment, path, id:way.id }
-            options.push(option);
+
+            return options
         }
-        return options
+        catch(err:any) {
+            this.logError(err,'addLastSegmentReverse',{original,from})
+            return []
+        }
+    }
+
+    private processPathWithoutNodeId(map: IMapArea, segmentId: string, path: IncyclistNode[]): IncyclistNode[] {
+        const way = map.getWay(segmentId)
+        if (!way) {
+            return []
+        }
+
+        const end = path.at(-1)
+        const newSegment = end.id === way.path.at(-1).id
+            ? { ...way, path: [...way.path].reverse() }
+            : { ...way }
+
+        const result = map.splitAtFirstBranch(newSegment)
+        return result?.path ?? []
+    }
+
+    private validateAndAddWay(path: IncyclistNode[], map: IMapArea, currentSegment: FreeRideContinuation): FreeRideContinuation | null {
+        if (!path.length) {
+            return null
+        }
+
+        const wayId = path[0].ways?.length === 1 ? path[0].ways[0] : path[1].ways[0]
+        const way = map?.getWay(wayId)
+
+        if (!way) {
+            return null
+        }
+
+        if (isOneWay(way) && way.path[0].id !== path[0].id) {
+            return null
+        }
+
+        return { ...currentSegment, path, id: way.id }
     }
 
     protected filterOptions(opts:FreeRideContinuation[],from: FreeRideContinuation):FreeRideContinuation[] {
@@ -324,13 +347,6 @@ export class FreeRideService extends IncyclistService {
         this.once('segment-update', () => { segmentUpdated = true } )
 
         const optionManager: OptionManager = useMapArea().getOptionManager()        
-
-        const segmentLog = (o:FreeRideContinuation) =>  {
-            if (!o?.path?.length)
-                return o?.id+':no path'
-
-            return `${o.id}:(${o.path.length}):${o.path[0].id}->${o.path.at(-1).id}`
-        }
 
         // run in sequence to not overload overpass servers
         for (const o of opts??[]) {
@@ -572,7 +588,7 @@ export class FreeRideService extends IncyclistService {
 
     }
 
-    protected async getStartOptions(map:IMapArea,initial:boolean=false) {
+    protected async getStartOptions(map:IMapArea) {
         this.startOptions = []
         if (!map)
             return

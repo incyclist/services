@@ -150,7 +150,7 @@ const isAbsolutePath = (path: string): boolean => {
     return false;
 }
 
-const tryDecode = (path: string): string => {
+export const safeDecode = (path: string): string => {
     try {
         return decodeURIComponent(path);
     } catch {
@@ -158,8 +158,14 @@ const tryDecode = (path: string): string => {
     }
 }
 
+export const safeEncode =(path:string):string=> {
+    const decoded = safeDecode(path)
+    const encoded = encodeURI(decoded)
+    return encoded
+}
+
 const handleFileUrlPath = (fileName: string): string => {
-    const cleanPath = tryDecode(fileName.replace(/^file:\/\/\/?/, ''));
+    const cleanPath = safeDecode(fileName.replace(/^file:\/\/\/?/, ''));
     return `file://${encodeURI(cleanPath)}`;
 }
 
@@ -192,7 +198,7 @@ const buildUrlFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}
         return handleFileUrlPath(fileName);
     }
 
-    const normalizedPath = tryDecode(fileName);
+    const normalizedPath = safeDecode(fileName);
     return buildFileUrl(normalizedPath);
 }
 

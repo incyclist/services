@@ -1,46 +1,52 @@
 
 import {TacxParser} from './TacxParser'
-import { FileInfo, getBindings } from '../../../../api'
+import { FileInfo } from '../../../../api'
 import path from 'path'
 import fs from 'fs/promises'
 import { IFileSystem } from '../../../../api/fs'
+import { Inject } from '../../../../base/decorators'
+import { IncyclistBindings } from '../../../../api/bindings'
 import { loadFile } from '../../../../../__tests__/utils/loadFile'
 
-const load =  async (file) => {
-    let data,error;
+const load = async (file: any) => {
+    let data: Buffer | undefined, error: any
 
     try {
-        data = await loadFile(null,file.filename) as ArrayBuffer           
-        
+        const arrayBuffer = await loadFile(null, file.filename) as ArrayBuffer
+        data = Buffer.from(arrayBuffer)
+    } catch (err) {
+        error = err
     }
-    catch(err) {
-        error = err;
-    } 
-    return {data,error}
-
+    return {data, error}
 }
 
-const mockFS:IFileSystem = fs as unknown as IFileSystem
-mockFS.existsFile = async (path)=> { try { await fs.stat(path); return true} catch { return false}}
-mockFS.existsDir = async (path)=> { try { await fs.stat(path); return true} catch { return false}}
+const createMockFS = (): IFileSystem => {
+    const mockFS = fs as unknown as IFileSystem
+    mockFS.existsFile = async (path) => { try { await fs.stat(path); return true } catch { return false } }
+    mockFS.existsDir = async (path) => { try { await fs.stat(path); return true } catch { return false } }
+    return mockFS
+}
 
+const createMockBindings = (): Partial<IncyclistBindings> => ({
+    path,
+    fs: createMockFS(),
+    loader: { open: load }
+})
 
-describe('TacxParser',()=>{
-    let parser:TacxParser
-    
-    beforeEach( ()=>{
+describe('TacxParser', () => {
+    let parser: TacxParser
+    let mockBindings: Partial<IncyclistBindings>
 
+    beforeEach(() => {
+        mockBindings = createMockBindings()
+        Inject('Bindings', mockBindings)
         parser = new TacxParser()
-
-
-        getBindings().path = path
-        getBindings().fs = mockFS
-        getBindings().loader = { open: load}
-
     })
 
-    afterEach( ()=>{
-        jest.resetAllMocks()
+    afterEach(() => {
+        Inject('Bindings', null)
+        jest.clearAllMocks()
+        jest.restoreAllMocks()
     })
 
     test('valid RLV file',async ()=>{        
@@ -104,9 +110,9 @@ describe('TacxParser',()=>{
 
 
 
-    test('existing absolute video file path in rlv',async ()=>{        
+    test('existing absolute video file path in rlv',async ()=>{
 
-        mockFS.existsFile = jest.fn().mockResolvedValue(true)
+        jest.spyOn(mockBindings.fs!, 'existsFile').mockResolvedValue(true)
         const name = 'ES_Andalusia-1'
         const ext = 'rlv'
         const dir = './__tests__/data/rlv'
@@ -128,10 +134,10 @@ describe('TacxParser',()=>{
 
     })
 
-    test('non-existing absolute video file path in rlv',async ()=>{        
+    test('non-existing absolute video file path in rlv',async ()=>{
 
-        mockFS.existsFile = jest.fn().mockResolvedValue(false)
-        
+        jest.spyOn(mockBindings.fs!, 'existsFile').mockResolvedValue(false)
+
         const name = 'ES_Andalusia-1'
         const ext = 'rlv'
         const dir = './__tests__/data/rlv'
@@ -139,10 +145,60 @@ describe('TacxParser',()=>{
         const fileInfo:FileInfo = {type:'file', filename:file, name, base:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
 
         const {details} = await parser.import(fileInfo)
-        
+
 
         expect(details.video?.file).toBe(`video://./__tests__/data/rlv/ES_Andalusia-1.avi`)
 
+    })
+
+    test('mobile channel sets videoUrl correctly',async ()=>{
+        mockBindings.appInfo = { getChannel: () => 'mobile' } as any
+
+        const name = 'IS_West'
+        const ext = 'rlv'
+        const dir = './__tests__/data/rlv'
+        const file = `${dir}/${name}.${ext}`
+        const fileInfo:FileInfo = {type:'file', filename:file, name, base:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
+
+        const {details} = await parser.import(fileInfo)
+
+        expect(details.video?.file).toBeDefined()
+        expect(details.video?.url).toBeDefined()
+        expect(details.video?.file).toBe(details.video?.url)
+        expect(details.video?.mappings).toBeDefined()
+    })
+
+    test('mobile channel includes video format',async ()=>{
+        mockBindings.appInfo = { getChannel: () => 'mobile' } as any
+
+        const name = 'IS_West'
+        const ext = 'rlv'
+        const dir = './__tests__/data/rlv'
+        const file = `${dir}/${name}.${ext}`
+        const fileInfo:FileInfo = {type:'file', filename:file, name, base:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
+
+        const {details} = await parser.import(fileInfo)
+
+        expect(details.video?.format).toBeDefined()
+        expect(typeof details.video?.format).toBe('string')
+        expect(details.video?.format?.length).toBeGreaterThan(0)
+    })
+
+    test('mobile channel with absolute path video',async ()=>{
+        jest.spyOn(mockBindings.fs!, 'existsFile').mockResolvedValue(true)
+        mockBindings.appInfo = { getChannel: () => 'mobile' } as any
+
+        const name = 'ES_Andalusia-1'
+        const ext = 'rlv'
+        const dir = './__tests__/data/rlv'
+        const file = `${dir}/${name}.${ext}`
+        const fileInfo:FileInfo = {type:'file', filename:file, name, base:`${name}.${ext}`, ext,dir,url:undefined, delimiter:'/'}
+
+        const {details} = await parser.import(fileInfo)
+
+        expect(details.video?.file).toBeDefined()
+        expect(details.video?.format).toBeDefined()
+        expect(details.video?.mappings).toBeDefined()
     })
 
 })

@@ -13,6 +13,10 @@ import { VideoConversion, VideoSyncHelper } from "../../video";
 import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 
+/**
+ * Video state tracking for playback synchronization.
+ * @internal
+ */
 type VideoState = {
     observer?: Observer
     id?:string,
@@ -30,6 +34,16 @@ type VideoState = {
     info?: Array<{start:number, stop:number, props:InfotextDisplayProps}>
 }
 
+/**
+ * Service for managing video playback synchronized with route position.
+ *
+ * Extends RouteDisplayService to provide video-specific functionality for route-based
+ * virtual cycling with video content. Handles video playback synchronization, multiple
+ * video segments, and video event management.
+ *
+ * @emits state-update - When display state changes (video loaded, progress updated, etc)
+ * @emits route-updated - When route is modified (e.g., when switching to next video segment)
+ */
 export class RLVDisplayService extends RouteDisplayService {
 
     protected currentVideo: VideoState
@@ -46,10 +60,18 @@ export class RLVDisplayService extends RouteDisplayService {
 
 
     constructor() {
-        super()        
+        super()
         this.isInitialized = false
     }
 
+    /**
+     * Initializes the view for video display.
+     *
+     * Sets up initial video state and loads the original route video asynchronously.
+     * Emits 'state-update' event when video initialization completes.
+     *
+     * @fires state-update When videos are fully initialized
+     */
     initView(): void {
         this.currentVideo = undefined
         this.videos = []
@@ -64,6 +86,13 @@ export class RLVDisplayService extends RouteDisplayService {
         this.offset = 0
     }
 
+    /**
+     * Retrieves overlay properties for display elements.
+     *
+     * @param overlay - Type of overlay (e.g., 'map')
+     * @param props - Current ride display properties
+     * @returns Overlay properties with show property based on route GPX availability
+     */
     getOverlayProps(overlay, props: CurrentRideDisplayProps):OverlayDisplayProps {
         const res = super.getOverlayProps(overlay, props)
 
@@ -127,13 +156,19 @@ export class RLVDisplayService extends RouteDisplayService {
 
             this.logEvent({message: 'video added', id: videoRoute.description.id, title: videoRoute.description.title, segmentDistance: videoRoute.description.distance,next:nextId})
         }
-        catch (error) {
-            this.logError(error,'addVideo')
+        /* istanbul ignore catch */
+        catch (err) {
+            this.logError(err,'addVideo')
         }
     }
 
 
 
+    /**
+     * Pauses video playback.
+     *
+     * Pauses the current video's synchronization helper and updates internal state.
+     */
     pause() {
         super.pause()
 
@@ -141,14 +176,36 @@ export class RLVDisplayService extends RouteDisplayService {
         this.isVideoPaused = true
     }
 
+    /**
+     * Resumes video playback.
+     *
+     * Resumes the current video's synchronization helper and updates internal state.
+     */
     resume() {
         super.resume()
         this.currentVideo?.syncHelper.resume()
         this.isVideoPaused = false
-        
+
     }
 
-
+    /**
+     * Retrieves all display properties for rendering the video ride view.
+     *
+     * @param props - Current ride display properties
+     * @returns RLVDisplayProps containing route properties and video information
+     *
+     * @example
+     * ```
+     * const displayProps = service.getDisplayProperties(props);
+     * if (displayProps.video) {
+     *   // Single video scenario
+     *   renderVideo(displayProps.video);
+     * } else if (displayProps.videos) {
+     *   // Multiple videos scenario
+     *   renderVideoList(displayProps.videos);
+     * }
+     * ```
+     */
     getDisplayProperties(props: CurrentRideDisplayProps):RLVDisplayProps {
         this.startTime = this.startTime??this.getVideoTime(this.startSettings?.startPos??0)
         const startTime = this.startTime
@@ -356,7 +413,11 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
 
-
+    /**
+     * Retrieves properties for the start overlay display.
+     *
+     * @returns Object containing video state, error, and progress information
+     */
     getStartOverlayProps() {
         const videoState = this.getVideoState()
         const videoStateError = this.currentVideo?.error
@@ -367,10 +428,14 @@ export class RLVDisplayService extends RouteDisplayService {
             videoStateError,
             videoProgress
         }
-        
+
     }
 
-
+    /**
+     * Retrieves logging properties for ride analytics.
+     *
+     * @returns Object containing mode, route, and ride settings for logging
+     */
     getLogProps(): object {
         const bikeProps = this.getBikeLogProps()
         const {realityFactor,startPos,endPos,segment,showPrev,loopOverwrite, nextOverwrite} = this.startSettings 
@@ -392,10 +457,22 @@ export class RLVDisplayService extends RouteDisplayService {
         
     }
 
+    /**
+     * Checks if the ride has successfully started and video is loaded.
+     *
+     * @returns True if current video is loaded, false or undefined otherwise
+     */
     isStartRideCompleted(): boolean {
         return this.currentVideo?.loaded
     }
 
+    /**
+     * Stops video playback and cleans up resources.
+     *
+     * Stops the current video's synchronization helper and clears start time.
+     *
+     * @async
+     */
     async stop() {
         try {
             this.currentVideo?.syncHelper.stop()
@@ -403,12 +480,11 @@ export class RLVDisplayService extends RouteDisplayService {
             await super.stop()
 
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'stop')
         }
     }
-
-
 
     protected getVideoState() {
         let state = 'Starting'
@@ -512,6 +588,7 @@ export class RLVDisplayService extends RouteDisplayService {
             }
             return codeStr
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'getCode')
         }
@@ -536,16 +613,26 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
 
-    onActivityUpdate(activityPos:ActivityUpdate,data):void {  
+    /**
+     * Processes activity position updates and synchronizes video playback.
+     *
+     * Updates the video sync helper with the current route distance and speed,
+     * accounting for multi-segment offset. Skips sync updates when video is paused.
+     *
+     * @param activityPos - Current activity update with route distance and speed
+     * @param data - Additional activity data
+     *
+     * @fires state-update When playback state changes
+     */
+    onActivityUpdate(activityPos:ActivityUpdate, data: any):void {
         super.onActivityUpdate(activityPos,data)
-        const offset = this.offset??0       
+        const offset = this.offset??0
         const {routeDistance,speed} = activityPos
 
         if (!this.isVideoPaused) {
             this.currentVideo?.syncHelper.onActivityUpdate(routeDistance-offset,speed)
         }
     }
-
 
     protected initVideoSource(video:VideoState) {
         const route = video.route
@@ -724,25 +811,30 @@ export class RLVDisplayService extends RouteDisplayService {
 
     }
 
+    /* istanbul ignore next */
     protected isMobile() {
         return this.getBindings()?.appInfo?.getChannel()==='mobile'
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getBindings() {
         return getBindings()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getRouteList(): RouteListService {
         return useRouteList()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getLocalization(): LocalizationService {
         return useLocalization()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getCoaches() {
         return getCoachesService()

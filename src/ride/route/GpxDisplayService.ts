@@ -14,6 +14,21 @@ const SV_UPDATE_FREQ = 3000
 const SV_MIN_READY = 1500
 const SV_MIN_DELAY = 1000
 
+/**
+ * Service for managing GPX-based route ride display with multiple view modes.
+ *
+ * Extends RouteDisplayService to add support for Street View, Satellite View, and
+ * traditional Map views during route rides. This service manages:
+ * - Street View with dynamic position updates and heading synchronization
+ * - Satellite View for geographic visualization
+ * - Map View as a fallback for mobile devices
+ * - View-specific display properties and event handling
+ * - Dynamic update frequency optimization for Street View based on performance
+ *
+ * Intelligently switches between view modes based on user preferences and device
+ * capabilities (e.g., uses Map view on mobile devices). Includes sophisticated
+ * Street View update throttling to respect API rate limits and improve performance.
+ */
 export class GpxDisplayService extends RouteDisplayService {
 
     protected mapLoaded:boolean = false
@@ -48,14 +63,24 @@ export class GpxDisplayService extends RouteDisplayService {
 
             
         }
+        /* istanbul ignore catch */
         catch(err) {
             this.logError(err,'initView')
         }
     }
     
 
-    // for StreetView we can't update the position more frequently than every 3 seconds
-    // also: we need to provide heading for StreetView
+    /**
+     * Gets Street View display properties for the current ride position.
+     *
+     * Provides Street View-specific configuration including position, heading, and
+     * event callbacks. Manages side view panels (left/right views) and respects the
+     * user's hideAll preference. Position updates are throttled to respect Street View
+     * API rate limits (minimum 3 second intervals).
+     *
+     * @param rideProps - Current ride display properties with hideAll flag
+     * @returns Street View configuration with position, observer, and event handlers
+     */
     getStreetViewProps(rideProps: CurrentRideDisplayProps) {
         const sideViews = {
             enabled: true,
@@ -66,7 +91,7 @@ export class GpxDisplayService extends RouteDisplayService {
 
         const props:any =  {
             onDisplayEvent: this.onStreetViewEvent.bind(this),
-            displayObserver: this.mapLoaded  ? this.getStreetViewObserver() : undefined,            
+            displayObserver: this.mapLoaded  ? this.getStreetViewObserver() : undefined,
             displayPosition: this.mapLoaded  ? null : this.position,
             sideViews
         }
@@ -74,17 +99,33 @@ export class GpxDisplayService extends RouteDisplayService {
         return props
     }
 
-    // We might need to restrict the position update frequency, similar to StreetView
-    // {position,googleMaps,visible,options,onEvent}
+    /**
+     * Gets Satellite View display properties for the current ride position.
+     *
+     * Provides satellite/aerial imagery view of the route with the current position
+     * marked. Satellite View allows users to see the actual terrain and surroundings
+     * of the route they are riding on.
+     *
+     * @returns Satellite View configuration with position and event handlers
+     */
     getSatelliteViewProps() {
         return {
             onDisplayEvent: this.onSatelliteViewEvent.bind(this),
             displayPosition: this.position
 
-            
+
         }
     }
 
+    /**
+     * Gets Map View display properties for the current ride position.
+     *
+     * Provides a traditional 2D map view of the route with the current position marked.
+     * This is the default view on mobile devices and serves as a fallback when other
+     * views are unavailable.
+     *
+     * @returns Map View configuration with position and event handlers
+     */
     getMapViewProps() {
         return {
             onDisplayEvent: this.onMapViewEvent.bind(this),
@@ -95,9 +136,18 @@ export class GpxDisplayService extends RouteDisplayService {
     
     
 
+    /**
+     * Gets start overlay properties showing the view type and loading status.
+     *
+     * Displays information about the currently loading map/view during ride start,
+     * including the view type name and load status. Helps users understand what view
+     * is being loaded and if there are any errors.
+     *
+     * @returns Start overlay properties with map type and state information
+     */
     getStartOverlayProps() {
-        
-        
+
+
         const rideView = this.getRideView()
 
 
@@ -115,19 +165,38 @@ export class GpxDisplayService extends RouteDisplayService {
         }
     }
 
+    /**
+     * Checks if the ride start process has completed.
+     *
+     * Returns true when the map/view is fully loaded and ready. For map view on mobile,
+     * this completes immediately. For Street View and Satellite View, waits for the
+     * view to finish loading.
+     *
+     * @returns True if the view is loaded and ready, false if still loading
+     */
     isStartRideCompleted(): boolean {
         const rideView = this.getRideView()
         if (rideView==='map') {
             this.mapLoaded = true
             return true;
         }
-        
+
 
         return this.mapLoaded
     }
 
 
 
+    /**
+     * Gets complete display properties for the GPX ride with the selected view mode.
+     *
+     * Extends the parent RouteDisplayService properties by adding view-specific settings
+     * for Street View, Satellite View, or Map View based on user preferences and device
+     * capabilities. Combines all necessary display data for rendering the GPX ride UI.
+     *
+     * @param props - Current ride display properties controlling visibility and layout
+     * @returns Complete GPX display properties including selected view mode and view-specific props
+     */
     getDisplayProperties(props:CurrentRideDisplayProps):GpxDisplayProps {
         let routeProps:RouteDisplayProps = super.getDisplayProperties(props)
         const rideView = this.getRideView() as 'sv' | 'map' | 'sat'
@@ -144,8 +213,8 @@ export class GpxDisplayService extends RouteDisplayService {
 
         return {
            rideView ,
-            ...routeProps            
-        }    
+            ...routeProps
+        }
     }
 
     protected getRideView():string {
@@ -334,16 +403,19 @@ export class GpxDisplayService extends RouteDisplayService {
         return this.getBindings().appInfo?.getChannel()==='mobile'
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getUserSettings(): UserSettingsService {
         return useUserSettings()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getGoogleMaps():GoogleMapsService {
         return useGoogleMaps()
     }
 
+    /* istanbul ignore next */
     @Injectable
     protected getBindings() {
         return getBindings()

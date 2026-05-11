@@ -1,12 +1,29 @@
 import { COURSE_INFO, FP_CAF, FP_IMF, FP_PGMF, FP_RLV, GENERAL_INFO, PROGRAM_DETAILS, RLV_FRAME_DISTANCE_MAPPING, RLV_INFOBOX, RLV_VIDEO_INFO, TacxBlock, TacxBlockType, TacxFile, TacxFileType } from "../../model/tacx"
 import { BinaryReader } from "../utils"
 
+/**
+ * Base reader for Tacx binary files (RLV, PGMF, CAF, IMF formats).
+ *
+ * Provides core functionality to validate and parse Tacx file headers and block structures.
+ * Subclasses like RLVFileReader and PGMFFileReader extend this to handle format-specific
+ * block processing.
+ *
+ * @template X - The specific Tacx file type being parsed (RlvFile, PgmfFile, etc.)
+ */
 export class TacxFileReader<X extends TacxFile> {
-    
+
 
     protected file: X
     protected reader: BinaryReader
 
+    /**
+     * Validates if the provided data is a valid Tacx file format.
+     *
+     * Checks the file header to ensure the data starts with a valid Tacx file type identifier.
+     *
+     * @param data - Binary file data to validate
+     * @returns True if data is a valid Tacx file, false otherwise
+     */
     static isValid(data: ArrayBuffer): boolean {
         try {
             const buffer = Buffer.from(data)
@@ -21,13 +38,16 @@ export class TacxFileReader<X extends TacxFile> {
         }
     }
     /**
-     * Parses the content of the Tacx file (rlv,pgmf,...) and returns a TacxFile object. 
-     * The binary content is expected to be in ArrayBuffer format
-     * 
-     * @param data the data to parse
-     * @returns the parsed TacxFile
+     * Parses a Tacx file and returns a structured file object.
+     *
+     * Reads the file header to extract metadata (file type, version, block count),
+     * then iterates through all blocks for subclass processing.
+     *
+     * @param data - Binary file data as ArrayBuffer
+     * @returns Parsed file object with metadata and block data
+     * @throws Error if file format is invalid or unsupported
      */
-    parse( data: ArrayBuffer): X {
+    parse(data: ArrayBuffer): X {
         const buffer = Buffer.from(data)
         this.reader = new BinaryReader(buffer)
 
