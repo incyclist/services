@@ -210,7 +210,7 @@ export class FreeRideService extends IncyclistService {
             ? { ...way, path: [...way.path].reverse() }
             : { ...way }
 
-        const result = map.splitAtFirstBranch(newSegment as WayInfo)
+        const result = map.splitAtFirstBranch(newSegment)
         return result?.path ?? []
     }
 
