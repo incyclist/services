@@ -5,5 +5,7 @@ export interface IMessageQueueBinding extends EventEmitter{
     subscribe(topic:string)
     unsubscribe(topic:string)
     publish(topic:string, payload:object)
+    connect?():Promise<boolean>
+    disconnect?():void
 
 }

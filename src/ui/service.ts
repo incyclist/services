@@ -16,6 +16,8 @@ import { AppFeatures, Interfaces, useAppState } from "../appstate";
 import { IncyclistPageService } from "../base/pages";
 import { waitNextTick } from "../utils";
 
+const BACKGROUND_PAUSE_TIMEOUT_MS = 300000   
+
 @Singleton
 export class UserInterfaceServcie extends IncyclistService {
 
@@ -29,6 +31,9 @@ export class UserInterfaceServcie extends IncyclistService {
     protected heartbeatIv!: NodeJS.Timeout
     protected appFeatures!: AppFeatures
     protected appState: 'Inactive'|'Active'|'Background'|'Stopped' = 'Inactive'
+    protected backgroundTimer: NodeJS.Timeout | undefined
+    protected backgroundPausedByService: boolean = false
+
 
     constructor() {
         super('Incyclist')
@@ -134,9 +139,10 @@ export class UserInterfaceServcie extends IncyclistService {
 
             this.stopHeartbeatWorker()
 
-            await IncyclistPageService.pausePage()
-            useDeviceAccess().disconnect()
-            
+            this.backgroundTimer = setTimeout(()=> {
+                this.backgroundPausedByService = true
+                this.pause()
+            },BACKGROUND_PAUSE_TIMEOUT_MS)
         }
         catch(err) {
             this.logError(err,'onAppPause')
@@ -155,13 +161,18 @@ export class UserInterfaceServcie extends IncyclistService {
         this.isTerminating = false;
 
         try {
+            this.startHeartbeatWorker()
+            this.backgroundPausedByService = false
             this.appState = 'Active'
             this.logEvent({message:'onAppResume called'})
 
-            useDeviceAccess().connect()
-            IncyclistPageService.resumePage()
+            // resume withing timeout
+            if (this.backgroundTimer) {
+                clearTimeout(this.backgroundTimer)
+                return
+            }
 
-            this.startHeartbeatWorker()
+            this.resume()
         }
         catch(err) {
             this.logError(err,'onAppPause')
@@ -204,6 +215,22 @@ export class UserInterfaceServcie extends IncyclistService {
         catch ( err) {
             this.logError(err,'onSessionStart')
         }
+    }
+
+    protected async pause() {
+        await IncyclistPageService.pausePage()
+        useDeviceAccess().disconnect()
+        if (this.getMessageQueue().disconnect)
+            this.getMessageQueue().disconnect()
+
+
+    }
+
+    protected resume() {
+        if (this.getMessageQueue().connect)
+            this.getMessageQueue().connect()
+        useDeviceAccess().connect()
+        IncyclistPageService.resumePage()
     }
 
     protected startHeartbeatWorker() {

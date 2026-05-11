@@ -9,7 +9,7 @@ import { ISecretBinding } from "../../api/secret";
 import { getBindings } from "../../api";
 import { useOnlineStatusMonitoring } from "../../monitoring";
 
-const BACKGROUND_PAUSE_TIMEOUT_MS = 60000   
+const BACKGROUND_PAUSE_TIMEOUT_MS = 300000   
 
 @Singleton
 export class RidePageService extends IncyclistPageService implements IRidePageService {
