@@ -3,7 +3,7 @@ import { IncyclistService } from "../../base/service";
 import {  Singleton } from "../../base/types";
 import { DEFAULT_POSITION } from "../../maps/MapArea/consts";
 import { useMapArea } from "../../maps/MapArea/service";
-import { FreeRideContinuation, IMapArea, IncyclistNode, IncyclistWay, WayInfo } from "../../maps/MapArea/types";
+import { FreeRideContinuation, IMapArea, IncyclistNode, IncyclistWay } from "../../maps/MapArea/types";
 import { concatPaths, getPointCrossingPath, isAllowed, isOneWay, isRoundabout } from "../../maps/MapArea/utils";
 import { RoutePoint } from "../base/types";
 import { FreeRideOption, FreeRidePoint } from "../list/types";
