@@ -34,6 +34,7 @@ export class FollowRouteDisplayService extends GpxDisplayService {
             }
 
         }
+        /* istanbul ignore catch */
         catch (err) {
             this.logEvent({ message: 'error', fn: 'savePosition()', position: this.position, error:err.message, stack:err.stack })
         }
