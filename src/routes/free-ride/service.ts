@@ -3,7 +3,7 @@ import { IncyclistService } from "../../base/service";
 import {  Singleton } from "../../base/types";
 import { DEFAULT_POSITION } from "../../maps/MapArea/consts";
 import { useMapArea } from "../../maps/MapArea/service";
-import { FreeRideContinuation, IMapArea, IncyclistNode, IncyclistWay } from "../../maps/MapArea/types";
+import { FreeRideContinuation, IMapArea, IncyclistNode, IncyclistWay, WayInfo } from "../../maps/MapArea/types";
 import { concatPaths, getPointCrossingPath, isAllowed, isOneWay, isRoundabout } from "../../maps/MapArea/utils";
 import { RoutePoint } from "../base/types";
 import { FreeRideOption, FreeRidePoint } from "../list/types";
@@ -169,45 +169,60 @@ export class FreeRideService extends IncyclistService {
     protected addLastSegmentReverse(original: FreeRideContinuation[],from: FreeRideContinuation):FreeRideContinuation[] {
         const options = original??[]
         const currentSegment = from??this.currentSegment
-        let map
+        let map:IMapArea
 
-        if (currentSegment?.path?.length>0) {
-            let path = [...currentSegment.path]
+        try {
 
-            // starting point from route selectoin (without node ID?)
-            if (!path[0].id) {
-                map = from?.map ?? this.getMapArea().getMap(path[0])
-                const way = map.getWay(currentSegment.id)
-                const end = path.at(-1)
-                let newSegment:FreeRideContinuation
-                if (end.id===way.path.at(-1).id) { 
-                    path = way.path 
-                    path.reverse()
-                    newSegment = {...way,path}
+            if (currentSegment?.path?.length>0) {
+                let path = [...currentSegment.path]
 
+                // starting point from route selectoin (without node ID?)
+                if (!path[0].id) {
+                    map = from?.map ?? this.getMapArea().getMap(path[0])
+                    const way = map.getWay(currentSegment.id)
+                    if (!way)  {
+                        return []
+                    }
+
+                    const end = path.at(-1)
+                    let newSegment:FreeRideContinuation
+                    if (end.id===way.path.at(-1).id) { 
+                        path = way.path 
+                        path.reverse()
+                        newSegment = {...way,path}
+
+                    }
+                    else {
+                        newSegment = {...way}
+                    }
+                    const result = map.splitAtFirstBranch(newSegment as WayInfo)
+                    path = result?.path??[]
                 }
                 else {
-                    newSegment = {...way}
+                    map = currentSegment.map
+                    path.reverse()
                 }
-                const result = map.splitAtFirstBranch(newSegment)
-                path = result?.path??[]
+                
+                const wayId = path[0].ways?.length===1  ?  path[0].ways[0] : path[1].ways[0]
+                const way = map?.getWay(wayId)     
+                if ( way && isOneWay(way) && way.path[0].id!==path[0].id) {
+                    // don't add if we are not allowed to ride in this direction
+                    return []
+                }
+                if (!way) {
+                    return []
+                }
+                
+                const option = { ...currentSegment, path, id:way.id }
+                options.push(option);
             }
-            else {
-                map = currentSegment.map
-                path.reverse()
-            }
-            
-            const wayId = path[0].ways?.length===1  ?  path[0].ways[0] : path[1].ways[0]
-            const way = map?.getWay(wayId)     
-            if ( way && isOneWay(way) && way.path[0].id!==path[0].id) {
-                // don't add if we are not allowed to ride in this direction
-                return
-            }
-            
-            const option = { ...currentSegment, path, id:way.id }
-            options.push(option);
+            return options
         }
-        return options
+        catch(err:any) {
+            this.logError(err,'addLastSegmentReverse',{original,from,map:map.getQueryLocation()})
+            return []
+
+        }
     }
 
     protected filterOptions(opts:FreeRideContinuation[],from: FreeRideContinuation):FreeRideContinuation[] {
