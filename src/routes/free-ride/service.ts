@@ -40,7 +40,7 @@ export class FreeRideService extends IncyclistService {
 
         const map = await this.getMapArea().load(this.startPosition)
        
-        await this.getStartOptions(map,true)
+        await this.getStartOptions(map)
 
         return this.getRouteDefinitionDisplayProps()
     }
@@ -348,13 +348,6 @@ export class FreeRideService extends IncyclistService {
 
         const optionManager: OptionManager = useMapArea().getOptionManager()        
 
-        const segmentLog = (o:FreeRideContinuation) =>  {
-            if (!o?.path?.length)
-                return o?.id+':no path'
-
-            return `${o.id}:(${o.path.length}):${o.path[0].id}->${o.path.at(-1).id}`
-        }
-
         // run in sequence to not overload overpass servers
         for (const o of opts??[]) {
 
@@ -595,7 +588,7 @@ export class FreeRideService extends IncyclistService {
 
     }
 
-    protected async getStartOptions(map:IMapArea,initial:boolean=false) {
+    protected async getStartOptions(map:IMapArea) {
         this.startOptions = []
         if (!map)
             return
