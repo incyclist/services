@@ -359,7 +359,7 @@ export class DeviceAccessService  extends IncyclistService{
             this.emit('interface-changed',ifaceName,{...this.interfaces[ifaceName],state:'connecting'})    
         
             await impl.disconnect()
-            const connected = await impl.connect()            
+            const connected = await impl.connect(true)            
 
             const state:InterfaceState = connected ? 'connected': 'disconnected'
             this.interfaces[ifaceName].state = state

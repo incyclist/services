@@ -161,18 +161,21 @@ export class UserInterfaceServcie extends IncyclistService {
         this.isTerminating = false;
 
         try {
+            let resumeRequired = true
+            // resume within timeout
+            if (this.backgroundTimer) {
+                clearTimeout(this.backgroundTimer)
+                resumeRequired = false
+            }
+            this.logEvent({message:'onAppResume called'})
+
             this.startHeartbeatWorker()
             this.backgroundPausedByService = false
             this.appState = 'Active'
-            this.logEvent({message:'onAppResume called'})
 
-            // resume withing timeout
-            if (this.backgroundTimer) {
-                clearTimeout(this.backgroundTimer)
-                return
+            if (resumeRequired) {
+                this.resume()
             }
-
-            this.resume()
         }
         catch(err) {
             this.logError(err,'onAppPause')
@@ -219,18 +222,18 @@ export class UserInterfaceServcie extends IncyclistService {
 
     protected async pause() {
         await IncyclistPageService.pausePage()
-        useDeviceAccess().disconnect()
+        await useDeviceAccess().disconnect()
         if (this.getMessageQueue().disconnect)
             this.getMessageQueue().disconnect()
 
 
     }
 
-    protected resume() {
+    protected async resume() {
         if (this.getMessageQueue().connect)
             this.getMessageQueue().connect()
-        useDeviceAccess().connect()
-        IncyclistPageService.resumePage()
+        await useDeviceAccess().connect()
+        await IncyclistPageService.resumePage()
     }
 
     protected startHeartbeatWorker() {
