@@ -614,7 +614,7 @@ export class VideoSyncHelper extends IncyclistService{
 
             const s0 = mapping.distance
             const v = mapping.videoSpeed/3.6
-            const t = mapping.time +(distance-s0)/v
+            const t = mapping.time===0 ? mapping.time +distance/v : mapping.time +(distance-s0)/v
 
             if (!Number.isNaN(t) ) {
                 return t
