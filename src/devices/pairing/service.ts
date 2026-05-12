@@ -269,10 +269,11 @@ export class DevicePairingService  extends IncyclistService{
     async prepareStart(adapterFilter:Array<string>=[]):Promise<void> {
         const stillPairing = this.isPairing()
         const stillScanning = this.isScanning()
+        const adapters = this.state?.adapters??[]
 
         this.logEvent({message:'Stop Pairing (OK)', stillPairing,stillScanning})
         try {
-            this.pauseAdapters(this.state.adapters.filter( a=> !adapterFilter.includes(a.udid)));
+            this.pauseAdapters(adapters.filter( a=> !adapterFilter.includes(a.udid)));
 
             if (this.isPairing()) {
                 this.removePairingCallbacks()
