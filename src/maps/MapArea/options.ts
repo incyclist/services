@@ -1,13 +1,27 @@
 import { EventLogger } from "gd-eventlog";
 import clone from "../../utils/clone";
-import { FreeRideContinuation, GetNextOptionProps, IMapArea, IMapAreaService, IncyclistNode, IncyclistWay, PathCrossingInfo, WayInfo } from "./types";
+import { FreeRideContinuation, GetNextOptionProps, IMapArea, IMapAreaService, IncyclistNode, IncyclistWay, NextOptionsResult, PathCrossingInfo, WayInfo } from "./types";
 import { concatPaths, isAllowed, isOneWay, isRoundabout, pointEquals, removeDuplicatePaths, removeDuplicates, splitAtIndex, splitAtPoint  } from "./utils";
 import { calculateDistance } from "../../utils/geo";
 import { waitNextTick } from "../../utils";
 
+/**
+ * Manages the discovery and retrieval of continuation options for free ride navigation.
+ *
+ * This service queries OpenStreetMap data (via the MapArea service) to find available paths
+ * at decision points. It distinguishes between two scenarios when no options are found:
+ *
+ * 1. **Confirmed Dead End** (isValid: true) - The query succeeded and definitively found no continuations
+ *    This typically occurs at the end of a street or cul-de-sac. Safe to reverse the path.
+ *
+ * 2. **Query Error** (isValid: false) - The API query failed or timed out, so we don't know if continuations exist
+ *    This could be a temporary network issue. Should NOT reverse without confirming the dead end.
+ *
+ * This distinction prevents infinite loops where API errors trigger endless reversal attempts.
+ */
 export class OptionManager {
-    
-    protected logger:EventLogger 
+
+    protected logger:EventLogger
     constructor( protected service: IMapAreaService, protected map?: IMapArea) {
         this.logger = new EventLogger('OptionManager')
     }
@@ -16,8 +30,18 @@ export class OptionManager {
         this.map = map
     }
 
+    /**
+     * Gets initial continuation options at the ride start position.
+     *
+     * Splits the starting way at the rider's current position and generates options
+     * for each segment, extending single-continuation segments to avoid unnecessary choice points.
+     *
+     * @param way - The starting street/way
+     * @param crossing - The exact position where the rider crosses the way
+     * @returns Array of initial continuation options
+     */
     async getStartOptions( way:IncyclistWay, crossing:PathCrossingInfo ): Promise<Array<FreeRideContinuation>> {
-        
+
         const options: Array<FreeRideContinuation> = []
         const parts = this.map?.splitAtCrossingPoint(way,crossing)??[]
 
@@ -29,32 +53,33 @@ export class OptionManager {
             try {
                 const path =segment.path
 
-                const opts = await this.getNextOptions(segment)
-    
+                const result = await this.getNextOptions(segment)
+                const opts = result.options
+
                 // if there is only one continuation option, extend the path
                 if (opts?.length===1) {
 
                     // same route, just extend path
-                    if ( opts[0].id === segment.id) { 
-                        concatPaths( path, opts[0].path,'after',opts[0].id )    
+                    if ( opts[0].id === segment.id) {
+                        concatPaths( path, opts[0].path,'after',opts[0].id )
                     }
                     else {
                         // different route, which might include a point we already have
                         let foundSameSegment = false;
-                        opts[0].path.forEach( (point,j) => {
-                            if (j===0)
+                        opts[0].path.forEach( (point) => {
+                            if (point === opts[0].path[0])
                                 return;
                             foundSameSegment =  points.some( pAll => pAll.id===point.id)
                         } )
                         if ( !foundSameSegment) {
-                            concatPaths( path, opts[0].path,'after',opts[0].id )        
+                            concatPaths( path, opts[0].path,'after',opts[0].id )
                         }
                     }
                 }
                 const option = {id:segment.id,path,map:this.map}
                 options.push(option);
                 await waitNextTick()
-    
+
             }
             catch(err:any) {
                 this.logError(err,'getStartOptions')
@@ -65,16 +90,54 @@ export class OptionManager {
         return options
     }
 
-    async getNextOptions( from:WayInfo|FreeRideContinuation, props?:GetNextOptionProps ): Promise<Array<FreeRideContinuation>> {
+    /**
+     * Queries OSM data to find continuation options from the end of a given path.
+     *
+     * Loads the map area around the endpoint (if needed) and identifies all street intersections
+     * that the rider could continue on from that location. Options are sorted by proximity to
+     * the current direction to prefer straight continuations over sharp turns.
+     *
+     * @param from - The current way/path to find continuations for
+     * @param props - Optional properties like minDistance threshold
+     * @returns NextOptionsResult with two fields:
+     *   - options: Array of available continuation paths (empty if dead end or error)
+     *   - isValid: boolean indicating whether the result is definitive
+     *
+     * @remarks
+     * The `isValid` flag is critical for distinguishing two failure modes:
+     *
+     * **isValid = true** (confirmed result):
+     * - The OSM query succeeded and processed data
+     * - Empty array means confirmed dead end (no intersections exist)
+     * - Safe to apply reversal logic to continue in opposite direction
+     * - Callers should NOT retry
+     *
+     * **isValid = false** (query failed):
+     * - The OSM API query failed, timed out, or returned invalid data
+     * - Empty array is inconclusive - continuations may exist but we don't know
+     * - Should NOT apply reversal logic (data is unreliable)
+     * - Callers should retry the query after backoff
+     *
+     * @example
+     * const result = await optionManager.getNextOptions(currentSegment);
+     * if (!result.isValid) {
+     *   // API error - retry later
+     *   await retryAfterDelay();
+     * } else if (result.options.length === 0) {
+     *   // Confirmed dead end - try reversing the path
+     *   const reversed = reversePath(currentSegment);
+     * }
+     */
+    async getNextOptions( from:WayInfo|FreeRideContinuation, props?:GetNextOptionProps ): Promise<NextOptionsResult> {
         try {
             if (from?.id===undefined || from?.path===undefined || from?.path.length<1)  {
-                return []
+                return { options: [], isValid: true }
             }
 
             // handle special case: way is a continuation (appending a single option) from the original  way
             const lastPoint = from.path.length>0 ? from.path.at(-1) : undefined
             const fromWayId = lastPoint?.wayId ?? from.id
-            let originalWay = this.getWay(fromWayId) 
+            let originalWay = this.getWay(fromWayId)
 
             // ensure we have a proper way object (not just the WayInfo)
             if ( !originalWay) {
@@ -82,42 +145,42 @@ export class OptionManager {
                 const query:Partial<IncyclistWay> = {id:from.id,path:from.path, map:map}
                 originalWay = this.getWay(query as IncyclistWay)
                 if (!originalWay) {
-                    return []
+                    return { options: [], isValid: true }
                 }
             }
             const way = {...originalWay,path:from.path}
-    
-            // get last location of way, if it has no id, get second to last 
+
+            // get last location of way, if it has no id, get second to last
             let location = way.path.at(-1);
             if (location.id===undefined) {
                 if (way.path.length>1)
                     location = way.path.at(-2);
                 else {
-                    return []
+                    return { options: [], isValid: true }
                 }
             }
-    
+
             // get updated map (if required)
             const map = await this.service.load(location)
-    
+
             if (!map)  {
                 if (!this.map?.isWithinBoundary(location))
-                    return []
+                    return { options: [], isValid: true }
             }
             else {
                 this.setMap(map)
             }
-    
-    
+
+
             // get node and remaining part of way
             const node = this.getNode(location);
             const remaining = this.getRemaining(way);
-    
-                    
+
+
             let options:Array<FreeRideContinuation> = [];
-    
+
             if (node!==undefined && remaining!==undefined ) {
-                
+
                 (node.ways??[]).forEach( (wid) => {
                     if ( wid===remaining.id) {
                         options.push(... this.getOptionsOnCurrentWay(node,remaining,options))
@@ -128,41 +191,41 @@ export class OptionManager {
                             options.push(... this.checkOptionsOnDifferentWay(node,w,options))
                     }
                 })
-                    
+
             }
 
             options = removeDuplicatePaths(options)
-            
+
 
 
             const currentDirection = this.map?.getHeading(way, 'end')??0;
             options.forEach( (option) => {
                 const direction = this.map?.getHeading(option as WayInfo, 'start')??0;
                 option.direction = direction-currentDirection
-                if (option.direction>180) 
+                if (option.direction>180)
                     option.direction = option.direction-360;
             })
-    
-    
+
+
             if (props?.minDistance) {
                 await this.checkMinDistance(options,props.minDistance)
             }
-    
+
             // remove options that are pointing back to the origin
             if (options?.length) {
                 const fromNode = from.path?.at(-2);
                 options = options.filter( o => o.path.length>0 && o.path[1].id!==fromNode.id)
             }
-    
-    
-            return options;        
-    
+
+
+            return { options, isValid: true };
+
         }
         catch(err:any) {
             this.logError(err,'getNextOptions')
-            return []
+            return { options: [], isValid: false }
         }
-    
+
     }
 
     protected async checkMinDistance(options:Array<FreeRideContinuation>,minDistance:number) {
@@ -172,9 +235,9 @@ export class OptionManager {
             if (option?.path?.length > 0) {
                 const distance = this.getDistance(option.path);
                 if (distance < minDistance) {
-                    const branches = await this.getNextOptions(option,{minDistance:minDistance-distance});
-                    option.options = branches??[]
-                    
+                    const result = await this.getNextOptions(option,{minDistance:minDistance-distance});
+                    option.options = result.options??[]
+
                 }
             }
         };

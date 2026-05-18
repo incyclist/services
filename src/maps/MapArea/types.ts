@@ -44,6 +44,11 @@ export type FreeRideContinuation = {
     ui?:FreeRideOption
 }
 
+export type NextOptionsResult = {
+    options: Array<FreeRideContinuation>
+    isValid: boolean
+}
+
 export interface IMapAreaService  {
     load( location: IncyclistNode): Promise<IMapArea|undefined>
     getMap(location:IncyclistNode):IMapArea|undefined 

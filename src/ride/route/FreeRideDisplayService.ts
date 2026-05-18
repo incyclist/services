@@ -628,12 +628,12 @@ export class FreeRideDisplayService extends GpxDisplayService {
                         options = undefined
                     }
 
-                    if (!options?.length && !finished && !forStart) {
+                    if (!options?.length && !finished && !forStart && !freeRide.isLastQueryValid()) {
                         this.logEvent( {message:'no options available - retry in 3000ms', })
                         await sleep(3000)
                     }
 
-                } while (!options?.length && !finished && !forStart)
+                } while (!options?.length && !finished && !forStart && !freeRide.isLastQueryValid())
 
             this.internalEmitter.off('stop-query',setFinished)
 

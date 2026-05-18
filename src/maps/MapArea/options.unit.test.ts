@@ -74,13 +74,14 @@ describe('OptionManager',()=>{
             const options = await manager.getStartOptions(way,crossing)
 
             
-            const res = await manager.getNextOptions(options[1])
+            const result = await manager.getNextOptions(options[1])
+            const res = result.options
 
             expect(res.length).toBe(2)
             expect(res[1].path[1].id).toBe('1028491949')
             expect(res[1].path[res[1].path.length-1].id).toBe('29386619')
 
-            
+
             expect(res[0].path[1].id).toBe('2292003367')
             expect(res[0].path[res[0].path.length-1].id).toBe('29386619')
 
@@ -183,11 +184,14 @@ describe('OptionManager',()=>{
 
             // Mock getNextOptions to return a single option with the same ID
             // This is the scenario that triggered the bug
-            jest.spyOn(manager, 'getNextOptions').mockResolvedValue([{
-                id: '85147125',  // Same as segment ID - this is the key issue
-                path: [node1, node2],
-                map: mockMap
-            }])
+            jest.spyOn(manager, 'getNextOptions').mockResolvedValue({
+                options: [{
+                    id: '85147125',  // Same as segment ID - this is the key issue
+                    path: [node1, node2],
+                    map: mockMap
+                }],
+                isValid: true
+            })
 
             // Call getStartOptions - should not throw or log errors
             const options = await manager.getStartOptions(roundaboutWay, crossing)

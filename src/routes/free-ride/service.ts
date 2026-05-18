@@ -22,7 +22,7 @@ export class FreeRideService extends IncyclistService {
     protected selectedOption:FreeRideContinuation
     protected options:FreeRideContinuation[]
     protected currentSegment: FreeRideContinuation
-    
+    protected lastOptionsQueryValid: boolean = true
 
     constructor() {
         super('FreeRide')
@@ -135,10 +135,17 @@ export class FreeRideService extends IncyclistService {
         return (this.options??[]).find( o => o.ui?.id === option.id)
     }
 
-    private async loadNextOptions(from: FreeRideContinuation,forStart?:boolean): Promise<FreeRideContinuation[]> {    
+    private async loadNextOptions(from: FreeRideContinuation,forStart?:boolean): Promise<FreeRideContinuation[]> {
 
         const optionManager = useMapArea().getOptionManager()
-        let opts =  await optionManager.getNextOptions(from) ?? [];
+        const result = await optionManager.getNextOptions(from)
+        let opts = result.options
+
+        this.lastOptionsQueryValid = result.isValid
+
+        if (!result.isValid) {
+            return []
+        }
 
         opts = this.evaluateOptions(opts, from);
         // for each of the options, get next options
@@ -358,9 +365,12 @@ export class FreeRideService extends IncyclistService {
             let segment = o;
             let done = false
             let isSingle = false
+            let lastHandlerWasNoOption = false
 
             do {
-                const nextOpts = await optionManager.getNextOptions(segment);
+                const nextOptsResult = await optionManager.getNextOptions(segment);
+                const nextOpts = nextOptsResult.options
+                const isValid = nextOptsResult.isValid
 
                 const handleSingleOption = () => {
                     if (segmentUpdated)
@@ -386,7 +396,7 @@ export class FreeRideService extends IncyclistService {
 
                 }
 
-                const handleNoOption = () => { 
+                const handleNoOption = () => {
                     if (segmentUpdated)
                         return
 
@@ -394,9 +404,15 @@ export class FreeRideService extends IncyclistService {
                     if (isSingle) {
                         o.options = [segment]
                         done = true;
-                        return 
+                        return
                     }
-        
+
+                    if (lastHandlerWasNoOption) {
+                        o.options = []
+                        done = true
+                        return
+                    }
+
                     try {
                         const map = segment.map ?? this.getMapArea().getMap(segment.path[0])
     
@@ -438,13 +454,21 @@ export class FreeRideService extends IncyclistService {
 
                 if (nextOpts?.length === 1) {
                     handleSingleOption()
+                    lastHandlerWasNoOption = false
                 }
-                else if (!nextOpts?.length) {
-                    handleNoOption()           
+                else if (!nextOpts?.length && isValid) {
+                    handleNoOption()
+                    lastHandlerWasNoOption = true
+                }
+                else if (!nextOpts?.length && !isValid) {
+                    o.options = []
+                    done = true
+                    lastHandlerWasNoOption = false
                 }
                 else {
                     o.options = nextOpts;
-                    done = true                           
+                    done = true
+                    lastHandlerWasNoOption = false
                 }
 
                 await waitNextTick()
@@ -463,6 +487,10 @@ export class FreeRideService extends IncyclistService {
 
     getOptions():FreeRideContinuation[] {
         return this.options
+    }
+
+    isLastQueryValid():boolean {
+        return this.lastOptionsQueryValid
     }
 
 
