@@ -757,23 +757,33 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     }
 
-    adjustPower( increase:boolean, large:boolean ) {
+    adjustPower( increase:boolean, large:boolean, gearFallback:boolean = true  ) {
         try {
             if (this.getWorkoutRide().inUse()) {
                 const inc = large ? 5:1
-                if (increase) this.getWorkoutRide().powerUp(inc) 
-                    else  this.getWorkoutRide().powerDown(inc)
+                this.adjustWorkout(increase,inc)
             }
             else {
                 const sgn = increase ? 1:-1
                 const inc = large ? sgn*50:sgn*5
-                this.devicePowerUp(inc)
+                this.devicePowerUp(inc, gearFallback)
             }
         }
         catch(err) {
             this.logError(err,'adjustPower')
         }        
     }
+
+    adjustWorkout( increase:boolean, inc:number) {
+        if (this.getWorkoutRide().inUse()) {
+
+            if (increase) this.getWorkoutRide().powerUp(inc) 
+                else  this.getWorkoutRide().powerDown(inc)
+        }
+
+    }
+
+
 
 
 
@@ -1064,7 +1074,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         delete this.startDeviceHandlers        
     }
 
-    protected devicePowerUp(inc:number) {
+    protected devicePowerUp(inc:number, gearFallback:boolean = true) {
 
         const device = this.getDeviceRide().getControlAdapter()
         if (!device ) 
@@ -1083,9 +1093,13 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             if (Math.abs(gearDelta)>1) {
                 gearDelta = Math.sign(gearDelta)*5
             }
-            this.getRideModeService().sendUpdate({gearDelta} )
+            this.gearChange(gearDelta)
         }
 
+    }
+
+    protected gearChange( gearDelta:number) {
+        this.getRideModeService().sendUpdate({gearDelta} )
     }
 
     protected simulatorPowerUp(mode:CyclingMode, powerInc:number) {
@@ -1247,6 +1261,16 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         const {key, /*deviceType,*/ duration} = event
         if (key==='up') this.adjustPower(true,duration>1000)
         else if (key==='down') this.adjustPower(false,duration>1000);
+        else if (key=='r-shift-up') this.gearChange(1)
+        else if (key=='r-shift-down') this.gearChange(-1)
+        else if (key=='l-shift-up') this.gearChange(5)
+        else if (key=='l-shift-down') this.gearChange(-5)
+        else if (key=='y') this.adjustPower(true,duration>1000,false)
+        else if (key=='b') this.adjustPower(false,duration>1000,false)
+        else if (key=='a') this.forward()
+        else if (key=='z') this.backward()
+
+
     }
 
     protected startListeningForDeviceData() {
