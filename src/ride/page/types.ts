@@ -30,6 +30,7 @@ export interface VideoRidePageDisplayProps extends RidePageDisplayProps {
 
 export interface GPXRidePageDisplayProps extends RidePageDisplayProps {
     rideView?:   RideViewType
+    displayObserver?:IObserver
 }
 
 // Union for consumers that need to handle all ride types

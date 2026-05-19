@@ -11,6 +11,7 @@ import { FreeRideOption } from "../../routes/list/types"
 import { MapViewPort } from "../route/types"
 import { LatLng } from "../../utils/geo"
 import { Unit } from "../../i18n"
+import { IObserver } from "../../types"
 
 export type RideType = 'Free-Ride' | 'GPX' | 'Video' | 'Workout'
 
@@ -115,6 +116,7 @@ export type RideViewType = 'sv' | 'map' | 'sat'
 
 export interface GpxDisplayProps extends RouteDisplayProps {
     rideView: RideViewType,
+    displayObserver?:IObserver
 }
 
 export interface RouteOptionDisplayProps { 

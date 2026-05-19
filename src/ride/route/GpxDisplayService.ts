@@ -91,9 +91,14 @@ export class GpxDisplayService extends RouteDisplayService {
 
         const props:any =  {
             onDisplayEvent: this.onStreetViewEvent.bind(this),
+            
             displayObserver: this.mapLoaded  ? this.getStreetViewObserver() : undefined,
             displayPosition: this.mapLoaded  ? null : this.position,
             sideViews
+        }
+
+        if ( this.isMobile()) {
+            // TODO: add sv component props (i.e. callbacks, position,...)
         }
 
         return props
@@ -151,7 +156,7 @@ export class GpxDisplayService extends RouteDisplayService {
         const rideView = this.getRideView()
 
 
-        if (rideView === 'map') {
+        if (rideView === 'map' || this.isMobile()) {
             return {
                 mapType: this.getRideViewName(),
                 mapState: 'Loaded'
@@ -176,7 +181,7 @@ export class GpxDisplayService extends RouteDisplayService {
      */
     isStartRideCompleted(): boolean {
         const rideView = this.getRideView()
-        if (rideView==='map') {
+        if (rideView==='map' || this.isMobile()) {
             this.mapLoaded = true
             return true;
         }
@@ -219,7 +224,7 @@ export class GpxDisplayService extends RouteDisplayService {
 
     protected getRideView():string {
         if (this.isMobile()) 
-            return 'map'
+            return 'sv'
        
         const rideView = this.getUserSettings().get('preferences.rideView','sv')       
         return rideView

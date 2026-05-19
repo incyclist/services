@@ -300,7 +300,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             startOverlayProps : isStarting ? this.getRideDisplay().getStartOverlayProps() : null,
             menuProps: this.menuProps,
             rideView: props.rideView,
-            route: props.route
+            route: props.route,
+            displayObserver: props.displayObserver
 
         }
         return displayProps

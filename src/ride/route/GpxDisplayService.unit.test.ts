@@ -417,13 +417,13 @@ describe('GpxDisplayService', () => {
             expect(props.rideView).toBe('sv')
         })
 
-        test('uses map view for mobile devices', () => {
+        test('uses sv view for mobile devices', () => {
             setupMocks(service, {
                 mockRideService: true,
                 channel: 'mobile'
             })
             const props = service.getDisplayProperties({hideAll: false} as any)
-            expect(props.rideView).toBe('map')
+            expect(props.rideView).toBe('sv')
         })
 
         test('includes parent route display properties', () => {
@@ -617,17 +617,17 @@ describe('GpxDisplayService', () => {
             cleanupMocks(service)
         })
 
-        test('selects map view for mobile regardless of preferences', () => {
+        test('selects street view for mobile regardless of preferences', () => {
             setupMocks(service, {
                 mockRideService: true,
                 channel: 'mobile',
                 userSettingsGet: jest.fn((key, def) => {
-                    if (key === 'preferences.rideView') return 'sv'
+                    if (key === 'preferences.rideView') return 'sat'
                     return def
                 })
             })
             const props = service.getStartOverlayProps()
-            expect(props.mapType).toBe('Map')
+            expect(props.mapType).toBe('Street View')
         })
 
         test('allows user preference for street view on desktop', () => {
