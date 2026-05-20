@@ -482,6 +482,8 @@ export class DeviceConfigurationService  extends IncyclistService{
                 return;
             }
 
+            if (adapter.updateCyclingModeConfig)
+                adapter.updateCyclingModeConfig()
 
             if (adapter.getSupportedCyclingModes) {
                 modes = adapter.getSupportedCyclingModes()               
