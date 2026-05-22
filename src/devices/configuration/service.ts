@@ -339,8 +339,6 @@ export class DeviceConfigurationService  extends IncyclistService{
     }
 
     delete(udid:string, capability?:ExtendedIncyclistCapability, forceSingle=false):void {
-        this.logEvent({message:'delete device',udid, capability, forceSingle})
-
         const deviceSettings:IncyclistDeviceSettings = this.settings.devices.find(d=>d.udid===udid)?.settings
         if (!deviceSettings)
             return;
@@ -370,6 +368,8 @@ export class DeviceConfigurationService  extends IncyclistService{
                 }                
                 
                 if (deviceIdx!==-1) {
+                    this.logEvent({message:'delete device',udid, capability, forceSingle})
+
                     record.devices.splice(deviceIdx,1)               
                     if (forceSingle) {
                         this.emitCapabiltyChanged(capability)            
@@ -388,6 +388,8 @@ export class DeviceConfigurationService  extends IncyclistService{
 
         }
         else {
+            this.logEvent({message:'delete device',udid, capability, forceSingle})
+
             capabilities.forEach( c=> {
                 const included =  c.devices.includes(udid)
                 if (included)
