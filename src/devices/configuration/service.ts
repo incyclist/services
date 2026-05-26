@@ -465,7 +465,8 @@ export class DeviceConfigurationService  extends IncyclistService{
         try {
             const udid = requestedUdid || 
                 capabilities.find( d=>d.capability===IncyclistCapability.Control)?.selected ||
-                capabilities.find( d=>d.capability===IncyclistCapability.Power)?.selected
+                capabilities.find( d=>d.capability===IncyclistCapability.Power)?.selected ||
+                capabilities.find( d=>d.capability===IncyclistCapability.Speed)?.selected
 
             if (!udid)
                 return;

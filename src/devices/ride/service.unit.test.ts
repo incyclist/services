@@ -18,8 +18,9 @@ describe('DeviceRideService',()=>{
             const configurationService= { 
                 getSelectedDevices: jest.fn(()=>
                     [{capability:IncyclistCapability.Cadence,selected:'2'},
-                    {capability:IncyclistCapability.Power,selected:'1'}]
-            )}
+                    {capability:IncyclistCapability.Power,selected:'1'}]),
+                getAdapters:jest.fn().mockReturnValue(adapters)
+            }
             s.emit = jest.fn( (e,d)=>{ data.push(d)} )
             s.inject('DeviceConfiguration', configurationService)
 

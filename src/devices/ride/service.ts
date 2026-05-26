@@ -1401,6 +1401,10 @@ export class DeviceRideService  extends IncyclistService{
         this.verifySelected(selectedDevices, IncyclistCapability.Cadence)
         this.verifySelected(selectedDevices, IncyclistCapability.Power)
 
+        const isSpeedOnlyMode = this.getCyclingMode()?.getName()==='SpeedSensor'
+
+
+
 
         // get list of capabilities, where the device sending the data was selected by the user
         const { enabledCapabilities, toBeReplaced } = this.getEnabledCapabilities(adapterInfo,selectedDevices);
@@ -1417,6 +1421,9 @@ export class DeviceRideService  extends IncyclistService{
                     break;
                 case IncyclistCapability.Speed:
                     this.data.speed = data.speed;
+                    if (isSpeedOnlyMode) {
+                        this.data.power = data.power
+                    }
                     break;
                 case IncyclistCapability.Cadence:
                     this.data.cadence = data.cadence
@@ -1751,6 +1758,9 @@ export class DeviceRideService  extends IncyclistService{
             if (adapter?.isControllable()) {
                 adapter.setCyclingMode(mode,settings)
                 await adapter.sendInitCommands()
+            }
+            else {
+                adapter.setCyclingMode(mode,settings)
             }
         }
         else {  // settings changed

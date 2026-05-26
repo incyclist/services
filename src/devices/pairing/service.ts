@@ -1360,17 +1360,38 @@ export class DevicePairingService  extends IncyclistService{
         return this.state.canStartRide
     }
 
+    /**
+     * Determines if the pairing process was successful and the system is ready to start a ride.
+     *
+     * The method checks if at least one required device capability is connected using a priority hierarchy:
+     * 1. Control device (smart trainer) - highest priority
+     * 2. Power meter - if no control device is available
+     * 3. Speed sensor - if neither control nor power devices are available
+     *
+     * The system is ready to start a ride only if:
+     * - Device configuration is valid and ready
+     * - Not currently scanning (or in page mode)
+     * - At least one of the prioritized capabilities is connected
+     *
+     * @returns {boolean} True if pairing is successful and at least one required device is connected; false otherwise
+     */
     checkPairingSuccess():boolean {
+        const configReadyToRide = this.getDeviceConfiguration().canStartRide()
 
-        const configReadyToRide = this.getDeviceConfiguration().canStartRide() 
-
-        if (!configReadyToRide || (this.isScanning() && this.usage!=='page' )) 
+        if (!configReadyToRide || (this.isScanning() && this.usage!=='page' ))
             return false;
-        
+
         const control = this.getCapability(IncyclistCapability.Control)
         const power = this.getCapability(IncyclistCapability.Power)
+        const speed =  this.getCapability(IncyclistCapability.Speed)
 
-        const success =   (control?.connectState==='connected' || power?.connectState==='connected')
+        const controlOK = (control?.selected && control?.connectState==='connected')
+        const powerOK = (!control?.selected && power?.selected && power?.connectState==='connected') 
+        const speedOK = (!control?.selected && !power?.selected && speed?.selected && speed?.connectState==='connected')
+        
+        const success = controlOK || powerOK || speedOK
+            
+
         this.state.canStartRide = success
         return success
     }
