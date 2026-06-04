@@ -3,7 +3,6 @@ import { Singleton } from '../../base/types';
 import { sleep } from '../../utils/sleep';
 import { AppApiBase } from '../../apps/base/api/base';
 import { EventLogger } from 'gd-eventlog';
-import pkg from '../../../package.json';
 import { Injectable } from '../../base/decorators';
 import { getBindings } from '../../api';
 import { UserSettingsService, useUserSettings } from '../../settings';
@@ -108,7 +107,7 @@ export class OverpassApi extends AppApiBase {
      * @returns The result of the query as a JSON object or string
      */
     async singleQuery( queryOL:string ):Promise<JSON|string> {
-        const res = await this.postToOverpass(this.url,queryOL);
+        const res = await this.postToOverpass(this.url,queryOL);        
         return res.data
     }
 
@@ -207,7 +206,7 @@ export class OverpassApi extends AppApiBase {
     }
 
     protected getAppVersion():string {
-        return this.getBindings()?.appInfo?.getAppVersion()??pkg.version
+        return this.getBindings()?.appInfo?.getAppVersion()??''
     }
 
     protected getUserId():string {
