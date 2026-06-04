@@ -1,9 +1,12 @@
 import any from 'promise.any'
-
 import { Singleton } from '../../base/types';
 import { sleep } from '../../utils/sleep';
 import { AppApiBase } from '../../apps/base/api/base';
 import { EventLogger } from 'gd-eventlog';
+import pkg from '../../../package.json';
+import { Injectable } from '../../base/decorators';
+import { getBindings } from '../../api';
+import { UserSettingsService, useUserSettings } from '../../settings';
 
 const OVERPASS_URL_ALT1 = 'https://overpass.kumi.systems/api/interpreter'
 const OVERPASS_URL_ALT2 = 'https://lz4.overpass-api.de/api/interpreter';
@@ -39,7 +42,7 @@ export class OverpassApi extends AppApiBase {
 
     constructor(props?:{url:string}) {
         super()
-        this.mirrors = [OVERPASS_URL_ALT1,OVERPASS_URL_ALT2,OVERPASS_URL_ALT3]    
+        this.mirrors = [OVERPASS_URL_ALT1,OVERPASS_URL_ALT2,OVERPASS_URL_ALT3]
         this.url = props?.url??  this.mirrors[0];
         this.logger = new EventLogger('Overpass')
         if (props?.url) {
@@ -47,6 +50,36 @@ export class OverpassApi extends AppApiBase {
                 this.mirrors.push(props.url)
             }
         }
+    }
+
+    protected getOverpassHeaders() {
+        const version = this.getAppVersion()
+        const userId = this.getUserId()
+
+        let userAgent = `Incyclist/${version}`
+        if (userId) {
+            try {
+                const crypto = this.getBindings()?.crypto
+                const hashedId = crypto ? crypto.createHash('sha256').update('OAPI:'+userId).digest('hex').substring(0, 8) : undefined
+                if (hashedId) {
+                    userAgent += ` (${hashedId})`
+                }
+            } catch (err) {
+                this.logger.logEvent({message: 'failed to hash userId', error: (err as Error).message})
+            }
+        }
+
+        return {
+            'User-Agent': userAgent,
+            'Referer': 'https://incyclist.com'
+        }
+    }
+
+    protected async postToOverpass(url:string, data?:object|string):Promise<any> {
+        const config = {
+            headers: this.getOverpassHeaders()
+        }
+        return await this.post(url, data, config)
     }
 
 
@@ -63,18 +96,19 @@ export class OverpassApi extends AppApiBase {
         const ts = Date.now()
         this.logger.logEvent({message:'query', queryOL, queryId:ts, timeout})
         const res = await this.bulkQuery(queryOL, timeout)
+        //const res = await this.sequentialQuery(queryOL, timeout)
         this.logger.logEvent({message:'query result', queryId:ts, hasData: res!==undefined, duration: Date.now()-ts})
         return res
     } 
 
     /**
      * Executes a Overpass query and returns the result. The query is executed against a single server, specified by the `url` property.
-     * 
+     *
      * @param queryOL the Overpass query language query
      * @returns The result of the query as a JSON object or string
      */
     async singleQuery( queryOL:string ):Promise<JSON|string> {
-        const res = await this.post(this.url,queryOL);
+        const res = await this.postToOverpass(this.url,queryOL);
         return res.data
     }
 
@@ -119,9 +153,53 @@ export class OverpassApi extends AppApiBase {
         return res
     }
 
+    protected async sequentialQuery( query:string, timeout?:number ):Promise<JSON|string|undefined> {
+        const startTime = Date.now();
+
+        for (const mirror of this.mirrors) {
+            if (timeout !== undefined && timeout !== null) {
+                const elapsed = Date.now() - startTime;
+                if (elapsed >= timeout) {
+                    return undefined;
+                }
+            }
+
+            try {
+                const res = await this.postToOverpass(mirror, query);
+                return res?.data;
+            } catch (err) {
+                this.logger.logEvent({message: 'mirror failed', mirror, error: (err as Error).message});
+                if (mirror !== this.mirrors[this.mirrors.length - 1]) {
+                    await sleep(100);
+                }
+            }
+        }
+
+        return undefined;
+    }
+
     reset() {
         this.mirrors = [OVERPASS_URL_ALT1,OVERPASS_URL_ALT2,OVERPASS_URL_ALT3]    
         this.url = this.mirrors[0]
+    }
+
+    protected getAppVersion():string {
+        return this.getBindings()?.appInfo?.getAppVersion()??pkg.version
+    }
+
+    protected getUserId():string {
+        
+        return this.getUserSettings().getValue('uuid','')
+    }
+
+    @Injectable
+    protected getUserSettings(): UserSettingsService {
+        return useUserSettings()
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 
 
