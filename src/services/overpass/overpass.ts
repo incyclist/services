@@ -75,10 +75,52 @@ export class OverpassApi extends AppApiBase {
     }
 
     protected async postToOverpass(url:string, data?:object|string):Promise<any> {
-        const config = {
-            headers: this.getOverpassHeaders()
+        try {
+            // Try Node.js https first (available in Electron with nodeIntegration: true)
+            // This allows us to set forbidden headers like User-Agent and Referer
+            // which are blocked by browser APIs (XMLHttpRequest, Fetch)
+            const https = require('https');
+            return await this.postViaNodeHttps(https, url, data);
+        } catch {
+            // Fall back to axios for browser/other environments where Node.js is not available
+            const config = {
+                headers: this.getOverpassHeaders()
+            }
+            return await this.post(url, data, config)
         }
-        return await this.post(url, data, config)
+    }
+
+    protected async postViaNodeHttps(https: any, url: string, data?: object | string): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const reqUrl = new URL(url);
+            const headers = this.getOverpassHeaders();
+            const queryData = typeof data === 'string' ? data : JSON.stringify(data);
+
+            const options = {
+                method: 'POST',
+                headers: {
+                    ...headers,
+                    'Content-Length': Buffer.byteLength(queryData)
+                }
+            };
+
+            const req = https.request(reqUrl, options, (res: any) => {
+                let body = '';
+                res.on('data', (chunk: any) => body += chunk);
+                res.on('end', () => {
+                    resolve({
+                        data: body,
+                        status: res.statusCode,
+                        statusText: res.statusMessage,
+                        headers: res.headers
+                    });
+                });
+            });
+
+            req.on('error', reject);
+            req.write(queryData);
+            req.end();
+        });
     }
 
 
