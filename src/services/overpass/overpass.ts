@@ -134,14 +134,38 @@ export class OverpassApi extends AppApiBase {
         return '' // no base url as we want to switch between mirrors
     }
 
+    protected async postWithErrorTracking(mirror:string, query:string):Promise<any> {
+        try {
+            return await this.postToOverpass(mirror, query);
+        } catch (err: any) {
+            const status = err?.response?.status;
+            const statusText = err?.response?.statusText;
+
+            if (status && status !== 408 && status !== 504) {
+                const isUnexpected = (status >= 406 && status<500);
+                if (isUnexpected) {
+                    this.logger.logEvent({
+                        message: 'error',
+                        fn:'postToOverpass',
+                        mirror,
+                        status,
+                        statusText,
+                        error: err?.message??'overpass query failed'
+                    });
+                }
+            }
+            throw err;
+        }
+    }
+
     protected async bulkQuery( query:string, timeout?:number ):Promise<JSON|string|undefined> {
-        
+
         const promises:Promise<JSON|string>[] = []
 
         this.mirrors.forEach(mirror=>{
-            promises.push(this.post(mirror,query).then((res)=>res?.data));
-        })        
-        if ( timeout!==undefined && timeout!==null) {            
+            promises.push(this.postWithErrorTracking(mirror, query).then((res)=>res?.data));
+        })
+        if ( timeout!==undefined && timeout!==null) {
             promises.push( sleep(timeout).then(()=>'timeout' ));
         }
 
@@ -165,10 +189,9 @@ export class OverpassApi extends AppApiBase {
             }
 
             try {
-                const res = await this.postToOverpass(mirror, query);
+                const res = await this.postWithErrorTracking(mirror, query);
                 return res?.data;
-            } catch (err) {
-                this.logger.logEvent({message: 'mirror failed', mirror, error: (err as Error).message});
+            } catch {
                 if (mirror !== this.mirrors[this.mirrors.length - 1]) {
                     await sleep(100);
                 }
