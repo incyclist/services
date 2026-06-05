@@ -6,6 +6,7 @@ import { EventLogger } from 'gd-eventlog';
 import { Injectable } from '../../base/decorators';
 import { getBindings } from '../../api';
 import { UserSettingsService, useUserSettings } from '../../settings';
+import { AxiosResponse } from 'axios';
 
 const OVERPASS_URL_ALT1 = 'https://overpass.kumi.systems/api/interpreter'
 const OVERPASS_URL_ALT2 = 'https://lz4.overpass-api.de/api/interpreter';
@@ -74,7 +75,7 @@ export class OverpassApi extends AppApiBase {
         }
     }
 
-    protected async postToOverpass(url:string, data?:object|string):Promise<any> {
+    protected async post(url:string, data?:object|string, conf?:object):Promise<AxiosResponse> {
         try {
             // Try Node.js https first (available in Electron with nodeIntegration: true)
             // This allows us to set forbidden headers like User-Agent and Referer
@@ -83,10 +84,12 @@ export class OverpassApi extends AppApiBase {
             return await this.postViaNodeHttps(https, url, data);
         } catch {
             // Fall back to axios for browser/other environments where Node.js is not available
+            const cfg = conf??{}
             const config = {
+                ...cfg,
                 headers: this.getOverpassHeaders()
             }
-            return await this.post(url, data, config)
+            return await super.post(url, data, config)
         }
     }
 
@@ -149,7 +152,7 @@ export class OverpassApi extends AppApiBase {
      * @returns The result of the query as a JSON object or string
      */
     async singleQuery( queryOL:string ):Promise<JSON|string> {
-        const res = await this.postToOverpass(this.url,queryOL);        
+        const res = await this.post(this.url,queryOL);        
         return res.data
     }
 
@@ -184,10 +187,6 @@ export class OverpassApi extends AppApiBase {
         }
     }
 
-    protected async postWithErrorTracking(mirror:string, query:string):Promise<any> {
-        return await this.postToOverpass(mirror, query);
-    }
-
     protected logUnexpectedErrors(fn:string, errors: Array<{mirror: string, status?: number, statusText?: string, error: string}>): void {
         const unexpectedErrors = errors.filter(e => {
             const status = e.status;
@@ -215,7 +214,7 @@ export class OverpassApi extends AppApiBase {
 
         this.mirrors.forEach(mirror=>{
             promises.push(
-                this.postWithErrorTracking(mirror, query)
+                this.post(mirror, query)
                     .then((res)=>res?.data)
                     .catch(err => {
                         errors.push(this.extractErrorInfo(err, mirror));
@@ -233,15 +232,16 @@ export class OverpassApi extends AppApiBase {
                 return undefined
             }
             return res
-        } catch {
+        } catch(err) {
             this.logUnexpectedErrors('bulkQuery',errors);
-            return undefined
+            throw  err
         }
     }
 
     protected async sequentialQuery( query:string, timeout?:number ):Promise<JSON|string|undefined> {
         const startTime = Date.now();
         const errors: Array<{mirror: string, status?: number, statusText?: string, error: string}> = [];
+        let lastError:any
 
         for (const mirror of this.mirrors) {
             if (timeout !== undefined && timeout !== null) {
@@ -252,9 +252,10 @@ export class OverpassApi extends AppApiBase {
             }
 
             try {
-                const res = await this.postWithErrorTracking(mirror, query);
+                const res = await this.post(mirror, query);
                 return res?.data;
             } catch (err) {
+                lastError = err
                 errors.push(this.extractErrorInfo(err, mirror));
                 if (mirror !== this.mirrors[this.mirrors.length - 1]) {
                     await sleep(100);
@@ -263,7 +264,7 @@ export class OverpassApi extends AppApiBase {
         }
 
         this.logUnexpectedErrors('sequentialQuery',errors);
-        return undefined;
+        throw lastError
     }
 
     reset() {
