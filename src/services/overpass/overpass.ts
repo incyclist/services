@@ -175,51 +175,73 @@ export class OverpassApi extends AppApiBase {
         return '' // no base url as we want to switch between mirrors
     }
 
-    protected async postWithErrorTracking(mirror:string, query:string):Promise<any> {
-        try {
-            return await this.postToOverpass(mirror, query);
-        } catch (err: any) {
-            const status = err?.response?.status;
-            const statusText = err?.response?.statusText;
+    protected extractErrorInfo(err: any, mirror: string): {mirror: string, status?: number, statusText?: string, error: string} {
+        return {
+            mirror,
+            status: err?.response?.status,
+            statusText: err?.response?.statusText,
+            error: err?.message ?? 'overpass query failed'
+        }
+    }
 
-            if (status && status !== 408 && status !== 504) {
-                const isUnexpected = (status >= 406 && status<500);
-                if (isUnexpected) {
-                    this.logger.logEvent({
-                        message: 'error',
-                        fn:'postToOverpass',
-                        mirror,
-                        status,
-                        statusText,
-                        error: err?.message??'overpass query failed'
-                    });
-                }
-            }
-            throw err;
+    protected async postWithErrorTracking(mirror:string, query:string):Promise<any> {
+        return await this.postToOverpass(mirror, query);
+    }
+
+    protected logUnexpectedErrors(fn:string, errors: Array<{mirror: string, status?: number, statusText?: string, error: string}>): void {
+        const unexpectedErrors = errors.filter(e => {
+            const status = e.status;
+            if (!status || status === 408 || status === 504) return false;
+            return status >= 406 && status < 500;
+        });
+
+        if (unexpectedErrors.length > 0 && unexpectedErrors.length === errors.length) {
+            unexpectedErrors.forEach(err => {
+                this.logger.logEvent({
+                    message: 'error',
+                    fn,
+                    mirror: err.mirror,
+                    status: err.status,
+                    statusText: err.statusText,
+                    error: err.error??'all mirrors failed with 4xx error'
+                });
+            });
         }
     }
 
     protected async bulkQuery( query:string, timeout?:number ):Promise<JSON|string|undefined> {
-
+        const errors: Array<{mirror: string, status?: number, statusText?: string, error: string}> = [];
         const promises:Promise<JSON|string>[] = []
 
         this.mirrors.forEach(mirror=>{
-            promises.push(this.postWithErrorTracking(mirror, query).then((res)=>res?.data));
+            promises.push(
+                this.postWithErrorTracking(mirror, query)
+                    .then((res)=>res?.data)
+                    .catch(err => {
+                        errors.push(this.extractErrorInfo(err, mirror));
+                        throw err;
+                    })
+            );
         })
         if ( timeout!==undefined && timeout!==null) {
             promises.push( sleep(timeout).then(()=>'timeout' ));
         }
 
-        const res = await any( promises)
-        if (res === 'timeout') {
+        try {
+            const res = await any( promises)
+            if (res === 'timeout') {
+                return undefined
+            }
+            return res
+        } catch {
+            this.logUnexpectedErrors('bulkQuery',errors);
             return undefined
         }
-
-        return res
     }
 
     protected async sequentialQuery( query:string, timeout?:number ):Promise<JSON|string|undefined> {
         const startTime = Date.now();
+        const errors: Array<{mirror: string, status?: number, statusText?: string, error: string}> = [];
 
         for (const mirror of this.mirrors) {
             if (timeout !== undefined && timeout !== null) {
@@ -232,13 +254,15 @@ export class OverpassApi extends AppApiBase {
             try {
                 const res = await this.postWithErrorTracking(mirror, query);
                 return res?.data;
-            } catch {
+            } catch (err) {
+                errors.push(this.extractErrorInfo(err, mirror));
                 if (mirror !== this.mirrors[this.mirrors.length - 1]) {
                     await sleep(100);
                 }
             }
         }
 
+        this.logUnexpectedErrors('sequentialQuery',errors);
         return undefined;
     }
 
