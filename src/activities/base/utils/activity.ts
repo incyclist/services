@@ -160,7 +160,7 @@ export class Activity implements ActivityInfo{
             const converter = this.getActivityConverter()
             const data: any = await converter.convert(this.details,format)
 
-            const fileName = this.details.fileName.replace('.json',`.${format}`)
+            const fileName = await this.getExportFileName(format)
             await fs.writeFile(fileName, Buffer.from(data))
             this.details[`${format}FileName`] = fileName
 
@@ -178,6 +178,20 @@ export class Activity implements ActivityInfo{
             observer.emit('export',{status:'done',format,success,error})
         }
         return success
+    }
+
+    protected async getExportFileName(format:string):Promise<string> {
+        let fileName = this.details.fileName.replace('json',format)
+
+        if (fileName.startsWith('mmkv:/')) {
+            const fs = this.getBindings().fs
+            const appDir = this.getBindings().appInfo.getAppDir()
+            const activitiesDir = this.getBindings().path.join(appDir, 'activities')
+            await fs.ensureDir(activitiesDir)
+            const baseName = fileName.split('/').pop()
+            fileName = this.getBindings().path.join(activitiesDir, baseName)
+        }
+        return fileName
     }
 
     async upload(connectedApp:string,observer?:Observer):Promise<boolean> {  
