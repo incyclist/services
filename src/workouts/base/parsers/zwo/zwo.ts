@@ -297,7 +297,7 @@ export class ZwoParser implements WorkoutParser<string>{
 
                     this.context = {}
 
-                    const zwoSteps = result.workout_file.workout[0].$$ ?? []
+                    const zwoSteps = result.workout_file.workout?.[0].$$ ?? []
 
                     const ftpOverride = result.workout_file.ftpOverride?.[0] ?? -1;                    
                     if (ftpOverride!==-1) {
@@ -322,7 +322,7 @@ export class ZwoParser implements WorkoutParser<string>{
                     resolve(workout)
                 }
                 catch ( err) {
-                    this.logger.logEvent( {message: 'error', fn:'parse()', error: err.message, tag, stack: err.stack})
+                    this.logger.logEvent( {message: 'error', fn:'parse()', error: err.message, tag, stack: err.stack, zwo:data})
                     reject( new Error( `parsing error: ${err.message}` ))
                 }
             });    
