@@ -19,7 +19,7 @@
     "@serialport/bindings-interface": "^1.2.2",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.6.0",
-    "@typescript-eslint/eslint-plugin": "^8.58.2",
+    "@typescript-eslint/eslint-plugin": "^8.59.0",
     "@typescript-eslint/parser": "^8.58.2",
     "dotenv": "^17.4.2",
     "eslint": "^9.39.4",
