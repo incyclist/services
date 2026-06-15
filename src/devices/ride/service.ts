@@ -871,12 +871,14 @@ export class DeviceRideService  extends IncyclistService{
             const isPaused = ai.adapter.isPaused()
             const prevStatus = ai.dataStatus
 
-            // paused or no data received yet or just restarting => no need to check
-            if (isPaused || !tsLastData || ai.isRestarting) {
+
+            // paused or no data received yet
+            if (isPaused || !tsLastData ) {
                 this.setLastDataTS(ai, tsNow)                
                 ai.dataStatus = 'green'
                 return;
             }
+
 
             const isAmber = (tsNow-tsLastData)>NO_DATA_THRESHOLD
             const isRed = (tsNow-tsLastData)>UNHEALTHY_THRESHOLD
@@ -902,6 +904,7 @@ export class DeviceRideService  extends IncyclistService{
             if (ai.dataStatus!==prevStatus) {
                 const {enabledCapabilities} = this.getEnabledCapabilities(ai)
                 this.emit('health',ai.udid, ai.dataStatus, enabledCapabilities)                
+                this.logEvent({message:'device health status changed', device:ai.adapter.getUniqueName(), udid:ai.udid, healthState:ai.dataStatus })                
             }
             
         }
@@ -954,22 +957,28 @@ export class DeviceRideService  extends IncyclistService{
 
 
     async prepareReconnect(unhealthy:AdapterRideInfo) {
+        const tsLastData =this.getLastDataTS(unhealthy)
+        const tsLastDataStr = new Date(tsLastData).toISOString()
+        const tsNow = Date.now()
 
-
-        this.logEvent({message:'prepareReconnect', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData, isRestarting: unhealthy.isRestarting  })
+        this.logEvent({message:'prepareReconnect', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (tsNow-tsLastData), tsLastData:tsLastDataStr, isRestarting: unhealthy.isRestarting  })
 
         if (unhealthy.isRestarting) {
-            this.logEvent({message:'skipped reconnect - device already restarting', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData  })
+            this.logEvent({message:'skipped reconnect - device already restarting', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (tsNow-tsLastData), tsLastData:tsLastDataStr  })
             return;
         }
 
         unhealthy.isRestarting = true
+        unhealthy.isHealthy = false
+
         // are all adapters on the same interface down?
         const ifName = unhealthy.adapter.getInterface()
         const adapters = this.rideAdapters?.filter( ai=> ai.adapter.getInterface()===ifName)
-        const stillHealthy = adapters.filter(ai=>ai.isHealthy===undefined || ai.isHealthy)
+        const stillHealthy = adapters.filter(ai=>ai.isHealthy===undefined || ai.isHealthy===true)
 
-        this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (Date.now()-unhealthy.tsLastData), tsLastData:unhealthy.tsLastData, stillHealthy:stillHealthy?.length, onSameInterface:adapters.length  })
+        this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, 
+                        noDataSince: (tsNow-tsLastData), 
+                        tsLastData:tsLastDataStr, stillHealthy:stillHealthy?.length, onSameInterface:adapters.length  })
 
         try {
             if ( !stillHealthy?.length && adapters.length>1 && ifName!=='ble')  {
@@ -1009,6 +1018,16 @@ export class DeviceRideService  extends IncyclistService{
             this.reconnectBusy = false;
             
             return;
+        }
+
+
+        // stop ongoing restart attempts
+        const restarting = adapters.filter( ai=>ai.isRestarting)??[]
+        if (restarting.length) {
+            this.logEvent({ message: 'interrupt restarts', interface: ifName });
+            for ( const ai of restarting) {
+                await this.stopDuringInterfaceRestart(ai)
+            }
         }
 
         // restart Interface and adapaters
@@ -1130,6 +1149,7 @@ export class DeviceRideService  extends IncyclistService{
         catch(err) {
             this.logError(err,'stopDuringInterfaceRestart')
         }
+        unhealthy.isRestarting = false;
 
     }
     private async reconnectSingle(unhealthy: AdapterRideInfo) {

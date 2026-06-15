@@ -375,7 +375,14 @@ export class ActivityRideService extends IncyclistService {
             }
 
             if (showLog ) {
-                this.logEvent({message:'Dashboard update',items:info.map(i=>`${i.title}:${i.data[0]?.value??''}:${i.data[1]?.value??''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`).join('|')})
+                const getLog = (i) => {
+                    let health = ''
+                    if (i.dataState==='amber') health = '[A]'
+                    if (i.dataState==='red') health = '[R]'
+                    return `${i.title}${health}:${i.data[0]?.value??''}:${i.data[1]?.value??''}${i.data[1]?.label?'('+i.data[1]?.label+')': ''}`
+                }
+
+                this.logEvent({message:'Dashboard update',items:info.map(getLog).join('|')})
             }
 
             return info
