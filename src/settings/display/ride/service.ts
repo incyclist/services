@@ -1,4 +1,4 @@
-import { getBindings } from "../../../api";
+import { getBindings, ISecretBinding } from "../../../api";
 import { Injectable, Singleton } from "../../../base/decorators";
 import { IncyclistService } from "../../../base/service";
 import { Observer } from "../../../base/types";
@@ -38,8 +38,11 @@ export class RideSettingsDisplayService extends IncyclistService {
     }
 
     setRideView(rideView:TRideView) {
+        if (this.isRestricted())
+            return;
+
         try {
-            this.getUserSettings().get('preferences.rideView',rideView)       
+            this.getUserSettings().set('preferences.rideView',rideView)       
         }
         catch(err) {
             this.logError(err,'setRideView')
@@ -53,7 +56,10 @@ export class RideSettingsDisplayService extends IncyclistService {
     }
 
 
-    protected getRideView():TRideView {
+    getRideView():TRideView {
+        if (this.isRestricted())
+            return 'map'
+
         if (this.isMobile() && !this.isAndroid()) 
             return 'map'
        
@@ -62,8 +68,13 @@ export class RideSettingsDisplayService extends IncyclistService {
 
     }
 
-    protected getRideViewOptions():Map<TRideView,string> {
+    getRideViewOptions():Map<TRideView,string> {
         const map:Map<TRideView,string> = new Map()
+
+        if (this.isRestricted()) {
+            map.set('map','Map')    
+            return map;
+        }
 
         if (!this.isIOS())
             map.set('sv','Street View')
@@ -75,6 +86,15 @@ export class RideSettingsDisplayService extends IncyclistService {
         return map
     }
 
+    protected isRestricted() {
+        if (this.isMobile()) {
+            const secretsStatus = this.getSecretBinding()?.getSecretsStatus?.() 
+            return  (secretsStatus === 'stale' || secretsStatus === 'missing' || secretsStatus===undefined) 
+        }
+        return false
+
+    }
+
     protected isMobile() {
         return this.getBindings().appInfo?.getChannel()==='mobile'
     }
@@ -83,7 +103,7 @@ export class RideSettingsDisplayService extends IncyclistService {
         return this.getBindings().appInfo?.getOS()?.platform==='android'
     }
     protected isIOS() {
-        return this.getBindings().appInfo?.getOS()?.platform==='darwin'
+        return this.getBindings().appInfo?.getOS()?.platform==='ios'
     }
 
     /* istanbul ignore next */
@@ -97,6 +117,10 @@ export class RideSettingsDisplayService extends IncyclistService {
     @Injectable
     protected getBindings() {
         return getBindings()
+    }
+
+    protected getSecretBinding(): ISecretBinding|undefined {
+        return this.getBindings().secret
     }
 
 }

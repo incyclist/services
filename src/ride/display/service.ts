@@ -157,8 +157,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     pause(requester: 'user' | 'device'='user') {
-        console.log('# PAUSE', requester)
-        
         try {
             if (this.state!=='Active')
                 return

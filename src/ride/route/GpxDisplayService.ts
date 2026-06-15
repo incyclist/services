@@ -4,7 +4,7 @@ import { Injectable } from "../../base/decorators";
 import { Observer } from "../../base/types";
 import { getHeading } from "../../routes";
 import { Route } from "../../routes/base/model/route";
-import { UserSettingsService, useUserSettings } from "../../settings";
+import { useRideSettingsDisplay } from "../../settings/display";
 import { RoutePoint } from "../../types";
 import { CurrentRideDisplayProps, GpxDisplayProps,  RouteDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
@@ -53,7 +53,7 @@ export class GpxDisplayService extends RouteDisplayService {
     protected initView() {
         try {
 
-            const rideView = this.getRideView()
+            const rideView = this.getRideSettingsDisplay().getRideView()
             if ( rideView==='sv') {
                 const updateFreq = this.getDefaultUpdateFrequency();
                 const minimalPause = this.getMinimalPause()
@@ -153,7 +153,7 @@ export class GpxDisplayService extends RouteDisplayService {
     getStartOverlayProps() {
 
 
-        const rideView = this.getRideView()
+        const rideView = this.getRideSettingsDisplay().getRideView()
 
 
         if (rideView === 'map' || this.isMobile()) {
@@ -180,7 +180,7 @@ export class GpxDisplayService extends RouteDisplayService {
      * @returns True if the view is loaded and ready, false if still loading
      */
     isStartRideCompleted(): boolean {
-        const rideView = this.getRideView()
+        const rideView = this.getRideSettingsDisplay().getRideView()
         if (rideView==='map' || this.isMobile()) {
             this.mapLoaded = true
             return true;
@@ -204,7 +204,7 @@ export class GpxDisplayService extends RouteDisplayService {
      */
     getDisplayProperties(props:CurrentRideDisplayProps):GpxDisplayProps {
         let routeProps:RouteDisplayProps = super.getDisplayProperties(props)
-        const rideView = this.getRideView() as 'sv' | 'map' | 'sat'
+        const rideView = this.getRideSettingsDisplay().getRideView() as 'sv' | 'map' | 'sat'
 
         if (rideView==='sv') {
             routeProps = {...routeProps, ...this.getStreetViewProps(props)}
@@ -222,17 +222,13 @@ export class GpxDisplayService extends RouteDisplayService {
         }
     }
 
-    protected getRideView():string {
-        if (this.isMobile()) 
-            return 'sv'
-       
-        const rideView = this.getUserSettings().get('preferences.rideView','sv')       
-        return rideView
-
+    protected getRideView() {
+        return this.getRideSettingsDisplay().getRideView()
     }
+
     protected getRideViewName( ):string {
 
-        const rideView = this.getRideView()
+        const rideView = this.getRideSettingsDisplay().getRideView()
         const map = {
             map: 'Map',
             sv: 'Street View',
@@ -349,7 +345,7 @@ export class GpxDisplayService extends RouteDisplayService {
 
         const {route,position} = state??{}
 
-        const rideView = this.getRideView()
+        const rideView = this.getRideSettingsDisplay().getRideView()
 
         if (rideView==='sv') {
             const sincePrev = Date.now()-(this.tsPrevSVUpdate??0) 
@@ -408,11 +404,10 @@ export class GpxDisplayService extends RouteDisplayService {
         return this.getBindings().appInfo?.getChannel()==='mobile'
     }
 
-    /* istanbul ignore next */
-    @Injectable
-    protected getUserSettings(): UserSettingsService {
-        return useUserSettings()
+    protected isIOS():boolean {
+        return this.getBindings().appInfo?.getOS().platform==='ios'
     }
+
 
     /* istanbul ignore next */
     @Injectable
@@ -424,6 +419,11 @@ export class GpxDisplayService extends RouteDisplayService {
     @Injectable
     protected getBindings() {
         return getBindings()
+    }
+
+    @Injectable
+    protected getRideSettingsDisplay() {
+        return useRideSettingsDisplay()
     }
 
     
