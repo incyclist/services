@@ -24,7 +24,7 @@ import { useAvatars } from "../../avatars";
 import clone from "../../utils/clone";
 import { buildSummary } from "../base/utils";
 import { Injectable } from "../../base/decorators";
-import { FormattedNumber, useUnitConverter } from "../../i18n";
+import { useUnitConverter } from "../../i18n";
 import { createUIActivityDetails } from "../list/utils";
 import { sleep } from "../../utils/sleep";
 

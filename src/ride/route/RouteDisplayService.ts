@@ -430,7 +430,7 @@ export class RouteDisplayService extends RideModeService {
             const isSIM = mode?.isSIM() 
 
             const realityFactor = this.startSettings?.realityFactor ?? 100
-            const targetSlope = (this.position.slope ?? 0) * realityFactor / 100
+            const targetSlope = (this.position?.slope ?? 0) * realityFactor / 100
 
             if (props?.limits && !isSIM) {
                 delete this.prevRequestSlope

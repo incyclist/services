@@ -39,7 +39,8 @@ export type AnyRidePageDisplayProps =
     | RidePageDisplayProps           // fallback / future types
 
 export interface RideMenuProps {
-    showResume: boolean   // true = Resume button, false = Pause button
+    showResume?: boolean    // true = Resume button, false = Pause button
+    finished?:boolean       // true = Activity is completed (finished)
 }
 
 interface RidePageCallbacks {

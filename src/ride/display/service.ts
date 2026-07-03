@@ -401,7 +401,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             return { ...props, ...childProps }
         }
         catch(err) {
-            this.logError(err,'getDisplayProperties')
+            this.logError(err,'getDisplayProperties',{state:this.state})
             return {state:this.state}
         }
     }
@@ -474,7 +474,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
         try {
             if ( this.state !== 'Starting' && this.state !=='Idle') {
-                this.logEvent({ message: "activity stopped",activity: this.activity?.id});                   
+                this.logEvent({ message: "activity stopped",activity: this.activity?.id, lastState:this.state});                   
             }
 
             const prevState = this.state
@@ -507,7 +507,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             if (prevState!=='Starting')
                 this.enableScreensaver()
 
-            this.state = 'Idle'
+            //this.state = 'Idle'
         }
         catch(err) {
             this.logError(err,'stopRide')
@@ -519,9 +519,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected async closePrevRide() {
         try {
-            if (this.observer || (this.state !== 'Idle')) {
+            if (this.observer || (this.state !== 'Idle' && this.state!=='Finished')) {
                 await this.stopRide({ noStateUpdates: true });
             }
+            this.state ='Idle'
 
         }
         catch (err) {

@@ -1808,8 +1808,17 @@ export class DeviceRideService  extends IncyclistService{
         const selected = getRouteList().getSelected()
         const personalApiKey = this.getGoogleMaps().hasPersonalApiKey()
 
+        if (!selected?.description)
+            return false
+
         if (selected?.description?.hasVideo || personalApiKey)
             return true
+
+        if ( !selected.description.hasVideo) {
+            const rideView = useUserSettings().getValue('preferences.rideView',null)
+            if (rideView==='map')
+                return true
+        }
 
         return useUserSettings().isNewUser()
         

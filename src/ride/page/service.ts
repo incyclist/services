@@ -189,6 +189,15 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     onMenuClose() {
         try {
+
+            const state = this.getRideDisplay().getState()
+            if (state==='Finished' || this.menuProps.finished) {
+                // this.onEndRide()
+                this.moveToPreviousPage()
+                this.closePage()
+                return;
+            }
+        
             this.menuProps = null
             this.updatePageDisplay()
         }
@@ -217,6 +226,17 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         catch(err:any) {
             this.logError(err,'onResume')
         }
+    }
+
+    onFinished() {
+        try {
+            this.menuProps = {showResume:false,finished:true}
+            this.updatePageDisplay()
+        }
+        catch(err:any) {
+            this.logError(err,'onResume')
+        }
+
     }
 
     onEndRide() {
@@ -366,6 +386,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         switch(state) {
             case 'Paused': 
                 this.menuProps = { showResume:true}
+                break;
+            case 'Finished': 
+                this.menuProps = { showResume:false,finished:true}
                 break;
             case 'Active': 
                 this.menuProps = null
