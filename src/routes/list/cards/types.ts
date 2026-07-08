@@ -77,6 +77,7 @@ export type RouteCardProps = {
     showLoopOverwrite:boolean,
     showNextOverwrite:boolean,
     hasWorkout?:boolean
+    showWorkoutOption?:boolean
     canStart?:boolean
     videoMissing?:Promise<boolean>
     videoChecking?:boolean
