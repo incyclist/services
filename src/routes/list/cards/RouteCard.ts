@@ -22,6 +22,7 @@ import { useOnlineStatusMonitoring } from "../../../monitoring";
 import { distanceBetween } from "../../../utils/geo";
 import { getUnitConversionShortcuts, Unit } from "../../../i18n";
 import { Injectable } from "../../../base/decorators";
+import { useAppState } from "../../../appstate";
 
 
 export const DEFAULT_TITLE = 'Import Route';
@@ -428,6 +429,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         let showLoopOverwrite, showNextOverwrite;
         let hasWorkout=true
+        let showWorkoutOption=false
 
 
         try {
@@ -436,6 +438,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
             showNextOverwrite = !!next
 
             hasWorkout = valid(workouts.getSelected())
+            const workoutsEnabled = this.isMobile() ? this.getAppState().hasFeature('MOBILE_WORKOUTS') : true
+            showWorkoutOption = workoutsEnabled && !hasWorkout
 
             if (showNextOverwrite) {
                 const card = getRouteList().getCard(next)
@@ -457,7 +461,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const xScale = { value: C( 1, 'distance'), unit: uDist }
         const yScale = { value: C( 1, 'elevation'), unit: uEl }
 
-        return {settings:uiSettings,totalDistance, totalElevation, showLoopOverwrite,showNextOverwrite,hasWorkout,canStart, videoChecking, videoMissing, 
+        return {settings:uiSettings,totalDistance, totalElevation, showLoopOverwrite,showNextOverwrite,hasWorkout,showWorkoutOption,canStart, videoChecking, videoMissing,
                 xScale, yScale,
                 updateStartPos: this.updateStartPos.bind(this),
                 updateMarkers: this.updateMarkers.bind(this)
@@ -1169,6 +1173,11 @@ export class RouteCard extends BaseCard implements Card<Route> {
     @Injectable
     protected getOnlineStatusMonitoring() {
         return useOnlineStatusMonitoring()
+    }
+
+    @Injectable
+    protected getAppState() {
+        return useAppState()
     }
 
     protected getRouteDownload() {

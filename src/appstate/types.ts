@@ -1,4 +1,4 @@
-export type FeatureToggle = 'NEW_SEARCH_UI' | 'CONTROLLERS' 
+export type FeatureToggle = 'NEW_SEARCH_UI' | 'CONTROLLERS' | 'MOBILE_WORKOUTS'
 
 export type Interfaces = 'ant'|'ble'|'serial'|'wifi'|'tcpip'
 
