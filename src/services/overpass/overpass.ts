@@ -215,9 +215,17 @@ export class OverpassApi extends AppApiBase {
         this.mirrors.forEach(mirror=>{
             promises.push(
                 this.post(mirror, query)
-                    .then((res)=>res?.data)
+                    .then((res) => {
+                        if (res?.status >= 400) {
+                            const err = Object.assign(new Error(`HTTP ${res.status}`), { response: res })
+                            errors.push(this.extractErrorInfo(err, mirror));
+                            throw err;
+                        }
+                        return res?.data
+                    })
                     .catch(err => {
-                        errors.push(this.extractErrorInfo(err, mirror));
+                        if (!errors.find(e => e.mirror === mirror))
+                            errors.push(this.extractErrorInfo(err, mirror));
                         throw err;
                     })
             );
@@ -253,6 +261,9 @@ export class OverpassApi extends AppApiBase {
 
             try {
                 const res = await this.post(mirror, query);
+                if (res?.status >= 400) {
+                    throw Object.assign(new Error(`HTTP ${res.status}`), { response: res })
+                }
                 return res?.data;
             } catch (err) {
                 lastError = err

@@ -166,6 +166,8 @@ export class FreeRideService extends IncyclistService {
         if (!opts?.length && from!=null) {
             opts = this.addLastSegmentReverse(opts,from);
         }
+        
+        if (!from) return opts ?? [] 
 
         opts = this.filterOptions(opts, from);
         opts = this.sortOptions(opts, from);
