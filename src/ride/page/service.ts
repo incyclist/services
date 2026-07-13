@@ -191,7 +191,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         try {
 
             const state = this.getRideDisplay().getState()
-            if (state==='Finished' || this.menuProps.finished) {
+            if (state==='Finished' || this.menuProps?.finished) {
                 // this.onEndRide()
                 this.moveToPreviousPage()
                 this.closePage()
@@ -202,7 +202,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.updatePageDisplay()
         }
         catch(err:any) {
-            this.logError(err,'onMenuOpen')
+            this.logError(err,'onMenuClose')
         }
     }
 
