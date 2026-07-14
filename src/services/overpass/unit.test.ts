@@ -120,11 +120,59 @@ describe ('OverpassClient Unit Test' ,() => {
             
         } );
 
-        
-        
-        
-    
+
+
+
+
     } )
-    
+
+    describe ( 'post', () => {
+
+        let client:OverpassApi
+
+        beforeEach( ()=> {
+            client = new OverpassApi();
+        })
+
+        test ('uses the fetch binding when available (desktop)', async () => {
+            const fetchMock = jest.fn().mockResolvedValue({ok:true, status:200, statusText:'OK', headers:{}, data:'result'})
+            ;(client as any).getBindings = jest.fn( ()=> ({fetch:{fetch:fetchMock}}) )
+
+            const res = await (client as any).post('https://overpass.example/api/interpreter', 'myquery')
+
+            expect(fetchMock).toHaveBeenCalledWith('https://overpass.example/api/interpreter', expect.objectContaining({
+                method: 'POST',
+                body: 'myquery',
+                referrerPolicy: 'unsafe-url',
+                headers: expect.objectContaining({ Referer: 'https://incyclist.com' })
+            }))
+            expect(res.data).toBe('result')
+            expect(res.status).toBe(200)
+        })
+
+        test ('falls back to the legacy path when the fetch binding request fails', async () => {
+            const fetchMock = jest.fn().mockRejectedValue(new Error('boom'))
+            ;(client as any).getBindings = jest.fn( ()=> ({fetch:{fetch:fetchMock}}) )
+            const legacySpy = jest.spyOn(client as any,'postViaNodeHttps').mockResolvedValue({data:'legacy',status:200,statusText:'OK',headers:{}})
+
+            const res = await (client as any).post('https://overpass.example/api/interpreter', 'myquery')
+
+            expect(fetchMock).toHaveBeenCalled()
+            expect(legacySpy).toHaveBeenCalled()
+            expect(res.data).toBe('legacy')
+        })
+
+        test ('uses the legacy path when no fetch binding is registered (e.g. mobile)', async () => {
+            ;(client as any).getBindings = jest.fn( ()=> ({}) )
+            const legacySpy = jest.spyOn(client as any,'postViaNodeHttps').mockResolvedValue({data:'legacy',status:200,statusText:'OK',headers:{}})
+
+            const res = await (client as any).post('https://overpass.example/api/interpreter', 'myquery')
+
+            expect(legacySpy).toHaveBeenCalled()
+            expect(res.data).toBe('legacy')
+        })
+
+    })
+
 })
 

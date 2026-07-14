@@ -13,6 +13,7 @@ import type { IVideoProcessor } from '../video'
 import type { ISecretBinding } from '../secret'
 import type { ISerialBinding } from '../serial/types'
 import type { ICryptoBinding } from '../crypto/types'
+import type { IFetchBinding } from '../fetch/types'
 
 
 export interface IUserSettingsBinding {
@@ -40,6 +41,7 @@ export class IncyclistBindings {
     public logging: ILogBinding
     public serial: ISerialBinding
     public crypto: ICryptoBinding
+    public fetch?: IFetchBinding
     public ant
     public ble
     public wifi

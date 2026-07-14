@@ -7,6 +7,7 @@ import { Injectable } from '../../base/decorators';
 import { getBindings } from '../../api';
 import { UserSettingsService, useUserSettings } from '../../settings';
 import { AxiosResponse } from 'axios';
+import type { IFetchBinding } from '../../api/fetch/types';
 
 const OVERPASS_URL_ALT1 = 'https://overpass.kumi.systems/api/interpreter'
 const OVERPASS_URL_ALT2 = 'https://lz4.overpass-api.de/api/interpreter';
@@ -76,6 +77,19 @@ export class OverpassApi extends AppApiBase {
     }
 
     protected async post(url:string, data?:object|string, conf?:object):Promise<AxiosResponse> {
+        // Desktop: issue the request from the Electron main process via the `fetch` binding,
+        // so a cross-origin Referer can be set with referrerPolicy:'unsafe-url' - the renderer's
+        // network stack silently cancels such requests otherwise (see electron/electron#33092).
+        // Not implemented on mobile - those platforms fall through to the legacy paths below.
+        const fetchBinding = this.getBindings()?.fetch
+        if (fetchBinding) {
+            try {
+                return await this.postViaFetchBinding(fetchBinding, url, data);
+            } catch {
+                // fall through to legacy paths below
+            }
+        }
+
         try {
             // Try Node.js https first (available in Electron with nodeIntegration: true)
             // This allows us to set forbidden headers like User-Agent and Referer
@@ -91,6 +105,26 @@ export class OverpassApi extends AppApiBase {
             }
             return await super.post(url, data, config)
         }
+    }
+
+    protected async postViaFetchBinding(fetchBinding: IFetchBinding, url: string, data?: object | string): Promise<AxiosResponse> {
+        const headers = this.getOverpassHeaders();
+        const body = typeof data === 'string' ? data : JSON.stringify(data);
+
+        const res = await fetchBinding.fetch(url, {
+            method: 'POST',
+            headers,
+            body,
+            referrerPolicy: 'unsafe-url'
+        });
+
+        return {
+            data: res.data,
+            status: res.status,
+            statusText: res.statusText,
+            headers: res.headers,
+            config: {} as AxiosResponse['config']
+        };
     }
 
     protected async postViaNodeHttps(https: any, url: string, data?: object | string): Promise<any> {
