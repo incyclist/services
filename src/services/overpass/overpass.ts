@@ -9,11 +9,11 @@ import { UserSettingsService, useUserSettings } from '../../settings';
 import { AxiosResponse } from 'axios';
 import type { IFetchBinding } from '../../api/fetch/types';
 
-const OVERPASS_URL_ALT1 = 'https://overpass.kumi.systems/api/interpreter'
-const OVERPASS_URL_ALT2 = 'https://lz4.overpass-api.de/api/interpreter';
-const OVERPASS_URL_ALT3 = 'https://z.overpass-api.de/api/interpreter'
+const OVERPASS_URL_PRIMARY = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_URL_ALT1 = 'https://overpass.kumi.systems/api/interpreter';
+const OVERPASS_URL_ALT2 = 'https://overpass.openstreetmap.fr/api/interpreter';
 
-export const OVERPASS_URL_DEFAULT = OVERPASS_URL_ALT1;
+export const OVERPASS_URL_DEFAULT = OVERPASS_URL_PRIMARY;
 
 
 /**
@@ -43,7 +43,7 @@ export class OverpassApi extends AppApiBase {
 
     constructor(props?:{url:string}) {
         super()
-        this.mirrors = [OVERPASS_URL_ALT1,OVERPASS_URL_ALT2,OVERPASS_URL_ALT3]
+        this.mirrors = [OVERPASS_URL_PRIMARY,OVERPASS_URL_ALT1,OVERPASS_URL_ALT2]
         this.url = props?.url??  this.mirrors[0];
         this.logger = new EventLogger('Overpass')
         if (props?.url) {
@@ -83,11 +83,7 @@ export class OverpassApi extends AppApiBase {
         // Not implemented on mobile - those platforms fall through to the legacy paths below.
         const fetchBinding = this.getBindings()?.fetch
         if (fetchBinding) {
-            try {
-                return await this.postViaFetchBinding(fetchBinding, url, data);
-            } catch {
-                // fall through to legacy paths below
-            }
+            return await this.postViaFetchBinding(fetchBinding, url, data);
         }
 
         try {
@@ -111,20 +107,30 @@ export class OverpassApi extends AppApiBase {
         const headers = this.getOverpassHeaders();
         const body = typeof data === 'string' ? data : JSON.stringify(data);
 
-        const res = await fetchBinding.fetch(url, {
-            method: 'POST',
-            headers,
-            body,
-            referrerPolicy: 'unsafe-url'
-        });
+        //this.logger.logEvent({message:'fetch', url,data})
 
-        return {
-            data: res.data,
-            status: res.status,
-            statusText: res.statusText,
-            headers: res.headers,
-            config: {} as AxiosResponse['config']
-        };
+        try {
+            const res = await fetchBinding.fetch(url, {
+                method: 'POST',
+                headers,
+                body,
+                referrerPolicy: 'unsafe-url'
+            });
+
+            //this.logger.logEvent({message:'fetch result', url,data, status:res.status, hasData:res.data!=null})
+
+            return {
+                data: res.data,
+                status: res.status,
+                statusText: res.statusText,
+                headers: res.headers,
+                config: {} as AxiosResponse['config']
+            };
+        }
+        catch(err) {
+            this.logger.logEvent({message:'fetch error', url,data,error:err.message})
+            throw err
+        }
     }
 
     protected async postViaNodeHttps(https: any, url: string, data?: object | string): Promise<any> {
@@ -313,7 +319,7 @@ export class OverpassApi extends AppApiBase {
     }
 
     reset() {
-        this.mirrors = [OVERPASS_URL_ALT1,OVERPASS_URL_ALT2,OVERPASS_URL_ALT3]    
+        this.mirrors = [OVERPASS_URL_PRIMARY,OVERPASS_URL_ALT1,OVERPASS_URL_ALT2]
         this.url = this.mirrors[0]
     }
 

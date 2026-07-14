@@ -150,16 +150,16 @@ describe ('OverpassClient Unit Test' ,() => {
             expect(res.status).toBe(200)
         })
 
-        test ('falls back to the legacy path when the fetch binding request fails', async () => {
-            const fetchMock = jest.fn().mockRejectedValue(new Error('boom'))
+        test ('propagates the error when the fetch binding request fails (no legacy fallback)', async () => {
+            const error = new Error('boom')
+            const fetchMock = jest.fn().mockRejectedValue(error)
             ;(client as any).getBindings = jest.fn( ()=> ({fetch:{fetch:fetchMock}}) )
-            const legacySpy = jest.spyOn(client as any,'postViaNodeHttps').mockResolvedValue({data:'legacy',status:200,statusText:'OK',headers:{}})
+            const legacySpy = jest.spyOn(client as any,'postViaNodeHttps')
 
-            const res = await (client as any).post('https://overpass.example/api/interpreter', 'myquery')
+            await expect( (client as any).post('https://overpass.example/api/interpreter', 'myquery') ).rejects.toThrow('boom')
 
             expect(fetchMock).toHaveBeenCalled()
-            expect(legacySpy).toHaveBeenCalled()
-            expect(res.data).toBe('legacy')
+            expect(legacySpy).not.toHaveBeenCalled()
         })
 
         test ('uses the legacy path when no fetch binding is registered (e.g. mobile)', async () => {
