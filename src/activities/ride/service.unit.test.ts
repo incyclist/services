@@ -605,6 +605,17 @@ describe('ActivityRideService',()=>{
           // Assert
           expect(props.showMap).toBeTruthy()
         });
+
+        test('Workout (no route, no GPS logs)', () => {
+
+            mockServices(service,{startSettings:{startPos:0,realityFactor:100,type:'Route'}, init:{activity:{routeType:'None',logs:[]} as unknown as ActivityDetails}})
+
+            // Act
+            const props = service.getActivitySummaryDisplayProperties();
+
+            // Assert
+            expect(props.showMap).toBeTruthy()
+        });
     })
 
     describe('getPrevRideStats',()=>{
