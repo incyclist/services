@@ -572,11 +572,12 @@ export class ActivityRideService extends IncyclistService {
             const startSettings:RouteStartSettings = this.getRouteList().getStartSettings()
 
             const isFreeRide = startSettings?.type==='Free-Ride'
+            const isWorkout = this.activity?.routeType==='None'
             const showSave = this.activity!==undefined && !this.isSaveDone;
             const showContinue = this.state!=='completed'
 
             const hasGPX = this.activity?.logs?.some( (log) => !!log.lat && !!log.lng)
-            const showMap = hasGPX || isFreeRide || (route?.description?.hasGpx)
+            const showMap = hasGPX || isFreeRide || isWorkout || (route?.description?.hasGpx)
             const preview = showMap ? undefined: route?.description?.previewUrl
             
             if (!this.isSummaryShown) { 

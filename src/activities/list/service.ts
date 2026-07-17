@@ -643,7 +643,7 @@ export class ActivityListService extends IncyclistService {
             startPos, 
             segment: activity?.segment,
             started: activity? new Date(activity.startTime) : undefined,
-            showMap: true,
+            showMap: activity?.routeType!=='None',
             points,
             activity,
             exports: this.exports,

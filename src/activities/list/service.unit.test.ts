@@ -591,6 +591,23 @@ describe('ActivityListService',()=>{
 
         })
 
+        test('workout-only activity (routeType None, no GPS logs)',()=>{
+            const db = new RepoMockClass({cntEntries:5,repoDelay:100})
+
+            const activity = structuredClone(SampleDetails)
+            activity.routeType = 'None'
+            delete activity.logs
+            db.activities[1].details = activity as unknown as ActivityDetails
+
+            const selected = db.activities[1]
+            setupMocks({repo:db.mock,initialized:true,listOpened:true,selected})
+
+            let res
+            res = service.openSelected()
+
+            expect(res.showMap).toBe(false)
+        })
+
 
     })
 
