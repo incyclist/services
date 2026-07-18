@@ -1,7 +1,7 @@
 
 import { Workout, WorkoutCard } from '..'
 import { Card, CardList } from '../../base/cardlist'
-import { Observer } from '../../base/types/observer'
+import { Observer, PromiseObserver } from '../../base/types/observer'
 import { waitNextTick } from '../../utils'
 import { WorkoutListService } from './service'
 import { WP } from './types'
@@ -377,11 +377,11 @@ describe('WorkoutListService',()=>{
             let settings = service.getStartSettings()
             expect(settings).toEqual({ftp:250, useErgMode:false} )
 
-            // start settings were changed by user
+            // start settings were changed by user (launch-scoped override, does not touch the global preference - RC-3)
             service.setStartSettings({ftp:200, useErgMode:true})
             settings = service.getStartSettings()
             expect(settings).toEqual({ftp:200, useErgMode:true} )
-            expect(s.getUserSettings().set).toHaveBeenCalledWith('preferences.useErgMode',true)
+            expect(s.getUserSettings().set).not.toHaveBeenCalledWith('preferences.useErgMode',expect.anything())
 
             // simulate event that user changed FTP in user settings, while overrule temporary settings
             s.onUserUpdate({ftp:300} )
@@ -395,11 +395,11 @@ describe('WorkoutListService',()=>{
             let settings = service.getStartSettings()
             expect(settings).toEqual({ftp:250, useErgMode:true} )
 
-            // start settings were changed by user
+            // start settings were changed by user (launch-scoped override, does not touch the global preference - RC-3)
             service.setStartSettings({ftp:200, useErgMode:false})
             settings = service.getStartSettings()
             expect(settings).toEqual({ftp:200, useErgMode:false} )
-            expect(s.getUserSettings().set).toHaveBeenCalledWith('preferences.useErgMode',false)
+            expect(s.getUserSettings().set).not.toHaveBeenCalledWith('preferences.useErgMode',expect.anything())
 
             // simulate event that user changed FTP in user settings, while overrule temporary settings
             s.onUserUpdate({ftp:300} )
@@ -412,17 +412,27 @@ describe('WorkoutListService',()=>{
             let settings = service.getStartSettings()
             expect(settings).toEqual({ftp:200, useErgMode:true} )
 
-            // start settings were changed by user
+            // start settings were changed by user (launch-scoped override, does not touch the global preference - RC-3)
             service.setStartSettings({ftp:210, useErgMode:false})
             settings = service.getStartSettings()
             expect(settings).toEqual({ftp:210, useErgMode:false} )
-            expect(s.getUserSettings().set).toHaveBeenCalledWith('preferences.useErgMode',false)
+            expect(s.getUserSettings().set).not.toHaveBeenCalledWith('preferences.useErgMode',expect.anything())
 
             // simulate event that user changed FTP in user settings, while overrule temporary settings
             s.onUserUpdate({ftp:300} )
             settings = service.getStartSettings()
             expect(settings).toEqual({ftp:300, useErgMode:false} )
 
+        })
+
+        test('ergMode override is superseded once global preference changes and override is cleared',()=>{
+            ergPref = true
+            service.setStartSettings({ftp:200, useErgMode:false})
+            expect(service.getStartSettings()).toEqual({ftp:200, useErgMode:false})
+
+            // global preference changes while an override is still active -> override wins (launch-scoped)
+            ergPref = true
+            expect(service.getStartSettings()).toEqual({ftp:200, useErgMode:false})
         })
         test('error',()=>{
             s.getUserSettings = jest.fn( ()=>{throw new Error})
@@ -894,10 +904,13 @@ describe('WorkoutListService',()=>{
             expect(s.myWorkouts.getCards().length).toBe(10)
 
         })
-        test('move into non-existing <identified as string>',()=>{
+        test('move into non-existing <identified as string> creates the group on demand (RC-2)',()=>{
             const list = service.moveCard( cards[0], s.myWorkouts, '4' )
-            expect(list).toBeUndefined()
-            expect(s.myWorkouts.getCards().length).toBe(12)
+            expect(list).toBeDefined()
+            expect(list.getTitle()).toBe('4')
+            expect(list.getCards()).toEqual([cards[0]])
+            expect(s.myWorkouts.getCards().length).toBe(11)
+            expect(s.lists).toContain(list)
 
         })
 
@@ -917,6 +930,165 @@ describe('WorkoutListService',()=>{
 
         })
 
+    })
+
+    describe ('deleteWorkout (RC-1)',()=>{
+        let s,service
+        let card
+
+        beforeEach( ()=>{
+            setupMocks()
+            s = service = new WorkoutListService()
+            s.logError = jest.fn()
+            s.observer = new Observer()
+            s.initialized = true
+            card = s.addItem(new Workout({type:'workout',id:'1',name:'1'}))
+        })
+
+        afterEach( ()=>{
+            resetMocks()
+            s.reset()
+        })
+
+        test('deletes an existing workout via its card',async ()=>{
+            card.delete = jest.fn().mockReturnValue(PromiseObserver.alwaysReturning(true))
+
+            const observer = service.deleteWorkout('1')
+            const result = await observer.wait()
+
+            expect(card.delete).toHaveBeenCalled()
+            expect(result).toBe(true)
+        })
+
+        test('unknown id resolves to false without throwing',async ()=>{
+            const observer = service.deleteWorkout('unknown')
+            const result = await observer.wait()
+            expect(result).toBe(false)
+        })
+
+        test('error',()=>{
+            s.findCard = jest.fn( ()=>{ throw new Error('') })
+            const observer = service.deleteWorkout('1')
+            expect(s.logError).toHaveBeenCalled()
+            expect(observer).toBeDefined()
+        })
+    })
+
+    describe ('getScheduledWorkouts (RC-5 - highlight-only auto-select gating)',()=>{
+        let s,service
+        let scheduledEntries
+
+        const injectChannel = (channel?:string)=> {
+            Inject('Bindings', { appInfo: { getChannel: jest.fn().mockReturnValue(channel) } })
+        }
+
+        beforeEach( ()=>{
+            setupMocks()
+            s = service = new WorkoutListService()
+            s.logError = jest.fn()
+            s.observer = new Observer()
+            s.initialized = true
+
+            MockAppState.getState.mockImplementation( (key)=> key==='scheduledToday' ? '1' : undefined)
+
+            const workout = new Workout({type:'workout',id:'1',name:'Today'})
+            scheduledEntries = [
+                { type:'scheduled', id:'source:1', name:'Today', day:new Date(), updated:new Date(), workoutId:'1', workout }
+            ]
+        })
+
+        afterEach( ()=>{
+            resetMocks()
+            s.reset()
+            Inject('Bindings', null)
+        })
+
+        test('non-mobile (default): still auto-selects the workout matching scheduledToday',()=>{
+            injectChannel('desktop')
+
+            s.getScheduledWorkouts(scheduledEntries)
+            expect(s.selectedWorkout?.id).toBe('1')
+        })
+
+        test('channel not (yet) known: preserves legacy auto-select default',()=>{
+            injectChannel(undefined)
+
+            s.getScheduledWorkouts(scheduledEntries)
+            expect(s.selectedWorkout?.id).toBe('1')
+        })
+
+        test('mobile: highlight only, does not auto-select (case-4 leak fix)',()=>{
+            injectChannel('mobile')
+
+            s.getScheduledWorkouts(scheduledEntries)
+            expect(s.selectedWorkout).toBeUndefined()
+        })
+    })
+
+    describe ('preload - RC-7 launch-time redirect gating',()=>{
+        let s,service
+        let scheduledHandler
+        let MockCalendarLocal
+
+        const injectChannel = (channel?:string)=> {
+            Inject('Bindings', { appInfo: { getChannel: jest.fn().mockReturnValue(channel) } })
+        }
+
+        beforeEach( ()=>{
+            MockCalendarLocal = {
+                on: jest.fn(),
+                off: jest.fn(),
+                once: jest.fn( (event,cb)=> { if (event==='scheduled') scheduledHandler = cb }),
+                init: jest.fn(),
+                setActive: jest.fn(),
+                getScheduledWorkouts: jest.fn().mockReturnValue([]),
+                reset: jest.fn()
+            }
+            Inject('WorkoutCalendar', MockCalendarLocal)
+            Inject('AppState', MockAppState)
+            MockAppState.setState.mockClear()
+            MockAppState.setPersistedState.mockClear()
+
+            s = service = new WorkoutListService()
+            s.logError = jest.fn()
+            s.getRepo = jest.fn().mockReturnValue({
+                load: jest.fn( ()=> {
+                    const o = new Observer()
+                    process.nextTick( ()=> { o.emit('done') })
+                    return o
+                })
+            })
+        })
+
+        afterEach( ()=>{
+            Inject('WorkoutCalendar', null)
+            Inject('AppState', null)
+            Inject('Bindings', null)
+            s.reset()
+            MockAppState.getState.mockReset()
+        })
+
+        test('non-mobile: keeps scheduledToday and redirects to the workouts page',()=>{
+            injectChannel('desktop')
+            service.preload()
+
+            const workout = new Workout({type:'workout',id:'1',name:'today'})
+            scheduledHandler({workout, day:new Date(), updated:new Date()})
+
+            expect(MockAppState.setState).toHaveBeenCalledWith('scheduledToday','1')
+            expect(MockAppState.setPersistedState).toHaveBeenCalledWith('page','workouts')
+        })
+
+        test('mobile: keeps scheduledToday but does not hijack the landing page',()=>{
+            injectChannel('mobile')
+            service.preload()
+
+            const workout = new Workout({type:'workout',id:'1',name:'today'})
+            scheduledHandler({workout, day:new Date(), updated:new Date()})
+
+            expect(MockAppState.setState).toHaveBeenCalledWith('scheduledToday','1')
+            expect(MockAppState.setPersistedState).not.toHaveBeenCalledWith('page','workouts')
+        })
     })
 
     describe ('canDisplayStart',()=>{

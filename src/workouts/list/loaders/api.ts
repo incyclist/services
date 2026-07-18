@@ -1,7 +1,7 @@
 import { Observer } from "../../../base/types/observer";
 import { waitNextTick } from "../../../utils";
 import { IncyclistWorkoutsApi} from "../../base/api";
-import { PlanDefinition } from "../../base/model";
+import { PlanDefinition } from "../../base/model/types";
 import { Workout,Plan } from "../../base/model/Workout";
 import { WorkoutsDbLoader } from "./db";
 import { Loader } from "./loader";

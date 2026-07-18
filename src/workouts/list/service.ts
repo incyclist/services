@@ -1,4 +1,4 @@
-import { FileInfo } from "../../api";
+import { FileInfo, getBindings } from "../../api";
 import { Card, CardList } from "../../base/cardlist";
 import { IncyclistService } from "../../base/service";
 import { IListService, ListObserver, Singleton } from "../../base/types";
@@ -52,6 +52,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     protected language:string
     protected selectedWorkout:Workout
     protected ftp:number
+    protected useErgModeOverride:boolean
     protected scheduledToday: WorkoutCalendarEntry
     protected scheduledList:  CardList<WP>
     protected selectedCard: Card<WP>
@@ -262,8 +263,9 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
         try {
             const userSettings = this.getUserSettings()
-        
-            useErgMode = userSettings.get('preferences.useErgMode',true)       
+
+            const globalErgMode = userSettings.get('preferences.useErgMode',true)
+            useErgMode = this.useErgModeOverride ?? globalErgMode
             const user= userSettings.get('user',undefined)
             ftp = this.ftp ?? user?.ftp ??  200
         }
@@ -275,20 +277,22 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
     /**
      * changes the Settings ( FTP and forced ERGMode on/off) for the workout
-     * 
-     * The FTP will overrule the FTP from the user settings, 
+     *
+     * The FTP will overrule the FTP from the user settings,
      * unless the FTP is changed in the user settings. In that case, the new value from the user settings will be taken
-     * 
+     *
+     * The ERG Mode override is launch-scoped: it overrules the global default for the remainder of this session,
+     * but does not persist to (or change) the global `preferences.useErgMode` setting
+     *
      * @param settings  new settings to be applied
      */
     setStartSettings(settings:WorkoutSettings):void {
         try {
-            const userSettings = this.getUserSettings()        
-            userSettings.set('preferences.useErgMode',settings?.useErgMode)
+            this.useErgModeOverride = settings?.useErgMode
             this.ftp = settings?.ftp
         }
         catch(err) {
-            this.logError(err,'setStartSettings')   
+            this.logError(err,'setStartSettings')
         }
     }
 
@@ -388,12 +392,15 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                 this.preloadObserver = new PromiseObserver<void>( promise )
     
                 this.getWorkoutCalendar().once('scheduled',( event:WorkoutCalendarEntry )=> {
-                    
+
                     this.scheduledToday = event
                     this.getAppState().setState('scheduledToday',event.workout.id)
-                    this.getAppState().setPersistedState('page','workouts')
-                    
-                    
+
+                    // mobile shows a post-pairing prompt instead of hijacking the landing page (RC-7)
+                    if (!this.isMobile()) {
+                        this.getAppState().setPersistedState('page','workouts')
+                    }
+
                 })
                 this.getWorkoutCalendar().init()
 
@@ -551,15 +558,19 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         const schedList = new CardList<WP>('scheduled', 'Scheduled Workouts');
         scheduled.forEach(w => schedList.add(new ScheduledWorkoutCard(w)));
 
-        const today = this.getAppState().getState('scheduledToday');
-        if (today) {
-            schedList.getCards().forEach(c => {
-                if (c.getId() === today) {
-                    c.select();
-                }
-            });
+        // Highlight-only on mobile (case-4 leak fix): viewing the list must never auto-select
+        // a workout for the next ride. Desktop/web keep the legacy auto-select behaviour.
+        if (!this.isMobile()) {
+            const today = this.getAppState().getState('scheduledToday');
+            if (today) {
+                schedList.getCards().forEach(c => {
+                    if (c.getId() === today) {
+                        c.select();
+                    }
+                });
+            }
         }
-        
+
         const newList = (this.scheduledList===undefined || this.scheduledList===null)
         if (newList) {
             this.scheduledList = schedList;    
@@ -668,12 +679,12 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
     moveCard( card:Card<WP>, source:CardList<WP>, target:string|CardList<WP>):CardList<WP> {
         try {
-         
+
             let targetList:CardList<WP>
             if (typeof target==='string') {
                 targetList = this.lists.find( l=>l.getTitle()===target)
                 if (!targetList)
-                    return;
+                    targetList = this.addList(target)
             }
             else {
                 targetList = target
@@ -682,14 +693,36 @@ export class WorkoutListService extends IncyclistService  implements IListServic
             source.remove(card)
             targetList.add(card)
 
-            this.emitLists('updated')                
+            this.emitLists('updated')
             return targetList
-    
+
         }
         catch(err) {
             this.logError(err,'moveCard')
         }
-        
+
+    }
+
+    /**
+     * deletes a workout (identified by id) from display and database
+     *
+     * Delegates to the underlying [[WorkoutCard]]/[[ScheduledWorkoutCard]], which unselects the workout first if it was selected
+     *
+     * @param id  id of the workout to be deleted
+     * @returns observer resolving to `true` once the delete has completed, `false` if the workout could not be found or deletion failed
+     */
+    deleteWorkout(id:string):PromiseObserver<boolean> {
+        try {
+            const {card} = this.findCard(id) ?? {}
+            if (!card)
+                return PromiseObserver.alwaysReturning(false)
+
+            return card.delete()
+        }
+        catch(err) {
+            this.logError(err,'deleteWorkout')
+            return PromiseObserver.alwaysReturning(false)
+        }
     }
 
     canDisplayStart(): boolean {
@@ -980,6 +1013,15 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     @Injectable
     protected getAppState() {
         return useAppState()
+    }
+
+    protected isMobile():boolean {
+        return this.getBindings()?.appInfo?.getChannel()==='mobile'
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 
     // istanbul ignore next
