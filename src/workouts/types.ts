@@ -1,5 +1,7 @@
 export type * from './page/types'
 export type * from './list/types'
+export type * from './base/graph/types'
+export type * from './ride/page/types'
 
 // `WorkoutSettingsDisplayProps` also exists (with a different meaning) in `./list/cards/types` -
 // re-export it explicitly under a disambiguated name rather than renaming the card-level declaration

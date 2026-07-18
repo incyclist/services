@@ -17,12 +17,13 @@ export interface ActiveWorkoutLimit extends WorkoutRequest{
 }
 
 export interface WorkoutDisplayProperties {
-    workout?:Workout, 
-    title?:string, 
-    ftp?:number, 
+    workout?:Workout,
+    title?:string,
+    ftp?:number,
     current?:ActiveWorkoutLimit,
     start?:number,
     stop?:number
+    mode?: string,
     canShowBackward?: boolean,
     canShowForward?: boolean
 }
