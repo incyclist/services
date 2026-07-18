@@ -153,7 +153,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                 case 'Video':     return this.getVideoRideDisplayProps()
                 case 'GPX':       return this.getGPXRideDisplayProps()
                 // case 'Free-Ride': return this.getFreeRideDisplayProps()
-                // case 'Workout':   return this.getWorkoutRideDisplayProps()
+                // 'Workout' is intentionally not handled here - it is owned entirely by
+                // WorkoutRidePageService (workouts/ride/page), a sibling page service, not a branch of this one.
                 default:
                     return noRideProps
             }
@@ -364,9 +365,6 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     // protected getFreeRideDisplayProps() {
     //     // TODO
-    // }
-    // protected getWorkoutRideDisplayProps() {
-    //     // TODO)
     // }
 
 
