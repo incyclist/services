@@ -392,7 +392,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
 
         const bars = getWorkoutGraphSeries(current, { ftp, absValues: true })
-        const lastBarX = bars.length ? bars[bars.length - 1].x : 0
+        const lastBarX = bars.length ? bars.at(-1).x : 0
         const maxX = Math.max(this.getLastLogTime(), lastBarX, current.duration ?? 0)
         const maxBarPower = bars.length ? Math.max(...bars.map(b => b.y)) : 0
 
@@ -486,7 +486,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         const logs = this.getActivityRide().getActivity()?.logs
         if (!logs || logs.length === 0)
             return 0
-        return logs[logs.length - 1].time ?? 0
+        return logs.at(-1).time ?? 0
     }
 
     protected getElapsedActivityTime(): number {

@@ -1,4 +1,4 @@
-import { Workout } from "../model"
+import { Step, Workout } from "../model"
 import { StepDefinition, WorkoutDefinition } from "../model/types"
 import { WorkoutGraphPlanBar, WorkoutGraphSeriesOptions } from "./types"
 
@@ -18,7 +18,7 @@ export const WORKOUT_ZONE_COLORS = [
 ]
 
 function getMinPower(step: StepDefinition, ftp?: number): number | undefined {
-    if (step === undefined || step.power === undefined)
+    if (step?.power === undefined)
         return undefined
 
     const p = step.power
@@ -35,7 +35,7 @@ function getMinPower(step: StepDefinition, ftp?: number): number | undefined {
 }
 
 function getMaxPower(step: StepDefinition, ftp?: number): number | undefined {
-    if (step === undefined || step.power === undefined)
+    if (step?.power === undefined)
         return 0
 
     const p = step.power
@@ -72,60 +72,109 @@ export function getStepDuration(step: StepDefinition): string {
 }
 
 /**
+ * Renders "low-highUNIT" (or just "highUNIT" for a single value, or '' if high is undefined).
+ * `low`/`high` are already in display order - ascending for a normal range, descending for a
+ * cooldown ramp - callers pick which of min/max is `low` vs `high`.
+ */
+function formatPowerText(low: number | undefined, high: number | undefined, unit: string, rangePrefix: string): string {
+    if (low !== undefined && high !== undefined && low !== high)
+        return `${rangePrefix}${Math.round(low)}-${Math.round(high)}${unit}`
+    if (high !== undefined)
+        return `${Math.round(high)}${unit}`
+    return ''
+}
+
+/** Appends the same range/value, converted to the other unit (%FTP <-> Watts), in parentheses. */
+function appendConvertedSuffix(text: string, low: number | undefined, high: number | undefined, unit: string, ftp?: number): string {
+    if (text === '' || ftp === undefined)
+        return text
+
+    const isPct = unit === '%'
+    const convert = (v: number) => isPct ? Math.round(v / 100 * ftp) : Math.round(v * 100 / ftp)
+    const suffixUnit = isPct ? 'W' : '%'
+
+    const range = (low !== undefined && high !== undefined && low !== high)
+        ? `${convert(low)}-${convert(high)}`
+        : `${convert(high as number)}`
+
+    return `${text} (${range}${suffixUnit})`
+}
+
+/**
  * Formats a step's power target for display, e.g. "260W", "95% (250W)", "Ramp 200-260W (77-100%)".
  * Returns '' if the step has no power limit defined.
  */
 export function getStepPower(step: StepDefinition, ftp?: number): string {
-    let stepText: string
-
     if (step.power === undefined)
         return ''
 
-    const unit = step.power.type === 'watt' ? 'W' : '%'
+    const { min, max, type } = step.power
+    const unit = type === 'watt' ? 'W' : '%'
 
-    if (step.steady || step.cooldown === false) {
-        if (step.power.min !== undefined && step.power.max !== undefined && step.power.min < step.power.max)
-            stepText = `${step.steady ? '' : 'Ramp '}${Math.round(step.power.min)}-${Math.round(step.power.max)}${unit}`
-        else if (step.power.max !== undefined)
-            stepText = `${Math.round(step.power.max)}${unit}`
-        else
-            stepText = ''
+    // a cooldown ramp (steady:false, cooldown:true) is the only case rendered high-to-low
+    const ascending = step.steady || step.cooldown === false
+    const low = ascending ? min : max
+    const high = ascending ? max : min
+    const rangePrefix = step.steady ? '' : 'Ramp '
 
-        if (stepText !== '' && ftp !== undefined && unit === '%') {
-            if (step.power.min !== undefined && step.power.max !== undefined && step.power.min < step.power.max)
-                stepText += ` (${Math.round(step.power.min / 100 * ftp)}-${Math.round(step.power.max / 100 * ftp)}W)`
-            else
-                stepText += ` (${Math.round(step.power.max / 100 * ftp)}W)`
-        }
-        if (stepText !== '' && ftp !== undefined && unit === 'W') {
-            if (step.power.min !== undefined && step.power.max !== undefined && step.power.min < step.power.max)
-                stepText += ` (${Math.round(step.power.min * 100 / ftp)}-${Math.round(step.power.max * 100 / ftp)}%)`
-            else
-                stepText += ` (${Math.round(step.power.max * 100 / ftp)}%)`
-        }
+    const stepText = formatPowerText(low, high, unit, rangePrefix)
+    return appendConvertedSuffix(stepText, low, high, unit, ftp)
+}
+
+function coerceToWorkout(workout: Workout): Workout | undefined {
+    if (workout instanceof Workout)
+        return workout
+
+    try {
+        return new Workout(workout as unknown as WorkoutDefinition)
     }
-    else {
-        if (step.power.min !== undefined && step.power.max !== undefined && step.power.min < step.power.max)
-            stepText = `Ramp ${Math.round(step.power.max)}-${Math.round(step.power.min)}${unit}`
-        else if (step.power.max !== undefined)
-            stepText = `${Math.round(step.power.max)}${unit}`
-        else
-            stepText = ''
-
-        if (stepText !== '' && ftp !== undefined && unit === '%') {
-            if (step.power.min !== undefined && step.power.max !== undefined && step.power.min < step.power.max)
-                stepText += ` (${Math.round(step.power.max / 100 * ftp)}-${Math.round(step.power.min / 100 * ftp)}W)`
-            else
-                stepText += ` (${Math.round(step.power.max / 100 * ftp)}W)`
-        }
-        if (stepText !== '' && ftp !== undefined && unit === 'W') {
-            if (step.power.min !== undefined && step.power.max !== undefined && step.power.min < step.power.max)
-                stepText += ` (${Math.round(step.power.max * 100 / ftp)}-${Math.round(step.power.min * 100 / ftp)}%)`
-            else
-                stepText += ` (${Math.round(step.power.max * 100 / ftp)}%)`
-        }
+    catch {
+        return undefined
     }
-    return stepText
+}
+
+/** One zone-colored bar spanning a whole steady step, or undefined if it has no usable power data. */
+function buildSteadyBar(step: Step, stepStart: number, ftp: number | undefined, absValues: boolean): WorkoutGraphPlanBar | undefined {
+    const x0 = stepStart
+    const x = stepStart + step.getDuration()
+    let y = getMaxPower(step, ftp)
+    let y0 = getMinPower(step, ftp)
+    const zone = getZone(y, ftp)
+
+    if (absValues && ftp) {
+        y = ftp * y / 100
+        y0 = ftp * y0 / 100
+    }
+
+    if (y === undefined || Number.isNaN(y))
+        return undefined
+    if (y0 !== undefined && !Number.isNaN(y0))
+        return { x, x0, y, y0, zone }
+    if (y0 === undefined)
+        return { x, x0, y, y0: 0, zone }
+    return undefined
+}
+
+/** Ten thin bars approximating the gradient across a ramp (non-steady) step. */
+function buildRampBars(wo: Workout, step: Step, stepStart: number, ftp: number | undefined, absValues: boolean): WorkoutGraphPlanBar[] {
+    const bars: WorkoutGraphPlanBar[] = []
+    const stepSize = step.getDuration() / 10
+
+    for (let i = 0; i < 10; i++) {
+        const x0 = stepStart + i * stepSize
+        const x = x0 + stepSize
+
+        const limit = wo.getLimits(x0 + 0.01)
+        let y = getMaxPower(limit, ftp)
+        const zone = getZone(y, ftp)
+
+        if (absValues && ftp)
+            y = ftp * y / 100
+
+        if (y !== undefined && !Number.isNaN(y))
+            bars.push({ x, x0, y, y0: 0, zone })
+    }
+    return bars
 }
 
 /**
@@ -140,76 +189,27 @@ export function getStepPower(step: StepDefinition, ftp?: number): string {
 export function getWorkoutGraphSeries(workout: Workout, opts?: WorkoutGraphSeriesOptions): WorkoutGraphPlanBar[] {
     const { ftp, absValues = false } = opts ?? {}
 
-    let wo = workout
-    if (!(wo instanceof Workout)) {
-        try {
-            wo = new Workout(wo as unknown as WorkoutDefinition)
-        }
-        catch {
-            return []
-        }
-    }
-    if (wo === undefined)
+    const wo = coerceToWorkout(workout)
+    if (!wo)
         return []
 
     const bars: WorkoutGraphPlanBar[] = []
-
-    let done = false
-    let step
     let stepStart = 0
 
-    while (!done) {
-        let limits
-        if (step === undefined) {
-            limits = wo.getLimits(0, true)
+    for (let limits = wo.getLimits(0, true); limits !== undefined; limits = wo.getLimits(stepStart + 0.01, true)) {
+        // includeStepInfo:true guarantees `.step` is the originating Step instance, not just a StepDefinition
+        const step = limits.step as Step
+
+        if (step.steady) {
+            const bar = buildSteadyBar(step, stepStart, ftp, absValues)
+            if (bar)
+                bars.push(bar)
         }
         else {
-            stepStart += step.getDuration()
-            limits = wo.getLimits(stepStart + 0.01, true)
+            bars.push(...buildRampBars(wo, step, stepStart, ftp, absValues))
         }
-        done = limits === undefined
 
-        if (!done) {
-            step = limits.step
-
-            if (step.steady) {
-                const x0 = stepStart
-                const x = stepStart + step.getDuration()
-                let y = getMaxPower(step, ftp)
-                let y0 = getMinPower(step, ftp)
-                const zone = getZone(y, ftp)
-
-                if (absValues && ftp) {
-                    y = ftp * y / 100
-                    y0 = ftp * y0 / 100
-                }
-
-                if (y !== undefined && !isNaN(y) && y0 !== undefined && !isNaN(y0)) {
-                    bars.push({ x, x0, y, y0, zone })
-                }
-                else if (y !== undefined && !isNaN(y) && y0 === undefined) {
-                    bars.push({ x, x0, y, y0: 0, zone })
-                }
-            }
-            else {
-                const stepSize = step.getDuration() / 10
-
-                for (let i = 0; i < 10; i++) {
-                    const x0 = stepStart + i * stepSize
-                    const x = x0 + stepSize
-
-                    const limit = wo.getLimits(x0 + 0.01)
-                    let y = getMaxPower(limit, ftp)
-                    const zone = getZone(y, ftp)
-
-                    if (absValues && ftp) {
-                        y = ftp * y / 100
-                    }
-                    if (y !== undefined && !isNaN(y))
-                        bars.push({ x, x0, y, y0: 0, zone })
-                }
-            }
-        }
+        stepStart += step.getDuration()
     }
 
     return bars
