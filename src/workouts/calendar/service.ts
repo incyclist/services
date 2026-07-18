@@ -89,6 +89,31 @@ export class WorkoutCalendarService extends IncyclistService{
         return []
     }
 
+    /**
+     * returns today's scheduled workout (if any), computed on demand from the calendar's loaded entries
+     *
+     * Used e.g. by the mobile post-pairing prompt, which needs a value that stays live on later syncs
+     * (unlike the app-state `scheduledToday` write, which fires only once per app launch)
+     *
+     * @returns today's scheduled workout, or undefined if nothing is scheduled today
+     */
+    getScheduledToday():ScheduledWorkout|undefined {
+        try {
+            if (!this.workouts)
+                return undefined
+
+            const now = new Date()
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+            const entry = this.workouts.find( w=> w.day?.toLocaleDateString()===today.toLocaleDateString() )
+            return entry ? this.getScheduledWorkout(entry) : undefined
+        }
+        catch (err) {
+            this.logError(err, 'getScheduledToday')
+            return undefined
+        }
+    }
+
     setActive(active:boolean) {
         try {
             this.listActive = active

@@ -2,7 +2,7 @@ import { CardList } from "../../base/cardlist";
 import { ListObserver } from "../../base/types";
 import { Workout } from "../base/model";
 import { ScheduledWorkout } from "../calendar";
-import { WorkoutSettings } from "./cards";
+import { WorkoutSettings } from "./cards/types";
 
 
 export type WP = Workout | ScheduledWorkout;

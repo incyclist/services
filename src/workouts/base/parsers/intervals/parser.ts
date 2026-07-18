@@ -1,7 +1,8 @@
 import { EventLogger } from "gd-eventlog";
 import { WorkoutParser } from "../types";
 import { FileInfo, getBindings } from "../../../../api";
-import { Limit, PowerLimit, SegmentDefinition, StepDefinition, Workout } from "../../model";
+import { Workout } from "../../model";
+import { Limit, PowerLimit, SegmentDefinition, StepDefinition } from "../../model/types";
 import { IntervalsStep, IntervalsValue, IntervalsWorkout } from "./types";
 import { Injectable } from "../../../../base/decorators/Injection";
 
