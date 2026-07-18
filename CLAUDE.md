@@ -116,6 +116,12 @@ There is no auto-formatter (no Prettier). ESLint (`eslint.config.mjs`) enforces 
 - Target is ES2024; avoid hacks for older targets.
 - No lax `any` — use proper types or `unknown`.
 - Types and interfaces live in `types.ts`; keep implementation files clean of type sprawl.
+- These are recurring SonarQube findings — apply them while first writing code, not as a post-hoc fix pass:
+  - Built-in Node module imports use the `node:` protocol prefix (`import fs from 'node:fs'`), never a bare specifier (`'fs'`).
+  - Last array element: `arr.at(-1)`, not `arr[arr.length - 1]`.
+  - NaN checks: `Number.isNaN(x)`, not the global `isNaN(x)`.
+  - Existence + property chains: optional chaining (`step?.power === undefined`), not `step === undefined || step.power === undefined`.
+  - Cognitive complexity: SonarQube flags functions above ~15. When a function accumulates many nested if/else branches (e.g. dual-branch formatting logic, multi-case builders), extract small named helpers per logical concern as you write it, rather than one large function refactored later.
 
 ### Documentation
 
