@@ -31,7 +31,8 @@ export interface WorkoutGraphActuals {
 // ---- upcoming steps ------------------------------------------------------------
 
 export interface WorkoutStepDisplay {
-    label: string                       // e.g. "260W", "FTP 95%", "Ramp 200-260W", "free"
+    label: string                       // full target description, Zwift-style - see getStepTargetText
+                                         // (e.g. "260W", "260W at 100-120HR", "100-120 rpm", "Ramp 200-260W", "free")
     targetPower: number | null          // W at current FTP; null for a free-ride (no-limit) step
     duration: number                    // step duration (s)
     remaining: number | null            // s left in step - non-null ONLY for the current step
@@ -39,17 +40,24 @@ export interface WorkoutStepDisplay {
 }
 
 export interface WorkoutUpcomingSteps {
-    current: WorkoutStepDisplay | null  // the in-progress step (null before start / after completion)
-    upcoming: WorkoutStepDisplay[]      // next 2-3 steps, plan order, empty near the end
+    // Built from the FLATTENED, repeat-expanded step sequence (getFlattenedSteps) - a repeated
+    // segment contributes one entry per repetition here, not one entry for the whole segment.
+    previous: WorkoutStepDisplay | null  // the step immediately before `current`; null if this is the first step
+    current: WorkoutStepDisplay | null   // the in-progress step (null before start / after completion)
+    upcoming: WorkoutStepDisplay[]       // next 2-3 steps, plan order, empty near the end
+    hasMore: boolean                     // true if flattened steps exist beyond `upcoming`'s last entry -
+                                          // lets the UI distinguish "more to come" from "this is the end"
 }
 
 // ---- dashboard shoutout line ----------------------------------------------------
 
 export interface WorkoutDashboardLine {
-    targetPower: number | null          // W target for the current step (null on a free-ride step)
-    targetDuration: number              // current step duration (s)
-    remaining: number                   // s remaining in current step
-    text: string                        // step description + repetition count (e.g. "VO2 max (3/5)")
+    // Fully composed, e.g. "260W at 100-120HR for 5min - VO2 max (3/5)" (getStepTargetText's
+    // target description + getStepDuration's duration, then the step title/rep count). No
+    // separate numeric power/duration/remaining fields - those are already shown live by
+    // WorkoutStepsList's current-step row; duplicating them here was the pre-1.0 design and is
+    // now considered wrong (session 3.3 rework).
+    text: string
     mode: string | null                 // cycling-mode toggle text ('ERG'|'SIM') or null when not toggleable
 }
 

@@ -804,7 +804,7 @@ export class WorkoutRide extends IncyclistService{
         request.maxCadence = limits?.cadence?.max ? Math.round(limits.cadence.max) : undefined;
         request.minHrm = limits.hrm?.min ? Math.round(limits.hrm.min) : undefined;
         request.maxHrm = limits.hrm?.max ? Math.round(limits.hrm.max) : undefined;
-        this.currentLimits = { ...request, duration: limits.duration, remaining: limits.remaining };
+        this.currentLimits = { ...request, duration: limits.duration, remaining: limits.remaining, step: limits.step };
     }
 
     protected getZoomParameters(time: number) {
