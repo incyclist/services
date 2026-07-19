@@ -7,8 +7,8 @@ import type { CurrentRideState, RideType } from "../../../types"
 import { useRideDisplay } from "../../../ride/display"
 import { useActivityRide } from "../../../activities"
 import { useWorkoutRide } from "../service"
-import type { ActiveWorkoutLimit, WorkoutDisplayProperties } from "../types"
-import { getStepPower, getWorkoutGraphSeries } from "../../base/graph"
+import type { WorkoutDisplayProperties } from "../types"
+import { getFlattenedSteps, getStepDuration, getStepTargetText, getWorkoutGraphSeries } from "../../base/graph"
 import type { Workout } from "../../base/model"
 import type { StepDefinition } from "../../base/model/types"
 import type {
@@ -405,58 +405,63 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     }
 
     protected buildUpcomingSteps(current: Workout | undefined, ftp: number): WorkoutUpcomingSteps {
+        const empty: WorkoutUpcomingSteps = { previous: null, current: null, upcoming: [], hasMore: false }
         if (!current)
-            return { current: null, upcoming: [] }
+            return empty
 
         const limits = this.getWorkoutRide().getCurrentLimits()
         if (!limits)
-            return { current: null, upcoming: [] }
+            return empty
 
         const currentStep: WorkoutStepDisplay = {
-            label: this.formatCurrentStepLabel(limits),
+            label: getStepTargetText(limits.step ?? {}, ftp, { min: limits.minPower, max: limits.maxPower }),
             targetPower: limits.targetPower ?? null,
             duration: limits.duration,
             remaining: limits.remaining,
             isCurrent: true
         }
 
+        // Flattened (repeat-expanded) - a repeated segment contributes one entry per repetition
+        // here, not one blob for the whole segment (§ getFlattenedSteps).
         const elapsedTime = this.getElapsedActivityTime()
-        const steps = current.steps ?? []
-        const currentIndex = steps.findIndex(s => s.start <= elapsedTime && s.end > elapsedTime)
+        const flattened = getFlattenedSteps(current)
+        const currentIndex = flattened.findIndex(s => s.start <= elapsedTime && s.end > elapsedTime)
 
-        const upcoming: WorkoutStepDisplay[] = currentIndex === -1
-            ? []
-            : steps.slice(currentIndex + 1, currentIndex + 1 + UPCOMING_STEPS_COUNT).map(step => ({
-                label: getStepPower(step, ftp) || 'free',
-                targetPower: this.getStepAbsolutePower(step, ftp),
-                duration: step.duration,
-                remaining: null,
-                isCurrent: false
-            }))
+        const toDisplay = (entry: { step: StepDefinition, duration: number }): WorkoutStepDisplay => ({
+            label: getStepTargetText(entry.step, ftp),
+            targetPower: this.getStepAbsolutePower(entry.step, ftp),
+            duration: entry.duration,
+            remaining: null,
+            isCurrent: false
+        })
 
-        return { current: currentStep, upcoming }
+        if (currentIndex === -1)
+            return { previous: null, current: currentStep, upcoming: [], hasMore: false }
+
+        const previous = currentIndex > 0 ? toDisplay(flattened[currentIndex - 1]) : null
+        const upcomingEntries = flattened.slice(currentIndex + 1, currentIndex + 1 + UPCOMING_STEPS_COUNT)
+        const upcoming = upcomingEntries.map(toDisplay)
+        const hasMore = currentIndex + 1 + UPCOMING_STEPS_COUNT < flattened.length
+
+        return { previous, current: currentStep, upcoming, hasMore }
     }
 
+    // "260W at 100-120HR for 5min - VO2 max (3/5)" (getStepTargetText + getStepDuration + the step
+    // title/rep count) - one composed phrase, Zwift-style, deliberately not split into separate
+    // power/duration/remaining fields (those are already live on WorkoutStepsList's current-step
+    // row - repeating them here was the pre-1.0 design and is now considered wrong, session 3.3).
     protected buildDashboardLine(wo: WorkoutDisplayProperties): WorkoutDashboardLine {
         const limits = this.getWorkoutRide().getCurrentLimits()
+        const title = wo.title ?? ''
 
-        return {
-            targetPower: limits?.targetPower ?? null,
-            targetDuration: limits?.duration ?? 0,
-            remaining: limits?.remaining ?? 0,
-            text: wo.title ?? '',
-            mode: wo.mode ?? null
-        }
-    }
+        if (!limits)
+            return { text: title, mode: wo.mode ?? null }
 
-    protected formatCurrentStepLabel(limits: ActiveWorkoutLimit): string {
-        if (limits.targetPower === undefined || limits.targetPower === null)
-            return 'free'
+        const target = getStepTargetText(limits.step ?? {}, wo.ftp, { min: limits.minPower, max: limits.maxPower })
+        const duration = getStepDuration({ duration: limits.duration })
+        const text = title ? `${target} for ${duration} - ${title}` : `${target} for ${duration}`
 
-        if (limits.minPower !== undefined && limits.maxPower !== undefined && limits.minPower !== limits.maxPower)
-            return `${Math.round(limits.minPower)}-${Math.round(limits.maxPower)}W`
-
-        return `${Math.round(limits.targetPower)}W`
+        return { text, mode: wo.mode ?? null }
     }
 
     protected getStepAbsolutePower(step: StepDefinition, ftp?: number): number | null {
@@ -502,8 +507,8 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             startGateProps: null,
             title: '',
             graph: { bars: [], ftp: 0, ftpLine: 0, domain: { x: [0, 0], y: [0, 0] } },
-            steps: { current: null, upcoming: [] },
-            dashboard: { targetPower: null, targetDuration: 0, remaining: 0, text: '', mode: null }
+            steps: { previous: null, current: null, upcoming: [], hasMore: false },
+            dashboard: { text: '', mode: null }
         }
     }
 

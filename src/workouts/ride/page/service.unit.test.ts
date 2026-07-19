@@ -207,12 +207,14 @@ describe('WorkoutRidePageService', () => {
             expect(props.rideType).toBe('Workout')
             expect(props.startOverlayProps).toBeNull()
 
-            expect(props.dashboard).toEqual({ targetPower: 150, targetDuration: 120, remaining: 50, text: 'Test Workout', mode: null })
+            expect(props.dashboard).toEqual({ text: '150W for 2min - Test Workout', mode: null })
 
+            expect(props.steps.previous).toEqual({ label: '200W', targetPower: 200, duration: 60, remaining: null, isCurrent: false })
             expect(props.steps.current).toEqual({ label: '150W', targetPower: 150, duration: 120, remaining: 50, isCurrent: true })
             expect(props.steps.upcoming).toEqual([
-                { label: '100W (40%)', targetPower: 100, duration: 90, remaining: null, isCurrent: false }
+                { label: '100W', targetPower: 100, duration: 90, remaining: null, isCurrent: false }
             ])
+            expect(props.steps.hasMore).toBe(false)
 
             expect(props.graph.ftp).toBe(250)
             expect(props.graph.ftpLine).toBe(250)
@@ -232,7 +234,45 @@ describe('WorkoutRidePageService', () => {
             const props = s.getPageDisplayProps()
 
             expect(props.graph).toEqual({ bars: [], ftp: 0, ftpLine: 0, domain: { x: [0, 0], y: [0, 0] } })
-            expect(props.steps).toEqual({ current: null, upcoming: [] })
+            expect(props.steps).toEqual({ previous: null, current: null, upcoming: [], hasMore: false })
+        })
+
+        test('steps are built from the FLATTENED (repeat-expanded) sequence, not one blob per segment', () => {
+            // warmup (0-30, 150W) -> [40s work @200W / 20s rest @100W] x3 (30-210) -> cooldown (210-240, 120W)
+            const current = new Workout({
+                type: 'workout', name: 'Intervals',
+                steps: [{ type: 'step', duration: 30, steady: true, power: { type: 'watt', min: 150, max: 150 } }]
+            })
+            current.addSegment({
+                type: 'segment', repeat: 3, steps: [
+                    { type: 'step', duration: 40, steady: true, work: true, power: { type: 'watt', min: 200, max: 200 } },
+                    { type: 'step', duration: 20, steady: true, work: false, power: { type: 'watt', min: 100, max: 100 } }
+                ]
+            })
+            current.addStep({ type: 'step', duration: 30, steady: true, power: { type: 'watt', min: 120, max: 120 } })
+
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({ title: 'Intervals', ftp: 250, mode: null })
+            // elapsed time 105s -> inside the 2nd repetition's "work" step (90-130)
+            MockWorkoutRide.getCurrentLimits.mockReturnValue({
+                time: 105, duration: 40, remaining: 35, targetPower: 200, minPower: 200, maxPower: 200
+            })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 105 })
+
+            const props = s.getPageDisplayProps()
+
+            // previous = 1st repetition's "rest" step (60-100), not the whole segment
+            expect(props.steps.previous).toEqual({ label: '100W', targetPower: 100, duration: 20, remaining: null, isCurrent: false })
+            expect(props.steps.current).toEqual({ label: '200W', targetPower: 200, duration: 40, remaining: 35, isCurrent: true })
+            // next 3 flattened entries: 2nd rep's rest, 3rd rep's work, 3rd rep's rest - individually, not the segment as a whole
+            expect(props.steps.upcoming).toEqual([
+                { label: '100W', targetPower: 100, duration: 20, remaining: null, isCurrent: false },
+                { label: '200W', targetPower: 200, duration: 40, remaining: null, isCurrent: false },
+                { label: '100W', targetPower: 100, duration: 20, remaining: null, isCurrent: false }
+            ])
+            // the cooldown step still follows beyond the 3 shown -> more to come
+            expect(props.steps.hasMore).toBe(true)
         })
     })
 
