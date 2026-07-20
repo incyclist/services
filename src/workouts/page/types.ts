@@ -19,6 +19,8 @@ export interface WorkoutListContentProps {
     workouts:  WorkoutListItemProps[]         // flat list, ALREADY filtered by groups.selected
     selectedId: string | null       // the workout explicitly selected for the next ride (null = none)
     isEmpty:   boolean              // true when there are no imported workouts at all
+    detailWorkoutId: string | null  // id of the workout whose WorkoutDetailsDialog is open (null = none) —
+                                     // mirrors RoutesPageService.detailRouteId / ActivitiesPageService.detailActivityId
 }
 
 // ---- Upcoming Training (synced / scheduled) --------------------------------
