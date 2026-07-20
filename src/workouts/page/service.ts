@@ -31,9 +31,8 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     protected detailWorkoutId: string | null = null
 
     protected importPhase: 'landing' | 'importing' | 'result' | 'error' | undefined
-    protected importGroup: string
     protected importingFileName: string
-    protected importResult: { workoutName: string; group: string }
+    protected importResult: { id: string; workoutName: string; group: string }
     protected importError: string
 
     protected listObserver: IObserver
@@ -148,9 +147,8 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
         try {
             const phase = this.importPhase ?? 'landing'
             const knownGroups = this.getKnownGroups()
-            const group = this.importGroup ?? this.getLastUsedImportGroup()
 
-            const props: WorkoutImportDisplayProps = { phase, group, knownGroups }
+            const props: WorkoutImportDisplayProps = { phase, knownGroups }
             if (phase==='importing')
                 props.importing = { fileName: this.importingFileName }
             if (phase==='result')
@@ -162,7 +160,7 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
         }
         catch (err) {
             this.logError(err, 'getImportDisplayProps')
-            return { phase:'landing', group:DEFAULT_IMPORT_GROUP, knownGroups:[] }
+            return { phase:'landing', knownGroups:[] }
         }
     }
 
@@ -295,7 +293,6 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     onImportOpen(): void {
         try {
             this.importPhase = 'landing'
-            this.importGroup = this.getLastUsedImportGroup()
             delete this.importError
             delete this.importResult
             this.emitImportUpdate()
@@ -305,34 +302,20 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
         }
     }
 
-    onImportGroupChange(name: string): void {
-        try {
-            this.importGroup = name
-            this.emitImportUpdate()
-        }
-        catch (err) {
-            this.logError(err, 'onImportGroupChange')
-        }
-    }
-
     onImportFile(file: FileInfo): IObserver {
         const observer = new Observer()
 
         try {
-            const group = this.importGroup
             this.importPhase = 'importing'
             this.importingFileName = file?.name
             this.emitImportUpdate()
 
             this.getWorkoutList().import(file, { showImportCards:false })
                 .then( ([card]) => {
-                    if (group && group!==DEFAULT_IMPORT_GROUP)
-                        card.move(group)
-
-                    this.persistLastUsedImportGroup(group)
+                    const group = this.getLastUsedImportGroup()   // suggestion only, NOT applied
 
                     this.importPhase = 'result'
-                    this.importResult = { workoutName: card.getTitle(), group }
+                    this.importResult = { id: card.getId(), workoutName: card.getTitle(), group }
                     observer.emit('success')
                     this.emitImportUpdate()
                 })
@@ -347,6 +330,22 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
             this.logError(err, 'onImportFile')
         }
         return observer
+    }
+
+    onImportSetGroup(id: string, group: string): void {
+        try {
+            const card = this.findWorkoutCard(id)
+            card?.move(group)
+            this.persistLastUsedImportGroup(group)
+
+            if (this.importResult)
+                this.importResult = { ...this.importResult, group }
+
+            this.emitImportUpdate()
+        }
+        catch (err) {
+            this.logError(err, 'onImportSetGroup')
+        }
     }
 
     onImportClose(): void {

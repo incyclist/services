@@ -89,10 +89,10 @@ export interface WorkoutDetailsProps {
 
 export interface WorkoutImportDisplayProps {
     phase:       'landing' | 'importing' | 'result' | 'error'
-    group:       string             // current Group-field value (default: last-used ?? 'My Workouts')
-    knownGroups: string[]           // existing groups, for the GroupPicker on the import dialog
+    knownGroups: string[]           // existing groups, for the GroupPicker shown on the 'result' phase
     importing?:  { fileName: string }              // present during 'importing'
-    result?:     { workoutName: string; group: string }  // present on 'result'
+    result?:     { id: string; workoutName: string; group: string }  // present on 'result';
+                                     // group is a suggestion (last-used ?? 'My Workouts'), NOT yet applied
     error?:      string             // present on 'error'
 }
 
@@ -114,8 +114,8 @@ export interface WorkoutListPageCallbacks {
     onClearSelection: () => void             // explicit unselect
     // import dialog
     onImportOpen:         () => void
-    onImportGroupChange:  (name: string) => void
     onImportFile:         (file: FileInfo) => IObserver   // returns observer: 'success' | 'error'
+    onImportSetGroup:     (id: string, group: string) => void   // result-phase only
     onImportClose:        () => void
 }
 

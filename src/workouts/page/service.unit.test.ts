@@ -293,22 +293,14 @@ describe('WorkoutListPageService', ()=>{
             s.reset()
         })
 
-        test('default (never opened) -> landing phase, last-used or default group',()=>{
-            MockUserSettings.get.mockReturnValue('My Workouts')
+        test('default (never opened) -> landing phase, no group field yet',()=>{
             const props = service.getImportDisplayProps()
-            expect(props).toEqual({ phase:'landing', group:'My Workouts', knownGroups:['My Workouts'] })
+            expect(props).toEqual({ phase:'landing', knownGroups:['My Workouts'] })
         })
 
-        test('onImportOpen sets landing phase with the last-used group',()=>{
-            MockUserSettings.get.mockReturnValue('Custom')
+        test('onImportOpen resets to landing phase, clearing any prior result/error',()=>{
             service.onImportOpen()
-            expect(service.getImportDisplayProps()).toMatchObject({ phase:'landing', group:'Custom' })
-        })
-
-        test('onImportGroupChange updates the group field live',()=>{
-            service.onImportOpen()
-            service.onImportGroupChange('New Group')
-            expect(service.getImportDisplayProps().group).toBe('New Group')
+            expect(service.getImportDisplayProps()).toMatchObject({ phase:'landing' })
         })
     })
 
@@ -492,7 +484,7 @@ describe('WorkoutListPageService', ()=>{
             s.logError = jest.fn()
             service.openPage()
 
-            card = { getTitle: jest.fn().mockReturnValue('Imported Workout'), move: jest.fn() }
+            card = { getId: jest.fn().mockReturnValue('imported-1'), getTitle: jest.fn().mockReturnValue('Imported Workout'), move: jest.fn() }
         })
 
         afterEach( ()=>{
@@ -500,8 +492,9 @@ describe('WorkoutListPageService', ()=>{
             s.reset()
         })
 
-        test('successful import into an existing/default group: no move, group persisted, observer emits success',async ()=>{
+        test('successful import lands on result phase with a suggested (not applied) group',async ()=>{
             MockWorkoutList.import.mockResolvedValue([card])
+            MockUserSettings.get.mockReturnValue('My Workouts')
             service.onImportOpen()
 
             const observer = service.onImportFile({ type:'file', name:'test.zwo' } as any)
@@ -511,21 +504,34 @@ describe('WorkoutListPageService', ()=>{
             await new Promise(process.nextTick)
 
             expect(card.move).not.toHaveBeenCalled()
-            expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.lastImportGroup','My Workouts')
+            expect(MockUserSettings.set).not.toHaveBeenCalled()
             expect(successHandler).toHaveBeenCalled()
-            expect(service.getImportDisplayProps()).toMatchObject({ phase:'result', result:{ workoutName:'Imported Workout', group:'My Workouts' } })
+            expect(service.getImportDisplayProps()).toMatchObject({
+                phase:'result',
+                result:{ id:'imported-1', workoutName:'Imported Workout', group:'My Workouts' }
+            })
         })
 
-        test('successful import into a new group relocates the card (RC-2 dependency)',async ()=>{
+        test('onImportSetGroup relocates the card, persists as last-used, and updates the result group',async ()=>{
             MockWorkoutList.import.mockResolvedValue([card])
             service.onImportOpen()
-            service.onImportGroupChange('Brand New Group')
 
-            const observer = service.onImportFile({ type:'file', name:'test.zwo' } as any)
+            service.onImportFile({ type:'file', name:'test.zwo' } as any)
             await new Promise(process.nextTick)
 
+            // onImportSetGroup relocates via findWorkoutCard(id), which walks the current lists -
+            // make the just-imported card discoverable there, same as it would be after import() lands it.
+            MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts','My Workouts',[card])])
+
+            service.onImportSetGroup('imported-1','Brand New Group')
+
             expect(card.move).toHaveBeenCalledWith('Brand New Group')
-            expect(service.getImportDisplayProps().phase).toBe('result')
+            expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.lastImportGroup','Brand New Group')
+            expect(service.getImportDisplayProps().result).toMatchObject({ id:'imported-1', group:'Brand New Group' })
+        })
+
+        test('onImportSetGroup on an unknown id is a safe no-op',()=>{
+            expect( ()=>service.onImportSetGroup('unknown','Custom')).not.toThrow()
         })
 
         test('failed import sets the error phase and observer emits error',async ()=>{

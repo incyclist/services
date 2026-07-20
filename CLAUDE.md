@@ -25,6 +25,8 @@ To run a single test file:
 npx jest src/path/to/file.unit.test.ts
 ```
 
+**Never run bare `npx jest` (or `jest`) with no file argument and no `-c` flag.** It falls back to the default config, whose `testRegex` matches everything — including `*.e2e.test.ts`, which hit real backends and can create/mutate real test data. For a full run, always use `npm test` / `npm run test:unit` (or `npm run test:e2e` / `npm run test:all` if you deliberately mean to include e2e/integ). Targeting a single file by path, as above, is fine regardless of config, since an explicit path bypasses `testRegex`.
+
 ## Architecture
 
 ### Module Layout
