@@ -414,6 +414,28 @@ describe('WorkoutListPageService', ()=>{
             expect(MockWorkoutList.unselect).toHaveBeenCalled()
             expect(emitSpy).toHaveBeenCalledWith('page-update')
         })
+
+        // Mirrors RoutesPageService.onSelect/detailRouteId and ActivitiesPageService.onOpenActivity/
+        // detailActivityId (session 5.1 correction, 2026-07-20) - the page must be able to react to
+        // a row tap without a component-level callback contract.
+        test('onOpenDetails sets detailWorkoutId and emits page-update',()=>{
+            const emitSpy = jest.spyOn(service.getPageObserver(),'emit')
+            service.onOpenDetails('w-1')
+            expect(service.getPageDisplayProps().detailWorkoutId).toBe('w-1')
+            expect(emitSpy).toHaveBeenCalledWith('page-update')
+        })
+
+        test('onCloseDetails clears detailWorkoutId and emits page-update',()=>{
+            service.onOpenDetails('w-1')
+            const emitSpy = jest.spyOn(service.getPageObserver(),'emit')
+            service.onCloseDetails()
+            expect(service.getPageDisplayProps().detailWorkoutId).toBeNull()
+            expect(emitSpy).toHaveBeenCalledWith('page-update')
+        })
+
+        test('detailWorkoutId defaults to null before any onOpenDetails call',()=>{
+            expect(service.getPageDisplayProps().detailWorkoutId).toBeNull()
+        })
     })
 
     describe('ride hand-off (§3) - onStart / onMarkForRoute',()=>{

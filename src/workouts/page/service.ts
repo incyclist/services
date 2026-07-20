@@ -28,6 +28,7 @@ const UPCOMING_COLLAPSED_COUNT = 3
 export class WorkoutListPageService extends IncyclistPageService implements IWorkoutListPageService {
 
     protected groupFilter: string | null = null
+    protected detailWorkoutId: string | null = null
 
     protected importPhase: 'landing' | 'importing' | 'result' | 'error' | undefined
     protected importGroup: string
@@ -101,7 +102,7 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
             const selectedId = service.getSelected()?.id ?? null
             const isEmpty = allWorkouts.length===0
 
-            return { pageType:'list', loading, upcoming, groups, workouts, selectedId, isEmpty }
+            return { pageType:'list', loading, upcoming, groups, workouts, selectedId, isEmpty, detailWorkoutId: this.detailWorkoutId }
         }
         catch (err) {
             this.logError(err, 'getPageDisplayProps')
@@ -178,11 +179,25 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     }
 
     onOpenDetails(id: string): void {
-        this.logEvent({ message: 'details opened', id })
+        try {
+            this.detailWorkoutId = id
+            this.logEvent({ message: 'details opened', id })
+            this.emitPageUpdate()
+        }
+        catch (err) {
+            this.logError(err, 'onOpenDetails')
+        }
     }
 
     onCloseDetails(): void {
-        this.logEvent({ message: 'details closed' })
+        try {
+            this.detailWorkoutId = null
+            this.logEvent({ message: 'details closed' })
+            this.emitPageUpdate()
+        }
+        catch (err) {
+            this.logError(err, 'onCloseDetails')
+        }
     }
 
     // ---- details dialog: start-settings -------------------------------------
