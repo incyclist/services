@@ -312,7 +312,13 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
             this.getWorkoutList().import(file, { showImportCards:false })
                 .then( ([card]) => {
-                    const group = this.getLastUsedImportGroup()   // suggestion only, NOT applied
+                    const group = this.getLastUsedImportGroup()
+
+                    // new cards already land in DEFAULT_IMPORT_GROUP, so only move the card when
+                    // the suggestion differs - this applies the last-used group by default while
+                    // still leaving it fully changeable afterward via onImportSetGroup.
+                    if (group !== DEFAULT_IMPORT_GROUP)
+                        card.move(group)
 
                     this.importPhase = 'result'
                     this.importResult = { id: card.getId(), workoutName: card.getTitle(), group }

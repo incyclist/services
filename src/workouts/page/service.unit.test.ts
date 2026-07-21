@@ -517,7 +517,7 @@ describe('WorkoutListPageService', ()=>{
             s.reset()
         })
 
-        test('successful import lands on result phase with a suggested (not applied) group',async ()=>{
+        test('successful import lands on result phase with the suggested group (already the default, so no move needed)',async ()=>{
             MockWorkoutList.import.mockResolvedValue([card])
             MockUserSettings.get.mockReturnValue('My Workouts')
             service.onImportOpen()
@@ -534,6 +534,32 @@ describe('WorkoutListPageService', ()=>{
             expect(service.getImportDisplayProps()).toMatchObject({
                 phase:'result',
                 result:{ id:'imported-1', workoutName:'Imported Workout', group:'My Workouts' }
+            })
+        })
+
+        // Regression test for bug 5.18 (real-device testing of the import flow, 2026-07-21):
+        // the suggested last-used group was only ever a display value in importResult.group -
+        // it was never actually applied to the card unless the user touched the GroupPicker and
+        // triggered onImportSetGroup. If the suggestion already showed the right value, the user
+        // had no reason to touch it, so the card silently stayed in DEFAULT_IMPORT_GROUP. This
+        // asserts the card ends up in the suggested (non-default) group from onImportFile() alone,
+        // with onImportSetGroup never called.
+        test('suggested last-used group is applied to the card at import time, without onImportSetGroup being called',async ()=>{
+            MockWorkoutList.import.mockResolvedValue([card])
+            MockUserSettings.get.mockReturnValue('XYZ')
+            service.onImportOpen()
+
+            const observer = service.onImportFile({ type:'file', name:'test.zwo' } as any)
+            const successHandler = jest.fn()
+            observer.on('success', successHandler)
+
+            await new Promise(process.nextTick)
+
+            expect(card.move).toHaveBeenCalledWith('XYZ')
+            expect(successHandler).toHaveBeenCalled()
+            expect(service.getImportDisplayProps()).toMatchObject({
+                phase:'result',
+                result:{ id:'imported-1', workoutName:'Imported Workout', group:'XYZ' }
             })
         })
 
