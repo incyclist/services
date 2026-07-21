@@ -567,5 +567,42 @@ describe('WorkoutListPageService', ()=>{
 
             expect(MockWorkoutList.import).toHaveBeenCalledWith(fileInfo, { showImportCards:false })
         })
+
+        // Regression test for bug 5.12 (dialog stuck on "Importing..." forever, real-device
+        // 2026-07-21). Root cause: emitImportUpdate() called this.getPageObserver()?.emit(...)
+        // with no try/catch. Observer.emit() wraps a plain node EventEmitter, whose emit()
+        // invokes every registered listener SYNCHRONOUSLY, in the caller's own call stack - if
+        // a listener throws, the exception propagates straight back through emit() to whoever
+        // called it. onImportFile() calls emitImportUpdate() synchronously (phase='importing')
+        // *before* the real getWorkoutList().import(...) call even runs, both inside the same
+        // outer try/catch - so a throwing 'import-update' listener (e.g. a dialog re-render
+        // failure) used to abort onImportFile() before the real import ever started, swallowed
+        // via logError() only, leaving the phase stuck at 'importing' forever with no error
+        // ever surfaced. The fix wraps emitImportUpdate()'s emit() call in its own try/catch,
+        // so a throwing listener can no longer break the service's own control flow: the real
+        // import still runs and can still complete normally.
+        test('a throwing import-update listener no longer prevents the real import from running',async ()=>{
+            MockWorkoutList.import.mockResolvedValue([card])
+            service.onImportOpen()
+            const pageObserver = service.getPageObserver()
+
+            const throwingListener = jest.fn(() => { throw new Error('listener boom (e.g. dialog re-render failure)') })
+            pageObserver.on('import-update', throwingListener)
+
+            const fileInfo = { type:'file', name:'test.zwo' } as any
+            const observer = service.onImportFile(fileInfo)
+            const successHandler = jest.fn()
+            observer.on('success', successHandler)
+
+            await new Promise(process.nextTick)
+
+            // the throwing listener must not have prevented the real import call
+            expect(MockWorkoutList.import).toHaveBeenCalledWith(fileInfo, { showImportCards:false })
+            // ... and the import must still be able to complete normally afterwards
+            expect(successHandler).toHaveBeenCalled()
+            expect(service.getImportDisplayProps()).toMatchObject({ phase:'result' })
+            // the listener's own exception is caught and logged, not left to bubble up
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'emitImportUpdate')
+        })
     })
 })
