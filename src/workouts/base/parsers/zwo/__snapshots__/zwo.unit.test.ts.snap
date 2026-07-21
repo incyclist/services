@@ -2,15 +2,16 @@
 
 exports[`ZwoParser import simple file 1`] = `
 Workout {
-  "_hash": "a18b5204c038e96616a9ac61705178cb",
+  "_hash": "b4d790d8c395d6b8691886ad0ad6a615",
   "cadence": undefined,
   "category": undefined,
   "cooldown": false,
   "description": undefined,
   "duration": 4440,
   "end": 4440,
+  "explicitId": false,
   "hrm": undefined,
-  "id": "a18b5204c038e96616a9ac61705178cb",
+  "id": "b4d790d8c395d6b8691886ad0ad6a615",
   "name": "Test",
   "power": undefined,
   "repeat": 1,
