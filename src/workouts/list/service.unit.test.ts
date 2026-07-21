@@ -834,6 +834,28 @@ describe('WorkoutListService',()=>{
 
                 expect(allCards).toHaveLength(1)
             })
+
+            test('re-importing a workout that was moved into a named group keeps it in that group',async ()=>{
+                // regression test for 5.15: re-import must update the existing card in place
+                // (same list/group), not delete-and-recreate it back into "My Workouts"
+                const [card1] = await service.import( fileInfo, {showImportCards:false})
+                card1.move('Cycling')
+
+                await service.import( fileInfo, {showImportCards:false})
+
+                const allCards = (s.getLists(false)??[])
+                    .flatMap( (l:CardList<WP>) => l.getCards())
+                    .filter( c=>c.getCardType()==='Workout')
+
+                expect(allCards).toHaveLength(1)
+
+                const myWorkoutsCards = s.myWorkouts.getCards().filter( c=>c.getCardType()==='Workout')
+                expect(myWorkoutsCards).toHaveLength(0)
+
+                const cyclingList = (s.getLists(false)??[]).find( (l:CardList<WP>) => l.getTitle()==='Cycling')
+                const cyclingCards = cyclingList.getCards().filter( c=>c.getCardType()==='Workout')
+                expect(cyclingCards).toHaveLength(1)
+            })
         })
 
 
