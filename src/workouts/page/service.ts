@@ -474,7 +474,12 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     }
 
     protected emitImportUpdate(): void {
-        this.getPageObserver()?.emit('import-update')
+        try {
+            this.getPageObserver()?.emit('import-update')
+        }
+        catch (err) {
+            this.logError(err, 'emitImportUpdate')
+        }
     }
 
     @Injectable
