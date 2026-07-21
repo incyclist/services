@@ -907,21 +907,22 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
     protected async _import( info:FileInfo):Promise<WorkoutCard> {
-            
-        const workout = await this.parse(info)              
+
+        const workout = await this.parse(info)
         const existing = this.findCard(workout)
 
-        if (existing ) {   
-            existing.list.remove( existing.card)
+        if (existing) {
+            const card = existing.card as unknown as WorkoutCard
+            card.update(workout)
+            return card
         }
-        else  {
-            this.items.push(workout)
-        }
-            
+
+        this.items.push(workout)
+
         const card = new WorkoutCard(workout,{list:this.myWorkouts as CardList<Workout>})
         card.save()
         card.enableDelete(true)
-        
+
         this.myWorkouts.add( card )
         return card
     }
