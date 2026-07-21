@@ -374,7 +374,7 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
         const selectedWorkout = this.getWorkoutList().getSelected()
 
         const items: ScheduledWorkoutItemProps[] = scheduled.map( w => ({
-            id: w.id,
+            id: w.workout?.id,
             title: w.workout?.name,
             date: w.day,
             duration: this.formatDuration(w.workout?.duration),

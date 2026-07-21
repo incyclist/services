@@ -183,8 +183,11 @@ describe('WorkoutListPageService', ()=>{
             expect(props.upcoming.todayId).toBe('source:1')
             expect(props.upcoming.items).toHaveLength(2)
 
-            const today = props.upcoming.items.find(i=>i.id==='source:1')
-            const tomorrow = props.upcoming.items.find(i=>i.id==='source:2')
+            // row id is the workout content's id ('1'/'2'), not the calendar entry's own id
+            // ('source:1'/'source:2') - see 5.16, findWorkoutCard()/ScheduledWorkoutCard.getId()
+            // look up by the workout's id, not the calendar/sync entry's id
+            const today = props.upcoming.items.find(i=>i.id==='1')
+            const tomorrow = props.upcoming.items.find(i=>i.id==='2')
 
             // isToday (highlight) and selected (ride-selection) are independent (§3.1)
             expect(today.isToday).toBe(true)
@@ -275,6 +278,28 @@ describe('WorkoutListPageService', ()=>{
             MockWorkoutList.getLists.mockImplementation( ()=>{ throw new Error('boom') })
             expect(service.getWorkoutDetailsProps('1')).toBeNull()
             expect(s.logError).toHaveBeenCalled()
+        })
+
+        // Regression test for 5.16: getUpcomingTrainingProps() used to build each row's `id`
+        // from the calendar/sync entry's own id (w.id, e.g. 'source:1') instead of the
+        // workout content's id (w.workout.id, e.g. '1') - the latter being what
+        // ScheduledWorkoutCard.getId() (inherited from WorkoutCard.getId()) actually returns,
+        // and what findWorkoutCard()/getWorkoutDetailsProps() look up by. This mismatch meant
+        // tapping a scheduled row's id (from getUpcomingTrainingProps output) never resolved
+        // to a card, so the details dialog silently rendered nothing.
+        test('scheduled row id (from getUpcomingTrainingProps) resolves via getWorkoutDetailsProps',()=>{
+            const workout = makeWorkout('1','Today')
+            const card = makeCard({id:'1', title:'Today', workout, cardType:'ScheduledWorkout', isScheduled:true, date:new Date('2026-01-01'), category:'scheduled'})
+            MockWorkoutList.getLists.mockReturnValue([makeList('scheduled','Scheduled Workouts',[card])])
+            // calendar/sync entry id ('source:1') deliberately differs from the workout content's id ('1')
+            MockWorkoutCalendar.getScheduledWorkouts.mockReturnValue([
+                { id:'source:1', name:'Today', day:new Date('2026-01-01'), workoutId:'1', workout, updated:new Date() }
+            ])
+
+            const pageProps:any = service.getPageDisplayProps()
+            const rowId = pageProps.upcoming.items[0].id
+
+            expect(service.getWorkoutDetailsProps(rowId)).not.toBeNull()
         })
     })
 
