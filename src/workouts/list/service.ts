@@ -878,8 +878,8 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
             const card =list.getCards().find(c=>c.getData()?.id===id) as WorkoutCard
             if (card)
-                res= {card,list:this.myWorkouts}
-    
+                res= {card,list}
+
         })
     
         return res;
