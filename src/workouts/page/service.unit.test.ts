@@ -2,6 +2,8 @@ import { Inject } from '../../base/decorators'
 import { Observer } from '../../base/types/observer'
 import { Workout } from '../base/model/Workout'
 import { WorkoutListPageService } from './service'
+import { WorkoutListService } from '../list/service'
+import { getBindings } from '../../api'
 
 describe('WorkoutListPageService', ()=>{
 
@@ -654,6 +656,61 @@ describe('WorkoutListPageService', ()=>{
             expect(service.getImportDisplayProps()).toMatchObject({ phase:'result' })
             // the listener's own exception is caught and logged, not left to bubble up
             expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'emitImportUpdate')
+        })
+    })
+
+    describe('import flow (§6) - end-to-end with the real WorkoutListService and parser',()=>{
+        // Everything above this block mocks WorkoutListService entirely, which can hide bugs
+        // in the real import()->parser->error-propagation chain (5.12: a real device reported
+        // WorkoutImportDialog getting stuck on 'importing' for a file that fails to parse).
+        // This composes the real WorkoutListService + real WorkoutParser/IntervalsJsonParser,
+        // exactly as mobile's onImportFile() does (showImportCards:false), so a genuine parse
+        // failure has to propagate through both services, not just be asserted at a mock boundary.
+        let s,service
+
+        const malformedWorkoutJson = {
+            // no top-level "type":"workout" - this makes Incyclist's own JsonParser reject it
+            // (supportsContent requires that field), but IntervalsJsonParser's own content check
+            // is much weaker (just `json.type !== 'workout'`) and wrongly claims it anyway.
+            name: 'Malformed workout',
+            steps: [
+                // no "units" on power (IntervalsJsonParser expects {units,start,end}) - every
+                // branch in convertPower() falls through, leaving power:{} with no min/max, which
+                // Step's own validation rejects with "power: no values specified".
+                { type:'step', duration:60, power:{} }
+            ]
+        }
+
+        const fileInfo = { type:'file', name:'malformed.json', ext:'json', filename:'/tmp/malformed.json', delimiter:'/', dir:'/tmp', url:undefined } as any
+
+        beforeEach( ()=>{
+            Inject('WorkoutList', null)
+            const workoutList = new WorkoutListService()
+            ;(workoutList as any).initialized = true
+
+            s = service = new WorkoutListPageService()
+            s.logError = jest.fn()
+            ;(service as any).pageObserver = new Observer()
+
+            getBindings().loader = { open: jest.fn().mockResolvedValue({ data: JSON.stringify(malformedWorkoutJson) }) } as any
+        })
+
+        afterEach( ()=>{
+            Inject('WorkoutList', null)
+        })
+
+        test('a genuinely malformed file reaches the error phase, not stuck on importing',async ()=>{
+            const observer = service.onImportFile(fileInfo)
+            const errorHandler = jest.fn()
+            observer.on('error', errorHandler)
+
+            await new Promise<void>((resolve) => { observer.once('error', () => resolve()) })
+
+            expect(errorHandler).toHaveBeenCalled()
+            expect(service.getImportDisplayProps()).toMatchObject({
+                phase:'error',
+                error: expect.stringContaining('power: no values specified')
+            })
         })
     })
 })

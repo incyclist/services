@@ -328,6 +328,16 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
                 .catch( (err:Error) => {
                     this.importPhase = 'error'
                     this.importError = err?.message
+                    // `observer` wraps a real Node EventEmitter, which special-cases the literal
+                    // 'error' event: emitting it with zero listeners registered throws
+                    // synchronously instead of being a no-op like any other event name. If that
+                    // ever happens here, it aborts this callback before emitImportUpdate() below
+                    // runs - which is exactly what caused WorkoutImportDialog to get stuck on
+                    // 'importing' forever on mobile (5.12), because its caller discarded this
+                    // observer without subscribing. Fixed by having the caller subscribe
+                    // (mirroring RouteImportDialog's existing pattern) - every caller of
+                    // onImportFile() must keep doing that until this event is renamed away from
+                    // the special-cased 'error' string (tracked separately, not yet done).
                     observer.emit('error', err)
                     this.emitImportUpdate()
                 })
