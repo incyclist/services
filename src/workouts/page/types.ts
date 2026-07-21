@@ -32,7 +32,7 @@ export interface UpcomingTrainingProps {
 }
 
 export interface ScheduledWorkoutItemProps {
-    id:       string                // `${source}:${workoutId}` (calendar id)
+    id:       string                // workout content's id (matches WorkoutCard.getId()/findWorkoutCard lookup) - NOT the calendar/sync entry's own id
     title:    string
     date:     Date                  // scheduled day
     duration: string                // pre-formatted, e.g. "45min"
