@@ -5,7 +5,7 @@ import { Observer, PromiseObserver } from '../../base/types/observer'
 import { waitNextTick } from '../../utils'
 import { WorkoutListService } from './service'
 import { WP } from './types'
-import { FileInfo } from '../../api'
+import { FileInfo, getBindings } from '../../api'
 import { Inject } from '../../base/decorators'
 import { sleep } from '../../utils/sleep'
 
@@ -767,6 +767,73 @@ describe('WorkoutListService',()=>{
             await expect( async ()=> {await service.import( fileInfo,{showImportCards:false})})
                 .rejects
                 .toThrow('XYZ')
+        })
+
+        describe('re-importing the same workout (de-dup)', ()=>{
+            // Matches mobile's actual call shape (showImportCards:false) and does NOT stub
+            // s.parse - it goes through the real WorkoutParser -> IntervalsJsonParser pipeline,
+            // exactly as a real .json workout file import would.
+            const fileInfo:FileInfo = { type:'file', name:'MyWorkout.json', ext:'json', filename:'/tmp/MyWorkout.json', delimiter:'/', dir:'/tmp', url:undefined}
+            const workoutJson = {
+                description: 'Test workout',
+                ftp: 200,
+                sportSettings: {},
+                steps: [
+                    { duration: 300, intensity:'active', power:{units:'w', start:100, end:150}, text:'Step 1'}
+                ]
+            }
+
+            let prevLoader
+
+            beforeEach( ()=>{
+                prevLoader = getBindings().loader
+                getBindings().loader = { open: async ()=> ({ error:false, data: JSON.stringify(workoutJson) }) } as any
+            })
+
+            afterEach( ()=>{
+                getBindings().loader = prevLoader
+            })
+
+            test('two separate parses of identical file content produce the same workout id',async ()=>{
+                const workout1 = await s.parse(fileInfo)
+                const workout2 = await s.parse(fileInfo)
+
+                expect(workout2.id).toEqual(workout1.id)
+                expect(workout2.hash).toEqual(workout1.hash)
+            })
+
+            test('importing the same FileInfo twice results in a single card in the list',async ()=>{
+                await service.import( fileInfo, {showImportCards:false})
+                await service.import( fileInfo, {showImportCards:false})
+
+                const workoutCards = s.myWorkouts.getCards().filter( c=>c.getCardType()==='Workout')
+                expect(workoutCards).toHaveLength(1)
+            })
+
+            test('two concurrent (overlapping) imports of the same FileInfo also result in a single card',async ()=>{
+                await Promise.all([
+                    service.import( fileInfo, {showImportCards:false}),
+                    service.import( fileInfo, {showImportCards:false})
+                ])
+
+                const workoutCards = s.myWorkouts.getCards().filter( c=>c.getCardType()==='Workout')
+                expect(workoutCards).toHaveLength(1)
+            })
+
+            test('re-importing after the card was moved into a non-default group (post-import group assignment) still de-dupes',async ()=>{
+                // mirrors the mobile flow: import -> onImportSetGroup() moves the card out of
+                // "My Workouts" into a named group -> user re-imports the same file later
+                const [card1] = await service.import( fileInfo, {showImportCards:false})
+                card1.move('Cycling')
+
+                await service.import( fileInfo, {showImportCards:false})
+
+                const allCards = (s.getLists(false)??[])
+                    .flatMap( (l:CardList<WP>) => l.getCards())
+                    .filter( c=>c.getCardType()==='Workout')
+
+                expect(allCards).toHaveLength(1)
+            })
         })
 
 
