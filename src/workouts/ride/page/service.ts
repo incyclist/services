@@ -393,7 +393,12 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
 
         const bars = getWorkoutGraphSeries(current, { ftp, absValues: true })
         const lastBarX = bars.length ? bars.at(-1).x : 0
-        const maxX = Math.max(this.getLastLogTime(), lastBarX, current.duration ?? 0)
+        // A malformed step (e.g. an imported workout with an unparseable duration) can leave
+        // lastBarX/current.duration NaN, and Math.max propagates NaN from any argument - filter
+        // non-finite candidates out rather than trusting each source individually, so a NaN
+        // domain bound never reaches the mobile graph's <Path> "d" strings (fatal Android OOM).
+        const maxXCandidates = [this.getLastLogTime(), lastBarX, current.duration ?? 0].filter(Number.isFinite)
+        const maxX = maxXCandidates.length ? Math.max(...maxXCandidates) : 0
         const maxBarPower = bars.length ? Math.max(...bars.map(b => b.y)) : 0
 
         return {

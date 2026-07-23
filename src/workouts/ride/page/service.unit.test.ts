@@ -237,6 +237,32 @@ describe('WorkoutRidePageService', () => {
             expect(props.steps).toEqual({ previous: null, current: null, upcoming: [], hasMore: false })
         })
 
+        // Regression (Android Vitals OOM): a malformed step duration (e.g. from a bad workout
+        // import) propagates NaN through Segment.duration/bar.x. graph.domain.x must stay finite -
+        // a NaN domain bound reaches the mobile graph's <Path> "d" strings, which can fatally
+        // OutOfMemoryError react-native-svg's native path parser on Android.
+        test('malformed step duration (NaN) does not leak into graph.domain.x', () => {
+            const current = new Workout({
+                type: 'workout', name: 'Corrupt Workout',
+                steps: [
+                    { type: 'step', duration: NaN, steady: true, power: { type: 'watt', min: 200, max: 200 } }
+                ]
+            })
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
+                title: 'Corrupt Workout', ftp: 250, mode: null, canShowBackward: true, canShowForward: true
+            })
+            MockWorkoutRide.getCurrentLimits.mockReturnValue({
+                time: 0, duration: 0, remaining: 0, targetPower: 200, minPower: 200, maxPower: 200
+            })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 0 })
+
+            const props = s.getPageDisplayProps()
+
+            expect(Number.isFinite(props.graph.domain.x[1])).toBe(true)
+        })
+
         test('steps are built from the FLATTENED (repeat-expanded) sequence, not one blob per segment', () => {
             // warmup (0-30, 150W) -> [40s work @200W / 20s rest @100W] x3 (30-210) -> cooldown (210-240, 120W)
             const current = new Workout({
