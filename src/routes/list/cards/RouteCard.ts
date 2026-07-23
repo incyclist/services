@@ -15,7 +15,7 @@ import { waitNextTick } from "../../../utils";
 import { DownloadObserver } from "../../download/types";
 import { useRouteDownload } from "../../download/service";
 import { EventLogger } from "gd-eventlog";
-import { checkIsLoop, getNextVideoId, getPosition, updateSlopes} from "../../base/utils/route";
+import { checkIsLoop, getNextVideoId, hasNextVideo, getPosition, updateSlopes} from "../../base/utils/route";
 import { getWorkoutList } from "../../../workouts";
 import { checkIsNew } from "../utils";
 import { useOnlineStatusMonitoring } from "../../../monitoring";
@@ -449,6 +449,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 }
             }
 
+            if (showNextOverwrite) {
+                const nextVideoEnabled = this.isMobile() ? this.getAppState().hasFeature('MOBILE_NEXT_VIDEO') : true
+                if (!nextVideoEnabled) {
+                    // next-video chaining is not (yet) supported on mobile: hide the option
+                    // and behave as if the user had chosen to stop at the end of the current video
+                    showNextOverwrite = false
+                    uiSettings.nextOverwrite = true
+                }
+            }
+
         }
         catch(err:any) {
             this.logError(err,'openSettings')
@@ -671,6 +681,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         try {
             const service = getRouteList()
 
+            this.enforceNextVideoOverrideOnMobile()
             service.select( this.route)
             service.setStartSettings({type:this.getCardType(), ...this.startSettings})
 
@@ -693,6 +704,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         try {
             const service = getRouteList()
 
+            this.enforceNextVideoOverrideOnMobile()
             service.select( this.route)
             service.setStartSettings({type:this.getCardType(), ...this.startSettings})
 
@@ -701,6 +713,28 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
         catch(err:any) {
             this.logError(err,'addWorkout')
+        }
+    }
+
+    // next-video chaining is not (yet) supported on mobile: regardless of what
+    // this.startSettings currently holds (stale persisted value, or changeSettings()
+    // never having been called), force it to behave as if the user chose to stop
+    // at the end of the current video.
+    protected enforceNextVideoOverrideOnMobile() {
+        try {
+            if (!this.isMobile())
+                return;
+
+            if (!this.startSettings || !hasNextVideo(this.route))
+                return
+
+            const nextVideoEnabled = this.getAppState().hasFeature('MOBILE_NEXT_VIDEO')
+            if (!nextVideoEnabled) {
+                this.startSettings.nextOverwrite = true
+            }
+        }
+        catch(err:any) {
+            this.logError(err,'enforceNextVideoOverride')
         }
     }
 
