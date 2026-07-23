@@ -1,4 +1,4 @@
-export type FeatureToggle = 'NEW_SEARCH_UI' | 'CONTROLLERS' | 'MOBILE_WORKOUTS' | 'WEBBLE_WINDOWS'
+export type FeatureToggle = 'NEW_SEARCH_UI' | 'CONTROLLERS' | 'MOBILE_WORKOUTS' | 'WEBBLE_WINDOWS' | 'MOBILE_NEXT_VIDEO'
 
 export type Interfaces = 'ant'|'ble'|'serial'|'wifi'|'tcpip'
 
