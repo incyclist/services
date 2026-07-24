@@ -90,22 +90,26 @@ describe('WorkoutRidePageService', () => {
 
     describe('openPage', () => {
 
-        test('initializes the ride, registers observer handlers, starts the ride', () => {
+        test('registers observer handlers and starts the ride, without re-initializing RideDisplay', () => {
             const rideObserver = new Observer()
             MockRideDisplay.getObserver.mockReturnValue(rideObserver)
 
             const result = s.openPage(true)
 
-            expect(MockRideDisplay.init).toHaveBeenCalled()
+            // RideDisplayService is already initialized by RidePage.tsx's
+            // getRidePageService().initPage() before WorkoutRidePage can ever mount - calling
+            // init() again here would race with start() and tear the ride back down mid-connect
+            // (closePrevRide() sees the already-set observer and calls stopRide()).
+            expect(MockRideDisplay.init).not.toHaveBeenCalled()
             expect(MockRideDisplay.start).toHaveBeenCalledWith(true)
             expect(result).toBeDefined()
         })
 
-        test('does not call init() again on a second openPage', () => {
+        test('never calls init() across repeated openPage calls',()=>{
             MockRideDisplay.getObserver.mockReturnValue(new Observer())
             s.openPage()
             s.openPage()
-            expect(MockRideDisplay.init).toHaveBeenCalledTimes(1)
+            expect(MockRideDisplay.init).not.toHaveBeenCalled()
         })
 
         test('subscribes to the workout observer immediately if already available', () => {
@@ -466,6 +470,19 @@ describe('WorkoutRidePageService', () => {
 
         test('Error -> page-update', () => {
             rideObserver.emit('state-update', 'Error')
+            expect(updateSpy).toHaveBeenCalled()
+        })
+
+        // regression: the overlay must keep refreshing (devicesState, readyToStart) while devices
+        // connect - 'Starting'/'Started' have no dedicated menuProps handling, but must still
+        // trigger a page-update, unlike 'Finished' which intentionally navigates away instead.
+        test('Starting -> page-update (start overlay must keep refreshing while devices connect)', () => {
+            rideObserver.emit('state-update', 'Starting')
+            expect(updateSpy).toHaveBeenCalled()
+        })
+
+        test('Started -> page-update (so the overlay can close once the ride is actually ready)', () => {
+            rideObserver.emit('state-update', 'Started')
             expect(updateSpy).toHaveBeenCalled()
         })
     })

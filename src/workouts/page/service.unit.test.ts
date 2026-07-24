@@ -460,6 +460,8 @@ describe('WorkoutListPageService', ()=>{
     describe('ride hand-off (§3) - onStart / onMarkForRoute',()=>{
         let s,service
         let card
+        let MockDevicePairing
+        let MockUIBinding
 
         beforeEach( ()=>{
             setupMocks()
@@ -470,20 +472,37 @@ describe('WorkoutListPageService', ()=>{
             card = makeCard({id:'1', title:'Alpha', workout:makeWorkout('1','Alpha')})
             MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts','My Workouts',[card])])
             MockWorkoutList.getStartSettings.mockReturnValue({ ftp:220, useErgMode:true })
+
+            MockDevicePairing = { isReadyToStart: jest.fn().mockReturnValue(true) }
+            Inject('DevicePairing', MockDevicePairing)
+
+            MockUIBinding = { openPage: jest.fn() }
+            getBindings().ui = MockUIBinding as any
         })
 
         afterEach( ()=>{
             resetMocks()
+            Inject('DevicePairing', null)
             s.reset()
         })
 
-        test('onStart selects the workout with the effective settings and emits start-ride',()=>{
-            const emitSpy = jest.spyOn(service.getPageObserver(),'emit')
+        test('onStart selects the workout with the effective settings, closes the list, clears detailWorkoutId and moves to the ride-ready page when devices are paired',()=>{
+            service.onOpenDetails('1')
 
             service.onStart('1', { noRoute:true })
 
             expect(card.select).toHaveBeenCalledWith({ ftp:220, useErgMode:true, noRoute:true })
-            expect(emitSpy).toHaveBeenCalledWith('start-ride', { id:'1', noRoute:true })
+            expect(MockWorkoutList.close).toHaveBeenCalled()
+            expect(service.getPageDisplayProps().detailWorkoutId).toBeNull()
+            expect(MockUIBinding.openPage).toHaveBeenCalledWith('/rideDeviceOK')
+        })
+
+        test('onStart moves to the pairing page when no device is ready',()=>{
+            MockDevicePairing.isReadyToStart.mockReturnValue(false)
+
+            service.onStart('1', { noRoute:true })
+
+            expect(MockUIBinding.openPage).toHaveBeenCalledWith('/pairingStart')
         })
 
         test('onStart on an unknown id is a safe no-op',()=>{

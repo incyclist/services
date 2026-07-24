@@ -200,8 +200,13 @@ export class WorkoutListService extends IncyclistService  implements IListServic
      */
     // istanbul ignore next
     close(): void {
-        // nothing to do
         this.getWorkoutCalendar().setActive(false)
+
+        this.logEvent( {message:'close workout list'})
+        this.emit('closed', this.observer )
+        this.observer?.emit('stopped')
+        this.observer?.reset()
+
         
     }
 

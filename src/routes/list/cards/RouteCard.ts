@@ -734,7 +734,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             }
         }
         catch(err:any) {
-            this.logError(err,'enforceNextVideoOverride')
+            this.logError(err,'enforceNextVideoOverrideOnMobile')
         }
     }
 
