@@ -37,7 +37,6 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     protected backgroundTimer: NodeJS.Timeout | undefined
     protected backgroundPausedByService = false
     protected menuProps: WorkoutRideMenuProps | null = null
-    protected isInitialized = false
 
     constructor() {
         super('WorkoutRidePage')
@@ -64,10 +63,11 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             try {
                 const service = this.getRideDisplay()
 
-                if (!this.isInitialized) {
-                    service.init()
-                    this.isInitialized = true
-                }
+                // RideDisplayService is already fully initialized by RidePage.tsx's
+                // getRidePageService().initPage() before WorkoutRidePage can ever mount -
+                // calling init() again here would race with the start() below and tear the
+                // ride back down mid-connect via closePrevRide()'s stopRide() (see the bug
+                // this comment replaces: device-start listeners got silently unregistered).
                 this.registerRideEventHandlers()
                 this.subscribeToWorkoutObserver()
                 service.start(simulate)
@@ -91,7 +91,6 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             this.unregisterRideEventHandlers()
             this.unsubscribeFromWorkoutObserver()
             this.menuProps = null
-            this.isInitialized = false
             super.closePage()
         }
         catch (err: any) {
@@ -319,19 +318,15 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         switch (state) {
             case 'Paused':
                 this.menuProps = { showResume: true, ...this.getStepFlags() }
-                this.updatePageDisplay()
                 break
             case 'Active':
                 this.menuProps = null
-                this.updatePageDisplay()
                 break
             case 'Finished':
                 this.emitNavigateBack()
-                break
-            case 'Error':
-                this.updatePageDisplay()
-                break
+                return
         }
+        this.updatePageDisplay()
     }
 
     protected onWorkoutUpdate(): void {

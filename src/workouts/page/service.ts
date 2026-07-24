@@ -20,6 +20,7 @@ import {
     WorkoutListItemProps,
     WorkoutListPageDisplayProps
 } from "./types";
+import { useDevicePairing } from "../../devices";
 
 const DEFAULT_IMPORT_GROUP = 'My Workouts'
 const UPCOMING_COLLAPSED_COUNT = 3
@@ -249,17 +250,27 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     // ---- ride hand-off (§3) -------------------------------------------------
 
     onStart(id: string, opts: { noRoute: boolean }): void {
+
         try {
             const card = this.findWorkoutCard(id)
             if (!card)
                 return
 
-            const settings = this.getWorkoutList().getStartSettings()
+            const service = this.getWorkoutList()
+            const pairing = this.getDevicePairing()
+            
+            const settings:any = service.getStartSettings()??{} as any
             card.select({ ...settings, noRoute: opts?.noRoute })
-            this.getPageObserver()?.emit('start-ride', { id, noRoute: opts?.noRoute })
+            
+            this.logEvent( {message:'Attempting to start a ride',id,...settings, noRoute: opts?.noRoute,readyToStart:pairing.isReadyToStart(), } )
+
+            this.detailWorkoutId = null
+            service.close()
+            const next =  pairing.isReadyToStart() ? '/rideDeviceOK'  : '/pairingStart' 
+            this.moveTo(next)
         }
-        catch (err) {
-            this.logError(err, 'onStart')
+        catch(err:any) {
+            this.logError(err,'onStart')
         }
     }
 
@@ -497,6 +508,12 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
             this.logError(err, 'emitImportUpdate')
         }
     }
+
+    @Injectable
+    protected getDevicePairing() {
+        return useDevicePairing()
+    }
+
 
     @Injectable
     protected getWorkoutList(): WorkoutListService {
