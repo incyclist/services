@@ -6,6 +6,7 @@ import type { IObserver } from "../../../base/typedefs"
 import type { CurrentRideState, RideType } from "../../../types"
 import { useRideDisplay } from "../../../ride/display"
 import { useActivityRide } from "../../../activities"
+import { useUserSettings } from "../../../settings"
 import { useWorkoutRide } from "../service"
 import type { WorkoutDisplayProperties } from "../types"
 import { getFlattenedSteps, getStepDuration, getStepTargetText, getWorkoutGraphSeries } from "../../base/graph"
@@ -14,6 +15,7 @@ import type { StepDefinition } from "../../base/model/types"
 import type {
     IWorkoutRidePageService,
     WorkoutDashboardLine,
+    WorkoutGestureHint,
     WorkoutGraphActuals,
     WorkoutGraphPlan,
     WorkoutGraphPoint,
@@ -26,6 +28,7 @@ import type {
 const BACKGROUND_PAUSE_TIMEOUT_MS = 300000
 const UPCOMING_STEPS_COUNT = 3
 const DEFAULT_LOAD_INCREMENT = 1
+const HINTS_WORKOUT_GESTURES_KEY = 'hints.workoutRideGestures'
 
 @Singleton
 export class WorkoutRidePageService extends IncyclistPageService implements IWorkoutRidePageService {
@@ -37,6 +40,9 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     protected backgroundTimer: NodeJS.Timeout | undefined
     protected backgroundPausedByService = false
     protected menuProps: WorkoutRideMenuProps | null = null
+    // this-ride-only suppression of the gesture-hint overlay (reset on every openPage()) -
+    // distinct from the persisted hints.workoutRideGestures flag, which suppresses it forever.
+    protected gestureHintDismissed = false
 
     constructor() {
         super('WorkoutRidePage')
@@ -58,6 +64,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             this.logEvent({ message: 'page shown', page: 'WorkoutRide' })
             EventLogger.setGlobalConfig('page', 'WorkoutRide')
 
+            this.gestureHintDismissed = false
             super.openPage()
 
             try {
@@ -147,7 +154,8 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
                 title: wo.title ?? '',
                 graph: this.buildGraphPlan(current, wo.ftp),
                 steps: this.buildUpcomingSteps(current, wo.ftp),
-                dashboard: this.buildDashboardLine(wo)
+                dashboard: this.buildDashboardLine(wo),
+                gestureHint: this.buildGestureHint(base.startOverlayProps === null)
             }
         }
         catch (err: any) {
@@ -283,6 +291,19 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
     }
 
+    onGestureHintDismissed({ dontShowAgain }: { dontShowAgain: boolean }): void {
+        try {
+            this.gestureHintDismissed = true
+            if (dontShowAgain) {
+                this.getUserSettings().set(HINTS_WORKOUT_GESTURES_KEY, true)
+            }
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onGestureHintDismissed')
+        }
+    }
+
     onCancelStart(): void {
         try {
             this.rideObserver?.stop()
@@ -379,6 +400,27 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             menuProps: this.menuProps,
             startGateProps: null
         }
+    }
+
+    // Non-null only when the start overlay has fully cleared AND elapsed ride time is 0 AND
+    // cadence is 0 (genuinely no pedaling yet - these two are checked separately from
+    // "start overlay cleared" since they can diverge) AND the persisted hint flag isn't set.
+    // Explicit-dismissal (onGestureHintDismissed) also suppresses it for the rest of this ride.
+    protected buildGestureHint(startOverlayCleared: boolean): WorkoutGestureHint | null {
+        if (this.gestureHintDismissed || !startOverlayCleared)
+            return null
+
+        if (this.getElapsedActivityTime() !== 0 || this.getCurrentCadence() !== 0)
+            return null
+
+        if (this.getUserSettings().get(HINTS_WORKOUT_GESTURES_KEY, false))
+            return null
+
+        return { visible: true }
+    }
+
+    protected getCurrentCadence(): number {
+        return this.getActivityRide().getCurrentValues?.()?.cadence ?? 0
     }
 
     protected buildGraphPlan(current: Workout | undefined, ftp: number): WorkoutGraphPlan {
@@ -508,7 +550,8 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             title: '',
             graph: { bars: [], ftp: 0, ftpLine: 0, domain: { x: [0, 0], y: [0, 0] } },
             steps: { previous: null, current: null, upcoming: [], hasMore: false },
-            dashboard: { text: '', mode: null }
+            dashboard: { text: '', mode: null },
+            gestureHint: null
         }
     }
 
@@ -547,6 +590,11 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     @Injectable
     protected getActivityRide() {
         return useActivityRide()
+    }
+
+    @Injectable
+    protected getUserSettings() {
+        return useUserSettings()
     }
 }
 

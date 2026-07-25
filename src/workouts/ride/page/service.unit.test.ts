@@ -8,6 +8,7 @@ let MockWorkoutRide
 let MockActivityRide
 let MockAppState
 let MockBindings
+let MockUserSettings
 
 const makeCurrentWorkout = () => new Workout({
     type: 'workout', name: 'Test Workout',
@@ -44,7 +45,8 @@ const setupMocks = () => {
         powerDown: jest.fn()
     }
     MockActivityRide = {
-        getActivity: jest.fn().mockReturnValue({ logs: [], time: 0 })
+        getActivity: jest.fn().mockReturnValue({ logs: [], time: 0 }),
+        getCurrentValues: jest.fn().mockReturnValue({ cadence: 0 })
     }
     MockAppState = {
         hasFeature: jest.fn().mockReturnValue(true),
@@ -56,12 +58,17 @@ const setupMocks = () => {
     MockBindings = {
         ui: { openPage: jest.fn() }
     }
+    MockUserSettings = {
+        get: jest.fn((_key: string, defValue: unknown) => defValue),
+        set: jest.fn()
+    }
 
     Inject('RideDisplay', MockRideDisplay)
     Inject('WorkoutRide', MockWorkoutRide)
     Inject('ActivityRide', MockActivityRide)
     Inject('AppState', MockAppState)
     Inject('Bindings', MockBindings)
+    Inject('UserSettings', MockUserSettings)
 }
 
 const resetMocks = () => {
@@ -70,6 +77,7 @@ const resetMocks = () => {
     Inject('ActivityRide', null)
     Inject('AppState', null)
     Inject('Bindings', null)
+    Inject('UserSettings', null)
 }
 
 describe('WorkoutRidePageService', () => {
@@ -303,6 +311,77 @@ describe('WorkoutRidePageService', () => {
             ])
             // the cooldown step still follows beyond the 3 shown -> more to come
             expect(props.steps.hasMore).toBe(true)
+        })
+    })
+
+    describe('getPageDisplayProps - gestureHint', () => {
+
+        beforeEach(() => {
+            // start overlay cleared, no pedaling yet, hint flag unset - the "visible" baseline
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 0 })
+            MockActivityRide.getCurrentValues.mockReturnValue({ cadence: 0 })
+            MockUserSettings.get.mockImplementation((_key: string, defValue: unknown) => defValue)
+        })
+
+        test('visible when start overlay cleared, elapsed time is 0, cadence is 0, and the flag is unset', () => {
+            expect(s.getPageDisplayProps().gestureHint).toEqual({ visible: true })
+        })
+
+        test('hidden while the start overlay is still showing', () => {
+            MockRideDisplay.getState.mockReturnValue('Starting')
+            expect(s.getPageDisplayProps().gestureHint).toBeNull()
+        })
+
+        test('hidden once elapsed ride time is non-zero', () => {
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 5 })
+            expect(s.getPageDisplayProps().gestureHint).toBeNull()
+        })
+
+        test('hidden once cadence is non-zero', () => {
+            MockActivityRide.getCurrentValues.mockReturnValue({ cadence: 40 })
+            expect(s.getPageDisplayProps().gestureHint).toBeNull()
+        })
+
+        test('hidden when the persisted hint flag is already set', () => {
+            MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'hints.workoutRideGestures' ? true : defValue)
+            expect(s.getPageDisplayProps().gestureHint).toBeNull()
+        })
+    })
+
+    describe('onGestureHintDismissed', () => {
+
+        beforeEach(() => {
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 0 })
+            MockActivityRide.getCurrentValues.mockReturnValue({ cadence: 0 })
+            MockUserSettings.get.mockImplementation((_key: string, defValue: unknown) => defValue)
+            s.openPage()
+        })
+
+        test('without dontShowAgain: hides the overlay for this ride, does not persist the flag', () => {
+            expect(s.getPageDisplayProps().gestureHint).toEqual({ visible: true })
+
+            s.onGestureHintDismissed({ dontShowAgain: false })
+
+            expect(MockUserSettings.set).not.toHaveBeenCalled()
+            expect(s.getPageDisplayProps().gestureHint).toBeNull()
+        })
+
+        test('with dontShowAgain: hides the overlay for this ride and persists the flag', () => {
+            s.onGestureHintDismissed({ dontShowAgain: true })
+
+            expect(MockUserSettings.set).toHaveBeenCalledWith('hints.workoutRideGestures', true)
+            expect(s.getPageDisplayProps().gestureHint).toBeNull()
+        })
+
+        test('emits page-update', () => {
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+
+            s.onGestureHintDismissed({ dontShowAgain: false })
+
+            expect(updateSpy).toHaveBeenCalled()
         })
     })
 

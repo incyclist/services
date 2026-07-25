@@ -70,14 +70,26 @@ export interface WorkoutRideMenuProps {
     // Stop is always present (confirmation handled in the view); Increase-Load always enabled.
 }
 
+// ---- gesture discoverability overlay ----------------------------------------------
+
+export interface WorkoutGestureHint {
+    visible: boolean
+}
+
 // ---- page display props ---------------------------------------------------------
 
 export interface WorkoutRidePageDisplayProps extends RidePageDisplayProps {
-    menuProps: WorkoutRideMenuProps | null
-    graph:     WorkoutGraphPlan          // planned (low-frequency) series only; actuals via getGraphActuals()
-    steps:     WorkoutUpcomingSteps      // compact upcoming-steps panel (WorkoutStepsList)
-    dashboard: WorkoutDashboardLine      // target/actual shoutout for RideDashboard's tablet 2nd line
-    title:     string                    // step/segment/repeat title (from WorkoutRide dashboard props)
+    menuProps:   WorkoutRideMenuProps | null
+    graph:       WorkoutGraphPlan          // planned (low-frequency) series only; actuals via getGraphActuals()
+    steps:       WorkoutUpcomingSteps      // compact upcoming-steps panel (WorkoutStepsList)
+    dashboard:   WorkoutDashboardLine      // target/actual shoutout for RideDashboard's tablet 2nd line
+    title:       string                    // step/segment/repeat title (from WorkoutRide dashboard props)
+    // First-ride education overlay (WorkoutGestureHintOverlay). null = hidden. Non-null only when
+    // the start/pairing overlay has fully cleared AND elapsed ride time is 0 AND cadence is 0 (no
+    // pedaling has happened yet) AND the persisted `hints.workoutRideGestures` flag isn't set.
+    // Computed entirely here - the mobile component must not independently inspect ride/activity
+    // data to decide its own visibility.
+    gestureHint: WorkoutGestureHint | null
 }
 
 // ---- callbacks -------------------------------------------------------------------
@@ -98,6 +110,11 @@ export interface WorkoutRidePageCallbacks {
     onRetryStart  (): void
     onIgnoreStart (): void
     onCancelStart (): void
+
+    // Always hides the gesture-hint overlay for the remainder of this ride. Only persists
+    // `hints.workoutRideGestures` (suppressing it on all future workout rides) when dontShowAgain
+    // is true - a plain close only hides it for this ride.
+    onGestureHintDismissed(props: { dontShowAgain: boolean }): void
 }
 
 export interface IWorkoutRidePageService extends WorkoutRidePageCallbacks, IPageService {
