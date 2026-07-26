@@ -290,7 +290,8 @@ export class DevicesPageService extends IncyclistPageService {
             value: d.value,
             interface: d.interface,
             isSelected: d.selected,
-            onClick: (addAll:boolean)=> {this.onDeviceSelected(d,addAll) }
+            onClick: (addAll:boolean)=> {this.onDeviceSelected(d,addAll) },
+            onDelete: ()=> {this.onDeviceDelete(d) }
 
         }))
 
@@ -339,12 +340,21 @@ export class DevicesPageService extends IncyclistPageService {
         this.updatePage()
     }
 
-    protected onDeviceSelected (d:DevicePairingData,addAll?:boolean) { 
+    protected onDeviceSelected (d:DevicePairingData,addAll?:boolean) {
         const capability = this.openedCapability
-        this.logEvent( {message:'device selected', capability, device:d.name})       
+        this.logEvent( {message:'device selected', capability, device:d.name})
 
         this.closeDeviceSelection(true)
         this.getDevicePairing().selectDevice( capability, d.udid,addAll)
+
+        this.updatePage()
+    }
+
+    protected onDeviceDelete (d:DevicePairingData) {
+        const capability = this.openedCapability
+        this.logEvent( {message:'device delete requested', capability, device:d.name})
+
+        this.getDevicePairing().deleteDevice( capability, d.udid)
 
         this.updatePage()
     }
