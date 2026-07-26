@@ -544,11 +544,28 @@ describe('WorkoutRidePageService', () => {
             expect(MockWorkoutRide.powerUp).not.toHaveBeenCalled()
         })
 
-        test('onIncreaseLoad / onDecreaseLoad use the default increment', () => {
+        test('onIncreaseLoad / onDecreaseLoad fall back to the default increment when nothing is stored', () => {
             s.onIncreaseLoad()
             s.onDecreaseLoad()
             expect(MockWorkoutRide.powerUp).toHaveBeenCalledWith(1)
             expect(MockWorkoutRide.powerDown).toHaveBeenCalledWith(1)
+        })
+
+        // Regression test (6.1 integration pass): onIncreaseLoad/onDecreaseLoad previously
+        // hardcoded DEFAULT_LOAD_INCREMENT instead of reading the live
+        // preferences.workouts.loadIncrement setting - silently diverging from the swipe gesture
+        // (useWorkoutRideGestures.ts, which already read the live value) the moment a user
+        // changed the increment via WorkoutSettingsDialog (session 5.10). Per
+        // workout-ride-page-service-design.md §6.5: "The menu 'Increase Load' action uses the
+        // same increment" as the swipe gesture.
+        test('onIncreaseLoad / onDecreaseLoad use the live, user-configured loadIncrement setting, not a hardcoded default', () => {
+            MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.loadIncrement' ? 7 : defValue)
+
+            s.onIncreaseLoad()
+            s.onDecreaseLoad()
+
+            expect(MockWorkoutRide.powerUp).toHaveBeenCalledWith(7)
+            expect(MockWorkoutRide.powerDown).toHaveBeenCalledWith(7)
         })
     })
 
