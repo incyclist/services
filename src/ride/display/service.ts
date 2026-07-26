@@ -87,7 +87,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             });
 
             if (!this.getRideType()) {
-                this.observer.emit('start-error',new Error('No active ride'))
+                this.observer?.emit('start-error',new Error('No active ride'))
                 this.setState('Error')
             }
 
