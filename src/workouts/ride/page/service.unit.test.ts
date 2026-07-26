@@ -314,6 +314,46 @@ describe('WorkoutRidePageService', () => {
         })
     })
 
+    describe('getPageDisplayProps - loadIncrement', () => {
+
+        test('reads preferences.workouts.loadIncrement via UserSettings, default 1', () => {
+            MockUserSettings.get.mockImplementation((_key: string, defValue: unknown) => defValue)
+
+            expect(s.getPageDisplayProps().loadIncrement).toBe(1)
+            expect(MockUserSettings.get).toHaveBeenCalledWith('preferences.workouts.loadIncrement', 1)
+        })
+
+        test('reflects a stored value', () => {
+            MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.loadIncrement' ? 7 : defValue)
+
+            expect(s.getPageDisplayProps().loadIncrement).toBe(7)
+        })
+    })
+
+    describe('onSetLoadIncrement', () => {
+        test('writes preferences.workouts.loadIncrement via UserSettings - same key onIncreaseLoad/onDecreaseLoad and the swipe gesture read', () => {
+            s.onSetLoadIncrement(3)
+            expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.loadIncrement', 3)
+        })
+
+        test('emits page-update', () => {
+            const updateSpy = jest.fn()
+            s.openPage()
+            s.getPageObserver().on('page-update', updateSpy)
+
+            s.onSetLoadIncrement(3)
+
+            expect(updateSpy).toHaveBeenCalled()
+        })
+
+        test('logs and swallows errors from UserSettings', () => {
+            MockUserSettings.set.mockImplementation(() => { throw new Error('boom') })
+
+            expect(() => s.onSetLoadIncrement(3)).not.toThrow()
+            expect(s.logError).toHaveBeenCalled()
+        })
+    })
+
     describe('getPageDisplayProps - gestureHint', () => {
 
         beforeEach(() => {

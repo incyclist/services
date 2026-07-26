@@ -29,6 +29,9 @@ const BACKGROUND_PAUSE_TIMEOUT_MS = 300000
 const UPCOMING_STEPS_COUNT = 3
 const DEFAULT_LOAD_INCREMENT = 1
 const HINTS_WORKOUT_GESTURES_KEY = 'hints.workoutRideGestures'
+// Same key mobile's useWorkoutRideGestures.ts (session 5.4) already reads - do not introduce a
+// second key for the same setting.
+const LOAD_INCREMENT_SETTING_KEY = 'preferences.workouts.loadIncrement'
 
 @Singleton
 export class WorkoutRidePageService extends IncyclistPageService implements IWorkoutRidePageService {
@@ -155,7 +158,8 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
                 graph: this.buildGraphPlan(current, wo.ftp),
                 steps: this.buildUpcomingSteps(current, wo.ftp),
                 dashboard: this.buildDashboardLine(wo),
-                gestureHint: this.buildGestureHint(base.startOverlayProps === null)
+                gestureHint: this.buildGestureHint(base.startOverlayProps === null),
+                loadIncrement: this.getLoadIncrement()
             }
         }
         catch (err: any) {
@@ -271,6 +275,18 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
 
     onDecreaseLoad(): void {
         this.adjustLoad(-DEFAULT_LOAD_INCREMENT)
+    }
+
+    // WorkoutSettingsDialog (session 5.10) - writes the same preferences.workouts.loadIncrement
+    // key onIncreaseLoad/onDecreaseLoad and the swipe gesture (session 5.4) already read from.
+    onSetLoadIncrement(value: number): void {
+        try {
+            this.getUserSettings().set(LOAD_INCREMENT_SETTING_KEY, value)
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onSetLoadIncrement')
+        }
     }
 
     onRetryStart(): void {
@@ -423,6 +439,10 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         return this.getActivityRide().getCurrentValues?.()?.cadence ?? 0
     }
 
+    protected getLoadIncrement(): number {
+        return this.getUserSettings().get(LOAD_INCREMENT_SETTING_KEY, DEFAULT_LOAD_INCREMENT)
+    }
+
     protected buildGraphPlan(current: Workout | undefined, ftp: number): WorkoutGraphPlan {
         if (!current) {
             return { bars: [], ftp: ftp ?? 0, ftpLine: ftp ?? 0, domain: { x: [0, 0], y: [0, 0] } }
@@ -551,7 +571,8 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             graph: { bars: [], ftp: 0, ftpLine: 0, domain: { x: [0, 0], y: [0, 0] } },
             steps: { previous: null, current: null, upcoming: [], hasMore: false },
             dashboard: { text: '', mode: null },
-            gestureHint: null
+            gestureHint: null,
+            loadIncrement: DEFAULT_LOAD_INCREMENT
         }
     }
 
