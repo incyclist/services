@@ -48,7 +48,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     openPage(simulate?:boolean): IObserver {
         try {
             this.logEvent({message:'page shown', page:'Rides'})
-            
+
             EventLogger.setGlobalConfig('page','Rides')
 
             super.openPage()
@@ -56,15 +56,37 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             try {
                 const service = this.getRideDisplay()
 
-                if (!this.isInitialized) {
-                    service.init()
-                }
-                this.registerEventHandlers()
-                service.start(simulate)
+                const registerAndStart = () => {
+                    // registerEventHandlers() must run after init() has resolved: init() is what
+                    // (re)creates RideDisplayService's observer instance (via closePrevRide() ->
+                    // new Observer()), so registering earlier would attach the handlers to a stale
+                    // (or, on the very first ride, undefined) observer that start() never emits on.
+                    this.registerEventHandlers()
+                    service.start(simulate)
 
-                sleep(5).then( ()=>{
-                    this.updatePageDisplay()
-                })
+                    sleep(5).then( ()=>{
+                        this.updatePageDisplay()
+                    })
+                }
+
+                if (!this.isInitialized) {
+                    // init() is async (it awaits closePrevRide() before setting up the new
+                    // observer/display service). start() depends on that state, so it must not
+                    // run until init() has actually resolved - previously this was fire-and-forget,
+                    // letting start() race ahead of init() and run against partially-initialized
+                    // (or leftover previous-ride) state. openPage() itself stays synchronous -
+                    // callers still get the IObserver immediately - only the start of the ride is
+                    // deferred until init() completes.
+                    service.init()
+                        .then( () => {
+                            this.isInitialized = true
+                            registerAndStart()
+                        })
+                        .catch( (err:any) => { this.logError(err,'openPage') } )
+                }
+                else {
+                    registerAndStart()
+                }
             }
             catch(err:any) {
                 this.logError(err,'openPage')
