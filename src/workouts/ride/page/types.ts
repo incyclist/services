@@ -90,6 +90,11 @@ export interface WorkoutRidePageDisplayProps extends RidePageDisplayProps {
     // Computed entirely here - the mobile component must not independently inspect ride/activity
     // data to decide its own visibility.
     gestureHint: WorkoutGestureHint | null
+    // Current `preferences.workouts.loadIncrement` setting (%) - the same key the swipe gesture
+    // (session 5.4) and the menu's Increase/Decrease Load buttons (session 5.5) already read via
+    // their own DEFAULT_LOAD_INCREMENT-driven callbacks. Exposed here so WorkoutSettingsDialog
+    // (session 5.10) can display/edit the live value without a second settings key.
+    loadIncrement: number
 }
 
 // ---- callbacks -------------------------------------------------------------------
@@ -106,6 +111,10 @@ export interface WorkoutRidePageCallbacks {
     onStepForward (): void       // -> ride.forward()      (delegates to WorkoutRide.forward)
     onIncreaseLoad(): void       // -> service.adjustLoad(+increment)
     onDecreaseLoad(): void       // -> service.adjustLoad(-increment)
+
+    // Writes preferences.workouts.loadIncrement (WorkoutSettingsDialog, session 5.10) - the same
+    // key onIncreaseLoad/onDecreaseLoad and the swipe gesture already read, not a second one.
+    onSetLoadIncrement(value: number): void
 
     onRetryStart  (): void
     onIgnoreStart (): void
