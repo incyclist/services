@@ -800,17 +800,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    unselect() {        
+    unselect() {
 
-        this.selectedRoute = null    
+        this.selectedRoute = null
         this.startSettings = null;
 
-        this.observer.emit('selected', null)
+        this.observer?.emit('selected', null)
     }
 
     select(route:Route) {
         this.selectedRoute = route
-        this.observer.emit('selected', route)
+        this.observer?.emit('selected', route)
     }
 
     selectCard(card:Card<Route>) {
