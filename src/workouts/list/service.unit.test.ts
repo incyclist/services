@@ -5,6 +5,7 @@ import { Observer, PromiseObserver } from '../../base/types/observer'
 import { waitNextTick } from '../../utils'
 import { WorkoutListService } from './service'
 import { WP } from './types'
+import { ScheduledWorkoutCard } from './cards/ScheduledWorkoutCard'
 import { FileInfo, getBindings } from '../../api'
 import { Inject } from '../../base/decorators'
 import { sleep } from '../../utils/sleep'
@@ -1060,6 +1061,133 @@ describe('WorkoutListService',()=>{
             const observer = service.deleteWorkout('1')
             expect(s.logError).toHaveBeenCalled()
             expect(observer).toBeDefined()
+        })
+    })
+
+    describe ('findCard/deleteWorkout: scheduled/regular id collision (5.19)',()=>{
+        // Workout.id is a content hash (MD5 of {name,description,steps,repeat}, see 5.20) - not
+        // scoped to a particular list. A regular, user-imported WorkoutCard can therefore share an
+        // id with a read-only, synced ScheduledWorkoutCard when their content matches (e.g. a
+        // workout imported from the same source it's also scheduled from). getLists(false) always
+        // puts the scheduled list first, so a naive id lookup resolves such a collision to the
+        // scheduled card instead of the user's own regular one.
+        let s,service
+        let regularCard
+        let scheduledWorkout
+
+        beforeEach( ()=>{
+            setupMocks()
+            s = service = new WorkoutListService()
+            s.logError = jest.fn()
+            s.observer = new Observer()
+            s.initialized = true
+
+            const content = {type:'workout', name:'Sweet Spot', description:'', steps:[]}
+            const regularWorkout = new Workout(content as any)
+            regularCard = s.addItem(regularWorkout)
+
+            scheduledWorkout = new Workout(content as any)
+            // confirms the premise of the bug: identical content -> identical id, even though
+            // these are two entirely separate Workout instances
+            expect(scheduledWorkout.id).toEqual(regularWorkout.id)
+
+            Inject('WorkoutCalendar', {
+                on: jest.fn(), off: jest.fn(), once: jest.fn(), init: jest.fn(), setActive: jest.fn(), reset: jest.fn(),
+                getScheduledWorkouts: jest.fn().mockReturnValue([
+                    { type:'scheduled', id:'source:1', name:'Sweet Spot', day:new Date(), updated:new Date(),
+                      workoutId:scheduledWorkout.id, workout:scheduledWorkout }
+                ])
+            })
+        })
+
+        afterEach( ()=>{
+            resetMocks()
+            s.reset()
+        })
+
+        test('findCard resolves the regular card, never the scheduled one, when both share an id',()=>{
+            const { card, list } = s.findCard(regularCard.getId())
+
+            expect(card).toBe(regularCard)
+            expect(card.getCardType()).toBe('Workout')
+            expect(list.getId()).not.toBe('scheduled')
+        })
+
+        test('deleteWorkout deletes the regular card, never the scheduled one',async ()=>{
+            regularCard.delete = jest.fn().mockReturnValue(PromiseObserver.alwaysReturning(true))
+
+            // getLists(false) rebuilds a fresh ScheduledWorkoutCard instance on every call (see
+            // WorkoutListService.getScheduledWorkouts()), so spying on any one instance grabbed
+            // beforehand wouldn't catch the internal lookup used by deleteWorkout() - spy on the
+            // shared prototype method instead, which every instance (including whichever fresh one
+            // deleteWorkout() resolves internally) inherits.
+            const scheduledDeleteSpy = jest.spyOn(ScheduledWorkoutCard.prototype,'delete')
+                .mockReturnValue(PromiseObserver.alwaysReturning(true))
+
+            const observer = service.deleteWorkout(regularCard.getId())
+            const result = await observer.wait()
+
+            expect(regularCard.delete).toHaveBeenCalled()
+            expect(scheduledDeleteSpy).not.toHaveBeenCalled()
+            expect(result).toBe(true)
+
+            scheduledDeleteSpy.mockRestore()
+        })
+    })
+
+    describe ('_import: scheduled/regular id collision (5.19 - second bug found)',()=>{
+        // Beyond delete/change-group, the same collision broke import de-dup: importing a workout
+        // whose content matches an existing *scheduled* (but not yet regularly imported) workout used
+        // to silently no-op - _import()'s de-dup check (findCard()) resolved the collision to the
+        // read-only ScheduledWorkoutCard, called .update()/.save() on IT instead of creating a new
+        // regular WorkoutCard, and returned that card as if the import had succeeded - the workout
+        // never showed up anywhere in the regular workouts list (getAllWorkoutItems() filters the
+        // scheduled list out entirely), so the import silently did nothing observable.
+        let s,service
+        let scheduledWorkout
+
+        beforeEach( ()=>{
+            setupMocks()
+            s = service = new WorkoutListService()
+            s.logError = jest.fn()
+            s.observer = new Observer()
+            s.initialized = true
+
+            scheduledWorkout = new Workout({type:'workout', name:'Sweet Spot', description:'', steps:[]} as any)
+
+            Inject('WorkoutCalendar', {
+                on: jest.fn(), off: jest.fn(), once: jest.fn(), init: jest.fn(), setActive: jest.fn(), reset: jest.fn(),
+                getScheduledWorkouts: jest.fn().mockReturnValue([
+                    { type:'scheduled', id:'source:1', name:'Sweet Spot', day:new Date(), updated:new Date(),
+                      workoutId:scheduledWorkout.id, workout:scheduledWorkout }
+                ])
+            })
+        })
+
+        afterEach( ()=>{
+            resetMocks()
+            s.reset()
+        })
+
+        test('importing a workout matching a scheduled (not-yet-regular) workout creates a real regular card',async ()=>{
+            const importedWorkout = new Workout({type:'workout', name:'Sweet Spot', description:'', steps:[]} as any)
+            // confirms the premise: identical content -> identical id to the scheduled workout above
+            expect(importedWorkout.id).toEqual(scheduledWorkout.id)
+
+            s.parse = jest.fn().mockResolvedValue(importedWorkout)
+
+            const fileInfo:FileInfo = { type:'file', name:'test.zwo', ext:'zwo', filename:'/tmp/test.zwo', delimiter:'/', dir:'/tmp', url:undefined}
+            const [card] = await service.import(fileInfo, {showImportCards:false})
+
+            expect(card.getCardType()).toBe('Workout')
+
+            const regularCards = (s.getLists(false)??[])
+                .filter( (l:CardList<WP>)=>l.getId()!=='scheduled')
+                .flatMap( (l:CardList<WP>) => l.getCards())
+                .filter( c=>c.getCardType()==='Workout')
+
+            expect(regularCards).toHaveLength(1)
+            expect(regularCards[0]).toBe(card)
         })
     })
 

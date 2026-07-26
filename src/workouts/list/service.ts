@@ -669,7 +669,11 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     
     selectCard(card:Card<WP>) {
         if (this.selectedWorkout) {
-            const selectedCard = this.findCard(this.selectedWorkout)?.card
+            // includeScheduled:true - the previously-selected workout may have been a scheduled-only
+            // entry (no regular counterpart), and unselecting it is a display-only side effect, not a
+            // management operation - safe to fall back to it, same as before this method scoped
+            // findCard() to regular lists by default (see findCard()'s doc comment, 5.19).
+            const selectedCard = this.findCard(this.selectedWorkout,{includeScheduled:true})?.card
             if (selectedCard)
                 selectedCard.unselect()
         }
@@ -862,22 +866,45 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
 
-    protected findCard(target:WP|string):{ card:Card<WP>, list:CardList<WP>} {
-        
+    /**
+     * Finds a card (regular or scheduled) by workout id.
+     *
+     * `Workout.id` is a content hash (MD5 of `{name,description,steps,repeat}`), not scoped to a
+     * particular list - a regular, user-managed `WorkoutCard` can therefore share an id with a
+     * read-only, synced `ScheduledWorkoutCard` when their content matches (e.g. a workout imported
+     * from the same source it's also scheduled from). `getLists(false)` always puts the scheduled
+     * list first, so a naive search would resolve such a collision to the scheduled card - wrong
+     * for every caller here, all of which act on (or dedupe against) the user's own regular copy:
+     * `selectCard()` (unselecting the previously-selected card), `deleteWorkout()`, `updateItem()`
+     * and `_import()` (de-dup on re-import). None of them should ever mutate/resolve a
+     * `ScheduledWorkoutCard` as a side effect of a same-id regular card existing.
+     *
+     * Regular (non-scheduled) lists are therefore always searched first. `includeScheduled` (opt-in,
+     * default `false`) only controls whether the scheduled list is searched at all, as a last resort
+     * fallback for a scheduled-only workout that has no regular counterpart - it never takes priority
+     * over a same-id regular card.
+     */
+    protected findCard(target:WP|string, opts?:{includeScheduled?:boolean}):{ card:Card<WP>, list:CardList<WP>} {
+
         let id:string;
-        
+
         if (typeof target==='string') {
             id = target
         }
         else {
             const item = target
-            id = item.id            
+            id = item.id
         }
 
-        let res;
+        const includeScheduled = opts?.includeScheduled ?? false
         const lists = this.getLists(false)||[]
+        const regularLists = lists.filter( l=>l.getId()!=='scheduled')
+        const scheduledLists = includeScheduled ? lists.filter( l=>l.getId()==='scheduled') : []
+        const orderedLists = [...regularLists, ...scheduledLists]
 
-        lists.forEach( list => {
+        let res;
+
+        orderedLists.forEach( list => {
             if (res)
                 return;
 
@@ -886,7 +913,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                 res= {card,list}
 
         })
-    
+
         return res;
     }
 
