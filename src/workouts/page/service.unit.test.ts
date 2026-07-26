@@ -636,7 +636,28 @@ describe('WorkoutListPageService', ()=>{
         // interrupt), so "Cancel" means the dialog stops listening and closes while the promise
         // keeps running in the background. These tests guard against that background result
         // resurrecting stale dialog state once it finally settles.
+        //
+        // importGeneration is stamped from Date.now() (not a plain incrementing counter) at each
+        // of its two call sites (onImportFile(), onImportClose()). Left to the real clock, two
+        // of those call sites firing back-to-back within the same test (zero real time elapsed)
+        // land on the same millisecond far more often than not - measured empirically at
+        // ~99,995/100,000 collisions for consecutive synchronous Date.now() calls in Node - which
+        // would silently defeat the `!==` staleness check these tests exist to prove. Stub
+        // Date.now() with a strictly-incrementing sequence so every call site gets a distinct
+        // value, deterministically.
         describe('cancel-safety: a background import settling after onImportClose', ()=>{
+            let dateNowSpy: jest.SpyInstance
+            let fakeNow: number
+
+            beforeEach(()=>{
+                fakeNow = 1_700_000_000_000
+                dateNowSpy = jest.spyOn(Date, 'now').mockImplementation(() => fakeNow++)
+            })
+
+            afterEach(()=>{
+                dateNowSpy.mockRestore()
+            })
+
             test('a success that arrives after onImportClose does not resurrect the dialog',async ()=>{
                 let resolveImport:(v:any)=>void
                 MockWorkoutList.import.mockReturnValue(new Promise(resolve => { resolveImport = resolve }))
@@ -704,6 +725,63 @@ describe('WorkoutListPageService', ()=>{
                     phase:'result',
                     result:{ id:'imported-2' }
                 })
+            })
+
+            // Review-flagged bug: card.move(group) used to run unconditionally, ahead of the
+            // importGeneration staleness check that already guarded importPhase/importResult.
+            // Only reachable now that Cancel lets a user escape 'importing' and start a second,
+            // live import (e.g. re-importing the same file) while the first (cancelled) one is
+            // still resolving in the background - completion order isn't guaranteed to match
+            // start order, so the stale import can resolve *after* the live one and silently
+            // re-move the card to its own (stale) suggested group, clobbering the live import's
+            // choice with no error and no dialog update to reveal it.
+            test('an older, cancelled import resolving after a newer live one does not overwrite the newer import\'s group',async ()=>{
+                let resolveFirst:(v:any)=>void
+                let resolveSecond:(v:any)=>void
+
+                // same underlying card both times - mirrors WorkoutListService's own de-dup
+                // (session 5.13): re-importing the same file resolves to the same card, not a
+                // fresh one. Only the card.move() side effect here is under test.
+                const sharedCard = { getId: jest.fn().mockReturnValue('same-1'), getTitle: jest.fn().mockReturnValue('Same File'), move: jest.fn() }
+
+                MockWorkoutList.import.mockReturnValueOnce(new Promise(resolve => { resolveFirst = resolve }))
+                service.onImportOpen()
+                service.onImportFile({ type:'file', name:'same.zwo' } as any)   // import #1 - will be cancelled
+
+                service.onImportClose()   // user cancels import #1 while it's still in flight
+                service.onImportOpen()
+
+                MockWorkoutList.import.mockReturnValueOnce(new Promise(resolve => { resolveSecond = resolve }))
+                service.onImportFile({ type:'file', name:'same.zwo' } as any)   // import #2 - live
+
+                // the suggested-group lookup is consumed in actual .then() execution order, not
+                // start order: whichever settles first (import #2, below) consumes 'Group B';
+                // the stale import #1 consumes 'Group A' second. 'Group A' is deliberately a
+                // non-default group - if it equalled DEFAULT_IMPORT_GROUP, the existing
+                // `group !== DEFAULT_IMPORT_GROUP` guard would suppress card.move() as a no-op
+                // regardless of the ordering bug, making this test pass for the wrong reason.
+                MockUserSettings.get.mockReturnValueOnce('Group B')
+                MockUserSettings.get.mockReturnValueOnce('Group A')
+
+                // import #2 (the newer, live one) resolves FIRST
+                resolveSecond([sharedCard])
+                await new Promise(process.nextTick)
+
+                expect(sharedCard.move).toHaveBeenCalledWith('Group B')
+                expect(service.getImportDisplayProps()).toMatchObject({ phase:'result', result:{ group:'Group B' } })
+                sharedCard.move.mockClear()
+
+                // import #1 (the older, cancelled one) resolves SECOND - inverted completion order
+                resolveFirst([sharedCard])
+                await new Promise(process.nextTick)
+
+                // must not re-move the card to its own (stale, discarded) suggested group 'Group A'
+                // - that would silently clobber the live import's 'Group B' - and the dialog must
+                // still show import #2's result untouched (there was no onImportClose() after
+                // import #2 started, so the dialog is legitimately still on 'result' / 'Group B',
+                // not 'landing')
+                expect(sharedCard.move).not.toHaveBeenCalled()
+                expect(service.getImportDisplayProps()).toMatchObject({ phase:'result', result:{ group:'Group B' } })
             })
         })
 
