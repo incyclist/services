@@ -35,6 +35,15 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     protected importingFileName: string
     protected importResult: { id: string; workoutName: string; group: string }
     protected importError: string
+    // Refreshed (to Date.now()) whenever the dialog stops caring about a specific
+    // onImportFile() call (see onImportClose()). onImportFile()'s single-file import chain has
+    // no abort mechanism - the parse/save promise keeps running in the background even after
+    // the user cancels - so this generation marker lets the eventual .then()/.catch() recognise
+    // it's stale and discard its own result instead of clobbering whatever the dialog (possibly
+    // reopened, possibly mid a newer import) is showing by the time it settles. Date.now() (over
+    // a plain incrementing counter) so two independent call sites can each mint a fresh value
+    // without coordinating a shared counter.
+    protected importGeneration = 0
 
     protected listObserver: IObserver
     protected listUpdateHandler = this.emitPageUpdate.bind(this)
@@ -315,6 +324,7 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
     onImportFile(file: FileInfo): IObserver {
         const observer = new Observer()
+        const generation = this.importGeneration = Date.now()
 
         try {
             this.importPhase = 'importing'
@@ -325,6 +335,19 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
                 .then( ([card]) => {
                     const group = this.getLastUsedImportGroup()
 
+                    observer.emit('success')
+
+                    // If onImportClose() (or a newer onImportFile()) ran while this promise was
+                    // still in flight, importGeneration has moved on and this result is stale -
+                    // don't let it clobber the dialog-facing state below, and (importantly) don't
+                    // let its card.move() side effect silently overwrite a newer, still-live
+                    // import's own group choice. That interleaving is reachable now that Cancel
+                    // lets the user escape 'importing' and start a second import of the same file
+                    // while the first is still resolving in the background - completion order
+                    // isn't guaranteed to match start order.
+                    if (generation !== this.importGeneration)
+                        return
+
                     // new cards already land in DEFAULT_IMPORT_GROUP, so only move the card when
                     // the suggestion differs - this applies the last-used group by default while
                     // still leaving it fully changeable afterward via onImportSetGroup.
@@ -333,12 +356,9 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
                     this.importPhase = 'result'
                     this.importResult = { id: card.getId(), workoutName: card.getTitle(), group }
-                    observer.emit('success')
                     this.emitImportUpdate()
                 })
                 .catch( (err:Error) => {
-                    this.importPhase = 'error'
-                    this.importError = err?.message
                     // `observer` wraps a real Node EventEmitter, which special-cases the literal
                     // 'error' event: emitting it with zero listeners registered throws
                     // synchronously instead of being a no-op like any other event name. If that
@@ -350,6 +370,13 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
                     // onImportFile() must keep doing that until this event is renamed away from
                     // the special-cased 'error' string (tracked separately, not yet done).
                     observer.emit('error', err)
+
+                    // see the .then() branch above - discard a stale result the same way here.
+                    if (generation !== this.importGeneration)
+                        return
+
+                    this.importPhase = 'error'
+                    this.importError = err?.message
                     this.emitImportUpdate()
                 })
         }
@@ -377,6 +404,10 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
     onImportClose(): void {
         try {
+            // Invalidates any in-flight onImportFile() call's eventual result (see
+            // importGeneration above) - covers both an explicit Cancel action and the dialog
+            // simply unmounting mid-import (WorkoutImportDialog calls this from both places).
+            this.importGeneration = Date.now()
             delete this.importPhase
             delete this.importingFileName
             delete this.importResult
