@@ -303,6 +303,30 @@ describe('WorkoutListPageService', ()=>{
 
             expect(service.getWorkoutDetailsProps(rowId)).not.toBeNull()
         })
+
+        // Regression test for 5.19: Workout.id is a content hash, not scoped to a particular list -
+        // a regular, user-imported card can share an id with a read-only, synced ScheduledWorkoutCard
+        // when their content matches (e.g. a workout imported from the same source it's also
+        // scheduled from). getWorkoutList().getLists(false) always returns the scheduled list first,
+        // so a naive id lookup used to resolve such a collision to the scheduled card - even though
+        // findWorkoutCard() falls back to the scheduled list here (this is the one caller that
+        // legitimately needs to resolve a scheduled-only workout), the regular card must still win
+        // whenever both exist.
+        test('prefers the regular card over a same-id scheduled card when both share an id',()=>{
+            const workout = makeWorkout('1','Sweet Spot')
+            const scheduledCard = makeCard({id:'1', title:'Sweet Spot', workout, cardType:'ScheduledWorkout', isScheduled:true, date:new Date('2026-01-01'), category:'scheduled'})
+            const regularCard = makeCard({id:'1', title:'Sweet Spot', workout, category:'My Workouts'})
+
+            MockWorkoutList.getLists.mockReturnValue([
+                makeList('scheduled','Scheduled Workouts',[scheduledCard]),
+                makeList('myWorkouts','My Workouts',[regularCard])
+            ])
+
+            const props = service.getWorkoutDetailsProps('1')
+
+            expect(props.isScheduled).toBe(false)
+            expect(props.group).toBe('My Workouts')
+        })
     })
 
     describe('getImportDisplayProps',()=>{
@@ -413,6 +437,25 @@ describe('WorkoutListPageService', ()=>{
 
             service.onChangeGroup('1','Custom')
             expect(card.move).toHaveBeenCalledWith('Custom')
+        })
+
+        // Regression test for 5.19: onChangeGroup() is a management operation on the user's own
+        // regular card - it must never resolve to (and therefore never call .move() on) a same-id
+        // ScheduledWorkoutCard, which is a read-only, synced representation.
+        test('onChangeGroup moves the regular card, never a same-id scheduled card (5.19)',()=>{
+            const workout = makeWorkout('1','Sweet Spot')
+            const scheduledCard = makeCard({id:'1', title:'Sweet Spot', workout, cardType:'ScheduledWorkout'})
+            const regularCard = makeCard({id:'1', title:'Sweet Spot', workout})
+
+            MockWorkoutList.getLists.mockReturnValue([
+                makeList('scheduled','Scheduled Workouts',[scheduledCard]),
+                makeList('myWorkouts','My Workouts',[regularCard])
+            ])
+
+            service.onChangeGroup('1','Custom')
+
+            expect(regularCard.move).toHaveBeenCalledWith('Custom')
+            expect(scheduledCard.move).not.toHaveBeenCalled()
         })
 
         test('onDelete resolves the delete observer result',async ()=>{
@@ -604,6 +647,28 @@ describe('WorkoutListPageService', ()=>{
 
         test('onImportSetGroup on an unknown id is a safe no-op',()=>{
             expect( ()=>service.onImportSetGroup('unknown','Custom')).not.toThrow()
+        })
+
+        // Regression test for 5.19: if the just-imported workout's content happens to match an
+        // existing scheduled/synced workout (same content hash -> same id), onImportSetGroup() must
+        // still relocate the user's own regular card, not the same-id read-only ScheduledWorkoutCard.
+        test('onImportSetGroup relocates the regular card, never a same-id scheduled card (5.19)',async ()=>{
+            MockWorkoutList.import.mockResolvedValue([card])
+            service.onImportOpen()
+
+            service.onImportFile({ type:'file', name:'test.zwo' } as any)
+            await new Promise(process.nextTick)
+
+            const scheduledCard = { getId: jest.fn().mockReturnValue('imported-1'), getTitle: jest.fn().mockReturnValue('Imported Workout'), move: jest.fn() }
+            MockWorkoutList.getLists.mockReturnValue([
+                makeList('scheduled','Scheduled Workouts',[scheduledCard]),
+                makeList('myWorkouts','My Workouts',[card])
+            ])
+
+            service.onImportSetGroup('imported-1','Brand New Group')
+
+            expect(card.move).toHaveBeenCalledWith('Brand New Group')
+            expect(scheduledCard.move).not.toHaveBeenCalled()
         })
 
         test('failed import sets the error phase and observer emits error',async ()=>{

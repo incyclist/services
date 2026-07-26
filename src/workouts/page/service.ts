@@ -121,7 +121,10 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
     getWorkoutDetailsProps(id: string): WorkoutDetailsProps | null {
         try {
-            const card = this.findWorkoutCard(id)
+            // includeScheduled:true - this is the read path for a row opened from either the
+            // regular list or the Upcoming Training section (5.19); the latter may point at a
+            // scheduled-only workout with no regular counterpart, which must still resolve.
+            const card = this.findWorkoutCard(id, { includeScheduled: true })
             if (!card)
                 return null
 
@@ -234,6 +237,9 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
     onChangeGroup(id: string, group: string): void {
         try {
+            // includeScheduled defaults to false - moving a workout into a group is a management
+            // operation on the user's own regular card and must never resolve to a same-id
+            // ScheduledWorkoutCard (5.19).
             const card = this.findWorkoutCard(id)
             card?.move(group)
             this.emitPageUpdate()
@@ -261,7 +267,10 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     onStart(id: string, opts: { noRoute: boolean }): void {
 
         try {
-            const card = this.findWorkoutCard(id)
+            // includeScheduled:true - starting straight from a scheduled-only entry (no regular
+            // counterpart) must keep working (5.19); select() only marks the workout for the next
+            // ride, it doesn't mutate the resolved card, so this is safe even on a collision.
+            const card = this.findWorkoutCard(id, { includeScheduled: true })
             if (!card)
                 return
 
@@ -285,7 +294,8 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
     onMarkForRoute(id: string): void {
         try {
-            const card = this.findWorkoutCard(id)
+            // includeScheduled:true - same rationale as onStart() (5.19).
+            const card = this.findWorkoutCard(id, { includeScheduled: true })
             if (!card)
                 return
 
@@ -388,6 +398,7 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
     onImportSetGroup(id: string, group: string): void {
         try {
+            // includeScheduled defaults to false - same rationale as onChangeGroup() (5.19).
             const card = this.findWorkoutCard(id)
             card?.move(group)
             this.persistLastUsedImportGroup(group)
@@ -482,10 +493,30 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
         return items
     }
 
-    protected findWorkoutCard(id: string): WorkoutCard | undefined {
+    /**
+     * Finds a card (regular or scheduled) by workout id.
+     *
+     * `Workout.id` is a content hash, not scoped to a particular list - a regular, user-managed
+     * `WorkoutCard` can share an id with a read-only, synced `ScheduledWorkoutCard` when their
+     * content matches. `getWorkoutList().getLists(false)` always puts the scheduled list first, so
+     * a naive search would resolve such a collision to the scheduled card - wrong for callers that
+     * manage the user's own copy (`onChangeGroup`, `onImportSetGroup`), which must never resolve to
+     * a `ScheduledWorkoutCard` (see 5.19). Regular (non-scheduled) lists are therefore always
+     * searched first. `includeScheduled` (opt-in, default `false`) only controls whether the
+     * scheduled list is searched at all, as a last-resort fallback for a scheduled-only workout with
+     * no regular counterpart (e.g. `getWorkoutDetailsProps()`/`onStart()`/`onMarkForRoute()`, which
+     * legitimately need to resolve a workout that only exists as a scheduled entry) - it never takes
+     * priority over a same-id regular card.
+     */
+    protected findWorkoutCard(id: string, opts?: { includeScheduled?: boolean }): WorkoutCard | undefined {
+        const includeScheduled = opts?.includeScheduled ?? false
         const lists = this.getWorkoutList().getLists(false) ?? []
 
-        for (const list of lists) {
+        const regularLists = lists.filter( l=>l.getId()!=='scheduled')
+        const scheduledLists = includeScheduled ? lists.filter( l=>l.getId()==='scheduled') : []
+        const orderedLists = [...regularLists, ...scheduledLists]
+
+        for (const list of orderedLists) {
             const card = list.getCards().find( c=>c.getId()===id)
             if (card)
                 return card as WorkoutCard
