@@ -35,6 +35,13 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     protected importingFileName: string
     protected importResult: { id: string; workoutName: string; group: string }
     protected importError: string
+    // Bumped whenever the dialog stops caring about a specific onImportFile() call (see
+    // onImportClose()). onImportFile()'s single-file import chain has no abort mechanism - the
+    // parse/save promise keeps running in the background even after the user cancels - so this
+    // token lets the eventual .then()/.catch() recognise it's stale and discard its own result
+    // instead of clobbering whatever the dialog (possibly reopened, possibly mid a newer import)
+    // is showing by the time it settles.
+    protected importToken = 0
 
     protected listObserver: IObserver
     protected listUpdateHandler = this.emitPageUpdate.bind(this)
@@ -315,6 +322,7 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
     onImportFile(file: FileInfo): IObserver {
         const observer = new Observer()
+        const token = ++this.importToken
 
         try {
             this.importPhase = 'importing'
@@ -331,14 +339,21 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
                     if (group !== DEFAULT_IMPORT_GROUP)
                         card.move(group)
 
+                    observer.emit('success')
+
+                    // The card move above already happened for real - the import itself isn't
+                    // undone by a cancel. What we guard here is only the dialog-facing state: if
+                    // onImportClose() (or a newer onImportFile()) ran while this promise was still
+                    // in flight, importToken has moved on, and this result is stale - don't let it
+                    // clobber whatever the dialog is showing now.
+                    if (token !== this.importToken)
+                        return
+
                     this.importPhase = 'result'
                     this.importResult = { id: card.getId(), workoutName: card.getTitle(), group }
-                    observer.emit('success')
                     this.emitImportUpdate()
                 })
                 .catch( (err:Error) => {
-                    this.importPhase = 'error'
-                    this.importError = err?.message
                     // `observer` wraps a real Node EventEmitter, which special-cases the literal
                     // 'error' event: emitting it with zero listeners registered throws
                     // synchronously instead of being a no-op like any other event name. If that
@@ -350,6 +365,13 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
                     // onImportFile() must keep doing that until this event is renamed away from
                     // the special-cased 'error' string (tracked separately, not yet done).
                     observer.emit('error', err)
+
+                    // see the .then() branch above - discard a stale result the same way here.
+                    if (token !== this.importToken)
+                        return
+
+                    this.importPhase = 'error'
+                    this.importError = err?.message
                     this.emitImportUpdate()
                 })
         }
@@ -377,6 +399,10 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
     onImportClose(): void {
         try {
+            // Invalidates any in-flight onImportFile() call's eventual result (see importToken
+            // above) - covers both an explicit Cancel action and the dialog simply unmounting
+            // mid-import (WorkoutImportDialog calls this from both places).
+            this.importToken++
             delete this.importPhase
             delete this.importingFileName
             delete this.importResult

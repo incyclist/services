@@ -631,6 +631,82 @@ describe('WorkoutListPageService', ()=>{
             expect(service.getImportDisplayProps().phase).toBe('landing')
         })
 
+        // Cancel-button addition (5.12 follow-up): there's no real abort for the single-file
+        // import chain (parse -> build -> save is one promise chain with no checkpoint to
+        // interrupt), so "Cancel" means the dialog stops listening and closes while the promise
+        // keeps running in the background. These tests guard against that background result
+        // resurrecting stale dialog state once it finally settles.
+        describe('cancel-safety: a background import settling after onImportClose', ()=>{
+            test('a success that arrives after onImportClose does not resurrect the dialog',async ()=>{
+                let resolveImport:(v:any)=>void
+                MockWorkoutList.import.mockReturnValue(new Promise(resolve => { resolveImport = resolve }))
+                service.onImportOpen()
+
+                service.onImportFile({ type:'file', name:'test.zwo' } as any)
+                expect(service.getImportDisplayProps().phase).toBe('importing')
+
+                // user hits Cancel while the import is still in flight
+                service.onImportClose()
+                expect(service.getImportDisplayProps().phase).toBe('landing')
+
+                resolveImport([card])
+                await new Promise(process.nextTick)
+
+                expect(service.getImportDisplayProps().phase).toBe('landing')
+                expect(service.getImportDisplayProps().result).toBeUndefined()
+            })
+
+            test('an error that arrives after onImportClose does not resurrect the dialog',async ()=>{
+                let rejectImport:(e:Error)=>void
+                MockWorkoutList.import.mockReturnValue(new Promise((_resolve,reject) => { rejectImport = reject }))
+                service.onImportOpen()
+
+                const observer = service.onImportFile({ type:'file', name:'bad.zwo' } as any)
+                const errorHandler = jest.fn()
+                observer.on('error', errorHandler)
+
+                service.onImportClose()
+
+                rejectImport(new Error('parse failed'))
+                await new Promise(process.nextTick)
+
+                // the observer itself still fires - a caller holding its own reference still
+                // learns the outcome - but the page-level dialog state must not flip to 'error'
+                expect(errorHandler).toHaveBeenCalled()
+                expect(service.getImportDisplayProps().phase).toBe('landing')
+            })
+
+            test('cancelling and starting a new import makes the older, still-pending result stale too',async ()=>{
+                let resolveFirst:(v:any)=>void
+                MockWorkoutList.import.mockReturnValueOnce(new Promise(resolve => { resolveFirst = resolve }))
+                service.onImportOpen()
+                service.onImportFile({ type:'file', name:'first.zwo' } as any)
+
+                service.onImportClose()
+                service.onImportOpen()
+
+                const secondCard = { getId: jest.fn().mockReturnValue('imported-2'), getTitle: jest.fn().mockReturnValue('Second'), move: jest.fn() }
+                MockWorkoutList.import.mockResolvedValueOnce([secondCard])
+                service.onImportFile({ type:'file', name:'second.zwo' } as any)
+                await new Promise(process.nextTick)
+
+                expect(service.getImportDisplayProps()).toMatchObject({
+                    phase:'result',
+                    result:{ id:'imported-2' }
+                })
+
+                // the first import (still pending all along) now resolves too - must not
+                // overwrite the second import's result
+                resolveFirst([card])
+                await new Promise(process.nextTick)
+
+                expect(service.getImportDisplayProps()).toMatchObject({
+                    phase:'result',
+                    result:{ id:'imported-2' }
+                })
+            })
+        })
+
         test('import calls WorkoutListService.import with showImportCards:false (mobile owns progress via the dialog)',()=>{
             MockWorkoutList.import.mockResolvedValue([card])
             service.onImportOpen()
