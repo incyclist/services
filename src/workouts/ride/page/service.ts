@@ -267,14 +267,19 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
     }
 
-    // The menu's "Increase/Decrease Load" action always uses the same default increment;
-    // a swipe gesture (session 5.4) instead sources its own increment and calls adjustLoad() directly.
+    // Per workout-ride-page-service-design.md §6.5: "The menu 'Increase Load' action uses the
+    // same increment" as the swipe gesture - both must read the live, user-configurable
+    // preferences.workouts.loadIncrement setting (session 5.4/5.10), not a hardcoded default.
+    // Previously hardcoded DEFAULT_LOAD_INCREMENT here, silently diverging from the swipe
+    // gesture (which already read the live setting via useWorkoutRideGestures.ts) as soon as a
+    // user changed the increment via WorkoutSettingsDialog (5.10) - found during the 6.1
+    // integration pass.
     onIncreaseLoad(): void {
-        this.adjustLoad(DEFAULT_LOAD_INCREMENT)
+        this.adjustLoad(this.getLoadIncrement())
     }
 
     onDecreaseLoad(): void {
-        this.adjustLoad(-DEFAULT_LOAD_INCREMENT)
+        this.adjustLoad(-this.getLoadIncrement())
     }
 
     // WorkoutSettingsDialog (session 5.10) - writes the same preferences.workouts.loadIncrement
