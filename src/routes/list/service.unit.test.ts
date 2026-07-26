@@ -402,5 +402,27 @@ describe('RouteListService',()=>{
 
     })
 
+    describe('select/unselect without observer', () => {
+        test('select() should not throw when observer is not initialized', () => {
+            const service = new MockeableService(repoData as any)
+            const route = service['routes'][0]
+
+            // observer is never initialized (no open() or searchRepo() call)
+            expect(service['observer']).toBeUndefined()
+
+            // Should not throw
+            expect(() => service.select(route)).not.toThrow()
+        })
+
+        test('unselect() should not throw when observer is not initialized', () => {
+            const service = new MockeableService(repoData as any)
+
+            // observer is never initialized (no open() or searchRepo() call)
+            expect(service['observer']).toBeUndefined()
+
+            // Should not throw
+            expect(() => service.unselect()).not.toThrow()
+        })
+    })
 
 })
