@@ -37,8 +37,8 @@ export type DeviceSelectionItemProps = {
     deviceName: string
     value: number,
     interface: string,
-    onClick?
-    onDelete?
+    onClick?: (addAll?:boolean)=>void
+    onDelete?: ()=>void
 }
 
 export type CapabilityDisplayProps = {
