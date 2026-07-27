@@ -822,46 +822,43 @@ export class WorkoutRide extends IncyclistService{
         return { start, stop };
     }
 
-    // Builds the tablet "shoutout" label for the current step - segment/step names only, never
-    // the workout name (that is shown elsewhere in the UI; embedding it here duplicated it in the
-    // dashboard line, see FIXES_BACKLOG #13). Format: "<segment>(<r>/<x>): <step>" when inside a
-    // repeating, named segment; "<segment>: <step>" inside a non-repeating/named segment; just
-    // "<step>" when the step is not inside a segment at all.
-    // Note: nested segments (a segment inside another segment) are not handled specially here -
-    // Segment.init() currently collapses nested segments into a flat Step, so this method only
-    // ever sees the flattened result, same as before this fix (FIXES_BACKLOG #13 follow-up).
     protected getStepTitle(time:number) {
         if (!this.workout)
             return
 
+        let title = this.workout.name
         const limit = this.workout.getLimits(time,true);
-        const segment = this.workout.getSegment(time)
+        const segment = this.workout.getSegment(time) 
 
-        const getRepeatCount = (seg) => {
-            const repeatTime = seg.duration/seg.repeat;
-            return Math.floor((time-seg.getStart())/repeatTime)+1
-        }
 
-        let segmentPart = ''
+        let ch = ': '
+
+
         if (segment?.text) {
-            segmentPart = segment.text
-            if (segment.repeat>0)
-                segmentPart += `(${getRepeatCount(segment)}/${segment.repeat})`
+            title += `${ch}${segment.text}`
+            ch=' - '
+        }
+        if (segment?.text &&  segment?.repeat>0) {
+            const repeatTime = segment.duration/segment.repeat;
+            const repeatCount = Math.floor((time-segment.getStart())/repeatTime )+1
+            title += `(${repeatCount}/${segment.repeat})`    
         }
 
-        let stepPart = ''
         if (!limit) {
-            stepPart = 'free'
+            title += `${ch}free`
         }
-        else if (limit?.text) {
-            stepPart = limit.text
-            if (segment && !segment.text && segment.repeat>0)
-                stepPart += `(${getRepeatCount(segment)}/${segment.repeat})`
-        }
+        else {
+            if (limit?.text)
+                title += `${ch}${limit.text}`
 
-        if (segmentPart && stepPart)
-            return `${segmentPart}: ${stepPart}`
-        return segmentPart || stepPart
+            if (limit?.text && segment && !segment.text && segment.repeat>0) {
+                const repeatTime = segment.duration/segment.repeat;
+                const repeatCount = Math.floor((time-segment.getStart())/repeatTime )+1
+                title += `(${repeatCount}/${segment.repeat})`    
+            }
+        }    
+
+        return title
     }
 
     protected getPowerVal( power:PowerLimit,key:'min'|'max') {

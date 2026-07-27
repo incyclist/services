@@ -485,7 +485,7 @@ describe('WorkoutRide',()=>{
 
             expect(s.manualTimeOffset).toBe(119)
             expect( emit).toHaveBeenCalledWith('request-update',expect.objectContaining({duration:60,minPower:50,maxPower:50 }))
-            expect( emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({title:'Test Segment(1/10): Test Relax',current:expect.objectContaining({duration:60,minPower:50,maxPower:50 })}))
+            expect( emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({title:'Test Workout: Test Segment(1/10) - Test Relax',current:expect.objectContaining({duration:60,minPower:50,maxPower:50 })}))
         })
 
         test('during last step',()=>{
@@ -556,7 +556,7 @@ describe('WorkoutRide',()=>{
 
             expect(s.manualTimeOffset).toBe(-61)
             expect( emit).toHaveBeenCalledWith('request-update',expect.objectContaining({duration:60,minPower:50,maxPower:50 }))
-            expect( emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({title:'Test Segment(1/10): Test Relax',current:expect.objectContaining({time:120,duration:60,minPower:50,maxPower:50 })}))
+            expect( emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({title:'Test Workout: Test Segment(1/10) - Test Relax',current:expect.objectContaining({time:120,duration:60,minPower:50,maxPower:50 })}))
 
         })
 
@@ -568,7 +568,7 @@ describe('WorkoutRide',()=>{
 
             expect(s.manualTimeOffset).toBe(-15)
             expect( emit).toHaveBeenCalledWith('request-update',expect.objectContaining({duration:120,minPower:100,maxPower:100 }))
-            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({title:'Test Segment(2/10): Test Work',current:expect.objectContaining({time:180,duration:120,minPower:100,maxPower:100 })}))
+            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({title:'Test Workout: Test Segment(2/10) - Test Work',current:expect.objectContaining({time:180,duration:120,minPower:100,maxPower:100 })}))
         })
 
 
@@ -585,7 +585,7 @@ describe('WorkoutRide',()=>{
 
             expect(s.manualTimeOffset).toBe(-5)
             expect( emit).toHaveBeenCalledWith('request-update',expect.objectContaining({duration:120,minPower:100,maxPower:100 }))
-            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({title:'Test Segment(1/10): Test Work',canShowBackward:false,
+            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({title:'Test Workout: Test Segment(1/10) - Test Work',canShowBackward:false,
                 current:expect.objectContaining({duration:120,minPower:100,maxPower:100 })}))
             
         })
@@ -620,7 +620,7 @@ describe('WorkoutRide',()=>{
             service.backward()
 
             expect( emit).toHaveBeenCalledWith('update', expect.objectContaining(
-                {title:'FatMax(1/9)',current:expect.objectContaining({time:expect.closeTo(300,0)})}))
+                {title:'Test Workout: FatMax(1/9)',current:expect.objectContaining({time:expect.closeTo(300,0)})}))
         })
 
 
@@ -776,7 +776,7 @@ describe('WorkoutRide',()=>{
             expect(dp.stop).toBeUndefined()
             expect(dp.ftp).toBe(200)
             expect(dp.workout).toBe(workout)
-            expect(dp.title).toBe('Test Segment(1/10): Test Work')
+            expect(dp.title).toBe('Test Workout: Test Segment(1/10) - Test Work')
         })
 
         test('not initialized',()=>{
@@ -812,15 +812,15 @@ describe('WorkoutRide',()=>{
 
             s.workout = wo
             const dp = service.getDashboardDisplayProperties()
-            expect(dp.title).toBe('Test Work(1/10)')
+            expect(dp.title).toBe('Test Workout: Test Work(1/10)')
 
             s.trainingTime = 120
             const dp1 = service.getDashboardDisplayProperties()
-            expect(dp1.title).toBe('Test Relax(1/10)')
+            expect(dp1.title).toBe('Test Workout: Test Relax(1/10)')
 
             s.trainingTime = 180
             const dp2 = service.getDashboardDisplayProperties()
-            expect(dp2.title).toBe('Test Work(2/10)')
+            expect(dp2.title).toBe('Test Workout: Test Work(2/10)')
 
 
         })
@@ -836,53 +836,20 @@ describe('WorkoutRide',()=>{
             ] })
             s.workout = wo
             const dp = service.getDashboardDisplayProperties()
-            expect(dp.title).toBe('')
+            expect(dp.title).toBe('Test Workout')
         })
 
         test('check title - individual step',()=>{
             s.trainingTime = 10
             const wo = new Workout({type:'workout',name:'Test Workout'})
             wo.addStep({type:'step', text:'Test Step', steady:true, work:true, duration:120, power:{min:60,max:60,type:'pct of FTP'}})
-            wo.addSegment( {type:'segment', repeat:10, steps: [
-                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}},
-                {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'}}
+            wo.addSegment( {type:'segment', repeat:10, steps: [ 
+                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}},                
+                {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'}} 
             ] })
             s.workout = wo
             const dp = service.getDashboardDisplayProperties()
-            expect(dp.title).toBe('Test Step')
-        })
-
-        // "Non-repeating" here means an explicit repeat:1 (the Segment default). The existing
-        // repeat-count math (reapplied unmodified from the pre-fix implementation) still renders
-        // "(1/1)" in this case - it triggers on repeat>0, not repeat>1. This test locks in that
-        // (pre-existing) behaviour rather than inventing a new repeat>1 threshold.
-        test('check title - step inside a non-repeating segment',()=>{
-            s.trainingTime = 10
-            const wo = new Workout({type:'workout',name:'Test Workout'})
-            wo.addSegment( {type:'segment', text:'Warmup', repeat:1, steps: [
-                {type:'step', steady:true, work:true, duration:120, power:{min:60,max:60,type:'pct of FTP'}, text:'Easy Spin'},
-            ] })
-            s.workout = wo
-            const dp = service.getDashboardDisplayProperties()
-            expect(dp.title).toBe('Warmup(1/1): Easy Spin')
-        })
-
-        test('check title - step inside a repeating segment reflects current repetition',()=>{
-            const wo = new Workout({type:'workout',name:'Test Workout'})
-            wo.addSegment( {type:'segment', text:'Sprint', repeat:5, steps: [
-                {type:'step', steady:true, work:true, duration:30, power:{min:260,max:260,type:'watt'}, text:'Sprint'},
-                {type:'step', steady:true, work:false, duration:90, power:{min:100,max:100,type:'watt'}, text:'Recover'},
-            ] })
-            s.workout = wo
-
-            s.trainingTime = 10 // 1st rep, work interval
-            expect(service.getDashboardDisplayProperties().title).toBe('Sprint(1/5): Sprint')
-
-            s.trainingTime = 250 // (250-0) / 120 = 2.08 -> 3rd rep, work interval (240-270)
-            expect(service.getDashboardDisplayProperties().title).toBe('Sprint(3/5): Sprint')
-
-            s.trainingTime = 350 // 3rd rep, recovery interval (270-360)
-            expect(service.getDashboardDisplayProperties().title).toBe('Sprint(3/5): Recover')
+            expect(dp.title).toBe('Test Workout: Test Step')
         })
 
         test('check zoom - beginning ',()=>{
