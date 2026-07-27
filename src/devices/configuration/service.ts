@@ -265,8 +265,9 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.emitCapabiltyChanged(capability)
     }
 
-    add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {   
-        let udid = this.getUdid(deviceSettings) 
+    add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {
+        let udid = this.getUdid(deviceSettings)
+        udid ??= this.getUdidForWifiAddressChange(deviceSettings)
 
         const {legacy=false} = props||{}
 
@@ -274,11 +275,17 @@ export class DeviceConfigurationService  extends IncyclistService{
 
 
         let adapter;
-        
+
         const updateWifiSettings = (udid:string) => {
             const settingIdx = this.settings.devices.findIndex(d => d.udid === udid)
             if (settingIdx !== -1 && this.settings.devices[settingIdx]?.settings?.interface === 'wifi') {
-                this.settings.devices[settingIdx].settings = { ...this.settings.devices[settingIdx].settings, ...deviceSettings }
+                const merged = { ...this.settings.devices[settingIdx].settings, ...deviceSettings }
+                this.settings.devices[settingIdx].settings = merged
+                // keep the in-memory adapter (if already instantiated) in sync too, so a subsequent
+                // isEqual()/getUdid() call within the same session sees the refreshed address as well
+                if (this.adapters[udid]) {
+                    this.adapters[udid].settings = merged
+                }
             }
         }
 
@@ -294,8 +301,8 @@ export class DeviceConfigurationService  extends IncyclistService{
                 this.logEvent({message:'could not create adapter'})
                 return;
             }
-    
-            udid = this.settings.devices?.find( d=> adapter.isEqual(d.settings))?.udid
+
+            udid = this.settings.devices?.find( d=> adapter.isEqual(d.settings))?.udid ?? this.getUdidForWifiAddressChange(deviceSettings)
             if (udid) {
                 updateWifiSettings(udid)
             }
@@ -410,6 +417,40 @@ export class DeviceConfigurationService  extends IncyclistService{
         const udids = Object.keys(this.adapters)
         const udid = udids.find( key=> this.adapters[key]?.isEqual(deviceSettings))
         return udid;
+    }
+
+    /**
+     * Wifi/mDNS devices are identified essentially by name (see `BleDeviceSettings` - there is no
+     * dedicated wifi identity type). `IncyclistDeviceAdapter.isEqual()` now requires the address to
+     * match too whenever both sides carry one, so a re-announcement under a *different* address (e.g.
+     * a DHCP lease change) is no longer picked up by `getUdid()` / the `isEqual()` lookup in `add()`.
+     *
+     * This is the fallback that restores the "same device, address just changed" reconciliation for
+     * wifi devices - gated by a session-scoped signal from the discovery layer
+     * (`DirectConnectInterface.hasNameCollision()`): as long as no *second*, independently observed
+     * address has been seen for this name in the current scan session, a single differing address is
+     * treated as an IP change on the existing persisted device rather than a new/second device (see
+     * FIXES_BACKLOG #14). If the discovery layer *has* seen two distinct addresses for this name this
+     * session, that is proof of two physical devices sharing the same (generic) name - this method
+     * returns undefined so the caller falls through to creating a new, separate device entry.
+     *
+     * The `hasNameCollision` call is guarded defensively: an older, not-yet-upgraded `incyclist-devices`
+     * build won't expose it, in which case this simply behaves as "no collision known" (i.e. matches by
+     * name alone, the pre-fix fallback), rather than throwing.
+     */
+    protected getUdidForWifiAddressChange(deviceSettings:IncyclistDeviceSettings):string|undefined {
+        const settings = deviceSettings as BleDeviceSettings
+        if (settings?.interface!=='wifi' || !settings.name)
+            return undefined
+
+        const dc = this.getDirectConnectInterface() as unknown as {hasNameCollision?:(name:string)=>boolean}
+        if (typeof dc?.hasNameCollision==='function' && dc.hasNameCollision(settings.name))
+            return undefined
+
+        return this.settings.devices?.find( d=> {
+            const s = d.settings as BleDeviceSettings
+            return s?.interface==='wifi' && s.name===settings.name
+        })?.udid
     }
 
     /**

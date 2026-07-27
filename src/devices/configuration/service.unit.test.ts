@@ -675,7 +675,116 @@ describe( 'DeviceConfigurationService',()=>{
         })
 
 
-    })    
+    })
+
+    describe( 'wifi device identity (FIXES_BACKLOG #14)',()=>{
+
+        // NB: the "existing device" fixture below deliberately uses a non-numeric udid
+        // ('wifi-udid-volt') - the test/uuid.ts jest mock for generateUdid() is a simple
+        // module-level incrementing counter ('1','2','3',...) shared across every test in this
+        // file, so a numeric-looking fixture udid could coincidentally collide with a freshly
+        // generated one and produce a false positive/negative unrelated to the code under test.
+        const EXISTING_UDID = 'wifi-udid-volt'
+
+        let service;
+        beforeEach( ()=>{
+            service = new DeviceConfigurationService()
+            service.updateUserSettings = jest.fn()
+            service.emitCapabiltyChanged = jest.fn()
+
+            service.settings = {
+                devices:[
+                    {udid:EXISTING_UDID, settings:{interface:'wifi', name:'Volt', address:'10.0.0.5', protocol:'fm'}}
+                ],
+                capabilities:[
+                    {capability:IncyclistCapability.Power, selected:EXISTING_UDID, devices:[EXISTING_UDID]},
+                    {capability:IncyclistCapability.Control, selected:EXISTING_UDID, devices:[EXISTING_UDID]},
+                    {capability:'bike', selected:EXISTING_UDID, devices:[EXISTING_UDID]}
+                ]
+            }
+            service.adapters = {
+                [EXISTING_UDID]: {
+                    settings: {interface:'wifi', name:'Volt', address:'10.0.0.5', protocol:'fm'},
+                    hasCapability: jest.fn( (c)=> c===IncyclistCapability.Power),
+                    isControllable: jest.fn().mockReturnValue(true),
+                    // address differs from the incoming announcement, so a plain isEqual() no
+                    // longer matches (see BleAdapter.isEqual() fix) - the fallback below must kick in
+                    isEqual: jest.fn().mockReturnValue(false)
+                }
+            }
+
+            SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue( {})
+        })
+
+        afterEach( ()=>{
+            AdapterFactory.reset()
+            service.reset()
+        })
+
+        test('single re-announcement with a changed address silently updates the stored device (no session collision)',()=>{
+            service.getDirectConnectInterface = jest.fn().mockReturnValue({
+                hasNameCollision: jest.fn().mockReturnValue(false)
+            })
+
+            const udid = service.add( {interface:'wifi', name:'Volt', address:'10.0.0.9', protocol:'fm'} )
+
+            expect(udid).toBe(EXISTING_UDID)
+            expect(service.settings.devices.length).toBe(1)
+            expect(service.settings.devices[0].settings).toMatchObject({address:'10.0.0.9'})
+            // the in-memory adapter is kept in sync too
+            expect(service.adapters[EXISTING_UDID].settings).toMatchObject({address:'10.0.0.9'})
+        })
+
+        test('two same-session announcements, same name, different address, surface as distinct entries (session collision)',()=>{
+            service.getDirectConnectInterface = jest.fn().mockReturnValue({
+                hasNameCollision: jest.fn().mockReturnValue(true)
+            })
+
+            // a session collision means add() falls through to creating a 2nd device - it needs a
+            // fresh adapter for the new address. We stub getAdapterFromSetting() with a fully
+            // controlled fake here rather than relying on the real (separately-versioned,
+            // separately-tested) incyclist-devices AdapterFactory/BleAdapter.isEqual(): this test's
+            // job is to verify DeviceConfigurationService's own orchestration (getUdidForWifiAddressChange
+            // + add()), not to re-verify BleAdapter.isEqual() itself (that's covered in the devices repo).
+            const newAdapter = {
+                isEqual: jest.fn().mockReturnValue(false),
+                getSettings: jest.fn().mockReturnValue({interface:'wifi', name:'Volt', address:'10.0.0.9', protocol:'fm'}),
+                hasCapability: jest.fn( (c)=> c===IncyclistCapability.Power)
+            }
+            service.getAdapterFromSetting = jest.fn().mockReturnValue(newAdapter)
+
+            const udid = service.add( {interface:'wifi', name:'Volt', address:'10.0.0.9', protocol:'fm'} )
+
+            expect(udid).toBeDefined()
+            expect(udid).not.toBe(EXISTING_UDID)
+            expect(service.settings.devices.length).toBe(2)
+
+            // the original, already-known device is untouched
+            const original = service.settings.devices.find(d=>d.udid===EXISTING_UDID)
+            expect(original.settings).toMatchObject({address:'10.0.0.5'})
+
+            // the 2nd physical device gets its own, separate entry
+            const added = service.settings.devices.find(d=>d.udid===udid)
+            expect(added.settings).toMatchObject({name:'Volt', address:'10.0.0.9'})
+        })
+
+        test('does not consult the discovery layer for non-wifi devices',()=>{
+            service.settings.devices.push({udid:'other-udid-hrm', settings:{interface:'ble', name:'HRM', address:'AA:BB', protocol:'hr'}})
+            service.adapters['other-udid-hrm'] = {
+                settings: {interface:'ble', name:'HRM', address:'AA:BB', protocol:'hr'},
+                hasCapability: jest.fn( (c)=> c===IncyclistCapability.HeartRate),
+                isControllable: jest.fn().mockReturnValue(false),
+                isEqual: jest.fn().mockReturnValue(false)
+            }
+            const dcSpy = jest.fn().mockReturnValue({hasNameCollision: jest.fn().mockReturnValue(false)})
+            service.getDirectConnectInterface = dcSpy
+
+            service.add( {interface:'ble', name:'HRM', address:'CC:DD', protocol:'hr'} )
+
+            expect(dcSpy).not.toHaveBeenCalled()
+        })
+
+    })
 
     describe( 'select',()=>{
 
