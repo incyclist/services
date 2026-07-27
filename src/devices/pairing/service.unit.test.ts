@@ -288,6 +288,14 @@ class TestWrapper extends DevicePairingService {
         return super.mappedCapability(c)
     }
 
+    onDeviceDetected(deviceSettings) {
+        return super.onDeviceDetected(deviceSettings)
+    }
+
+    isOnDeletedList(c:IncyclistCapability|CapabilityData,udid:string):boolean {
+        return super.isOnDeletedList(c,udid)
+    }
+
 
 }
 
@@ -1008,7 +1016,9 @@ describe('PairingService',()=>{
                     await svc.deleteDevice( IncyclistCapability.Cadence,'4',true)
 
                     expect(configuration.unselect).not.toHaveBeenCalledWith(IncyclistCapability.Control)
-                    expect(configuration.delete).toHaveBeenCalledWith('4', IncyclistCapability.Control,false)
+                    // 3rd arg is `forceSingle`, always true - deleteCapabilityDevice only ever deletes a single capability,
+                    // it must never let configuration.delete() cascade into removing the device from every capability
+                    expect(configuration.delete).toHaveBeenCalledWith('4', IncyclistCapability.Control,true)
 
                     expect(configuration.unselect).not.toHaveBeenCalledWith(IncyclistCapability.Power)
                     expect(configuration.delete).not.toHaveBeenCalledWith(expect.anything(), IncyclistCapability.Power, expect.anything())
@@ -1023,7 +1033,91 @@ describe('PairingService',()=>{
                     expect(configuration.delete).toHaveBeenCalledWith('4', IncyclistCapability.Speed,true)
 
                 })
-    
+
+            })
+
+            describe('deleted device exclude list (rescan / re-discovery)',()=>{
+
+                beforeEach( ()=>{
+                    TestWrapper.setupMocks()
+                    svc = new TestWrapper()
+                    svc.initServices()
+                    svc.simulateScanning()
+                })
+
+                afterEach( ()=>{
+                    svc.resetServices()
+                    svc.reset()
+                    TestWrapper.resetMocks()
+                })
+
+                test('a device deleted from one capability is retracted from just that capability on rescan - other capabilities keep it',async ()=>{
+                    svc.setupMockData( IncyclistCapability.HeartRate, [
+                        {udid:'1'},
+                        {udid:'2', selected:true}
+                    ])
+
+                    // user deletes device '2' from the heartrate capability only
+                    await svc.deleteDevice( IncyclistCapability.HeartRate,'2')
+                    expect(svc.isOnDeletedList(IncyclistCapability.HeartRate,'2')).toBe(true);
+
+                    (configuration.delete as jest.Mock).mockClear()
+
+                    // simulate a rescan replaying the cached announcement for the same (still known)
+                    // device, which supports both 'heartrate' and 'power' - add() re-adds it to both
+                    configuration.add = jest.fn().mockReturnValue('2')
+
+                    svc.onDeviceDetected( {interface:'wifi', name:'Wifi Trainer'} as any)
+
+                    // add() runs normally - it's not skipped just because the device was deleted
+                    // from one of its capabilities
+                    expect(configuration.add).toHaveBeenCalled()
+
+                    // the device is retracted from 'heartrate' (the capability it was deleted
+                    // from) only - never from 'power', which it was never deleted from
+                    expect(configuration.delete).toHaveBeenCalledWith('2', IncyclistCapability.HeartRate, true)
+                    expect(configuration.delete).not.toHaveBeenCalledWith('2', IncyclistCapability.Power, expect.anything())
+                    expect(configuration.delete).toHaveBeenCalledTimes(1)
+                })
+
+                test('a device that was never deleted is still added normally when detected, with no retraction',async ()=>{
+                    configuration.add = jest.fn().mockReturnValue('3')
+
+                    svc.onDeviceDetected( {interface:'wifi', name:'Wifi Trainer'} as any)
+
+                    expect(configuration.add).toHaveBeenCalled()
+                    expect(configuration.delete).not.toHaveBeenCalled()
+                })
+
+                test('a device deleted from every capability it supports is fully purged on rescan (all retracted, none left)',async ()=>{
+                    svc.setupMockData( IncyclistCapability.Power, [ {udid:'2', selected:true, c:['cadence']} ])
+                    svc.setupMockData( IncyclistCapability.Cadence, [ {udid:'2', selected:true} ])
+
+                    await svc.deleteDevice( IncyclistCapability.Power,'2',true);  // deleteAll=true
+
+                    (configuration.delete as jest.Mock).mockClear()
+                    configuration.add = jest.fn().mockReturnValue('2')
+
+                    svc.onDeviceDetected( {interface:'wifi', name:'Wifi Trainer'} as any)
+
+                    expect(configuration.delete).toHaveBeenCalledWith('2', IncyclistCapability.Power, true)
+                    expect(configuration.delete).toHaveBeenCalledWith('2', IncyclistCapability.Cadence, true)
+                })
+
+                test('second delete attempt on an already-deleted device is a safe no-op',async ()=>{
+                    svc.setupMockData( IncyclistCapability.Power, [
+                        {udid:'1'},
+                        {udid:'2', selected:true}
+                    ])
+
+                    await svc.deleteDevice( IncyclistCapability.Power,'2')
+                    expect(configuration.delete).toHaveBeenCalledTimes(1)
+
+                    await expect( svc.deleteDevice( IncyclistCapability.Power,'2') ).resolves.not.toThrow()
+                    // no additional delete on the underlying configuration - the device is already gone
+                    expect(configuration.delete).toHaveBeenCalledTimes(1)
+                })
+
             })
 
             describe('pairing',()=>{
