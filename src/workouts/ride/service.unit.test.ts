@@ -896,14 +896,31 @@ describe('WorkoutRide',()=>{
         })
 
 
+        // FIXES_BACKLOG #13 follow-up: an untitled segment/step inside a repeating structure used
+        // to leak the bare workout name through unstripped (real-world repro: a .zwo IntervalsT
+        // block, which has no name attribute at all). Desktop now falls back to a verbal
+        // description ("<target> for <duration>") plus the repeat indicator, since there's nothing
+        // else descriptive to show and no other numeric display for it.
         test('check title - segment with no segment text and no step text',()=>{
             s.trainingTime = 10
 
             const wo = new Workout({type:'workout',name:'Test Workout'})
-            wo.addSegment( {type:'segment', repeat:10, steps: [ 
+            wo.addSegment( {type:'segment', repeat:10, steps: [
                 {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}},
-                {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'}} 
+                {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'}}
             ] })
+            s.workout = wo
+            const dp = service.getDashboardDisplayProperties()
+            expect(dp.title).toBe('Test Workout: 200W for 2min(1/10)')
+        })
+
+        // Regression: a plain top-level step (not part of any segment at all) with no text of its
+        // own has no repeat context either - desktop shows just the bare workout name, unlike the
+        // in-a-segment case above (which does get the verbal-description fallback).
+        test('check title - individual step with no text, not in a segment',()=>{
+            s.trainingTime = 10
+            const wo = new Workout({type:'workout',name:'Test Workout'})
+            wo.addStep({type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}})
             s.workout = wo
             const dp = service.getDashboardDisplayProperties()
             expect(dp.title).toBe('Test Workout')
@@ -970,6 +987,91 @@ describe('WorkoutRide',()=>{
 
 
 
+    })
+
+    // FIXES_BACKLOG #13: mobile shows the workout name elsewhere on screen and must never repeat
+    // it in getStepTitle()'s output; when neither the segment nor the step has its own text, it
+    // must not duplicate the "<target> for <duration>" text WorkoutRidePageService.buildDashboardLine()
+    // already shows separately for the dashboard shoutout line.
+    describe('getDashboardDisplayProperties - mobile title (FIXES_BACKLOG #13)',()=>{
+        let s,service:WorkoutRide
+        const workout = new Workout({type:'workout',name:'Test Workout'})
+        workout.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [
+            {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
+            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'}
+        ] })
+
+        beforeEach( ()=>{
+            s = service = new WorkoutRide
+            s.workout = workout
+            s.settings = {ftp:200}
+            s.state='active'
+            s.getBindings = jest.fn().mockReturnValue({ appInfo: { getChannel: ()=>'mobile' } })
+        })
+        afterEach( ()=>{
+            s.reset()
+        })
+
+        test('both segment and step named - workout name never included, separator unchanged',()=>{
+            s.trainingTime = 10
+            const dp = service.getDashboardDisplayProperties()
+            expect(dp.title).toBe('Test Segment(1/10) - Test Work')
+        })
+
+        test('segment named, step nameless - repeat attaches to the segment name',()=>{
+            const wo = new Workout({type:'workout',name:'Test Workout'})
+            wo.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}}
+            ] })
+            s.workout = wo
+            s.trainingTime = 10
+            const dp = service.getDashboardDisplayProperties()
+            expect(dp.title).toBe('Test Segment(1/10)')
+        })
+
+        test('step named, segment nameless - repeat attaches to the step name',()=>{
+            const wo = new Workout({type:'workout',name:'Test Workout'})
+            wo.addSegment( {type:'segment', repeat:10, steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'}
+            ] })
+            s.workout = wo
+            s.trainingTime = 10
+            const dp = service.getDashboardDisplayProperties()
+            expect(dp.title).toBe('Test Work(1/10)')
+        })
+
+        // Real-world repro: a .zwo IntervalsT block (Repeat=3, OnPower/OffPower, no name
+        // attribute at all) - both segment and step are nameless, but it does repeat. Only the
+        // bare repeat suffix is returned - buildDashboardLine() already shows the numeric target
+        // separately, so embedding it again here would duplicate it.
+        test('both nameless, inside a repeating segment - bare repeat suffix only',()=>{
+            const wo = new Workout({type:'workout',name:'Test Workout'})
+            wo.addSegment( {type:'segment', repeat:3, steps: [
+                {type:'step', steady:true, work:true, duration:30, power:{min:180,max:180,type:'watt'}},
+                {type:'step', steady:true, work:false, duration:90, power:{min:110,max:110,type:'watt'}}
+            ] })
+            s.workout = wo
+            s.trainingTime = 10
+            const dp = service.getDashboardDisplayProperties()
+            expect(dp.title).toBe('(1/3)')
+        })
+
+        // Not in a segment at all - no repeat context exists either, so fall back to the verbal
+        // description instead of an empty title.
+        test('both nameless, not in a segment - falls back to the verbal description',()=>{
+            const wo = new Workout({type:'workout',name:'Test Workout'})
+            wo.addStep({type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}})
+            s.workout = wo
+            s.trainingTime = 10
+            const dp = service.getDashboardDisplayProperties()
+            expect(dp.title).toBe('200W for 2min')
+        })
+
+        test('free (no active limit) - bare "free", no workout name',()=>{
+            s.trainingTime = 100000
+            const dp = service.getDashboardDisplayProperties()
+            expect(dp.title).toBe('free')
+        })
     })
 
     describe('getCurrentLimits',()=>{

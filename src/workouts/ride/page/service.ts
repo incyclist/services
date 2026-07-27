@@ -154,7 +154,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
 
             return {
                 ...base,
-                title: this.getMobileStepTitle(wo),
+                title: wo.title ?? '',
                 graph: this.buildGraphPlan(current, wo.ftp),
                 steps: this.buildUpcomingSteps(current, wo.ftp),
                 dashboard: this.buildDashboardLine(wo),
@@ -522,42 +522,30 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         return { previous, current: currentStep, upcoming, hasMore }
     }
 
-    // WorkoutRide.getStepTitle() (feeding wo.title) is shared with desktop/web, which does want the
-    // workout name prefixed - so that method is not touched here. Mobile shows the workout name
-    // elsewhere on screen, so it must not be repeated in the step title or dashboard shoutout line;
-    // strip exactly the "<workout name>: " prefix getStepTitle() always adds when a name is set,
-    // rather than reimplementing its segment/step/repeat composition (FIXES_BACKLOG #13).
-    //
-    // When the current segment and step both have no text of their own, getStepTitle() has nothing
-    // to append at all - it returns the workout name completely bare, with no ": " separator (see
-    // FIXES_BACKLOG #13 follow-up: an untitled segment/step inside a repeating structure hit this
-    // and the raw workout name leaked through unstripped). Treat that bare case the same as "no
-    // step-specific title" too.
-    protected getMobileStepTitle(wo: WorkoutDisplayProperties): string {
-        const title = wo.title ?? ''
-        const name = wo.workout?.name
-        if (!name)
-            return title
-        if (title === name)
-            return ''
-        const prefix = `${name}: `
-        return title.startsWith(prefix) ? title.slice(prefix.length) : title
-    }
-
     // "260W at 100-120HR for 5min - VO2 max (3/5)" (getStepTargetText + getStepDuration + the step
     // title/rep count) - one composed phrase, Zwift-style, deliberately not split into separate
     // power/duration/remaining fields (those are already live on WorkoutStepsList's current-step
     // row - repeating them here was the pre-1.0 design and is now considered wrong, session 3.3).
+    //
+    // WorkoutRide.getStepTitle() (feeding wo.title) is platform-aware (FIXES_BACKLOG #13): on
+    // mobile it never repeats the workout name (shown elsewhere on screen), and when neither the
+    // segment nor the current step has its own text, it avoids duplicating the "<target> for
+    // <duration>" text already built below:
+    // - inside a (possibly nameless) repeating segment, it returns just the bare repeat suffix
+    //   (e.g. "(1/3)"), which attaches directly here with no separator, not a standalone title
+    // - outside any segment, it falls back to the same verbal description computed here too (no
+    //   repeat context to show instead) - since it's identical, skip re-appending it
     protected buildDashboardLine(wo: WorkoutDisplayProperties): WorkoutDashboardLine {
         const limits = this.getWorkoutRide().getCurrentLimits()
-        const title = this.getMobileStepTitle(wo)
+        const title = wo.title ?? ''
 
         if (!limits)
             return { text: title, mode: wo.mode ?? null }
 
         const target = getStepTargetText(limits.step ?? {}, wo.ftp)
         const duration = getStepDuration({ duration: limits.duration })
-        const text = title ? `${target} for ${duration} - ${title}` : `${target} for ${duration}`
+        const base = `${target} for ${duration}`
+        const text = !title || title===base ? base : (title.startsWith('(') ? `${base}${title}` : `${base} - ${title}`)
 
         return { text, mode: wo.mode ?? null }
     }
