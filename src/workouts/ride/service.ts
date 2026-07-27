@@ -10,7 +10,7 @@ import { Workout } from "../base/model";
 import { CurrentStep, PowerLimit, StepDefinition } from "../base/model/types";
 import { WorkoutListService, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
-import { ActiveWorkoutLimit, WorkoutDisplayProperties } from "./types";
+import { ActiveWorkoutLimit, PowerAdjustmentResult, WorkoutDisplayProperties } from "./types";
 import { Injectable } from "../../base/decorators";
 
 const DEFAULT_FTP = 200;
@@ -425,13 +425,14 @@ export class WorkoutRide extends IncyclistService{
      * - Step defined in "Watts": The power limit will be increased by _delta_ Watts
      * 
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
-     * @returns the resulting Workout FTP (in Watt) after the adjustment; for a "graduated" ERG-only
-     *          step (not exercised by an actual workout - see `minPower!==maxPower` below) it is the
-     *          adjusted step target power instead; `undefined` if no FTP is configured for this
-     *          workout (e.g. a purely Watt-based workout) or the result could not be determined
+     * @returns which quantity was adjusted and its resulting value (in Watt): `{type:'targetPower'}`
+     *          when the current step allows a power range (`minPower!==maxPower`) and the target is
+     *          nudged directly within that range; `{type:'ftp'}` when the Workout FTP itself was
+     *          scaled; `undefined` if no FTP is configured for this workout (e.g. a purely Watt-based
+     *          workout, outside a range step) or the result could not be determined
      *
      */
-    powerUp(delta:number):number|undefined {
+    powerUp(delta:number):PowerAdjustmentResult|undefined {
 
 
         if (delta<0)
@@ -449,7 +450,7 @@ export class WorkoutRide extends IncyclistService{
                 this.currentLimits.targetPower = Math.min(this.currentLimits.targetPower+deltaVal, this.currentLimits.maxPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
-                return this.currentLimits.targetPower;
+                return { type: 'targetPower', value: this.currentLimits.targetPower };
             }
 
             let adjustedFtp:number|undefined
@@ -463,7 +464,7 @@ export class WorkoutRide extends IncyclistService{
 
             this.setCurrentLimits()
             this.emit('update', this.getDashboardDisplayProperties())
-            return adjustedFtp
+            return adjustedFtp!==undefined ? { type: 'ftp', value: adjustedFtp } : undefined
         }
         catch(err) {
             this.logError(err,'powerUp')
@@ -481,13 +482,14 @@ export class WorkoutRide extends IncyclistService{
      * - Step defined in "Watts": The power limit will be decreased by _delta_ Watts
      * 
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
-     * @returns the resulting Workout FTP (in Watt) after the adjustment; for a "graduated" ERG-only
-     *          step (not exercised by an actual workout - see `minPower!==maxPower` below) it is the
-     *          adjusted step target power instead; `undefined` if no FTP is configured for this
-     *          workout (e.g. a purely Watt-based workout) or the result could not be determined
+     * @returns which quantity was adjusted and its resulting value (in Watt): `{type:'targetPower'}`
+     *          when the current step allows a power range (`minPower!==maxPower`) and the target is
+     *          nudged directly within that range; `{type:'ftp'}` when the Workout FTP itself was
+     *          scaled; `undefined` if no FTP is configured for this workout (e.g. a purely Watt-based
+     *          workout, outside a range step) or the result could not be determined
      *
      */
-    powerDown(delta:number):number|undefined {
+    powerDown(delta:number):PowerAdjustmentResult|undefined {
         this.logEvent({message: 'workout power down', delta})
 
         try {
@@ -499,7 +501,7 @@ export class WorkoutRide extends IncyclistService{
                 this.currentLimits.targetPower = Math.max(this.currentLimits.targetPower-deltaVal, this.currentLimits.minPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
-                return this.currentLimits.targetPower;
+                return { type: 'targetPower', value: this.currentLimits.targetPower };
             }
 
 
@@ -515,7 +517,7 @@ export class WorkoutRide extends IncyclistService{
 
             this.setCurrentLimits()
             this.emit('update', this.getDashboardDisplayProperties())
-            return adjustedFtp
+            return adjustedFtp!==undefined ? { type: 'ftp', value: adjustedFtp } : undefined
         }
         catch(err) {
             this.logError(err,'powerDown')

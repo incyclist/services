@@ -8,7 +8,7 @@ import { useRideDisplay } from "../../../ride/display"
 import { useActivityRide } from "../../../activities"
 import { useUserSettings } from "../../../settings"
 import { useWorkoutRide } from "../service"
-import type { WorkoutDisplayProperties } from "../types"
+import type { PowerAdjustmentResult, WorkoutDisplayProperties } from "../types"
 import { getFlattenedSteps, getStepDuration, getStepTargetText, getWorkoutGraphSeries } from "../../base/graph"
 import type { Workout } from "../../base/model"
 import type { StepDefinition } from "../../base/model/types"
@@ -344,12 +344,11 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
      * Adjusts the workout load (intensity) by the given percentage.
      *
      * @param deltaPct positive to increase, negative to decrease the load
-     * @returns the resulting Workout FTP (in Watt) after the adjustment, or `undefined` if no FTP
-     *          is configured for this workout or the result could not be determined. See
-     *          `WorkoutRideService.powerUp()`/`powerDown()` for the "graduated" ERG-only step case,
-     *          which is not exercised via this workout-ride page service.
+     * @returns which quantity was adjusted and its resulting value (in Watt) - see
+     *          `WorkoutRideService.powerUp()`/`powerDown()`; `undefined` if it could not be
+     *          determined (e.g. no FTP configured and the current step isn't a power range).
      */
-    adjustLoad(deltaPct: number): number | undefined {
+    adjustLoad(deltaPct: number): PowerAdjustmentResult | undefined {
         try {
             if (deltaPct >= 0)
                 return this.getWorkoutRide().powerUp(deltaPct)
