@@ -1104,6 +1104,35 @@ describe('PairingService',()=>{
                     expect(configuration.delete).toHaveBeenCalledWith('2', IncyclistCapability.Cadence, true)
                 })
 
+                test('a device deleted from every capability it supports keeps being retracted even if a later rescan is assigned a new udid',async ()=>{
+                    // reproduces a real-world case: deleting a device from its last remaining
+                    // capability makes DeviceConfigurationService purge its adapter/settings row
+                    // entirely (see deleteFromDeviceList) - so on a later rescan, getUdid() can no
+                    // longer recognize it and configuration.add() mints a brand-new udid ('99') for
+                    // what is physically the same device. Without settings-based matching, this new
+                    // udid isn't on the exclude list and the device reappears in every capability.
+                    svc.setupMockData( IncyclistCapability.Power, [ {udid:'2', selected:true, c:['cadence']} ])
+                    svc.setupMockData( IncyclistCapability.Cadence, [ {udid:'2', selected:true} ])
+
+                    const deviceSettings = {interface:'wifi', name:'Wifi Trainer'}
+                    svc.getDeviceAdapter = jest.fn().mockReturnValue( {
+                        getSettings: jest.fn().mockReturnValue(deviceSettings),
+                        getCapabilities: jest.fn().mockReturnValue([IncyclistCapability.Power, IncyclistCapability.Cadence]),
+                        stop: jest.fn().mockResolvedValue(true)
+                    } as unknown as IncyclistDeviceAdapter)
+
+                    await svc.deleteDevice( IncyclistCapability.Power,'2',true);  // deleteAll=true
+
+                    (configuration.delete as jest.Mock).mockClear()
+                    configuration.add = jest.fn().mockReturnValue('99')
+                    configuration.isEqualDeviceSettings = jest.fn( (a,b) => a?.name===b?.name && a?.interface===b?.interface)
+
+                    svc.onDeviceDetected( deviceSettings as any)
+
+                    expect(configuration.delete).toHaveBeenCalledWith('99', IncyclistCapability.Power, true)
+                    expect(configuration.delete).toHaveBeenCalledWith('99', IncyclistCapability.Cadence, true)
+                })
+
                 test('second delete attempt on an already-deleted device is a safe no-op',async ()=>{
                     svc.setupMockData( IncyclistCapability.Power, [
                         {udid:'1'},
