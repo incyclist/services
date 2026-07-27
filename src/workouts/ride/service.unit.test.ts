@@ -667,12 +667,13 @@ describe('WorkoutRide',()=>{
         })
         test('no FTP set',()=>{
             s.settings={}
-            service.powerUp(10)
+            const result = service.powerUp(10)
 
             expect( setStartSettings).not.toHaveBeenCalled()
             expect( s.manualPowerOffset).toBe(10)
             expect( emit).toHaveBeenCalledWith('request-update',expect.anything())
             expect( emit).toHaveBeenCalledWith('update', expect.not.objectContaining({ftp:expect.anything()}))
+            expect(result).toBeUndefined()
 
         })
 
@@ -686,14 +687,14 @@ describe('WorkoutRide',()=>{
 
         })
 
-        // Regression: mobile swipe-up feedback ("+5% (275W)") needs the actual resulting Watts,
-        // not a value re-derived from FTP - powerUp() must report it directly.
-        test('returns the resulting targetPower for a normal (FTP-based) adjustment',()=>{
+        // Regression: mobile swipe-up feedback ("+5% (220W)") needs the adjusted Workout FTP,
+        // not the current step's targetPower - powerUp() must report the FTP directly.
+        test('returns the adjusted Workout FTP for a normal (FTP-based) adjustment',()=>{
             s.settings={ftp:200}
             const result = service.powerUp(10)
 
-            expect(result).toEqual(expect.any(Number))
-            expect(result).toBe(s.currentLimits?.targetPower)
+            expect(result).toBe(220)
+            expect(result).toBe(Math.round(s.settings.ftp))
         })
 
         test('returns the resulting targetPower for a graduated step (minPower!==maxPower), without touching FTP',()=>{
@@ -758,12 +759,13 @@ describe('WorkoutRide',()=>{
         })
         test('no FTP set',()=>{
             s.settings={}
-            service.powerDown(10)
+            const result = service.powerDown(10)
 
             expect( setStartSettings).not.toHaveBeenCalled()
             expect( s.manualPowerOffset).toBe(-10)
             expect( emit).toHaveBeenCalledWith('request-update',expect.anything())
             expect( emit).toHaveBeenCalledWith('update', expect.not.objectContaining({ftp:expect.anything()}))
+            expect(result).toBeUndefined()
 
         })
 
@@ -777,14 +779,14 @@ describe('WorkoutRide',()=>{
 
         })
 
-        // Regression: mobile swipe-down feedback ("-5% (255W)") needs the actual resulting Watts,
-        // not a value re-derived from FTP - powerDown() must report it directly.
-        test('returns the resulting targetPower for a normal (FTP-based) adjustment',()=>{
+        // Regression: mobile swipe-down feedback ("-5% (91W)") needs the adjusted Workout FTP,
+        // not the current step's targetPower - powerDown() must report the FTP directly.
+        test('returns the adjusted Workout FTP for a normal (FTP-based) adjustment',()=>{
             s.settings={ftp:100}
             const result = service.powerDown(10)
 
-            expect(result).toEqual(expect.any(Number))
-            expect(result).toBe(s.currentLimits?.targetPower)
+            expect(result).toBe(Math.round(100/1.1))
+            expect(result).toBe(Math.round(s.settings.ftp))
         })
 
         test('returns the resulting targetPower for a graduated step (minPower!==maxPower), without touching FTP',()=>{

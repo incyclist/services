@@ -577,19 +577,19 @@ describe('WorkoutRidePageService', () => {
             expect(MockWorkoutRide.powerUp).not.toHaveBeenCalled()
         })
 
-        // Regression: the mobile swipe gesture feedback ("+5% (275W)") needs the resulting Watts
-        // value - adjustLoad() must forward whatever WorkoutRide.powerUp()/powerDown() reports,
+        // Regression: the mobile swipe gesture feedback ("+5% (220W)") needs the adjusted Workout
+        // FTP - adjustLoad() must forward whatever WorkoutRide.powerUp()/powerDown() reports,
         // rather than swallowing it as void.
-        test('returns the resulting targetPower reported by powerUp', () => {
-            MockWorkoutRide.powerUp.mockReturnValue(275)
+        test('returns the adjusted Workout FTP reported by powerUp', () => {
+            MockWorkoutRide.powerUp.mockReturnValue(220)
             const result = s.adjustLoad(5)
-            expect(result).toBe(275)
+            expect(result).toBe(220)
         })
 
-        test('returns the resulting targetPower reported by powerDown', () => {
-            MockWorkoutRide.powerDown.mockReturnValue(255)
+        test('returns the adjusted Workout FTP reported by powerDown', () => {
+            MockWorkoutRide.powerDown.mockReturnValue(91)
             const result = s.adjustLoad(-5)
-            expect(result).toBe(255)
+            expect(result).toBe(91)
         })
 
         test('returns undefined when the underlying call throws', () => {

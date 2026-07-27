@@ -425,7 +425,10 @@ export class WorkoutRide extends IncyclistService{
      * - Step defined in "Watts": The power limit will be increased by _delta_ Watts
      * 
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
-     * @returns the resulting target power (in Watt) after the adjustment, or `undefined` if it could not be determined
+     * @returns the resulting Workout FTP (in Watt) after the adjustment; for a "graduated" ERG-only
+     *          step (not exercised by an actual workout - see `minPower!==maxPower` below) it is the
+     *          adjusted step target power instead; `undefined` if no FTP is configured for this
+     *          workout (e.g. a purely Watt-based workout) or the result could not be determined
      *
      */
     powerUp(delta:number):number|undefined {
@@ -449,16 +452,18 @@ export class WorkoutRide extends IncyclistService{
                 return this.currentLimits.targetPower;
             }
 
+            let adjustedFtp:number|undefined
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp * (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
                 this.logEvent({message: 'workout FTP adjusted', ftp:this.settings.ftp})
+                adjustedFtp = Math.round(this.settings.ftp)
             }
             this.manualPowerOffset += delta
 
             this.setCurrentLimits()
             this.emit('update', this.getDashboardDisplayProperties())
-            return this.currentLimits?.targetPower
+            return adjustedFtp
         }
         catch(err) {
             this.logError(err,'powerUp')
@@ -476,7 +481,10 @@ export class WorkoutRide extends IncyclistService{
      * - Step defined in "Watts": The power limit will be decreased by _delta_ Watts
      * 
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
-     * @returns the resulting target power (in Watt) after the adjustment, or `undefined` if it could not be determined
+     * @returns the resulting Workout FTP (in Watt) after the adjustment; for a "graduated" ERG-only
+     *          step (not exercised by an actual workout - see `minPower!==maxPower` below) it is the
+     *          adjusted step target power instead; `undefined` if no FTP is configured for this
+     *          workout (e.g. a purely Watt-based workout) or the result could not be determined
      *
      */
     powerDown(delta:number):number|undefined {
@@ -495,17 +503,19 @@ export class WorkoutRide extends IncyclistService{
             }
 
 
+            let adjustedFtp:number|undefined
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp / (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
                 this.logEvent({message: 'workout FTP adjusted', ftp:this.settings.ftp})
+                adjustedFtp = Math.round(this.settings.ftp)
             }
 
             this.manualPowerOffset -= delta
 
             this.setCurrentLimits()
             this.emit('update', this.getDashboardDisplayProperties())
-            return this.currentLimits?.targetPower
+            return adjustedFtp
         }
         catch(err) {
             this.logError(err,'powerDown')

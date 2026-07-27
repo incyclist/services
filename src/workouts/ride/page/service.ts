@@ -344,11 +344,10 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
      * Adjusts the workout load (intensity) by the given percentage.
      *
      * @param deltaPct positive to increase, negative to decrease the load
-     * @returns the resulting target power (in Watt) after the adjustment, or `undefined` if it
-     *          could not be determined. This is the actual post-adjustment `targetPower` - for the
-     *          "graduated" step case (`minPower!==maxPower`) it is adjusted directly and cannot be
-     *          re-derived from FTP alone, so callers must use this return value rather than
-     *          recomputing it themselves.
+     * @returns the resulting Workout FTP (in Watt) after the adjustment, or `undefined` if no FTP
+     *          is configured for this workout or the result could not be determined. See
+     *          `WorkoutRideService.powerUp()`/`powerDown()` for the "graduated" ERG-only step case,
+     *          which is not exercised via this workout-ride page service.
      */
     adjustLoad(deltaPct: number): number | undefined {
         try {
