@@ -117,11 +117,14 @@ describe('workouts/base/graph/series', () => {
             expect(getStepTargetText(step)).toBe('145HR')
         })
 
-        test('powerOverrideWatts replaces the step-derived Watts (live manual-power offset)', () => {
-            // step says 200W, but the rider swiped up +20W -> WorkoutRide.getCurrentLimits() already
-            // reflects 220W; the override must win over the raw step definition.
-            const step = { duration: 60, steady: true, power: { type: 'watt' as const, max: 200 } }
-            expect(getStepTargetText(step, undefined, { max: 220 })).toBe('220W')
+        // Regression: always resolve power from the step definition itself, even for a ramp -
+        // there is no override argument to short-circuit this with an already-collapsed
+        // instantaneous min===max value (see WorkoutRidePageService.buildUpcomingSteps/
+        // buildDashboardLine, which pass `limits.step` straight through instead of `limits`'s
+        // flattened minPower/maxPower).
+        test('ramp step resolves the full range from the step definition, not a collapsed instantaneous value', () => {
+            const step = { duration: 600, steady: false, cooldown: false, power: { type: 'watt' as const, min: 100, max: 140 } }
+            expect(getStepTargetText(step)).toBe('Ramp 100-140W')
         })
     })
 
