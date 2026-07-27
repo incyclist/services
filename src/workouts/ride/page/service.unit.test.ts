@@ -208,7 +208,8 @@ describe('WorkoutRidePageService', () => {
                 title: 'Test Workout', ftp: 250, mode: null, canShowBackward: true, canShowForward: true
             })
             MockWorkoutRide.getCurrentLimits.mockReturnValue({
-                time: 70, duration: 120, remaining: 50, targetPower: 150, minPower: 150, maxPower: 150
+                time: 70, duration: 120, remaining: 50, targetPower: 150, minPower: 150, maxPower: 150,
+                step: { type: 'step', duration: 120, steady: true, power: { type: 'watt', min: 150, max: 150 } }
             })
             MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 70 })
 
@@ -240,6 +241,36 @@ describe('WorkoutRidePageService', () => {
             ])
         })
 
+        // Regression: a ramp step's live limits collapse min===max to the instantaneous ERG
+        // target (Step.calc() interpolates a single Watt value for cycling-mode control) - the
+        // current-step label and dashboard text must still describe the full ramp range from the
+        // raw step definition (`limits.step`), not that flattened instantaneous value.
+        test('ramp step -> current label and dashboard text show the Ramp range, not the flat instantaneous target', () => {
+            const current = new Workout({
+                type: 'workout', name: 'Ramp Workout',
+                steps: [
+                    { type: 'step', duration: 600, steady: false, cooldown: false, power: { type: 'watt', min: 100, max: 140 } }
+                ]
+            })
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
+                title: 'Ramp Workout', ftp: 250, mode: null, canShowBackward: false, canShowForward: true
+            })
+            // Step.calc() interpolates min===max===120 (the instantaneous ERG target) at the
+            // halfway point of the ramp - only `step` still carries the original 100/140 range.
+            MockWorkoutRide.getCurrentLimits.mockReturnValue({
+                time: 300, duration: 600, remaining: 300, targetPower: 120, minPower: 120, maxPower: 120,
+                step: { type: 'step', duration: 600, steady: false, cooldown: false, power: { type: 'watt', min: 100, max: 140 } }
+            })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 300 })
+
+            const props = s.getPageDisplayProps()
+
+            expect(props.steps.current).toEqual({ label: 'Ramp 100-140W', targetPower: 120, duration: 600, remaining: 300, isCurrent: true })
+            expect(props.dashboard).toEqual({ text: 'Ramp 100-140W for 10min - Ramp Workout', mode: null })
+        })
+
         test('no current workout -> empty graph/steps, still returns base props', () => {
             MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: undefined, state: 'Active' })
 
@@ -266,7 +297,8 @@ describe('WorkoutRidePageService', () => {
                 title: 'Corrupt Workout', ftp: 250, mode: null, canShowBackward: true, canShowForward: true
             })
             MockWorkoutRide.getCurrentLimits.mockReturnValue({
-                time: 0, duration: 0, remaining: 0, targetPower: 200, minPower: 200, maxPower: 200
+                time: 0, duration: 0, remaining: 0, targetPower: 200, minPower: 200, maxPower: 200,
+                step: { type: 'step', duration: NaN, steady: true, power: { type: 'watt', min: 200, max: 200 } }
             })
             MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 0 })
 
@@ -294,7 +326,8 @@ describe('WorkoutRidePageService', () => {
             MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({ title: 'Intervals', ftp: 250, mode: null })
             // elapsed time 105s -> inside the 2nd repetition's "work" step (90-130)
             MockWorkoutRide.getCurrentLimits.mockReturnValue({
-                time: 105, duration: 40, remaining: 35, targetPower: 200, minPower: 200, maxPower: 200
+                time: 105, duration: 40, remaining: 35, targetPower: 200, minPower: 200, maxPower: 200,
+                step: { type: 'step', duration: 40, steady: true, work: true, power: { type: 'watt', min: 200, max: 200 } }
             })
             MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 105 })
 

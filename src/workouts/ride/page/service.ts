@@ -481,7 +481,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             return empty
 
         const currentStep: WorkoutStepDisplay = {
-            label: getStepTargetText(limits.step ?? {}, ftp, { min: limits.minPower, max: limits.maxPower }),
+            label: getStepTargetText(limits.step ?? {}, ftp),
             targetPower: limits.targetPower ?? null,
             duration: limits.duration,
             remaining: limits.remaining,
@@ -524,7 +524,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         if (!limits)
             return { text: title, mode: wo.mode ?? null }
 
-        const target = getStepTargetText(limits.step ?? {}, wo.ftp, { min: limits.minPower, max: limits.maxPower })
+        const target = getStepTargetText(limits.step ?? {}, wo.ftp)
         const duration = getStepDuration({ duration: limits.duration })
         const text = title ? `${target} for ${duration} - ${title}` : `${target} for ${duration}`
 

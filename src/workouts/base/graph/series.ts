@@ -160,20 +160,13 @@ function formatRange(low: number | undefined, high: number | undefined, unit: st
  * "Ramp high-low" for a cooldown ramp). Heartrate/cadence ranges have no direction concept and
  * always render low-high. Returns 'free' when the step carries no target at all.
  *
- * `powerOverrideWatts`, when given, replaces the step's own power resolution for the min/max
- * Watts used in the text (direction/prefix still come from the step's steady/cooldown flags).
- * Needed for the *current* step only: `WorkoutRide.getCurrentLimits()` already resolves power
- * including the live manual-power offset from a swipe-triggered load adjustment (powerUp/
- * powerDown) - re-deriving from the raw step definition here would ignore that offset and show
- * a stale target the moment the rider adjusts load on a Watt-defined step. Upcoming steps have
- * no such live offset yet, so they omit this and resolve straight from the step definition.
+ * Always resolves power straight from the step definition's min/max, even for the *current* step
+ * of an active ride - `WorkoutRide.getCurrentLimits()` also exposes a live instantaneous target
+ * (including any swipe-triggered manual-power offset) separately via `WorkoutStepDisplay.targetPower`;
+ * this text is the full range/ramp description shown alongside it, not the instantaneous value.
  */
-export function getStepTargetText(
-    step: StepDefinition,
-    ftp?: number,
-    powerOverrideWatts?: { min?: number, max?: number }
-): string {
-    const { min: minPower, max: maxPower } = powerOverrideWatts ?? resolvePowerWatts(step.power, ftp)
+export function getStepTargetText(step: StepDefinition, ftp?: number): string {
+    const { min: minPower, max: maxPower } = resolvePowerWatts(step.power, ftp)
     const ascending = step.steady || step.cooldown === false
     const lowPower = ascending ? minPower : maxPower
     const highPower = ascending ? maxPower : minPower
