@@ -459,8 +459,11 @@ export class DevicePairingService  extends IncyclistService{
      * 
      * As the user might want to delete multiple devices, the screen will typically remain open
      * 
-     * This method does not stop an ongoing scan. I.e. if the device will be detected again in the scan, it will be re-added
-     * 
+     * This method does not stop an ongoing scan. The device is added to a session-lifetime exclude list for
+     * this capability though, so even if it is detected again in the scan (e.g. a cached/replayed
+     * announcement), it will not reappear under this capability - other capabilities the device supports
+     * (that it wasn't separately deleted from) are unaffected and will still show the device if announced.
+     *
      * @param capability the capability to be managed <br><br> One of ( 'control', 'power', 'heartrate', 'speed', 'cadence')
      * @param udid The unique device ID of the device to be selected
      * @param deleteAll if true, the device will be deleted in all capabilities it supports
@@ -1245,16 +1248,29 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
-        
+
         try {
             const udid = this.getDeviceConfiguration().add(deviceSettings,{legacy:false})
             this.logEvent({message:'device detected',device:deviceSettings,udid, isScanning:this.isScanning()})
-            
+
             if(!udid) {
                 this.logEvent({message:'device could not be added', reason:'add() failed'})
                 return;
             }
-    
+
+            // add() just (re-)added this device to every capability it supports. If the user
+            // deleted it from specific capabilities earlier in this session, retract it from
+            // those capabilities only - a capability it was NOT deleted from should still show
+            // the device if it's announced again (e.g. deleted from 'heartrate' but not 'power').
+            // If it was deleted from every capability it supports, this naturally purges the
+            // adapter/settings entirely too, via configuration.delete()'s own cascade.
+            const deletedCapabilities = (this.state.deleted||[])
+                .filter( e=> e.udid===udid)
+                .map( e=> e.capability)
+            deletedCapabilities.forEach( capability => {
+                this.getDeviceConfiguration().delete(udid,capability,true)
+            })
+
             const adapter = this.getDeviceConfiguration().getAdapter(udid)
             
             if (adapter) {
@@ -2087,7 +2103,11 @@ export class DevicePairingService  extends IncyclistService{
             c.connectState = undefined
         }
         
-        this.getDeviceConfiguration().delete(udid,capability,shouldEmit)
+        // the 3rd parameter of DeviceConfigurationService.delete() is `forceSingle`, not `shouldEmit`.
+        // deleteCapabilityDevice always deletes the device from this one capability only, so it must
+        // always force a single-capability delete - otherwise, deleting the 'control'/'bike' capability
+        // would cascade into removing the device from every capability it supports.
+        this.getDeviceConfiguration().delete(udid,capability,true)
         this.addToDeletedList(capability,udid)
         this.emitStateChange( {capabilities:this.state.capabilities})
     }
@@ -2134,17 +2154,8 @@ export class DevicePairingService  extends IncyclistService{
         this.state.deleted.push( { capability:c.capability,udid })       
     }
 
-    protected removeFromDeletedList(capability:IncyclistCapability|CapabilityData,udid:string ) {
-        const c = this.getCapability(capability)        
-        const idx = this.state.deleted.findIndex( e=> e.capability===c.capability && e.udid===udid)
-        if (idx===-1)
-            return
-
-        this.state.deleted.splice(idx,1)       
-    }
-
     protected isOnDeletedList(c:IncyclistCapability|CapabilityData,udid:string ):boolean {
-        const capability = this.getCapability(c)        
+        const capability = this.getCapability(c)
 
         return this.state.deleted.some( e=> e.capability===capability.capability && e.udid===udid)
     }
