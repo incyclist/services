@@ -1,8 +1,15 @@
 module.exports = {
     roots: ['<rootDir>/src'],
     transform: {
-      '^.+\\.tsx?$': 'ts-jest',
-      '^.+\\.js$': ['ts-jest', { diagnostics: false }],
+      // tsconfig.jest.json sets isolatedModules: true, so ts-jest transpiles each file
+      // independently (ts.transpileModule) instead of building a full TS Program/LanguageService
+      // per worker - much lower memory, at the cost of not catching type errors here. That's
+      // fine: `tsc --noEmit` against the real tsconfig.json already runs separately as the
+      // type-checking step, so re-type-checking during test runs is redundant. A dedicated
+      // tsconfig (rather than setting isolatedModules on the main tsconfig.json) keeps this
+      // test-only setting from affecting the real esm/cjs production builds.
+      '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.jest.json' }],
+      '^.+\\.js$': ['ts-jest', { diagnostics: false, tsconfig: 'tsconfig.jest.json' }],
     },
     transformIgnorePatterns: [
         '/node_modules/(?!@garmin/fitsdk)',
@@ -15,6 +22,12 @@ module.exports = {
     globalSetup: './jest-setup.js',
     testRegex: '^.+(\\.)?(test|spec)\\.(ts|js)?$',
     moduleFileExtensions: ['ts', 'js', 'json', 'node'],
+    // Caps peak memory on multi-core machines: each worker loads its own ts-jest transform
+    // state and coverage instrumentation, so worker count directly multiplies memory use.
+    maxWorkers: '50%',
+    // Recycles a worker if it grows past this - bounds memory growth over a long test run
+    // regardless of maxWorkers.
+    workerIdleMemoryLimit: '512MB',
     collectCoverageFrom: [
       "src/**/*.{js,ts}",
       "!src/**/*.d.ts",
