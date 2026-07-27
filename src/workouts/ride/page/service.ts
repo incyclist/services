@@ -527,11 +527,21 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     // elsewhere on screen, so it must not be repeated in the step title or dashboard shoutout line;
     // strip exactly the "<workout name>: " prefix getStepTitle() always adds when a name is set,
     // rather than reimplementing its segment/step/repeat composition (FIXES_BACKLOG #13).
+    //
+    // When the current segment and step both have no text of their own, getStepTitle() has nothing
+    // to append at all - it returns the workout name completely bare, with no ": " separator (see
+    // FIXES_BACKLOG #13 follow-up: an untitled segment/step inside a repeating structure hit this
+    // and the raw workout name leaked through unstripped). Treat that bare case the same as "no
+    // step-specific title" too.
     protected getMobileStepTitle(wo: WorkoutDisplayProperties): string {
         const title = wo.title ?? ''
         const name = wo.workout?.name
-        const prefix = name ? `${name}: ` : ''
-        return prefix && title.startsWith(prefix) ? title.slice(prefix.length) : title
+        if (!name)
+            return title
+        if (title === name)
+            return ''
+        const prefix = `${name}: `
+        return title.startsWith(prefix) ? title.slice(prefix.length) : title
     }
 
     // "260W at 100-120HR for 5min - VO2 max (3/5)" (getStepTargetText + getStepDuration + the step

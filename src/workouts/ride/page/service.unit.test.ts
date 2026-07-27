@@ -288,6 +288,32 @@ describe('WorkoutRidePageService', () => {
             expect(props.dashboard).toEqual({ text: '150W for 2min - free', mode: null })
         })
 
+        // Regression (FIXES_BACKLOG #13 follow-up, confirmed on a real ride): when the current
+        // segment AND step both have no text of their own, getStepTitle() has nothing to append -
+        // it returns the workout name completely bare (no ": " separator at all), e.g.
+        // "Threshold Starter – 2x8min". The exact-prefix strip missed this case and let the raw
+        // workout name leak through as "180W for 30s - Threshold Starter – 2x8min".
+        test('strips a bare, unmodified workout name (untitled segment/step) down to no title at all', () => {
+            const current = makeCurrentWorkout()
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
+                workout: { name: 'Threshold Starter – 2x8min' },
+                title: 'Threshold Starter – 2x8min',
+                ftp: 200, mode: null, canShowBackward: true, canShowForward: true
+            })
+            MockWorkoutRide.getCurrentLimits.mockReturnValue({
+                time: 25, duration: 30, remaining: 5, targetPower: 180, minPower: 180, maxPower: 180,
+                step: { type: 'step', duration: 30, steady: true, power: { type: 'watt', min: 180, max: 180 } }
+            })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 25 })
+
+            const props = s.getPageDisplayProps()
+
+            expect(props.title).toBe('')
+            expect(props.dashboard).toEqual({ text: '180W for 30s', mode: null })
+        })
+
         // Regression: a ramp step's live limits collapse min===max to the instantaneous ERG
         // target (Step.calc() interpolates a single Watt value for cycling-mode control) - the
         // current-step label and dashboard text must still describe the full ramp range from the
