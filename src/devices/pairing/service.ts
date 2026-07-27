@@ -1263,9 +1263,13 @@ export class DevicePairingService  extends IncyclistService{
             // those capabilities only - a capability it was NOT deleted from should still show
             // the device if it's announced again (e.g. deleted from 'heartrate' but not 'power').
             // If it was deleted from every capability it supports, this naturally purges the
-            // adapter/settings entirely too, via configuration.delete()'s own cascade.
+            // adapter/settings entirely too, via configuration.delete()'s own cascade - which also
+            // means a *later* re-detection of the same physical device gets a brand-new udid (its
+            // old adapter/settings row is gone, so add() can't recognize it). Match by settings
+            // identity as a fallback so it's still recognized as "was deleted" and retracted again,
+            // rather than reappearing under the new udid.
             const deletedCapabilities = (this.state.deleted||[])
-                .filter( e=> e.udid===udid)
+                .filter( e=> e.udid===udid || (e.settings && this.getDeviceConfiguration().isEqualDeviceSettings(e.settings,deviceSettings)))
                 .map( e=> e.capability)
             deletedCapabilities.forEach( capability => {
                 this.getDeviceConfiguration().delete(udid,capability,true)
@@ -2103,12 +2107,17 @@ export class DevicePairingService  extends IncyclistService{
             c.connectState = undefined
         }
         
+        // captured before delete() runs: if this is the device's last remaining capability,
+        // delete() purges its adapter/settings entirely, so the udid can't be relied on to
+        // recognize the same physical device again - the settings snapshot is the fallback.
+        const settings = this.getDeviceAdapter(udid)?.getSettings?.() as IncyclistDeviceSettings
+
         // the 3rd parameter of DeviceConfigurationService.delete() is `forceSingle`, not `shouldEmit`.
         // deleteCapabilityDevice always deletes the device from this one capability only, so it must
         // always force a single-capability delete - otherwise, deleting the 'control'/'bike' capability
         // would cascade into removing the device from every capability it supports.
         this.getDeviceConfiguration().delete(udid,capability,true)
-        this.addToDeletedList(capability,udid)
+        this.addToDeletedList(capability,udid,settings)
         this.emitStateChange( {capabilities:this.state.capabilities})
     }
 
@@ -2146,12 +2155,12 @@ export class DevicePairingService  extends IncyclistService{
         return (this.state.capabilities || []).map(c => c.selected === udid ? 1 : 0).reduce((a, c) => a + c, 0);
     }
 
-    protected addToDeletedList(capability:IncyclistCapability|CapabilityData,udid:string ) {
+    protected addToDeletedList(capability:IncyclistCapability|CapabilityData,udid:string,settings?:IncyclistDeviceSettings ) {
         if (this.isOnDeletedList(capability,udid))
             return;
 
-        const c = this.getCapability(capability)        
-        this.state.deleted.push( { capability:c.capability,udid })       
+        const c = this.getCapability(capability)
+        this.state.deleted.push( { capability:c.capability,udid,settings })
     }
 
     protected isOnDeletedList(c:IncyclistCapability|CapabilityData,udid:string ):boolean {

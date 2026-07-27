@@ -412,6 +412,19 @@ export class DeviceConfigurationService  extends IncyclistService{
         return udid;
     }
 
+    /**
+     * Compares two device settings for device identity (same physical device), independent of any
+     * udid currently assigned. Unlike {@link getUdid}, this does not require the device to still be
+     * registered in {@link adapters} - it builds a throwaway adapter purely for the comparison, so it
+     * keeps working even after a device has been fully deleted (adapter/settings row purged).
+     */
+    isEqualDeviceSettings(a:IncyclistDeviceSettings, b:IncyclistDeviceSettings):boolean {
+        if (!a || !b)
+            return false;
+        const adapter = this.getAdapterFromSetting(a)
+        return adapter?.isEqual(b) ?? false
+    }
+
     setDisplayName( deviceSettings:IncyclistDeviceSettings, displayName?:string) {
         const udid =this.getUdid(deviceSettings) 
         if (!udid) 

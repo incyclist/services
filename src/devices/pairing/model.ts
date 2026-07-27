@@ -1,7 +1,7 @@
 import { DeviceData, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices"
 import { EnrichedInterfaceSetting } from "../access"
 import { RideServiceCheckFilter } from "../ride"
-import { AdapterInfo } from "../configuration"
+import { AdapterInfo, IncyclistDeviceSettings } from "../configuration"
 
 
 export interface DevicePairingData {
@@ -52,6 +52,12 @@ export interface PairingState {
 export interface DeleteListEntry  {
     capability: IncyclistCapability,
     udid: string
+    /**
+     * Snapshot of the device's settings at the time of deletion. Used to recognize the same
+     * physical device on a later rescan even if its udid was regenerated (e.g. after the device
+     * was fully purged when its last remaining capability was deleted) - see onDeviceDetected.
+     */
+    settings?: IncyclistDeviceSettings
 }
 
 export interface InternalPairingState extends PairingState {
