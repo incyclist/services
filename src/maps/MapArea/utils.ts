@@ -143,11 +143,18 @@ export function concatPaths(path:IncyclistNode[]|RoutePoint[],path2:IncyclistNod
     
     if ( position==='after') {
         append.shift();
-        path.push(...append)
+        // Avoid spreading a potentially very large array into push() - V8's argument
+        // limit for spread/apply calls is far below the array sizes long OSM ways can produce,
+        // which caused "RangeError: Maximum call stack size exceeded" in production.
+        append.forEach( p => path.push(p) )
     }
     else { // before
         path.shift();               // remove first element from original array
-        path.unshift(...append);    // insert new elements to the beginning
+        // Same spread-call risk applies to unshift(). Build the combined array first,
+        // then repopulate `path` in place using single-argument push() calls only.
+        const newPath = append.concat(path)
+        path.length = 0
+        newPath.forEach( p => path.push(p) )
     }
 }
 
