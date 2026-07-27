@@ -267,9 +267,7 @@ export class DeviceConfigurationService  extends IncyclistService{
 
     add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {
         let udid = this.getUdid(deviceSettings)
-        if (udid===undefined) {
-            udid = this.getUdidForWifiAddressChange(deviceSettings)
-        }
+        udid ??= this.getUdidForWifiAddressChange(deviceSettings)
 
         const {legacy=false} = props||{}
 
