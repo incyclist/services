@@ -241,6 +241,53 @@ describe('WorkoutRidePageService', () => {
             ])
         })
 
+        // Regression (FIXES_BACKLOG #13): WorkoutRide.getStepTitle() prefixes its output with the
+        // workout name for desktop/web (which must NOT change - see WorkoutRide.unit.test.ts).
+        // Mobile shows the workout name elsewhere on screen, so the page service must strip that
+        // "<name>: " prefix from both the `title` prop and the dashboard shoutout line, without
+        // reimplementing getStepTitle()'s own segment/step/repeat composition.
+        test('strips the workout name prefix from title and dashboard text for mobile', () => {
+            const current = makeCurrentWorkout()
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
+                workout: { name: 'VO2 Max Intervals' },
+                title: 'VO2 Max Intervals: Sprint(2/5)',
+                ftp: 250, mode: null, canShowBackward: true, canShowForward: true
+            })
+            MockWorkoutRide.getCurrentLimits.mockReturnValue({
+                time: 70, duration: 120, remaining: 50, targetPower: 150, minPower: 150, maxPower: 150,
+                step: { type: 'step', duration: 120, steady: true, power: { type: 'watt', min: 150, max: 150 } }
+            })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 70 })
+
+            const props = s.getPageDisplayProps()
+
+            expect(props.title).toBe('Sprint(2/5)')
+            expect(props.dashboard).toEqual({ text: '150W for 2min - Sprint(2/5)', mode: null })
+        })
+
+        test('leaves title/dashboard text untouched when it does not start with "<workout name>: "', () => {
+            const current = makeCurrentWorkout()
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
+                workout: { name: 'VO2 Max Intervals' },
+                title: 'free',
+                ftp: 250, mode: null, canShowBackward: true, canShowForward: true
+            })
+            MockWorkoutRide.getCurrentLimits.mockReturnValue({
+                time: 70, duration: 120, remaining: 50, targetPower: 150, minPower: 150, maxPower: 150,
+                step: { type: 'step', duration: 120, steady: true, power: { type: 'watt', min: 150, max: 150 } }
+            })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 70 })
+
+            const props = s.getPageDisplayProps()
+
+            expect(props.title).toBe('free')
+            expect(props.dashboard).toEqual({ text: '150W for 2min - free', mode: null })
+        })
+
         // Regression: a ramp step's live limits collapse min===max to the instantaneous ERG
         // target (Step.calc() interpolates a single Watt value for cycling-mode control) - the
         // current-step label and dashboard text must still describe the full ramp range from the

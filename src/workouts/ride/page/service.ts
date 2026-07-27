@@ -154,7 +154,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
 
             return {
                 ...base,
-                title: wo.title ?? '',
+                title: this.getMobileStepTitle(wo),
                 graph: this.buildGraphPlan(current, wo.ftp),
                 steps: this.buildUpcomingSteps(current, wo.ftp),
                 dashboard: this.buildDashboardLine(wo),
@@ -513,13 +513,25 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         return { previous, current: currentStep, upcoming, hasMore }
     }
 
+    // WorkoutRide.getStepTitle() (feeding wo.title) is shared with desktop/web, which does want the
+    // workout name prefixed - so that method is not touched here. Mobile shows the workout name
+    // elsewhere on screen, so it must not be repeated in the step title or dashboard shoutout line;
+    // strip exactly the "<workout name>: " prefix getStepTitle() always adds when a name is set,
+    // rather than reimplementing its segment/step/repeat composition (FIXES_BACKLOG #13).
+    protected getMobileStepTitle(wo: WorkoutDisplayProperties): string {
+        const title = wo.title ?? ''
+        const name = wo.workout?.name
+        const prefix = name ? `${name}: ` : ''
+        return prefix && title.startsWith(prefix) ? title.slice(prefix.length) : title
+    }
+
     // "260W at 100-120HR for 5min - VO2 max (3/5)" (getStepTargetText + getStepDuration + the step
     // title/rep count) - one composed phrase, Zwift-style, deliberately not split into separate
     // power/duration/remaining fields (those are already live on WorkoutStepsList's current-step
     // row - repeating them here was the pre-1.0 design and is now considered wrong, session 3.3).
     protected buildDashboardLine(wo: WorkoutDisplayProperties): WorkoutDashboardLine {
         const limits = this.getWorkoutRide().getCurrentLimits()
-        const title = wo.title ?? ''
+        const title = this.getMobileStepTitle(wo)
 
         if (!limits)
             return { text: title, mode: wo.mode ?? null }
