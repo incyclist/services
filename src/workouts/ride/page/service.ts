@@ -8,7 +8,7 @@ import { useRideDisplay } from "../../../ride/display"
 import { useActivityRide } from "../../../activities"
 import { useUserSettings } from "../../../settings"
 import { useWorkoutRide } from "../service"
-import type { WorkoutDisplayProperties } from "../types"
+import type { PowerAdjustmentResult, WorkoutDisplayProperties } from "../types"
 import { getFlattenedSteps, getStepDuration, getStepTargetText, getWorkoutGraphSeries } from "../../base/graph"
 import type { Workout } from "../../base/model"
 import type { StepDefinition } from "../../base/model/types"
@@ -340,15 +340,24 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
     }
 
-    adjustLoad(deltaPct: number): void {
+    /**
+     * Adjusts the workout load (intensity) by the given percentage.
+     *
+     * @param deltaPct positive to increase, negative to decrease the load
+     * @returns which quantity was adjusted and its resulting value (in Watt) - see
+     *          `WorkoutRideService.powerUp()`/`powerDown()`; `undefined` if it could not be
+     *          determined (e.g. no FTP configured and the current step isn't a power range).
+     */
+    adjustLoad(deltaPct: number): PowerAdjustmentResult | undefined {
         try {
             if (deltaPct >= 0)
-                this.getWorkoutRide().powerUp(deltaPct)
+                return this.getWorkoutRide().powerUp(deltaPct)
             else
-                this.getWorkoutRide().powerDown(-deltaPct)
+                return this.getWorkoutRide().powerDown(-deltaPct)
         }
         catch (err: any) {
             this.logError(err, 'adjustLoad')
+            return undefined
         }
     }
 

@@ -21,6 +21,15 @@ export interface ActiveWorkoutLimit extends WorkoutRequest{
     step?: StepDefinition
 }
 
+/** Result of WorkoutRide.powerUp()/powerDown(): which quantity was actually adjusted, and its new
+ *  value (in Watt) - 'ftp' when the step target is defined relative to FTP (the Workout FTP itself
+ *  was scaled), 'targetPower' when the current step allows a power range (minPower!==maxPower) and
+ *  the user is nudging the target within that range directly, without touching FTP at all. */
+export interface PowerAdjustmentResult {
+    type: 'ftp' | 'targetPower'
+    value: number
+}
+
 export interface WorkoutDisplayProperties {
     workout?:Workout,
     title?:string,

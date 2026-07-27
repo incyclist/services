@@ -10,7 +10,7 @@ import { Workout } from "../base/model";
 import { CurrentStep, PowerLimit, StepDefinition } from "../base/model/types";
 import { WorkoutListService, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
-import { ActiveWorkoutLimit, WorkoutDisplayProperties } from "./types";
+import { ActiveWorkoutLimit, PowerAdjustmentResult, WorkoutDisplayProperties } from "./types";
 import { Injectable } from "../../base/decorators";
 
 const DEFAULT_FTP = 200;
@@ -425,9 +425,14 @@ export class WorkoutRide extends IncyclistService{
      * - Step defined in "Watts": The power limit will be increased by _delta_ Watts
      * 
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
-     * 
+     * @returns which quantity was adjusted and its resulting value (in Watt): `{type:'targetPower'}`
+     *          when the current step allows a power range (`minPower!==maxPower`) and the target is
+     *          nudged directly within that range; `{type:'ftp'}` when the Workout FTP itself was
+     *          scaled; `undefined` if no FTP is configured for this workout (e.g. a purely Watt-based
+     *          workout, outside a range step) or the result could not be determined
+     *
      */
-    powerUp(delta:number):void {
+    powerUp(delta:number):PowerAdjustmentResult|undefined {
 
 
         if (delta<0)
@@ -445,21 +450,25 @@ export class WorkoutRide extends IncyclistService{
                 this.currentLimits.targetPower = Math.min(this.currentLimits.targetPower+deltaVal, this.currentLimits.maxPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
-                return;
+                return { type: 'targetPower', value: this.currentLimits.targetPower };
             }
 
+            let adjustedFtp:number|undefined
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp * (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
                 this.logEvent({message: 'workout FTP adjusted', ftp:this.settings.ftp})
-            }            
+                adjustedFtp = Math.round(this.settings.ftp)
+            }
             this.manualPowerOffset += delta
 
             this.setCurrentLimits()
             this.emit('update', this.getDashboardDisplayProperties())
+            return adjustedFtp!==undefined ? { type: 'ftp', value: adjustedFtp } : undefined
         }
         catch(err) {
             this.logError(err,'powerUp')
+            return undefined
         }
     }
 
@@ -473,9 +482,14 @@ export class WorkoutRide extends IncyclistService{
      * - Step defined in "Watts": The power limit will be decreased by _delta_ Watts
      * 
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
-     * 
+     * @returns which quantity was adjusted and its resulting value (in Watt): `{type:'targetPower'}`
+     *          when the current step allows a power range (`minPower!==maxPower`) and the target is
+     *          nudged directly within that range; `{type:'ftp'}` when the Workout FTP itself was
+     *          scaled; `undefined` if no FTP is configured for this workout (e.g. a purely Watt-based
+     *          workout, outside a range step) or the result could not be determined
+     *
      */
-    powerDown(delta:number):void {
+    powerDown(delta:number):PowerAdjustmentResult|undefined {
         this.logEvent({message: 'workout power down', delta})
 
         try {
@@ -487,23 +501,27 @@ export class WorkoutRide extends IncyclistService{
                 this.currentLimits.targetPower = Math.max(this.currentLimits.targetPower-deltaVal, this.currentLimits.minPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
-                return;
+                return { type: 'targetPower', value: this.currentLimits.targetPower };
             }
 
 
+            let adjustedFtp:number|undefined
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp / (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
                 this.logEvent({message: 'workout FTP adjusted', ftp:this.settings.ftp})
+                adjustedFtp = Math.round(this.settings.ftp)
             }
 
             this.manualPowerOffset -= delta
 
             this.setCurrentLimits()
             this.emit('update', this.getDashboardDisplayProperties())
+            return adjustedFtp!==undefined ? { type: 'ftp', value: adjustedFtp } : undefined
         }
         catch(err) {
             this.logError(err,'powerDown')
+            return undefined
         }
     }
 
