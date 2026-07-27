@@ -624,6 +624,27 @@ describe('WorkoutRidePageService', () => {
             expect(MockWorkoutRide.powerUp).not.toHaveBeenCalled()
         })
 
+        // Regression: the mobile swipe gesture feedback needs to know which quantity was adjusted
+        // ("+5% (FTP: 220W)" vs "+5% (155W)") - adjustLoad() must forward whatever
+        // WorkoutRide.powerUp()/powerDown() reports verbatim, rather than swallowing it as void.
+        test('returns the {type:"ftp"} result reported by powerUp', () => {
+            MockWorkoutRide.powerUp.mockReturnValue({ type: 'ftp', value: 220 })
+            const result = s.adjustLoad(5)
+            expect(result).toEqual({ type: 'ftp', value: 220 })
+        })
+
+        test('returns the {type:"targetPower"} result reported by powerDown', () => {
+            MockWorkoutRide.powerDown.mockReturnValue({ type: 'targetPower', value: 145 })
+            const result = s.adjustLoad(-5)
+            expect(result).toEqual({ type: 'targetPower', value: 145 })
+        })
+
+        test('returns undefined when the underlying call throws', () => {
+            MockWorkoutRide.powerUp.mockImplementation(() => { throw new Error('boom') })
+            const result = s.adjustLoad(5)
+            expect(result).toBeUndefined()
+        })
+
         test('onIncreaseLoad / onDecreaseLoad fall back to the default increment when nothing is stored', () => {
             s.onIncreaseLoad()
             s.onDecreaseLoad()

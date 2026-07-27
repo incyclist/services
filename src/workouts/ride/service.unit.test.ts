@@ -667,12 +667,13 @@ describe('WorkoutRide',()=>{
         })
         test('no FTP set',()=>{
             s.settings={}
-            service.powerUp(10)
+            const result = service.powerUp(10)
 
             expect( setStartSettings).not.toHaveBeenCalled()
             expect( s.manualPowerOffset).toBe(10)
             expect( emit).toHaveBeenCalledWith('request-update',expect.anything())
             expect( emit).toHaveBeenCalledWith('update', expect.not.objectContaining({ftp:expect.anything()}))
+            expect(result).toBeUndefined()
 
         })
 
@@ -680,9 +681,43 @@ describe('WorkoutRide',()=>{
             s.setCurrentLimits = jest.fn( ()=>{throw new Error('Err')})
             s.logError = jest.fn()
 
-            service.powerUp(10)
+            const result = service.powerUp(10)
             expect(s.logError).toHaveBeenCalled()
+            expect(result).toBeUndefined()
 
+        })
+
+        // Regression: mobile swipe-up feedback ("+5% (FTP: 220W)") needs to know the Workout FTP
+        // was adjusted (not the range-step targetPower) - powerUp() must report both the value and
+        // which quantity it is.
+        test('returns {type:"ftp"} with the adjusted Workout FTP for a normal (FTP-based) adjustment',()=>{
+            s.settings={ftp:200}
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'ftp', value: 220 })
+            expect(result?.value).toBe(Math.round(s.settings.ftp))
+        })
+
+        // Regression: mobile swipe-up feedback ("+5% (155W)", no FTP label) for a step that allows
+        // a power range (e.g. 120-170W) - powerUp() must report {type:'targetPower'}, not FTP,
+        // since FTP isn't touched in this branch at all.
+        test('returns {type:"targetPower"} for a range step (minPower!==maxPower), without touching FTP',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:150 }
+
+            const result = service.powerUp(1)
+
+            expect(result).toEqual({ type: 'targetPower', value: 155 })
+            expect(s.currentLimits.targetPower).toBe(155)
+            expect(setStartSettings).not.toHaveBeenCalled()
+        })
+
+        test('caps the range-step targetPower at maxPower',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:280 }
+
+            const result = service.powerUp(2)
+
+            expect(result).toEqual({ type: 'targetPower', value: 300 })
+            expect(s.currentLimits.targetPower).toBe(300)
         })
 
     })
@@ -728,12 +763,13 @@ describe('WorkoutRide',()=>{
         })
         test('no FTP set',()=>{
             s.settings={}
-            service.powerDown(10)
+            const result = service.powerDown(10)
 
             expect( setStartSettings).not.toHaveBeenCalled()
             expect( s.manualPowerOffset).toBe(-10)
             expect( emit).toHaveBeenCalledWith('request-update',expect.anything())
             expect( emit).toHaveBeenCalledWith('update', expect.not.objectContaining({ftp:expect.anything()}))
+            expect(result).toBeUndefined()
 
         })
 
@@ -741,9 +777,43 @@ describe('WorkoutRide',()=>{
             s.setCurrentLimits = jest.fn( ()=>{throw new Error('Err')})
             s.logError = jest.fn()
 
-            service.powerDown(10)
+            const result = service.powerDown(10)
             expect(s.logError).toHaveBeenCalled()
+            expect(result).toBeUndefined()
 
+        })
+
+        // Regression: mobile swipe-down feedback ("-5% (FTP: 91W)") needs to know the Workout FTP
+        // was adjusted (not the range-step targetPower) - powerDown() must report both the value
+        // and which quantity it is.
+        test('returns {type:"ftp"} with the adjusted Workout FTP for a normal (FTP-based) adjustment',()=>{
+            s.settings={ftp:100}
+            const result = service.powerDown(10)
+
+            expect(result).toEqual({ type: 'ftp', value: Math.round(100/1.1) })
+            expect(result?.value).toBe(Math.round(s.settings.ftp))
+        })
+
+        // Regression: mobile swipe-down feedback ("-5% (145W)", no FTP label) for a step that
+        // allows a power range (e.g. 120-170W) - powerDown() must report {type:'targetPower'}, not
+        // FTP, since FTP isn't touched in this branch at all.
+        test('returns {type:"targetPower"} for a range step (minPower!==maxPower), without touching FTP',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:150 }
+
+            const result = service.powerDown(1)
+
+            expect(result).toEqual({ type: 'targetPower', value: 145 })
+            expect(s.currentLimits.targetPower).toBe(145)
+            expect(setStartSettings).not.toHaveBeenCalled()
+        })
+
+        test('floors the range-step targetPower at minPower',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:120 }
+
+            const result = service.powerDown(2)
+
+            expect(result).toEqual({ type: 'targetPower', value: 100 })
+            expect(s.currentLimits.targetPower).toBe(100)
         })
 
     })
