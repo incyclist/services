@@ -340,15 +340,26 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
     }
 
-    adjustLoad(deltaPct: number): void {
+    /**
+     * Adjusts the workout load (intensity) by the given percentage.
+     *
+     * @param deltaPct positive to increase, negative to decrease the load
+     * @returns the resulting target power (in Watt) after the adjustment, or `undefined` if it
+     *          could not be determined. This is the actual post-adjustment `targetPower` - for the
+     *          "graduated" step case (`minPower!==maxPower`) it is adjusted directly and cannot be
+     *          re-derived from FTP alone, so callers must use this return value rather than
+     *          recomputing it themselves.
+     */
+    adjustLoad(deltaPct: number): number | undefined {
         try {
             if (deltaPct >= 0)
-                this.getWorkoutRide().powerUp(deltaPct)
+                return this.getWorkoutRide().powerUp(deltaPct)
             else
-                this.getWorkoutRide().powerDown(-deltaPct)
+                return this.getWorkoutRide().powerDown(-deltaPct)
         }
         catch (err: any) {
             this.logError(err, 'adjustLoad')
+            return undefined
         }
     }
 

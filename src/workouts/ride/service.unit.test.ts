@@ -680,9 +680,39 @@ describe('WorkoutRide',()=>{
             s.setCurrentLimits = jest.fn( ()=>{throw new Error('Err')})
             s.logError = jest.fn()
 
-            service.powerUp(10)
+            const result = service.powerUp(10)
             expect(s.logError).toHaveBeenCalled()
+            expect(result).toBeUndefined()
 
+        })
+
+        // Regression: mobile swipe-up feedback ("+5% (275W)") needs the actual resulting Watts,
+        // not a value re-derived from FTP - powerUp() must report it directly.
+        test('returns the resulting targetPower for a normal (FTP-based) adjustment',()=>{
+            s.settings={ftp:200}
+            const result = service.powerUp(10)
+
+            expect(result).toEqual(expect.any(Number))
+            expect(result).toBe(s.currentLimits?.targetPower)
+        })
+
+        test('returns the resulting targetPower for a graduated step (minPower!==maxPower), without touching FTP',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:150 }
+
+            const result = service.powerUp(1)
+
+            expect(result).toBe(155)
+            expect(s.currentLimits.targetPower).toBe(155)
+            expect(setStartSettings).not.toHaveBeenCalled()
+        })
+
+        test('caps the graduated-step targetPower at maxPower',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:280 }
+
+            const result = service.powerUp(2)
+
+            expect(result).toBe(300)
+            expect(s.currentLimits.targetPower).toBe(300)
         })
 
     })
@@ -741,9 +771,39 @@ describe('WorkoutRide',()=>{
             s.setCurrentLimits = jest.fn( ()=>{throw new Error('Err')})
             s.logError = jest.fn()
 
-            service.powerDown(10)
+            const result = service.powerDown(10)
             expect(s.logError).toHaveBeenCalled()
+            expect(result).toBeUndefined()
 
+        })
+
+        // Regression: mobile swipe-down feedback ("-5% (255W)") needs the actual resulting Watts,
+        // not a value re-derived from FTP - powerDown() must report it directly.
+        test('returns the resulting targetPower for a normal (FTP-based) adjustment',()=>{
+            s.settings={ftp:100}
+            const result = service.powerDown(10)
+
+            expect(result).toEqual(expect.any(Number))
+            expect(result).toBe(s.currentLimits?.targetPower)
+        })
+
+        test('returns the resulting targetPower for a graduated step (minPower!==maxPower), without touching FTP',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:150 }
+
+            const result = service.powerDown(1)
+
+            expect(result).toBe(145)
+            expect(s.currentLimits.targetPower).toBe(145)
+            expect(setStartSettings).not.toHaveBeenCalled()
+        })
+
+        test('floors the graduated-step targetPower at minPower',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:120 }
+
+            const result = service.powerDown(2)
+
+            expect(result).toBe(100)
+            expect(s.currentLimits.targetPower).toBe(100)
         })
 
     })

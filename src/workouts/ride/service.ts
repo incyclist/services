@@ -425,9 +425,10 @@ export class WorkoutRide extends IncyclistService{
      * - Step defined in "Watts": The power limit will be increased by _delta_ Watts
      * 
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
-     * 
+     * @returns the resulting target power (in Watt) after the adjustment, or `undefined` if it could not be determined
+     *
      */
-    powerUp(delta:number):void {
+    powerUp(delta:number):number|undefined {
 
 
         if (delta<0)
@@ -445,21 +446,23 @@ export class WorkoutRide extends IncyclistService{
                 this.currentLimits.targetPower = Math.min(this.currentLimits.targetPower+deltaVal, this.currentLimits.maxPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
-                return;
+                return this.currentLimits.targetPower;
             }
 
             if (this.settings?.ftp) {
                 this.settings.ftp = this.settings.ftp * (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
                 this.logEvent({message: 'workout FTP adjusted', ftp:this.settings.ftp})
-            }            
+            }
             this.manualPowerOffset += delta
 
             this.setCurrentLimits()
             this.emit('update', this.getDashboardDisplayProperties())
+            return this.currentLimits?.targetPower
         }
         catch(err) {
             this.logError(err,'powerUp')
+            return undefined
         }
     }
 
@@ -473,9 +476,10 @@ export class WorkoutRide extends IncyclistService{
      * - Step defined in "Watts": The power limit will be decreased by _delta_ Watts
      * 
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
-     * 
+     * @returns the resulting target power (in Watt) after the adjustment, or `undefined` if it could not be determined
+     *
      */
-    powerDown(delta:number):void {
+    powerDown(delta:number):number|undefined {
         this.logEvent({message: 'workout power down', delta})
 
         try {
@@ -487,7 +491,7 @@ export class WorkoutRide extends IncyclistService{
                 this.currentLimits.targetPower = Math.max(this.currentLimits.targetPower-deltaVal, this.currentLimits.minPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
-                return;
+                return this.currentLimits.targetPower;
             }
 
 
@@ -501,9 +505,11 @@ export class WorkoutRide extends IncyclistService{
 
             this.setCurrentLimits()
             this.emit('update', this.getDashboardDisplayProperties())
+            return this.currentLimits?.targetPower
         }
         catch(err) {
             this.logError(err,'powerDown')
+            return undefined
         }
     }
 
