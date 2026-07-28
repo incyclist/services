@@ -150,6 +150,34 @@ const isAbsolutePath = (path: string): boolean => {
     return false;
 }
 
+/**
+ * Builds a `video://` URL for a given file path, using the correct number of
+ * slashes depending on whether the path is absolute or relative.
+ *
+ * The total slash run after the `video:` scheme must always be 3 for an
+ * absolute path and 2 for a relative one:
+ * - Windows absolute paths (`C:\path` / `C:/path`) have no leading slash of
+ *   their own, so the prefix needs all 3 slashes explicitly: `video:///C:\path`
+ * - Unix absolute paths (`/path`) already contribute their own leading slash,
+ *   so only 2 explicit slashes are needed: `video://` + `/path` = `video:///path`
+ *   (prefixing a 3rd explicit slash here would double up and produce the
+ *   malformed 4-slash URL this helper exists to prevent)
+ * - Relative paths (e.g. `./path`) use 2 explicit slashes and contribute no
+ *   leading slash of their own: `video://./path`
+ *
+ * This mirrors the equivalent `file://` handling in {@link buildFileUrl} and is the
+ * single source of truth for `video://` URL construction across the codebase.
+ */
+export const buildVideoUrl = (filePath: string): string => {
+    if (isAbsolutePath(filePath)) {
+        if (/^[A-Za-z]:/.test(filePath)) {
+            return `video:///${filePath}`
+        }
+        return `video://${filePath}`
+    }
+    return `video://${filePath}`
+}
+
 export const safeDecode = (path: string): string => {
     try {
         return decodeURIComponent(path);
@@ -169,7 +197,7 @@ const handleFileUrlPath = (fileName: string): string => {
     return `file://${encodeURI(cleanPath)}`;
 }
 
-const buildFileUrl = (normalizedPath: string): string => {
+export const buildFileUrl = (normalizedPath: string): string => {
     if (isAbsolutePath(normalizedPath)) {
         if (/^[A-Za-z]:/.exec(normalizedPath)) {
             return `file:///${encodeURI(normalizedPath)}`;

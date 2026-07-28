@@ -425,4 +425,81 @@ describe('RouteListService',()=>{
         })
     })
 
+    describe('preloadDetails - auto-undo missing download', () => {
+        // A route marked as downloaded whose local video file no longer exists
+        // (deleted outside the app, or - historically - deleted moments after
+        // completion by a third-party download library bug) should self-heal
+        // back to the same state as the user-triggered "delete downloaded
+        // video" action: streamable from its original remote URL again, and
+        // re-downloadable. preloadDetails() is the async hot path that already
+        // runs for every route on load and already has direct RouteCard access,
+        // so that's where the check is hooked in.
+
+        let service:MockeableService
+
+        const flushPromises = () => new Promise(resolve => setImmediate(resolve))
+
+        beforeEach(() => {
+            // RouteListService is a Singleton, and some sibling describe blocks
+            // in this file construct/mutate it without resetting afterward -
+            // force a clean slate regardless of what ran before this block, so
+            // this describe's own card-count assertions aren't at the mercy of
+            // sibling test ordering/cleanup.
+            new RouteListService().reset()
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        afterEach(() => {
+            (service as any).reset()
+            ;(new RoutesDbLoader() as any).reset()
+        })
+
+        // Mutates an existing (real fixture) route/card in place, rather than
+        // injecting new data - prepareMock() always builds from the fixture.
+        // Retitling it to sort first alphabetically guarantees it's inside
+        // preloadDetails()'s preload cap (PRELOAD_DESKTOP/PRELOAD_MOBILE)
+        // regardless of the other ~34 fixture titles.
+        const primeCard = (overrides:Partial<RouteInfo>):RouteCard => {
+            const route = service['routes'][0]
+            Object.assign(route.description, { title:'0-auto-undo-test-route' }, overrides)
+            return service.getCard(route.description.id)
+        }
+
+        test('resets the download when a downloaded video route\'s file no longer exists',async () => {
+            const card = primeCard({ hasVideo:true, isDownloaded:true })
+            card.videoExists = jest.fn().mockResolvedValue(false)
+            card.resetDownload = jest.fn().mockResolvedValue(undefined)
+
+            await (service as any).preloadDetails()
+            await flushPromises()
+
+            expect(card.videoExists).toHaveBeenCalledTimes(1)
+            expect(card.resetDownload).toHaveBeenCalledTimes(1)
+        })
+
+        test('does not reset the download when the video file still exists',async () => {
+            const card = primeCard({ hasVideo:true, isDownloaded:true })
+            card.videoExists = jest.fn().mockResolvedValue(true)
+            card.resetDownload = jest.fn().mockResolvedValue(undefined)
+
+            await (service as any).preloadDetails()
+            await flushPromises()
+
+            expect(card.videoExists).toHaveBeenCalledTimes(1)
+            expect(card.resetDownload).not.toHaveBeenCalled()
+        })
+
+        test('does not check file existence for a non-downloaded / non-video route',async () => {
+            const card = primeCard({ hasVideo:false, isDownloaded:false })
+            card.videoExists = jest.fn().mockResolvedValue(false)
+            card.resetDownload = jest.fn().mockResolvedValue(undefined)
+
+            await (service as any).preloadDetails()
+            await flushPromises()
+
+            expect(card.videoExists).not.toHaveBeenCalled()
+            expect(card.resetDownload).not.toHaveBeenCalled()
+        })
+    })
+
 })

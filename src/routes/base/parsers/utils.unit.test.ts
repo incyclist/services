@@ -1,8 +1,30 @@
 import path from "path"
 import { FileInfo, getBindings } from "../../../api"
-import { getReferencedFileInfo } from "./utils"
+import { buildVideoUrl, getReferencedFileInfo } from "./utils"
 
 describe('Incyclist Parser Utils',()=>{
+
+    describe('buildVideoUrl',()=>{
+        test('Unix absolute path produces a 3-slash video:// URL',()=>{
+            const res = buildVideoUrl('/storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4')
+            expect(res).toBe('video:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4')
+        })
+
+        test('Windows absolute path (backslash) produces a 3-slash video:// URL',()=>{
+            const res = buildVideoUrl('D:\\RLV-Training\\RLV\\ES_Andalusia-1\\ES_Andalusia-1.avi')
+            expect(res).toBe('video:///D:\\RLV-Training\\RLV\\ES_Andalusia-1\\ES_Andalusia-1.avi')
+        })
+
+        test('Windows absolute path (forward slash) produces a 3-slash video:// URL',()=>{
+            const res = buildVideoUrl('C:/Users/user/videos/route.mp4')
+            expect(res).toBe('video:///C:/Users/user/videos/route.mp4')
+        })
+
+        test('relative path produces a 2-slash video:// URL',()=>{
+            const res = buildVideoUrl('./__tests__/data/rlv/IS_West.avi')
+            expect(res).toBe('video://./__tests__/data/rlv/IS_West.avi')
+        })
+    })
 
     describe('getReferencedFileInfo',()=>{
 

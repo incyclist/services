@@ -10,7 +10,7 @@ import { RLVFileReader } from "./rlv";
 import { TacxFileReader } from "./TacxReader";
 
 import type { Parser, ParseResult } from "../types";
-import { fixIncorrectFileInfo } from "../utils";
+import { buildVideoUrl, fixIncorrectFileInfo } from "../utils";
 import { EventLogger } from "gd-eventlog";
 import { Injectable } from "../../../../base/decorators";
 
@@ -197,12 +197,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
     }
 
     protected buildVideoUrl(filePath: string): string {
-        // Absolute paths (Unix /path or Windows C:\path): use 3 slashes
-        // Relative paths (./path or ../path): use 2 slashes
-        if (filePath.startsWith('/') || /^[A-Za-z]:/.test(filePath)) {
-            return `video:///${filePath}`
-        }
-        return `video://${filePath}`
+        return buildVideoUrl(filePath)
     }
 
 
