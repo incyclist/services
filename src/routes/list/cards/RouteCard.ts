@@ -414,7 +414,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         if (descr?.hasVideo && !descr.videoUrl) {
             const details = this.getRouteData()
-            if (details.video.url) {
+            if (details.video?.url) {
                 canStart = false            
                 videoChecking = true
                 videoMissing = this.isVideoMissing()
