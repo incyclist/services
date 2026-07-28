@@ -12,7 +12,7 @@ import { useWorkoutList } from "../workouts";
 import { useActiveRides, useActivityList } from "../activities";
 import { IMessageQueueBinding } from "../api/mq";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../monitoring";
-import { AppFeatures, Interfaces, useAppState } from "../appstate";
+import { AppFeatures, Interfaces, useAppState, useFeatureToggleSync } from "../appstate";
 import { IncyclistPageService } from "../base/pages";
 import { waitNextTick } from "../utils";
 
@@ -192,6 +192,11 @@ export class UserInterfaceServcie extends IncyclistService {
 
             const user = this.getUserSettings().getValue('user',{})
             const id = this.getUserSettings().getValue('uuid',undefined)
+
+            // subscribe before publishing the session-start trigger, so that we don't miss
+            // a near-immediate push from the backend in response to it
+            this.getFeatureToggleSync().start(id)
+
             const {username,weight,ftp,gender} = user
             const topic = `incyclist/session/${this.session}/start`
             const os = this.getBindings().appInfo?.getOS()?.platform
@@ -596,6 +601,11 @@ export class UserInterfaceServcie extends IncyclistService {
     @Injectable
     protected getAppState() {
         return useAppState()
+    }
+
+    @Injectable
+    protected getFeatureToggleSync() {
+        return useFeatureToggleSync()
     }
 
 
