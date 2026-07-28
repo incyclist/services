@@ -7,19 +7,20 @@ import { useUserSettings } from "../settings";
 import { UserSettingsService } from "../settings/service/service";
 import { FeatureToggle } from "./types";
 
-const TOPIC_PREFIX = 'features'
+const TOPIC_PREFIX = 'incyclist/features'
 
 /**
  * Receives remote feature toggle updates over MQTT and applies them to the local user settings.
  *
  * A (future) backend "feature-toggle" microservice publishes changed toggle values to
- * `features/<uuid>/<toggle-name>` (payload `{value:boolean}`) whenever it is notified - via the
- * already-existing `incyclist/session/${session}/start` message - that a client with a given
- * uuid has started a session.
+ * `incyclist/features/<uuid>/<toggle-name>` (payload `{value:boolean}`) whenever it is notified -
+ * via the already-existing `incyclist/session/${session}/start` message - that a client with a
+ * given uuid has started a session.
  *
  * This service only implements the client-side receiving half: once it knows the user's uuid, it
- * subscribes to `features/<uuid>/+` and, for every message received on that subscription, stores
- * the toggle value under the same settings key that `AppStateService.hasFeature()` reads.
+ * subscribes to `incyclist/features/<uuid>/+` and, for every message received on that
+ * subscription, stores the toggle value under the same settings key that
+ * `AppStateService.hasFeature()` reads.
  *
  * There is no polling and no acknowledgement/confirmation flow: this is fire-and-forget. A client
  * that is offline when the backend pushes a change simply keeps its last-known local value until
@@ -59,13 +60,16 @@ export class FeatureToggleSyncService extends IncyclistService {
                 this.stop()
 
             const mq = this.getMessageQueue()
-            if (!mq?.enabled?.())
+            if (!mq?.enabled?.()) {
+                this.logEvent({ message: 'feature-toggle sync not started', reason: 'mq binding not enabled', uuid })
                 return
+            }
 
             this.uuid = uuid
             mq.on('mq-message', this.onMessageHandler)
             mq.subscribe(this.getTopic(uuid))
             this.subscribed = true
+            this.logEvent({ message: 'feature-toggle sync started', uuid, topic: this.getTopic(uuid) })
         }
         catch (err) {
             this.logError(err, 'start')
@@ -88,6 +92,7 @@ export class FeatureToggleSyncService extends IncyclistService {
                 if (this.uuid)
                     mq.unsubscribe(this.getTopic(this.uuid))
             }
+            this.logEvent({ message: 'feature-toggle sync stopped', uuid: this.uuid })
         }
         catch (err) {
             this.logError(err, 'stop')
@@ -101,31 +106,43 @@ export class FeatureToggleSyncService extends IncyclistService {
         return `${TOPIC_PREFIX}/${uuid}/+`
     }
 
+    /**
+     * Returns this service's own topic prefix (`incyclist/features/<uuid>/`) if a uuid is known,
+     * so callers can cheaply tell "not one of ours" (no uuid known, or `topic` doesn't start with
+     * it - the common case, since `mq-message` fires for every subscription any service in the app
+     * has, not just this one) apart from "one of ours, but malformed" - which is worth logging.
+     */
+    protected getTopicPrefix(): string | undefined {
+        return this.uuid ? `${TOPIC_PREFIX}/${this.uuid}/` : undefined
+    }
+
     protected onMessage(topic: string, message: string | Uint8Array) {
         try {
-            const toggleName = this.parseToggleName(topic)
-            if (!toggleName)
+            const prefix = this.getTopicPrefix()
+            if (!prefix || typeof topic !== 'string' || !topic.startsWith(prefix))
                 return
+
+            const toggleName = this.parseToggleName(topic, prefix)
+            if (!toggleName) {
+                this.logEvent({ message: 'feature-toggle sync: ignoring malformed topic', topic,payload:message })
+                return
+            }
 
             const payload = this.parsePayload(message)
-            if (!payload || typeof payload.value !== 'boolean')
+            if (!payload || typeof payload.value !== 'boolean') {
+                this.logEvent({ message: 'feature-toggle sync: ignoring malformed payload', topic,payload:message })
                 return
+            }
 
             this.getUserSettings().set(toggleName, payload.value)
+            this.logEvent({ message: 'feature-toggle sync: applied toggle', toggle: toggleName, value: payload.value })
         }
         catch (err) {
             this.logError(err, 'onMessage', { topic })
         }
     }
 
-    protected parseToggleName(topic: string): FeatureToggle | undefined {
-        if (!this.uuid || typeof topic !== 'string')
-            return undefined
-
-        const prefix = `${TOPIC_PREFIX}/${this.uuid}/`
-        if (!topic.startsWith(prefix))
-            return undefined
-
+    protected parseToggleName(topic: string, prefix: string): FeatureToggle | undefined {
         const toggleName = topic.slice(prefix.length)
         if (!toggleName || toggleName.includes('/'))
             return undefined
