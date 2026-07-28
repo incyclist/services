@@ -1179,12 +1179,27 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 if (!route.description.country) {
                     route.updateCountryFromPoints()
                         .then( ()=> {
-                            this.logEvent({message:'preload route updated (country)', route:card?.getData()?.title})
+                            this.logEvent({message:'preload route updated', route:card?.getData()?.title, reason:'country added'})
                             this.db.save(route,false)
                         })
                 }
 
-            }) 
+                // Self-heal a route that's marked as downloaded but whose local
+                // video file no longer exists on disk (e.g. deleted outside the
+                // app, or - historically - deleted moments after completion by
+                // a third-party download library bug). Only check routes that
+                // could plausibly have a dead local file, to avoid an fs check
+                // on every single route on every load.
+                if (route.description.hasVideo && route.description.isDownloaded) {
+                    card.videoExists().then( exists => {
+                        if (!exists) {
+                            this.logEvent({message:'preload route updated', route:card?.getData()?.title, reason:'downloaded file missing'})
+                            card.resetDownload()
+                        }
+                    })
+                }
+
+            })
             .catch( ()=>{
                 // ignore
             }) 

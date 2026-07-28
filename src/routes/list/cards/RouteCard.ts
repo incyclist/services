@@ -1100,7 +1100,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         this.emitUpdate()
     }
 
-    protected async resetDownload():Promise<void> {
+    async resetDownload():Promise<void> {
         const descr = this.getRouteDescription()
         descr.isDownloaded = false
 

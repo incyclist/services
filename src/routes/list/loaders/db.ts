@@ -4,7 +4,7 @@ import { PromiseObserver } from "../../../base/types/observer"
 import { Route } from "../../base/model/route"
 import { RouteInfo } from "../../base/types"
 import { RoutesLegacyDbLoader } from "./LegacyDB"
-import { RouteInfoDBEntry } from "./types"
+import { correctVideoUrl, RouteInfoDBEntry } from "./types"
 import { DBLoader } from "./DBLoader"
 import { RouteApiDetail } from "../../base/api/types"
 import { waitNextTick } from "../../../utils"
@@ -95,7 +95,66 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             return;
 
         const details = await this.loadDetailRecord(descr)
+        if (!details)
+            return details
+
+        await this.correctPersistedVideoUrl(descr, details)
+
         return details
+    }
+
+    /**
+     * Self-heals a `details.video.url` on the normal hot load path - this is
+     * the one actually exercised on every app start for already-downloaded
+     * routes (`RouteListService.preloadDetails()` -> `getDetails()`), unlike
+     * `Loader.verifyVideoUrl()` which only runs during a first-ever legacy
+     * migration.
+     *
+     * Two things get corrected (see `correctVideoUrl()` for the full
+     * platform-aware logic): a malformed slash count (4+ slashes, from the
+     * historic download-completion bug) on every platform, and - on mobile
+     * only, in the same pass - the scheme itself, from `video:` to `file:`
+     * (mobile has no `video:` protocol handler; that's desktop-only).
+     *
+     * Corrects `details.video.url` (and `descr.videoUrl`, if it independently
+     * drifted) on the in-memory objects so the caller gets the fix this same
+     * session, and persists the corrected details record back to the repo so
+     * subsequent loads read the already-correct value.
+     */
+    protected async correctPersistedVideoUrl(descr:RouteInfo, details:RouteApiDetail):Promise<boolean> {
+        const corrected = correctVideoUrl(details.video?.url, this.isMobile())
+        if (!corrected)
+            return false;
+
+        details.video.url = corrected
+        if (descr.videoUrl !== corrected) {
+            descr.videoUrl = corrected
+        }
+
+        await this.writeDetailsRecord(descr, details)
+        return true;
+    }
+
+    /**
+     * Writes a details record back to the repo for the given description,
+     * using the same repo-selection (`getDetailsRepo`) and id (`legacyId` if
+     * present, else `id`) as `writeDetails()` - but narrowly scoped to just
+     * this write, without the description-hash bookkeeping / `write()` side
+     * effects that the broader `save()` flow performs.
+     */
+    protected async writeDetailsRecord(descr:RouteInfo, details:RouteApiDetail):Promise<void> {
+        const repo = this.getDetailsRepo(new Route(descr))
+        if (!repo)
+            return;
+
+        const id = descr.legacyId || descr.id
+
+        try {
+            await repo.write(id, details as undefined as JSONObject)
+        }
+        catch(err) {
+            this.logger.logEvent({message:'could not persist corrected video URL', id, error:err.message})
+        }
     }
 
 
@@ -290,9 +349,18 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         const details = await this.loadDetailRecord(route)
         let updated = false
 
+        const verifyVideoUrl = (route:Route) => {
+            const res =this.verifyVideoUrl(route)
+            if (res) {
+                this.logger.logEvent({message:'video URL updated', url:route?.details?.video?.url})
+            }
+            return res
+        }
+
+
         addDetails(route,details)
         updated ||= this.verifyRouteHash(route)
-        updated ||= this.verifyVideoUrl(route)
+        updated ||= verifyVideoUrl(route)
         
         if (alreadyAdded)
             this.emitRouteUpdate(route)

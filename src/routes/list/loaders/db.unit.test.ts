@@ -304,6 +304,59 @@ describe('RoutesDbLoader',()=>{
 
     })
 
+    describe('verifyVideoUrl',()=>{
+
+        let loader:RoutesDbLoader;
+        let loaderObj
+
+        beforeEach( ()=>{
+            loader = loaderObj = new RoutesDbLoader()
+        })
+
+        afterEach( ()=>{
+            loaderObj.reset()
+        })
+
+        const buildVideoRoute = (videoUrl:string, descrOverrides:Partial<RouteInfo> = {}):Route => {
+            const description = {
+                id:'test-route',
+                title:'Test Route',
+                hasVideo:true,
+                videoUrl,
+                isDownloaded:true,
+                isLocal:false,
+                ...descrOverrides
+            } as unknown as RouteInfo
+
+            const details = { video: { url: videoUrl } } as unknown as Route['details']
+
+            return new Route(description, details)
+        }
+
+        test('normalizes an already-persisted malformed (4-slash) video URL and reports updated',()=>{
+            const malformed = 'video:////storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+            const route = buildVideoRoute(malformed)
+
+            const updated = loaderObj['verifyVideoUrl'](route)
+
+            expect(updated).toBe(true)
+            expect(route.details.video.url).toBe('video:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4')
+            expect(route.description.videoUrl).toBe(route.details.video.url)
+        })
+
+        test('is a no-op for an already well-formed (3-slash) video URL',()=>{
+            const wellFormed = 'video:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+            const route = buildVideoRoute(wellFormed)
+
+            const updated = loaderObj['verifyVideoUrl'](route)
+
+            expect(updated).toBeFalsy()
+            expect(route.details.video.url).toBe(wellFormed)
+            expect(route.description.videoUrl).toBe(wellFormed)
+        })
+
+    })
+
     describe( 'save',()=>{
 
         let loader:RoutesDbLoader;
@@ -500,6 +553,159 @@ describe('RoutesDbLoader',()=>{
 
             expect(details).toBeUndefined()
             expectLog('could not load route details','some error')
+        })
+
+    })
+
+    describe('getDetails - malformed video URL self-heal',()=>{
+        // Unlike `verifyVideoUrl()` (only exercised on first-ever legacy
+        // migration), `getDetails()` is the hot path RouteListService.preloadDetails()
+        // actually calls on every app start for already-downloaded routes -
+        // this is where the persisted-URL correction needs to actually run.
+
+        let loader:RoutesDbLoader
+        let loaderObj
+        let descr:RouteInfo
+        let repoWrite:jest.Mock
+
+        beforeEach( ()=>{
+            loader = loaderObj = new RoutesDbLoader()
+
+            descr = {
+                id:'video-route-1',
+                title:'Test Video Route',
+                hasVideo:true,
+            } as RouteInfo
+
+            loaderObj.getDescription = jest.fn().mockReturnValue(descr)
+
+            repoWrite = jest.fn().mockResolvedValue(undefined)
+            loaderObj.getDetailsRepo = jest.fn().mockReturnValue({ write:repoWrite })
+        })
+
+        afterEach( ()=>{
+            loaderObj.reset()
+        })
+
+        test('normalizes a malformed (4-slash) persisted video URL, syncs descr.videoUrl and persists the correction',async ()=>{
+            const malformed = 'video:////storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+            const corrected = 'video:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+
+            descr.videoUrl = malformed
+            const detailsRecord = { id:descr.id, video:{ url:malformed } }
+            loaderObj.loadDetailRecord = jest.fn().mockResolvedValue(detailsRecord)
+
+            const details = await loader.getDetails(descr.id)
+
+            expect(details.video.url).toBe(corrected)
+            expect(descr.videoUrl).toBe(corrected)
+            expect(repoWrite).toHaveBeenCalledTimes(1)
+            expect(repoWrite).toHaveBeenCalledWith(descr.id, detailsRecord)
+        })
+
+        test('is a no-op for an already well-formed (3-slash) video URL - no repo write',async ()=>{
+            const wellFormed = 'video:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+
+            descr.videoUrl = wellFormed
+            const detailsRecord = { id:descr.id, video:{ url:wellFormed } }
+            loaderObj.loadDetailRecord = jest.fn().mockResolvedValue(detailsRecord)
+
+            const details = await loader.getDetails(descr.id)
+
+            expect(details.video.url).toBe(wellFormed)
+            expect(descr.videoUrl).toBe(wellFormed)
+            expect(repoWrite).not.toHaveBeenCalled()
+        })
+
+        test('uses legacyId (not id) as the repo key when correcting a legacy route',async ()=>{
+            const malformed = 'video:////storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+
+            descr.legacyId = 'legacy-123'
+            descr.videoUrl = malformed
+            const detailsRecord = { id:descr.id, video:{ url:malformed } }
+            loaderObj.loadDetailRecord = jest.fn().mockResolvedValue(detailsRecord)
+
+            await loader.getDetails(descr.id)
+
+            expect(repoWrite).toHaveBeenCalledWith('legacy-123', detailsRecord)
+        })
+
+        describe('platform-aware scheme correction',()=>{
+            // video: is a desktop-only convention (Electron registers a real
+            // custom protocol handler for it). Mobile has no such handler, so
+            // on mobile the persisted URL should be corrected all the way to
+            // file:, in the same pass as any slash-count fix - not left as a
+            // (possibly well-formed) video: URL for a subsequent load to catch.
+
+            test('mobile: an already well-formed (3-slash) video:// URL is corrected to file://, persisted',async ()=>{
+                loaderObj.isMobile = jest.fn().mockReturnValue(true)
+
+                const wellFormedVideo = 'video:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+                const expectedFile = 'file:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+
+                descr.videoUrl = wellFormedVideo
+                const detailsRecord = { id:descr.id, video:{ url:wellFormedVideo } }
+                loaderObj.loadDetailRecord = jest.fn().mockResolvedValue(detailsRecord)
+
+                const details = await loader.getDetails(descr.id)
+
+                expect(details.video.url).toBe(expectedFile)
+                expect(descr.videoUrl).toBe(expectedFile)
+                expect(repoWrite).toHaveBeenCalledTimes(1)
+                expect(repoWrite).toHaveBeenCalledWith(descr.id, detailsRecord)
+            })
+
+            test('mobile: a malformed (4-slash) video: URL is corrected straight to a well-formed file:// URL (no video:// intermediate), persisted',async ()=>{
+                loaderObj.isMobile = jest.fn().mockReturnValue(true)
+
+                const malformed = 'video:////storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+                const expectedFile = 'file:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+
+                descr.videoUrl = malformed
+                const detailsRecord = { id:descr.id, video:{ url:malformed } }
+                loaderObj.loadDetailRecord = jest.fn().mockResolvedValue(detailsRecord)
+
+                const details = await loader.getDetails(descr.id)
+
+                expect(details.video.url).toBe(expectedFile)
+                expect(descr.videoUrl).toBe(expectedFile)
+                expect(repoWrite).toHaveBeenCalledTimes(1)
+                expect(repoWrite).toHaveBeenCalledWith(descr.id, detailsRecord)
+            })
+
+            test('non-mobile: a malformed (4-slash) video: URL is only corrected to well-formed video:// (3-slash) - scheme unchanged, persisted',async ()=>{
+                loaderObj.isMobile = jest.fn().mockReturnValue(false)
+
+                const malformed = 'video:////storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+                const expectedVideo = 'video:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+
+                descr.videoUrl = malformed
+                const detailsRecord = { id:descr.id, video:{ url:malformed } }
+                loaderObj.loadDetailRecord = jest.fn().mockResolvedValue(detailsRecord)
+
+                const details = await loader.getDetails(descr.id)
+
+                expect(details.video.url).toBe(expectedVideo)
+                expect(descr.videoUrl).toBe(expectedVideo)
+                expect(repoWrite).toHaveBeenCalledTimes(1)
+                expect(repoWrite).toHaveBeenCalledWith(descr.id, detailsRecord)
+            })
+
+            test('non-mobile: an already well-formed (3-slash) video:// URL is a no-op - no repo write',async ()=>{
+                loaderObj.isMobile = jest.fn().mockReturnValue(false)
+
+                const wellFormedVideo = 'video:///storage/emulated/0/Android/data/com.incyclist.app/files/videos/FR_Galibier_Demo.mp4'
+
+                descr.videoUrl = wellFormedVideo
+                const detailsRecord = { id:descr.id, video:{ url:wellFormedVideo } }
+                loaderObj.loadDetailRecord = jest.fn().mockResolvedValue(detailsRecord)
+
+                const details = await loader.getDetails(descr.id)
+
+                expect(details.video.url).toBe(wellFormedVideo)
+                expect(descr.videoUrl).toBe(wellFormedVideo)
+                expect(repoWrite).not.toHaveBeenCalled()
+            })
         })
 
     })

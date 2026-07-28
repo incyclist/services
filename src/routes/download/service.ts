@@ -4,6 +4,7 @@ import { IncyclistService } from "../../base/service";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { Route } from "../base/model/route";
+import { buildVideoUrl } from "../base/parsers/utils";
 import { RoutesApiLoader } from "../list/loaders/api";
 import { RoutesDbLoader } from "../list/loaders/db";
 import { DownloadObserver } from "./types";
@@ -207,9 +208,10 @@ export class RouteDownloadService extends IncyclistService {
             session.on('close', ()=> { /*console.log('~~~ CLOSE') */ })
             session.on('progress', onProgress)
             session.on('error', onError)
-            session.once('done', ()=>{ 
-                this.logEvent({message:'download finished ',title, id,url})
-                observer.emit('done', `video:///${file}`)
+            session.once('done', ()=>{
+                const localUrl = buildVideoUrl(file) 
+                this.logEvent({message:'download finished ',title, id,url,localUrl})
+                observer.emit('done', localUrl)
             })    
             session.start()
         }
