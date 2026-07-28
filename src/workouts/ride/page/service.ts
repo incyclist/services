@@ -545,7 +545,10 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         const target = getStepTargetText(limits.step ?? {}, wo.ftp)
         const duration = getStepDuration({ duration: limits.duration })
         const base = `${target} for ${duration}`
-        const text = !title || title===base ? base : (title.startsWith('(') ? `${base}${title}` : `${base} - ${title}`)
+
+        let text = base
+        if (title && title!==base)
+            text = title.startsWith('(') ? `${base}${title}` : `${base} - ${title}`
 
         return { text, mode: wo.mode ?? null }
     }
