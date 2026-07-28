@@ -40,7 +40,7 @@ const MALFORMED_VIDEO_URL = /^video:\/{4,}/
  * second correction pass fixes the scheme.
  */
 export const correctVideoUrl = (url?: string, isMobile: boolean = false): string | undefined => {
-    if (!url || !url.startsWith('video:'))
+    if (!url?.startsWith('video:'))
         return undefined
 
     const malformed = MALFORMED_VIDEO_URL.test(url)
