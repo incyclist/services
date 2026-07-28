@@ -241,18 +241,18 @@ describe('WorkoutRidePageService', () => {
             ])
         })
 
-        // Regression (FIXES_BACKLOG #13): WorkoutRide.getStepTitle() prefixes its output with the
-        // workout name for desktop/web (which must NOT change - see WorkoutRide.unit.test.ts).
-        // Mobile shows the workout name elsewhere on screen, so the page service must strip that
-        // "<name>: " prefix from both the `title` prop and the dashboard shoutout line, without
-        // reimplementing getStepTitle()'s own segment/step/repeat composition.
-        test('strips the workout name prefix from title and dashboard text for mobile', () => {
+        // Regression (FIXES_BACKLOG #13): WorkoutRide.getStepTitle() is now platform-aware - on
+        // mobile it never includes the workout name to begin with (desktop/web still gets it
+        // prefixed, see WorkoutRide.unit.test.ts), so the page service no longer needs to
+        // transform `title` at all; both the `title` prop and the dashboard line just consume it
+        // as-is.
+        test('passes the mobile-formatted title and dashboard text through unchanged', () => {
             const current = makeCurrentWorkout()
             MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
             MockRideDisplay.getState.mockReturnValue('Active')
             MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
                 workout: { name: 'VO2 Max Intervals' },
-                title: 'VO2 Max Intervals: Sprint(2/5)',
+                title: 'Sprint(2/5)',
                 ftp: 250, mode: null, canShowBackward: true, canShowForward: true
             })
             MockWorkoutRide.getCurrentLimits.mockReturnValue({
@@ -267,7 +267,7 @@ describe('WorkoutRidePageService', () => {
             expect(props.dashboard).toEqual({ text: '150W for 2min - Sprint(2/5)', mode: null })
         })
 
-        test('leaves title/dashboard text untouched when it does not start with "<workout name>: "', () => {
+        test('passes the "free" title through unchanged', () => {
             const current = makeCurrentWorkout()
             MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
             MockRideDisplay.getState.mockReturnValue('Active')
@@ -286,6 +286,57 @@ describe('WorkoutRidePageService', () => {
 
             expect(props.title).toBe('free')
             expect(props.dashboard).toEqual({ text: '150W for 2min - free', mode: null })
+        })
+
+        // Regression (FIXES_BACKLOG #13 follow-up, confirmed on a real ride, .zwo IntervalsT block):
+        // when the current segment AND step both have no text, WorkoutRide.getStepTitle() (mobile
+        // channel) returns just the bare repeat suffix, e.g. "(1/3)" - buildDashboardLine() already
+        // shows "<target> for <duration>" separately, so a bare suffix like this must attach
+        // directly with no " - " separator (it isn't a standalone title).
+        test('attaches a bare repeat suffix directly, with no separator', () => {
+            const current = makeCurrentWorkout()
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
+                workout: { name: 'Threshold Starter – 2x8min' },
+                title: '(1/3)',
+                ftp: 200, mode: null, canShowBackward: true, canShowForward: true
+            })
+            MockWorkoutRide.getCurrentLimits.mockReturnValue({
+                time: 25, duration: 30, remaining: 5, targetPower: 180, minPower: 180, maxPower: 180,
+                step: { type: 'step', duration: 30, steady: true, power: { type: 'watt', min: 180, max: 180 } }
+            })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 25 })
+
+            const props = s.getPageDisplayProps()
+
+            expect(props.title).toBe('(1/3)')
+            expect(props.dashboard).toEqual({ text: '180W for 30s(1/3)', mode: null })
+        })
+
+        // Regression: outside any segment, WorkoutRide.getStepTitle() (mobile channel) falls back
+        // to the verbal description itself ("<target> for <duration>", no repeat context to show
+        // instead) - since that's the exact same phrase buildDashboardLine() already computes, it
+        // must not be appended a second time.
+        test('does not duplicate the verbal description when title equals the already-computed target/duration text', () => {
+            const current = makeCurrentWorkout()
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ workout: current, state: 'Active' })
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
+                workout: { name: 'Threshold Starter – 2x8min' },
+                title: '180W for 30s',
+                ftp: 200, mode: null, canShowBackward: true, canShowForward: true
+            })
+            MockWorkoutRide.getCurrentLimits.mockReturnValue({
+                time: 25, duration: 30, remaining: 5, targetPower: 180, minPower: 180, maxPower: 180,
+                step: { type: 'step', duration: 30, steady: true, power: { type: 'watt', min: 180, max: 180 } }
+            })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 25 })
+
+            const props = s.getPageDisplayProps()
+
+            expect(props.title).toBe('180W for 30s')
+            expect(props.dashboard).toEqual({ text: '180W for 30s', mode: null })
         })
 
         // Regression: a ramp step's live limits collapse min===max to the instantaneous ERG

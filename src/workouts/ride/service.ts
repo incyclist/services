@@ -1,4 +1,5 @@
 import { CyclingMode } from "incyclist-devices";
+import { getBindings } from "../../api";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer } from "../../base/types/observer";
@@ -8,6 +9,7 @@ import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
 import { Workout } from "../base/model";
 import { CurrentStep, PowerLimit, StepDefinition } from "../base/model/types";
+import { getStepDuration, getStepTargetText } from "../base/graph";
 import { WorkoutListService, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
 import { ActiveWorkoutLimit, PowerAdjustmentResult, WorkoutDisplayProperties } from "./types";
@@ -840,43 +842,63 @@ export class WorkoutRide extends IncyclistService{
         return { start, stop };
     }
 
+    // Desktop/web shows the workout name prefixed ("<name>: ..."); mobile shows the workout name
+    // elsewhere on screen and must not repeat it here (see FIXES_BACKLOG #13). When neither the
+    // segment nor the current step has its own text, there is nothing descriptive to show beyond
+    // the repeat count - desktop falls back to a "<target> for <duration>" verbal description
+    // (it has no other numeric display for this), while mobile's dashboard line already shows
+    // that separately (WorkoutRidePageService.buildDashboardLine()), so mobile only needs the bare
+    // repeat suffix here to avoid showing it twice.
+    protected getBindings() {
+        return getBindings()
+    }
+
     protected getStepTitle(time:number) {
         if (!this.workout)
             return
 
-        let title = this.workout.name
         const limit = this.workout.getLimits(time,true);
-        const segment = this.workout.getSegment(time) 
+        const segment = this.workout.getSegment(time)
+        const isMobile = this.getBindings()?.appInfo?.getChannel()==='mobile'
 
-
-        let ch = ': '
-
-
-        if (segment?.text) {
-            title += `${ch}${segment.text}`
-            ch=' - '
-        }
-        if (segment?.text &&  segment?.repeat>0) {
-            const repeatTime = segment.duration/segment.repeat;
-            const repeatCount = Math.floor((time-segment.getStart())/repeatTime )+1
-            title += `(${repeatCount}/${segment.repeat})`    
-        }
-
-        if (!limit) {
-            title += `${ch}free`
-        }
-        else {
-            if (limit?.text)
-                title += `${ch}${limit.text}`
-
-            if (limit?.text && segment && !segment.text && segment.repeat>0) {
+        const repeatSuffix = (segment?.repeat>0)
+            ? (() => {
                 const repeatTime = segment.duration/segment.repeat;
                 const repeatCount = Math.floor((time-segment.getStart())/repeatTime )+1
-                title += `(${repeatCount}/${segment.repeat})`    
-            }
-        }    
+                return `(${repeatCount}/${segment.repeat})`
+            })()
+            : ''
 
-        return title
+        const compose = (body:string) => isMobile ? body : `${this.workout.name}: ${body}`
+
+        if (!limit)
+            return compose('free')
+
+        const segmentName = segment?.text
+        const stepName = limit?.text
+
+        if (segmentName && stepName)
+            return compose(`${segmentName}${repeatSuffix} - ${stepName}`)
+        if (segmentName)
+            return compose(`${segmentName}${repeatSuffix}`)
+        if (stepName)
+            return compose(`${stepName}${repeatSuffix}`)
+
+        // neither the segment nor the step has a name of its own
+        const rawStep = this.currentLimits?.step ?? limit
+        const verbalDescription = `${getStepTargetText(rawStep, this.settings?.ftp)} for ${getStepDuration(rawStep)}`
+
+        if (isMobile)
+            // buildDashboardLine() already shows the verbal description separately - only the
+            // repeat indicator (if any) still needs to surface here; if there's no segment (and so
+            // no repeat) at all, fall back to the verbal description itself rather than an empty title
+            return repeatSuffix || verbalDescription
+
+        if (!segment)
+            // not in a segment at all - nothing to add beyond the bare workout name on desktop
+            return this.workout.name
+
+        return compose(`${verbalDescription}${repeatSuffix}`)
     }
 
     protected getPowerVal( power:PowerLimit,key:'min'|'max') {
