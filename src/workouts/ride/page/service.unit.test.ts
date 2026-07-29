@@ -800,6 +800,20 @@ describe('WorkoutRidePageService', () => {
             workoutObserver.emit(event)
             expect(navSpy).toHaveBeenCalled()
         })
+
+        // Regression: auto-completion (WorkoutRideService.checkIfDone() firing 'completed' once
+        // elapsed time reaches the workout's end, or 'stopped') previously only emitted
+        // navigate-back and never finalized the activity via RideDisplay.stop(true) - unlike
+        // onStop() (manual "End Ride"), which always finalized first. That meant a workout
+        // finishing naturally landed on an unpopulated Ride Summary until the user also tapped
+        // "End Ride" manually. Both paths must now converge on the same finalize-then-navigate
+        // behavior.
+        test.each(['completed', 'stopped'])('%s -> finalizes the activity via RideDisplay.stop(true) before navigating back, same as manual onStop()', (event) => {
+            workoutObserver.emit(event)
+
+            expect(MockRideDisplay.stop).toHaveBeenCalledWith(true)
+            expect(navSpy).toHaveBeenCalled()
+        })
     })
 
     describe('getRideObserver', () => {
