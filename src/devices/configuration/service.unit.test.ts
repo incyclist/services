@@ -987,7 +987,102 @@ describe( 'DeviceConfigurationService',()=>{
 
 
 
-    })    
+    })
+
+    describe( 'updateCapabilities (FIXES_BACKLOG #22)',()=>{
+
+        let service;
+        beforeEach( ()=>{
+            service = new DeviceConfigurationService()
+            service.updateUserSettings = jest.fn()
+        })
+
+        afterEach( ()=>{
+            service.reset()
+        })
+
+        test('device downgraded (no longer Control-capable) while still selected for Control - capability is removed and selected is reassigned, not silently kept',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'fm'}},
+                    {udid:'2',settings:{interface:'ble',address:'125',protocol:'fm'}},
+                ],
+                capabilities:[
+                    {capability:'bike', selected:'1', devices:['1','2']},
+                    {capability:IncyclistCapability.Control, selected:'1', devices:['1','2']},
+                    {capability:IncyclistCapability.Power, selected:'1', devices:['1','2']},
+                ]
+            }
+            service.adapters = {
+                '1': { getCapabilities: jest.fn().mockReturnValue([IncyclistCapability.Power]) }
+            }
+
+            service.updateCapabilities('1')
+
+            const {capabilities} = service.settings
+            const control = capabilities.find(c=>c.capability===IncyclistCapability.Control)
+            const power = capabilities.find(c=>c.capability===IncyclistCapability.Power)
+
+            // device '1' must no longer be listed under Control, and must no longer be `selected` for it
+            expect(control.devices).not.toContain('1')
+            expect(control.selected).not.toBe('1')
+            expect(control.selected).toBe('2')  // reassigned to the remaining device, per delete()'s existing convention
+
+            // device '1' keeps its other (still valid) capabilities untouched
+            expect(power.devices).toContain('1')
+            expect(power.selected).toBe('1')
+        })
+
+        test('device downgraded and it was the only device selected/listed for Control - capability is cleared, not left dangling',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'fm'}},
+                ],
+                capabilities:[
+                    {capability:'bike', selected:'1', devices:['1']},
+                    {capability:IncyclistCapability.Control, selected:'1', devices:['1']},
+                    {capability:IncyclistCapability.Power, selected:'1', devices:['1']},
+                ]
+            }
+            service.adapters = {
+                '1': { getCapabilities: jest.fn().mockReturnValue([IncyclistCapability.Power]) }
+            }
+
+            service.updateCapabilities('1')
+
+            const {capabilities} = service.settings
+            const control = capabilities.find(c=>c.capability===IncyclistCapability.Control)
+
+            expect(control.devices).not.toContain('1')
+            expect(control.selected).toBeUndefined()
+        })
+
+        test('device still has the capability - selected/devices for that capability are left untouched',()=>{
+            service.settings = {
+                devices:[
+                    {udid:'1',settings:{interface:'ble',address:'124',protocol:'fm'}},
+                    {udid:'2',settings:{interface:'ble',address:'125',protocol:'fm'}},
+                ],
+                capabilities:[
+                    {capability:'bike', selected:'1', devices:['1','2']},
+                    {capability:IncyclistCapability.Control, selected:'1', devices:['1','2']},
+                    {capability:IncyclistCapability.Power, selected:'1', devices:['1','2']},
+                ]
+            }
+            service.adapters = {
+                '1': { getCapabilities: jest.fn().mockReturnValue([IncyclistCapability.Control,IncyclistCapability.Power]) }
+            }
+
+            service.updateCapabilities('1')
+
+            const {capabilities} = service.settings
+            const control = capabilities.find(c=>c.capability===IncyclistCapability.Control)
+
+            expect(control.devices).toEqual(['1','2'])
+            expect(control.selected).toBe('1')
+        })
+
+    })
 
     describe( 'setInterfaceSettings',()=>{
 
