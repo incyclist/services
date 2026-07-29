@@ -56,7 +56,13 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     openPage(): IObserver {
         try {
             super.openPage()
-            this.logEvent({ message: 'page shown', page: 'Workouts' })
+
+            let pageType 
+            if (!this.getAppState().hasFeature('MOBILE_WORKOUTS')) {
+                pageType= 'placeholder' 
+            }
+
+            this.logEvent({ message: 'page shown', page: 'Workouts',pageType })
 
             const { observer } = this.getWorkoutList().open()
             this.listObserver = observer
@@ -340,12 +346,14 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
             this.importPhase = 'importing'
             this.importingFileName = file?.name
             this.emitImportUpdate()
+            this.logEvent({ message: 'workout import attempted', file: file?.name })
 
             this.getWorkoutList().import(file, { showImportCards:false })
                 .then( ([card]) => {
                     const group = this.getLastUsedImportGroup()
 
                     observer.emit('success')
+                    this.logEvent({ message: 'workout import succeeded', file: file?.name, workoutName: card.getTitle(), group })
 
                     // If onImportClose() (or a newer onImportFile()) ran while this promise was
                     // still in flight, importGeneration has moved on and this result is stale -
@@ -380,6 +388,7 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
                     // onImportFile() must keep doing that until this event is renamed away from
                     // the special-cased 'error' string (tracked separately, not yet done).
                     observer.emit('error', err)
+                    this.logEvent({ message: 'workout import failed', file: file?.name, error: err?.message })
 
                     // see the .then() branch above - discard a stale result the same way here.
                     if (generation !== this.importGeneration)

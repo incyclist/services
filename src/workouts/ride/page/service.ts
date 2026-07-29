@@ -241,8 +241,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
 
     onStop(): void {
         try {
-            this.getRideDisplay().stop(true)
-            this.emitNavigateBack()
+            this.finishRide()
         }
         catch (err: any) {
             this.logError(err, 'onStop')
@@ -385,6 +384,15 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     }
 
     protected onWorkoutFinished(): void {
+        this.finishRide()
+    }
+
+    // Shared by onStop() (manual "End Ride") and onWorkoutFinished() (auto-completion once
+    // WorkoutRideService.checkIfDone() fires 'completed'/'stopped') - both must finalize the
+    // activity via RideDisplay.stop(true) before navigating back, so a workout that completes on
+    // its own also lands on a populated Ride Summary instead of requiring a manual "End Ride" tap.
+    protected finishRide(): void {
+        this.getRideDisplay().stop(true)
         this.emitNavigateBack()
     }
 
