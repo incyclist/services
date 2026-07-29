@@ -2,14 +2,25 @@ import { HealthStatus } from "../../devices"
 import { Dimension, Unit } from "../../i18n"
 import { RoutePoint } from "../../types"
 import { ActivityDetailsUI } from "../base"
+import { WorkoutGraphActuals, WorkoutGraphPlan } from "../../workouts"
 
 export type ActivityState = 'ininitalized' | 'active' | 'paused' | 'completed' | 'idle'
+
+export type ActivityWorkoutSummaryGraph = {
+    plan: WorkoutGraphPlan
+    actuals: WorkoutGraphActuals
+}
 
 export type ActivitySummaryDisplayProperties = {
     activity?: ActivityDetailsUI
     showSave?: boolean
     showContinue?: boolean
     showMap?: boolean
+    // true for a route-less workout (routeType==='None') - there's no GPS/route data to show on
+    // a map in this case, so the summary should render the workout profile instead (see
+    // workoutGraph). Mutually exclusive with showMap.
+    showWorkoutSummary?: boolean
+    workoutGraph?: ActivityWorkoutSummaryGraph
     preview?: string
     units?: Record<Dimension,Unit>
 }
