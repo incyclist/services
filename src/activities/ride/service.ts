@@ -12,7 +12,7 @@ import { RouteSettings } from "../../routes/list/cards/types";
 import { v4 as generateUUID } from 'uuid';
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
 import { ActivityDashboardDataItem, ActivityState, ActivitySummaryDisplayProperties, ActivityWorkoutSummaryGraph } from "./types";
-import { getWorkoutGraphSeries, Workout, WorkoutGraphActuals, WorkoutGraphPlan } from "../../workouts";
+import { getWorkoutGraphSeries, WorkoutGraphActuals, WorkoutGraphPlan } from "../../workouts";
 import { addDetails, checkIsLoop, getElevationGainAt, getNextPosition, getPosition, getRouteHash, validateRoute } from "../../routes/base/utils/route";
 import { Route } from "../../routes/base/model/route";
 import { RouteApiDetail } from "../../routes/base/api/types";
