@@ -11,7 +11,8 @@ import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/typ
 import { RouteSettings } from "../../routes/list/cards/types";
 import { v4 as generateUUID } from 'uuid';
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
-import { ActivityDashboardDataItem, ActivityState, ActivitySummaryDisplayProperties } from "./types";
+import { ActivityDashboardDataItem, ActivityState, ActivitySummaryDisplayProperties, ActivityWorkoutSummaryGraph } from "./types";
+import { getWorkoutGraphSeries, Workout, WorkoutGraphActuals, WorkoutGraphPlan } from "../../workouts";
 import { addDetails, checkIsLoop, getElevationGainAt, getNextPosition, getPosition, getRouteHash, validateRoute } from "../../routes/base/utils/route";
 import { Route } from "../../routes/base/model/route";
 import { RouteApiDetail } from "../../routes/base/api/types";
@@ -572,31 +573,37 @@ export class ActivityRideService extends IncyclistService {
             const startSettings:RouteStartSettings = this.getRouteList().getStartSettings()
 
             const isFreeRide = startSettings?.type==='Free-Ride'
-            const isWorkout = this.activity?.routeType==='None'
+            // A route-less workout (pure structured/ERG session, no GPS/route at all) - not to be
+            // confused with "was this a workout ride": a workout ridden against a route also has
+            // routeType!=='None' and correctly gets a map/preview like any other route ride.
+            const showWorkoutSummary = this.activity?.routeType==='None'
             const showSave = this.activity!==undefined && !this.isSaveDone;
             const showContinue = this.state!=='completed'
 
             const hasGPX = this.activity?.logs?.some( (log) => !!log.lat && !!log.lng)
-            const showMap = hasGPX || isFreeRide || isWorkout || (route?.description?.hasGpx)
+            const showMap = hasGPX || isFreeRide || (route?.description?.hasGpx)
             const preview = showMap ? undefined: route?.description?.previewUrl
-            
-            if (!this.isSummaryShown) { 
-                this.logEvent({message:'activity summary shown', showSave, showContinue, showMap, fileLink: this.activity?.fitFileName})
+            const workoutGraph = showWorkoutSummary ? this.buildWorkoutSummaryGraph(this.activity) : undefined
+
+            if (!this.isSummaryShown) {
+                this.logEvent({message:'activity summary shown', showSave, showContinue, showMap, showWorkoutSummary, fileLink: this.activity?.fitFileName})
             }
 
             this.isSummaryShown = true
 
             const props = {
                 activity: createUIActivityDetails(this.activity),
-    
+
                 showSave,
                 showContinue,
                 showMap,
+                showWorkoutSummary,
+                workoutGraph,
                 showDonate:this.canShowDonate(),
                 preview,
                 units: this.getUnitConverter().getDefaultUnits()
 
-    
+
             }
             
     
@@ -607,6 +614,46 @@ export class ActivityRideService extends IncyclistService {
             this.logError(err,'getActivitySummaryDisplayProperties()')
             return {}
         }
+    }
+
+    // Builds the plan-vs-actuals data a summary-mode WorkoutGraph needs for a completed,
+    // route-less workout activity - mirrors WorkoutRidePageService.buildGraphPlan()'s domain-bound
+    // math (same NaN-guard rationale: a malformed step/duration must not propagate NaN into the
+    // mobile graph's SVG path strings), but sources actuals from the finished activity's own
+    // recorded logs instead of a live ride buffer.
+    protected buildWorkoutSummaryGraph(activity?: ActivityDetails): ActivityWorkoutSummaryGraph | undefined {
+        const workout = activity?.workout
+        if (!workout)
+            return undefined
+
+        const ftp = activity.user?.ftp ?? 0
+        const bars = getWorkoutGraphSeries(workout, { ftp, absValues: true })
+        const lastBarX = bars.length ? bars.at(-1).x : 0
+        const lastLogTime = activity.logs?.length ? activity.logs.at(-1).time : 0
+        const maxXCandidates = [lastLogTime, lastBarX, workout.duration ?? 0].filter(Number.isFinite)
+        const maxX = maxXCandidates.length ? Math.max(...maxXCandidates) : 0
+        const maxBarPower = bars.length ? Math.max(...bars.map(b => b.y)) : 0
+
+        const plan: WorkoutGraphPlan = {
+            bars,
+            ftp,
+            ftpLine: ftp,
+            domain: { x: [0, maxX], y: [0, maxBarPower * 1.1] }
+        }
+
+        const actuals: WorkoutGraphActuals = {
+            power: (activity.logs ?? [])
+                .filter(log => Number.isFinite(log.time) && Number.isFinite(log.power))
+                .map(log => ({ x: log.time, y: log.power })),
+            heartrate: (activity.logs ?? [])
+                .filter(log => Number.isFinite(log.time) && Number.isFinite(log.heartrate))
+                .map(log => ({ x: log.time, y: log.heartrate as number })),
+            // no "current position" marker makes sense for a finished ride - keep it outside the
+            // domain so WorkoutGraphView's marker rendering (position within [xMin,xMax]) is a no-op
+            position: -1
+        }
+
+        return { plan, actuals }
     }
 
 

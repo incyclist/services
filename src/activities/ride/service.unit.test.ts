@@ -15,6 +15,7 @@ import { PastActivityLogEntry } from "../list"
 import { Observer } from "../../base/types/observer"
 import { DeviceRideService } from "../../devices"
 import { Inject } from "../../base/decorators"
+import { Workout } from "../../workouts"
 
 
 describe('ActivityRideService',()=>{
@@ -606,7 +607,7 @@ describe('ActivityRideService',()=>{
           expect(props.showMap).toBeTruthy()
         });
 
-        test('Workout (no route, no GPS logs)', () => {
+        test('Workout (no route, no GPS logs) - shows the workout summary, not a map', () => {
 
             mockServices(service,{startSettings:{startPos:0,realityFactor:100,type:'Route'}, init:{activity:{routeType:'None',logs:[]} as unknown as ActivityDetails}})
 
@@ -614,7 +615,66 @@ describe('ActivityRideService',()=>{
             const props = service.getActivitySummaryDisplayProperties();
 
             // Assert
+            expect(props.showMap).toBeFalsy()
+            expect(props.showWorkoutSummary).toBeTruthy()
+        });
+
+        test('Workout ridden against a route - still shows a map, not the workout summary', () => {
+
+            const route  = createFromJson(sydney as unknown as RouteApiDetail)
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'}, init:{activity:{routeType:'GPX',logs:[{lat:1,lng:1}]} as unknown as ActivityDetails}})
+
+            // Act
+            const props = service.getActivitySummaryDisplayProperties();
+
+            // Assert
             expect(props.showMap).toBeTruthy()
+            expect(props.showWorkoutSummary).toBeFalsy()
+        });
+
+        test('Workout (no route) with a plan and recorded logs - builds plan/actuals for the summary graph', () => {
+
+            const workout = new Workout({
+                type: 'workout', name: 'T',
+                steps: [{ type: 'step', duration: 60, steady: true, power: { type: 'watt', min: 200, max: 200 } }]
+            })
+            const logs = [
+                { time: 0, power: 100, heartrate: 120 },
+                { time: 30, power: 200, heartrate: 140 },
+                { time: 60, power: 190, heartrate: 145 },
+            ]
+
+            mockServices(service,{startSettings:{startPos:0,realityFactor:100,type:'Route'}, init:{activity:{
+                routeType:'None', logs, workout, user:{weight:75,ftp:250}
+            } as unknown as ActivityDetails}})
+
+            // Act
+            const props = service.getActivitySummaryDisplayProperties();
+
+            // Assert
+            expect(props.showMap).toBeFalsy()
+            expect(props.showWorkoutSummary).toBeTruthy()
+            expect(props.workoutGraph?.plan.ftp).toBe(250)
+            expect(props.workoutGraph?.plan.bars.length).toBeGreaterThan(0)
+            expect(props.workoutGraph?.actuals.power).toEqual([
+                { x: 0, y: 100 }, { x: 30, y: 200 }, { x: 60, y: 190 }
+            ])
+            expect(props.workoutGraph?.actuals.heartrate).toEqual([
+                { x: 0, y: 120 }, { x: 30, y: 140 }, { x: 60, y: 145 }
+            ])
+            // no live "current position" marker makes sense once the ride is finished
+            expect(props.workoutGraph?.actuals.position).toBe(-1)
+        });
+
+        test('Workout (no route) with no plan attached - workoutGraph is omitted, not a crash', () => {
+
+            mockServices(service,{startSettings:{startPos:0,realityFactor:100,type:'Route'}, init:{activity:{routeType:'None',logs:[]} as unknown as ActivityDetails}})
+
+            // Act
+            const props = service.getActivitySummaryDisplayProperties();
+
+            // Assert
+            expect(props.workoutGraph).toBeUndefined()
         });
     })
 
