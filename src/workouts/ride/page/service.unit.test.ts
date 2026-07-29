@@ -814,6 +814,28 @@ describe('WorkoutRidePageService', () => {
             expect(MockRideDisplay.stop).toHaveBeenCalledWith(true)
             expect(navSpy).toHaveBeenCalled()
         })
+
+        // Regression (2026-07-29, real-device report): RideDisplayService.stop() internally
+        // calls WorkoutRideService.stop({completed:true}) as part of its own finalization
+        // (src/ride/display/service.ts:501) - which re-emits 'completed'/'stopped' on the SAME
+        // workout observer this handler is subscribed to. Before this test existed, that
+        // re-entrant emit caused finishRide() to run a SECOND time reentrantly, calling
+        // getRideDisplay().stop(true) again while the first call was still unwinding - the
+        // second call's stopRide() then sees its own prevState as already 'Finished' and hits
+        // the "already stopping" guard, which forces RideDisplayService.state back to 'Idle'.
+        // That's indistinguishable from "no ride was ever started" to anything reading ride
+        // state afterward (e.g. the Menu button falling back to the StartRide overlay instead
+        // of the ride menu) - confirmed via real tablet testing of a 10s dummy workout.
+        test.each(['completed', 'stopped'])('%s -> does not re-finalize if RideDisplay.stop() itself triggers another completion event reentrantly', (event) => {
+            MockRideDisplay.stop.mockImplementation(() => {
+                workoutObserver.emit(event)
+            })
+
+            workoutObserver.emit(event)
+
+            expect(MockRideDisplay.stop).toHaveBeenCalledTimes(1)
+            expect(navSpy).toHaveBeenCalledTimes(1)
+        })
     })
 
     describe('getRideObserver', () => {

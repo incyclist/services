@@ -46,6 +46,16 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     // this-ride-only suppression of the gesture-hint overlay (reset on every openPage()) -
     // distinct from the persisted hints.workoutRideGestures flag, which suppresses it forever.
     protected gestureHintDismissed = false
+    // Guards finishRide() against re-entrant re-invocation (reset on every openPage()) -
+    // RideDisplayService.stop() internally calls WorkoutRideService.stop({completed:true}) as
+    // part of its own finalization, which re-emits 'completed'/'stopped' on the same workout
+    // observer this page subscribes to. Without this guard, that re-emit calls finishRide()
+    // a second time while the first call is still unwinding; the second getRideDisplay().stop(true)
+    // call then finds RideDisplayService already mid-stop and its own re-entrancy guard forces
+    // its state back to 'Idle' - indistinguishable from "no ride ever started" to anything
+    // reading ride state afterward (confirmed via real-device testing: Menu fell back to the
+    // StartRide overlay after a workout auto-completed).
+    protected rideFinished = false
 
     constructor() {
         super('WorkoutRidePage')
@@ -68,6 +78,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             EventLogger.setGlobalConfig('page', 'WorkoutRide')
 
             this.gestureHintDismissed = false
+            this.rideFinished = false
             super.openPage()
 
             try {
@@ -391,7 +402,15 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     // WorkoutRideService.checkIfDone() fires 'completed'/'stopped') - both must finalize the
     // activity via RideDisplay.stop(true) before navigating back, so a workout that completes on
     // its own also lands on a populated Ride Summary instead of requiring a manual "End Ride" tap.
+    //
+    // Guarded by rideFinished: RideDisplay.stop(true) internally re-triggers WorkoutRideService's
+    // own 'completed'/'stopped' event as part of its finalization (see the rideFinished field
+    // comment) - without this guard, that re-entrant emit would call finishRide() again while the
+    // first call is still unwinding, corrupting RideDisplay's state.
     protected finishRide(): void {
+        if (this.rideFinished) return
+        this.rideFinished = true
+
         this.getRideDisplay().stop(true)
         this.emitNavigateBack()
     }
