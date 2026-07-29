@@ -24,6 +24,7 @@ const setupMocks = () => {
         init: jest.fn(),
         start: jest.fn(),
         stop: jest.fn(),
+        ensureFinalized: jest.fn(),
         pause: jest.fn(),
         resume: jest.fn(),
         backward: jest.fn(),
@@ -628,7 +629,7 @@ describe('WorkoutRidePageService', () => {
 
             s.onStop()
 
-            expect(MockRideDisplay.stop).toHaveBeenCalledWith(true)
+            expect(MockRideDisplay.ensureFinalized).toHaveBeenCalledWith(true)
             expect(navSpy).toHaveBeenCalled()
         })
 
@@ -803,37 +804,39 @@ describe('WorkoutRidePageService', () => {
 
         // Regression: auto-completion (WorkoutRideService.checkIfDone() firing 'completed' once
         // elapsed time reaches the workout's end, or 'stopped') previously only emitted
-        // navigate-back and never finalized the activity via RideDisplay.stop(true) - unlike
-        // onStop() (manual "End Ride"), which always finalized first. That meant a workout
-        // finishing naturally landed on an unpopulated Ride Summary until the user also tapped
-        // "End Ride" manually. Both paths must now converge on the same finalize-then-navigate
-        // behavior.
-        test.each(['completed', 'stopped'])('%s -> finalizes the activity via RideDisplay.stop(true) before navigating back, same as manual onStop()', (event) => {
+        // navigate-back and never finalized the activity - unlike onStop() (manual "End Ride"),
+        // which always finalized first. That meant a workout finishing naturally landed on an
+        // unpopulated Ride Summary until the user also tapped "End Ride" manually. Both paths
+        // must now converge on the same finalize-then-navigate behavior.
+        test.each(['completed', 'stopped'])('%s -> finalizes the activity before navigating back, same as manual onStop()', (event) => {
             workoutObserver.emit(event)
 
-            expect(MockRideDisplay.stop).toHaveBeenCalledWith(true)
+            expect(MockRideDisplay.ensureFinalized).toHaveBeenCalledWith(true)
             expect(navSpy).toHaveBeenCalled()
         })
 
-        // Regression (2026-07-29, real-device report): RideDisplayService.stop() internally
-        // calls WorkoutRideService.stop({completed:true}) as part of its own finalization
-        // (src/ride/display/service.ts:501) - which re-emits 'completed'/'stopped' on the SAME
-        // workout observer this handler is subscribed to. Before this test existed, that
-        // re-entrant emit caused finishRide() to run a SECOND time reentrantly, calling
-        // getRideDisplay().stop(true) again while the first call was still unwinding - the
-        // second call's stopRide() then sees its own prevState as already 'Finished' and hits
-        // the "already stopping" guard, which forces RideDisplayService.state back to 'Idle'.
-        // That's indistinguishable from "no ride was ever started" to anything reading ride
-        // state afterward (e.g. the Menu button falling back to the StartRide overlay instead
-        // of the ride menu) - confirmed via real tablet testing of a 10s dummy workout.
-        test.each(['completed', 'stopped'])('%s -> does not re-finalize if RideDisplay.stop() itself triggers another completion event reentrantly', (event) => {
-            MockRideDisplay.stop.mockImplementation(() => {
+        // Regression (2026-07-29, real-device report): RideDisplayService.onWorkoutCompleted()
+        // already calls stopRide() directly whenever a workout reaches its natural end
+        // (src/ride/display/service.ts:685-696) - entirely independently of this page's own
+        // finishRide(). Combined with RideDisplay.stop()'s own cascade back into
+        // WorkoutRideService.stop({completed:true}) (which re-emits 'completed'/'stopped' on the
+        // SAME workout observer this handler is subscribed to), 'completed'/'stopped' can fire
+        // more than once for a single ride. Before this test existed, that caused finishRide() to
+        // run a second time reentrantly, calling getRideDisplay().stop(true) again while the
+        // first call was still unwinding - the second call's stopRide() then saw its own
+        // prevState as already 'Finished' and hit the "already stopping" guard, which forced
+        // RideDisplayService.state back to 'Idle'. That's indistinguishable from "no ride was
+        // ever started" to anything reading ride state afterward (e.g. the Menu button falling
+        // back to the StartRide overlay instead of the ride menu) - confirmed via real tablet
+        // testing of a 10s dummy workout.
+        test.each(['completed', 'stopped'])('%s -> does not re-finalize if RideDisplay itself triggers another completion event reentrantly', (event) => {
+            MockRideDisplay.ensureFinalized.mockImplementation(() => {
                 workoutObserver.emit(event)
             })
 
             workoutObserver.emit(event)
 
-            expect(MockRideDisplay.stop).toHaveBeenCalledTimes(1)
+            expect(MockRideDisplay.ensureFinalized).toHaveBeenCalledTimes(1)
             expect(navSpy).toHaveBeenCalledTimes(1)
         })
     })

@@ -46,15 +46,13 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     // this-ride-only suppression of the gesture-hint overlay (reset on every openPage()) -
     // distinct from the persisted hints.workoutRideGestures flag, which suppresses it forever.
     protected gestureHintDismissed = false
-    // Guards finishRide() against re-entrant re-invocation (reset on every openPage()) -
-    // RideDisplayService.stop() internally calls WorkoutRideService.stop({completed:true}) as
-    // part of its own finalization, which re-emits 'completed'/'stopped' on the same workout
-    // observer this page subscribes to. Without this guard, that re-emit calls finishRide()
-    // a second time while the first call is still unwinding; the second getRideDisplay().stop(true)
-    // call then finds RideDisplayService already mid-stop and its own re-entrancy guard forces
-    // its state back to 'Idle' - indistinguishable from "no ride ever started" to anything
-    // reading ride state afterward (confirmed via real-device testing: Menu fell back to the
-    // StartRide overlay after a workout auto-completed).
+    // Guards finishRide() against re-entrant/duplicate re-invocation (reset on every openPage()) -
+    // RideDisplayService.onWorkoutCompleted()/onRouteCompleted() already call stopRide() directly
+    // whenever a workout/route reaches its natural end, independently of this page's own
+    // finishRide(); combined with RideDisplay.stop()'s own internal cascade back into
+    // WorkoutRideService.stop({completed:true}), 'completed'/'stopped' can end up firing more than
+    // once for the same ride. This flag keeps finishRide()'s side effects (finalize + navigate
+    // back) to exactly one execution regardless of how many times that happens.
     protected rideFinished = false
 
     constructor() {
@@ -400,18 +398,22 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
 
     // Shared by onStop() (manual "End Ride") and onWorkoutFinished() (auto-completion once
     // WorkoutRideService.checkIfDone() fires 'completed'/'stopped') - both must finalize the
-    // activity via RideDisplay.stop(true) before navigating back, so a workout that completes on
-    // its own also lands on a populated Ride Summary instead of requiring a manual "End Ride" tap.
+    // activity before navigating back, so a workout that completes on its own also lands on a
+    // populated Ride Summary instead of requiring a manual "End Ride" tap - i.e. the exact same
+    // outcome as the user pressing Menu -> End Ride.
     //
-    // Guarded by rideFinished: RideDisplay.stop(true) internally re-triggers WorkoutRideService's
-    // own 'completed'/'stopped' event as part of its finalization (see the rideFinished field
-    // comment) - without this guard, that re-entrant emit would call finishRide() again while the
-    // first call is still unwinding, corrupting RideDisplay's state.
+    // Uses ensureFinalized() rather than stop() directly: RideDisplayService.onWorkoutCompleted()
+    // already calls stopRide() on its own whenever the workout reaches its natural end, completely
+    // independently of this page service. ensureFinalized() detects that (ride already
+    // Finished/Idle/Closing) and only completes the finalization steps that partial, direct
+    // stopRide() call skips (cleanup()/coaches.stopRide()), without re-entering stop()'s state
+    // machine at all - so it can never see the ride as "already stopping" and corrupt its state.
+    // For a manual "End Ride" (ride still Active), ensureFinalized() behaves exactly like stop().
     protected finishRide(): void {
         if (this.rideFinished) return
         this.rideFinished = true
 
-        this.getRideDisplay().stop(true)
+        this.getRideDisplay().ensureFinalized(true)
         this.emitNavigateBack()
     }
 

@@ -20,7 +20,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     protected menuProps: RideMenuProps | null = null
     protected isInitialized: boolean = false
     protected startGateProps: StartGateProps|null =  null
-    
+    // Guards onEndRide() against duplicate invocation once the ride auto-finishes (reset on every
+    // openPage()) - see the onDisplayStateUpdate() 'Finished' case and the WorkoutRidePageService
+    // rideFinished field for the equivalent workout-side fix and full rationale.
+    protected rideFinished = false
+
 
     constructor()  {
         super('RidePage')
@@ -51,6 +55,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
             EventLogger.setGlobalConfig('page','Rides')
 
+            this.rideFinished = false
             super.openPage()
 
             try {
@@ -215,12 +220,10 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
             const state = this.getRideDisplay().getState()
             if (state==='Finished' || this.menuProps?.finished) {
-                // this.onEndRide()
-                this.moveToPreviousPage()
-                this.closePage()
+                this.onEndRide()
                 return;
             }
-        
+
             this.menuProps = null
             this.updatePageDisplay()
         }
@@ -262,9 +265,23 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     }
 
+    // Shared by the manual "End Ride" menu action and onDisplayStateUpdate()'s 'Finished' case
+    // (a route/video reaching its natural end) - both must finalize the ride and navigate away
+    // identically, so a ride that ends on its own also lands away from the ride page instead of
+    // requiring a manual "End Ride" tap.
+    //
+    // Uses ensureFinalized() rather than stop() directly: RideDisplayService.onRouteCompleted()
+    // already calls stopRide() on its own whenever a route/video reaches its natural end,
+    // completely independently of this page service. ensureFinalized() detects that (ride already
+    // Finished/Idle/Closing) and only completes the finalization steps that partial, direct
+    // stopRide() call skips (cleanup()/coaches.stopRide()), without re-entering stop()'s state
+    // machine at all. For a manual "End Ride" (ride still Active), it behaves exactly like stop().
     onEndRide() {
         try {
-            this.getRideDisplay().stop()
+            if (this.rideFinished) return
+            this.rideFinished = true
+
+            this.getRideDisplay().ensureFinalized()
             this.moveToPreviousPage()
             this.closePage()
         } catch(err:any) {
@@ -404,13 +421,16 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     protected onDisplayStateUpdate( state:CurrentRideState ) {
         switch(state) {
-            case 'Paused': 
+            case 'Paused':
                 this.menuProps = { showResume:true}
                 break;
-            case 'Finished': 
-                this.menuProps = { showResume:false,finished:true}
-                break;
-            case 'Active': 
+            case 'Finished':
+                // The route/video reached its natural end (RideDisplayService.onRouteCompleted())
+                // - finalize and navigate away exactly as if the user had pressed Menu -> End
+                // Ride, rather than leaving the ride menu open waiting for a manual tap.
+                this.onEndRide()
+                return
+            case 'Active':
                 this.menuProps = null
                 break;
 

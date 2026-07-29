@@ -197,6 +197,7 @@ export interface ICurrentRideService {
     pause(requester: 'user' | 'device'): void;
     resume(): void;
     stop(exit: boolean): Promise<void>;
+    ensureFinalized(exit: boolean): Promise<void>;
     toggleCyclingMode(): void;
     takeScreenshot(): Promise<void>;
     stopWorkout(): void;

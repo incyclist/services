@@ -12,6 +12,7 @@ const setupMocks = () => {
         init: jest.fn(),
         start: jest.fn(),
         stop: jest.fn(),
+        ensureFinalized: jest.fn(),
         pause: jest.fn(),
         resume: jest.fn(),
         retryStart: jest.fn(),
@@ -165,5 +166,55 @@ describe('RidePageService', () => {
             expect(s.logError).toHaveBeenCalled()
         })
 
+    })
+
+    // Regression: a route/video reaching its natural end (RideDisplayService.onRouteCompleted()
+    // setting state to 'Finished') previously just flipped the ride menu to a "finished" state
+    // and waited for the user to manually tap "End Ride" - unlike onEndRide() (manual tap), which
+    // finalizes and navigates away immediately. Auto-completion must now behave exactly like the
+    // user pressing Menu -> End Ride.
+    describe('onDisplayStateUpdate - Finished', () => {
+
+        beforeEach(() => {
+            (s as any).isInitialized = true
+            s.openPage()
+        })
+
+        it('auto-invokes the same finalize-and-navigate-away sequence as manual "End Ride"', () => {
+            (s as any).onDisplayStateUpdate('Finished')
+
+            expect(MockRideDisplay.ensureFinalized).toHaveBeenCalled()
+            expect(MockBindings.ui.openPage).toHaveBeenCalled()
+        })
+
+        it('does not leave the ride menu open waiting for a manual tap', () => {
+            (s as any).onDisplayStateUpdate('Finished')
+
+            expect(s.getPageDisplayProps().menuProps).toBeNull()
+        })
+
+        it('does not re-finalize if triggered more than once for the same ride', () => {
+            (s as any).onDisplayStateUpdate('Finished');
+            (s as any).onDisplayStateUpdate('Finished')
+
+            expect(MockRideDisplay.ensureFinalized).toHaveBeenCalledTimes(1)
+        })
+    })
+
+    describe('onMenuClose - Finished', () => {
+
+        beforeEach(() => {
+            (s as any).isInitialized = true
+            s.openPage()
+        })
+
+        it('finalizes the ride (not just navigates away) when closing the menu on a finished ride', () => {
+            MockRideDisplay.getState.mockReturnValue('Finished')
+
+            s.onMenuClose()
+
+            expect(MockRideDisplay.ensureFinalized).toHaveBeenCalled()
+            expect(MockBindings.ui.openPage).toHaveBeenCalled()
+        })
     })
 })

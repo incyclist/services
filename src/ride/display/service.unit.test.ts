@@ -208,4 +208,81 @@ describe('RideDisplayService', () => {
 
     })
 
-})   
+    // ensureFinalized() exists so page services (e.g. WorkoutRidePageService.finishRide()) can
+    // guarantee full finalization (cleanup()+coaches.stopRide(), same as stop()) even when the
+    // ride may have ALREADY been auto-finalized elsewhere - onWorkoutCompleted()/
+    // onRouteCompleted() call stopRide() directly whenever a workout/route reaches its natural
+    // end, independently of any page service (see src/ride/display/service.ts:685-696, 723-743).
+    // It must never re-enter stop()/stopRide() once that's already happened - stopRide()'s
+    // "already stopping" guard resets state to 'Idle' on a redundant call, which previously
+    // corrupted ride state for anything read afterward (confirmed via real-device testing).
+    describe('ensureFinalized', () => {
+        let service: RideDisplayService
+        let cleanup: jest.Mock
+        let stopRideCoach: jest.Mock
+
+        const setupMocks = (s: any) => {
+            cleanup = jest.fn()
+            stopRideCoach = jest.fn()
+            Inject('WorkoutRide', { stop: jest.fn() })
+            Inject('ActivityRide', { stop: jest.fn(), cleanup, getActivity: jest.fn().mockReturnValue({}) })
+            Inject('RouteList', { unselect: jest.fn(), getSelected: jest.fn() })
+            Inject('UIBinding', { enableScreensaver: jest.fn(), disableScreensaver: jest.fn() })
+            Inject('DeviceRide', { pause: jest.fn(), enforceSimulator: jest.fn() })
+            s.displayService = { stop: jest.fn() }
+            s.stopDevices = jest.fn()
+            s.getRideModeService = jest.fn().mockReturnValue(undefined)
+            s.getCoaches = jest.fn().mockReturnValue({ stopRide: stopRideCoach })
+        }
+
+        const cleanupMocks = () => {
+            Inject('WorkoutRide', null)
+            Inject('ActivityRide', null)
+            Inject('RouteList', null)
+            Inject('UIBinding', null)
+            Inject('DeviceRide', null)
+        }
+
+        beforeEach(() => {
+            service = new RideDisplayService()
+            setupMocks(service as any)
+        })
+
+        afterEach(() => {
+            cleanupMocks()
+        })
+
+        test('when the ride is still active, behaves exactly like stop() - full stopRide() runs and state becomes Finished', async () => {
+            (service as any).state = 'Active'
+
+            await service.ensureFinalized(true)
+
+            expect((service as any).state).toBe('Finished')
+            expect(cleanup).toHaveBeenCalled()
+            expect(stopRideCoach).toHaveBeenCalled()
+        })
+
+        test.each(['Finished', 'Idle', 'Closing'] as const)('when the ride was already auto-finalized (state=%s), does not re-enter stop()/stopRide() - just completes cleanup()/coaches.stopRide()', async (state) => {
+            (service as any).state = state
+            const stopRideSpy = jest.spyOn(service as any, 'stopRide')
+
+            await service.ensureFinalized(true)
+
+            expect(stopRideSpy).not.toHaveBeenCalled()
+            expect((service as any).state).toBe(state) // untouched, not reset to Idle
+            expect(cleanup).toHaveBeenCalled()
+            expect(stopRideCoach).toHaveBeenCalled()
+        })
+
+        test('calling ensureFinalized() a second time after the first already finalized things is a safe no-op repeat, not a corruption', async () => {
+            (service as any).state = 'Active'
+
+            await service.ensureFinalized(true)
+            expect((service as any).state).toBe('Finished')
+
+            await service.ensureFinalized(true)
+            expect((service as any).state).toBe('Finished') // still Finished, never Idle
+        })
+    })
+
+})

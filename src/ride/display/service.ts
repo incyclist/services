@@ -246,7 +246,27 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         await this.stopRide({exit,noStateUpdates:true})
         this.getActivityRide().cleanup()
         this.getCoaches().stopRide()
-       
+
+    }
+
+    // For callers that need to guarantee full finalization (cleanup()+coaches.stopRide(), the
+    // same as a normal stop()) as a page-level reaction to a ride that may have ALREADY been
+    // auto-finalized elsewhere - onWorkoutCompleted()/onRouteCompleted() above call stopRide()
+    // directly whenever a workout/route reaches its natural end, independently of any page
+    // service. Calling stop() again in that case would re-enter stopRide()'s "already stopping"
+    // guard - harmless to the state machine, but redundant and worth avoiding rather than relying
+    // on it. This method does the equivalent of stop() exactly once: if the ride is still active,
+    // it defers to the normal stop(); if it's already Finished/Idle/Closing, it only performs the
+    // two steps stop() does AFTER stopRide() (which the auto-finalization paths above skip),
+    // without re-invoking stopRide() at all.
+    async ensureFinalized(exit: boolean = false) {
+        if (this.state === 'Finished' || this.state === 'Idle' || this.state === 'Closing') {
+            this.getActivityRide().cleanup()
+            this.getCoaches().stopRide()
+            return
+        }
+
+        await this.stop(exit)
     }
 
     toggleCyclingMode() {
