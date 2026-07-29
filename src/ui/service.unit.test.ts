@@ -1,4 +1,6 @@
+import { EventLogger } from 'gd-eventlog'
 import { UserInterfaceServcie } from './service'
+import { IncyclistPlatform } from './types'
 
 describe('UserInterfaceServcie - onSessionStart', () => {
 
@@ -58,5 +60,45 @@ describe('UserInterfaceServcie - onSessionStart', () => {
 
         expect((service as any).sendMessage).toHaveBeenCalledTimes(1)
         expect((service as any).queueMessage).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('UserInterfaceServcie - initLogging', () => {
+
+    let service: UserInterfaceServcie
+
+    const setupMocks = (platform: IncyclistPlatform) => {
+        service['platform'] = platform
+        service['version'] = '1.0.0'
+        ;(service as any).getBindings = jest.fn().mockReturnValue({
+            appInfo: { getAppVersion: jest.fn().mockReturnValue('1.0.0') },
+            logging: { createAdapter: jest.fn().mockReturnValue(null) }
+        })
+        ;(service as any).getUserSettings = jest.fn().mockReturnValue({
+            get: jest.fn().mockReturnValue('test-uuid-1234'),
+            getValue: jest.fn().mockReturnValue('production')
+        })
+    }
+
+    beforeEach(() => {
+        service = new UserInterfaceServcie()
+    })
+
+    afterEach(() => {
+        jest.restoreAllMocks()
+    })
+
+    test.each(['desktop', 'mobile', 'web'] as const)('includes app-channel:%s in the permanent log globals', (platform) => {
+        setupMocks(platform)
+        const setGlobalSpy = jest.spyOn(EventLogger.prototype, 'setGlobal')
+
+        service['initLogging']()
+
+        expect(setGlobalSpy).toHaveBeenCalledWith(expect.objectContaining({
+            'app-channel': platform,
+            version: '1.0.0',
+            appVersion: '1.0.0',
+            uuid: 'test-uuid-1234'
+        }))
     })
 })

@@ -406,7 +406,8 @@ export class UserInterfaceServcie extends IncyclistService {
                 version:this.version,
                 appVersion: appInfo.getAppVersion(),
                 uuid:this.getUserSettings().get('uuid',undefined),
-                session: this.session
+                session: this.session,
+                'app-channel': this.platform
             }
             this.logger.logEvent( {message:'setting globals',...globals})
             this.logger.setGlobal(globals);
