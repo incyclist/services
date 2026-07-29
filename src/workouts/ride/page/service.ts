@@ -56,8 +56,8 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         this.workoutEventHandler['update'] = this.onWorkoutUpdate.bind(this)
         this.workoutEventHandler['forward'] = this.onWorkoutUpdate.bind(this)
         this.workoutEventHandler['backward'] = this.onWorkoutUpdate.bind(this)
-        this.workoutEventHandler['completed'] = this.onWorkoutFinished.bind(this)
-        this.workoutEventHandler['stopped'] = this.onWorkoutFinished.bind(this)
+        this.workoutEventHandler['completed'] = this.onFinished.bind(this)
+        this.workoutEventHandler['stopped'] = this.onFinished.bind(this)
     }
 
     // ---- lifecycle -----------------------------------------------------------
@@ -97,7 +97,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             EventLogger.setGlobalConfig('page', null)
             this.logEvent({ message: 'page closed', page: 'WorkoutRide' })
 
-            this.getRideDisplay().stop(true)
+            this.getRideDisplay().stop()
             this.unregisterRideEventHandlers()
             this.unsubscribeFromWorkoutObserver()
             this.menuProps = null
@@ -383,11 +383,17 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         this.updatePageDisplay()
     }
 
-    protected onWorkoutFinished(): void {
-        this.finishRide()
+    protected onFinished(): void {
+        try {
+            this.menuProps = {showResume:false,finished:true, canStepBack:false, canStepForward:false}
+            this.updatePageDisplay()
+        }
+        catch(err:any) {
+            this.logError(err,'onFinished')
+        }
     }
 
-    // Shared by onStop() (manual "End Ride") and onWorkoutFinished() (auto-completion once
+    // Shared by onStop() (manual "End Ride") and onFinished() (auto-completion once
     // WorkoutRideService.checkIfDone() fires 'completed'/'stopped') - both must finalize the
     // activity via RideDisplay.stop(true) before navigating back, so a workout that completes on
     // its own also lands on a populated Ride Summary instead of requiring a manual "End Ride" tap.

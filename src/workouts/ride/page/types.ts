@@ -1,6 +1,6 @@
 import type { IObserver } from "../../../base/typedefs"
 import type { IPageService } from "../../../base/pages"
-import type { RidePageDisplayProps } from "../../../ride/page/types"
+import type { RideMenuProps, RidePageDisplayProps } from "../../../ride/page/types"
 import type { WorkoutGraphPlanBar } from "../../base/graph/types"
 
 // ---- graph -------------------------------------------------------------------
@@ -63,11 +63,9 @@ export interface WorkoutDashboardLine {
 
 // ---- menu ----------------------------------------------------------------------
 
-export interface WorkoutRideMenuProps {
-    showResume: boolean       // true = Resume, false = Pause
+export interface WorkoutRideMenuProps extends RideMenuProps{
     canStepBack: boolean      // = WorkoutDisplayProperties.canShowBackward
     canStepForward: boolean   // = WorkoutDisplayProperties.canShowForward
-    // Stop is always present (confirmation handled in the view); Increase-Load always enabled.
 }
 
 // ---- gesture discoverability overlay ----------------------------------------------

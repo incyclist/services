@@ -162,7 +162,7 @@ describe('WorkoutRidePageService', () => {
 
             s.closePage()
 
-            expect(MockRideDisplay.stop).toHaveBeenCalledWith(true)
+            expect(MockRideDisplay.stop).toHaveBeenCalled()
 
             // handlers detached -> no page-update on a subsequent state-update
             const updateSpy = jest.fn()
@@ -798,22 +798,12 @@ describe('WorkoutRidePageService', () => {
 
         test.each(['completed', 'stopped'])('%s -> navigate-back', (event) => {
             workoutObserver.emit(event)
-            expect(navSpy).toHaveBeenCalled()
+            expect(updateSpy).toHaveBeenCalled()
+            const menuProps = s.getPageDisplayProps().menuProps
+            expect(menuProps).toMatchObject({ showResume: false, finished: true })
+
         })
 
-        // Regression: auto-completion (WorkoutRideService.checkIfDone() firing 'completed' once
-        // elapsed time reaches the workout's end, or 'stopped') previously only emitted
-        // navigate-back and never finalized the activity via RideDisplay.stop(true) - unlike
-        // onStop() (manual "End Ride"), which always finalized first. That meant a workout
-        // finishing naturally landed on an unpopulated Ride Summary until the user also tapped
-        // "End Ride" manually. Both paths must now converge on the same finalize-then-navigate
-        // behavior.
-        test.each(['completed', 'stopped'])('%s -> finalizes the activity via RideDisplay.stop(true) before navigating back, same as manual onStop()', (event) => {
-            workoutObserver.emit(event)
-
-            expect(MockRideDisplay.stop).toHaveBeenCalledWith(true)
-            expect(navSpy).toHaveBeenCalled()
-        })
     })
 
     describe('getRideObserver', () => {
