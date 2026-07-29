@@ -56,7 +56,13 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     openPage(): IObserver {
         try {
             super.openPage()
-            this.logEvent({ message: 'page shown', page: 'Workouts' })
+
+            let pageType 
+            if (!this.getAppState().hasFeature('MOBILE_WORKOUTS')) {
+                pageType= 'placeholder' 
+            }
+
+            this.logEvent({ message: 'page shown', page: 'Workouts',pageType })
 
             const { observer } = this.getWorkoutList().open()
             this.listObserver = observer
