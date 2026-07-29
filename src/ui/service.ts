@@ -188,7 +188,7 @@ export class UserInterfaceServcie extends IncyclistService {
             this.startQueueWorker();
             this.startHeartbeatWorker()
 
-            const sent = false
+            let sent = false
 
             const user = this.getUserSettings().getValue('user',{})
             const id = this.getUserSettings().getValue('uuid',undefined)
@@ -210,9 +210,8 @@ export class UserInterfaceServcie extends IncyclistService {
 
             
             if (this.isMobile()|| this.isOnline()) {
-                this.sendMessage(topic,payload)                
+                sent = this.sendMessage(topic,payload)
             }
-            
 
             if (!sent) {
                 this.queueMessage(topic,payload)
