@@ -244,14 +244,20 @@ export class DeviceConfigurationService  extends IncyclistService{
             }    
         })
 
-        // remove capabilties that are no more present (unless device is selected for this capability)
+        // remove capabilties that are no more present - including when the device is (still) the
+        // `selected` one for that capability: a capability a device no longer has must never be left
+        // dangling as `selected` for that device (e.g. a controllable FTMS trainer that gets downgraded
+        // to Power Meter every session must actually lose CONTROL/RESISTANCE in settings.json, not just
+        // live in memory - see FIXES_BACKLOG #22). `delete(...,true)` (forceSingle) removes the device
+        // from just this one capability record and reassigns/clears `record.selected` following the same
+        // convention used everywhere else in this file (see `delete()`).
         this.settings.capabilities.forEach( c => {
             if (c.capability==='bike') // legacy capability - ignore
                 return
 
             const capability = c.capability as IncyclistCapability
-            if (!capabilties.includes(capability) && c.selected!==udid) {
-                this.delete(udid, capability)
+            if (!capabilties.includes(capability)) {
+                this.delete(udid, capability, true)
             }
         })
 
