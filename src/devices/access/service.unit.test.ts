@@ -3,7 +3,6 @@ import { DeviceAccessService } from './service';
 import { AntInterface, InterfaceFactory } from 'incyclist-devices';
 import { removeAllListeners } from 'cluster';
 
-const OC = expect.objectContaining
 
 describe('DeviceAccessService', () => {
     
@@ -77,9 +76,9 @@ describe('DeviceAccessService', () => {
         eventSpy.mockClear()
 
         await service.enableInterface(ifaceName,null,{autoConnect:true});
-        expect(eventSpy).toHaveBeenCalledWith('test-iface',OC({name:'test-iface',state:'disconnected'}))
-        expect(eventSpy).toHaveBeenCalledWith('test-iface',OC({name:'test-iface',state:'connecting'}))
-        expect(eventSpy).toHaveBeenCalledWith('test-iface',OC({name:'test-iface',state:'connected'}))
+        expect(eventSpy).toHaveBeenCalledWith('test-iface',expect.objectContaining({name:'test-iface',state:'disconnected'}))
+        expect(eventSpy).toHaveBeenCalledWith('test-iface',expect.objectContaining({name:'test-iface',state:'connecting'}))
+        expect(eventSpy).toHaveBeenCalledWith('test-iface',expect.objectContaining({name:'test-iface',state:'connected'}))
         expect(logSpy).not.toHaveBeenCalled()
     });
 
@@ -90,7 +89,7 @@ describe('DeviceAccessService', () => {
         eventSpy.mockClear()
 
         await service.enableInterface(ifaceName);
-        expect(eventSpy).toHaveBeenCalledWith('test-iface',OC({name:'test-iface',state:'connected'}))               
+        expect(eventSpy).toHaveBeenCalledWith('test-iface',expect.objectContaining({name:'test-iface',state:'connected'}))               
 
         // 2nd call to enable an already enabled and connected interface, should not emit a state change
         eventSpy.mockClear()
@@ -101,7 +100,7 @@ describe('DeviceAccessService', () => {
         mocks.interface.isConnected.mockReturnValue(false)
         eventSpy.mockClear()
         await service.enableInterface(ifaceName);
-        expect(eventSpy).toHaveBeenCalledWith('test-iface',OC({name:'test-iface',state:'disconnected'}))               
+        expect(eventSpy).toHaveBeenCalledWith('test-iface',expect.objectContaining({name:'test-iface',state:'disconnected'}))               
         
     });
 
@@ -126,7 +125,7 @@ describe('DeviceAccessService', () => {
         eventSpy.mockClear()
 
         await service.enableInterface(ifaceName);
-        expect(eventSpy).toHaveBeenCalledWith('test-iface',OC({name:'test-iface',state:'disconnected'}))        
+        expect(eventSpy).toHaveBeenCalledWith('test-iface',expect.objectContaining({name:'test-iface',state:'disconnected'}))        
     });
 
     test('initial call with  no binding', async () => {
@@ -140,7 +139,7 @@ describe('DeviceAccessService', () => {
         mocks.interface.isConnected.mockReturnValue(true)
 
         await service.enableInterface(ifaceName,binding);
-        expect(eventSpy).toHaveBeenCalledWith('test-iface',OC({name:'test-iface',state:'connected'}))                      
+        expect(eventSpy).toHaveBeenCalledWith('test-iface',expect.objectContaining({name:'test-iface',state:'connected'}))                      
         expect(logSpy).not.toHaveBeenCalled()
     });
   })

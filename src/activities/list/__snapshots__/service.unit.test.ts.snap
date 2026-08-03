@@ -1,4 +1,49 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ActivityListService > openSelected > normal 1`] = `
+{
+  "canOpen": true,
+  "canStart": undefined,
+  "distance": {
+    "unit": "km",
+    "value": 0.1,
+  },
+  "duration": 28.884,
+  "elevation": {
+    "unit": "m",
+    "value": 5,
+  },
+  "exports": [
+    {
+      "file": "/mnt/c/temp/Incyclist/activities/Incyclist Ride-20241128153550.json",
+      "type": "json",
+    },
+    {
+      "file": "/mnt/c/temp/Incyclist/activities/Incyclist Ride-20241128153550.tcx",
+      "type": "tcx",
+    },
+    {
+      "file": "/mnt/c/temp/Incyclist/activities/Incyclist Ride-20241128153550.fit",
+      "type": "fit",
+    },
+  ],
+  "segment": undefined,
+  "showMap": true,
+  "startPos": {
+    "unit": "km",
+    "value": 6.9,
+  },
+  "started": 2024-11-28T14:35:50.612Z,
+  "title": "Menglonnais",
+  "units": {
+    "distance": "km",
+    "elevation": "m",
+    "speed": "km/h",
+    "weight": "kg",
+  },
+  "uploads": [],
+}
+`;
 
 exports[`ActivityListService openSelected normal 1`] = `
 {

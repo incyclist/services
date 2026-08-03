@@ -1,4 +1,103 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DeviceConfigurationService > init > empty configuration 1`] = `
+{
+  "capabilities": [
+    {
+      "capability": "control",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+    {
+      "capability": "power",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+    {
+      "capability": "cadence",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+    {
+      "capability": "speed",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+    {
+      "capability": "heartrate",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
+  ],
+  "devices": [],
+  "interfaces": [
+    {
+      "enabled": true,
+      "name": "ant",
+    },
+    {
+      "enabled": true,
+      "name": "ble",
+    },
+    {
+      "enabled": true,
+      "name": "serial",
+      "protocol": "Daum Classic",
+    },
+    {
+      "enabled": false,
+      "name": "tcpip",
+      "port": 51955,
+      "protocol": "Daum Premium",
+    },
+    {
+      "enabled": true,
+      "invisible": true,
+      "name": "wifi",
+    },
+  ],
+}
+`;
+
+exports[`DeviceConfigurationService > init > no capabilities 1`] = `
+[
+  {
+    "capability": "control",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "power",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "cadence",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "speed",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "heartrate",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+]
+`;
 
 exports[`DeviceConfigurationService init empty configuration 1`] = `
 {

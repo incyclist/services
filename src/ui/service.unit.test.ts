@@ -105,8 +105,8 @@ describe('UserInterfaceServcie - initLogging', () => {
     })
 })
 
-jest.mock('../devices', () => ({
-    ...jest.requireActual('../devices'),
+vi.mock('../devices', async () => ({
+    ...(await vi.importActual('../devices')),
     useDevicePairing: jest.fn(),
     useDeviceAccess: jest.fn(),
 }))

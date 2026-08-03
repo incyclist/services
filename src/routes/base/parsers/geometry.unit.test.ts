@@ -2,10 +2,11 @@ import { FileInfo } from "../../../api"
 import { GeometryParser, Geometry, GeometryPoint, VideoPoint, GeoParserData } from "./geometry"
 import type { ParseResult } from "./types"
 import * as utilsModule from "../../../utils"
+import * as localUtilsModule from "./utils"
 
-jest.mock("../../../api")
-jest.mock("../../../utils")
-jest.mock("./utils")
+vi.mock("../../../api")
+vi.mock("../../../utils")
+vi.mock("./utils")
 
 describe("GeometryParser", () => {
     let parser: GeometryParser
@@ -168,7 +169,7 @@ describe("GeometryParser", () => {
                 data: JSON.stringify(testGeometry),
             })
 
-            jest.mocked(require("./utils").getUtf8Data).mockReturnValue(JSON.stringify(testGeometry))
+            jest.mocked(localUtilsModule.getUtf8Data).mockReturnValue(JSON.stringify(testGeometry))
 
             const result = await parser.getData(mockFile)
 
@@ -193,7 +194,7 @@ describe("GeometryParser", () => {
                 data: "invalid json",
             })
 
-            jest.mocked(require("./utils").getUtf8Data).mockReturnValue("invalid json")
+            jest.mocked(localUtilsModule.getUtf8Data).mockReturnValue("invalid json")
 
             await expect(parser.getData(mockFile)).rejects.toThrow(
                 "Could not open file: test-route"

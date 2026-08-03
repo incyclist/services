@@ -2,7 +2,7 @@ import { Inject } from '../../base/decorators'
 import { Observer } from '../../base/types'
 import { JsonRepository } from '../../api/repository/json'
 import { ParserFactory } from '../base/parsers/factory'
-import { RouteParser } from '../base/parsers'
+import { RouteParser, useParsers } from '../base/parsers'
 import { RouteLibraryScannerService, useRouteLibraryScanner } from './service'
 import { FolderInfo, ParsedRoute, ScannedRoute } from './types'
 import { Route } from '../base/model/route'
@@ -55,7 +55,6 @@ describe('RouteLibraryScannerService', () => {
         Inject('RoutesDBLoader', dbMock)
 
         // Ensure parsers are initialised before each test
-        const { useParsers } = require('../base/parsers')
         parsersFactory = useParsers()
 
         service = new RouteLibraryScannerService()

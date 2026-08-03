@@ -157,23 +157,24 @@ describe('WorkoutRide',()=>{
 
         let s,service:WorkoutRide
         let  emit;
-        beforeEach( ()=>{
+        beforeEach( async ()=>{
             setupMocks(workout)
             s = service = new WorkoutRide()
-            s.init()       
+            s.init()
+            await waitNextTick()
 
             emit = jest.spyOn(s,'emit')
         })
         afterEach( ()=>{
             s.stopWorker()
-            s.reset()       
+            s.reset()
 
             resetMocks()
             jest.resetAllMocks()
         })
 
         test('normal',async ()=>{
-            service.start()    
+            service.start()
             expect(emit).toHaveBeenCalledWith('started')
             expect(s.state).toBe('active')
             
@@ -223,12 +224,12 @@ describe('WorkoutRide',()=>{
 
         let s,service:WorkoutRide
         let  emit;
-        beforeEach( ()=>{
+        beforeEach( async ()=>{
             setupMocks(workout)
             s = service = new WorkoutRide()
-            s.init()       
-            s.start()    
-
+            s.init()
+            await waitNextTick()
+            s.start()
 
             emit = jest.spyOn(s,'emit')
         })
@@ -306,12 +307,12 @@ describe('WorkoutRide',()=>{
 
         let s,service:WorkoutRide
         let  emit;
-        beforeEach( ()=>{
+        beforeEach( async ()=>{
             setupMocks(workout)
             s = service = new WorkoutRide()
-            s.init()       
-            s.start()    
-
+            s.init()
+            await waitNextTick()
+            s.start()
 
             emit = jest.spyOn(s,'emit')
         })
@@ -383,11 +384,12 @@ describe('WorkoutRide',()=>{
 
         let s,service:WorkoutRide
         let  emit;
-        beforeEach( ()=>{
+        beforeEach( async ()=>{
             setupMocks(workout)
             s = service = new WorkoutRide()
-            s.init()       
-            s.start()    
+            s.init()
+            await waitNextTick()
+            s.start()
 
             emit = jest.spyOn(s,'emit')
         })
@@ -458,11 +460,12 @@ describe('WorkoutRide',()=>{
 
         let s,service:WorkoutRide
         let  emit;
-        beforeEach( ()=>{
+        beforeEach( async ()=>{
             setupMocks(workout)
             s = service = new WorkoutRide()
-            s.init()       
-            s.start()    
+            s.init()
+            await waitNextTick()
+            s.start()
 
             emit = jest.spyOn(s,'emit')
         })
@@ -524,11 +527,12 @@ describe('WorkoutRide',()=>{
 
         let s,service:WorkoutRide
         let  emit;
-        beforeEach( ()=>{
+        beforeEach( async ()=>{
             setupMocks(workout)
             s = service = new WorkoutRide()
-            s.init()       
-            s.start()    
+            s.init()
+            await waitNextTick()
+            s.start()
 
             emit = jest.spyOn(s,'emit')
         })

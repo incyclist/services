@@ -9,13 +9,14 @@
         "declaration": true,
         "outDir": "lib",
         "removeComments": true,
-        "types": ["jest", "node"]
+        "types": ["node", "vitest/globals"]
     },
     "lib": ["ESNext.Array","ES2023.Array"],
     "include": [
         "src/**/*.js",
         "src/**/*.ts",
         "__tests__/**/*.ts",
+        "test/**/*.ts",
       ],
     "exclude": [
         "./node_modules" 

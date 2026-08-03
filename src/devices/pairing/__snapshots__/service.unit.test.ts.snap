@@ -1,4 +1,254 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PairingService > api > start > FE device in configuration 1`] = `[Function]`;
+
+exports[`PairingService > api > start > no devices in configuration will start scan 1`] = `
+[
+  {
+    "canStartRide": false,
+    "capabilities": [
+      {
+        "capability": "control",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "power",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "cadence",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "speed",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "heartrate",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+    ],
+    "interfaces": [
+      {
+        "enabled": true,
+        "isScanning": false,
+        "name": "ant",
+        "state": "connected",
+      },
+      {
+        "enabled": true,
+        "isScanning": false,
+        "name": "ble",
+        "state": "connected",
+      },
+      {
+        "enabled": false,
+        "isScanning": false,
+        "name": "serial",
+        "protocol": "Daum Classic",
+        "state": "connected",
+      },
+      {
+        "enabled": true,
+        "isScanning": false,
+        "name": "tcpip",
+        "state": "connected",
+      },
+    ],
+    "stopRequested": false,
+    "stopped": false,
+  },
+  {
+    "canStartRide": false,
+  },
+  {
+    "capabilities": [
+      {
+        "capability": "control",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "power",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "cadence",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "speed",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "heartrate",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+    ],
+    "interfaces": undefined,
+  },
+  {
+    "capabilities": [
+      {
+        "capability": "control",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "power",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "cadence",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "speed",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+      {
+        "capability": "heartrate",
+        "deviceName": undefined,
+        "deviceNames": "",
+        "devices": [],
+        "disabled": false,
+        "interface": undefined,
+        "selected": undefined,
+      },
+    ],
+  },
+]
+`;
+
+exports[`PairingService > api > start > no devices in configuration; FE device found in scan 1`] = `[Function]`;
+
+exports[`PairingService > api > start > no devices in configuration; HRM sensor found in scan 1`] = `[Function]`;
+
+exports[`PairingService > api > startDeviceSelection > capability with devices 1`] = `
+{
+  "capability": "control",
+  "devices": [
+    {
+      "connectState": "connecting",
+      "interface": "ant",
+      "name": "1",
+      "selected": true,
+      "udid": "1",
+    },
+    {
+      "connectState": "connecting",
+      "interface": "ant",
+      "name": "3",
+      "selected": true,
+      "udid": "3",
+    },
+    {
+      "connectState": "connecting",
+      "interface": "ble",
+      "name": "2",
+      "selected": false,
+      "udid": "2",
+    },
+  ],
+}
+`;
+
+exports[`PairingService > api > startDeviceSelection > stop before scanStartDelay 1`] = `
+{
+  "capability": "control",
+  "devices": [
+    {
+      "connectState": "connecting",
+      "interface": "ant",
+      "name": "1",
+      "selected": true,
+      "udid": "1",
+    },
+    {
+      "connectState": "connecting",
+      "interface": "ant",
+      "name": "3",
+      "selected": true,
+      "udid": "3",
+    },
+    {
+      "connectState": "connecting",
+      "interface": "ble",
+      "name": "2",
+      "selected": false,
+      "udid": "2",
+    },
+  ],
+}
+`;
 
 exports[`PairingService api start FE device in configuration 1`] = `[Function]`;
 

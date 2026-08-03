@@ -7,9 +7,9 @@ import * as api from '../../../api';
 import { ParseResult, Parser } from './types';
 import { RouteApiDetail } from '../api/types';
 
-jest.mock('./utils');
-jest.mock('../../../utils/xml');
-jest.mock('../../../api');
+vi.mock('./utils');
+vi.mock('../../../utils/xml');
+vi.mock('../../../api');
 
 describe('MultipleXMLParser', () => {
   let mockParser1: jest.Mocked<XMLParser>;
@@ -72,8 +72,8 @@ describe('MultipleXMLParser', () => {
 
   describe('constructor', () => {
     test('instantiate parsers from provided classes', () => {
-      const XMLParserClass1 = jest.fn(() => mockParser1);
-      const XMLParserClass2 = jest.fn(() => mockParser2);
+      const XMLParserClass1 = jest.fn(function () { return mockParser1 });
+      const XMLParserClass2 = jest.fn(function () { return mockParser2 });
 
       const parser = new MultipleXMLParser([
         XMLParserClass1 as any,
@@ -91,8 +91,8 @@ describe('MultipleXMLParser', () => {
     });
 
     test('store parser instances in correct order', () => {
-      const XMLParserClass1 = jest.fn(() => mockParser1);
-      const XMLParserClass2 = jest.fn(() => mockParser2);
+      const XMLParserClass1 = jest.fn(function () { return mockParser1 });
+      const XMLParserClass2 = jest.fn(function () { return mockParser2 });
 
       const parser = new MultipleXMLParser([
         XMLParserClass1 as any,
@@ -110,8 +110,8 @@ describe('MultipleXMLParser', () => {
       mockParser2.supportsContent.mockReturnValue(true);
       mockParser2.import.mockResolvedValue(mockParseResult);
 
-      const XMLParserClass1 = jest.fn(() => mockParser1);
-      const XMLParserClass2 = jest.fn(() => mockParser2);
+      const XMLParserClass1 = jest.fn(function () { return mockParser1 });
+      const XMLParserClass2 = jest.fn(function () { return mockParser2 });
       const parser = new MultipleXMLParser([
         XMLParserClass1 as any,
         XMLParserClass2 as any,
@@ -129,7 +129,7 @@ describe('MultipleXMLParser', () => {
       mockParser1.supportsContent.mockReturnValue(true);
       mockParser1.import.mockResolvedValue(mockParseResult);
 
-      const XMLParserClass1 = jest.fn(() => mockParser1);
+      const XMLParserClass1 = jest.fn(function () { return mockParser1 });
       const parser = new MultipleXMLParser([XMLParserClass1 as any]);
 
       const result = await parser.import(mockFileInfo);
@@ -143,7 +143,7 @@ describe('MultipleXMLParser', () => {
       mockParser1.supportsContent.mockReturnValue(true);
       mockParser1.import.mockResolvedValue(mockParseResult);
 
-      const XMLParserClass1 = jest.fn(() => mockParser1);
+      const XMLParserClass1 = jest.fn(function () { return mockParser1 });
       const parser = new MultipleXMLParser([XMLParserClass1 as any]);
 
       const result = await parser.import(mockFileInfo, mockXmlData);
@@ -157,7 +157,7 @@ describe('MultipleXMLParser', () => {
     test('throw error when no suitable parser found', async () => {
       mockParser1.supportsContent.mockReturnValue(false);
 
-      const XMLParserClass1 = jest.fn(() => mockParser1);
+      const XMLParserClass1 = jest.fn(function () { return mockParser1 });
       const parser = new MultipleXMLParser([XMLParserClass1 as any]);
 
       await expect(parser.import(mockFileInfo, mockXmlData)).rejects.toThrow();

@@ -1,4 +1,22 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`RoutesDbLoader > load > GPX File from DB 1`] = `
+_Route {
+  "_description": {
+    "country": "AU",
+    "distance": 3801.452188724582,
+    "elevation": 35.19111323845895,
+    "hasGpx": true,
+    "hasVideo": false,
+    "id": "5c7a6ae31b1bef04c5854cb3",
+    "isLocal": false,
+    "isLoop": true,
+    "title": "Sydney Opera House and Botanic Garden",
+  },
+  "_details": undefined,
+  "updateCountryFromPoints": [Function],
+}
+`;
 
 exports[`RoutesDbLoader load GPX File from DB 1`] = `
 Route {

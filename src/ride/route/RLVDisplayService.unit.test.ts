@@ -2,8 +2,9 @@ import { Inject } from '../../base/decorators';
 import { Observer } from '../../base/types';
 import { RLVDisplayService } from './RLVDisplayService';
 import { ActivityUpdate } from '../../activities/ride/types';
+import { hasNextVideo, getNextVideoId } from '../../routes';
 
-jest.mock('../../video', () => ({
+vi.mock('../../video', () => ({
   VideoSyncHelper: jest.fn(function () {
     this.pause = jest.fn();
     this.resume = jest.fn();
@@ -23,19 +24,19 @@ jest.mock('../../video', () => ({
   VideoConversion: jest.fn(),
 }));
 
-jest.mock('../../routes', () => ({
-  ...jest.requireActual('../../routes'),
+vi.mock('../../routes', async () => ({
+  ...(await vi.importActual('../../routes')),
   correctDistanceValues: jest.fn(),
   validateRoute: jest.fn(),
   hasNextVideo: jest.fn().mockReturnValue(false),
   getNextVideoId: jest.fn().mockReturnValue(undefined),
 }));
 
-jest.mock('../../maps/MapArea/utils', () => ({
+vi.mock('../../maps/MapArea/utils', () => ({
   concatPaths: jest.fn(),
 }));
 
-jest.mock('../../utils/geo', () => ({
+vi.mock('../../utils/geo', () => ({
   distanceBetween: jest.fn().mockReturnValue(0),
 }));
 
@@ -236,18 +237,17 @@ describe('RLVDisplayService', () => {
       expect(overlayProps.videoState).toBe('Started');
     });
 
-    test('emits state-update event when videos are initialized', (done) => {
+    test('emits state-update event when videos are initialized', async () => {
       const emitSpy = jest.spyOn(service as any, 'emit');
 
       service.initView();
 
-      setTimeout(() => {
-        const stateUpdateCalls = emitSpy.mock.calls.filter(
-          (call) => call[0] === 'state-update'
-        );
-        expect(stateUpdateCalls.length).toBeGreaterThan(0);
-        done();
-      }, 100);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const stateUpdateCalls = emitSpy.mock.calls.filter(
+        (call) => call[0] === 'state-update'
+      );
+      expect(stateUpdateCalls.length).toBeGreaterThan(0);
     });
 
     test('affects getDisplayProperties behavior after initialization', async () => {
@@ -1338,7 +1338,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
       // Mock the hasNextVideo and getNextVideoId functions
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1364,7 +1363,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRouteDetails = jest.fn().mockResolvedValue(null);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1387,7 +1385,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRoute = jest.fn().mockReturnValue(route2);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1410,7 +1407,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRoute = jest.fn().mockReturnValue(route2);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1442,7 +1438,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRoute = jest.fn().mockReturnValue(route2);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1479,7 +1474,6 @@ describe('RLVDisplayService', () => {
 
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1504,7 +1498,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRoute = jest.fn().mockReturnValue(route2);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1562,7 +1555,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRoute = jest.fn().mockReturnValue(route2);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1599,7 +1591,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRoute = jest.fn().mockReturnValue(route2);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1634,7 +1625,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRoute = jest.fn().mockReturnValue(route2);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1670,7 +1660,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRoute = jest.fn().mockReturnValue(route2);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1710,7 +1699,6 @@ describe('RLVDisplayService', () => {
       mockRouteList.getRoute = jest.fn().mockReturnValue(route2);
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 
@@ -1757,7 +1745,6 @@ describe('RLVDisplayService', () => {
 
       mockRouteList.getSelected = jest.fn().mockReturnValue(route1);
 
-      const { hasNextVideo, getNextVideoId } = require('../../routes');
       hasNextVideo.mockImplementation((route: any) => route.details?.next !== undefined);
       getNextVideoId.mockImplementation((route: any) => route.details?.next);
 

@@ -7,8 +7,6 @@ import { RouteDisplayService } from './RouteDisplayService'
 import { Observer } from '../../base/types'
 import { RouteSettings } from '../../routes/list/cards/types'
 
-const CT = expect.closeTo
-
 describe( 'RouteDisplayService', () => {
 
     const sydneyRoute  = createFromJson(sydney as unknown as RouteApiDetail)
@@ -178,7 +176,7 @@ describe( 'RouteDisplayService', () => {
                 service.onActivityUpdate({time:i+1, speed:36, routeDistance:(i+1)*10,distance:10},{distance:10})
             }
             expect(mockObserver.emit).toHaveBeenCalledTimes(10)
-            expect(getPosition(service)).toMatchObject({lap:1,routeDistance:CT(100,1)})
+            expect(getPosition(service)).toMatchObject({lap:1,routeDistance:expect.closeTo(100,1)})
         })
 
         test('strange values',async ()=>{
@@ -197,7 +195,7 @@ describe( 'RouteDisplayService', () => {
                 "lapDistance": 3790
             }
             service.onActivityUpdate({time:1, speed:36, routeDistance:3796,distance:6},{distance:10})
-            expect(getPosition(service)).toMatchObject({lap:1,routeDistance:CT(3796,0)})
+            expect(getPosition(service)).toMatchObject({lap:1,routeDistance:expect.closeTo(3796,0)})
         })
 
         test('ignores update when power is zero and speed is zero', async () => {

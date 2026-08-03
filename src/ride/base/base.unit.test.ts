@@ -17,26 +17,26 @@ const mockDeviceRide = {
 };
 
 // Mock external dependencies to avoid circular imports
-jest.mock("../../workouts", () => ({
+vi.mock("../../workouts", () => ({
     useWorkoutList: jest.fn(() => mockWorkoutList),
     useWorkoutRide: jest.fn(() => mockWorkoutRide),
     ActiveWorkoutLimit: {},
 }));
 
-jest.mock("../../devices", () => ({
+vi.mock("../../devices", () => ({
     useDeviceRide: jest.fn(() => mockDeviceRide),
 }));
 
-jest.mock("../../activities/ride/types", () => ({}));
-jest.mock("../../activities", () => ({
+vi.mock("../../activities/ride/types", () => ({}));
+vi.mock("../../activities", () => ({
     ScreenShotInfo: {},
 }));
 
-jest.mock("../../routes/base/model/route", () => ({
+vi.mock("../../routes/base/model/route", () => ({
     Route: {},
 }));
 
-jest.mock("../../utils/sleep", () => ({
+vi.mock("../../utils/sleep", () => ({
     sleep: jest.fn(),
 }));
 

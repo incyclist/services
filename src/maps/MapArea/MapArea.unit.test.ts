@@ -8,6 +8,7 @@ import t5 from '../../../__tests__/data/overpass/roundabout-issue2.json';
 import { MapArea } from './MapArea';
 import {  Boundary, IncyclistNode, IncyclistWay, IncyclistWaySplit, PathCrossingInfo, WayInfo } from './types';
 import { getPointCrossingPath, isOneWay } from './utils';
+import * as utilsModule from './utils';
 import { DEFAULT_FILTER } from './consts';
 import { LatLng } from '../../utils/geo';
 
@@ -187,7 +188,7 @@ describe( 'MapArea', () => {
     
 
         test ( 'two ways with same distance -> delivers first match', () => {
-            const distanceToPathSpy = jest.spyOn(require('./utils'), 'distanceToPath').mockReturnValue(1);
+            const distanceToPathSpy = jest.spyOn(utilsModule, 'distanceToPath').mockReturnValue(1);
     
             let location = { lat: -16.7824429, lng: 145.6983982 };
             const res = area.getNearestPath(location);
@@ -199,7 +200,7 @@ describe( 'MapArea', () => {
         });
 
         test ( 'error: distanceToPath will have lowest value for way with highest id', () => {
-            const distanceToPathSpy = jest.spyOn(require('./utils'), 'distanceToPath').mockImplementation((point,w) => { return 184561986-Number((w as IncyclistWay).id); });
+            const distanceToPathSpy = jest.spyOn(utilsModule, 'distanceToPath').mockImplementation((point,w) => { return 184561986-Number((w as IncyclistWay).id); });
     
             
             let location = { lat: -16.7824429, lng: 145.6983982 };
@@ -213,7 +214,7 @@ describe( 'MapArea', () => {
 
     
         test ( 'error: distanceToPath returns undefined', () => {
-            const distanceToPathSpy = jest.spyOn(require('./utils'), 'distanceToPath').mockReturnValue(undefined);
+            const distanceToPathSpy = jest.spyOn(utilsModule, 'distanceToPath').mockReturnValue(undefined);
     
             let location = { lat: -16.7824429, lng: 145.6983982 };
             const res = area.getNearestPath(location);

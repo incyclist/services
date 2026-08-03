@@ -526,16 +526,14 @@ describe('GpxDisplayService', () => {
             expect(service['tsLastSVEvent']).toBeGreaterThanOrEqual(beforeTime)
         })
 
-        test('updates pov_changed timestamp and sets timeout', (done) => {
+        test('updates pov_changed timestamp and sets timeout', async () => {
             setupMocks(service, {mockRideService: true})
             const props = service.getStreetViewProps({hideAll: false} as any) as any
             service['tsLastPovChanged'] = Date.now() - 1000
             props.onDisplayEvent('pov_changed')
             expect(service['tsLastPovChanged']).toBeDefined()
             expect(service['povTimeout']).toBeDefined()
-            setTimeout(() => {
-                done()
-            }, 150)
+            await new Promise((resolve) => setTimeout(resolve, 150))
         })
 
         test('updates timestamps on status_changed event', () => {
@@ -580,7 +578,7 @@ describe('GpxDisplayService', () => {
             expect(service['svObserver']).toBeDefined()
         })
 
-        test('respects minimum update frequency for street view', (done) => {
+        test('respects minimum update frequency for street view', async () => {
             setupMocks(service, {
                 mockRideService: true,
                 userSettingsGet: jest.fn((key, def) => {
@@ -592,9 +590,7 @@ describe('GpxDisplayService', () => {
             service.onActivityUpdate({time:1, speed:36, routeDistance:100,distance:10},{distance:10})
             service.onActivityUpdate({time:2, speed:36, routeDistance:200,distance:10},{distance:10})
 
-            setTimeout(() => {
-                done()
-            }, 100)
+            await new Promise((resolve) => setTimeout(resolve, 100))
         })
     })
 

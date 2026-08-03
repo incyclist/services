@@ -4,8 +4,8 @@ import { LocalFitConverter } from "./fit";
 import { TcxConverter } from "./tcx";
 
 // Mocking dependencies
-jest.mock("./fit");
-jest.mock("./tcx");
+vi.mock("./fit");
+vi.mock("./tcx");
 
 const activity: ActivityDetails = {
     type: 'IncyclistActivity', version: '1', id: 'test', title: 'test', logs: [], distance: 100, user: { weight: 80 },

@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
 export default tseslint.config(
-    { ignores: ['lib/**', 'samples/**', 'tools/**', 'coverage/**', '*.cjs', '*.mjs', '*.js', '**/*.test.ts', '**/*.unit.test.ts', 'test/**', '__tests__/**'] },
+    { ignores: ['lib/**', 'samples/**', 'tools/**', 'coverage/**', '*.cjs', '*.mjs', '*.js', '**/*.test.ts', '**/*.unit.test.ts', 'test/**', '__tests__/**', 'vitest.setup.ts'] },
 
     js.configs.recommended,
     ...tseslint.configs.recommended,

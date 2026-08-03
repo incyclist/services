@@ -11,7 +11,6 @@ import { createFromJson } from '../../routes'
 import { RouteApiDetail } from '../../routes/base/api/types'
 import { waitNextTick } from '../../utils'
 
-const OC = expect.objectContaining
 describe('RideDisplayService', () => {
 
     describe('powerUp', () => {
@@ -176,12 +175,12 @@ describe('RideDisplayService', () => {
                 await waitNextTick()
 
 
-                expect(emit).toHaveBeenCalledWith('overlay-update', OC( {
+                expect(emit).toHaveBeenCalledWith('overlay-update', expect.objectContaining( {
                     hideAll: true,
-                    map:OC({show: false}),
-                    sideViews: OC({enabled:true, hide:true, left:true, right:true}),
-                    upcomingElevation: OC({show:false}),
-                    totalElevation: OC({show:false}),
+                    map:expect.objectContaining({show: false}),
+                    sideViews: expect.objectContaining({enabled:true, hide:true, left:true, right:true}),
+                    upcomingElevation: expect.objectContaining({show:false}),
+                    totalElevation: expect.objectContaining({show:false}),
                 }))
                 expect(setFn).not.toHaveBeenCalled()
                 jest.clearAllMocks()
@@ -189,10 +188,10 @@ describe('RideDisplayService', () => {
                 service.toggleAllOverlays()
                 await waitNextTick()
 
-                expect(emit).toHaveBeenCalledWith('overlay-update', OC( {
+                expect(emit).toHaveBeenCalledWith('overlay-update', expect.objectContaining( {
                     hideAll: false,
                     map: {show:true, minimized:false},
-                    sideViews: OC({enabled:true, hide:false, left:true, right:true}),
+                    sideViews: expect.objectContaining({enabled:true, hide:false, left:true, right:true}),
                     upcomingElevation: {show:true, minimized:false},
                     totalElevation: {show:true, minimized:false},
                 }))
