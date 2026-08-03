@@ -91,7 +91,7 @@ export class WorkoutsDbLoader extends Loader{
         let prev
         const idx = this.workouts.findIndex( d=> d.id===workout.id)
 
-        let changed = false
+        let changed: boolean
         if (idx===-1) {
             changed = true
             this.workouts.push( workout)

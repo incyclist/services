@@ -97,7 +97,7 @@ export class StravaAppConnection extends ConnectedAppService<StravaCredentials> 
 
 
     protected initAuth():boolean {
-        let isInitialized = false;
+        let isInitialized: boolean;
 
         try {
             const auth = this.getCredentials();

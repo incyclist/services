@@ -303,7 +303,6 @@ export class MapArea implements IMapArea{
 
         const addOption = (newPath:IncyclistNode[], res:Array<IncyclistWaySplit>, reverse:boolean) =>{
             const optWay = way;
-            let path = []
 
             // in case the crossing point is exactly at the beginning or end of a way ( i.e. street)
             // we need to add the streets crossing at that point as options
@@ -318,7 +317,7 @@ export class MapArea implements IMapArea{
                     }
 
 
-                path = newPath
+                const path = newPath
                 if (reverse)
                     path.reverse();
                 res.push({wayId:optWay.id,path})

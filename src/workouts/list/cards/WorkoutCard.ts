@@ -309,7 +309,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
 
         // let the caller of delete() consume an intialize the observer first
         await waitNextTick()
-        let deleted:boolean = false
+        let deleted:boolean
 
         try {
 

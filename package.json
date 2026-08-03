@@ -15,6 +15,7 @@
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@serialport/binding-mock": "^10.2.2",
     "@serialport/bindings-interface": "^1.2.2",
     "@types/jest": "^30.0.0",
@@ -22,8 +23,9 @@
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.59.0",
     "dotenv": "^17.4.2",
-    "eslint": "^9.39.4",
+    "eslint": "^10.2.1",
     "formdata-node": "^6.0.3",
+    "globals": "^17.9.0",
     "jest": "^30.3.0",
     "jsdoc": "^4.0.5",
     "ts-jest": "^29.4.9",

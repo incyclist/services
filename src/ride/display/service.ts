@@ -1104,7 +1104,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected simulatorPowerUp(mode:CyclingMode, powerInc:number) {
 
         const simMode = mode.getSetting('mode') as any as string // TODO: fix getSetting declaration
-        let request = {}
+        let request
         if (simMode==='Power') {
             const currentPowerTarget = mode.getSetting('power')
             const targetPower = Number(currentPowerTarget)+powerInc

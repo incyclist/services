@@ -90,7 +90,7 @@ export class VideoConversion extends IncyclistService {
 
             const clean = str.trim()
             const parts = clean.split(':')
-            let seconds = 0
+            let seconds: number
             if (parts.length === 3) {
                 const [h, m, s] = parts
                 seconds = Number(h) * 3600 + Number(m) * 60 + Number.parseFloat(s)

@@ -105,7 +105,7 @@ export class IntervalsAppConnection extends ConnectedAppService<IntervalsCredent
 
 
     protected initAuth():boolean {
-        let isInitialized = false;
+        let isInitialized: boolean;
 
         try {
             const auth = this.getCredentials();

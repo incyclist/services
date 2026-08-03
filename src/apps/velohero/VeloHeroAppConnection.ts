@@ -80,7 +80,7 @@ export class VeloHeroAppConnection extends ConnectedAppService<VeloHeroCredentia
 
 
     protected initAuth():boolean {
-        let isInitialized = false;
+        let isInitialized: boolean;
 
         if (!this.getUserSettings().isInitialized) {
             return false
