@@ -98,7 +98,7 @@ export const detectAnomalies = (points: RoutePoint[], maxCount?:number) => {
 
     const onSpeedJumpDetected = (point:RoutePointEval, idx:number)=> {
         const prevPoint = data[lastValidSpeedIdx];
-        let nextJumpIdx,nextNullIdx
+        let nextNullIdx
 
         if (prevPoint.speed === 0) {
             anomalies.push({ idx: lastValidSpeedIdx, type: 'noDistance',point});
@@ -127,7 +127,7 @@ export const detectAnomalies = (points: RoutePoint[], maxCount?:number) => {
 
                 }
             // }
-            anomalies.push({ idx, type: 'speedJump',point, nextNullIdx,nextJumpIdx  });
+            anomalies.push({ idx, type: 'speedJump',point, nextNullIdx });
         }
 
     }
@@ -172,7 +172,7 @@ export const fixAnomaly  = ( anomaly:Anomaly, points: RoutePoint[]) => {
 
 export const fixAnomalies= (points: RoutePoint[], maxAttempts:number=1000) => { 
     let fixed = 0
-    let anomalies = []
+    let anomalies: ReturnType<typeof detectAnomalies>
     const tsStart = Date.now()
     let prev:Anomaly
     let stuck = false

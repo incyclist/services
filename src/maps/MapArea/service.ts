@@ -162,10 +162,11 @@ export class MapAreaService extends IncyclistService implements IMapAreaService 
 
     async loadMap( location: IncyclistNode):Promise<IMapArea|undefined> {
         let ts
-        
+
         for (let i=0;i<2;i++) {
 
-            try {                       
+            try {
+                ts = Date.now()
                 const bounds = getBounds(location?.lat,location?.lng,this.radius)
                 const query = buildQuery(GET_WAYS_IN_AREA,bounds);
 

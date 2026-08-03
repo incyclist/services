@@ -229,6 +229,7 @@ export class Activity implements ActivityInfo{
             }
             catch(err) {
                 this.logError(err,'upload')
+                error = err.message
             }
         }
 

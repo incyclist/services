@@ -383,7 +383,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             }
             catch (err) {
                 this.getLogger().logEvent({ message: 'xml details', error: err.message, mappings });
-                throw new Error('Could not parse XML File');
+                throw new Error('Could not parse XML File', { cause: err });
             }
 
         }

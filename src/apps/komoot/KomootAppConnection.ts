@@ -100,7 +100,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
     }
 
     protected checkAuth():boolean {
-        let isInitialized = false;
+        let isInitialized: boolean;
         let credentials;
 
         if (!this.getUserSettings().isInitialized) {

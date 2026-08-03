@@ -361,8 +361,8 @@ export class ActivitiesRepository {
             endPos = this.getUnitConverter().convert( endPos.value, 'distance', {from:endPos.unit, to:'m'})
         }
 
-        if (result?.length > 0 && criteria?.endPos !== undefined) {
-            result = result.filter(ai => ai.summary.endPos === criteria.endPos);
+        if (result?.length > 0 && endPos !== undefined) {
+            result = result.filter(ai => ai.summary.endPos === endPos);
         }
         return result
     }

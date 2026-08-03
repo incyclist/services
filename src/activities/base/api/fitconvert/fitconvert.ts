@@ -19,7 +19,7 @@ export class IncyclistFitConvertApi {
             url = response.data;            
         }
         catch (error) {
-            throw new Error(`convert failed: (phase convert), reason: ${error.message}`);
+            throw new Error(`convert failed: (phase convert), reason: ${error.message}`, { cause: error });
         }
 
         // download result
@@ -29,7 +29,7 @@ export class IncyclistFitConvertApi {
         }
         
         catch (error) {
-            throw new Error(`convert failed: (phase download), reason: ${error.message}`);
+            throw new Error(`convert failed: (phase download), reason: ${error.message}`, { cause: error });
         }
     }
 

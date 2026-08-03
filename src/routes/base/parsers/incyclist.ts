@@ -124,7 +124,7 @@ export class IncyclistXMLParser extends XMLParser{
         }
         catch(err) {
             if (!data['gpx-file-path'])
-                throw new Error('<gpx-file-path> missing in XML')
+                throw new Error('<gpx-file-path> missing in XML', { cause: err })
             throw err
         }
 

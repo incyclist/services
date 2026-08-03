@@ -1498,7 +1498,7 @@ export class DeviceRideService  extends IncyclistService{
 
         const selectedDevices = selected ?? config.getSelectedDevices()
 
-        let enabledCapabilities = [];
+        let enabledCapabilities: Array<IncyclistCapability>;
 
         const duplicates = this.checkAntSameDeviceID(adapters);
         const toBeReplaced = duplicates.filter(dai => dai.udid === adapterInfo.udid).map(dai => dai.info.udid);

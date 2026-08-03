@@ -91,7 +91,7 @@ export class VeloHeroApi  extends AppApiBase{
                 error = `HTTP error ${response.status}: ${response.statusText}`
             }
 
-            throw new Error(error)
+            throw new Error(error, { cause: err })
         }
     }
 

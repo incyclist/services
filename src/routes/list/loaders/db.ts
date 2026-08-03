@@ -35,7 +35,7 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         const updatedDescr = this.buildRouteDBInfo(route.description)
         const idx = this.routeDescriptions.findIndex( d=> d.id===route.description.id)
 
-        let changed = false
+        let changed: boolean
         if (idx===-1) {
             this.routeDescriptions.push( clone(updatedDescr) )
             this.routeHashes[route.description.id] = stringify(updatedDescr)

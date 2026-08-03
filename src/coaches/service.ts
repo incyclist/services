@@ -259,10 +259,9 @@ export class CoachesService extends IncyclistService {
             return
 
         const prevPosition = coach.getPosition() || route.points[0];
-        let nextPosition = undefined;
 
         if (distance > 0) {
-            nextPosition = getNextPosition(route, { distance, prev: prevPosition });
+            const nextPosition = getNextPosition(route, { distance, prev: prevPosition });
             if (nextPosition) {
                 const { slope } = nextPosition;
                 coach.sendDeviceUpdate({ slope: slope * realityFactor / 100 });

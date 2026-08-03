@@ -278,7 +278,6 @@ export class FreeRideDisplayService extends GpxDisplayService {
     protected findPointBeforeOrAtTurn(path:RoutePoint[]) {
         let prevPointIdx;
         let atPoint: boolean = false;
-        let found = false;
         let idx = path.findIndex(p => p.routeDistance >= this.position.routeDistance);
         if (idx > 0) {
 
@@ -288,11 +287,11 @@ export class FreeRideDisplayService extends GpxDisplayService {
                 idx--;
             }
             prevPointIdx = idx
-            
+
 
         }
-        found = idx !== -1;
-        
+        const found = idx !== -1;
+
         return {prevPointIdx, atPoint, found};
     }
 
