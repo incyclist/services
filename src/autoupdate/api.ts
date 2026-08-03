@@ -8,6 +8,10 @@ import { Injectable } from "../base/decorators";
 const UPDATE_SERVER_URL = 'UPDATE_SERVER_URL'
 const DEFAULT_DOMAIN = 'incyclist.com'
 
+// update-check requests should fail fast rather than rely on an incidental
+// OS/network/proxy timeout - see FIXES_BACKLOG item #29
+const UPDATE_CHECK_TIMEOUT_MS = 5000
+
 type VersionInfo = {
     version: string,
     path: string,
@@ -61,11 +65,26 @@ export class IncyclistUpdatesApi extends IncyclistService{
         return base;
     }
 
-    protected async _get(url:string, ...args) {
+    protected async _get(url:string, config:Record<string,any> = {}) {
         const api = this.getApi()
         const baseUrl = this.getBaseUrl()
-                
-        return await api.get( baseUrl+url, ...args )       
+
+        return await api.get( baseUrl+url, { timeout: UPDATE_CHECK_TIMEOUT_MS, ...config } )
+    }
+
+    /**
+     * Identifies errors that are an expected, already-handled outcome of an update
+     * check (no connectivity, or the request timing out) rather than a real error
+     * worth logging as such.
+     */
+    protected isExpectedError(err:Error):boolean {
+        if (!err)
+            return false
+        if (err.message==='Network Error')
+            return true
+        if (/timeout/i.test(err.message ?? ''))
+            return true
+        return false
     }
 
 
@@ -86,7 +105,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
             return {version,path,url,downloadUrl}
         }
         catch (err) {
-            if (err.message!=='Network Error') {
+            if (!this.isExpectedError(err)) {
                 this.logError(err,'getLatestMacAppVersion')
             }
         }
@@ -123,7 +142,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
             return {version,path,url,downloadUrl}
         }
         catch (err) {
-            if (err.message!=='Network Error') {
+            if (!this.isExpectedError(err)) {
                 this.logError(err,'getLatestLinuxAppVersion')
             }
         }
@@ -154,7 +173,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
             return {version,path,url,downloadUrl}
         }
         catch (err) {
-            if (err.message!=='Network Error') {
+            if (!this.isExpectedError(err)) {
                 this.logError(err,'getLatestWindowsAppVersion')
             }
         }
