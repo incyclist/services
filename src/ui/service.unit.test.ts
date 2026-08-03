@@ -1,6 +1,8 @@
 import { EventLogger } from 'gd-eventlog'
 import { UserInterfaceServcie } from './service'
 import { IncyclistPlatform } from './types'
+import { IncyclistPageService } from '../base/pages'
+import * as devices from '../devices'
 
 describe('UserInterfaceServcie - onSessionStart', () => {
 
@@ -100,5 +102,65 @@ describe('UserInterfaceServcie - initLogging', () => {
             appVersion: '1.0.0',
             uuid: 'test-uuid-1234'
         }))
+    })
+})
+
+jest.mock('../devices', () => ({
+    ...jest.requireActual('../devices'),
+    useDevicePairing: jest.fn(),
+    useDeviceAccess: jest.fn(),
+}))
+
+describe('UserInterfaceServcie - onAppExit', () => {
+
+    let service: UserInterfaceServcie
+
+    const setupMocks = (props: { pairingExit?: () => Promise<unknown> } = {}) => {
+        service['isTerminating'] = false
+        service['isTerminated'] = false
+        ;(service as any).stopHeartbeatWorker = jest.fn()
+        ;(service as any).sendAppExitMessage = jest.fn()
+
+        jest.spyOn(IncyclistPageService, 'closePage').mockImplementation(() => undefined)
+        ;(devices.useDevicePairing as jest.Mock).mockReturnValue({
+            exit: props.pairingExit ?? jest.fn().mockResolvedValue(true)
+        })
+        ;(devices.useDeviceAccess as jest.Mock).mockReturnValue({
+            terminate: jest.fn().mockResolvedValue(undefined)
+        })
+    }
+
+    beforeEach(() => {
+        service = new UserInterfaceServcie()
+        jest.useFakeTimers({ doNotFake: ['nextTick'] })
+    })
+
+    afterEach(() => {
+        jest.useRealTimers()
+        jest.restoreAllMocks()
+    })
+
+    test('resolves once device teardown finishes, well within the exit timeout', async () => {
+        setupMocks()
+
+        const result = await service.onAppExit()
+
+        expect(result).toBe(true)
+        expect(service['isTerminated']).toBe(true)
+    })
+
+    // Guards against a slow/hung device disconnect (e.g. a BLE adapter mid-connect)
+    // preventing the app from ever exiting - enforced inside onAppExit() itself so
+    // every caller (desktop, mobile) gets the guarantee without its own timeout logic.
+    test('resolves anyway if device teardown does not finish before the exit timeout', async () => {
+        const neverResolves = new Promise<boolean>(() => { /* intentionally never settles */ })
+        setupMocks({ pairingExit: jest.fn().mockReturnValue(neverResolves) })
+
+        const pending = service.onAppExit()
+        await jest.advanceTimersByTimeAsync(5000)
+        const result = await pending
+
+        expect(result).toBe(true)
+        expect(service['isTerminated']).toBe(true)
     })
 })

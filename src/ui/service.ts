@@ -15,8 +15,15 @@ import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../moni
 import { AppFeatures, Interfaces, useAppState, useFeatureToggleSync } from "../appstate";
 import { IncyclistPageService } from "../base/pages";
 import { waitNextTick } from "../utils";
+import { sleep } from "../utils/sleep";
 
-const BACKGROUND_PAUSE_TIMEOUT_MS = 300000   
+const BACKGROUND_PAUSE_TIMEOUT_MS = 300000
+
+// Cap how long onAppExit's device/interface teardown may take before we give up
+// waiting on it - a slow or hung BLE disconnect must not be able to prevent the
+// app from quitting. Enforced here (not by each caller) so every platform
+// (desktop, mobile) gets the same guarantee without its own timeout handling.
+const APP_EXIT_TIMEOUT_MS = 5000
 
 @Singleton
 export class UserInterfaceServcie extends IncyclistService {
@@ -106,18 +113,26 @@ export class UserInterfaceServcie extends IncyclistService {
                 this.stopHeartbeatWorker()
                 this.sendAppExitMessage()
                 IncyclistPageService.closePage()
-                await waitNextTick()
-                await useDevicePairing().exit()
-                await useDeviceAccess().terminate()
-                this.appState = 'Stopped'
 
+                // Device/interface teardown (BLE disconnect etc.) can take an unbounded amount
+                // of time (observed: from tens of ms up to several seconds, occasionally more,
+                // depending on how far a connection attempt had progressed). Cap the wait so a
+                // slow/hung disconnect can never prevent the app from exiting - enforced here so
+                // every caller (desktop, mobile) gets the guarantee for free.
+                const cleanup = async () => {
+                    await waitNextTick()
+                    await useDevicePairing().exit()
+                    await useDeviceAccess().terminate()
+                }
+                await Promise.race([ cleanup(), sleep(APP_EXIT_TIMEOUT_MS) ])
+
+                this.appState = 'Stopped'
 
                 this.logEvent({message:'onAppExit finished'})
                 this.isTerminated = true
 
-                
                 return true
-                
+
             }
             return false
 
@@ -125,7 +140,7 @@ export class UserInterfaceServcie extends IncyclistService {
         catch(err) {
             this.logError(err,'onAppExit')
             return true;
-        }        
+        }
 
     }
 
