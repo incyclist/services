@@ -77,7 +77,7 @@ const findMoovBySignature = (buf: Buffer): Box | undefined => {
             return undefined
 
         const box = readBoxHeader(buf, typeOffset - 4)
-        if (box && box.type === 'moov' && box.bodyEnd <= buf.length)
+        if (box?.type === 'moov' && box.bodyEnd <= buf.length)
             return box
 
         searchFrom = typeOffset + 4
@@ -160,7 +160,7 @@ const parseTrak = (buf: Buffer, trakBox: Box): { handlerType?: string, codec?: s
 export const parseMp4Boxes = (headBuffer?: Buffer, tailBuffer?: Buffer): Mp4CodecInfo => {
     const result: Mp4CodecInfo = { moovLocation: 'not-found', incomplete: true }
 
-    if (headBuffer && headBuffer.length > 0) {
+    if (headBuffer?.length > 0) {
         const headBoxes = findBoxes(headBuffer, 0, headBuffer.length)
         const ftypBox = findBox(headBoxes, 'ftyp')
         if (ftypBox)
@@ -174,7 +174,7 @@ export const parseMp4Boxes = (headBuffer?: Buffer, tailBuffer?: Buffer): Mp4Code
         }
     }
 
-    if (result.moovLocation === 'not-found' && tailBuffer && tailBuffer.length > 0) {
+    if (result.moovLocation === 'not-found' && tailBuffer?.length > 0) {
         const moovBox = findMoovBySignature(tailBuffer)
         if (moovBox) {
             applyMoov(tailBuffer, moovBox, result)
