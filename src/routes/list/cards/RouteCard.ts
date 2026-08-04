@@ -140,13 +140,21 @@ export class RouteCard extends BaseCard implements Card<Route> {
         if (!descr.videoUrl)
             return true
 
+        // Some import/self-heal paths produce an extra leading slash (video:////, file:////)
+        // instead of the canonical video:///, file:///. Collapse that known malformation first,
+        // so the scheme-strip below always leaves the path's own leading slash intact rather
+        // than stripping it along with the scheme (which turned a well-formed video:/// URL
+        // into a relative path, e.g. "mnt/nas/..." instead of "/mnt/nas/...", and made
+        // videoExists() falsely report an existing file as missing).
+        const normalizedUrl = videoUrl.replace('video:////','video:///').replace('file:////','file:///')
+
         let path = undefined
-        if ( videoUrl.startsWith('file:///') )
-            path = videoUrl.replace('file:///','')            
-        
-        if ( videoUrl.startsWith('video:///') )
-            path = videoUrl.replace('video:///','')           
-        
+        if ( normalizedUrl.startsWith('file:///') )
+            path = normalizedUrl.replace('file://','')
+
+        if ( normalizedUrl.startsWith('video:///') )
+            path = normalizedUrl.replace('video://','')
+
         // local file
         if (path) {
             return await this.fileExists(path)
