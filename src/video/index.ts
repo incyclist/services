@@ -1,3 +1,5 @@
 export * from './types'
 export * from './VideoSyncHelper'
 export * from './VideoConversion'
+export * from './Mp4BoxParser'
+export * from './resolvePlaybackUrl'

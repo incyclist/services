@@ -9,7 +9,7 @@ import { correctDistanceValues, getNextVideoId, hasNextVideo, RouteListService, 
 import { Route } from "../../routes/base/model/route";
 import { RouteInfoText, RoutePoint } from "../../routes/base/types";
 import { distanceBetween } from "../../utils/geo";
-import { VideoConversion, VideoSyncHelper } from "../../video";
+import { VideoConversion, VideoSyncHelper, resolvePlaybackUrl } from "../../video";
 import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 
@@ -566,6 +566,18 @@ export class RLVDisplayService extends RouteDisplayService {
         this.emit('state-update')
     }
 
+    // ffmpeg conversion failures (e.g. missing binary, corrupt source) previously had no
+    // subscriber and were silently swallowed - see design/video-decode-diagnostics.md §3.4.
+    // Routed through the same onVideoLoadError()/buildVideoError() chokepoint as native
+    // decode errors: a raw conversion error has no real MediaError.code, and both
+    // getCode()/buildVideoError() already tolerate a missing code by falling back to
+    // error.message, so no MediaError-shaped fake code is needed.
+    protected onConvertError(message:string, video:VideoState = this.currentVideo) {
+        if (!video)
+            return
+        this.onVideoLoadError({message} as unknown as MediaError, video)
+    }
+
     protected onVideoStalled(time:number, bufferedTime:number, buffers:Array<{start:number,end:number}>,video:VideoState = this.currentVideo ) {
         video.syncHelper.onVideoStalled(time, bufferedTime)
     }   
@@ -714,34 +726,11 @@ export class RLVDisplayService extends RouteDisplayService {
         video.playback = 'converted'
         video.source = new VideoConversion(this.cleanupUrl(src), video?.route )
         video.source.getObserver().on( 'convert-progress', this.onConvertUpdate.bind(this))
+        video.source.getObserver().on( 'convert-error', (message:string) => this.onConvertError(message, video))
     }
 
     protected cleanupUrl(url:string) {
-        if (!url)
-            return
-        let fileName = url
-        const lc = url.toLowerCase()
-
-        if (fileName.startsWith('incyclist:'))
-            fileName = fileName.replace('incyclist:','file:');
-        
-        if ( fileName.startsWith('video:') && !lc.endsWith('.avi') )
-            return fileName.replace('video:','file:');
-        
-        if ( fileName.startsWith('file:') && !lc.endsWith('.avi') && !this.isMobile())
-            return fileName.replace('file:','video:');
-        
-        if ( fileName.startsWith('video:') && lc.endsWith('.avi') )
-            return fileName;
-        
-        if ( fileName.startsWith('file:') || fileName.startsWith('http:') || fileName.startsWith('https:') || fileName.startsWith('/') )
-            return fileName;
-        
-        if ( fileName.startsWith('content:'))
-            return fileName
-        
-        return `./${fileName}`;
-       
+        return resolvePlaybackUrl(url, this.isMobile())
     }
 
     protected isLoopEnabled(): boolean {

@@ -2,8 +2,10 @@ import { Inject } from '../../base/decorators';
 import { Observer } from '../../base/types';
 import { RLVDisplayService } from './RLVDisplayService';
 import { ActivityUpdate } from '../../activities/ride/types';
+import { VideoConversion } from '../../video';
 
 jest.mock('../../video', () => ({
+  ...jest.requireActual('../../video'),
   VideoSyncHelper: jest.fn(function () {
     this.pause = jest.fn();
     this.resume = jest.fn();
@@ -20,7 +22,10 @@ jest.mock('../../video', () => ({
     // Map route distance to video time: 1000m->10s, 5000m->50s, 9000m->90s
     this.getVideoTimeByPosition = jest.fn((distance) => distance / 100);
   }),
-  VideoConversion: jest.fn(),
+  VideoConversion: jest.fn(function () {
+    this.setStartPos = jest.fn();
+    this.getObserver = jest.fn().mockReturnValue({ on: jest.fn() });
+  }),
 }));
 
 jest.mock('../../routes', () => ({
@@ -1898,6 +1903,47 @@ describe('RLVDisplayService', () => {
       // Error message should indicate import failure
       const overlayProps = service.getStartOverlayProps();
       expect(overlayProps.videoState).toBeDefined();
+    });
+
+    test('surfaces a ffmpeg convert-error instead of silently swallowing it', async () => {
+      const aviRoute = createMockRoute({
+        description: {
+          id: 'avi-convert-error',
+          title: 'AVI needing conversion',
+          hasGpx: false,
+          videoFormat: 'avi',
+          videoUrl: 'video:///routes/avi-convert-error.avi',
+        },
+        details: {
+          id: 'avi-convert-error',
+          title: 'AVI needing conversion',
+          distance: 10000,
+          points: [{ distance: 0, elevation: 0, lat: 0, lng: 0 }],
+          video: {
+            url: 'video:///routes/avi-convert-error.avi',
+            file: 'avi-convert-error.avi',
+            framerate: 30,
+            mappings: [],
+            format: 'avi',
+            selectableSegments: [],
+          },
+          infoTexts: [],
+        },
+      });
+
+      setupMocks(aviRoute);
+      service.init(mockRideService as any);
+      await waitForStateUpdate();
+
+      const conversionInstance = (VideoConversion as unknown as jest.Mock).mock.instances[0];
+      const onCalls = conversionInstance.getObserver().on.mock.calls;
+      const convertErrorHandler = onCalls.find(([event]: [string]) => event === 'convert-error')?.[1];
+      expect(convertErrorHandler).toBeDefined();
+
+      convertErrorHandler('ffmpeg exited with code 1');
+
+      const overlayProps = service.getStartOverlayProps();
+      expect(overlayProps.videoStateError).toBe('ffmpeg exited with code 1');
     });
   });
 });
