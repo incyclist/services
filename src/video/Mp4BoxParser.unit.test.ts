@@ -77,4 +77,83 @@ describe('parseMp4Boxes', () => {
         expect(result.moovLocation).toBe('not-found')
         expect(result.incomplete).toBe(true)
     })
+
+    describe('codecDetails', () => {
+
+        // Expected values below are cross-checked against `ffprobe -show_streams` on each fixture.
+
+        test('h264 (standard High profile, 8-bit 4:2:0): profile/level/chroma/bit depth', () => {
+            const file = readFixture('faststart_h264.mp4')
+
+            const result = parseMp4Boxes(file, undefined)
+
+            expect(result.codecDetails).toEqual({
+                profile: 'High',
+                profileId: 100,
+                level: '2.1',
+                chromaFormat: '4:2:0',
+                bitDepthLuma: 8,
+                bitDepthChroma: 8
+            })
+        })
+
+        test('h264 (High 10 profile): extended chroma/bit-depth fields past the variable-length SPS/PPS lists', () => {
+            const file = readFixture('faststart_h264_high10.mp4')
+
+            const result = parseMp4Boxes(file, undefined)
+
+            expect(result.codecDetails).toEqual({
+                profile: 'High 10',
+                profileId: 110,
+                level: '1.0',
+                chromaFormat: '4:2:0',
+                bitDepthLuma: 10,
+                bitDepthChroma: 10
+            })
+        })
+
+        test('hevc: profile/tier/level/chroma/bit depth all come from fixed offsets', () => {
+            const file = readFixture('faststart_hevc.mp4')
+
+            const result = parseMp4Boxes(file, undefined)
+
+            expect(result.codecDetails).toEqual({
+                profile: 'Main',
+                profileId: 1,
+                tier: 'Main',
+                level: '2.1',
+                chromaFormat: '4:2:0',
+                bitDepthLuma: 8,
+                bitDepthChroma: 8
+            })
+        })
+
+        test('av1: profile/tier/level/chroma/bit depth/monochrome', () => {
+            const file = readFixture('faststart_av1.mp4')
+
+            const result = parseMp4Boxes(file, undefined)
+
+            expect(result.videoCodec).toBe('av01')
+            expect(result.codecDetails).toEqual({
+                profile: 'Main',
+                profileId: 0,
+                tier: 'Main',
+                level: '2.0',
+                chromaFormat: '4:2:0',
+                bitDepthLuma: 10,
+                bitDepthChroma: 10,
+                monochrome: false
+            })
+        })
+
+        test('config box truncated mid-record: falls back gracefully, never throws', () => {
+            const file = readFixture('faststart_h264_high10.mp4')
+            // Cut the head buffer short partway through where avcC's extended fields would be -
+            // profile/level (fixed offset, near the front of avcC) should still come through even
+            // though the SPS/PPS walk for chroma/bit-depth can't complete.
+            const truncated = file.subarray(0, 250)
+
+            expect(() => parseMp4Boxes(truncated, undefined)).not.toThrow()
+        })
+    })
 })
