@@ -20,7 +20,13 @@ export class PairingPageStateMachine {
     protected selectStateChangeCallback: ()=>void
     protected retryTimeout: NodeJS.Timeout|undefined
     protected selectionTimeout: NodeJS.Timeout|undefined
-    
+    // in-flight markers used to prevent overlapping startPairing()/startScanning() calls
+    // being triggered while a previous call from this same session hasn't settled yet
+    // (see performCheck()) - overlapping calls used to race against each other and could
+    // leave the state machine stuck in 'Pairing'/'Scanning' with no path back to 'Idle'
+    protected pairingPromise: Promise<void>|undefined
+    protected scanningPromise: Promise<void>|undefined
+
 
 
 
@@ -61,7 +67,12 @@ export class PairingPageStateMachine {
             delete this.stateChangeCallback
 
             this.resetTimeouts()
-            this.setState('Closed')        
+            // drop any in-flight markers from this session - a stale, still-pending
+            // startPairing()/startScanning() promise from a previous session must not
+            // block a fresh performCheck() after the next start()
+            delete this.pairingPromise
+            delete this.scanningPromise
+            this.setState('Closed')
             this.logIncomingEvent('stop',prev,'Closed')
 
         } 
@@ -196,17 +207,30 @@ export class PairingPageStateMachine {
                     this.setState('Done')
                     //this.setState('Idle')
                 }
-                else {
+                else if (!this.pairingPromise) {
+                    // guard against overlapping startPairing() calls: performCheck() can be
+                    // triggered multiple times (e.g. repeated onDeviceSelectionClosed() calls)
+                    // before a previous startPairing() call has settled. DevicePairingService's
+                    // own reentrancy guard doesn't apply while usage==='page', so without this
+                    // the state machine could end up with several overlapping pairing attempts
+                    // racing each other and get stuck in 'Pairing' forever.
                     this.setState('Pairing')
-                    service.startPairing(adapters, {})
+                    this.pairingPromise = Promise.resolve(service.startPairing(adapters, {}))
+                        .catch( err=>{ this.logError(err,'startPairing') })
+                        .finally( ()=>{ delete this.pairingPromise })
                 }
 
             }
             else if (this.selectState==='Closed' || this.selectState==='Active'){
-                this.setState('Scanning')
-                service.startScanning(adapters, {})
+                if (!this.scanningPromise) {
+                    // same overlap guard as above, applied to startScanning()
+                    this.setState('Scanning')
+                    this.scanningPromise = Promise.resolve(service.startScanning(adapters, {}))
+                        .catch( err=>{ this.logError(err,'startScanning') })
+                        .finally( ()=>{ delete this.scanningPromise })
+                }
             }
-            
+
 
             if (this.state!==oldState)
                 this.logger.logEvent( {message:'state changed',stateTransition:{from:oldState,to:this.state} })
