@@ -155,6 +155,13 @@ export class RouteCard extends BaseCard implements Card<Route> {
         if ( normalizedUrl.startsWith('video:///') )
             path = normalizedUrl.replace('video://','')
 
+        // "video:///C:\Users\..." -> "/C:\Users\..." after the scheme-strip above - strip the
+        // extra leading slash for Windows drive-letter paths (Unix absolute paths keep theirs,
+        // since they don't have this problem - a drive letter isn't its own root the way a
+        // Unix "/" is)
+        if ( path && /^\/[A-Za-z]:[\\/]/.test(path) )
+            path = path.slice(1)
+
         // local file
         if (path) {
             return await this.fileExists(path)
