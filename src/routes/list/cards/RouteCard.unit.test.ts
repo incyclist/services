@@ -40,6 +40,16 @@ describe('RouteCard.videoExists', () => {
         expect(exists).toBe(true);
     });
 
+    test('a well-formed video:/// URL with a Windows drive-letter path resolves without a stray leading slash', async () => {
+        existsFile.mockResolvedValue(true);
+        const card = createCard({ hasVideo: true, videoUrl: 'video:///C:\\Users\\klaus\\Videos\\Neuer Ordner\\ValGardena.mp4' });
+
+        const exists = await card.videoExists();
+
+        expect(existsFile).toHaveBeenCalledWith('C:\\Users\\klaus\\Videos\\Neuer Ordner\\ValGardena.mp4');
+        expect(exists).toBe(true);
+    });
+
     test('a well-formed file:/// URL resolves to the correct absolute path', async () => {
         existsFile.mockResolvedValue(true);
         const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/data/videos/route.mp4' });
