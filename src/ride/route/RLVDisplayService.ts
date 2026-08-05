@@ -530,6 +530,10 @@ export class RLVDisplayService extends RouteDisplayService {
             if (time!==undefined) {
                 this.currentVideo.buffering = `${time}s`
                 this.currentVideo.bufferTime = time
+                if (time>200) {
+                    this.logEvent({message: 'video conversion >200s'})
+                    this.onVideoLoaded(0)
+                }
             }
             else if (progress!==undefined)
                 this.currentVideo.buffering = `${progress}%`
