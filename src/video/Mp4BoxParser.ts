@@ -240,6 +240,18 @@ const AV1_PROFILE_NAMES: Record<number, string> = { 0: 'Main', 1: 'High', 2: 'Pr
 // AV1 level_idx -> level string, e.g. 0 -> "2.0", 7 -> "3.3" (spec table, 4 minor levels per major)
 const av1Level = (levelIdx: number): string => `${2 + Math.floor(levelIdx / 4)}.${levelIdx % 4}`
 
+const av1BitDepth = (highBitdepth: number, twelveBit: number): number => {
+    if (twelveBit) return 12
+    return highBitdepth ? 10 : 8
+}
+
+const av1ChromaFormat = (monochrome: number, subsamplingX: number, subsamplingY: number): string => {
+    if (monochrome) return CHROMA_FORMAT_NAMES[0]
+    if (subsamplingX && subsamplingY) return '4:2:0'
+    if (subsamplingX && !subsamplingY) return '4:2:2'
+    return '4:4:4'
+}
+
 /**
  * AV1CodecConfigurationRecord (av1-in-ISOBMFF spec, "Section 2.3.1: AV1CodecConfigurationBox").
  * Fully byte-aligned bit-packed fields - no bitstream OBU parsing needed for any of this.
@@ -261,12 +273,8 @@ const parseAv1C = (buf: Buffer, av1CBox: Box): CodecDetails | undefined => {
     const chromaSubsamplingX = (byte2 >> 3) & 0x01
     const chromaSubsamplingY = (byte2 >> 2) & 0x01
 
-    const bitDepth = twelveBit ? 12 : (highBitdepth ? 10 : 8)
-    const chromaFormat = monochrome
-        ? CHROMA_FORMAT_NAMES[0]
-        : (chromaSubsamplingX && chromaSubsamplingY) ? '4:2:0'
-        : (chromaSubsamplingX && !chromaSubsamplingY) ? '4:2:2'
-        : '4:4:4'
+    const bitDepth = av1BitDepth(highBitdepth, twelveBit)
+    const chromaFormat = av1ChromaFormat(monochrome, chromaSubsamplingX, chromaSubsamplingY)
 
     return {
         profile: AV1_PROFILE_NAMES[seqProfile] ?? `unknown (${seqProfile})`,
