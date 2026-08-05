@@ -550,11 +550,17 @@ export class RLVDisplayService extends RouteDisplayService {
         video.loaded = false
         video.error = this.buildVideoError(error,video)
 
+        // isCurrentVideo distinguishes "the error landed on the video state the overlay/ride
+        // machinery is actually reading" from "it landed on an orphaned video object" - the
+        // latter would silently leave getVideoState() reading a currentVideo with no error set,
+        // stuck on 'Starting' with the failure only ever visible in this log line.
+        const isCurrentVideo = video === this.currentVideo
+
         if (video.isInitial) {
-            this.logEvent({message: 'could not load video',video:this.getVideoUrl(video),error:error.message, errorCode:this.getCode(error)})
+            this.logEvent({message: 'could not load video',video:this.getVideoUrl(video),error:error.message, errorCode:this.getCode(error),isCurrentVideo})
         }
         else {
-            this.logEvent({message: 'could not load next video',video:this.getVideoUrl(video),error:error.message, errorCode:this.getCode(error)})
+            this.logEvent({message: 'could not load next video',video:this.getVideoUrl(video),error:error.message, errorCode:this.getCode(error),isCurrentVideo})
 
             // remove all videos with an index >= the video that failed to load
             const errIdx = this.videos.indexOf(video)

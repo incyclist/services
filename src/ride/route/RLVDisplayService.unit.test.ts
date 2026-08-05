@@ -608,12 +608,21 @@ describe('RLVDisplayService', () => {
         code: 4,
         message: 'Format error',
       } as any;
+      const logEventSpy = jest.spyOn(service as any, 'logEvent');
 
       if (displayProps.video?.onLoadError) {
         displayProps.video.onLoadError(mediaError);
 
         const overlayProps = service.getStartOverlayProps();
         expect(overlayProps.videoStateError).toBeDefined();
+        // the error must land on the video state getVideoState() actually reads, or the
+        // overlay silently stays 'Starting' forever despite the error being logged - see
+        // design/video-decode-diagnostics.md
+        expect(overlayProps.videoState).toBe('Start:Failed');
+        expect(logEventSpy).toHaveBeenCalledWith(expect.objectContaining({
+          message: 'could not load video',
+          isCurrentVideo: true,
+        }));
       }
     });
 
