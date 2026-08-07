@@ -483,8 +483,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.observer?.stop({immediately:props.noStateUpdates})
             if (props.noStateUpdates)
                 delete this.observer
-            else 
-                waitNextTick().then( ()=>delete this.observer)
+            else {
+                const observerToClear = this.observer
+                waitNextTick().then( () => { if (this.observer === observerToClear) delete this.observer })
+            }
 
             if (prevState==='Finished' || prevState==='Idle' || prevState==='Closing') {
                 this.state = 'Idle'
@@ -651,7 +653,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             const data:ActivityUpdate = {time,speed,routeDistance,distance}
 
             this.getRideModeService().onActivityUpdate(data,currentValues)
-            this.observer.emit('data-update',data,currentValues )
+            this.observer?.emit('data-update',data,currentValues )
         }
     }
 
