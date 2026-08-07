@@ -38,19 +38,19 @@ describe ('AppService',()=>{
     
             
             test('all connected',()=>{
-                setupMocks( {strava:connectedApp, velohero:connectedApp})
+                setupMocks( {strava:connectedApp, intervals:connectedApp})
     
                 const res = service.getConnectedServices('ActivityUpload')
-                expect(res).toEqual([OC({name:'Strava', key:'strava'}),OC({name:'VeloHero', key:'velohero'})])
+                expect(res).toEqual([OC({name:'Strava', key:'strava'}),OC({name:'Intervals.icu', key:'intervals'})])
             })
     
     
             test('partially connected', () =>{
     
-                setupMocks( {strava:notConnectedApp, velohero:connectedApp})
+                setupMocks( {strava:notConnectedApp, intervals:connectedApp})
     
                 const res = service.getConnectedServices('ActivityUpload')
-                expect(res).toEqual([OC({name:'VeloHero', key:'velohero'})])
+                expect(res).toEqual([OC({name:'Intervals.icu', key:'intervals'})])
     
     
             })

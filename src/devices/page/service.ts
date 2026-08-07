@@ -45,10 +45,23 @@ export class DevicesPageService extends IncyclistPageService {
             if (this.promiseOpen!==undefined)  {
                 return this.getPageObserver()
             }
-        
-            this.stateMachine.start( ()=>{
+
+            const onStateMachineUpdate = ()=>{
                 this.getPageObserver().emit('page-update')
-            })
+            }
+
+            this.stateMachine.start( onStateMachineUpdate)
+
+            // self-heal: start() is a no-op (and logs an error) if the state machine wasn't
+            // in 'Closed' state - this can happen if a previous session got stuck (e.g. an
+            // earlier pairing/scanning reentrancy issue) and was never cleanly stopped. Without
+            // this, openPage() would silently continue without ever wiring up
+            // stateChangeCallback, leaving the Pairing screen stuck with no further updates.
+            if (this.stateMachine.state!=='Idle') {
+                this.logEvent({message:'state machine was not in expected state on open, resetting', page:'Pairing', state:this.stateMachine.state})
+                this.stateMachine.stop()
+                this.stateMachine.start( onStateMachineUpdate)
+            }
 
             this.promiseOpen = new Promise<void> ((done)=> {
                 this.start()
@@ -361,7 +374,11 @@ export class DevicesPageService extends IncyclistPageService {
 
 
     protected async closeDeviceSelection( enabled: boolean) {
-        this.logEvent( {message:'capability closed', capability:this.openedCapability})
+        // diagnostic: production logs have shown this firing multiple times while the
+        // Pairing screen was reportedly not the active page - the caller could not be
+        // confirmed from static analysis alone, so capture the call stack to identify it
+        // the next time this is captured in production.
+        this.logEvent( {message:'capability closed', capability:this.openedCapability, enabled, caller:new Error().stack})
 
         if (!enabled) {
             const all = this.state.capabilities??[]
