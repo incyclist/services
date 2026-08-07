@@ -36,13 +36,13 @@ export class WorkoutDisplayService extends RideModeService {
 
     getLogProps(): object {
 
-        const workout = this.getWorkoutList().getSelected()
+        const workout = this.getWorkoutList().getSelected()??this.getWorkoutRide().getWorkout()
         const settings  = this.getWorkoutList().getStartSettings()??{}
         const bikeProps = this.getBikeLogProps()
 
         return {
             mode:'workout',
-            workout: workout.name,
+            workout: workout?.name,
             ...settings,
             ...bikeProps
         }
