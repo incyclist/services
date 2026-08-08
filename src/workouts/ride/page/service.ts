@@ -80,14 +80,12 @@ export class WorkoutRidePageService extends RidePageServiceBase implements IRide
         this.subscribeToWorkoutObserver()
     }
 
-    // TODO(FIXES_BACKLOG #24, bug 2/2): still bypasses the Activity Summary via the legacy
-    // 'navigate-back' page-observer event, unlike onFinished() (the workout-observer
-    // 'completed'/'stopped' path) which already converges onto menuProps.finished. Kept exactly
-    // as-is for this structural-extraction commit; converged onto buildFinishedMenuProps() in the
-    // next (behavioral) commit, which also deletes emitNavigateBack()/'navigate-back' entirely.
-    protected onRideFinishedState(): void {
-        this.emitNavigateBack()
-    }
+    // No onRideFinishedState() override here anymore (FIXES_BACKLOG #24, bug 2/2, fixed): the
+    // ride-observer's 'Finished' path now falls through to RidePageServiceBase's default, which
+    // sets menuProps via buildFinishedMenuProps() (overridden below) - the same Activity Summary
+    // convergence point as the workout-observer 'completed'/'stopped' path (onFinished(), below).
+    // Previously called emitNavigateBack(), a separate 'navigate-back' page-observer event that
+    // bypassed the summary entirely - removed along with emitNavigateBack() itself.
 
     protected onClosePage(): void {
         this.unsubscribeFromWorkoutObserver()
@@ -291,20 +289,13 @@ export class WorkoutRidePageService extends RidePageServiceBase implements IRide
 
     // Shared by onStop() (manual "End Ride") and onFinished() (auto-completion once
     // WorkoutRideService.checkIfDone() fires 'completed'/'stopped') - both must finalize the
-    // activity via RideDisplay.stop(true) before navigating back, so a workout that completes on
-    // its own also lands on a populated Ride Summary instead of requiring a manual "End Ride" tap.
-    //
-    // TODO(FIXES_BACKLOG #24, bug 2/2): kept exactly as-is (still calling emitNavigateBack(), the
-    // legacy 'navigate-back' page-observer event) for this structural-extraction commit; converged
-    // onto onFinished()/menuProps.finished in the next (behavioral) commit, which also deletes
-    // emitNavigateBack()/'navigate-back' entirely.
+    // activity via RideDisplay.stop(true) before converging onto onFinished()/menuProps.finished,
+    // so a workout that completes on its own lands on the Activity Summary the same way a manual
+    // "End Ride" tap does (FIXES_BACKLOG #24, bug 2/2 - previously called the now-removed
+    // emitNavigateBack(), bypassing the summary).
     protected finishRide(): void {
         this.getRideDisplay().stop(true)
-        this.emitNavigateBack()
-    }
-
-    protected emitNavigateBack(): void {
-        this.getPageObserver()?.emit('navigate-back')
+        this.onFinished()
     }
 
     protected subscribeToWorkoutObserver(): void {
@@ -523,8 +514,3 @@ export class WorkoutRidePageService extends RidePageServiceBase implements IRide
         return useUserSettings()
     }
 }
-
-// TODO(FIXES_BACKLOG #24): dropped once getRidePageService() becomes the single factory that
-// resolves the correct concrete subclass itself - kept for this structural-extraction commit so
-// mobile's existing getWorkoutRidePageService() call sites keep compiling unchanged until then.
-export const getWorkoutRidePageService = () => new WorkoutRidePageService()

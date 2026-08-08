@@ -3,6 +3,7 @@ import { CurrentRideDisplayProps, GpxDisplayProps, RideType, RLVDisplayProps } f
 import { AnyRidePageDisplayProps, GPXRidePageDisplayProps, IRidePageService, RidePageDisplayProps, VideoRidePageDisplayProps } from "./types";
 import { RidePageServiceBase } from "./base";
 import { useRideDisplay } from "../display";
+import { WorkoutRidePageService } from "../../workouts/ride/page/service";
 import { sleep } from "../../utils/sleep";
 import { ISecretBinding } from "../../api/secret";
 import { getBindings } from "../../api";
@@ -221,4 +222,15 @@ export class RidePageService extends RidePageServiceBase implements IRidePageSer
 }
 
 
-export const getRidePageService = ()=> new RidePageService()
+/**
+ * Single factory for the ride page service (FIXES_BACKLOG #24), replacing the former
+ * getRidePageService()/getWorkoutRidePageService() pair. Resolves to the concrete subclass
+ * matching the ride currently selected in RouteList/WorkoutList (RideDisplayService.getRideType()) -
+ * callers never need an instanceof check or cast, since RidePageService and WorkoutRidePageService
+ * both implement the full IRidePageService interface (RidePageServiceBase provides safe no-op
+ * defaults for whichever half doesn't apply to a given ride type).
+ */
+export const getRidePageService = (): IRidePageService => {
+    const rideType = useRideDisplay().getRideType()
+    return rideType === 'Workout' ? new WorkoutRidePageService() : new RidePageService()
+}
