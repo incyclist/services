@@ -418,10 +418,49 @@ export class WorkoutRide extends IncyclistService{
     }
 
     /**
+     * Determines whether a power adjustment in the direction of `delta` should nudge `targetPower`
+     * within the current step's power range, as opposed to scaling the Workout FTP.
+     *
+     * This is the single source of truth for the branching used by both `powerUp()`/`powerDown()`
+     * (to decide what they actually adjust) and `getDashboardDisplayProperties()` (to decide
+     * whether the corresponding load button should be labelled in Watt or in % of FTP) - keeping
+     * both in sync, including the boundary check that differs between the top and bottom of a
+     * range (and applies identically whether the range comes from an explicit Watt step or a
+     * percent-of-FTP zone, since both resolve into `minPower`/`maxPower` before this point).
+     *
+     * @param delta positive to check headroom towards `maxPower` (as used by `powerUp`), negative
+     *              to check headroom towards `minPower` (as used by `powerDown`); only the sign is
+     *              used, the magnitude does not affect the outcome
+     */
+    private isPowerRangeAdjustable(delta:number):boolean {
+        if (this.currentLimits?.minPower===this.currentLimits?.maxPower)
+            return false
+
+        return delta>=0
+            ? this.currentLimits?.targetPower<this.currentLimits?.maxPower
+            : this.currentLimits?.targetPower>this.currentLimits?.minPower
+    }
+
+    /**
+     * Builds the labels for the dashboard's load ("+5%"/"+1%"/"-1%"/"-5%") buttons, reflecting
+     * what a click on each of them will actually do right now: `isPowerRangeAdjustable()` decides
+     * per-button (using the same boundary logic `powerUp()`/`powerDown()` use to act) whether the
+     * click will nudge `targetPower` (Watt-labelled) or scale the Workout FTP (%-labelled).
+     */
+    private getLoadButtonLabels():WorkoutDisplayProperties['loadButtons'] {
+        return {
+            inc5: this.isPowerRangeAdjustable(5) ? '+5W' : '+5%',
+            inc1: this.isPowerRangeAdjustable(1) ? '+1W' : '+1%',
+            dec1: this.isPowerRangeAdjustable(-1) ? '-1W' : '-1%',
+            dec5: this.isPowerRangeAdjustable(-5) ? '-5W' : '-5%',
+        }
+    }
+
+    /**
      * Adjusts the base level of th workout
-     * 
-     * This allows the user to increase the instensity of a workout. 
-     * 
+     *
+     * This allows the user to increase the instensity of a workout.
+     *
      * Depending on how the the step limits are defined, this will have different impact
      * - Step defined in "percentage of FTP": The FTP will be increased by _delta_ %
      * - Step defined in "Watts": The power limit will be increased by _delta_ Watts
@@ -444,7 +483,7 @@ export class WorkoutRide extends IncyclistService{
 
         try {
 
-            if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower<this.currentLimits?.maxPower) {
+            if ( this.isPowerRangeAdjustable(delta)) {
                 let deltaVal = delta
                 if ( this.settings?.ftp) {
                     deltaVal = delta===1 ? 5 : 50
@@ -495,7 +534,7 @@ export class WorkoutRide extends IncyclistService{
         this.logEvent({message: 'workout power down', delta})
 
         try {
-            if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower>this.currentLimits?.minPower) {
+            if ( this.isPowerRangeAdjustable(-delta)) {
                 let deltaVal = delta
                 if ( this.settings?.ftp) {
                     deltaVal = delta===1 ? 5 : 50
@@ -566,15 +605,16 @@ export class WorkoutRide extends IncyclistService{
             const {start,stop} = this.getZoomParameters(this.trainingTime);
             const title = this.getStepTitle(this.trainingTime)
             const canShowBackward = Math.round((this.trainingTime??0))>0
-            
+
             const props = {
-                workout:this.workout, title, 
-                ftp:this.settings.ftp, 
+                workout:this.workout, title,
+                ftp:this.settings.ftp,
                 current:this.currentLimits,
                 start,stop,
                 mode: this.getCyclingModeText(),
                 canShowBackward,
-                canShowForward:true
+                canShowForward:true,
+                loadButtons: this.getLoadButtonLabels()
             }
 
             return props

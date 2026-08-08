@@ -989,6 +989,107 @@ describe('WorkoutRide',()=>{
 
     })
 
+    // FIXES_BACKLOG #35 / services#505: the dashboard's load-adjustment buttons (+5/+1/-1/-5) either
+    // nudge targetPower (Watt) within the current step's power range, or scale the Workout FTP (%),
+    // depending on the same boundary logic powerUp()/powerDown() use to act - loadButtons surfaces
+    // which one each button will actually do, so web-ui doesn't have to re-implement that branching.
+    describe('getDashboardDisplayProperties - loadButtons (FIXES_BACKLOG #35 / services#505)',()=>{
+        let s,service:WorkoutRide
+        const workout = new Workout({type:'workout',name:'Test Workout'})
+        workout.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [
+            {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
+            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'}
+        ] })
+
+        beforeEach( ()=>{
+            s = service = new WorkoutRide
+            s.workout = workout
+            s.settings = {ftp:200}
+            s.state='active'
+            s.trainingTime = 10
+        })
+        afterEach( ()=>{
+            s.reset()
+            jest.resetAllMocks()
+        })
+
+        test('single fixed-target step (minPower===maxPower): always %, regardless of targetPower',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:150, maxPower:150, targetPower:150 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-1%', dec5:'-5%' })
+        })
+
+        test('explicit Watt-range step: bottom edge (targetPower===minPower) - dec is %, inc is W',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:100 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+5W', inc1:'+1W', dec1:'-1%', dec5:'-5%' })
+        })
+
+        test('explicit Watt-range step: top edge (targetPower===maxPower) - inc is %, dec is W',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:300 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-1W', dec5:'-5W' })
+        })
+
+        test('explicit Watt-range step: mid-range - all four buttons are W',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+5W', inc1:'+1W', dec1:'-1W', dec5:'-5W' })
+        })
+
+        // A percent-of-FTP zone (e.g. 50-60% FTP) resolves into the identical minPower/maxPower
+        // Watt range via getPowerVal() before isPowerRangeAdjustable() ever runs - so it must hit
+        // the exact same edge-flipping behaviour as an explicit-Watt step, just at different Watt
+        // values (100-120W here, for ftp=200: 50%=100W, 60%=120W).
+        describe('percent-of-FTP zone (50-60% FTP, ftp=200 => 100-120W)',()=>{
+            const zoneWorkout = new Workout({type:'workout',name:'Zone Workout'})
+            zoneWorkout.addStep({type:'step', steady:true, work:true, duration:120, power:{min:50,max:60,type:'pct of FTP'}, text:'Zone Step'})
+
+            beforeEach( ()=>{
+                s.workout = zoneWorkout
+                s.settings = {ftp:200}
+                s.setCurrentLimits(0)
+            })
+
+            test('resolves to the expected Watt range',()=>{
+                expect(s.currentLimits.minPower).toBe(100)
+                expect(s.currentLimits.maxPower).toBe(120)
+            })
+
+            test('bottom edge (targetPower===minPower=100W) - dec is %, inc is W',()=>{
+                s.currentLimits.targetPower = 100
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtons).toEqual({ inc5:'+5W', inc1:'+1W', dec1:'-1%', dec5:'-5%' })
+            })
+
+            test('top edge (targetPower===maxPower=120W) - inc is %, dec is W',()=>{
+                s.currentLimits.targetPower = 120
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-1W', dec5:'-5W' })
+            })
+
+            test('mid-zone (targetPower=110W) - all four buttons are W',()=>{
+                s.currentLimits.targetPower = 110
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtons).toEqual({ inc5:'+5W', inc1:'+1W', dec1:'-1W', dec5:'-5W' })
+            })
+        })
+
+        test('undefined when workout is not active (idle)',()=>{
+            s.state = 'idle'
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toBeUndefined()
+        })
+    })
+
     // FIXES_BACKLOG #13: mobile shows the workout name elsewhere on screen and must never repeat
     // it in getStepTitle()'s output; when neither the segment nor the step has its own text, it
     // must not duplicate the "<target> for <duration>" text WorkoutRidePageService.buildDashboardLine()
