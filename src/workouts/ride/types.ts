@@ -39,5 +39,11 @@ export interface WorkoutDisplayProperties {
     stop?:number
     mode?: string,
     canShowBackward?: boolean,
-    canShowForward?: boolean
+    canShowForward?: boolean,
+    /** Labels for the dashboard's load-adjustment buttons, reflecting what a click on each will
+     *  actually do (`+5W`/`+1W`/`-1W`/`-5W` when it will nudge `targetPower` within the current
+     *  step's power range, `+5%`/`+1%`/`-1%`/`-5%` when it will scale the Workout FTP instead) -
+     *  see `WorkoutRide.isPowerRangeAdjustable()`. Undefined when the workout isn't active (same
+     *  states under which the rest of this object is empty). */
+    loadButtons?: { inc5:string, inc1:string, dec1:string, dec5:string }
 }
