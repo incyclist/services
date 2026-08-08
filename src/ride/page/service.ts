@@ -1,159 +1,40 @@
-import { EventLogger } from "gd-eventlog";
 import { Injectable, Singleton } from "../../base/decorators";
-import { IncyclistPageService } from "../../base/pages";
-import { CurrentRideDisplayProps, CurrentRideState, GpxDisplayProps, IObserver, RideType, RLVDisplayProps } from "../../types";
-import { AnyRidePageDisplayProps, GPXRidePageDisplayProps, IRidePageService, RideMenuProps, RidePageDisplayProps, StartGateProps, VideoRidePageDisplayProps } from "./types";
+import { CurrentRideDisplayProps, GpxDisplayProps, RideType, RLVDisplayProps } from "../../types";
+import { AnyRidePageDisplayProps, GPXRidePageDisplayProps, IRidePageService, RidePageDisplayProps, VideoRidePageDisplayProps } from "./types";
+import { RidePageServiceBase } from "./base";
 import { useRideDisplay } from "../display";
+import { WorkoutRidePageService } from "../../workouts/ride/page/service";
 import { sleep } from "../../utils/sleep";
 import { ISecretBinding } from "../../api/secret";
 import { getBindings } from "../../api";
 import { useOnlineStatusMonitoring } from "../../monitoring";
 
-const BACKGROUND_PAUSE_TIMEOUT_MS = 300000   
-
 @Singleton
-export class RidePageService extends IncyclistPageService implements IRidePageService {
-
-    protected eventHandler: Record<string,any> = {}
-    protected backgroundTimer: NodeJS.Timeout | undefined
-    protected backgroundPausedByService: boolean = false
-    protected menuProps: RideMenuProps | null = null
-    protected isInitialized: boolean = false
-    protected startGateProps: StartGateProps|null =  null
-    
+export class RidePageService extends RidePageServiceBase implements IRidePageService {
 
     constructor()  {
         super('RidePage')
 
-        this.eventHandler['state-update'] = this.onDisplayStateUpdate.bind(this)
         this.eventHandler['route-update'] = this.onRouteUpdate.bind(this)
-
     }
 
-
-    async initPage():Promise<RideType|undefined> {
-        try {
-            const service = this.getRideDisplay()
-
-            await service.init()     
-            this.isInitialized = true  
-            
-            return service.getRideType()
-        }
-        catch(err:any) {
-            this.logError(err,'initPage')
-        }
+    protected getPageLogName(): string {
+        return 'Rides'
     }
 
-    openPage(simulate?:boolean): IObserver {
-        try {
-            this.logEvent({message:'page shown', page:'Rides'})
-
-            EventLogger.setGlobalConfig('page','Rides')
-
-            super.openPage()
-
-            try {
-                const service = this.getRideDisplay()
-
-                const registerAndStart = () => {
-                    // registerEventHandlers() must run after init() has resolved: init() is what
-                    // (re)creates RideDisplayService's observer instance (via closePrevRide() ->
-                    // new Observer()), so registering earlier would attach the handlers to a stale
-                    // (or, on the very first ride, undefined) observer that start() never emits on.
-                    this.registerEventHandlers()
-                    service.start(simulate)
-
-                    sleep(5).then( ()=>{
-                        this.updatePageDisplay()
-                    })
-                }
-
-                if (!this.isInitialized) {
-                    // init() is async (it awaits closePrevRide() before setting up the new
-                    // observer/display service). start() depends on that state, so it must not
-                    // run until init() has actually resolved - previously this was fire-and-forget,
-                    // letting start() race ahead of init() and run against partially-initialized
-                    // (or leftover previous-ride) state. openPage() itself stays synchronous -
-                    // callers still get the IObserver immediately - only the start of the ride is
-                    // deferred until init() completes.
-                    service.init()
-                        .then( () => {
-                            this.isInitialized = true
-                            registerAndStart()
-                        })
-                        .catch( (err:any) => { this.logError(err,'openPage') } )
-                }
-                else {
-                    registerAndStart()
-                }
-            }
-            catch(err:any) {
-                this.logError(err,'openPage')
-            }
-            return this.getPageObserver()
-        }
-        catch(err:any) {
-            this.logError(err,'openPage')
-        }
-        return this.getPageObserver()
+    protected requiresOwnInit(): boolean {
+        return true
     }
 
-
-    closePage(): void {
-        try {
-            EventLogger.setGlobalConfig('page',null)
-            this.logEvent({message:'page closed', page:'Rides'})        
-
-            this.getRideDisplay().stop()
-            this.menuProps = null
-            this.isInitialized = false
-            super.closePage()
-        }
-        catch(err:any) {
-            this.logError(err,'closePage')
-        }
+    protected getBackgroundPauseRequester(): 'user' | 'device' {
+        return 'user'
     }
 
-    async pausePage(): Promise<void> {
-        try {
-            this.backgroundTimer = setTimeout(()=> {
-                this.getRideDisplay().pause('user')
-                this.backgroundPausedByService = true
-            },BACKGROUND_PAUSE_TIMEOUT_MS)
-
-            this.isInitialized = false
-            return super.pausePage()
-        }
-        catch(err:any)  {
-            this.logError(err,'pausePage')
-        }
+    protected onRideStartRequested(): void {
+        sleep(5).then( ()=>{
+            this.updatePageDisplay()
+        })
     }
-
-    async resumePage(): Promise<void>  {
-        try {
-            if (this.backgroundTimer) {
-                clearTimeout(this.backgroundTimer)
-            }
-
-        // TODO:
-        //   if backgroundPausedByService:
-        //     backgroundPausedByService = false
-        //     // ride is paused, menu is open -- user must consciously tap Resume
-        //     // no automatic resume
-        //   else:
-        //     // short interruption -- ride never paused, nothing to do        
-
-            return super.resumePage()
-        } catch(err:any) {
-            this.logError(err,'resumePage')
-        }
-        
-    }    
-    getRideObserver(): IObserver|null {
-        return this.rideObserver??null
-    }
-
 
     getPageDisplayProps(): AnyRidePageDisplayProps {
 
@@ -162,10 +43,10 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         const noRideProps:RidePageDisplayProps = {
             rideState:'Error',
             startOverlayProps,
-            rideType: null as unknown as RideType,            
+            rideType: null as unknown as RideType,
             menuProps: null,
             startGateProps: null
-            
+
         }
 
         try {
@@ -220,34 +101,12 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                 this.closePage()
                 return;
             }
-        
+
             this.menuProps = null
             this.updatePageDisplay()
         }
         catch(err:any) {
             this.logError(err,'onMenuClose')
-        }
-    }
-
-    onPause() {
-        try {
-            this.getRideDisplay().pause('user')
-            this.menuProps = { showResume: true}  // menu stays open, now shows Resume
-            this.updatePageDisplay()
-        }
-        catch(err:any) {
-            this.logError(err,'onPause')
-        }
-    }
-
-    onResume() {
-        try {
-            this.getRideDisplay().resume()
-            this.menuProps = null
-            this.updatePageDisplay()
-        }
-        catch(err:any) {
-            this.logError(err,'onResume')
         }
     }
 
@@ -272,80 +131,28 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
-    onRetryStart() {
-        try {
-            this.getRideDisplay().retryStart()
-        } catch(err:any) {
-            this.logError(err,'onRetryStart')
-        }
-    }
-
-    onIgnoreStart() {
-        try {
-            this.getRideDisplay().startWithMissingSensors();
-        }
-        catch(err:any)  {
-            this.logError(err,'onIgnoreStart')
-        }
-    }
-
-    onCancelStart() {
-        try {
-            this.rideObserver?.stop()
-            this.getRideDisplay().cancelStart()
-                .then( ()=> {
-                    this.moveToPreviousPage()
-                    this.closePage()
-                })
-                .catch( (err:any)=> {this.logError(err,'onCancelStart') } )
-
-        }
-        catch(err:any) {
-            this.logError(err,'onCancelStart')
-        }
-    }
-
-
     protected getVideoRideDisplayProps():VideoRidePageDisplayProps {
         const props: RLVDisplayProps = this.rideDisplayProps as CurrentRideDisplayProps & RLVDisplayProps
-        const state = this.getRideDisplay().getState()
-        const rideType = this.getRideDisplay().getRideType()
-        const isStarting = state==='Idle' || state==='Starting' || state==='Error' 
-
 
         const displayProps:VideoRidePageDisplayProps = {
-            rideState: state,
-            rideType,
-            startGateProps:this.startGateProps,
-            startOverlayProps : isStarting ? this.getRideDisplay().getStartOverlayProps() : null,
-            menuProps: this.menuProps,
+            ...this.buildBaseDisplayProps(),
             video:props.video,
             videos:props.videos,
             route: props.route
-
-
         }
         return displayProps
 
-        
+
     }
 
     protected getGPXRideDisplayProps():GPXRidePageDisplayProps {
         const props: GpxDisplayProps = this.rideDisplayProps as CurrentRideDisplayProps & GpxDisplayProps
-        const state = this.getRideDisplay().getState()
-        const rideType = this.getRideDisplay().getRideType()
-        const isStarting = state==='Idle' || state==='Starting' || state==='Error' 
-    
+
         const displayProps: GPXRidePageDisplayProps = {
-            rideState: state,
-            rideType,
-            startGateProps:this.startGateProps,
-            startOverlayProps : isStarting ? this.getRideDisplay().getStartOverlayProps() : null,
-            menuProps: this.menuProps,
+            ...this.buildBaseDisplayProps(),
             rideView: props.rideView,
             route: props.route,
             displayObserver: props.displayObserver
-
         }
         return displayProps
     }
@@ -353,13 +160,13 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     protected async checkSecretValidity() {
         if (this.getBindings().appInfo?.getChannel()==='mobile') {
-            const secretsStatus = this.getSecretBinding()?.getSecretsStatus?.() 
+            const secretsStatus = this.getSecretBinding()?.getSecretsStatus?.()
 
             if (secretsStatus === 'stale' || secretsStatus === 'missing' || secretsStatus===undefined) {
 
                 if (!this.getOnlineStatusMonitoring().onlineStatus)
                     this.showStartGate()
-            }            
+            }
         }
     }
 
@@ -377,75 +184,28 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.updatePageDisplay()
     }
 
-    
-
-    getRideType():RideType {
-        return this.getRideDisplay().getRideType()
-
-    }
-
 
     // protected getFreeRideDisplayProps() {
     //     // TODO
     // }
 
-
-    protected updatePageDisplay() {
-        this.getPageObserver()?.emit('page-update')
-    }    
-    protected registerEventHandlers() {
-        const events = Object.keys(this.eventHandler )
-        events.forEach( event=> { this.rideObserver?.on(event,this.eventHandler[event])})        
-    }
-    protected unregisterEventHandlers() {
-        const events = Object.keys(this.eventHandler )
-        events.forEach( event=> { this.rideObserver?.off(event,this.eventHandler[event])})        
-    }
-
-    protected onDisplayStateUpdate( state:CurrentRideState ) {
-        switch(state) {
-            case 'Paused': 
-                this.menuProps = { showResume:true}
-                break;
-            case 'Finished': 
-                this.menuProps = { showResume:false,finished:true}
-                break;
-            case 'Active': 
-                this.menuProps = null
-                break;
-
-        }
-        this.updatePageDisplay()
-    }
-
     protected onRouteUpdate() {
         this.updatePageDisplay()
-    }
-
-    protected moveToPreviousPage() {
-        this.moveTo('$contentPage')        
-    }
-
-    protected get rideObserver (): IObserver|null {
-        try {
-            return this.getRideDisplay()?.getObserver()
-        }catch(err:any) {
-            this.logError(err,'get rideObserver')
-        }
-            return null
     }
 
     protected get rideDisplayProps() {
         return this.getRideDisplay().getDisplayProperties()
     }
 
+    protected getSecretBinding(): ISecretBinding|undefined {
+        return this.getBindings().secret
+    }
+
+    // Kept per-subclass rather than shared on RidePageServiceBase - see the import-cycle note on
+    // RidePageServiceBase.getRideDisplay().
     @Injectable
     protected getRideDisplay() {
         return useRideDisplay()
-    }
-
-    protected getSecretBinding(): ISecretBinding|undefined {
-        return this.getBindings().secret
     }
 
     @Injectable
@@ -457,9 +217,20 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     protected getOnlineStatusMonitoring() {
         return useOnlineStatusMonitoring()
     }
-    
+
 
 }
 
 
-export const getRidePageService = ()=> new RidePageService()
+/**
+ * Single factory for the ride page service (FIXES_BACKLOG #24), replacing the former
+ * getRidePageService()/getWorkoutRidePageService() pair. Resolves to the concrete subclass
+ * matching the ride currently selected in RouteList/WorkoutList (RideDisplayService.getRideType()) -
+ * callers never need an instanceof check or cast, since RidePageService and WorkoutRidePageService
+ * both implement the full IRidePageService interface (RidePageServiceBase provides safe no-op
+ * defaults for whichever half doesn't apply to a given ride type).
+ */
+export const getRidePageService = (): IRidePageService => {
+    const rideType = useRideDisplay().getRideType()
+    return rideType === 'Workout' ? new WorkoutRidePageService() : new RidePageService()
+}

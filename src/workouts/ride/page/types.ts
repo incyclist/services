@@ -1,5 +1,3 @@
-import type { IObserver } from "../../../base/typedefs"
-import type { IPageService } from "../../../base/pages"
 import type { RideMenuProps, RidePageDisplayProps } from "../../../ride/page/types"
 import type { WorkoutGraphPlanBar } from "../../base/graph/types"
 
@@ -63,7 +61,11 @@ export interface WorkoutDashboardLine {
 
 // ---- menu ----------------------------------------------------------------------
 
-export interface WorkoutRideMenuProps extends RideMenuProps{
+// RideMenuProps (ride/page/types.ts) already carries canStepBack/canStepForward as optional,
+// folded in as part of the RidePageService/WorkoutRidePageService merge (FIXES_BACKLOG #24) - this
+// alias just narrows them back to required for callers that specifically know they're dealing
+// with a workout ride's menu.
+export type WorkoutRideMenuProps = RideMenuProps & {
     canStepBack: boolean      // = WorkoutDisplayProperties.canShowBackward
     canStepForward: boolean   // = WorkoutDisplayProperties.canShowForward
 }
@@ -76,7 +78,12 @@ export interface WorkoutGestureHint {
 
 // ---- page display props ---------------------------------------------------------
 
-export interface WorkoutRidePageDisplayProps extends RidePageDisplayProps {
+// RidePageDisplayProps (ride/page/types.ts) already carries these fields as optional, folded in
+// as part of the RidePageService/WorkoutRidePageService merge (FIXES_BACKLOG #24) - this alias
+// just narrows them back to required for callers that specifically know they're dealing with a
+// workout ride's display props (WorkoutRidePageService.getPageDisplayProps(), mobile's
+// WorkoutRidePage/View).
+export type WorkoutRidePageDisplayProps = RidePageDisplayProps & {
     menuProps:   WorkoutRideMenuProps | null
     graph:       WorkoutGraphPlan          // planned (low-frequency) series only; actuals via getGraphActuals()
     steps:       WorkoutUpcomingSteps      // compact upcoming-steps panel (WorkoutStepsList)
@@ -95,38 +102,9 @@ export interface WorkoutRidePageDisplayProps extends RidePageDisplayProps {
     loadIncrement: number
 }
 
-// ---- callbacks -------------------------------------------------------------------
-
-export interface WorkoutRidePageCallbacks {
-    onMenuOpen    (): void
-    onMenuClose   (): void
-
-    onPause       (): void
-    onResume      (): void
-    onStop        (): void       // -> ride.stop(true)     (view enforces the confirmation tap)
-
-    onStepBack    (): void       // -> ride.backward()     (delegates to WorkoutRide.backward)
-    onStepForward (): void       // -> ride.forward()      (delegates to WorkoutRide.forward)
-    onIncreaseLoad(): void       // -> service.adjustLoad(+increment)
-    onDecreaseLoad(): void       // -> service.adjustLoad(-increment)
-
-    // Writes preferences.workouts.loadIncrement (WorkoutSettingsDialog, session 5.10) - the same
-    // key onIncreaseLoad/onDecreaseLoad and the swipe gesture already read, not a second one.
-    onSetLoadIncrement(value: number): void
-
-    onRetryStart  (): void
-    onIgnoreStart (): void
-    onCancelStart (): void
-
-    // Always hides the gesture-hint overlay for the remainder of this ride. Only persists
-    // `hints.workoutRideGestures` (suppressing it on all future workout rides) when dontShowAgain
-    // is true - a plain close only hides it for this ride.
-    onGestureHintDismissed(props: { dontShowAgain: boolean }): void
-}
-
-export interface IWorkoutRidePageService extends WorkoutRidePageCallbacks, IPageService {
-    getRideObserver(): IObserver | null
-    getPageDisplayProps(): WorkoutRidePageDisplayProps
-    getGraphActuals(): WorkoutGraphActuals
-    adjustLoad(deltaPct: number): void
-}
+// ---- callbacks / service interface -------------------------------------------------
+//
+// Previously WorkoutRidePageCallbacks/IWorkoutRidePageService, alongside a sibling
+// IRidePageService/RidePageCallbacks in ride/page/types.ts - both are now collapsed into the one
+// IRidePageService interface there (FIXES_BACKLOG #24), which RidePageService and
+// WorkoutRidePageService both implement in full via RidePageServiceBase's safe no-op defaults.

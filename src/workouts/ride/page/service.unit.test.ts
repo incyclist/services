@@ -621,15 +621,20 @@ describe('WorkoutRidePageService', () => {
             expect(s.getPageDisplayProps().menuProps).toBeNull()
         })
 
-        test('onStop stops the ride and emits navigate-back', () => {
+        // FIXES_BACKLOG #24, bug 2/2 (fixed): onStop() -> finishRide() now converges onto
+        // menuProps.finished (same as onFinished()'s workout-observer 'completed'/'stopped' path)
+        // instead of the removed emitNavigateBack()/'navigate-back' event, so a manually-ended
+        // workout lands on the Activity Summary too.
+        test('onStop stops the ride and sets menuProps to the finished state', () => {
             s.openPage()
-            const navSpy = jest.fn()
-            s.getPageObserver().on('navigate-back', navSpy)
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
 
             s.onStop()
 
             expect(MockRideDisplay.stop).toHaveBeenCalledWith(true)
-            expect(navSpy).toHaveBeenCalled()
+            expect(s.getPageDisplayProps().menuProps).toMatchObject({ showResume: false, finished: true })
+            expect(updateSpy).toHaveBeenCalled()
         })
 
         test('onStepBack / onStepForward delegate to RideDisplay', () => {
@@ -750,10 +755,16 @@ describe('WorkoutRidePageService', () => {
             expect(updateSpy).toHaveBeenCalled()
         })
 
-        test('Finished -> navigate-back only', () => {
+        // FIXES_BACKLOG #24, bug 2/2 (fixed): the ride-observer 'Finished' path used to call
+        // emitNavigateBack() directly, bypassing the Activity Summary - it now converges onto
+        // menuProps.finished, same as onFinished() (the workout-observer completion path, tested
+        // below), and no longer emits 'navigate-back' at all (that event/method is gone).
+        test('Finished -> menuProps set to finished, page-update, no navigate-back', () => {
             updateSpy.mockClear()
             rideObserver.emit('state-update', 'Finished')
-            expect(navSpy).toHaveBeenCalled()
+            expect(s.getPageDisplayProps().menuProps).toMatchObject({ showResume: false, finished: true })
+            expect(updateSpy).toHaveBeenCalled()
+            expect(navSpy).not.toHaveBeenCalled()
         })
 
         test('Error -> page-update', () => {

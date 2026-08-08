@@ -1,11 +1,10 @@
-import { EventLogger } from "gd-eventlog"
 import { Injectable } from "../../../base/decorators"
 import { Singleton } from "../../../base/types"
-import { IncyclistPageService } from "../../../base/pages"
-import type { IObserver } from "../../../base/typedefs"
+import { RidePageServiceBase } from "../../../ride/page/base"
+import type { IRidePageService } from "../../../ride/page/types"
 import type { CurrentRideState, RideType } from "../../../types"
-import { useRideDisplay } from "../../../ride/display"
 import { useActivityRide } from "../../../activities"
+import { useRideDisplay } from "../../../ride/display"
 import { useUserSettings } from "../../../settings"
 import { useWorkoutRide } from "../service"
 import type { PowerAdjustmentResult, WorkoutDisplayProperties } from "../types"
@@ -13,7 +12,6 @@ import { getFlattenedSteps, getStepDuration, getStepTargetText, getWorkoutGraphS
 import type { Workout } from "../../base/model"
 import type { StepDefinition } from "../../base/model/types"
 import type {
-    IWorkoutRidePageService,
     WorkoutDashboardLine,
     WorkoutGestureHint,
     WorkoutGraphActuals,
@@ -25,7 +23,6 @@ import type {
     WorkoutUpcomingSteps
 } from "./types"
 
-const BACKGROUND_PAUSE_TIMEOUT_MS = 300000
 const UPCOMING_STEPS_COUNT = 3
 const DEFAULT_LOAD_INCREMENT = 1
 const HINTS_WORKOUT_GESTURES_KEY = 'hints.workoutRideGestures'
@@ -34,23 +31,17 @@ const HINTS_WORKOUT_GESTURES_KEY = 'hints.workoutRideGestures'
 const LOAD_INCREMENT_SETTING_KEY = 'preferences.workouts.loadIncrement'
 
 @Singleton
-export class WorkoutRidePageService extends IncyclistPageService implements IWorkoutRidePageService {
+export class WorkoutRidePageService extends RidePageServiceBase implements IRidePageService {
 
-    protected rideEventHandler: Record<string, any> = {}
     protected workoutEventHandler: Record<string, any> = {}
     protected workoutObserverSubscribed = false
 
-    protected backgroundTimer: NodeJS.Timeout | undefined
-    protected backgroundPausedByService = false
-    protected menuProps: WorkoutRideMenuProps | null = null
     // this-ride-only suppression of the gesture-hint overlay (reset on every openPage()) -
     // distinct from the persisted hints.workoutRideGestures flag, which suppresses it forever.
     protected gestureHintDismissed = false
 
     constructor() {
         super('WorkoutRidePage')
-
-        this.rideEventHandler['state-update'] = this.onRideStateUpdate.bind(this)
 
         this.workoutEventHandler['step-changed'] = this.onWorkoutUpdate.bind(this)
         this.workoutEventHandler['update'] = this.onWorkoutUpdate.bind(this)
@@ -60,82 +51,52 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         this.workoutEventHandler['stopped'] = this.onFinished.bind(this)
     }
 
-    // ---- lifecycle -----------------------------------------------------------
-
-    openPage(simulate?: boolean): IObserver {
-        try {
-            this.logEvent({ message: 'page shown', page: 'WorkoutRide' })
-            EventLogger.setGlobalConfig('page', 'WorkoutRide')
-
-            this.gestureHintDismissed = false
-            super.openPage()
-
-            try {
-                const service = this.getRideDisplay()
-
-                // RideDisplayService is already fully initialized by RidePage.tsx's
-                // getRidePageService().initPage() before WorkoutRidePage can ever mount -
-                // calling init() again here would race with the start() below and tear the
-                // ride back down mid-connect via closePrevRide()'s stopRide() (see the bug
-                // this comment replaces: device-start listeners got silently unregistered).
-                this.registerRideEventHandlers()
-                this.subscribeToWorkoutObserver()
-                service.start(simulate)
-            }
-            catch (err: any) {
-                this.logError(err, 'openPage')
-            }
-        }
-        catch (err: any) {
-            this.logError(err, 'openPage')
-        }
-        return this.getPageObserver()
+    protected getPageLogName(): string {
+        return 'WorkoutRide'
     }
 
-    closePage(): void {
-        try {
-            EventLogger.setGlobalConfig('page', null)
-            this.logEvent({ message: 'page closed', page: 'WorkoutRide' })
-
-            this.getRideDisplay().stop()
-            this.unregisterRideEventHandlers()
-            this.unsubscribeFromWorkoutObserver()
-            this.menuProps = null
-            super.closePage()
-        }
-        catch (err: any) {
-            this.logError(err, 'closePage')
-        }
+    protected requiresOwnInit(): boolean {
+        // RideDisplayService is already fully initialized by RidePage.tsx's
+        // getRidePageService().initPage() before WorkoutRidePage can ever mount - calling
+        // init() again here would race with the start() below and tear the ride back down
+        // mid-connect via closePrevRide()'s stopRide() (see the bug this comment replaces:
+        // device-start listeners got silently unregistered).
+        return false
     }
 
-    async pausePage(): Promise<void> {
-        try {
-            this.backgroundTimer = setTimeout(() => {
-                this.getRideDisplay().pause('device')
-                this.backgroundPausedByService = true
-            }, BACKGROUND_PAUSE_TIMEOUT_MS)
-
-            return super.pausePage()
-        }
-        catch (err: any) {
-            this.logError(err, 'pausePage')
-        }
+    protected getBackgroundPauseRequester(): 'user' | 'device' {
+        return 'device'
     }
 
-    async resumePage(): Promise<void> {
-        try {
-            if (this.backgroundTimer) {
-                clearTimeout(this.backgroundTimer)
-            }
-            return super.resumePage()
-        }
-        catch (err: any) {
-            this.logError(err, 'resumePage')
-        }
+    protected resetPageState(): void {
+        this.gestureHintDismissed = false
     }
 
-    getRideObserver(): IObserver | null {
-        return this.rideObserver ?? null
+    protected onRideHandlersRegistered(): void {
+        this.subscribeToWorkoutObserver()
+    }
+
+    protected onBeforeDisplayStateUpdate(_state: CurrentRideState): void {
+        this.subscribeToWorkoutObserver()
+    }
+
+    // No onRideFinishedState() override here anymore (FIXES_BACKLOG #24, bug 2/2, fixed): the
+    // ride-observer's 'Finished' path now falls through to RidePageServiceBase's default, which
+    // sets menuProps via buildFinishedMenuProps() (overridden below) - the same Activity Summary
+    // convergence point as the workout-observer 'completed'/'stopped' path (onFinished(), below).
+    // Previously called emitNavigateBack(), a separate 'navigate-back' page-observer event that
+    // bypassed the summary entirely - removed along with emitNavigateBack() itself.
+
+    protected onClosePage(): void {
+        this.unsubscribeFromWorkoutObserver()
+    }
+
+    protected buildPausedMenuProps(): WorkoutRideMenuProps {
+        return { showResume: true, ...this.getStepFlags() }
+    }
+
+    protected buildFinishedMenuProps(): WorkoutRideMenuProps {
+        return { showResume: false, finished: true, canStepBack: false, canStepForward: false }
     }
 
     // ---- display props ---------------------------------------------------------
@@ -148,12 +109,17 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
                 return this.getEmptyDisplayProps()
             }
 
-            const base = this.buildBaseProps()
+            const base = this.buildBaseDisplayProps()
             const wo = this.getWorkoutRide().getDashboardDisplayProperties()
             const current = this.getRideDisplay().getDisplayProperties().workout
 
             return {
                 ...base,
+                // base.menuProps is only ever populated here via this class's own
+                // buildPausedMenuProps()/buildFinishedMenuProps()/onMenuOpen()/onMenuClose()
+                // overrides, which always shape it as WorkoutRideMenuProps - RidePageServiceBase's
+                // field itself is typed to the wider (Video/GPX-compatible) RideMenuProps.
+                menuProps: base.menuProps as WorkoutRideMenuProps | null,
                 title: wo.title ?? '',
                 graph: this.buildGraphPlan(current, wo.ftp),
                 steps: this.buildUpcomingSteps(current, wo.ftp),
@@ -217,28 +183,6 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
     }
 
-    onPause(): void {
-        try {
-            this.getRideDisplay().pause('user')
-            this.menuProps = { showResume: true, ...this.getStepFlags() }
-            this.updatePageDisplay()
-        }
-        catch (err: any) {
-            this.logError(err, 'onPause')
-        }
-    }
-
-    onResume(): void {
-        try {
-            this.getRideDisplay().resume()
-            this.menuProps = null
-            this.updatePageDisplay()
-        }
-        catch (err: any) {
-            this.logError(err, 'onResume')
-        }
-    }
-
     onStop(): void {
         try {
             this.finishRide()
@@ -282,7 +226,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
     }
 
     // WorkoutSettingsDialog (session 5.10) - writes the same preferences.workouts.loadIncrement
-    // key onIncreaseLoad/onDecreaseLoad and the swipe gesture (session 5.4) already read from.
+    // key onIncreaseLoad/onDecreaseLoad and the swipe gesture already read from.
     onSetLoadIncrement(value: number): void {
         try {
             this.getUserSettings().set(LOAD_INCREMENT_SETTING_KEY, value)
@@ -290,24 +234,6 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
         catch (err: any) {
             this.logError(err, 'onSetLoadIncrement')
-        }
-    }
-
-    onRetryStart(): void {
-        try {
-            this.getRideDisplay().retryStart()
-        }
-        catch (err: any) {
-            this.logError(err, 'onRetryStart')
-        }
-    }
-
-    onIgnoreStart(): void {
-        try {
-            this.getRideDisplay().startWithMissingSensors()
-        }
-        catch (err: any) {
-            this.logError(err, 'onIgnoreStart')
         }
     }
 
@@ -321,21 +247,6 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
         catch (err: any) {
             this.logError(err, 'onGestureHintDismissed')
-        }
-    }
-
-    onCancelStart(): void {
-        try {
-            this.rideObserver?.stop()
-            this.getRideDisplay().cancelStart()
-                .then(() => {
-                    this.moveToPreviousPage()
-                    this.closePage()
-                })
-                .catch((err: any) => { this.logError(err, 'onCancelStart') })
-        }
-        catch (err: any) {
-            this.logError(err, 'onCancelStart')
         }
     }
 
@@ -360,24 +271,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
     }
 
-    // ---- ride/workout observer handling -----------------------------------------
-
-    protected onRideStateUpdate(state: CurrentRideState): void {
-        this.subscribeToWorkoutObserver()
-
-        switch (state) {
-            case 'Paused':
-                this.menuProps = { showResume: true, ...this.getStepFlags() }
-                break
-            case 'Active':
-                this.menuProps = null
-                break
-            case 'Finished':
-                this.emitNavigateBack()
-                return
-        }
-        this.updatePageDisplay()
-    }
+    // ---- workout observer handling -----------------------------------------
 
     protected onWorkoutUpdate(): void {
         this.updatePageDisplay()
@@ -385,7 +279,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
 
     protected onFinished(): void {
         try {
-            this.menuProps = {showResume:false,finished:true, canStepBack:false, canStepForward:false}
+            this.menuProps = this.buildFinishedMenuProps()
             this.updatePageDisplay()
         }
         catch(err:any) {
@@ -395,11 +289,13 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
 
     // Shared by onStop() (manual "End Ride") and onFinished() (auto-completion once
     // WorkoutRideService.checkIfDone() fires 'completed'/'stopped') - both must finalize the
-    // activity via RideDisplay.stop(true) before navigating back, so a workout that completes on
-    // its own also lands on a populated Ride Summary instead of requiring a manual "End Ride" tap.
+    // activity via RideDisplay.stop(true) before converging onto onFinished()/menuProps.finished,
+    // so a workout that completes on its own lands on the Activity Summary the same way a manual
+    // "End Ride" tap does (FIXES_BACKLOG #24, bug 2/2 - previously called the now-removed
+    // emitNavigateBack(), bypassing the summary).
     protected finishRide(): void {
         this.getRideDisplay().stop(true)
-        this.emitNavigateBack()
+        this.onFinished()
     }
 
     protected subscribeToWorkoutObserver(): void {
@@ -423,28 +319,7 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         this.workoutObserverSubscribed = false
     }
 
-    protected registerRideEventHandlers(): void {
-        Object.keys(this.rideEventHandler).forEach(event => this.rideObserver?.on(event, this.rideEventHandler[event]))
-    }
-
-    protected unregisterRideEventHandlers(): void {
-        Object.keys(this.rideEventHandler).forEach(event => this.rideObserver?.off(event, this.rideEventHandler[event]))
-    }
-
     // ---- display-props builders (§6.6-§6.8) --------------------------------------
-
-    protected buildBaseProps() {
-        const state = this.getRideDisplay().getState()
-        const isStarting = state === 'Idle' || state === 'Starting' || state === 'Error'
-
-        return {
-            rideState: state,
-            rideType: this.getRideDisplay().getRideType(),
-            startOverlayProps: isStarting ? this.getRideDisplay().getStartOverlayProps() : null,
-            menuProps: this.menuProps,
-            startGateProps: null
-        }
-    }
 
     // Non-null only when the start overlay has fully cleared AND elapsed ride time is 0 AND
     // cadence is 0 (genuinely no pedaling yet - these two are checked separately from
@@ -617,28 +492,8 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         }
     }
 
-    protected updatePageDisplay(): void {
-        this.getPageObserver()?.emit('page-update')
-    }
-
-    protected emitNavigateBack(): void {
-        this.getPageObserver()?.emit('navigate-back')
-    }
-
-    protected moveToPreviousPage(): void {
-        this.moveTo('$contentPage')
-    }
-
-    protected get rideObserver(): IObserver | null {
-        try {
-            return this.getRideDisplay()?.getObserver()
-        }
-        catch (err: any) {
-            this.logError(err, 'get rideObserver')
-        }
-        return null
-    }
-
+    // Kept per-subclass rather than shared on RidePageServiceBase - see the import-cycle note on
+    // RidePageServiceBase.getRideDisplay().
     @Injectable
     protected getRideDisplay() {
         return useRideDisplay()
@@ -659,5 +514,3 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         return useUserSettings()
     }
 }
-
-export const getWorkoutRidePageService = () => new WorkoutRidePageService()
