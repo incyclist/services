@@ -185,7 +185,12 @@ describe('RidePageService', () => {
             expect(s.getPageDisplayProps().menuProps).toBeNull()
         })
 
-        test('does NOT unregister event handlers (known bug - fixed when the shared base always unregisters)', () => {
+        // FIXES_BACKLOG #24, bug 1/2 (fixed by this extraction): RidePageServiceBase.closePage()
+        // always unregisters handlers, unlike the old RidePageService.closePage() this replaces -
+        // was previously left registered, so a stale RideDisplayService-observer listener from a
+        // closed page could still mutate state on the next ride. Was asserted the other way
+        // (menuProps still mutated) before the base class existed - see git history.
+        test('unregisters event handlers, so a stale ride observer can no longer mutate state after close', () => {
             const rideObserver = new Observer()
             MockRideDisplay.getObserver.mockReturnValue(rideObserver);
             (s as any).isInitialized = true // skip the async init dance so handlers register synchronously
@@ -193,16 +198,8 @@ describe('RidePageService', () => {
 
             s.closePage()
 
-            const updateSpy = jest.fn()
-            // page observer was stopped by closePage() -> re-open a listener surface via a fresh openPage()
-            // is not needed here: we only care whether the OLD rideObserver still drives updates.
-            const pageObserverBeforeReopen = (s as any).pageObserver
-            void pageObserverBeforeReopen
             rideObserver.emit('state-update', 'Paused')
-            // menuProps still gets mutated because the stale handler is still attached - this is
-            // the bug: unregisterEventHandlers() is never called by RidePageService.closePage()
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true })
-            expect(updateSpy).not.toHaveBeenCalled() // no listener was attached to observe page-update on this run
+            expect(s.getPageDisplayProps().menuProps).toBeNull()
         })
 
         test('logs and swallows errors', () => {
