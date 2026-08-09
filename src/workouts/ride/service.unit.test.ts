@@ -1133,6 +1133,224 @@ describe('WorkoutRide',()=>{
         })
     })
 
+    // FIXES_BACKLOG #37: the load buttons keep %/W power semantics only in ERG mode. In
+    // SIM/Resistance mode they either mean gear shift (virtual shifting enabled) or are meaningless
+    // and must be hidden (virtual shifting disabled) - see getLoadButtonMode()/isVirtualShiftingEnabled()
+    // (shared with RideDisplayService, incyclist-devices' ride module).
+    describe('loadButtonMode / gear-shift (FIXES_BACKLOG #37)',()=>{
+
+        let s,service:WorkoutRide
+        let sendUpdate,getCyclingMode
+        const workout = new Workout({type:'workout',name:'Test Workout'})
+        workout.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [
+            {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
+            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'}
+        ] })
+
+        const mockMode = (props:{isERG?:boolean, isSIM?:boolean, isResistance?:boolean, virtshift?:string}) => ({
+            isERG: jest.fn().mockReturnValue(!!props.isERG),
+            isSIM: jest.fn().mockReturnValue(!!props.isSIM),
+            isResistance: jest.fn().mockReturnValue(!!props.isResistance),
+            getSetting: jest.fn().mockReturnValue(props.virtshift),
+        })
+
+        const setDeviceMode = (mode) => {
+            sendUpdate = jest.fn()
+            getCyclingMode = jest.fn().mockReturnValue(mode)
+            Inject('DeviceRide', { sendUpdate, getCyclingMode })
+        }
+
+        beforeEach( ()=>{
+            setupMocks(workout)
+            s = service = new WorkoutRide()
+            s.workoutList = useWorkoutList()
+            s.workoutList.setStartSettings = jest.fn()
+            s.resetTimes()
+            s.manualPowerOffset = 0
+            s.workout = workout
+            s.settings = {ftp:200}
+            s.state = 'active'
+            s.trainingTime = 0
+        })
+        afterEach( ()=>{
+            s.reset()
+            resetMocks()
+            Inject('DeviceRide', null)
+            jest.resetAllMocks()
+        })
+
+        describe('getLoadButtonMode',()=>{
+            test('no device/mode active yet => power',()=>{
+                setDeviceMode(undefined)
+                expect(service.getLoadButtonMode()).toBe('power')
+            })
+
+            test('ERG mode => power (unaffected, #35/#506 behaviour)',()=>{
+                setDeviceMode(mockMode({isERG:true}))
+                expect(service.getLoadButtonMode()).toBe('power')
+            })
+
+            test.each(['Mixed','Incyclist','SmartTrainer','Enabled'])(
+                'SIM mode with virtshift=%s => gear',
+                (virtshift)=>{
+                    setDeviceMode(mockMode({isSIM:true, virtshift}))
+                    expect(service.getLoadButtonMode()).toBe('gear')
+                }
+            )
+
+            test('SIM mode with virtshift disabled => hidden',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Disabled'}))
+                expect(service.getLoadButtonMode()).toBe('hidden')
+            })
+
+            test('SIM mode with no virtshift setting at all => hidden',()=>{
+                setDeviceMode(mockMode({isSIM:true}))
+                expect(service.getLoadButtonMode()).toBe('hidden')
+            })
+
+            test('Resistance mode => gear unconditionally',()=>{
+                setDeviceMode(mockMode({isResistance:true}))
+                expect(service.getLoadButtonMode()).toBe('gear')
+            })
+
+            test('error accessing device/mode => power (fail safe)',()=>{
+                Inject('DeviceRide', { getCyclingMode: jest.fn().mockImplementation(()=>{throw new Error('err')}) })
+                s.logError = jest.fn()
+                expect(service.getLoadButtonMode()).toBe('power')
+                expect(s.logError).toHaveBeenCalled()
+            })
+        })
+
+        describe('getDashboardDisplayProperties - loadButtonMode/loadButtons',()=>{
+            test('power mode: loadButtonMode "power", loadButtons keep the existing %/W labels',()=>{
+                setDeviceMode(mockMode({isERG:true}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:150, maxPower:150, targetPower:150 }
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtonMode).toBe('power')
+                expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-1%', dec5:'-5%' })
+            })
+
+            test('gear mode: loadButtonMode "gear", loadButtons are the bare gear-step text (no unit), matching ShiftingControl',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Enabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtonMode).toBe('gear')
+                expect(dp.loadButtons).toEqual({ inc5:'+5', inc1:'+1', dec1:'-1', dec5:'-5' })
+            })
+
+            test('hidden mode: loadButtonMode "hidden" - web-ui/mobile use this to hide the four load buttons',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Disabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtonMode).toBe('hidden')
+            })
+        })
+
+        describe('powerUp()/powerDown() route to a gear shift when loadButtonMode==="gear"',()=>{
+            test('powerUp(5) performs a +5 gear shift via the same device mechanism as a non-workout ride, untouched targetPower/FTP',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Enabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerUp(5)
+
+                expect(sendUpdate).toHaveBeenCalledWith({gearDelta:5})
+                expect(result).toEqual({type:'gear', value:5})
+                expect(s.currentLimits.targetPower).toBe(200)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+
+            test('powerUp(1) performs a +1 gear shift',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Mixed'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerUp(1)
+
+                expect(sendUpdate).toHaveBeenCalledWith({gearDelta:1})
+                expect(result).toEqual({type:'gear', value:1})
+            })
+
+            test('powerDown(5) performs a -5 gear shift',()=>{
+                setDeviceMode(mockMode({isResistance:true}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerDown(5)
+
+                expect(sendUpdate).toHaveBeenCalledWith({gearDelta:-5})
+                expect(result).toEqual({type:'gear', value:-5})
+                expect(s.currentLimits.targetPower).toBe(200)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+
+            test('powerDown(1) performs a -1 gear shift',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'SmartTrainer'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerDown(1)
+
+                expect(sendUpdate).toHaveBeenCalledWith({gearDelta:-1})
+                expect(result).toEqual({type:'gear', value:-1})
+            })
+
+            // Crossed with the %/W range-boundary matrix from #506 (FIXES_BACKLOG #37): gear mode
+            // must short-circuit before any of that boundary logic runs, regardless of where
+            // targetPower currently sits within the step's range.
+            test.each([
+                ['bottom edge', 100],
+                ['top edge', 300],
+                ['mid-range', 200],
+            ])('gear mode ignores the %%/W range-boundary logic entirely (targetPower at %s)',(_label,targetPower)=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Enabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower }
+
+                const result = service.powerUp(5)
+
+                expect(result).toEqual({type:'gear', value:5})
+                expect(s.currentLimits.targetPower).toBe(targetPower)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+
+            // Also crossed with the fixed-target (minPower===maxPower, always-% in power mode) case.
+            test('gear mode ignores a fixed-target step (minPower===maxPower) the same way',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Enabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:150, maxPower:150, targetPower:150 }
+
+                const result = service.powerDown(1)
+
+                expect(result).toEqual({type:'gear', value:-1})
+                expect(s.currentLimits.targetPower).toBe(150)
+            })
+        })
+
+        describe('powerUp()/powerDown() are no-ops when loadButtonMode==="hidden"',()=>{
+            test('powerUp: no device call, no result, currentLimits/FTP untouched',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Disabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerUp(5)
+
+                expect(sendUpdate).not.toHaveBeenCalled()
+                expect(result).toBeUndefined()
+                expect(s.currentLimits.targetPower).toBe(200)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+
+            test('powerDown: no device call, no result, currentLimits/FTP untouched',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Disabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerDown(5)
+
+                expect(sendUpdate).not.toHaveBeenCalled()
+                expect(result).toBeUndefined()
+                expect(s.currentLimits.targetPower).toBe(200)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+        })
+    })
+
     // FIXES_BACKLOG #13: mobile shows the workout name elsewhere on screen and must never repeat
     // it in getStepTitle()'s output; when neither the segment nor the step has its own text, it
     // must not duplicate the "<target> for <duration>" text WorkoutRidePageService.buildDashboardLine()

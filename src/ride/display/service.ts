@@ -6,7 +6,7 @@ import { Segment, Step, useWorkoutList, useWorkoutRide, Workout } from "../../wo
 import { useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { CurrentRideDeviceInfo, CurrentRideState, IRideModeService, RideType } from "../base";
-import { AdapterStateInfo, useDeviceConfiguration, useDeviceRide } from "../../devices";
+import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceConfiguration, useDeviceRide } from "../../devices";
 import { useUserSettings } from "../../settings";
 import { CyclingMode, DeviceData, IncyclistCapability, UpdateRequest } from "incyclist-devices";
 import { formatDateTime, getLegacyInterface, waitNextTick } from "../../utils";
@@ -1366,25 +1366,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     protected isVirtualShiftingEnabled () {
-        // TODO: move into device mode class
         try {
             const mode = this.getDeviceRide().getCyclingMode() as CyclingMode
-            if (!mode)
-                return false
-
-
-            if (mode.isSIM()) {            
-                const virtshiftMode = mode.getSetting('virtshift') as unknown as string
-                return (virtshiftMode==='Mixed' || virtshiftMode==='Incyclist' || virtshiftMode==='SmartTrainer'|| virtshiftMode==='Enabled')
-            }
-            
-            if (mode.isResistance()) {
-                return true
-            }
-
-            return false
+            return checkVirtualShiftingEnabled(mode)
         }
-        catch(err) {            
+        catch(err) {
             this.logError(err,'isVirtualShiftingEnabled')
             return false
         }

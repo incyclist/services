@@ -3,7 +3,7 @@ import { getBindings } from "../../api";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer } from "../../base/types/observer";
-import { useDeviceRide } from "../../devices";
+import { DeviceRideService, getLoadButtonMode, useDeviceRide } from "../../devices";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
@@ -12,7 +12,7 @@ import { CurrentStep, PowerLimit, StepDefinition } from "../base/model/types";
 import { getStepDuration, getStepTargetText } from "../base/graph";
 import { WorkoutListService, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
-import { ActiveWorkoutLimit, PowerAdjustmentResult, WorkoutDisplayProperties } from "./types";
+import { ActiveWorkoutLimit, LoadButtonMode, PowerAdjustmentResult, WorkoutDisplayProperties } from "./types";
 import { Injectable } from "../../base/decorators";
 
 const DEFAULT_FTP = 200;
@@ -471,6 +471,38 @@ export class WorkoutRide extends IncyclistService{
     }
 
     /**
+     * Determines what the dashboard's load-adjustment buttons currently mean, based on the
+     * rider's current cycling mode (FIXES_BACKLOG #37): `'power'` in ERG mode (the pre-existing,
+     * unaffected behaviour - see `getLoadButtonLabels()`), `'gear'` in SIM/Resistance mode with
+     * virtual shifting enabled (buttons perform a gear shift instead - see `getGearButtonLabels()`
+     * and `powerUp()`/`powerDown()`), `'hidden'` in SIM/Resistance mode with virtual shifting
+     * disabled (the buttons are meaningless and `web-ui`/`mobile` must not show them).
+     *
+     * Reuses `RideDisplayService.isVirtualShiftingEnabled()`'s exact SIM+virtshift-setting check
+     * (via the shared `getLoadButtonMode()` helper in `incyclist-devices`' ride module) rather than
+     * re-deriving it.
+     */
+    getLoadButtonMode():LoadButtonMode {
+        try {
+            const mode = this.getDeviceRide().getCyclingMode() as CyclingMode
+            return getLoadButtonMode(mode)
+        }
+        catch(err) {
+            this.logError(err,'getLoadButtonMode')
+            return 'power'
+        }
+    }
+
+    /**
+     * Builds the labels for the dashboard's load ("+5"/"+1"/"-1"/"-5", no unit) buttons when
+     * `getLoadButtonMode()==='gear'` - matching `ShiftingControl`'s existing button-text convention
+     * for a non-workout ride's gear-shift buttons exactly (see `web-ui/.../shifting/control/component.jsx`).
+     */
+    private getGearButtonLabels():WorkoutDisplayProperties['loadButtons'] {
+        return { inc5: '+5', inc1: '+1', dec1: '-1', dec5: '-5' }
+    }
+
+    /**
      * Builds the labels for the dashboard's load ("+5%"/"+1%"/"-1%"/"-5%") buttons, reflecting
      * what a click on each of them will actually do right now: `isPowerRangeAdjustable()` decides
      * per-button (using the same boundary logic `powerUp()`/`powerDown()` use to act) whether the
@@ -519,6 +551,15 @@ export class WorkoutRide extends IncyclistService{
         this.logEvent({message: 'workout power up', delta})
 
         try {
+            const loadButtonMode = this.getLoadButtonMode()
+            if (loadButtonMode==='hidden')
+                return undefined
+
+            if (loadButtonMode==='gear') {
+                this.gearChange(delta)
+                this.logEvent({message: 'workout gear shift', gearDelta: delta})
+                return { type: 'gear', value: delta }
+            }
 
             if ( this.isPowerRangeAdjustable(delta)) {
                 const deltaVal = this.getPowerRangeDeltaVal(delta)
@@ -568,6 +609,16 @@ export class WorkoutRide extends IncyclistService{
         this.logEvent({message: 'workout power down', delta})
 
         try {
+            const loadButtonMode = this.getLoadButtonMode()
+            if (loadButtonMode==='hidden')
+                return undefined
+
+            if (loadButtonMode==='gear') {
+                this.gearChange(-delta)
+                this.logEvent({message: 'workout gear shift', gearDelta: -delta})
+                return { type: 'gear', value: -delta }
+            }
+
             if ( this.isPowerRangeAdjustable(-delta)) {
                 const deltaVal = this.getPowerRangeDeltaVal(delta)
                 this.currentLimits.targetPower = Math.max(this.currentLimits.targetPower-deltaVal, this.currentLimits.minPower)
@@ -598,11 +649,27 @@ export class WorkoutRide extends IncyclistService{
     }
 
     /**
+     * Performs a gear shift, using the exact same device-level mechanism a non-workout ride's
+     * gear shift uses (`RideDisplayService.gearChange()` -> `RideModeService.sendUpdate({gearDelta})`,
+     * which itself just forwards to `DeviceRideService.sendUpdate()`) - see FIXES_BACKLOG #37. No
+     * workout-specific gear semantics are introduced by this: the current step's own
+     * target/duration/completion tracking is left untouched, exactly as it is already untouched by
+     * the rider's real-world cadence choice.
+     *
+     * Only called by `powerUp()`/`powerDown()` once `getLoadButtonMode()==='gear'`.
+     *
+     * @param gearDelta positive to shift up, negative to shift down
+     */
+    private gearChange(gearDelta:number):void {
+        this.getDeviceRide().sendUpdate({gearDelta})
+    }
+
+    /**
      * Toggles between the originally selected mode and ERG mode
-     * 
-     * This allows to temporarily swith to SmartTrainer (SIM) mode, 
+     *
+     * This allows to temporarily swith to SmartTrainer (SIM) mode,
      * e.g. if there is a Sprint(max effort) segment upcoming and switch back to ERG after that segment
-     * 
+     *
      */
     toggleCyclingMode():void {
         const  deviceRide = useDeviceRide()
@@ -636,6 +703,7 @@ export class WorkoutRide extends IncyclistService{
             const {start,stop} = this.getZoomParameters(this.trainingTime);
             const title = this.getStepTitle(this.trainingTime)
             const canShowBackward = Math.round((this.trainingTime??0))>0
+            const loadButtonMode = this.getLoadButtonMode()
 
             const props = {
                 workout:this.workout, title,
@@ -645,7 +713,8 @@ export class WorkoutRide extends IncyclistService{
                 mode: this.getCyclingModeText(),
                 canShowBackward,
                 canShowForward:true,
-                loadButtons: this.getLoadButtonLabels()
+                loadButtonMode,
+                loadButtons: loadButtonMode==='power' ? this.getLoadButtonLabels() : this.getGearButtonLabels()
             }
 
             return props
@@ -1050,6 +1119,11 @@ export class WorkoutRide extends IncyclistService{
     @Injectable
     protected getWorkoutList() {
         return useWorkoutList()
+    }
+
+    @Injectable
+    protected getDeviceRide():DeviceRideService {
+        return useDeviceRide()
     }
 
 }
