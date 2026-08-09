@@ -418,10 +418,86 @@ export class WorkoutRide extends IncyclistService{
     }
 
     /**
+     * Determines whether a power adjustment in the direction of `delta` should nudge `targetPower`
+     * within the current step's power range, as opposed to scaling the Workout FTP.
+     *
+     * This is the single source of truth for the branching used by both `powerUp()`/`powerDown()`
+     * (to decide what they actually adjust) and `getDashboardDisplayProperties()` (to decide
+     * whether the corresponding load button should be labelled in Watt or in % of FTP) - keeping
+     * both in sync, including the boundary check that differs between the top and bottom of a
+     * range (and applies identically whether the range comes from an explicit Watt step or a
+     * percent-of-FTP zone, since both resolve into `minPower`/`maxPower` before this point).
+     *
+     * @param delta positive to check headroom towards `maxPower` (as used by `powerUp`), negative
+     *              to check headroom towards `minPower` (as used by `powerDown`); only the sign is
+     *              used, the magnitude does not affect the outcome
+     */
+    private isPowerRangeAdjustable(delta:number):boolean {
+        if (this.currentLimits?.minPower===this.currentLimits?.maxPower)
+            return false
+
+        return delta>=0
+            ? this.currentLimits?.targetPower<this.currentLimits?.maxPower
+            : this.currentLimits?.targetPower>this.currentLimits?.minPower
+    }
+
+    /**
+     * The nominal Watt step `powerUp()`/`powerDown()` nudge `targetPower` by once
+     * `isPowerRangeAdjustable()` is true: a fixed 5W/50W (matching mobile's swipe-gesture step
+     * size, see `useWorkoutRideGestures.ts`) when the workout has an FTP configured, or the
+     * literal `magnitude` itself for a purely Watt-based workout with no FTP.
+     *
+     * @param magnitude the button's nominal magnitude - `1` (inc1/dec1) or `5` (inc5/dec5)
+     */
+    private getPowerRangeDeltaVal(magnitude:number):number {
+        if (!this.settings?.ftp)
+            return magnitude
+        return magnitude===1 ? 5 : 50
+    }
+
+    /**
+     * The Watt amount a range-adjustable click will actually apply right now, i.e. the nominal
+     * step from `getPowerRangeDeltaVal()` clamped to whatever headroom remains towards
+     * `maxPower`/`minPower` - e.g. with only 1W of headroom left, a nominally-5W button only
+     * moves `targetPower` by 1W (`powerUp()`/`powerDown()` clamp the same way), so the label must
+     * say "+1W", not "+5W".
+     */
+    private getPowerRangeAdjustmentWatts(magnitude:number, increase:boolean):number {
+        const nominal = this.getPowerRangeDeltaVal(magnitude)
+        const headroom = increase
+            ? this.currentLimits.maxPower-this.currentLimits.targetPower
+            : this.currentLimits.targetPower-this.currentLimits.minPower
+        return Math.min(nominal, headroom)
+    }
+
+    /**
+     * Builds the labels for the dashboard's load ("+5%"/"+1%"/"-1%"/"-5%") buttons, reflecting
+     * what a click on each of them will actually do right now: `isPowerRangeAdjustable()` decides
+     * per-button (using the same boundary logic `powerUp()`/`powerDown()` use to act) whether the
+     * click will nudge `targetPower` (Watt-labelled, with the real, headroom-clamped amount via
+     * `getPowerRangeAdjustmentWatts()`) or scale the Workout FTP (%-labelled).
+     */
+    private getLoadButtonLabels():WorkoutDisplayProperties['loadButtons'] {
+        const label = (magnitude:number, increase:boolean):string => {
+            const sign = increase ? '+' : '-'
+            const delta = increase ? magnitude : -magnitude
+            return this.isPowerRangeAdjustable(delta)
+                ? `${sign}${this.getPowerRangeAdjustmentWatts(magnitude, increase)}W`
+                : `${sign}${magnitude}%`
+        }
+        return {
+            inc5: label(5, true),
+            inc1: label(1, true),
+            dec1: label(1, false),
+            dec5: label(5, false),
+        }
+    }
+
+    /**
      * Adjusts the base level of th workout
-     * 
-     * This allows the user to increase the instensity of a workout. 
-     * 
+     *
+     * This allows the user to increase the instensity of a workout.
+     *
      * Depending on how the the step limits are defined, this will have different impact
      * - Step defined in "percentage of FTP": The FTP will be increased by _delta_ %
      * - Step defined in "Watts": The power limit will be increased by _delta_ Watts
@@ -444,11 +520,8 @@ export class WorkoutRide extends IncyclistService{
 
         try {
 
-            if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower<this.currentLimits?.maxPower) {
-                let deltaVal = delta
-                if ( this.settings?.ftp) {
-                    deltaVal = delta===1 ? 5 : 50
-                }
+            if ( this.isPowerRangeAdjustable(delta)) {
+                const deltaVal = this.getPowerRangeDeltaVal(delta)
                 this.currentLimits.targetPower = Math.min(this.currentLimits.targetPower+deltaVal, this.currentLimits.maxPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
@@ -495,11 +568,8 @@ export class WorkoutRide extends IncyclistService{
         this.logEvent({message: 'workout power down', delta})
 
         try {
-            if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower>this.currentLimits?.minPower) {
-                let deltaVal = delta
-                if ( this.settings?.ftp) {
-                    deltaVal = delta===1 ? 5 : 50
-                }
+            if ( this.isPowerRangeAdjustable(-delta)) {
+                const deltaVal = this.getPowerRangeDeltaVal(delta)
                 this.currentLimits.targetPower = Math.max(this.currentLimits.targetPower-deltaVal, this.currentLimits.minPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
@@ -566,15 +636,16 @@ export class WorkoutRide extends IncyclistService{
             const {start,stop} = this.getZoomParameters(this.trainingTime);
             const title = this.getStepTitle(this.trainingTime)
             const canShowBackward = Math.round((this.trainingTime??0))>0
-            
+
             const props = {
-                workout:this.workout, title, 
-                ftp:this.settings.ftp, 
+                workout:this.workout, title,
+                ftp:this.settings.ftp,
                 current:this.currentLimits,
                 start,stop,
                 mode: this.getCyclingModeText(),
                 canShowBackward,
-                canShowForward:true
+                canShowForward:true,
+                loadButtons: this.getLoadButtonLabels()
             }
 
             return props
