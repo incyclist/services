@@ -96,6 +96,11 @@ interface RidePageCallbacks {
 // getRidePageService() callers never need an instanceof check or cast.
 export interface IRidePageService extends RidePageCallbacks, IPageService{
     initPage(): Promise<RideType|undefined>
+    // Overrides IPageService's parameterless openPage() - RidePageService.openPage() accepts an
+    // optional simulate flag (Video/GPX/Workout callers pass this through from their own props),
+    // which the interface never declared even before the single-class merge (mobile previously
+    // typed its refs against the concrete RidePageService class, which masked the gap).
+    openPage(simulate?: boolean): IObserver
     getRideObserver(): IObserver|null
     getPageDisplayProps(): AnyRidePageDisplayProps
     getRideType(): RideType
