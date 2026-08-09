@@ -2,6 +2,7 @@ import type { IObserver } from "../../../base/typedefs"
 import type { IPageService } from "../../../base/pages"
 import type { RideMenuProps, RidePageDisplayProps } from "../../../ride/page/types"
 import type { WorkoutGraphPlanBar } from "../../base/graph/types"
+import type { LoadButtonMode } from "../types"
 
 // ---- graph -------------------------------------------------------------------
 
@@ -93,6 +94,11 @@ export interface WorkoutRidePageDisplayProps extends RidePageDisplayProps {
     // their own DEFAULT_LOAD_INCREMENT-driven callbacks. Exposed here so WorkoutSettingsDialog
     // (session 5.10) can display/edit the live value without a second settings key.
     loadIncrement: number
+    // What a load-adjust action currently does (FIXES_BACKLOG #37) - see
+    // IWorkoutRidePageService.getLoadButtonMode(), the live version of this callers must re-check
+    // at gesture/tap time rather than caching. Mirrored here for UI that only re-renders on a
+    // getPageDisplayProps() refresh (e.g. a future settings/menu surface).
+    loadButtonMode: LoadButtonMode
 }
 
 // ---- callbacks -------------------------------------------------------------------
@@ -129,4 +135,8 @@ export interface IWorkoutRidePageService extends WorkoutRidePageCallbacks, IPage
     getPageDisplayProps(): WorkoutRidePageDisplayProps
     getGraphActuals(): WorkoutGraphActuals
     adjustLoad(deltaPct: number): void
+    // FIXES_BACKLOG #37: callers (useWorkoutRideGestures.ts's swipe handler, a future menu/settings
+    // surface) must call this fresh at gesture/tap time - cycling mode can change mid-ride - rather
+    // than caching a value read from getPageDisplayProps().loadButtonMode.
+    getLoadButtonMode(): LoadButtonMode
 }

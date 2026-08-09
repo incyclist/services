@@ -1,5 +1,8 @@
 import { Workout } from "../base/model"
 import { StepDefinition } from "../base/model/types"
+import { LoadButtonMode } from "../../devices"
+
+export type { LoadButtonMode }
 
 export interface WorkoutRequest {
     time: number
@@ -22,11 +25,14 @@ export interface ActiveWorkoutLimit extends WorkoutRequest{
 }
 
 /** Result of WorkoutRide.powerUp()/powerDown(): which quantity was actually adjusted, and its new
- *  value (in Watt) - 'ftp' when the step target is defined relative to FTP (the Workout FTP itself
- *  was scaled), 'targetPower' when the current step allows a power range (minPower!==maxPower) and
- *  the user is nudging the target within that range directly, without touching FTP at all. */
+ *  value - 'ftp' when the step target is defined relative to FTP (the Workout FTP itself was
+ *  scaled, value in Watt), 'targetPower' when the current step allows a power range
+ *  (minPower!==maxPower) and the user is nudging the target within that range directly, without
+ *  touching FTP at all (value in Watt), 'gear' when `getLoadButtonMode()==='gear'` (SIM/Resistance
+ *  mode with virtual shifting enabled, FIXES_BACKLOG #37) and the click performed a gear shift
+ *  instead (value is the signed gearDelta that was applied, positive to shift up). */
 export interface PowerAdjustmentResult {
-    type: 'ftp' | 'targetPower'
+    type: 'ftp' | 'targetPower' | 'gear'
     value: number
 }
 
@@ -40,10 +46,19 @@ export interface WorkoutDisplayProperties {
     mode?: string,
     canShowBackward?: boolean,
     canShowForward?: boolean,
+    /** What a click on the dashboard's load-adjustment buttons currently does (FIXES_BACKLOG #37) -
+     *  see `getLoadButtonMode()` in `incyclist-devices`' ride module for the exact semantics of each
+     *  value. `web-ui`/`mobile` use this to hide the four load buttons entirely when `'hidden'`, and
+     *  to know that a click routes to a gear shift rather than a power/FTP adjustment when `'gear'`.
+     *  Undefined when the workout isn't active (same states under which the rest of this object is
+     *  empty). */
+    loadButtonMode?: LoadButtonMode,
     /** Labels for the dashboard's load-adjustment buttons, reflecting what a click on each will
-     *  actually do (`+5W`/`+1W`/`-1W`/`-5W` when it will nudge `targetPower` within the current
-     *  step's power range, `+5%`/`+1%`/`-1%`/`-5%` when it will scale the Workout FTP instead) -
-     *  see `WorkoutRide.isPowerRangeAdjustable()`. Undefined when the workout isn't active (same
-     *  states under which the rest of this object is empty). */
+     *  actually do: when `loadButtonMode==='power'`, `+5W`/`+1W`/`-1W`/`-5W` if it will nudge
+     *  `targetPower` within the current step's power range, `+5%`/`+1%`/`-1%`/`-5%` if it will scale
+     *  the Workout FTP instead (see `WorkoutRide.isPowerRangeAdjustable()`); when
+     *  `loadButtonMode==='gear'`, the bare gear-step text `+5`/`+1`/`-1`/`-5` (no unit), matching
+     *  `ShiftingControl`'s existing button-text convention. Undefined when the workout isn't active
+     *  (same states under which the rest of this object is empty). */
     loadButtons?: { inc5:string, inc1:string, dec1:string, dec5:string }
 }

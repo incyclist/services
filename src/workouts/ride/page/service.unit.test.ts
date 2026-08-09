@@ -42,7 +42,8 @@ const setupMocks = () => {
         getDashboardDisplayProperties: jest.fn().mockReturnValue({}),
         getCurrentLimits: jest.fn(),
         powerUp: jest.fn(),
-        powerDown: jest.fn()
+        powerDown: jest.fn(),
+        getLoadButtonMode: jest.fn().mockReturnValue('power')
     }
     MockActivityRide = {
         getActivity: jest.fn().mockReturnValue({ logs: [], time: 0 }),
@@ -718,6 +719,37 @@ describe('WorkoutRidePageService', () => {
 
             expect(MockWorkoutRide.powerUp).toHaveBeenCalledWith(7)
             expect(MockWorkoutRide.powerDown).toHaveBeenCalledWith(7)
+        })
+    })
+
+    // FIXES_BACKLOG #37: useWorkoutRideGestures.ts's swipe handler needs a way to know, at swipe
+    // time, whether a load-adjust gesture currently means power/FTP, gear, or nothing at all - this
+    // is a thin passthrough to WorkoutRide.getLoadButtonMode() (the single source of truth), so
+    // mobile only ever talks to the page service, never the domain service directly.
+    describe('getLoadButtonMode', () => {
+        test.each(['power', 'gear', 'hidden'] as const)('forwards WorkoutRide.getLoadButtonMode() verbatim (%s)', (mode) => {
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue(mode)
+            expect(s.getLoadButtonMode()).toBe(mode)
+        })
+
+        test('returns "power" (fail safe) when the underlying call throws', () => {
+            MockWorkoutRide.getLoadButtonMode.mockImplementation(() => { throw new Error('boom') })
+            expect(s.getLoadButtonMode()).toBe('power')
+            expect(s.logError).toHaveBeenCalled()
+        })
+    })
+
+    describe('getPageDisplayProps - loadButtonMode', () => {
+        test.each(['power', 'gear', 'hidden'] as const)('surfaces WorkoutRide.getDashboardDisplayProperties().loadButtonMode verbatim (%s)', (mode) => {
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({ loadButtonMode: mode })
+            const props = s.getPageDisplayProps()
+            expect(props.loadButtonMode).toBe(mode)
+        })
+
+        test('defaults to "power" when the workout dashboard props do not report a mode', () => {
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({})
+            const props = s.getPageDisplayProps()
+            expect(props.loadButtonMode).toBe('power')
         })
     })
 
