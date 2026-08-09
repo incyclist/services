@@ -1,7 +1,11 @@
 export type * from './page/types'
 export type * from './list/types'
 export type * from './base/graph/types'
-export type * from './ride/page/types'
+// The Workout*-prefixed ride-page display types (WorkoutGraphPlan, WorkoutRidePageDisplayProps,
+// etc.) used to live at './ride/page/types' and be re-exported here. They now live at
+// '../ride/page/types' alongside the rest of RidePageService's types (FIXES_BACKLOG #24) -
+// already reachable from the package root via src/index.ts -> './ride' -> ride/page/index.ts, so
+// no re-export is needed here.
 
 // `WorkoutSettingsDisplayProps` also exists (with a different meaning) in `./list/cards/types` -
 // re-export it explicitly under a disambiguated name rather than renaming the card-level declaration

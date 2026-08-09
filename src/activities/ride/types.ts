@@ -2,7 +2,7 @@ import { HealthStatus } from "../../devices"
 import { Dimension, Unit } from "../../i18n"
 import { RoutePoint } from "../../types"
 import { ActivityDetailsUI } from "../base"
-import { WorkoutGraphActuals, WorkoutGraphPlan } from "../../workouts"
+import type { WorkoutGraphActuals, WorkoutGraphPlan } from "../../ride/page"
 
 export type ActivityState = 'ininitalized' | 'active' | 'paused' | 'completed' | 'idle'
 
