@@ -989,6 +989,368 @@ describe('WorkoutRide',()=>{
 
     })
 
+    // FIXES_BACKLOG #35 / services#505: the dashboard's load-adjustment buttons (+5/+1/-1/-5) either
+    // nudge targetPower (Watt) within the current step's power range, or scale the Workout FTP (%),
+    // depending on the same boundary logic powerUp()/powerDown() use to act - loadButtons surfaces
+    // which one each button will actually do, so web-ui doesn't have to re-implement that branching.
+    describe('getDashboardDisplayProperties - loadButtons (FIXES_BACKLOG #35 / services#505)',()=>{
+        let s,service:WorkoutRide
+        const workout = new Workout({type:'workout',name:'Test Workout'})
+        workout.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [
+            {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
+            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'}
+        ] })
+
+        beforeEach( ()=>{
+            s = service = new WorkoutRide
+            s.workout = workout
+            s.settings = {ftp:200}
+            s.state='active'
+            s.trainingTime = 10
+        })
+        afterEach( ()=>{
+            s.reset()
+            jest.resetAllMocks()
+        })
+
+        test('single fixed-target step (minPower===maxPower): always %, regardless of targetPower',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:150, maxPower:150, targetPower:150 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-1%', dec5:'-5%' })
+        })
+
+        // With settings.ftp set (the normal case), powerUp()/powerDown()'s nominal Watt step for a
+        // range-adjustable click is 5W for the "1" button and 50W for the "5" button (matching
+        // mobile's fixed 5W/50W swipe step, see getPowerRangeDeltaVal()) - the label must reflect
+        // that actual step, not the button's own "1"/"5" magnitude, whenever there's enough headroom
+        // to apply it in full.
+        test('explicit Watt-range step: bottom edge (targetPower===minPower) - dec is %, inc is W (actual 5W/50W step)',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:100 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+50W', inc1:'+5W', dec1:'-1%', dec5:'-5%' })
+        })
+
+        test('explicit Watt-range step: top edge (targetPower===maxPower) - inc is %, dec is W (actual 5W/50W step)',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:300 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-5W', dec5:'-50W' })
+        })
+
+        test('explicit Watt-range step: mid-range - all four buttons are W (actual 5W/50W step)',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+50W', inc1:'+5W', dec1:'-5W', dec5:'-50W' })
+        })
+
+        // Regression (reported after #506 merged): near either edge, the nominal 5W/50W step must
+        // be clamped to whatever headroom actually remains - the same clamp powerUp()/powerDown()
+        // themselves apply (Math.min/Math.max against maxPower/minPower) - otherwise the label
+        // promises a bigger move than what will actually happen. Both inc1 and inc5 land on the
+        // same clamped value here since both nominal steps (5W, 50W) exceed the 1W of headroom.
+        test('near top edge (1W of headroom): both inc1 and inc5 clamp to the same actual +1W',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:299 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+1W', inc1:'+1W', dec1:'-5W', dec5:'-50W' })
+        })
+
+        test('near bottom edge (1W of headroom): both dec1 and dec5 clamp to the same actual -1W',()=>{
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:101 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+50W', inc1:'+5W', dec1:'-1W', dec5:'-1W' })
+        })
+
+        test('no FTP configured: nominal step is the literal button magnitude (1W/5W), still clamped to headroom',()=>{
+            s.settings = {}
+            s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:299 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+1W', inc1:'+1W', dec1:'-1W', dec5:'-5W' })
+        })
+
+        // A percent-of-FTP zone (e.g. 50-60% FTP) resolves into the identical minPower/maxPower
+        // Watt range via getPowerVal() before isPowerRangeAdjustable() ever runs - so it must hit
+        // the exact same edge-flipping behaviour as an explicit-Watt step, just at different Watt
+        // values (100-120W here, for ftp=200: 50%=100W, 60%=120W).
+        describe('percent-of-FTP zone (50-60% FTP, ftp=200 => 100-120W)',()=>{
+            const zoneWorkout = new Workout({type:'workout',name:'Zone Workout'})
+            zoneWorkout.addStep({type:'step', steady:true, work:true, duration:120, power:{min:50,max:60,type:'pct of FTP'}, text:'Zone Step'})
+
+            beforeEach( ()=>{
+                s.workout = zoneWorkout
+                s.settings = {ftp:200}
+                s.setCurrentLimits(0)
+            })
+
+            test('resolves to the expected Watt range',()=>{
+                expect(s.currentLimits.minPower).toBe(100)
+                expect(s.currentLimits.maxPower).toBe(120)
+            })
+
+            // Zone is only 20W wide (100-120W), so the nominal 50W ("5" button) step never fits in
+            // full here - every "5" button in this describe block clamps to the remaining headroom.
+            test('bottom edge (targetPower===minPower=100W) - dec is %, inc is W, clamped to 20W headroom',()=>{
+                s.currentLimits.targetPower = 100
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtons).toEqual({ inc5:'+20W', inc1:'+5W', dec1:'-1%', dec5:'-5%' })
+            })
+
+            test('top edge (targetPower===maxPower=120W) - inc is %, dec is W, clamped to 20W headroom',()=>{
+                s.currentLimits.targetPower = 120
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-5W', dec5:'-20W' })
+            })
+
+            test('mid-zone (targetPower=110W) - all four buttons are W, clamped to 10W headroom on both sides',()=>{
+                s.currentLimits.targetPower = 110
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtons).toEqual({ inc5:'+10W', inc1:'+5W', dec1:'-5W', dec5:'-10W' })
+            })
+
+            // Regression: within the zone but 1W off an edge - both the "1" and "5" buttons on that
+            // side clamp to the same +/-1W, exactly as in the wider explicit-Watt-range case above.
+            test('1W from top edge (targetPower=119W): both inc1 and inc5 clamp to the same actual +1W',()=>{
+                s.currentLimits.targetPower = 119
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtons).toEqual({ inc5:'+1W', inc1:'+1W', dec1:'-5W', dec5:'-19W' })
+            })
+        })
+
+        test('undefined when workout is not active (idle)',()=>{
+            s.state = 'idle'
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toBeUndefined()
+        })
+    })
+
+    // FIXES_BACKLOG #37: the load buttons keep %/W power semantics only in ERG mode. In
+    // SIM/Resistance mode they either mean gear shift (virtual shifting enabled) or are meaningless
+    // and must be hidden (virtual shifting disabled) - see getLoadButtonMode()/isVirtualShiftingEnabled()
+    // (shared with RideDisplayService, incyclist-devices' ride module).
+    describe('loadButtonMode / gear-shift (FIXES_BACKLOG #37)',()=>{
+
+        let s,service:WorkoutRide
+        let sendUpdate,getCyclingMode
+        const workout = new Workout({type:'workout',name:'Test Workout'})
+        workout.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [
+            {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
+            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'}
+        ] })
+
+        const mockMode = (props:{isERG?:boolean, isSIM?:boolean, isResistance?:boolean, virtshift?:string}) => ({
+            isERG: jest.fn().mockReturnValue(!!props.isERG),
+            isSIM: jest.fn().mockReturnValue(!!props.isSIM),
+            isResistance: jest.fn().mockReturnValue(!!props.isResistance),
+            getSetting: jest.fn().mockReturnValue(props.virtshift),
+        })
+
+        const setDeviceMode = (mode) => {
+            sendUpdate = jest.fn()
+            getCyclingMode = jest.fn().mockReturnValue(mode)
+            Inject('DeviceRide', { sendUpdate, getCyclingMode })
+        }
+
+        beforeEach( ()=>{
+            setupMocks(workout)
+            s = service = new WorkoutRide()
+            s.workoutList = useWorkoutList()
+            s.workoutList.setStartSettings = jest.fn()
+            s.resetTimes()
+            s.manualPowerOffset = 0
+            s.workout = workout
+            s.settings = {ftp:200}
+            s.state = 'active'
+            s.trainingTime = 0
+        })
+        afterEach( ()=>{
+            s.reset()
+            resetMocks()
+            Inject('DeviceRide', null)
+            jest.resetAllMocks()
+        })
+
+        describe('getLoadButtonMode',()=>{
+            test('no device/mode active yet => power',()=>{
+                setDeviceMode(undefined)
+                expect(service.getLoadButtonMode()).toBe('power')
+            })
+
+            test('ERG mode => power (unaffected, #35/#506 behaviour)',()=>{
+                setDeviceMode(mockMode({isERG:true}))
+                expect(service.getLoadButtonMode()).toBe('power')
+            })
+
+            test.each(['Mixed','Incyclist','SmartTrainer','Enabled'])(
+                'SIM mode with virtshift=%s => gear',
+                (virtshift)=>{
+                    setDeviceMode(mockMode({isSIM:true, virtshift}))
+                    expect(service.getLoadButtonMode()).toBe('gear')
+                }
+            )
+
+            test('SIM mode with virtshift disabled => hidden',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Disabled'}))
+                expect(service.getLoadButtonMode()).toBe('hidden')
+            })
+
+            test('SIM mode with no virtshift setting at all => hidden',()=>{
+                setDeviceMode(mockMode({isSIM:true}))
+                expect(service.getLoadButtonMode()).toBe('hidden')
+            })
+
+            test('Resistance mode => gear unconditionally',()=>{
+                setDeviceMode(mockMode({isResistance:true}))
+                expect(service.getLoadButtonMode()).toBe('gear')
+            })
+
+            test('error accessing device/mode => power (fail safe)',()=>{
+                Inject('DeviceRide', { getCyclingMode: jest.fn().mockImplementation(()=>{throw new Error('err')}) })
+                s.logError = jest.fn()
+                expect(service.getLoadButtonMode()).toBe('power')
+                expect(s.logError).toHaveBeenCalled()
+            })
+        })
+
+        describe('getDashboardDisplayProperties - loadButtonMode/loadButtons',()=>{
+            test('power mode: loadButtonMode "power", loadButtons keep the existing %/W labels',()=>{
+                setDeviceMode(mockMode({isERG:true}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:150, maxPower:150, targetPower:150 }
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtonMode).toBe('power')
+                expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-1%', dec5:'-5%' })
+            })
+
+            test('gear mode: loadButtonMode "gear", loadButtons are the bare gear-step text (no unit), matching ShiftingControl',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Enabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtonMode).toBe('gear')
+                expect(dp.loadButtons).toEqual({ inc5:'+5', inc1:'+1', dec1:'-1', dec5:'-5' })
+            })
+
+            test('hidden mode: loadButtonMode "hidden" - web-ui/mobile use this to hide the four load buttons',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Disabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+                const dp = service.getDashboardDisplayProperties()
+
+                expect(dp.loadButtonMode).toBe('hidden')
+            })
+        })
+
+        describe('powerUp()/powerDown() route to a gear shift when loadButtonMode==="gear"',()=>{
+            test('powerUp(5) performs a +5 gear shift via the same device mechanism as a non-workout ride, untouched targetPower/FTP',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Enabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerUp(5)
+
+                expect(sendUpdate).toHaveBeenCalledWith({gearDelta:5})
+                expect(result).toEqual({type:'gear', value:5})
+                expect(s.currentLimits.targetPower).toBe(200)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+
+            test('powerUp(1) performs a +1 gear shift',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Mixed'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerUp(1)
+
+                expect(sendUpdate).toHaveBeenCalledWith({gearDelta:1})
+                expect(result).toEqual({type:'gear', value:1})
+            })
+
+            test('powerDown(5) performs a -5 gear shift',()=>{
+                setDeviceMode(mockMode({isResistance:true}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerDown(5)
+
+                expect(sendUpdate).toHaveBeenCalledWith({gearDelta:-5})
+                expect(result).toEqual({type:'gear', value:-5})
+                expect(s.currentLimits.targetPower).toBe(200)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+
+            test('powerDown(1) performs a -1 gear shift',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'SmartTrainer'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerDown(1)
+
+                expect(sendUpdate).toHaveBeenCalledWith({gearDelta:-1})
+                expect(result).toEqual({type:'gear', value:-1})
+            })
+
+            // Crossed with the %/W range-boundary matrix from #506 (FIXES_BACKLOG #37): gear mode
+            // must short-circuit before any of that boundary logic runs, regardless of where
+            // targetPower currently sits within the step's range.
+            test.each([
+                ['bottom edge', 100],
+                ['top edge', 300],
+                ['mid-range', 200],
+            ])('gear mode ignores the %%/W range-boundary logic entirely (targetPower at %s)',(_label,targetPower)=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Enabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower }
+
+                const result = service.powerUp(5)
+
+                expect(result).toEqual({type:'gear', value:5})
+                expect(s.currentLimits.targetPower).toBe(targetPower)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+
+            // Also crossed with the fixed-target (minPower===maxPower, always-% in power mode) case.
+            test('gear mode ignores a fixed-target step (minPower===maxPower) the same way',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Enabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:150, maxPower:150, targetPower:150 }
+
+                const result = service.powerDown(1)
+
+                expect(result).toEqual({type:'gear', value:-1})
+                expect(s.currentLimits.targetPower).toBe(150)
+            })
+        })
+
+        describe('powerUp()/powerDown() are no-ops when loadButtonMode==="hidden"',()=>{
+            test('powerUp: no device call, no result, currentLimits/FTP untouched',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Disabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerUp(5)
+
+                expect(sendUpdate).not.toHaveBeenCalled()
+                expect(result).toBeUndefined()
+                expect(s.currentLimits.targetPower).toBe(200)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+
+            test('powerDown: no device call, no result, currentLimits/FTP untouched',()=>{
+                setDeviceMode(mockMode({isSIM:true, virtshift:'Disabled'}))
+                s.currentLimits = { time:0, duration:0, remaining:0, minPower:100, maxPower:300, targetPower:200 }
+
+                const result = service.powerDown(5)
+
+                expect(sendUpdate).not.toHaveBeenCalled()
+                expect(result).toBeUndefined()
+                expect(s.currentLimits.targetPower).toBe(200)
+                expect(s.workoutList.setStartSettings).not.toHaveBeenCalled()
+            })
+        })
+    })
+
     // FIXES_BACKLOG #13: mobile shows the workout name elsewhere on screen and must never repeat
     // it in getStepTitle()'s output; when neither the segment nor the step has its own text, it
     // must not duplicate the "<target> for <duration>" text WorkoutRidePageService.buildDashboardLine()

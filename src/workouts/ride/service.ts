@@ -3,7 +3,7 @@ import { getBindings } from "../../api";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer } from "../../base/types/observer";
-import { useDeviceRide } from "../../devices";
+import { DeviceRideService, getLoadButtonMode, useDeviceRide } from "../../devices";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
@@ -12,7 +12,7 @@ import { CurrentStep, PowerLimit, StepDefinition } from "../base/model/types";
 import { getStepDuration, getStepTargetText } from "../base/graph";
 import { WorkoutListService, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
-import { ActiveWorkoutLimit, PowerAdjustmentResult, WorkoutDisplayProperties } from "./types";
+import { ActiveWorkoutLimit, LoadButtonMode, PowerAdjustmentResult, WorkoutDisplayProperties } from "./types";
 import { Injectable } from "../../base/decorators";
 
 const DEFAULT_FTP = 200;
@@ -418,10 +418,118 @@ export class WorkoutRide extends IncyclistService{
     }
 
     /**
+     * Determines whether a power adjustment in the direction of `delta` should nudge `targetPower`
+     * within the current step's power range, as opposed to scaling the Workout FTP.
+     *
+     * This is the single source of truth for the branching used by both `powerUp()`/`powerDown()`
+     * (to decide what they actually adjust) and `getDashboardDisplayProperties()` (to decide
+     * whether the corresponding load button should be labelled in Watt or in % of FTP) - keeping
+     * both in sync, including the boundary check that differs between the top and bottom of a
+     * range (and applies identically whether the range comes from an explicit Watt step or a
+     * percent-of-FTP zone, since both resolve into `minPower`/`maxPower` before this point).
+     *
+     * @param delta positive to check headroom towards `maxPower` (as used by `powerUp`), negative
+     *              to check headroom towards `minPower` (as used by `powerDown`); only the sign is
+     *              used, the magnitude does not affect the outcome
+     */
+    private isPowerRangeAdjustable(delta:number):boolean {
+        if (this.currentLimits?.minPower===this.currentLimits?.maxPower)
+            return false
+
+        return delta>=0
+            ? this.currentLimits?.targetPower<this.currentLimits?.maxPower
+            : this.currentLimits?.targetPower>this.currentLimits?.minPower
+    }
+
+    /**
+     * The nominal Watt step `powerUp()`/`powerDown()` nudge `targetPower` by once
+     * `isPowerRangeAdjustable()` is true: a fixed 5W/50W (matching mobile's swipe-gesture step
+     * size, see `useWorkoutRideGestures.ts`) when the workout has an FTP configured, or the
+     * literal `magnitude` itself for a purely Watt-based workout with no FTP.
+     *
+     * @param magnitude the button's nominal magnitude - `1` (inc1/dec1) or `5` (inc5/dec5)
+     */
+    private getPowerRangeDeltaVal(magnitude:number):number {
+        if (!this.settings?.ftp)
+            return magnitude
+        return magnitude===1 ? 5 : 50
+    }
+
+    /**
+     * The Watt amount a range-adjustable click will actually apply right now, i.e. the nominal
+     * step from `getPowerRangeDeltaVal()` clamped to whatever headroom remains towards
+     * `maxPower`/`minPower` - e.g. with only 1W of headroom left, a nominally-5W button only
+     * moves `targetPower` by 1W (`powerUp()`/`powerDown()` clamp the same way), so the label must
+     * say "+1W", not "+5W".
+     */
+    private getPowerRangeAdjustmentWatts(magnitude:number, increase:boolean):number {
+        const nominal = this.getPowerRangeDeltaVal(magnitude)
+        const headroom = increase
+            ? this.currentLimits.maxPower-this.currentLimits.targetPower
+            : this.currentLimits.targetPower-this.currentLimits.minPower
+        return Math.min(nominal, headroom)
+    }
+
+    /**
+     * Determines what the dashboard's load-adjustment buttons currently mean, based on the
+     * rider's current cycling mode (FIXES_BACKLOG #37): `'power'` in ERG mode (the pre-existing,
+     * unaffected behaviour - see `getLoadButtonLabels()`), `'gear'` in SIM/Resistance mode with
+     * virtual shifting enabled (buttons perform a gear shift instead - see `getGearButtonLabels()`
+     * and `powerUp()`/`powerDown()`), `'hidden'` in SIM/Resistance mode with virtual shifting
+     * disabled (the buttons are meaningless and `web-ui`/`mobile` must not show them).
+     *
+     * Reuses `RideDisplayService.isVirtualShiftingEnabled()`'s exact SIM+virtshift-setting check
+     * (via the shared `getLoadButtonMode()` helper in `incyclist-devices`' ride module) rather than
+     * re-deriving it.
+     */
+    getLoadButtonMode():LoadButtonMode {
+        try {
+            const mode = this.getDeviceRide().getCyclingMode() as CyclingMode
+            return getLoadButtonMode(mode)
+        }
+        catch(err) {
+            this.logError(err,'getLoadButtonMode')
+            return 'power'
+        }
+    }
+
+    /**
+     * Builds the labels for the dashboard's load ("+5"/"+1"/"-1"/"-5", no unit) buttons when
+     * `getLoadButtonMode()==='gear'` - matching `ShiftingControl`'s existing button-text convention
+     * for a non-workout ride's gear-shift buttons exactly (see `web-ui/.../shifting/control/component.jsx`).
+     */
+    private getGearButtonLabels():WorkoutDisplayProperties['loadButtons'] {
+        return { inc5: '+5', inc1: '+1', dec1: '-1', dec5: '-5' }
+    }
+
+    /**
+     * Builds the labels for the dashboard's load ("+5%"/"+1%"/"-1%"/"-5%") buttons, reflecting
+     * what a click on each of them will actually do right now: `isPowerRangeAdjustable()` decides
+     * per-button (using the same boundary logic `powerUp()`/`powerDown()` use to act) whether the
+     * click will nudge `targetPower` (Watt-labelled, with the real, headroom-clamped amount via
+     * `getPowerRangeAdjustmentWatts()`) or scale the Workout FTP (%-labelled).
+     */
+    private getLoadButtonLabels():WorkoutDisplayProperties['loadButtons'] {
+        const label = (magnitude:number, increase:boolean):string => {
+            const sign = increase ? '+' : '-'
+            const delta = increase ? magnitude : -magnitude
+            return this.isPowerRangeAdjustable(delta)
+                ? `${sign}${this.getPowerRangeAdjustmentWatts(magnitude, increase)}W`
+                : `${sign}${magnitude}%`
+        }
+        return {
+            inc5: label(5, true),
+            inc1: label(1, true),
+            dec1: label(1, false),
+            dec5: label(5, false),
+        }
+    }
+
+    /**
      * Adjusts the base level of th workout
-     * 
-     * This allows the user to increase the instensity of a workout. 
-     * 
+     *
+     * This allows the user to increase the instensity of a workout.
+     *
      * Depending on how the the step limits are defined, this will have different impact
      * - Step defined in "percentage of FTP": The FTP will be increased by _delta_ %
      * - Step defined in "Watts": The power limit will be increased by _delta_ Watts
@@ -443,12 +551,18 @@ export class WorkoutRide extends IncyclistService{
         this.logEvent({message: 'workout power up', delta})
 
         try {
+            const loadButtonMode = this.getLoadButtonMode()
+            if (loadButtonMode==='hidden')
+                return undefined
 
-            if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower<this.currentLimits?.maxPower) {
-                let deltaVal = delta
-                if ( this.settings?.ftp) {
-                    deltaVal = delta===1 ? 5 : 50
-                }
+            if (loadButtonMode==='gear') {
+                this.gearChange(delta)
+                this.logEvent({message: 'workout gear shift', gearDelta: delta})
+                return { type: 'gear', value: delta }
+            }
+
+            if ( this.isPowerRangeAdjustable(delta)) {
+                const deltaVal = this.getPowerRangeDeltaVal(delta)
                 this.currentLimits.targetPower = Math.min(this.currentLimits.targetPower+deltaVal, this.currentLimits.maxPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
@@ -495,11 +609,18 @@ export class WorkoutRide extends IncyclistService{
         this.logEvent({message: 'workout power down', delta})
 
         try {
-            if ( this.currentLimits?.minPower!==this.currentLimits?.maxPower && this.currentLimits?.targetPower>this.currentLimits?.minPower) {
-                let deltaVal = delta
-                if ( this.settings?.ftp) {
-                    deltaVal = delta===1 ? 5 : 50
-                }
+            const loadButtonMode = this.getLoadButtonMode()
+            if (loadButtonMode==='hidden')
+                return undefined
+
+            if (loadButtonMode==='gear') {
+                this.gearChange(-delta)
+                this.logEvent({message: 'workout gear shift', gearDelta: -delta})
+                return { type: 'gear', value: -delta }
+            }
+
+            if ( this.isPowerRangeAdjustable(-delta)) {
+                const deltaVal = this.getPowerRangeDeltaVal(delta)
                 this.currentLimits.targetPower = Math.max(this.currentLimits.targetPower-deltaVal, this.currentLimits.minPower)
                 this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
                 this.emit('update', this.getDashboardDisplayProperties())
@@ -528,11 +649,27 @@ export class WorkoutRide extends IncyclistService{
     }
 
     /**
+     * Performs a gear shift, using the exact same device-level mechanism a non-workout ride's
+     * gear shift uses (`RideDisplayService.gearChange()` -> `RideModeService.sendUpdate({gearDelta})`,
+     * which itself just forwards to `DeviceRideService.sendUpdate()`) - see FIXES_BACKLOG #37. No
+     * workout-specific gear semantics are introduced by this: the current step's own
+     * target/duration/completion tracking is left untouched, exactly as it is already untouched by
+     * the rider's real-world cadence choice.
+     *
+     * Only called by `powerUp()`/`powerDown()` once `getLoadButtonMode()==='gear'`.
+     *
+     * @param gearDelta positive to shift up, negative to shift down
+     */
+    private gearChange(gearDelta:number):void {
+        this.getDeviceRide().sendUpdate({gearDelta})
+    }
+
+    /**
      * Toggles between the originally selected mode and ERG mode
-     * 
-     * This allows to temporarily swith to SmartTrainer (SIM) mode, 
+     *
+     * This allows to temporarily swith to SmartTrainer (SIM) mode,
      * e.g. if there is a Sprint(max effort) segment upcoming and switch back to ERG after that segment
-     * 
+     *
      */
     toggleCyclingMode():void {
         const  deviceRide = useDeviceRide()
@@ -566,15 +703,18 @@ export class WorkoutRide extends IncyclistService{
             const {start,stop} = this.getZoomParameters(this.trainingTime);
             const title = this.getStepTitle(this.trainingTime)
             const canShowBackward = Math.round((this.trainingTime??0))>0
-            
+            const loadButtonMode = this.getLoadButtonMode()
+
             const props = {
-                workout:this.workout, title, 
-                ftp:this.settings.ftp, 
+                workout:this.workout, title,
+                ftp:this.settings.ftp,
                 current:this.currentLimits,
                 start,stop,
                 mode: this.getCyclingModeText(),
                 canShowBackward,
-                canShowForward:true
+                canShowForward:true,
+                loadButtonMode,
+                loadButtons: loadButtonMode==='power' ? this.getLoadButtonLabels() : this.getGearButtonLabels()
             }
 
             return props
@@ -979,6 +1119,11 @@ export class WorkoutRide extends IncyclistService{
     @Injectable
     protected getWorkoutList() {
         return useWorkoutList()
+    }
+
+    @Injectable
+    protected getDeviceRide():DeviceRideService {
+        return useDeviceRide()
     }
 
 }
