@@ -8,7 +8,7 @@ import { useRideDisplay } from "../../../ride/display"
 import { useActivityRide } from "../../../activities"
 import { useUserSettings } from "../../../settings"
 import { useWorkoutRide } from "../service"
-import type { PowerAdjustmentResult, WorkoutDisplayProperties } from "../types"
+import type { LoadButtonMode, PowerAdjustmentResult, WorkoutDisplayProperties } from "../types"
 import { getFlattenedSteps, getStepDuration, getStepTargetText, getWorkoutGraphSeries } from "../../base/graph"
 import type { Workout } from "../../base/model"
 import type { StepDefinition } from "../../base/model/types"
@@ -159,7 +159,8 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
                 steps: this.buildUpcomingSteps(current, wo.ftp),
                 dashboard: this.buildDashboardLine(wo),
                 gestureHint: this.buildGestureHint(base.startOverlayProps === null),
-                loadIncrement: this.getLoadIncrement()
+                loadIncrement: this.getLoadIncrement(),
+                loadButtonMode: wo.loadButtonMode ?? 'power'
             }
         }
         catch (err: any) {
@@ -357,6 +358,29 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
         catch (err: any) {
             this.logError(err, 'adjustLoad')
             return undefined
+        }
+    }
+
+    /**
+     * What a load-adjust action (swipe gesture, menu "Increase/Decrease Load") currently does
+     * (FIXES_BACKLOG #37) - `'power'` (nudges targetPower/FTP, ERG mode), `'gear'` (performs a
+     * gear shift, SIM/Resistance mode with virtual shifting enabled) or `'hidden'` (meaningless,
+     * SIM/Resistance mode with virtual shifting disabled - callers should not surface a load-adjust
+     * control at all in this mode). Callers must re-check this at the moment of the gesture/tap
+     * (cycling mode can change mid-ride), not cache it - see `useWorkoutRideGestures.ts`.
+     *
+     * Single source of truth lives in `WorkoutRide.getLoadButtonMode()` (built on the same
+     * SIM+virtshift-setting check `RideDisplayService.isVirtualShiftingEnabled()` uses) - this is a
+     * thin passthrough so mobile only ever talks to the page service, never the domain service
+     * directly.
+     */
+    getLoadButtonMode(): LoadButtonMode {
+        try {
+            return this.getWorkoutRide().getLoadButtonMode()
+        }
+        catch (err: any) {
+            this.logError(err, 'getLoadButtonMode')
+            return 'power'
         }
     }
 
@@ -613,7 +637,8 @@ export class WorkoutRidePageService extends IncyclistPageService implements IWor
             steps: { previous: null, current: null, upcoming: [], hasMore: false },
             dashboard: { text: '', mode: null },
             gestureHint: null,
-            loadIncrement: DEFAULT_LOAD_INCREMENT
+            loadIncrement: DEFAULT_LOAD_INCREMENT,
+            loadButtonMode: 'power'
         }
     }
 
