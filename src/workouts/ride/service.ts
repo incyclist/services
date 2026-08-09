@@ -450,7 +450,9 @@ export class WorkoutRide extends IncyclistService{
      * @param magnitude the button's nominal magnitude - `1` (inc1/dec1) or `5` (inc5/dec5)
      */
     private getPowerRangeDeltaVal(magnitude:number):number {
-        return this.settings?.ftp ? (magnitude===1 ? 5 : 50) : magnitude
+        if (!this.settings?.ftp)
+            return magnitude
+        return magnitude===1 ? 5 : 50
     }
 
     /**
@@ -478,7 +480,8 @@ export class WorkoutRide extends IncyclistService{
     private getLoadButtonLabels():WorkoutDisplayProperties['loadButtons'] {
         const label = (magnitude:number, increase:boolean):string => {
             const sign = increase ? '+' : '-'
-            return this.isPowerRangeAdjustable(increase ? magnitude : -magnitude)
+            const delta = increase ? magnitude : -magnitude
+            return this.isPowerRangeAdjustable(delta)
                 ? `${sign}${this.getPowerRangeAdjustmentWatts(magnitude, increase)}W`
                 : `${sign}${magnitude}%`
         }
