@@ -21,7 +21,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.2",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
-    "@typescript-eslint/parser": "^8.59.0",
+    "@typescript-eslint/parser": "^8.66.0",
     "dotenv": "^17.4.2",
     "eslint": "^10.2.1",
     "formdata-node": "^6.0.3",
