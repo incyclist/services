@@ -856,6 +856,7 @@ describe('RidePageService', () => {
 
         test('maps logs to power/heartrate points, skipping undefined values, and reports elapsed time as position', () => {
             MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.inUse.mockReturnValue(true)
             MockActivityRide.getActivity.mockReturnValue({
                 time: 12,
                 logs: [

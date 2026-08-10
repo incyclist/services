@@ -520,20 +520,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     // ---- Workout ride methods --------------------------------------------------------
 
-    // NOTE (session 2.1, deviation from workout-combo-service-design.md §4.4.6, flagged for
-    // review): the design spec's exact code guards this method on isWorkoutAttached() as its
-    // first line. That guard is NOT applied here - it breaks an existing, unmodified test
-    // ('getGraphActuals > maps logs to power/heartrate points...', which calls this method
-    // directly against a plain GPX fixture with no workout attached and expects real telemetry
-    // back), and the session's starting prompt requires the pre-existing suite to pass unmodified,
-    // treating any forced test edit as a design violation to escalate rather than patch.
-    // Not believed to be load-bearing: today getGraphActuals() is only ever called from
-    // WorkoutRidePage.tsx (grep confirmed), and per session 5.1's plan a Video/GPX page will only
-    // call it once workoutAttached is true (the same gate that already controls whether
-    // WorkoutDashboard renders at all) - so an un-attached Video/GPX ride should never reach this
-    // call site in practice. Flagged here rather than silently resolved; see PR description.
     getGraphActuals(): WorkoutGraphActuals {
         try {
+            if (!this.isWorkoutAttached())
+                return { power: [], heartrate: [], position: 0 }
+
             const state = this.getRideDisplay().getState()
             if (state === 'Idle' || state === 'Starting' || state === 'Started') {
                 return { power: [], heartrate: [], position: 0 }
