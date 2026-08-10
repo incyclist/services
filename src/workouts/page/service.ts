@@ -11,6 +11,7 @@ import { ScheduledWorkoutSettingsDisplayProps } from "../list/cards/types";
 import { useWorkoutCalendar } from "../calendar";
 import { WorkoutListService, useWorkoutList } from "../list/service";
 import {
+    AttachedRouteProps,
     GroupFilterProps,
     IWorkoutListPageService,
     ScheduledWorkoutItemProps,
@@ -21,6 +22,7 @@ import {
     WorkoutListPageDisplayProps
 } from "./types";
 import { useDevicePairing } from "../../devices";
+import { useRouteList } from "../../routes";
 
 const DEFAULT_IMPORT_GROUP = 'My Workouts'
 const UPCOMING_COLLAPSED_COUNT = 3
@@ -153,11 +155,34 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
                 group: settingsProps.category,
                 canDelete: card.canDelete(),
                 isScheduled,
-                date: isScheduled ? (settingsProps as ScheduledWorkoutSettingsDisplayProps).date : undefined
+                date: isScheduled ? (settingsProps as ScheduledWorkoutSettingsDisplayProps).date : undefined,
+                attachedRoute: this.getAttachedRouteProps(),
+                comboEnabled: this.isWorkoutComboEnabled()
             }
         }
         catch (err) {
             this.logError(err, 'getWorkoutDetailsProps')
+            return null
+        }
+    }
+
+    /**
+     * The route this workout is currently paired with, for the "Route: <name>" row on the details
+     * dialog (HLD §4.2). Single source, single slot (design §2). Whether the user picked this route
+     * on the Routes page or via an Activity's "ride again" is not recorded and not displayed - an
+     * activity resolves to its RouteCard and *that* is what gets selected, so by the time it is
+     * attached there is only a route.
+     */
+    protected getAttachedRouteProps(): AttachedRouteProps | null {
+        try {
+            const route = this.getRouteList().getSelected()
+            if (!route)
+                return null
+
+            return { id: route.description?.id, title: route.title }
+        }
+        catch (err) {
+            this.logError(err, 'getAttachedRouteProps')
             return null
         }
     }
@@ -321,6 +346,21 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
         }
         catch (err) {
             this.logError(err, 'onClearSelection')
+        }
+    }
+
+    /**
+     * '[x]' on the "Route: <name>" row (HLD §4.2). Clears only the route side of the attachment;
+     * the workout selection is untouched. Exact mirror of RoutesPageService.onClearWorkoutSelection().
+     * Nothing else needs clearing - ActivityListService holds no attachment state (design §2).
+     */
+    onClearRouteSelection(): void {
+        try {
+            this.getRouteList().unselect()
+            this.emitPageUpdate()
+        }
+        catch (err) {
+            this.logError(err, 'onClearRouteSelection')
         }
     }
 
@@ -589,6 +629,11 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     @Injectable
     protected getWorkoutList(): WorkoutListService {
         return useWorkoutList()
+    }
+
+    @Injectable
+    protected getRouteList() {
+        return useRouteList()
     }
 
     @Injectable

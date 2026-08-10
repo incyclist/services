@@ -43,6 +43,24 @@ export interface IRoutePageService extends IPageService, IPageCallBacks {
     getPageDisplayProps():RoutePageDisplayProps
     onImportClosed(): void   // called when user explicitly closes dialog
     getImportDisplayProps(): ImportDisplayProps
+    getRouteDetailsProps(routeId: string): RouteDetailsProps
+    onClearWorkoutSelection(): void   // '[x]' on the "Workout: <name>" row (Phase 2, HLD §4.2)
+}
+
+// ---- cross-visibility (Phase 2, session 2.2) --------------------------------
+
+export interface AttachedWorkoutProps {
+    id:    string      // Workout.id (content hash)
+    title: string      // Workout.name
+}
+
+/** Additive companion to what RouteDetailsDialog already reads from RouteCard.openSettings().
+ *  Deliberately NOT a migration of that dialog onto the page layer - see
+ *  mobile/internal/designs/workout-combo-service-design.md §3.5. */
+export interface RouteDetailsProps {
+    routeId:         string
+    attachedWorkout: AttachedWorkoutProps | null
+    comboEnabled:    boolean
 }
 
 export type DownloadStatus = 'downloading' | 'done' | 'failed' | 'required'

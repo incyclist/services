@@ -63,6 +63,15 @@ export interface WorkoutListItemProps {
 
 // ---- Details dialog (overlay, not a navigated screen) ----------------------
 
+/** The route this workout is currently paired with for the next ride. At most one route is ever
+ *  selected (design §2), and RouteListService is its single source - mirror image of
+ *  AttachedWorkoutProps (routes/page/types.ts), which RouteListService's counterpart provides for
+ *  the route side. */
+export interface AttachedRouteProps {
+    id:    string      // route.description.id
+    title: string      // route.title (localised)
+}
+
 export interface WorkoutDetailsProps {
     id:                  string
     title:               string
@@ -83,6 +92,9 @@ export interface WorkoutDetailsProps {
     // scheduled-entry extras
     isScheduled:         boolean
     date?:               Date        // present only when isScheduled
+    // cross-visibility (Phase 2, session 2.2)
+    attachedRoute:       AttachedRouteProps | null   // null = nothing attached
+    comboEnabled:        boolean                     // isWorkoutComboEnabled() - see base/pages/service.ts
 }
 
 // ---- Import dialog (single-file, Phase 1) ----------------------------------
@@ -112,6 +124,8 @@ export interface WorkoutListPageCallbacks {
     onStart:          (id: string, opts: { noRoute: boolean }) => void  // select + navigate to ride
     onMarkForRoute?:  (id: string) => void   // Phase 2: explicit select-for-later (ride with a route)
     onClearSelection: () => void             // explicit unselect
+    onClearRouteSelection: () => void        // '[x]' on the "Route: <name>" row (Phase 2, §3.4.3) - clears
+                                              // only the route side of the attachment
     // import dialog
     onImportOpen:         () => void
     onImportFile:         (file: FileInfo) => IObserver   // returns observer: 'success' | 'error'
