@@ -851,6 +851,7 @@ describe('RidePageService', () => {
 
         test('before the ride is active -> empty series', () => {
             MockRideDisplay.getState.mockReturnValue('Starting')
+            MockWorkoutRide.inUse.mockReturnValue(true)
             expect(s.getGraphActuals()).toEqual({ power: [], heartrate: [], position: 0 })
         })
 

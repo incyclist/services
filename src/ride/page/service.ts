@@ -444,8 +444,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * Phone-fallback corner-widget preference (ride-overlay-layout-design.md §6.4) - which of the
      * two competing corner widgets (elevation graph vs. workout info) a combo ride currently shows.
      * Only meaningful for a Video/GPX ride with a workout actually attached AND the combo surface
-     * switched on - a plain route ride has nothing to toggle, and a Workout-only ride has no
-     * elevation graph competing for the corner slot. Undefined (default 'elevation') otherwise.
+     * switched on - a plain route ride has nothing to toggle. Only buildWorkoutOverlayProps()
+     * (Video/GPX) calls this; a Workout-only ride goes through getWorkoutRideDisplayProps()
+     * instead and never reaches it. Undefined (default 'elevation') otherwise.
      */
     protected getCornerWidget(): 'elevation' | 'workout' | undefined {
         try {
@@ -680,6 +681,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                 // buildBaseDisplayProps()'s field itself is typed to the wider (Video/GPX-
                 // compatible) RideMenuProps.
                 menuProps: base.menuProps as WorkoutRideMenuProps | null,
+                workoutAttached: true,
                 title: wo.title ?? '',
                 graph: this.buildGraphPlan(current, wo.ftp),
                 steps: this.buildUpcomingSteps(current, wo.ftp),
