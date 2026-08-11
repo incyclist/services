@@ -44,7 +44,8 @@ const setupMocks = (rideType: string = 'GPX') => {
         getCurrentLimits: jest.fn(),
         powerUp: jest.fn(),
         powerDown: jest.fn(),
-        getLoadButtonMode: jest.fn().mockReturnValue('power')
+        getLoadButtonMode: jest.fn().mockReturnValue('power'),
+        inUse: jest.fn().mockReturnValue(false)
     }
     MockActivityRide = {
         getActivity: jest.fn().mockReturnValue({ logs: [], time: 0 }),
@@ -855,6 +856,7 @@ describe('RidePageService', () => {
 
         test('maps logs to power/heartrate points, skipping undefined values, and reports elapsed time as position', () => {
             MockRideDisplay.getState.mockReturnValue('Active')
+            MockWorkoutRide.inUse.mockReturnValue(true)
             MockActivityRide.getActivity.mockReturnValue({
                 time: 12,
                 logs: [
@@ -1298,6 +1300,415 @@ describe('RidePageService', () => {
 
             expect(result).toBeUndefined()
             expect(s.logError).toHaveBeenCalled()
+        })
+    })
+
+    // ==========================================================================================
+    // Phase 2 (session 2.1, workout-combo-service-design.md §4): attachment-based workout
+    // behaviour. Fixtures per §6 "Session 2.1":
+    //   (a)  Workout ride, both toggles off - already covered throughout the suite above (every
+    //        existing test in this file still passes unmodified); toggle-independence itself is
+    //        asserted explicitly below.
+    //   (b)  Video/GPX + workout attached, both toggles on (state 3 - combo live)
+    //   (c)  Video/GPX + workout attached, MOBILE_WORKOUTS on / COMBO off (state 2 - shipped)
+    //   (c') Video/GPX + workout attached, COMBO on / MOBILE_WORKOUTS off (state 1 - behaves as c)
+    //   (d)  Video/GPX, no workout attached
+    // ==========================================================================================
+
+    const setFeatureToggles = (mobileWorkouts: boolean, combo: boolean) => {
+        MockAppState.hasFeature.mockImplementation((toggle: string) => {
+            if (toggle === 'MOBILE_WORKOUTS') return mobileWorkouts
+            if (toggle === 'MOBILE_WORKOUT_ROUTE_COMBO') return combo
+            return true
+        })
+    }
+
+    describe('isWorkoutAttached', () => {
+        test('Workout ride -> always true, regardless of either toggle (Phase 1 must not depend on either)', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            setFeatureToggles(false, false)
+            expect((s as any).isWorkoutAttached()).toBe(true)
+        })
+
+        test('(b) Video/GPX ride, workout in use, both toggles on -> true', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            setFeatureToggles(true, true)
+            expect((s as any).isWorkoutAttached()).toBe(true)
+        })
+
+        test('(c) Video/GPX ride, workout in use, MOBILE_WORKOUTS on / COMBO off -> false', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Video')
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            setFeatureToggles(true, false)
+            expect((s as any).isWorkoutAttached()).toBe(false)
+        })
+
+        test("(c') Video/GPX ride, workout in use, COMBO on / MOBILE_WORKOUTS off -> false (behaves as (c) - COMBO alone is never honoured)", () => {
+            MockRideDisplay.getRideType.mockReturnValue('Video')
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            setFeatureToggles(false, true)
+            expect((s as any).isWorkoutAttached()).toBe(false)
+        })
+
+        test('(d) Video/GPX ride, no workout in use, both toggles on -> false', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockWorkoutRide.inUse.mockReturnValue(false)
+            setFeatureToggles(true, true)
+            expect((s as any).isWorkoutAttached()).toBe(false)
+        })
+
+        test('other/unknown ride type -> false', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Free-Ride')
+            setFeatureToggles(true, true)
+            expect((s as any).isWorkoutAttached()).toBe(false)
+        })
+
+        test('logs and returns false if the underlying call throws', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            setFeatureToggles(true, true)
+            MockWorkoutRide.inUse.mockImplementation(() => { throw new Error('boom') })
+            expect((s as any).isWorkoutAttached()).toBe(false)
+            expect(s.logError).toHaveBeenCalled()
+        })
+    })
+
+    describe('getPageDisplayProps - Video/GPX combo, fixture (b): both toggles on, workout attached', () => {
+        beforeEach(() => {
+            setFeatureToggles(true, true)
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
+                title: 'Test Workout', ftp: 250, mode: null, canShowBackward: true, canShowForward: true, loadButtonMode: 'gear'
+            })
+            MockWorkoutRide.getCurrentLimits.mockReturnValue({
+                time: 70, duration: 120, remaining: 50, targetPower: 150, minPower: 150, maxPower: 150,
+                step: { type: 'step', duration: 120, steady: true, power: { type: 'watt', min: 150, max: 150 } }
+            })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 70 })
+        })
+
+        test('Video ride, showWorkout true: carries all seven workout fields plus its own video fields', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Video')
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active', video: { id: 'v1' }, route: { id: 'r1' }, workout: makeCurrentWorkout(), showWorkout: true
+            })
+
+            const props: any = s.getPageDisplayProps()
+
+            expect(props.workoutAttached).toBe(true)
+            expect(props.video).toEqual({ id: 'v1' })
+            expect(props.title).toBe('Test Workout')
+            expect(props.graph.ftp).toBe(250)
+            expect(props.steps.current).toBeTruthy()
+            expect(props.dashboard.text).toContain('150W')
+            expect(props.gestureHint).toBeDefined()
+            expect(props.loadIncrement).toBe(1)
+            expect(props.loadButtonMode).toBe('gear')
+        })
+
+        test('GPX ride, showWorkout true: carries all seven workout fields plus its own GPX fields', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active', rideView: 'map', route: { id: 'r1' }, workout: makeCurrentWorkout(), showWorkout: true
+            })
+
+            const props: any = s.getPageDisplayProps()
+
+            expect(props.workoutAttached).toBe(true)
+            expect(props.rideView).toBe('map')
+            expect(props.title).toBe('Test Workout')
+            expect(props.graph.ftp).toBe(250)
+        })
+
+        test('workoutAttached true but RideDisplayService.showWorkout false (still starting) -> overlay suppressed, no workout fields', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockRideDisplay.getState.mockReturnValue('Idle')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Idle', rideView: 'map', route: { id: 'r1' }, workout: makeCurrentWorkout(), showWorkout: false
+            })
+
+            const props: any = s.getPageDisplayProps()
+
+            expect(props.workoutAttached).toBe(false)
+            expect(props.title).toBeUndefined()
+            expect(props.graph).toBeUndefined()
+        })
+
+        test('workout observer is subscribed after openPage() (unblocked - was type-gated to Workout only before Phase 2)', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX');
+            (s as any).isInitialized = true
+            const rideObserver = new Observer()
+            const workoutObserver = new Observer()
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver)
+            MockWorkoutRide.getObserver.mockReturnValue(workoutObserver)
+
+            s.openPage()
+
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+            workoutObserver.emit('update')
+            expect(updateSpy).toHaveBeenCalled()
+        })
+
+        test('RideMenu props carry the step flags on a combo ride', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockRideDisplay.getState.mockReturnValue('Paused')
+
+            s.onMenuOpen()
+
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, canStepBack: true, canStepForward: true })
+        })
+
+        test('onStepBack / onStepForward delegate to RideDisplay when a workout is attached to a route ride', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+
+            s.onStepBack()
+            s.onStepForward()
+
+            expect(MockRideDisplay.backward).toHaveBeenCalled()
+            expect(MockRideDisplay.forward).toHaveBeenCalled()
+        })
+    })
+
+    describe('getPageDisplayProps - Video/GPX combo, gated off (states 1/2/d - must be identical to today)', () => {
+        const scenarios: [string, boolean, boolean, boolean][] = [
+            ['(c) MOBILE_WORKOUTS on / COMBO off, workout attached', true, false, true],
+            ["(c') COMBO on / MOBILE_WORKOUTS off, workout attached", false, true, true],
+            ['(d) both toggles on, no workout attached', true, true, false]
+        ]
+
+        scenarios.forEach(([name, mobileWorkouts, combo, workoutInUse]) => {
+            test(`${name} -> no workout fields, no observer subscription, step callbacks are no-ops`, () => {
+                setFeatureToggles(mobileWorkouts, combo)
+                MockWorkoutRide.inUse.mockReturnValue(workoutInUse)
+                MockRideDisplay.getRideType.mockReturnValue('GPX')
+                MockRideDisplay.getState.mockReturnValue('Active')
+                MockRideDisplay.getDisplayProperties.mockReturnValue({
+                    state: 'Active', rideView: 'map', route: { id: 'r1' }, workout: makeCurrentWorkout(), showWorkout: true
+                });
+                (s as any).isInitialized = true
+                const rideObserver = new Observer()
+                const workoutObserver = new Observer()
+                MockRideDisplay.getObserver.mockReturnValue(rideObserver)
+                MockWorkoutRide.getObserver.mockReturnValue(workoutObserver)
+
+                const props: any = s.getPageDisplayProps()
+                expect(props.workoutAttached).toBeFalsy()
+                expect(props.graph).toBeUndefined()
+                expect(props.cornerWidget).toBeUndefined()
+
+                s.openPage()
+                const updateSpy = jest.fn()
+                s.getPageObserver().on('page-update', updateSpy)
+                workoutObserver.emit('update')
+                expect(updateSpy).not.toHaveBeenCalled()
+
+                s.onStepBack()
+                s.onStepForward()
+                expect(MockRideDisplay.backward).not.toHaveBeenCalled()
+                expect(MockRideDisplay.forward).not.toHaveBeenCalled()
+
+                // menu carries no step flags either - identical to today's plain route-ride menu
+                s.onMenuOpen()
+                expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: false })
+            })
+        })
+    })
+
+    // §4.4.5: getLoadButtonMode()/adjustLoad() are cycling-mode-driven and must stay
+    // workout-independent - guarding them on isWorkoutAttached() would break gear shifting on a
+    // plain SIM-mode route ride (FIXES_BACKLOG #37). Assert explicitly on fixture (d).
+    describe('getLoadButtonMode / adjustLoad - NOT workout-gated (§4.4.5)', () => {
+        test('(d) gear mode and gear shift still work on a plain GPX ride with no workout attached', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            setFeatureToggles(true, true)
+            MockWorkoutRide.inUse.mockReturnValue(false)
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('gear')
+
+            expect(s.getLoadButtonMode()).toBe('gear')
+
+            s.adjustLoad(5)
+            expect(MockWorkoutRide.powerUp).toHaveBeenCalledWith(5)
+
+            s.adjustLoad(-5)
+            expect(MockWorkoutRide.powerDown).toHaveBeenCalledWith(5)
+        })
+    })
+
+    // §4.5: bidirectional completion - fixture (b), workout-ends-first direction. The domain layer
+    // (RideDisplayService.onWorkoutCompleted()) already keeps the ride running; this is the
+    // page-layer half (§4.4.7), the headline fix of this session.
+    describe('onWorkoutFinished (§4.4.7) - the correctness fix', () => {
+        test('fixture (b): a completing workout does NOT finish a route ride - no finished menu, no navigation', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            setFeatureToggles(true, true)
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            s.openPage()
+
+            ;(s as any).onWorkoutFinished()
+
+            expect((s as any).menuProps?.finished).toBeFalsy()
+            expect(MockBindings.ui.openPage).not.toHaveBeenCalled()
+        })
+
+        test('fixture (b): re-entrant - a second onWorkoutFinished() call changes nothing', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            setFeatureToggles(true, true)
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            s.openPage()
+
+            ;(s as any).onWorkoutFinished()
+            ;(s as any).onWorkoutFinished()
+
+            expect((s as any).menuProps?.finished).toBeFalsy()
+            expect(MockBindings.ui.openPage).not.toHaveBeenCalled()
+        })
+
+        test('via the workout observer: "completed"/"stopped" keep a combo ride running (fixture b)', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            setFeatureToggles(true, true)
+            MockWorkoutRide.inUse.mockReturnValue(true);
+            (s as any).isInitialized = true
+            const rideObserver = new Observer()
+            const workoutObserver = new Observer()
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver)
+            MockWorkoutRide.getObserver.mockReturnValue(workoutObserver)
+            s.openPage()
+
+            workoutObserver.emit('completed')
+
+            expect(MockRideDisplay.stop).not.toHaveBeenCalled()
+            expect((s as any).menuProps?.finished).toBeFalsy()
+
+            // the workout is no longer in use -> the overlay collapses on the next read
+            MockWorkoutRide.inUse.mockReturnValue(false)
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map', showWorkout: false })
+            expect((s.getPageDisplayProps() as any).workoutAttached).toBe(false)
+        })
+
+        test('fixture (a) Workout ride: unchanged - a completing workout DOES finish the ride', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+
+            ;(s as any).onWorkoutFinished()
+
+            expect((s as any).menuProps).toMatchObject({ finished: true })
+        })
+    })
+
+    describe('finishRide (§4.4.7) - fixture (a): manual End Ride on a Workout-only ride, unchanged', () => {
+        test('stops the ride once and sets the finished menu directly (not via onWorkoutFinished)', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+
+            ;(s as any).finishRide()
+
+            expect(MockRideDisplay.stop).toHaveBeenCalledWith(true)
+            expect(MockRideDisplay.stop).toHaveBeenCalledTimes(1)
+            expect((s as any).menuProps).toMatchObject({ showResume: false, finished: true })
+        })
+    })
+
+    describe('unsubscribeFromWorkoutObserver - unregisters from the cached instance (§4.4.3)', () => {
+        test('still removes handlers and clears the flag even if getWorkoutRide().getObserver() has since reset to undefined', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            const rideObserver = new Observer()
+            const workoutObserver = new Observer()
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver)
+            MockWorkoutRide.getObserver.mockReturnValue(workoutObserver)
+            s.openPage()
+            expect((s as any).workoutObserverSubscribed).toBe(true)
+
+            // simulate WorkoutRideService having reset back to 'idle' before the page closes -
+            // getObserver() would now return undefined if re-read live
+            MockWorkoutRide.getObserver.mockReturnValue(undefined)
+
+            s.closePage()
+
+            expect((s as any).workoutObserverSubscribed).toBe(false)
+            const updateSpy = jest.fn()
+            s.getPageObserver()?.on('page-update', updateSpy)
+            workoutObserver.emit('update')
+            expect(updateSpy).not.toHaveBeenCalled()
+        })
+    })
+
+    // "Also in scope" (ride-overlay-layout-design.md §6.4 / §11 item A) - phone-fallback
+    // corner-widget toggle. Additive and inert until session 5.1 wires up the RideMenu row and the
+    // corner-slot tap handler; covered with the same set/read/gate test pattern as the existing
+    // load-increment setting.
+    describe('cornerWidget', () => {
+        test('populated ("elevation" default) when isWorkoutAttached() AND isWorkoutComboEnabled() are both true', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockRideDisplay.getState.mockReturnValue('Active')
+            setFeatureToggles(true, true)
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map', workout: makeCurrentWorkout(), showWorkout: true })
+
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('elevation')
+        })
+
+        test('undefined when no workout is attached', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            setFeatureToggles(true, true)
+            MockWorkoutRide.inUse.mockReturnValue(false)
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map' })
+
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBeUndefined()
+        })
+
+        test('undefined when the combo toggle is off, even with a workout attached (state 2)', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            setFeatureToggles(true, false)
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map', workout: makeCurrentWorkout(), showWorkout: true })
+
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBeUndefined()
+        })
+
+        test('undefined on a Workout-only ride - no elevation graph competes for the corner slot there', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            setFeatureToggles(false, false)
+
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBeUndefined()
+        })
+
+        test('reads the persisted preferences.workouts.rideCornerWidget setting', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            setFeatureToggles(true, true)
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map', workout: makeCurrentWorkout(), showWorkout: true })
+            MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'workout' : defValue)
+
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('workout')
+        })
+
+        describe('onToggleCornerWidget', () => {
+            test('flips "elevation" -> "workout" and emits page-update', () => {
+                s.openPage()
+                const updateSpy = jest.fn()
+                s.getPageObserver().on('page-update', updateSpy)
+                MockUserSettings.get.mockImplementation((_key: string, defValue: unknown) => defValue)
+
+                s.onToggleCornerWidget()
+
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'workout')
+                expect(updateSpy).toHaveBeenCalled()
+            })
+
+            test('flips "workout" -> "elevation"', () => {
+                MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'workout' : defValue)
+
+                s.onToggleCornerWidget()
+
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'elevation')
+            })
+
+            test('logs and swallows errors', () => {
+                MockUserSettings.set.mockImplementation(() => { throw new Error('boom') })
+                expect(() => s.onToggleCornerWidget()).not.toThrow()
+                expect(s.logError).toHaveBeenCalled()
+            })
         })
     })
 })

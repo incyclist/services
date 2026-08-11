@@ -39,6 +39,9 @@ const HINTS_WORKOUT_GESTURES_KEY = 'hints.workoutRideGestures'
 // Same key mobile's useWorkoutRideGestures.ts (session 5.4) already reads - do not introduce a
 // second key for the same setting.
 const LOAD_INCREMENT_SETTING_KEY = 'preferences.workouts.loadIncrement'
+// Phone-fallback corner-widget toggle (ride-overlay-layout-design.md §6.4) - which of the two
+// competing corner widgets (elevation graph vs. workout info) a combo ride currently shows.
+const CORNER_WIDGET_SETTING_KEY = 'preferences.workouts.rideCornerWidget'
 
 /**
  * Single page service for all ride types (Video/GPX/Workout) - FIXES_BACKLOG #24. Previously
@@ -54,6 +57,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     protected eventHandler: Record<string, any> = {}
     protected workoutEventHandler: Record<string, any> = {}
     protected workoutObserverSubscribed = false
+    protected workoutObserver: IObserver | undefined
     protected backgroundTimer: NodeJS.Timeout | undefined
     protected backgroundPausedByService: boolean = false
     protected menuProps: RideMenuProps | null = null
@@ -276,7 +280,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     onMenuOpen(): void {
         try {
             const state = this.getRideDisplay().getState()
-            this.menuProps = this.isRideType('Workout')
+            this.menuProps = this.isWorkoutAttached()
                 ? { showResume: state === 'Paused', ...this.getStepFlags() }
                 : { showResume: state === 'Paused' }
             this.updatePageDisplay()
@@ -365,10 +369,12 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     protected getVideoRideDisplayProps(): VideoRidePageDisplayProps {
-        const props: RLVDisplayProps = this.rideDisplayProps as CurrentRideDisplayProps & RLVDisplayProps
+        const props = this.rideDisplayProps as CurrentRideDisplayProps & RLVDisplayProps & { showWorkout?: boolean }
+        const base = this.buildBaseDisplayProps()
 
         const displayProps: VideoRidePageDisplayProps = {
-            ...this.buildBaseDisplayProps(),
+            ...base,
+            ...this.buildWorkoutOverlayProps(props, base.startOverlayProps === null),
             video: props.video,
             videos: props.videos,
             route: props.route
@@ -377,15 +383,98 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     protected getGPXRideDisplayProps(): GPXRidePageDisplayProps {
-        const props: GpxDisplayProps = this.rideDisplayProps as CurrentRideDisplayProps & GpxDisplayProps
+        const props = this.rideDisplayProps as CurrentRideDisplayProps & GpxDisplayProps & { showWorkout?: boolean }
+        const base = this.buildBaseDisplayProps()
 
         const displayProps: GPXRidePageDisplayProps = {
-            ...this.buildBaseDisplayProps(),
+            ...base,
+            ...this.buildWorkoutOverlayProps(props, base.startOverlayProps === null),
             rideView: props.rideView,
             route: props.route,
             displayObserver: props.displayObserver
         }
         return displayProps
+    }
+
+    /**
+     * The workout half of a combo ride's display props (Video/GPX ride with an attached workout).
+     * Mirrors getWorkoutRideDisplayProps()'s builders exactly (same graph/steps/dashboard/hint/
+     * increment sources) so the two ride shapes can never drift apart - a combo ride's
+     * WorkoutDashboard must show what a workout-only ride shows.
+     *
+     * Also honours RideDisplayService's own `showWorkout` (already computed for every ride type,
+     * and what desktop renders off): it adds the "not while the ride is still starting" and "not
+     * while overlays are hidden" suppression that isWorkoutAttached() alone doesn't carry.
+     *
+     * `cornerWidget` (ride-overlay-layout-design.md §6.4) is computed independently of
+     * `showWorkout` - it only needs isWorkoutAttached() + isWorkoutComboEnabled() - and is
+     * therefore included in every branch below, not just the "workout visible" one.
+     */
+    protected buildWorkoutOverlayProps(
+        props: CurrentRideDisplayProps & { showWorkout?: boolean },
+        startOverlayCleared: boolean
+    ): Partial<RidePageDisplayProps> {
+        const cornerWidget = this.getCornerWidget()
+
+        if (!this.isWorkoutAttached() || !props?.showWorkout)
+            return { workoutAttached: false, cornerWidget }
+
+        try {
+            const wo = this.getWorkoutRide().getDashboardDisplayProperties()
+
+            return {
+                workoutAttached: true,
+                cornerWidget,
+                title:           wo.title ?? '',
+                graph:           this.buildGraphPlan(props.workout, wo.ftp),
+                steps:           this.buildUpcomingSteps(props.workout, wo.ftp),
+                dashboard:       this.buildDashboardLine(wo),
+                gestureHint:     this.buildGestureHint(startOverlayCleared),
+                loadIncrement:   this.getLoadIncrement(),
+                loadButtonMode:  wo.loadButtonMode ?? 'power'
+            }
+        }
+        catch (err: any) {
+            this.logError(err, 'buildWorkoutOverlayProps')
+            return { workoutAttached: false, cornerWidget }
+        }
+    }
+
+    /**
+     * Phone-fallback corner-widget preference (ride-overlay-layout-design.md §6.4) - which of the
+     * two competing corner widgets (elevation graph vs. workout info) a combo ride currently shows.
+     * Only meaningful for a Video/GPX ride with a workout actually attached AND the combo surface
+     * switched on - a plain route ride has nothing to toggle, and a Workout-only ride has no
+     * elevation graph competing for the corner slot. Undefined (default 'elevation') otherwise.
+     */
+    protected getCornerWidget(): 'elevation' | 'workout' | undefined {
+        try {
+            if (!this.isWorkoutAttached() || !this.isWorkoutComboEnabled())
+                return undefined
+            return this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'elevation')
+        }
+        catch (err: any) {
+            this.logError(err, 'getCornerWidget')
+            return undefined
+        }
+    }
+
+    /**
+     * '[x]'-style toggle for the phone-fallback corner widget (ride-overlay-layout-design.md §6.4).
+     * Mirrors onSetLoadIncrement() exactly: write the setting via getUserSettings(), then
+     * updatePageDisplay(). Additive and inert until session 5.1 wires up the RideMenu row and the
+     * corner-slot tap handler.
+     */
+    onToggleCornerWidget(): void {
+        try {
+            const current = this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'elevation')
+            const next = current === 'elevation' ? 'workout' : 'elevation'
+            this.getUserSettings().set(CORNER_WIDGET_SETTING_KEY, next)
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onToggleCornerWidget')
+        }
     }
 
     protected async checkSecretValidity() {
@@ -433,6 +522,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     getGraphActuals(): WorkoutGraphActuals {
         try {
+            if (!this.isWorkoutAttached())
+                return { power: [], heartrate: [], position: 0 }
+
             const state = this.getRideDisplay().getState()
             if (state === 'Idle' || state === 'Starting' || state === 'Started') {
                 return { power: [], heartrate: [], position: 0 }
@@ -468,6 +560,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     onStepBack(): void {
         try {
+            if (!this.isWorkoutAttached())
+                return
             this.getRideDisplay().backward()
         }
         catch (err: any) {
@@ -477,6 +571,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     onStepForward(): void {
         try {
+            if (!this.isWorkoutAttached())
+                return
             this.getRideDisplay().forward()
         }
         catch (err: any) {
@@ -605,9 +701,28 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.updatePageDisplay()
     }
 
+    /**
+     * The workout ended (completed on its own, or stopped by the rider) - NOT necessarily the ride.
+     *
+     * A workout-only ride ends with its workout: it has no route to fall back to, so the menu flips
+     * to its terminal 'finished' shape and the rider lands on the Activity Summary (FIXES_BACKLOG
+     * #24, bug 2/2 - the finalisation itself is RideDisplayService.onWorkoutCompleted()'s
+     * stopRide(), not this method's).
+     *
+     * A route ride does not: the workout dropping away just returns it to a plain GPX/Video ride,
+     * still running. RideDisplayService.onWorkoutCompleted() already makes exactly this distinction
+     * on the domain side (it only calls stopRide() when getRideType()==='Workout'); the page layer
+     * has to mirror that branch here or a completing workout would navigate the rider off a
+     * still-running route ride.
+     *
+     * Re-entrant by design: RideDisplayService.stop() re-emits the workout's own completed/stopped
+     * event, so this can fire more than once per ride. Every branch is idempotent.
+     */
     protected onWorkoutFinished(): void {
         try {
-            this.menuProps = this.buildFinishedMenuProps()
+            if (this.isRideType('Workout'))
+                this.menuProps = this.buildFinishedMenuProps()
+
             this.updatePageDisplay()
         }
         catch (err: any) {
@@ -615,18 +730,19 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
-    // Shared by onStop() (manual "End Ride") and onWorkoutFinished() (auto-completion once
-    // WorkoutRideService.checkIfDone() fires 'completed'/'stopped') - both must finalize the
-    // activity via RideDisplay.stop(true) before converging onto onWorkoutFinished()/
-    // menuProps.finished, so a workout that completes on its own lands on the Activity Summary
-    // the same way a manual "End Ride" tap does (FIXES_BACKLOG #24, bug 2/2).
+    /**
+     * The *ride* ended - manual "End Ride" from a workout ride's menu (onStop()). Sets the finished
+     * menu directly rather than routing through onWorkoutFinished(), which since Phase 2 only
+     * speaks for the workout (above) and would no longer do it for a combo ride.
+     */
     protected finishRide(): void {
         this.getRideDisplay().stop(true)
-        this.onWorkoutFinished()
+        this.menuProps = this.buildFinishedMenuProps()
+        this.updatePageDisplay()
     }
 
     protected subscribeToWorkoutObserver(): void {
-        if (!this.isRideType('Workout') || this.workoutObserverSubscribed)
+        if (this.workoutObserverSubscribed || !this.isWorkoutAttached())
             return
 
         const observer = this.getWorkoutRide().getObserver()
@@ -634,6 +750,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             return
 
         this.registerHandlers(observer, this.workoutEventHandler)
+        this.workoutObserver = observer
         this.workoutObserverSubscribed = true
     }
 
@@ -641,7 +758,13 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         if (!this.workoutObserverSubscribed)
             return
 
-        this.unregisterHandlers(this.getWorkoutRide().getObserver(), this.workoutEventHandler)
+        // Unregister from the instance we actually subscribed to. WorkoutRideService.getObserver()
+        // returns undefined once its state is back to 'idle' (resetWorkout()), which happens a tick
+        // after a workout ends - far more reachable on a combo ride, where the workout can finish
+        // long before the page closes. Reading it fresh at close time would silently leave the
+        // handlers attached and the flag stuck true.
+        this.unregisterHandlers(this.workoutObserver, this.workoutEventHandler)
+        this.workoutObserver = undefined
         this.workoutObserverSubscribed = false
     }
 
@@ -845,14 +968,47 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
+    /**
+     * Whether this ride's workout surface (dashboard, graph, step/load controls, gesture hints) is
+     * live. Distinct from getRideType(): a 'Workout' ride always has one; a 'Video'/'GPX' ride has
+     * one only when the rider attached it AND the combo toggle is on.
+     *
+     * Uses WorkoutRideService.inUse() - the same predicate RideDisplayService.forward()/backward()
+     * already guard on - rather than a selection read, so it goes false the moment the workout
+     * completes or is stopped mid-ride and the ride reverts to a plain route ride.
+     *
+     * The toggle check is deliberately *inside* the service, not only at the page (session 5.1) -
+     * belt-and-braces protection for the window where the combo flow becomes reachable (3.3/5.2)
+     * before the ride-screen overlay (5.1) has landed.
+     *
+     * A 'Workout' ride short-circuits to true unconditionally, before the toggle check - a
+     * workout-only ride is Phase 1, already shipped, and must keep working with the combo toggle
+     * off exactly as it does today.
+     */
+    protected isWorkoutAttached(): boolean {
+        try {
+            if (this.isRideType('Workout'))
+                return true
+            if (!this.isRideType('Video', 'GPX'))
+                return false
+            if (!this.isWorkoutComboEnabled())
+                return false
+            return this.getWorkoutRide().inUse()
+        }
+        catch (err: any) {
+            this.logError(err, 'isWorkoutAttached')
+            return false
+        }
+    }
+
     protected buildPausedMenuProps(): RideMenuProps | WorkoutRideMenuProps {
-        return this.isRideType('Workout')
+        return this.isWorkoutAttached()
             ? { showResume: true, ...this.getStepFlags() }
             : { showResume: true }
     }
 
     protected buildFinishedMenuProps(): RideMenuProps | WorkoutRideMenuProps {
-        return this.isRideType('Workout')
+        return this.isWorkoutAttached()
             ? { showResume: false, finished: true, canStepBack: false, canStepForward: false }
             : { showResume: false, finished: true }
     }

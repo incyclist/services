@@ -40,6 +40,19 @@ export interface RidePageDisplayProps {
     title?:            string
     gestureHint?:       WorkoutGestureHint | null
     loadIncrement?:    number
+
+    // NEW - Phase 2. True when the workout surface is live (see RidePageService.isWorkoutAttached()).
+    // Always true for a 'Workout' ride; for 'Video'/'GPX' it is the combo flag the ride screen and
+    // the Wave-3 overlay-arrangement hook branch on. Absent/false = render exactly as today.
+    workoutAttached?:  boolean
+    // NEW - Phase 2. Was previously only on the WorkoutRidePageDisplayProps narrowing; a combo ride
+    // needs it too. WorkoutRidePageDisplayProps keeps narrowing it to required.
+    loadButtonMode?:   LoadButtonMode
+    // NEW - Phase 2 (ride-overlay-layout-design.md §6.4). Phone-fallback corner-widget preference -
+    // which of the two competing corner widgets (elevation graph vs. workout info) a combo ride
+    // currently shows. Only populated for a Video/GPX ride with a workout attached AND the combo
+    // toggle on (RidePageService.getCornerWidget()); undefined elsewhere (default 'elevation').
+    cornerWidget?:     'elevation' | 'workout'
 }
 
 // Video ride -- extends base with video-specific props
@@ -89,6 +102,11 @@ interface RidePageCallbacks {
     onDecreaseLoad(): void
     onSetLoadIncrement(value: number): void
     onGestureHintDismissed(props: { dontShowAgain: boolean }): void
+
+    // NEW - Phase 2 (ride-overlay-layout-design.md §6.4). Phone-fallback corner-widget toggle -
+    // additive and inert until session 5.1 wires up the RideMenu row and the corner-slot tap
+    // handler.
+    onToggleCornerWidget(): void
 }
 
 // Single merged interface (FIXES_BACKLOG #24), implemented in full by the single RidePageService
