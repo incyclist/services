@@ -1,10 +1,11 @@
 import { EventLogger } from "gd-eventlog";
 import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistPageService } from "../../base/pages";
-import { ActivitiesPageDisplayProps, IActivitiesPageService } from "./types";
+import { ActivitiesPageDisplayProps, ActivityDetailsProps, AttachedWorkoutProps, IActivitiesPageService } from "./types";
 import { IObserver } from "../../types";
 import { ActivityListDisplayProperties, useActivityList } from "../list";
 import { sleep } from "../../utils/sleep";
+import { useWorkoutList } from "../../workouts";
 
 @Singleton
 export class ActivitiesPageService extends IncyclistPageService implements IActivitiesPageService { 
@@ -121,6 +122,39 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
     }
 
 
+    /**
+     * The workout currently paired with `activityId`, for the "Workout: <name>" row on the
+     * activity details dialog (HLD §4.2). `ActivityListService.openSelected()` /
+     * `getSelectedActivityDisplayProps()` are not touched - see
+     * mobile/internal/designs/workout-combo-service-design.md §3.6. Takes `activityId` (rather than
+     * reading `ActivityListService.getSelected()`) so it stays a pure read for the activity the
+     * dialog is actually showing - symmetric with `RoutesPageService.getRouteDetailsProps(routeId)`.
+     */
+    getActivityDetailsProps(activityId: string): ActivityDetailsProps {
+        const comboEnabled = this.isWorkoutComboEnabled()
+        try {
+            const workout = this.getWorkoutList().getSelected()
+            const attachedWorkout: AttachedWorkoutProps | null = workout ? { id: workout.id, title: workout.name } : null
+
+            return { activityId, attachedWorkout, comboEnabled }
+        }
+        catch (err) {
+            this.logError(err, 'getActivityDetailsProps')
+            return { activityId, attachedWorkout: null, comboEnabled }
+        }
+    }
+
+    /** '[x]' on the "Workout: <name>" row (HLD §4.2). */
+    onClearWorkoutSelection(): void {
+        try {
+            this.getWorkoutList().unselect()
+            this.updatePageDisplay()
+        }
+        catch (err) {
+            this.logError(err, 'onClearWorkoutSelection')
+        }
+    }
+
     protected updatePageDisplay() {
         this.getPageObserver()?.emit('page-update')
     }
@@ -157,6 +191,11 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
     @Injectable
     getActivityList()  {
         return useActivityList()
+    }
+
+    @Injectable
+    protected getWorkoutList() {
+        return useWorkoutList()
     }
 
 }

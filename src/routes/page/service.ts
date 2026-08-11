@@ -5,7 +5,7 @@ import { FileInfo, FolderInfo, ImportDisplayProps, IObserver, ParsedRoute, Scann
 import { useRouteList } from "../list";
 import { SummaryCardDisplayProps } from "../list/cards/types";
 import { SearchFilter, SearchState } from "../list/types";
-import { DownloadRowDisplayProps, IRoutePageService, RouteItemProps, RoutePageDisplayProps  } from "./types";
+import { AttachedWorkoutProps, DownloadRowDisplayProps, IRoutePageService, RouteDetailsProps, RouteItemProps, RoutePageDisplayProps  } from "./types";
 import { useUserSettings } from "../../settings";
 import { Observer } from "../../base/types";
 import { sleep } from "../../utils/sleep";
@@ -14,6 +14,7 @@ import { Route } from "../base/model/route";
 import { DownloadObserver } from "../download/types";
 import { useRouteDownload } from "../download/service";
 import { useRouteLibraryScanner } from "../library/service";
+import { useWorkoutList } from "../../workouts";
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -357,7 +358,49 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
 
 
-    protected getDownloadDisplayProps(): DownloadRowDisplayProps[] {        
+    /**
+     * The workout currently paired with `routeId`, for the "Workout: <name>" row on the route
+     * details dialog (HLD §4.2). Additive companion to `RouteCard.openSettings()` - see
+     * mobile/internal/designs/workout-combo-service-design.md §3.5. Takes `routeId` (rather than
+     * reading `this.detailRouteId`) so it stays a pure read for the route the dialog is actually
+     * showing.
+     */
+    getRouteDetailsProps(routeId: string): RouteDetailsProps {
+        const comboEnabled = this.isWorkoutComboEnabled()
+        try {
+            return { routeId, attachedWorkout: this.getAttachedWorkoutProps(), comboEnabled }
+        }
+        catch (err) {
+            this.logError(err, 'getRouteDetailsProps')
+            return { routeId, attachedWorkout: null, comboEnabled }
+        }
+    }
+
+    protected getAttachedWorkoutProps(): AttachedWorkoutProps | null {
+        const workout = this.getWorkoutList().getSelected()
+        if (!workout)
+            return null
+        return { id: workout.id, title: workout.name }
+    }
+
+    /**
+     * '[x]' on the "Workout: <name>" row (HLD §4.2). Clears only the workout side of the
+     * attachment. Deliberately does NOT clear the route selection - RoutesPageService subscribes
+     * 'selected' on the route list observer and closes the details dialog on it (onDialogClosed);
+     * clearing the route from inside the route dialog would close the dialog out from under the
+     * user (design §3.5).
+     */
+    onClearWorkoutSelection(): void {
+        try {
+            this.getWorkoutList().unselect()
+            this.updatePageDisplay()
+        }
+        catch (err) {
+            this.logError(err, 'onClearWorkoutSelection')
+        }
+    }
+
+    protected getDownloadDisplayProps(): DownloadRowDisplayProps[] {
         return Array.from(this.downloadCache.values())
     }
 
@@ -542,6 +585,11 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     @Injectable
     protected getRouteLibraryScanner() {
         return useRouteLibraryScanner()
+    }
+
+    @Injectable
+    protected getWorkoutList() {
+        return useWorkoutList()
     }
 
 }

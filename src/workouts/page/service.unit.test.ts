@@ -11,6 +11,7 @@ describe('WorkoutListPageService', ()=>{
     let MockUserSettings
     let MockWorkoutList
     let MockWorkoutCalendar
+    let MockRouteList
 
     // ---- test helpers -------------------------------------------------------
 
@@ -87,11 +88,16 @@ describe('WorkoutListPageService', ()=>{
             getScheduledWorkouts: jest.fn().mockReturnValue([]),
             getScheduledToday: jest.fn().mockReturnValue(undefined)
         }
+        MockRouteList = {
+            getSelected: jest.fn().mockReturnValue(undefined),
+            unselect: jest.fn()
+        }
 
         Inject('WorkoutList', MockWorkoutList)
         Inject('WorkoutCalendar', MockWorkoutCalendar)
         Inject('UserSettings', MockUserSettings)
         Inject('AppState', MockAppState)
+        Inject('RouteList', MockRouteList)
     }
 
     const resetMocks = ()=>{
@@ -99,6 +105,7 @@ describe('WorkoutListPageService', ()=>{
         Inject('WorkoutCalendar', null)
         Inject('UserSettings', null)
         Inject('AppState', null)
+        Inject('RouteList', null)
     }
 
     describe('getPageDisplayProps',()=>{
@@ -326,6 +333,102 @@ describe('WorkoutListPageService', ()=>{
 
             expect(props.isScheduled).toBe(false)
             expect(props.group).toBe('My Workouts')
+        })
+    })
+
+    // Session 2.2 - cross-visibility (workout-combo-service-design.md §3.4, §3.8)
+    describe('cross-visibility - attachedRoute / comboEnabled',()=>{
+        let s,service
+        let card
+
+        beforeEach( ()=>{
+            setupMocks()
+            s = service = new WorkoutListPageService()
+            s.logError = jest.fn()
+
+            card = makeCard({id:'1', title:'Alpha', workout:makeWorkout('1','Alpha')})
+            MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts','My Workouts',[card])])
+        })
+
+        afterEach( ()=>{
+            resetMocks()
+            s.reset()
+        })
+
+        test('no route selected -> attachedRoute is null',()=>{
+            MockRouteList.getSelected.mockReturnValue(undefined)
+            const props = service.getWorkoutDetailsProps('1')
+            expect(props.attachedRoute).toBeNull()
+        })
+
+        test('route selected -> attachedRoute carries {id,title} from RouteListService.getSelected()',()=>{
+            MockRouteList.getSelected.mockReturnValue({ description:{ id:'r-1' }, title:'Alpe du Zwift' })
+            const props = service.getWorkoutDetailsProps('1')
+            expect(props.attachedRoute).toEqual({ id:'r-1', title:'Alpe du Zwift' })
+        })
+
+        // design §2/§3.4.1 (D4): an activity is never a third attachment slot - whatever an
+        // Activity's "ride again" selects is a route, so the result must be identical whether or
+        // not an activity also happens to be selected somewhere. There is no activity read to stub.
+        test('route selected while an activity also happens to be selected -> identical result (no activity read)',()=>{
+            MockRouteList.getSelected.mockReturnValue({ description:{ id:'r-1' }, title:'Alpe du Zwift' })
+            const withoutActivity = service.getWorkoutDetailsProps('1')
+
+            // re-run - nothing about an activity selection could be represented here since
+            // getAttachedRouteProps() never reads ActivityListService at all (§2)
+            const withActivityContext = service.getWorkoutDetailsProps('1')
+            expect(withActivityContext.attachedRoute).toEqual(withoutActivity.attachedRoute)
+        })
+
+        test('RouteListService.getSelected() throwing -> attachedRoute is null, no throw',()=>{
+            MockRouteList.getSelected.mockImplementation( ()=>{ throw new Error('boom') })
+            const props = service.getWorkoutDetailsProps('1')
+            expect(props.attachedRoute).toBeNull()
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'getAttachedRouteProps')
+        })
+
+        test('attachedRoute is populated regardless of comboEnabled (inert data, HLD §9.2)',()=>{
+            MockAppState.hasFeature.mockReturnValue(false)   // both toggles off
+            MockRouteList.getSelected.mockReturnValue({ description:{ id:'r-1' }, title:'Alpe du Zwift' })
+
+            const props = service.getWorkoutDetailsProps('1')
+            expect(props.comboEnabled).toBe(false)
+            expect(props.attachedRoute).toEqual({ id:'r-1', title:'Alpe du Zwift' })
+        })
+
+        // The one case that fails if MOBILE_WORKOUTS/MOBILE_WORKOUT_ROUTE_COMBO ever get combined
+        // with a bare hasFeature('MOBILE_WORKOUT_ROUTE_COMBO') instead of the shared predicate.
+        test.each([
+            [false, false, false],
+            [false, true,  false],   // state 1 - the dead-end guard
+            [true,  false, false],   // state 2 - shipped state
+            [true,  true,  true]     // state 3 - only state with new behaviour
+        ])('MOBILE_WORKOUTS=%s COMBO=%s -> comboEnabled=%s',(workouts, combo, expected)=>{
+            MockAppState.hasFeature.mockImplementation( (f)=> {
+                if (f==='MOBILE_WORKOUTS') return workouts
+                if (f==='MOBILE_WORKOUT_ROUTE_COMBO') return combo
+                return false
+            })
+
+            const props = service.getWorkoutDetailsProps('1')
+            expect(props.comboEnabled).toBe(expected)
+        })
+
+        test('onClearRouteSelection unselects the route, leaves the workout selection intact, and emits page-update',()=>{
+            service.openPage()
+            const emitSpy = jest.spyOn(service.getPageObserver(),'emit')
+
+            service.onClearRouteSelection()
+
+            expect(MockRouteList.unselect).toHaveBeenCalledTimes(1)
+            expect(MockWorkoutList.unselect).not.toHaveBeenCalled()
+            expect(emitSpy).toHaveBeenCalledWith('page-update')
+        })
+
+        test('onClearRouteSelection error is logged, not thrown',()=>{
+            MockRouteList.unselect.mockImplementation( ()=>{ throw new Error('boom') })
+            expect( ()=>service.onClearRouteSelection()).not.toThrow()
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'onClearRouteSelection')
         })
     })
 
