@@ -29,6 +29,7 @@ const setupMocks = (rideType: string = 'GPX') => {
         resume: jest.fn(),
         backward: jest.fn(),
         forward: jest.fn(),
+        stopWorkout: jest.fn(),
         retryStart: jest.fn(),
         startWithMissingSensors: jest.fn(),
         cancelStart: jest.fn().mockResolvedValue(undefined),
@@ -332,6 +333,121 @@ describe('RidePageService', () => {
             rideObserver.emit('state-update', 'Active')
             workoutObserver.emit('update')
             expect(updateSpy).not.toHaveBeenCalled()
+        })
+    })
+
+    // §4.5.1 - the route-ends-first mid-ride transition (RideDisplayService.onRouteCompleted()
+    // flips the ride type to 'Workout' and emits 'view-changed'). RidePageService bridges that to
+    // 'ride-type-update' on the page observer (the event all three mobile ride pages already
+    // subscribe to) and guards the resulting page-component swap so it doesn't tear the still-
+    // running ride down.
+    describe('view transition (route-ends-first, §4.5.1)', () => {
+
+        test("'view-changed' on the ride observer re-emits 'ride-type-update' with the new ride type, and arms viewTransition", () => {
+            const rideObserver = new Observer();
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver);
+            (s as any).isInitialized = true // skip the async init dance so handlers register synchronously
+            s.openPage()
+
+            const typeUpdateSpy = jest.fn()
+            s.getPageObserver().on('ride-type-update', typeUpdateSpy)
+
+            // the domain side has already flipped by the time 'view-changed' fires
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            rideObserver.emit('view-changed')
+
+            expect(typeUpdateSpy).toHaveBeenCalledWith('Workout')
+            expect((s as any).viewTransition).toBe(true)
+        })
+
+        test('closePage() during a viewTransition does not stop the ride, and clears the flag', () => {
+            const rideObserver = new Observer();
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver);
+            (s as any).isInitialized = true
+            s.openPage()
+
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            rideObserver.emit('view-changed')
+            expect((s as any).viewTransition).toBe(true)
+
+            s.closePage()
+
+            expect(MockRideDisplay.stop).not.toHaveBeenCalled()
+            // closePage() swallows the whole close while the flag is set - it stays set for the
+            // matching openPage() below, not cleared here.
+            expect((s as any).viewTransition).toBe(true)
+        })
+
+        test('the matching openPage() returns early: no init()/start(), flag cleared, page repainted', () => {
+            const rideObserver = new Observer();
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver);
+            (s as any).isInitialized = true
+            s.openPage()
+
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            rideObserver.emit('view-changed')
+            s.closePage() // outgoing page's unmount effect - suppressed
+
+            MockRideDisplay.init.mockClear()
+            MockRideDisplay.start.mockClear()
+
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+
+            const result = s.openPage()
+
+            expect(MockRideDisplay.init).not.toHaveBeenCalled()
+            expect(MockRideDisplay.start).not.toHaveBeenCalled()
+            expect((s as any).viewTransition).toBe(false)
+            expect(updateSpy).toHaveBeenCalled()
+            expect(result).toBe(s.getPageObserver())
+        })
+
+        test('re-subscribes to the workout observer on the transitioned-to openPage(), so workout updates keep repainting the page', () => {
+            const rideObserver = new Observer()
+            const workoutObserver = new Observer();
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver);
+            (s as any).isInitialized = true
+            s.openPage()
+
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            MockWorkoutRide.getObserver.mockReturnValue(workoutObserver)
+            rideObserver.emit('view-changed')
+            s.closePage()
+            s.openPage()
+
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+            workoutObserver.emit('update')
+
+            expect(updateSpy).toHaveBeenCalled()
+        })
+
+        // Defensive backstop (repo owner, 2026-08-10): start() must never run twice. The
+        // viewTransition early-return above is what's supposed to make this unreachable in
+        // practice - this test exercises the backstop directly, simulating a page mounting over an
+        // already-live ride WITHOUT going through onViewChanged() first (viewTransition left false).
+        test.each(['Started', 'Active', 'Paused'] as const)(
+            'registerAndStart() logs and skips start() if the ride is already %s outside a transition',
+            (state) => {
+                MockRideDisplay.getState.mockReturnValue(state);
+                (s as any).isInitialized = true // synchronous registerAndStart(), no async init dance
+
+                s.openPage()
+
+                expect(MockRideDisplay.start).not.toHaveBeenCalled()
+                expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'openPage')
+            }
+        )
+
+        test('does not log the backstop for a normal Idle-ride openPage()', () => {
+            MockRideDisplay.getState.mockReturnValue('Idle');
+            (s as any).isInitialized = true
+
+            s.openPage()
+
+            expect(MockRideDisplay.start).toHaveBeenCalled()
+            expect(s.logError).not.toHaveBeenCalled()
         })
     })
 
@@ -1471,6 +1587,21 @@ describe('RidePageService', () => {
             expect(MockRideDisplay.backward).toHaveBeenCalled()
             expect(MockRideDisplay.forward).toHaveBeenCalled()
         })
+
+        // Mobile Phase 2 session 5.3 ("Stop Workout, keep riding") + the architecture-debt fix
+        // found in that session's review: mobile was calling RideDisplayService.stopWorkout()
+        // directly, bypassing RidePageService - this is the passthrough that closes that gap.
+        test('onStopWorkout delegates to RideDisplay.stopWorkout() and refreshes the page display when a workout is attached', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            s.openPage()
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+
+            s.onStopWorkout()
+
+            expect(MockRideDisplay.stopWorkout).toHaveBeenCalledTimes(1)
+            expect(updateSpy).toHaveBeenCalled()
+        })
     })
 
     describe('getPageDisplayProps - Video/GPX combo, gated off (states 1/2/d - must be identical to today)', () => {
@@ -1510,6 +1641,9 @@ describe('RidePageService', () => {
                 s.onStepForward()
                 expect(MockRideDisplay.backward).not.toHaveBeenCalled()
                 expect(MockRideDisplay.forward).not.toHaveBeenCalled()
+
+                s.onStopWorkout()
+                expect(MockRideDisplay.stopWorkout).not.toHaveBeenCalled()
 
                 // menu carries no step flags either - identical to today's plain route-ride menu
                 s.onMenuOpen()

@@ -68,11 +68,18 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     // distinct from the persisted hints.workoutRideGestures flag, which suppresses it forever.
     protected gestureHintDismissed = false
 
+    // Set by onViewChanged() (route-ends-first mid-ride type flip, §4.5.1), consumed by the
+    // closePage()/openPage() pair that the resulting page-component swap triggers. Guards the
+    // outgoing page's teardown from stopping a still-running ride, and the incoming page's mount
+    // from re-running init()/start() against it.
+    protected viewTransition = false
+
     constructor() {
         super('RidePage')
 
         this.eventHandler['state-update'] = this.onDisplayStateUpdate.bind(this)
         this.eventHandler['route-update'] = this.onRouteUpdate.bind(this)
+        this.eventHandler['view-changed'] = this.onViewChanged.bind(this)
 
         this.workoutEventHandler['step-changed'] = this.onWorkoutUpdate.bind(this)
         this.workoutEventHandler['update'] = this.onWorkoutUpdate.bind(this)
@@ -99,6 +106,19 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     openPage(simulate?: boolean): IObserver {
+        // Second half of a mid-ride view transition (onViewChanged(), §4.5.1): the ride is
+        // already running and the ride/workout observer handlers are still attached (closePage()
+        // below was suppressed for the same flag). Re-emit so the incoming page paints itself
+        // from current state, and return without touching init()/start() - see registerAndStart().
+        if (this.viewTransition) {
+            this.viewTransition = false
+            this.logEvent({ message: 'page shown', page: this.getPageLogName(), viewTransition: true })
+            EventLogger.setGlobalConfig('page', this.getPageLogName())
+            this.subscribeToWorkoutObserver()
+            this.updatePageDisplay()
+            return this.getPageObserver()
+        }
+
         try {
             const pageLogName = this.getPageLogName()
             this.logEvent({ message: 'page shown', page: pageLogName })
@@ -117,6 +137,21 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                     // (or, on the very first ride, undefined) observer that start() never emits on.
                     this.registerHandlers(this.rideObserver, this.eventHandler)
                     this.subscribeToWorkoutObserver()
+
+                    // Should be unreachable: openPage() returns early on a view transition (above),
+                    // and every other openPage() path runs against an Idle/Finished ride. If this
+                    // ever fires, a page mounted over an already-live ride without going through
+                    // onViewChanged() - log it rather than restarting the ride underneath the rider.
+                    const state = service.getState()
+                    if (state === 'Started' || state === 'Active' || state === 'Paused') {
+                        this.logError(
+                            new Error(`start() requested while ride is ${state}`),
+                            'openPage'
+                        )
+                        this.updatePageDisplay()
+                        return
+                    }
+
                     service.start(simulate)
                     if (this.isRideType('Video', 'GPX')) {
                         sleep(5).then(() => {
@@ -162,6 +197,14 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     closePage(): void {
+        // A mid-ride view transition (onViewChanged(), §4.5.1) unmounts the outgoing ride page,
+        // whose unmount effect calls closePage() - but the *ride* is still running and must not be
+        // stopped or torn down. Swallow exactly that one close and leave the flag set for the
+        // matching openPage() above. Any other closePage() (End Ride, navigate away, unmount for
+        // real) behaves as before.
+        if (this.viewTransition)
+            return
+
         try {
             EventLogger.setGlobalConfig('page', null)
             this.logEvent({ message: 'page closed', page: this.getPageLogName() })
@@ -511,6 +554,32 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.updatePageDisplay()
     }
 
+    /**
+     * RideDisplayService switched the ride's own type mid-ride - today only ever Video/GPX ->
+     * Workout, when the route completed while the workout was still running
+     * (RideDisplayService.onRouteCompleted()). The route is already unselected and the display
+     * service already replaced by the time this fires; the page layer's job is purely to move the
+     * UI to the matching ride screen (§4.5.1).
+     *
+     * Emits 'ride-type-update' on the page observer - the event all three mobile ride pages
+     * already subscribe to (and which, before this, nothing in services ever emitted).
+     */
+    protected onViewChanged(): void {
+        try {
+            const rideType = this.getRideDisplay().getRideType()
+            this.logEvent({ message: 'ride type changed', rideType })
+
+            // The workout observer subscription survives - it is the same WorkoutRideService
+            // instance and the same observer; only the route half went away.
+            this.viewTransition = true
+            this.getPageObserver()?.emit('ride-type-update', rideType)
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onViewChanged')
+        }
+    }
+
     protected get rideDisplayProps() {
         return this.getRideDisplay().getDisplayProperties()
     }
@@ -556,6 +625,24 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
         catch (err: any) {
             this.logError(err, 'onStop')
+        }
+    }
+
+    // "Stop Workout, keep riding" (workout-mobile-hld-phase2.md §6.3/§8.3, mobile Phase 2 session
+    // 5.3) - distinct from onStop() above, which ends the whole ride. This only detaches the
+    // workout; the ride continues as a plain Video/GPX ride. isWorkoutAttached() flips false on
+    // the next page-update as a side effect of RideDisplayService.stopWorkout() (WorkoutRide.stop()
+    // clears WorkoutRide.inUse()), which is what actually drops the overlay - updatePageDisplay()
+    // here just makes that visible immediately rather than waiting for the next unrelated tick.
+    onStopWorkout(): void {
+        try {
+            if (!this.isWorkoutAttached())
+                return
+            this.getRideDisplay().stopWorkout()
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onStopWorkout')
         }
     }
 
