@@ -29,6 +29,7 @@ const setupMocks = (rideType: string = 'GPX') => {
         resume: jest.fn(),
         backward: jest.fn(),
         forward: jest.fn(),
+        stopWorkout: jest.fn(),
         retryStart: jest.fn(),
         startWithMissingSensors: jest.fn(),
         cancelStart: jest.fn().mockResolvedValue(undefined),
@@ -1586,6 +1587,21 @@ describe('RidePageService', () => {
             expect(MockRideDisplay.backward).toHaveBeenCalled()
             expect(MockRideDisplay.forward).toHaveBeenCalled()
         })
+
+        // Mobile Phase 2 session 5.3 ("Stop Workout, keep riding") + the architecture-debt fix
+        // found in that session's review: mobile was calling RideDisplayService.stopWorkout()
+        // directly, bypassing RidePageService - this is the passthrough that closes that gap.
+        test('onStopWorkout delegates to RideDisplay.stopWorkout() and refreshes the page display when a workout is attached', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            s.openPage()
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+
+            s.onStopWorkout()
+
+            expect(MockRideDisplay.stopWorkout).toHaveBeenCalledTimes(1)
+            expect(updateSpy).toHaveBeenCalled()
+        })
     })
 
     describe('getPageDisplayProps - Video/GPX combo, gated off (states 1/2/d - must be identical to today)', () => {
@@ -1625,6 +1641,9 @@ describe('RidePageService', () => {
                 s.onStepForward()
                 expect(MockRideDisplay.backward).not.toHaveBeenCalled()
                 expect(MockRideDisplay.forward).not.toHaveBeenCalled()
+
+                s.onStopWorkout()
+                expect(MockRideDisplay.stopWorkout).not.toHaveBeenCalled()
 
                 // menu carries no step flags either - identical to today's plain route-ride menu
                 s.onMenuOpen()

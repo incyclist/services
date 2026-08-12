@@ -628,6 +628,24 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
+    // "Stop Workout, keep riding" (workout-mobile-hld-phase2.md §6.3/§8.3, mobile Phase 2 session
+    // 5.3) - distinct from onStop() above, which ends the whole ride. This only detaches the
+    // workout; the ride continues as a plain Video/GPX ride. isWorkoutAttached() flips false on
+    // the next page-update as a side effect of RideDisplayService.stopWorkout() (WorkoutRide.stop()
+    // clears WorkoutRide.inUse()), which is what actually drops the overlay - updatePageDisplay()
+    // here just makes that visible immediately rather than waiting for the next unrelated tick.
+    onStopWorkout(): void {
+        try {
+            if (!this.isWorkoutAttached())
+                return
+            this.getRideDisplay().stopWorkout()
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onStopWorkout')
+        }
+    }
+
     onStepBack(): void {
         try {
             if (!this.isWorkoutAttached())

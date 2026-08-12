@@ -96,6 +96,11 @@ interface RidePageCallbacks {
 
     // Workout ride callbacks
     onStop        (): void
+
+    // "Stop Workout, keep riding" (mobile Phase 2 session 5.3) - Video/GPX+workout combo only;
+    // detaches the workout, the ride itself keeps going. Distinct from onStop() above.
+    onStopWorkout (): void
+
     onStepBack    (): void
     onStepForward (): void
     onIncreaseLoad(): void
