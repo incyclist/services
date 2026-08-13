@@ -634,22 +634,24 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     unselect(selectedCard?:Card<WP>) {
 
         if (selectedCard) {
-            delete this.selectedCard    
-            this.selectedWorkout = null    
+            delete this.selectedCard
+            this.selectedWorkout = null
             this.getAppState().setState('scheduledToday',null)
             return;
         }
 
-        if (!this.selectedCard) { 
-            return;
+        // FIXES_BACKLOG #39: select(workout) sets only selectedWorkout, selectCard(card) sets
+        // both - so a workout selected via select() alone previously left unselect() a silent
+        // no-op (early-returned here before ever clearing selectedWorkout). The card-specific
+        // work (card.unselect(), refreshing that card's own view) stays conditional on there
+        // being one; clearing the selection itself must not be.
+        if (this.selectedCard) {
+            const card = this.selectedCard
+            delete this.selectedCard
+            card.unselect()
         }
 
-        const card = this.selectedCard
-        delete this.selectedCard
-        card.unselect()
-        
-        
-        this.selectedWorkout = null    
+        this.selectedWorkout = null
         this.getAppState().setState('scheduledToday',null)
     }
 

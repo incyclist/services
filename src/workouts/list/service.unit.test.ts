@@ -868,7 +868,75 @@ describe('WorkoutListService',()=>{
     describe ('getLists',()=>{})
     describe ('emitLists',()=>{})
     describe ('select',()=>{})
-    describe ('unselect',()=>{})
+    // FIXES_BACKLOG #39: select(workout) sets only selectedWorkout, selectCard(card) sets both -
+    // unselect() with no argument previously bailed before clearing selectedWorkout whenever
+    // selectedCard wasn't tracked.
+    describe ('unselect',()=>{
+        let service:WorkoutListService
+        let cards:Card<WP>[]
+
+        beforeEach( ()=>{
+            const init = (s:any)=> {
+                s.logError = jest.fn()
+                s.observer = new Observer()
+                s.initialized = true
+
+                cards = []
+                for (let i=0;i<3;i++) {
+                    const c = s.addItem(new Workout({type:'workout',id:`u${i+1}`,name:`u${i+1}`}))
+                    cards.push(c)
+                }
+            }
+
+            setupMocks()
+            MockAppState.getState.mockReturnValue(true)
+
+            service = new WorkoutListService()
+            init(service)
+        })
+
+        afterEach( ()=>{
+            resetMocks()
+            service.reset()
+        })
+
+        test('selected via selectCard(): unselect() clears the selection and calls card.unselect() (existing behaviour, must not regress)',()=>{
+            const unselectSpy = jest.spyOn(cards[0],'unselect')
+            service.selectCard(cards[0])
+
+            service.unselect()
+
+            expect(unselectSpy).toHaveBeenCalled()
+            expect((service as any).selectedWorkout).toBeNull()
+            expect((service as any).selectedCard).toBeUndefined()
+            expect(MockAppState.setState).toHaveBeenCalledWith('scheduledToday',null)
+        })
+
+        test('selected via select() alone (no selectedCard): unselect() still clears selectedWorkout - the fix',()=>{
+            service.select(cards[0].getData())
+            expect((service as any).selectedWorkout).toBe(cards[0].getData())
+
+            service.unselect()
+
+            expect((service as any).selectedWorkout).toBeNull()
+            expect(MockAppState.setState).toHaveBeenCalledWith('scheduledToday',null)
+        })
+
+        test('nothing selected: unselect() is a safe no-op, does not throw',()=>{
+            expect(()=>service.unselect()).not.toThrow()
+            expect((service as any).selectedWorkout).toBeNull()
+        })
+
+        test('unselect(card): existing early-return branch, unaffected by the fix',()=>{
+            service.selectCard(cards[0])
+
+            service.unselect(cards[1])
+
+            expect((service as any).selectedCard).toBeUndefined()
+            expect((service as any).selectedWorkout).toBeNull()
+            expect(MockAppState.setState).toHaveBeenCalledWith('scheduledToday',null)
+        })
+    })
 
     describe ('selectCard',()=>{
         let service:WorkoutListService
