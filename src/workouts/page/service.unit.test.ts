@@ -664,6 +664,19 @@ describe('WorkoutListPageService', ()=>{
             expect(card.select).toHaveBeenCalledWith({ ftp:220, useErgMode:true, noRoute:false })
             expect(emitSpy).not.toHaveBeenCalledWith('start-ride', expect.anything())
         })
+
+        // FIXES_BACKLOG #43: starting a combo ride goes through RouteCard.start() on the Routes
+        // side, never through this service's own onStart() - so onMarkForRoute() must clear
+        // detailWorkoutId itself, or WorkoutDetailsDialog silently reopens for this workout the
+        // next time the Workouts page mounts, regardless of how the ride ends.
+        test('onMarkForRoute clears detailWorkoutId', ()=>{
+            service.onOpenDetails('1')
+            expect(service.getPageDisplayProps().detailWorkoutId).toBe('1')
+
+            service.onMarkForRoute('1')
+
+            expect(service.getPageDisplayProps().detailWorkoutId).toBeNull()
+        })
     })
 
     describe('import flow (§6)',()=>{
