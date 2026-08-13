@@ -332,6 +332,13 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
             const settings = this.getWorkoutList().getStartSettings()
             card.select({ ...settings, noRoute: false })
+
+            // FIXES_BACKLOG #43: the combo ride is started from the Routes side (RouteCard.start()),
+            // which never calls this service's own onStart() - the only other place that clears
+            // detailWorkoutId. Left set, WorkoutDetailsDialog silently reopens for this workout the
+            // next time the Workouts page mounts, however/whenever the ride ends. Clear it here,
+            // same as onStart() does, since the user is leaving the dialog either way.
+            this.detailWorkoutId = null
             this.emitPageUpdate()
         }
         catch (err) {
