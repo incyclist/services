@@ -49,7 +49,7 @@ describe('ActivitiesPageService',()=>{
         test('no workout selected -> attachedWorkout is null',()=>{
             MockWorkoutList.getSelected.mockReturnValue(undefined)
             const props = service.getActivityDetailsProps('activity-1')
-            expect(props).toEqual({ activityId:'activity-1', attachedWorkout:null, comboEnabled:true })
+            expect(props).toEqual({ activityId:'activity-1', attachedWorkout:null })
         })
 
         test('workout selected -> attachedWorkout carries {id,title} from WorkoutListService.getSelected()',()=>{
@@ -63,38 +63,11 @@ describe('ActivitiesPageService',()=>{
             expect(props.activityId).toBe('activity-42')
         })
 
-        test('WorkoutListService.getSelected() throwing -> attachedWorkout null, comboEnabled still returned, no throw',()=>{
+        test('WorkoutListService.getSelected() throwing -> attachedWorkout null, no throw',()=>{
             MockWorkoutList.getSelected.mockImplementation( ()=>{ throw new Error('boom') })
             const props = service.getActivityDetailsProps('activity-1')
-            expect(props).toEqual({ activityId:'activity-1', attachedWorkout:null, comboEnabled:true })
+            expect(props).toEqual({ activityId:'activity-1', attachedWorkout:null })
             expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'getActivityDetailsProps')
-        })
-
-        test('attachedWorkout is populated regardless of comboEnabled (inert data, HLD §9.2)',()=>{
-            MockAppState.hasFeature.mockReturnValue(false)   // both toggles off
-            MockWorkoutList.getSelected.mockReturnValue({ id:'w-1', name:'FTP Builder' })
-
-            const props = service.getActivityDetailsProps('activity-1')
-            expect(props.comboEnabled).toBe(false)
-            expect(props.attachedWorkout).toEqual({ id:'w-1', title:'FTP Builder' })
-        })
-
-        // The one case that fails if MOBILE_WORKOUTS/MOBILE_WORKOUT_ROUTE_COMBO ever get combined
-        // with a bare hasFeature('MOBILE_WORKOUT_ROUTE_COMBO') instead of the shared predicate.
-        test.each([
-            [false, false, false],
-            [false, true,  false],   // state 1 - the dead-end guard
-            [true,  false, false],   // state 2 - shipped state
-            [true,  true,  true]     // state 3 - only state with new behaviour
-        ])('MOBILE_WORKOUTS=%s COMBO=%s -> comboEnabled=%s',(workouts, combo, expected)=>{
-            MockAppState.hasFeature.mockImplementation( (f)=> {
-                if (f==='MOBILE_WORKOUTS') return workouts
-                if (f==='MOBILE_WORKOUT_ROUTE_COMBO') return combo
-                return false
-            })
-
-            const props = service.getActivityDetailsProps('activity-1')
-            expect(props.comboEnabled).toBe(expected)
         })
     })
 

@@ -453,8 +453,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             showNextOverwrite = !!next
 
             hasWorkout = valid(workouts.getSelected())
-            const workoutsEnabled = this.isMobile() ? this.getAppState().hasFeature('MOBILE_WORKOUTS') : true
-            showWorkoutOption = workoutsEnabled && !hasWorkout
+            showWorkoutOption = !hasWorkout
 
             if (showNextOverwrite) {
                 const card = getRouteList().getCard(next)

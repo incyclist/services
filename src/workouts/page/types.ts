@@ -3,13 +3,7 @@ import { Workout } from "../base/model";
 
 // ---- top-level page props --------------------------------------------------
 
-export type WorkoutListPageDisplayProps =
-    | WorkoutListPlaceholderProps
-    | WorkoutListContentProps
-
-export interface WorkoutListPlaceholderProps {
-    pageType: 'placeholder'         // MOBILE_WORKOUTS feature off -> "under development"
-}
+export type WorkoutListPageDisplayProps = WorkoutListContentProps
 
 export interface WorkoutListContentProps {
     pageType:  'list'
@@ -94,7 +88,6 @@ export interface WorkoutDetailsProps {
     date?:               Date        // present only when isScheduled
     // cross-visibility (Phase 2, session 2.2)
     attachedRoute:       AttachedRouteProps | null   // null = nothing attached
-    comboEnabled:        boolean                     // isWorkoutComboEnabled() - see base/pages/service.ts
 }
 
 // ---- Import dialog (single-file, Phase 1) ----------------------------------

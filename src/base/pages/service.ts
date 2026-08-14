@@ -101,30 +101,4 @@ export class IncyclistPageService extends IncyclistService implements IPageServi
         return useAppState()
     }
 
-    /**
-     * Whether the route+workout combination surface (Phase 2) is live.
-     *
-     * MOBILE_WORKOUT_ROUTE_COMBO implies MOBILE_WORKOUTS and is never honoured without it: the whole
-     * combo flow forward-navigates into the Workouts page, which renders an "under development"
-     * placeholder when MOBILE_WORKOUTS is off (WorkoutListPageService.getPageDisplayProps()). Honouring
-     * COMBO alone would put an "Add Workout" button on the route dialog whose destination is a
-     * placeholder - a dead end reachable purely from a hand-edited settings.json.
-     *
-     * Lives on the page-service base rather than being repeated in four subclasses so the two toggles
-     * can never be combined differently in different places. Safe by construction w.r.t. desktop/web:
-     * every IncyclistPageService subclass is mobile-only (HLD §9.4), and web-ui has zero references to
-     * any of them.
-     */
-    protected isWorkoutComboEnabled(): boolean {
-        try {
-            const appState = this.getAppState()
-            return appState.hasFeature('MOBILE_WORKOUTS')
-                && appState.hasFeature('MOBILE_WORKOUT_ROUTE_COMBO')
-        }
-        catch (err) {
-            this.logError(err, 'isWorkoutComboEnabled')
-            return false
-        }
-    }
-
 }

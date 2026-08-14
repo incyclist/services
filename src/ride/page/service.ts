@@ -450,8 +450,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * while overlays are hidden" suppression that isWorkoutAttached() alone doesn't carry.
      *
      * `cornerWidget` (ride-overlay-layout-design.md §6.4) is computed independently of
-     * `showWorkout` - it only needs isWorkoutAttached() + isWorkoutComboEnabled() - and is
-     * therefore included in every branch below, not just the "workout visible" one.
+     * `showWorkout` - it only needs isWorkoutAttached() - and is therefore included in every
+     * branch below, not just the "workout visible" one.
      */
     protected buildWorkoutOverlayProps(
         props: CurrentRideDisplayProps & { showWorkout?: boolean },
@@ -486,14 +486,14 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     /**
      * Phone-fallback corner-widget preference (ride-overlay-layout-design.md §6.4) - which of the
      * two competing corner widgets (elevation graph vs. workout info) a combo ride currently shows.
-     * Only meaningful for a Video/GPX ride with a workout actually attached AND the combo surface
-     * switched on - a plain route ride has nothing to toggle. Only buildWorkoutOverlayProps()
-     * (Video/GPX) calls this; a Workout-only ride goes through getWorkoutRideDisplayProps()
-     * instead and never reaches it. Undefined (default 'elevation') otherwise.
+     * Only meaningful for a Video/GPX ride with a workout actually attached - a plain route ride
+     * has nothing to toggle. Only buildWorkoutOverlayProps() (Video/GPX) calls this; a Workout-only
+     * ride goes through getWorkoutRideDisplayProps() instead and never reaches it. Undefined
+     * (default 'elevation') otherwise.
      */
     protected getCornerWidget(): 'elevation' | 'workout' | undefined {
         try {
-            if (!this.isWorkoutAttached() || !this.isWorkoutComboEnabled())
+            if (!this.isWorkoutAttached())
                 return undefined
             return this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'elevation')
         }
@@ -1060,27 +1060,20 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     /**
      * Whether this ride's workout surface (dashboard, graph, step/load controls, gesture hints) is
      * live. Distinct from getRideType(): a 'Workout' ride always has one; a 'Video'/'GPX' ride has
-     * one only when the rider attached it AND the combo toggle is on.
+     * one only when the rider attached it.
      *
      * Uses WorkoutRideService.inUse() - the same predicate RideDisplayService.forward()/backward()
      * already guard on - rather than a selection read, so it goes false the moment the workout
      * completes or is stopped mid-ride and the ride reverts to a plain route ride.
      *
-     * The toggle check is deliberately *inside* the service, not only at the page (session 5.1) -
-     * belt-and-braces protection for the window where the combo flow becomes reachable (3.3/5.2)
-     * before the ride-screen overlay (5.1) has landed.
-     *
-     * A 'Workout' ride short-circuits to true unconditionally, before the toggle check - a
-     * workout-only ride is Phase 1, already shipped, and must keep working with the combo toggle
-     * off exactly as it does today.
+     * A 'Workout' ride short-circuits to true unconditionally - a workout-only ride is Phase 1,
+     * already shipped, and doesn't go through WorkoutRideService.inUse() at all.
      */
     protected isWorkoutAttached(): boolean {
         try {
             if (this.isRideType('Workout'))
                 return true
             if (!this.isRideType('Video', 'GPX'))
-                return false
-            if (!this.isWorkoutComboEnabled())
                 return false
             return this.getWorkoutRide().inUse()
         }
