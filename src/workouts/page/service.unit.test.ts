@@ -122,14 +122,6 @@ describe('WorkoutListPageService', ()=>{
             s.reset()
         })
 
-        test('MOBILE_WORKOUTS off -> placeholder, nothing else computed',()=>{
-            MockAppState.hasFeature.mockReturnValue(false)
-
-            const props = service.getPageDisplayProps()
-            expect(props).toEqual({ pageType:'placeholder' })
-            expect(MockWorkoutList.getLists).not.toHaveBeenCalled()
-        })
-
         test('empty list -> isEmpty true, upcoming null, groups from My Workouts',()=>{
             const list = makeList('myWorkouts','My Workouts',[])
             MockWorkoutList.getLists.mockReturnValue([list])
@@ -231,7 +223,7 @@ describe('WorkoutListPageService', ()=>{
         })
 
         test('error -> logs and returns an empty object',()=>{
-            MockAppState.hasFeature.mockImplementation( ()=>{ throw new Error('boom') })
+            MockWorkoutList.getLists.mockImplementation( ()=>{ throw new Error('boom') })
             const props = service.getPageDisplayProps()
             expect(s.logError).toHaveBeenCalled()
             expect(props).toEqual({})
@@ -337,7 +329,7 @@ describe('WorkoutListPageService', ()=>{
     })
 
     // Session 2.2 - cross-visibility (workout-combo-service-design.md §3.4, §3.8)
-    describe('cross-visibility - attachedRoute / comboEnabled',()=>{
+    describe('cross-visibility - attachedRoute',()=>{
         let s,service
         let card
 
@@ -385,33 +377,6 @@ describe('WorkoutListPageService', ()=>{
             const props = service.getWorkoutDetailsProps('1')
             expect(props.attachedRoute).toBeNull()
             expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'getAttachedRouteProps')
-        })
-
-        test('attachedRoute is populated regardless of comboEnabled (inert data, HLD §9.2)',()=>{
-            MockAppState.hasFeature.mockReturnValue(false)   // both toggles off
-            MockRouteList.getSelected.mockReturnValue({ description:{ id:'r-1' }, title:'Alpe du Zwift' })
-
-            const props = service.getWorkoutDetailsProps('1')
-            expect(props.comboEnabled).toBe(false)
-            expect(props.attachedRoute).toEqual({ id:'r-1', title:'Alpe du Zwift' })
-        })
-
-        // The one case that fails if MOBILE_WORKOUTS/MOBILE_WORKOUT_ROUTE_COMBO ever get combined
-        // with a bare hasFeature('MOBILE_WORKOUT_ROUTE_COMBO') instead of the shared predicate.
-        test.each([
-            [false, false, false],
-            [false, true,  false],   // state 1 - the dead-end guard
-            [true,  false, false],   // state 2 - shipped state
-            [true,  true,  true]     // state 3 - only state with new behaviour
-        ])('MOBILE_WORKOUTS=%s COMBO=%s -> comboEnabled=%s',(workouts, combo, expected)=>{
-            MockAppState.hasFeature.mockImplementation( (f)=> {
-                if (f==='MOBILE_WORKOUTS') return workouts
-                if (f==='MOBILE_WORKOUT_ROUTE_COMBO') return combo
-                return false
-            })
-
-            const props = service.getWorkoutDetailsProps('1')
-            expect(props.comboEnabled).toBe(expected)
         })
 
         test('onClearRouteSelection unselects the route, leaves the workout selection intact, and emits page-update',()=>{

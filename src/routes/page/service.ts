@@ -366,13 +366,12 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
      * showing.
      */
     getRouteDetailsProps(routeId: string): RouteDetailsProps {
-        const comboEnabled = this.isWorkoutComboEnabled()
         try {
-            return { routeId, attachedWorkout: this.getAttachedWorkoutProps(), comboEnabled }
+            return { routeId, attachedWorkout: this.getAttachedWorkoutProps() }
         }
         catch (err) {
             this.logError(err, 'getRouteDetailsProps')
-            return { routeId, attachedWorkout: null, comboEnabled }
+            return { routeId, attachedWorkout: null }
         }
     }
 

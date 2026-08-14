@@ -18,7 +18,6 @@ export type { AttachedWorkoutProps }
 export interface ActivityDetailsProps {
     activityId:      string                     // echoed back, same as RouteDetailsProps.routeId
     attachedWorkout: AttachedWorkoutProps | null
-    comboEnabled:    boolean
 }
 
 export interface IActivitiesPageService extends IPageService  {

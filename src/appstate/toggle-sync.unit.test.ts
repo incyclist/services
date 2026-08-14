@@ -130,9 +130,9 @@ describe('FeatureToggleSyncService', () => {
 
         test('accepts a Uint8Array payload (as delivered by some mq bindings)', () => {
             const payload = Buffer.from(JSON.stringify({ value: true }))
-            emit(`incyclist/features/${UUID}/MOBILE_WORKOUTS`, new Uint8Array(payload))
+            emit(`incyclist/features/${UUID}/WEBBLE_WINDOWS`, new Uint8Array(payload))
 
-            expect(settings.set).toHaveBeenCalledWith('MOBILE_WORKOUTS', true)
+            expect(settings.set).toHaveBeenCalledWith('WEBBLE_WINDOWS', true)
         })
 
         test('ignores a message on an unrelated topic, without logging (this handler sees all mq traffic, not just its own)', () => {
@@ -150,7 +150,7 @@ describe('FeatureToggleSyncService', () => {
         })
 
         test('ignores and logs a message whose topic has a leading slash (a structurally different MQTT topic, not a match for incyclist/features/<uuid>/+)', () => {
-            emit(`/incyclist/features/${UUID}/MOBILE_WORKOUTS`, JSON.stringify({ value: false }))
+            emit(`/incyclist/features/${UUID}/WEBBLE_WINDOWS`, JSON.stringify({ value: false }))
 
             expect(settings.set).not.toHaveBeenCalled()
         })

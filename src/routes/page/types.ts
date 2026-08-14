@@ -60,7 +60,6 @@ export interface AttachedWorkoutProps {
 export interface RouteDetailsProps {
     routeId:         string
     attachedWorkout: AttachedWorkoutProps | null
-    comboEnabled:    boolean
 }
 
 export type DownloadStatus = 'downloading' | 'done' | 'failed' | 'required'

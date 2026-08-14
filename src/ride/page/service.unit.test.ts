@@ -1423,76 +1423,45 @@ describe('RidePageService', () => {
     // ==========================================================================================
     // Phase 2 (session 2.1, workout-combo-service-design.md §4): attachment-based workout
     // behaviour. Fixtures per §6 "Session 2.1":
-    //   (a)  Workout ride, both toggles off - already covered throughout the suite above (every
-    //        existing test in this file still passes unmodified); toggle-independence itself is
-    //        asserted explicitly below.
-    //   (b)  Video/GPX + workout attached, both toggles on (state 3 - combo live)
-    //   (c)  Video/GPX + workout attached, MOBILE_WORKOUTS on / COMBO off (state 2 - shipped)
-    //   (c') Video/GPX + workout attached, COMBO on / MOBILE_WORKOUTS off (state 1 - behaves as c)
+    //   (a)  Workout ride - already covered throughout the suite above (every existing test in
+    //        this file still passes unmodified).
+    //   (b)  Video/GPX + workout attached (combo live)
     //   (d)  Video/GPX, no workout attached
     // ==========================================================================================
 
-    const setFeatureToggles = (mobileWorkouts: boolean, combo: boolean) => {
-        MockAppState.hasFeature.mockImplementation((toggle: string) => {
-            if (toggle === 'MOBILE_WORKOUTS') return mobileWorkouts
-            if (toggle === 'MOBILE_WORKOUT_ROUTE_COMBO') return combo
-            return true
-        })
-    }
-
     describe('isWorkoutAttached', () => {
-        test('Workout ride -> always true, regardless of either toggle (Phase 1 must not depend on either)', () => {
+        test('Workout ride -> always true', () => {
             MockRideDisplay.getRideType.mockReturnValue('Workout')
-            setFeatureToggles(false, false)
             expect((s as any).isWorkoutAttached()).toBe(true)
         })
 
-        test('(b) Video/GPX ride, workout in use, both toggles on -> true', () => {
+        test('(b) Video/GPX ride, workout in use -> true', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockWorkoutRide.inUse.mockReturnValue(true)
-            setFeatureToggles(true, true)
             expect((s as any).isWorkoutAttached()).toBe(true)
         })
 
-        test('(c) Video/GPX ride, workout in use, MOBILE_WORKOUTS on / COMBO off -> false', () => {
-            MockRideDisplay.getRideType.mockReturnValue('Video')
-            MockWorkoutRide.inUse.mockReturnValue(true)
-            setFeatureToggles(true, false)
-            expect((s as any).isWorkoutAttached()).toBe(false)
-        })
-
-        test("(c') Video/GPX ride, workout in use, COMBO on / MOBILE_WORKOUTS off -> false (behaves as (c) - COMBO alone is never honoured)", () => {
-            MockRideDisplay.getRideType.mockReturnValue('Video')
-            MockWorkoutRide.inUse.mockReturnValue(true)
-            setFeatureToggles(false, true)
-            expect((s as any).isWorkoutAttached()).toBe(false)
-        })
-
-        test('(d) Video/GPX ride, no workout in use, both toggles on -> false', () => {
+        test('(d) Video/GPX ride, no workout in use -> false', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockWorkoutRide.inUse.mockReturnValue(false)
-            setFeatureToggles(true, true)
             expect((s as any).isWorkoutAttached()).toBe(false)
         })
 
         test('other/unknown ride type -> false', () => {
             MockRideDisplay.getRideType.mockReturnValue('Free-Ride')
-            setFeatureToggles(true, true)
             expect((s as any).isWorkoutAttached()).toBe(false)
         })
 
         test('logs and returns false if the underlying call throws', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
-            setFeatureToggles(true, true)
             MockWorkoutRide.inUse.mockImplementation(() => { throw new Error('boom') })
             expect((s as any).isWorkoutAttached()).toBe(false)
             expect(s.logError).toHaveBeenCalled()
         })
     })
 
-    describe('getPageDisplayProps - Video/GPX combo, fixture (b): both toggles on, workout attached', () => {
+    describe('getPageDisplayProps - Video/GPX combo, fixture (b): workout attached', () => {
         beforeEach(() => {
-            setFeatureToggles(true, true)
             MockWorkoutRide.inUse.mockReturnValue(true)
             MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
                 title: 'Test Workout', ftp: 250, mode: null, canShowBackward: true, canShowForward: true, loadButtonMode: 'gear'
@@ -1604,16 +1573,13 @@ describe('RidePageService', () => {
         })
     })
 
-    describe('getPageDisplayProps - Video/GPX combo, gated off (states 1/2/d - must be identical to today)', () => {
-        const scenarios: [string, boolean, boolean, boolean][] = [
-            ['(c) MOBILE_WORKOUTS on / COMBO off, workout attached', true, false, true],
-            ["(c') COMBO on / MOBILE_WORKOUTS off, workout attached", false, true, true],
-            ['(d) both toggles on, no workout attached', true, true, false]
+    describe('getPageDisplayProps - Video/GPX, no workout attached (must be identical to today)', () => {
+        const scenarios: [string, boolean][] = [
+            ['(d) no workout attached', false]
         ]
 
-        scenarios.forEach(([name, mobileWorkouts, combo, workoutInUse]) => {
+        scenarios.forEach(([name, workoutInUse]) => {
             test(`${name} -> no workout fields, no observer subscription, step callbacks are no-ops`, () => {
-                setFeatureToggles(mobileWorkouts, combo)
                 MockWorkoutRide.inUse.mockReturnValue(workoutInUse)
                 MockRideDisplay.getRideType.mockReturnValue('GPX')
                 MockRideDisplay.getState.mockReturnValue('Active')
@@ -1658,7 +1624,6 @@ describe('RidePageService', () => {
     describe('getLoadButtonMode / adjustLoad - NOT workout-gated (§4.4.5)', () => {
         test('(d) gear mode and gear shift still work on a plain GPX ride with no workout attached', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
-            setFeatureToggles(true, true)
             MockWorkoutRide.inUse.mockReturnValue(false)
             MockWorkoutRide.getLoadButtonMode.mockReturnValue('gear')
 
@@ -1678,7 +1643,6 @@ describe('RidePageService', () => {
     describe('onWorkoutFinished (§4.4.7) - the correctness fix', () => {
         test('fixture (b): a completing workout does NOT finish a route ride - no finished menu, no navigation', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
-            setFeatureToggles(true, true)
             MockWorkoutRide.inUse.mockReturnValue(true)
             s.openPage()
 
@@ -1690,7 +1654,6 @@ describe('RidePageService', () => {
 
         test('fixture (b): re-entrant - a second onWorkoutFinished() call changes nothing', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
-            setFeatureToggles(true, true)
             MockWorkoutRide.inUse.mockReturnValue(true)
             s.openPage()
 
@@ -1703,7 +1666,6 @@ describe('RidePageService', () => {
 
         test('via the workout observer: "completed"/"stopped" keep a combo ride running (fixture b)', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
-            setFeatureToggles(true, true)
             MockWorkoutRide.inUse.mockReturnValue(true);
             (s as any).isInitialized = true
             const rideObserver = new Observer()
@@ -1773,10 +1735,9 @@ describe('RidePageService', () => {
     // corner-slot tap handler; covered with the same set/read/gate test pattern as the existing
     // load-increment setting.
     describe('cornerWidget', () => {
-        test('populated ("elevation" default) when isWorkoutAttached() AND isWorkoutComboEnabled() are both true', () => {
+        test('populated ("elevation" default) when isWorkoutAttached() is true', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockRideDisplay.getState.mockReturnValue('Active')
-            setFeatureToggles(true, true)
             MockWorkoutRide.inUse.mockReturnValue(true)
             MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map', workout: makeCurrentWorkout(), showWorkout: true })
 
@@ -1785,32 +1746,20 @@ describe('RidePageService', () => {
 
         test('undefined when no workout is attached', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
-            setFeatureToggles(true, true)
             MockWorkoutRide.inUse.mockReturnValue(false)
             MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map' })
 
             expect((s.getPageDisplayProps() as any).cornerWidget).toBeUndefined()
         })
 
-        test('undefined when the combo toggle is off, even with a workout attached (state 2)', () => {
-            MockRideDisplay.getRideType.mockReturnValue('GPX')
-            setFeatureToggles(true, false)
-            MockWorkoutRide.inUse.mockReturnValue(true)
-            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map', workout: makeCurrentWorkout(), showWorkout: true })
-
-            expect((s.getPageDisplayProps() as any).cornerWidget).toBeUndefined()
-        })
-
         test('undefined on a Workout-only ride - no elevation graph competes for the corner slot there', () => {
             MockRideDisplay.getRideType.mockReturnValue('Workout')
-            setFeatureToggles(false, false)
 
             expect((s.getPageDisplayProps() as any).cornerWidget).toBeUndefined()
         })
 
         test('reads the persisted preferences.workouts.rideCornerWidget setting', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
-            setFeatureToggles(true, true)
             MockWorkoutRide.inUse.mockReturnValue(true)
             MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map', workout: makeCurrentWorkout(), showWorkout: true })
             MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'workout' : defValue)

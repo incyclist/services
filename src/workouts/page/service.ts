@@ -1,7 +1,6 @@
 import { Singleton } from "../../base/types";
 import { IncyclistPageService } from "../../base/pages";
 import { Injectable } from "../../base/decorators";
-import { useAppState } from "../../appstate";
 import { IObserver } from "../../types";
 import { FileInfo } from "../../api";
 import { Observer } from "../../base/types/observer";
@@ -59,12 +58,7 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
         try {
             super.openPage()
 
-            let pageType 
-            if (!this.getAppState().hasFeature('MOBILE_WORKOUTS')) {
-                pageType= 'placeholder' 
-            }
-
-            this.logEvent({ message: 'page shown', page: 'Workouts',pageType })
+            this.logEvent({ message: 'page shown', page: 'Workouts' })
 
             const { observer } = this.getWorkoutList().open()
             this.listObserver = observer
@@ -104,10 +98,6 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
 
     getPageDisplayProps(): WorkoutListPageDisplayProps {
         try {
-            if (!this.getAppState().hasFeature('MOBILE_WORKOUTS')) {
-                return { pageType: 'placeholder' }
-            }
-
             const service = this.getWorkoutList()
             const loading = service.isStillLoading()
             const upcoming = this.getUpcomingTrainingProps()
@@ -156,8 +146,7 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
                 canDelete: card.canDelete(),
                 isScheduled,
                 date: isScheduled ? (settingsProps as ScheduledWorkoutSettingsDisplayProps).date : undefined,
-                attachedRoute: this.getAttachedRouteProps(),
-                comboEnabled: this.isWorkoutComboEnabled()
+                attachedRoute: this.getAttachedRouteProps()
             }
         }
         catch (err) {
@@ -651,11 +640,6 @@ export class WorkoutListPageService extends IncyclistPageService implements IWor
     @Injectable
     protected getUserSettings() {
         return useUserSettings()
-    }
-
-    @Injectable
-    protected getAppState() {
-        return useAppState()
     }
 }
 

@@ -131,16 +131,15 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
      * dialog is actually showing - symmetric with `RoutesPageService.getRouteDetailsProps(routeId)`.
      */
     getActivityDetailsProps(activityId: string): ActivityDetailsProps {
-        const comboEnabled = this.isWorkoutComboEnabled()
         try {
             const workout = this.getWorkoutList().getSelected()
             const attachedWorkout: AttachedWorkoutProps | null = workout ? { id: workout.id, title: workout.name } : null
 
-            return { activityId, attachedWorkout, comboEnabled }
+            return { activityId, attachedWorkout }
         }
         catch (err) {
             this.logError(err, 'getActivityDetailsProps')
-            return { activityId, attachedWorkout: null, comboEnabled }
+            return { activityId, attachedWorkout: null }
         }
     }
 
