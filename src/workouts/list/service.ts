@@ -13,6 +13,7 @@ import { WorkoutCard } from "./cards/WorkoutCard";
 import { WorkoutImportCard,WorkoutCreateCard } from './cards'
 import { WorkoutSettings } from "./cards/types";
 import { WorkoutsDbLoader } from "./loaders/db";
+import { WorkoutsApiLoader } from "./loaders/api";
 import { WP,WorkoutSettingsDisplayProps } from "./types";
 import { Injectable } from "../../base/decorators";
 import { ScheduledWorkout, useWorkoutCalendar, WorkoutCalendarEntry } from "../calendar";
@@ -48,7 +49,8 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     protected preloadObserver: PromiseObserver<void>
     protected items: Array<WP>
     protected db: WorkoutsDbLoader
-    protected screenProps;    
+    protected api: WorkoutsApiLoader
+    protected screenProps;
     protected language:string
     protected selectedWorkout:Workout
     protected ftp:number
@@ -72,6 +74,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         this.myWorkouts.add( new WorkoutImportCard() )
         this.myWorkouts.add( new WorkoutCreateCard() )
 
+        this.api = new WorkoutsApiLoader()
 
         this.registerUserChangeHandler();
 
@@ -782,6 +785,13 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     }
 
     protected async loadWorkouts():Promise<void> {
+        await this.loadWorkoutsFromRepo()
+        await this.loadWorkoutsFromApi()
+        this.logEvent( {message:'loadWorkoutsFromApi done'})
+
+    }
+
+    protected async loadWorkoutsFromRepo():Promise<void> {
 
         return new Promise<void> ( (done,reject) => {
             try {
@@ -799,6 +809,22 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                 this.logEvent({message:'could not load workout', reason: err.message})
                 reject(err as Error)
             }
+        })
+
+    }
+
+    protected async loadWorkoutsFromApi():Promise<void> {
+
+        return new Promise<void> ( (done) => {
+            this.logEvent( {message:'loadWorkoutsFromApi start'})
+
+            const observer = this.api.load()
+            const add = this.addItem.bind(this)
+            const update = this.updateItem.bind(this)
+
+            observer.on('workout.added',add)
+            observer.on('workout.updated',update)
+            observer.on('done',done)
         })
 
     }

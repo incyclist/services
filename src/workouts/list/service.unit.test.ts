@@ -10,6 +10,21 @@ import { FileInfo, getBindings } from '../../api'
 import { Inject } from '../../base/decorators'
 import { sleep } from '../../utils/sleep'
 
+// Default-workouts sync (loadWorkoutsFromApi()) constructs a real WorkoutsApiLoader in every
+// WorkoutListService instance. Auto-mocked here so the many describe blocks below that don't
+// care about it (only 'preload' does, and overrides this per-test) never fire a real HTTP
+// request against the production workouts service during a test run.
+jest.mock('./loaders/api', () => ({
+    WorkoutsApiLoader: jest.fn().mockImplementation(() => ({
+        load: jest.fn(() => {
+            const { Observer } = jest.requireActual('../../base/types/observer')
+            const o = new Observer()
+            process.nextTick(() => o.emit('done'))
+            return o
+        })
+    }))
+}))
+
 describe('WorkoutListService',()=>{
 
     const MockAppState = {
@@ -552,8 +567,9 @@ describe('WorkoutListService',()=>{
         let s,service
         let loadError
         let loadResult
+        let apiLoadResult
         let delay
-        let eventSpy 
+        let eventSpy
 
         beforeEach( ()=>{
             setupMocks()
@@ -575,19 +591,35 @@ describe('WorkoutListService',()=>{
                         o.emit('done')
                     })
                     return o
-    
+
                 })
             })
+            // default-workouts sync — see loadWorkoutsFromApi(); empty by default so
+            // existing local-DB-only assertions below are unaffected
+            s.api = {
+                load: jest.fn( ()=> {
+                    const o = new Observer()
+                    process.nextTick( ()=>{
+                        const results = apiLoadResult??[]
+                        results.forEach( w=> {
+                            o.emit('workout.added',w)
+                        })
+                        o.emit('done')
+                    })
+                    return o
+                })
+            }
             s.observer = new Observer()
             eventSpy = jest.spyOn(s.observer,'emit')
 
         })
-        
+
         afterEach( ()=>{
             resetMocks()
             s.reset()
             loadError = undefined
             loadResult = undefined
+            apiLoadResult = undefined
             delay = undefined
         })
 
@@ -609,6 +641,21 @@ describe('WorkoutListService',()=>{
             expect(eventSpy).toHaveBeenCalledWith('loading')
             expect(eventSpy).toHaveBeenCalledWith('loaded',expect.anything(),expect.anything())
 
+        })
+        test('workouts published via the workouts service (default workouts) are loaded alongside local ones',async ()=>{
+            loadResult = [
+                new Workout({type:'workout',id:'1',name:'local',category:{name:'My Workouts'}})
+            ]
+            apiLoadResult = [
+                new Workout({type:'workout',id:'default-30-vo2max-classic',name:"30' VO2Max Intervals",category:{name:'30 min'}})
+            ]
+
+            const observer = service.preload()
+            await observer.wait()
+            await waitNextTick()
+
+            expect(s.api.load).toHaveBeenCalled()
+            expect(service.getLists().map(l=>l.getTitle()).sort()).toEqual(['30 min','My Workouts'].sort())
         })
         test('concurrent starts',async ()=>{
             delay = 100
