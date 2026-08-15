@@ -12,6 +12,8 @@ Workout {
   "explicitId": false,
   "hrm": undefined,
   "id": "b4d790d8c395d6b8691886ad0ad6a615",
+  "isDeleted": undefined,
+  "isLocal": true,
   "name": "Test",
   "power": undefined,
   "repeat": 1,

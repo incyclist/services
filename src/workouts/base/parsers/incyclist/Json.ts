@@ -21,7 +21,7 @@ export class JsonParser implements WorkoutParser<string>{
             const parsedData = JSON.parse(str);
             const {name,description,category,steps,type='workout'} = parsedData;
 
-            const workout =  new Workout({type,name,description,category});
+            const workout =  new Workout({type,name,description,category,isLocal:true});
             steps.forEach(step => {
                 if ( step.type==='step') {
                     workout.addStep(step)

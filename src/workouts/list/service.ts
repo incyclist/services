@@ -833,23 +833,29 @@ export class WorkoutListService extends IncyclistService  implements IListServic
 
 
     
-    protected addItem(item:WP):Card<WP> {       
+    protected addItem(item:WP):Card<WP> {
+        // keep tombstoned (deleted, non-local) workouts tracked so a future sync recognizes
+        // them as already-seen and does not resurrect them - but never surface them in the UI
+        this.items.push(item)
+        if ((item as unknown as Workout).isDeleted) {
+            return undefined
+        }
+
         const list = this.selectList(item)
 
         let card;
-        if (item.type==='workout') {            
-            card = new WorkoutCard(item as unknown as Workout,{list: list as CardList<Workout>})       
+        if (item.type==='workout') {
+            card = new WorkoutCard(item as unknown as Workout,{list: list as CardList<Workout>})
         }
         else if (item.type==='plan') {
             // TODO
         }
 
         list.add( card)
-        
-        card.enableDelete(true)    
-        this.items.push(item)
-        
-        this.emitLists('updated')                
+
+        card.enableDelete(true)
+
+        this.emitLists('updated')
         return card;
     }
 

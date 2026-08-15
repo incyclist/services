@@ -52,7 +52,7 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
         
         
 
-        const workout =  new Workout({type:'workout',name,description: data.description});
+        const workout =  new Workout({type:'workout',name,description: data.description,isLocal:true});
 
         data.steps.forEach(s => {
             if ( s.reps!==undefined && s.reps!==null) {
