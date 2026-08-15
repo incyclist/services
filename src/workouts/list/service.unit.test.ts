@@ -563,6 +563,42 @@ describe('WorkoutListService',()=>{
 
     describe('onCarouselUpdated',()=>{})
 
+    describe('addItem',()=>{
+        let s,service
+
+        beforeEach( ()=>{
+            setupMocks()
+            s = service = new WorkoutListService()
+        })
+        afterEach( ()=>{
+            resetMocks()
+            s.reset()
+        })
+
+        // A workout tombstoned via WorkoutCard.markDeleted() (see WorkoutCard.unit.test.ts)
+        // must never resurface in a displayed list, whether it's loaded from the local DB or
+        // re-synced from the workouts service - but it still needs to be tracked internally
+        // so a future sync recognizes the id as already-seen and does not re-add it.
+        test('a deleted (tombstoned) workout is tracked but not shown in any list',()=>{
+            const before = s.myWorkouts.getCards().length
+
+            const card = s.addItem(new Workout({type:'workout',id:'1',name:'deleted',isDeleted:true}))
+
+            expect(card).toBeUndefined()
+            expect(s.myWorkouts.getCards().length).toBe(before)
+            expect(s.items.find(i=>i.id==='1')).toBeDefined()
+        })
+
+        test('a non-deleted workout is shown as usual', ()=>{
+            const before = s.myWorkouts.getCards().length
+
+            const card = s.addItem(new Workout({type:'workout',id:'2',name:'kept'}))
+
+            expect(card).toBeDefined()
+            expect(s.myWorkouts.getCards().length).toBe(before+1)
+        })
+    })
+
     describe ('preload',()=>{
         let s,service
         let loadError

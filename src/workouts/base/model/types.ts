@@ -98,6 +98,10 @@ export interface WorkoutDefinition extends SegmentDefinition {
     description?: string
     /** @public A categorym the workout belongs to */
     category?:Category
+    /** @public true if this workout was imported/created locally by the user, as opposed to published by the workouts service */
+    isLocal?:boolean
+    /** @public true if the user has deleted this workout - kept as a tombstone (not physically removed) for non-local workouts, so a future sync does not resurrect it */
+    isDeleted?:boolean
 }
 
 export interface ScheduledWorkout {

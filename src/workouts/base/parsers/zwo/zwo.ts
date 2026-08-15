@@ -68,7 +68,7 @@ export class ZwoParser implements WorkoutParser<string>{
 
         const name = ignoreEmpty(xml.json['name']) ?? fileName       
         const description = ignoreEmpty(xml.json['description'])
-        const workout = new Workout( {type:'workout',name,description});
+        const workout = new Workout( {type:'workout',name,description,isLocal:true});
         return this.parse(str,workout)
         
     }

@@ -328,9 +328,12 @@ describe('WorkoutCard',()=>{
         let s,service:WorkoutListService
         let list
         beforeEach( ()=>{
-            
-            workout = new Workout( {type:'workout',id:'1234'})
-            workout.addStep( {type:'step', duration:1000, power:{min:100, max:120, type:'pct of FTP'}})   
+
+            // isLocal:true - these tests exercise the physical-delete path (a user's own
+            // imported/created workout). See the 'published (non-local) workout' block
+            // below for the tombstone path taken by workouts that came from the server.
+            workout = new Workout( {type:'workout',id:'1234',isLocal:true})
+            workout.addStep( {type:'step', duration:1000, power:{min:100, max:120, type:'pct of FTP'}})
 
 
             s = service = useWorkoutList()
@@ -347,7 +350,8 @@ describe('WorkoutCard',()=>{
             c.logError = jest.fn()
             c.emitUpdate = jest.fn()
             c.getRepo = jest.fn().mockReturnValue({
-                delete: jest.fn( async ()=>{return;} )
+                delete: jest.fn( async ()=>{return;} ),
+                save: jest.fn( async ()=>{return;} )
             })
         })
 
@@ -421,11 +425,49 @@ describe('WorkoutCard',()=>{
         test('unexpected error',async ()=>{
             s.unselectCard = jest.fn( ()=>{ throw new Error()})
             const observer= card.delete()
-            
+
             expect(observer).toBeUndefined()
             expect(c.logError).toHaveBeenCalled()
-            
 
+
+        })
+
+        describe('published (non-local) workout',()=>{
+            // A workout that came from the workouts service (isLocal is not set) must not be
+            // physically removed - the next sync would otherwise see it as never-seen and
+            // resurrect it. It is tombstoned (isDeleted:true, kept in the local DB) instead.
+            beforeEach( ()=>{
+                workout.isLocal = false
+            })
+
+            test('marks the workout as deleted instead of removing it',async ()=>{
+                const observer= card.delete()
+                observer.emit = jest.fn()
+                const deleted = await observer.wait()
+
+                expect(deleted).toBe(true)
+                expect(workout.isDeleted).toBe(true)
+                expect(c.getRepo().save).toHaveBeenCalledWith(workout,true)
+                expect(c.getRepo().delete).not.toHaveBeenCalled()
+
+                expect(list.remove).toHaveBeenCalledWith(card)
+                expect(service.emitLists).toHaveBeenCalledWith('updated')
+            })
+
+            test('error while marking as deleted',async ()=>{
+                c.getRepo = jest.fn().mockReturnValue({
+                    delete: jest.fn( async ()=>{return;} ),
+                    save: jest.fn().mockRejectedValue(new Error())
+                })
+
+                const observer= card.delete()
+                observer.emit = jest.fn()
+                const deleted = await observer.wait()
+
+                expect(deleted).toBe(false)
+                expect(observer.emit).toHaveBeenCalledWith('done',false)
+                expect(service.emitLists).not.toHaveBeenCalledWith('updated')
+            })
         })
     })
 

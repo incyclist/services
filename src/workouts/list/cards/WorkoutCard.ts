@@ -154,9 +154,16 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         
     }
 
+    protected async markDeleted():Promise<void> {
+        this.workout.isDeleted = true
+        // calls the repo directly (not this.save(), which swallows errors) so a failure here
+        // propagates to _delete()'s own try/catch, the same way a hard-delete failure does
+        await this.getRepo().save(this.workout,true)
+    }
+
     /**
      * deletes the workout from display and database
-     * 
+     *
      * In case the workout was currently selected, it will unselect it before deleting
      */
     delete(): PromiseObserver<boolean> {
@@ -314,7 +321,16 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         try {
 
             this.deleteObserver.emit('started')
-            await this.getRepo().delete(this.workout) 
+
+            if (this.workout.isLocal) {
+                await this.getRepo().delete(this.workout)
+            }
+            else {
+                // published (non-local) workouts are tombstoned, not removed: the local
+                // record is kept with isDeleted:true so the next sync recognizes it was
+                // already seen and does not re-add it (see WorkoutListService.addItem())
+                await this.markDeleted()
+            }
 
             // remove from list in UI
             this.deleteFromUIList();

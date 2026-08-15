@@ -17,6 +17,8 @@ export class Workout extends Segment implements WorkoutDefinition {
     public name:string;
     public description: string
     public category?:Category
+    public isLocal?:boolean
+    public isDeleted?:boolean
     // true when the caller supplied an explicit id/hash (e.g. a workout reloaded from
     // storage) - once true, the id/hash is authoritative and must never be recomputed
     // from steps, no matter how they are populated or mutated afterwards
@@ -32,6 +34,8 @@ export class Workout extends Segment implements WorkoutDefinition {
         this.repeat = 1;
         this.type = 'workout'
         this.category = opts.category
+        this.isLocal = opts.isLocal
+        this.isDeleted = opts.isDeleted
 
         this.steps = []
         this.start = this.end = this.duration =0
