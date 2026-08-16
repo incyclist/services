@@ -345,6 +345,132 @@ describe('GpxDisplayService', () => {
         })
     })
 
+    describe('street view start on mobile', () => {
+        let service: GpxDisplayService
+
+        const svMobile = (overrides:any = {}) => ({
+            mockRideService: true,
+            channel: 'mobile',
+            userSettingsGet: jest.fn((key, def) => {
+                if (key === 'preferences.rideView') return 'sv'
+                return def
+            }),
+            ...overrides
+        })
+
+        // Street View is only offered on Android, and only when the secrets binding is
+        // healthy - otherwise getRideView() falls back to 'map' and the ride never reaches
+        // the Street View path at all.
+        const setupSVMocks = (s:any, options:any) => {
+            setupMocks(s, options)
+            Inject('Bindings', {
+                appInfo: {
+                    getChannel: jest.fn().mockReturnValue(options.channel ?? 'desktop'),
+                    getOS: jest.fn().mockReturnValue({platform: 'android'})
+                },
+                secret: {
+                    getSecretsStatus: jest.fn().mockReturnValue('valid')
+                }
+            })
+        }
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            service['clearStreetViewStartTimeout']()
+            cleanupMocks(service)
+        })
+
+        test('waits for the Loaded event instead of completing immediately', () => {
+            setupSVMocks(service, svMobile())
+
+            expect(service.isStartRideCompleted()).toBe(false)
+            expect(service.getStartOverlayProps().mapState).toBe('Loading')
+        })
+
+        test('completes once the view reports Loaded', () => {
+            setupSVMocks(service, svMobile())
+
+            service['onStreetViewEvent']('Loaded', undefined)
+
+            expect(service.isStartRideCompleted()).toBe(true)
+            expect(service.getStartOverlayProps().mapState).toBe('Loaded')
+        })
+
+        test('other mobile ride views still complete immediately', () => {
+            setupSVMocks(service, svMobile({
+                userSettingsGet: jest.fn((key, def) => {
+                    if (key === 'preferences.rideView') return 'sat'
+                    return def
+                })
+            }))
+
+            expect(service.isStartRideCompleted()).toBe(true)
+            expect(service.getStartOverlayProps().mapState).toBe('Loaded')
+        })
+
+        test('desktop behaviour is unchanged', () => {
+            setupSVMocks(service, svMobile({channel: 'desktop'}))
+
+            expect(service['waitsForStreetView']()).toBe(false)
+            expect(service.isStartRideCompleted()).toBe(false)
+        })
+
+        test('start is no longer blocked once the start timeout expires', () => {
+            jest.useFakeTimers()
+            try {
+                setupSVMocks(service, svMobile())
+                service['armStreetViewStartTimeout']()
+
+                expect(service.isStartRideCompleted()).toBe(false)
+
+                jest.advanceTimersByTime(15000)
+
+                expect(service.isStartRideCompleted()).toBe(true)
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+
+        test('the start timeout is cancelled by the Loaded event', () => {
+            jest.useFakeTimers()
+            try {
+                setupSVMocks(service, svMobile())
+                service['armStreetViewStartTimeout']()
+                service['onStreetViewEvent']('Loaded', undefined)
+
+                jest.advanceTimersByTime(15000)
+
+                expect(service['svStartTimedOut']).toBe(false)
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+
+        test('provides an initial position including heading', () => {
+            setupSVMocks(service, svMobile())
+            service.onActivityUpdate({time:1, speed:36, routeDistance:500, distance:10},{distance:10})
+
+            const props = service.getStreetViewProps({hideAll: false} as any)
+
+            expect(props.displayPosition?.routeDistance).toBe(500)
+            expect(typeof props.displayPosition?.heading).toBe('number')
+        })
+
+        test('panorama changes feed the adaptive update delay', () => {
+            setupSVMocks(service, svMobile())
+            service['tsPrevSVUpdate'] = Date.now()-1000
+
+            service['onStreetViewEvent']('pano_changed', undefined)
+
+            expect(service['updateDurations'].length).toBe(1)
+        })
+    })
+
     describe('getDisplayProperties', () => {
         let service: GpxDisplayService
 

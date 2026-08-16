@@ -8,7 +8,7 @@ import { EventEmitter } from "node:events"
 import { ActiveRideListAvatar, ActivityDetails, PrevRidesListDisplayProps, ScreenShotInfo } from "../../activities"
 import { Workout } from "../../workouts"
 import { FreeRideOption } from "../../routes/list/types"
-import { MapViewPort } from "../route/types"
+import { MapViewPort, StreetViewEvent } from "../route/types"
 import { LatLng } from "../../utils/geo"
 import { Unit } from "../../i18n"
 import { IObserver } from "../../types"
@@ -117,6 +117,10 @@ export type RideViewType = 'sv' | 'map' | 'sat'
 export interface GpxDisplayProps extends RouteDisplayProps {
     rideView: RideViewType,
     displayObserver?:IObserver
+    /** initial position for the view, until displayObserver takes over */
+    displayPosition?: CurrentPosition
+    /** lets the view report its load state back to the service (Street View) */
+    onDisplayEvent?: (event:StreetViewEvent, data?:any) => void
 }
 
 export interface RouteOptionDisplayProps { 

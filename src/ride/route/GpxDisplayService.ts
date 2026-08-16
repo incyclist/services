@@ -15,6 +15,18 @@ const SV_MIN_READY = 1500
 const SV_MIN_DELAY = 1000
 
 /**
+ * Maximum time the start overlay waits for the Street View component to report 'Loaded'
+ * before the ride is started anyway.
+ *
+ * Without this cap, a device that can never resolve a panorama (e.g. a blocked/stalled
+ * request to Google's Street View backend) would be stuck on the start overlay forever.
+ * Bailing out restores the previous behaviour (ride starts, view may stay black) instead
+ * of blocking the user, so this can never be worse than not waiting at all.
+ * Overridable via the `SV_START_TIMEOUT` user setting.
+ */
+const SV_START_TIMEOUT = 15000
+
+/**
  * Service for managing GPX-based route ride display with multiple view modes.
  *
  * Extends RouteDisplayService to add support for Street View, Satellite View, and
@@ -42,6 +54,9 @@ export class GpxDisplayService extends RouteDisplayService {
     protected tsLastPovChanged: number
     protected povTimeout: NodeJS.Timeout
     protected updateDurations: Array<number> = []
+    /** set once the start overlay stopped waiting for the Street View 'Loaded' event */
+    protected svStartTimedOut: boolean = false
+    protected svStartTimeout: NodeJS.Timeout
     
     
 
@@ -58,7 +73,10 @@ export class GpxDisplayService extends RouteDisplayService {
                 const updateFreq = this.getDefaultUpdateFrequency();
                 const minimalPause = this.getMinimalPause()
                 const bestFreq = this.getBestCaseUpdateFrequency()
-                this.logEvent({message:'init streetview', updateFreq, minimalPause, bestFreq})                
+                this.logEvent({message:'init streetview', updateFreq, minimalPause, bestFreq})
+
+                if (this.waitsForStreetView())
+                    this.armStreetViewStartTimeout()
             }
 
             
@@ -98,10 +116,46 @@ export class GpxDisplayService extends RouteDisplayService {
         }
 
         if ( this.isMobile()) {
-            // TODO: add sv component props (i.e. callbacks, position,...)
+            // The native Street View component needs a concrete start position (including a
+            // heading) so it can load the first panorama while the start overlay is still
+            // shown. `this.position` honours the ride's start offset - the route's first
+            // point, which the mobile view used before, does not.
+            props.displayPosition = this.mapLoaded ? null : this.getInitialStreetViewPosition()
         }
 
         return props
+    }
+
+    /**
+     * Start position for the native Street View component, enriched with the heading the
+     * rider will be facing. Returns undefined while no position has been determined yet -
+     * the mobile component must not be given a (0,0) fallback, which would request a
+     * panorama in the middle of the Atlantic.
+     */
+    protected getInitialStreetViewPosition() {
+        const position = this.position
+        if (!position)
+            return undefined
+        if (position.heading !== undefined)
+            return position
+
+        try {
+            return {...position, heading: getHeading(this.getOriginalRoute(), position)}
+        }
+        catch (err) {
+            this.logError(err, 'getInitialStreetViewPosition')
+            return position
+        }
+    }
+
+    /**
+     * True when the start overlay has to wait for the Street View component to report
+     * 'Loaded'. Only relevant on mobile: desktop already waits (it has always received the
+     * component's events), while mobile used to skip the wait entirely and therefore tore
+     * the overlay down onto a panorama that had not loaded yet - a black screen.
+     */
+    protected waitsForStreetView(): boolean {
+        return this.isMobile() && this.getRideSettingsDisplay().getRideView() === 'sv'
     }
 
     /**
@@ -156,7 +210,7 @@ export class GpxDisplayService extends RouteDisplayService {
         const rideView = this.getRideSettingsDisplay().getRideView()
 
 
-        if (rideView === 'map' || this.isMobile()) {
+        if (rideView === 'map' || (this.isMobile() && !this.waitsForStreetView())) {
             return {
                 mapType: this.getRideViewName(),
                 mapState: 'Loaded'
@@ -181,11 +235,14 @@ export class GpxDisplayService extends RouteDisplayService {
      */
     isStartRideCompleted(): boolean {
         const rideView = this.getRideSettingsDisplay().getRideView()
-        if (rideView==='map' || this.isMobile()) {
+        if (rideView==='map' || (this.isMobile() && !this.waitsForStreetView())) {
             this.mapLoaded = true
             return true;
         }
 
+        // Never block the rider indefinitely on a panorama that may never resolve.
+        if (this.svStartTimedOut)
+            return true
 
         return this.mapLoaded
     }
@@ -270,6 +327,7 @@ export class GpxDisplayService extends RouteDisplayService {
 
         if (event==='Loaded') {
             this.mapLoaded = true
+            this.clearStreetViewStartTimeout()
             this.emit('state-update')
             this.tsLastSVEvent = Date.now()
         }
@@ -282,6 +340,14 @@ export class GpxDisplayService extends RouteDisplayService {
         else if ( event==='pano_changed') {
             this.logEvent({message:'street view panorama changed', panorama:data})
             this.tsLastSVEvent = Date.now()
+
+            // Mobile has no 'pov_changed' equivalent, so the round-trip measurement that
+            // feeds the adaptive update delay is taken from the panorama change instead.
+            // Without this, updateDurations never fills on mobile and
+            // getStreetViewUpdateDelay() stays pinned at the default frequency no matter
+            // how slow the device actually is.
+            if (this.isMobile())
+                this.recordUpdateDuration()
         }
         else if ( event==='pov_changed') {
 
@@ -292,20 +358,7 @@ export class GpxDisplayService extends RouteDisplayService {
                 resetTimeout()
                 this.povTimeout = setTimeout(() => {
                     this.povTimeout = undefined
-                    let duration:number
-                    if (this.tsPrevSVUpdate) {
-                        duration = Date.now()-this.tsPrevSVUpdate;
-                        if (duration>250) {
-                            if (this.updateDurations.length==10) {
-                                this.updateDurations.shift()
-                            }
-                            this.updateDurations.push(duration)
-                        }
-                    }
-                    //console.log('# street view position confirmed', duration, clone({lat,lng,heading}), clone(this.svPosition))
-                    if (duration!==undefined && duration>250) {
-                        this.logEvent({message:'street view position update confirmed', duration})
-                    }
+                    this.recordUpdateDuration()
                 }, 100)
             }
             else {
@@ -318,6 +371,63 @@ export class GpxDisplayService extends RouteDisplayService {
             this.tsLastSVEvent = Date.now()
         }
 
+    }
+
+    /**
+     * Records how long the last position update took to be acknowledged by the Street View
+     * component. The samples drive getStreetViewUpdateDelay()'s adaptive back-off, so that
+     * slow devices are not sent position updates faster than they can render them.
+     */
+    protected recordUpdateDuration() {
+        if (!this.tsPrevSVUpdate)
+            return
+
+        const duration = Date.now()-this.tsPrevSVUpdate
+        if (duration<=250)
+            return
+
+        if (this.updateDurations.length==10) {
+            this.updateDurations.shift()
+        }
+        this.updateDurations.push(duration)
+        this.logEvent({message:'street view position update confirmed', duration})
+    }
+
+    protected armStreetViewStartTimeout() {
+        this.clearStreetViewStartTimeout()
+
+        const timeout = this.getStreetViewStartTimeout()
+        this.svStartTimeout = setTimeout( ()=>{
+            this.svStartTimeout = undefined
+            if (this.mapLoaded)
+                return
+
+            this.svStartTimedOut = true
+            this.logEvent({message:'street view start timeout', timeout})
+            // re-trigger the start check, which now no longer waits for the view
+            this.emit('state-update')
+        }, timeout)
+    }
+
+    protected clearStreetViewStartTimeout() {
+        if (this.svStartTimeout) {
+            clearTimeout(this.svStartTimeout)
+            this.svStartTimeout = undefined
+        }
+    }
+
+    protected getStreetViewStartTimeout() {
+        return this.getNumSetting('SV_START_TIMEOUT') ?? SV_START_TIMEOUT
+    }
+
+    onStarted(): void {
+        this.clearStreetViewStartTimeout()
+        super.onStarted()
+    }
+
+    async stop(): Promise<void> {
+        this.clearStreetViewStartTimeout()
+        return super.stop()
     }
 
     protected getStreetViewObserver () {

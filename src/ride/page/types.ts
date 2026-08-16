@@ -1,7 +1,7 @@
 import { IPageService } from "../../base/pages"
 import { Route } from "../../routes/base/model/route"
 import { IObserver, RideType } from "../../types"
-import { CurrentRideState, GPXStartOverlayProps, RideViewType, StartOverlayProps, VideoDisplayProps, VideoStartOverlayProps } from "../types"
+import { CurrentPosition, CurrentRideState, GPXStartOverlayProps, RideViewType, StartOverlayProps, StreetViewEvent, VideoDisplayProps, VideoStartOverlayProps } from "../types"
 import type { LoadButtonMode, PowerAdjustmentResult } from "../../workouts/ride/types"
 import type { WorkoutGraphPlanBar } from "../../workouts/base/graph/types"
 
@@ -68,6 +68,10 @@ export interface VideoRidePageDisplayProps extends RidePageDisplayProps {
 export interface GPXRidePageDisplayProps extends RidePageDisplayProps {
     rideView?:   RideViewType
     displayObserver?:IObserver
+    /** initial position for the view, until displayObserver takes over */
+    displayPosition?: CurrentPosition
+    /** lets the view report its load state back to the service (Street View) */
+    onDisplayEvent?: (event:StreetViewEvent, data?:any) => void
 }
 
 // Union for consumers that need to handle all ride types. RidePageDisplayProps itself already

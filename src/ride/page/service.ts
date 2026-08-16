@@ -434,7 +434,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             ...this.buildWorkoutOverlayProps(props, base.startOverlayProps === null),
             rideView: props.rideView,
             route: props.route,
-            displayObserver: props.displayObserver
+            displayObserver: props.displayObserver,
+            displayPosition: props.displayPosition,
+            onDisplayEvent: props.onDisplayEvent
         }
         return displayProps
     }
