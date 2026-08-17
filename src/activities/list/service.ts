@@ -417,6 +417,8 @@ export class ActivityListService extends IncyclistService {
             return false;
         }
 
+        await activity.load()
+
         return new Promise( done => {
             const emitUpdate = async (update:{status:'started'|'done', format:string, success:boolean, error:string} )=>{
                 
@@ -435,11 +437,13 @@ export class ActivityListService extends IncyclistService {
 
     }
 
-    async upload(connectedApp:string):Promise<boolean> {  
+    async upload(connectedApp:string):Promise<boolean> {
         const activity = this.getSelected()
         if (!activity){
             return false;
         }
+
+        await activity.load()
 
         return new Promise ( done=> {
             const emitUploadUpdate = (update:{status:'started'|'done', connectedApp:string, success:boolean, error:string }) =>{

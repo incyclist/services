@@ -70,7 +70,7 @@ export type DisplayExportInfo = {
     creating?: boolean
 }
 
-export type ActivityUploadStatus  = 'success' | 'failed' | 'unknown'
+export type ActivityUploadStatus  = 'success' | 'failed' | 'unknown' | 'loading'
 export type DisplayUploadInfo = {
     type: string,
     url?: string,
