@@ -60,8 +60,6 @@ export class RideSettingsDisplayService extends IncyclistService {
         if (this.isRestricted())
             return 'map'
 
-        if (this.isMobile() && !this.isAndroid()) 
-            return 'map'
        
         const rideView = this.getUserSettings().get('preferences.rideView','sv')       
         return rideView
@@ -76,8 +74,7 @@ export class RideSettingsDisplayService extends IncyclistService {
             return map;
         }
 
-        if (!this.isIOS())
-            map.set('sv','Street View')
+        map.set('sv','Street View')
         map.set('map','Map')
 
         if (!this.isMobile())
