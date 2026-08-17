@@ -872,10 +872,109 @@ describe('ActivityListService',()=>{
             const success = await service.upload('strava')
             expect(success).toBe(false)
             expect(target.upload).toHaveBeenCalledWith('strava',expect.any(Observer))
-            expect(updatedSpy).toHaveBeenCalledTimes(2)            
-        })    
-    })    
+            expect(updatedSpy).toHaveBeenCalledTimes(2)
+        })
+    })
 
+    // Regression tests for FIXES_BACKLOG item #48:
+    // select() kicks off loadDetails() asynchronously and returns immediately. Before the fix,
+    // upload()/export() would call straight into Activity.upload()/export() while activity.details
+    // was still undefined, which made ActivityConverterFactory.convert() throw
+    // "illegal use: activity and format need to be specified". The fix is to await activity.load()
+    // (a no-op if the activity isn't currently loading) before proceeding.
+    describe('upload/export race with a still-loading selection (issue #48)',()=>{
+
+        let convertMock:jest.Mock
+
+        beforeEach( async ()=>{
+            service = new ActivityListService()
+        })
+
+        afterEach( ()=>{
+            cleanupMocks()
+            Inject('ActivityConverter', null)
+            Inject('ActivityUploadFactory', null)
+            Inject('AppsService', null)
+            service.reset()
+        })
+
+        // mirrors the real ActivityConverterFactory.convert() guard clause, so the test fails
+        // the same way production did if details aren't loaded yet by the time convert() runs
+        const setupRaceMocks = (fsOverrides={}) => {
+            const db = new RepoMockClass({cntEntries:5,repoDelay:100})
+            const repo = {...db.mock, save:jest.fn().mockResolvedValue(undefined)}
+            const mocks = setupMocks({repo,initialized:true,listOpened:true})
+
+            Inject('Bindings', {
+                fs: {
+                    existsFile:jest.fn().mockResolvedValue(false),
+                    writeFile:jest.fn().mockResolvedValue(undefined),
+                    ...fsOverrides
+                }
+            })
+
+            convertMock = jest.fn( async (activity,format) => {
+                if (!activity || !format)
+                    throw new Error('illegal use: activity and format need to be specified')
+                return Buffer.from('DATA')
+            })
+            Inject('ActivityConverter', {convert:convertMock})
+            Inject('ActivityUploadFactory', {get:jest.fn().mockReturnValue({upload:jest.fn().mockResolvedValue(true)})})
+            // needs to double as an EventEmitter-ish object as it is also consumed (unrelated to this
+            // test) by RouteListService.handleConfigChanges() while building display props for the update event
+            Inject('AppsService', {getConnectedServices:jest.fn().mockReturnValue([]), on:jest.fn(), off:jest.fn()})
+
+            return mocks
+        }
+
+        test('export() called immediately after select(), before details finish loading',async ()=>{
+            setupRaceMocks()
+
+            const selectRes = service.select('activity-1')
+            expect(selectRes).toBe(true)
+
+            const selected = service.getSelected()
+            expect(selected.isComplete()).toBe(false)
+            expect(selected.isLoading()).toBe(true)
+
+            // call export() WITHOUT waiting for the delayed repo load to resolve first
+            const success = await service.export('tcx')
+
+            // must never have reached the converter with details still undefined
+            convertMock.mock.calls.forEach( ([activity]) => {
+                expect(activity).toBeDefined()
+            })
+            expect(convertMock).toHaveBeenCalled()
+            expect(success).toBe(true)
+            expect(selected.isComplete()).toBe(true)
+        })
+
+        test('upload() called immediately after select(), before details finish loading',async ()=>{
+            const existingFiles = new Set<string>()
+            setupRaceMocks({
+                existsFile: jest.fn( (file:string) => Promise.resolve(existingFiles.has(file))),
+                writeFile: jest.fn( (file:string) => { existingFiles.add(file); return Promise.resolve() })
+            })
+
+            const selectRes = service.select('activity-1')
+            expect(selectRes).toBe(true)
+
+            const selected = service.getSelected()
+            expect(selected.isComplete()).toBe(false)
+            expect(selected.isLoading()).toBe(true)
+
+            // call upload() WITHOUT waiting for the delayed repo load to resolve first
+            const success = await service.upload('strava')
+
+            // must never have reached the converter with details still undefined
+            convertMock.mock.calls.forEach( ([activity]) => {
+                expect(activity).toBeDefined()
+            })
+            expect(convertMock).toHaveBeenCalled()
+            expect(success).toBe(true)
+            expect(selected.isComplete()).toBe(true)
+        })
+    })
 
 
     describe('openRoute',()=>{

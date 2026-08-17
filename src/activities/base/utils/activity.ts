@@ -261,15 +261,19 @@ export class Activity implements ActivityInfo{
 
         const uploads:Array<DisplayUploadInfo> = []
 
+        // details haven't arrived yet (see select()/load()) - report 'loading' rather than
+        // 'unknown', so UI callers can tell "not yet synced" apart from "we don't know yet"
+        const stillLoading = !this.details && this.isLoading()
+
         const services = this.getAppsService().getConnectedServices('ActivityUpload')
         services.forEach( service => {
-            let status:ActivityUploadStatus = 'unknown'
+            let status:ActivityUploadStatus = stillLoading ? 'loading' : 'unknown'
 
             const info = this.details?.links?.[service.key]
             if (info) {
                 status =  (info.error || !info.activity_id) ? 'failed' : 'success'
-                
-            }            
+
+            }
 
             uploads.push({
                 type:service.key,status, url:info?.url,text:service.name, synchronizing:this.isUploading(service.key)
