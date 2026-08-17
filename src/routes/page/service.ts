@@ -301,7 +301,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             this.getRouteLibraryScanner().done()
 
             this.importObserver = undefined
-            this.getPageObserver().emit('import-closed')
+            this.getPageObserver()?.emit('import-closed')
             
             this.serviceState = this.getRouteList().search()
             this.updatePageDisplay()

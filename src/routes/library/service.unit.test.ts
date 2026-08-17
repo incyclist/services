@@ -313,6 +313,55 @@ describe('RouteLibraryScannerService', () => {
         })
     })
 
+    // FIXES_BACKLOG.md item #40 - production crash: RouteImportDialog's own unmount effect
+    // (mobile) calls onImportClosed() -> RouteLibraryScannerService.done(), clearing
+    // importProps, *before* an in-flight importSingle() (kicked off by a native file picker
+    // that took long enough to background the app and unmount the page) resolves. The
+    // success/error handlers wired in importSingle(), and the write inside importRoute()
+    // itself, used to write to this.importProps.phase unconditionally and crashed with
+    // "Cannot set property 'phase' of undefined" once importProps was already undefined.
+    describe('importSingle - teardown race (FIXES_BACKLOG item #40)', () => {
+        test('emitting success after prepare()->done() does not throw (scanner already torn down)', () => {
+            service.prepare()
+            service.done()
+
+            const observer = service.importSingle({ filename: 'route.gpx', ext: 'gpx' } as any)
+
+            expect(() => observer.emit('success', { title: 'Test Route' } as any)).not.toThrow()
+        })
+
+        test('emitting error after prepare()->done() does not throw (scanner already torn down)', () => {
+            service.prepare()
+            service.done()
+
+            const observer = service.importSingle({ filename: 'route.gpx', ext: 'gpx' } as any)
+
+            expect(() => observer.emit('error', 'some error')).not.toThrow()
+        })
+
+        test('a still-open import (prepare() but no done()) still updates importProps normally on success', () => {
+            service.prepare()
+
+            const observer = service.importSingle({ filename: 'route.gpx', ext: 'gpx' } as any)
+            observer.emit('success', { title: 'Test Route' } as any)
+
+            const props = service.getDisplayProps()
+            expect(props.phase).toBe('result')
+            expect(props.resultSuccess).toEqual({ routeName: 'Test Route' })
+        })
+
+        test('a still-open import (prepare() but no done()) still updates importProps normally on error', () => {
+            service.prepare()
+
+            const observer = service.importSingle({ filename: 'route.gpx', ext: 'gpx' } as any)
+            observer.emit('error', 'boom')
+
+            const props = service.getDisplayProps()
+            expect(props.phase).toBe('result')
+            expect(props.error).toBe('boom')
+        })
+    })
+
     describe('useRouteLibraryScanner', () => {
         test('returns the singleton instance', () => {
             const a = useRouteLibraryScanner()

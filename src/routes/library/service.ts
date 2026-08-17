@@ -62,11 +62,20 @@ export class RouteLibraryScannerService extends IncyclistService {
         })
 
         observer.on('success',(route:Route)=> {
+            // The scanner may already have been torn down (done()) if the dialog/page
+            // unmounted before this async result arrived - nothing left to update in
+            // that case (FIXES_BACKLOG.md item #40).
+            if (!this.importProps)
+                return
+
             this.importProps.phase = 'result'
             this.importProps.resultSuccess= { routeName: route.title}
 
         })
         observer.on('error',(error:string)=> {
+            if (!this.importProps)
+                return
+
             this.importProps.phase = 'result'
             this.importProps.error = error
 
@@ -210,8 +219,15 @@ export class RouteLibraryScannerService extends IncyclistService {
     private async importRoute  (fileInfo: FileInfo, observer:IObserver) {
         
         await sleep(0)
-       
+
         observer.emit('parsing')
+
+        // The scanner may already have been torn down (done()) if the dialog/page
+        // unmounted while this promise chain was suspended - bail out, there's nothing
+        // left to update (FIXES_BACKLOG.md item #40).
+        if (!this.importProps)
+            return
+
         this.importProps.phase = 'parsing'
 
         if (fileInfo?.ext==='gpx' ) {
