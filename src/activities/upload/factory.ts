@@ -1,4 +1,6 @@
 import { Singleton } from "../../base/types";
+import { Injectable } from "../../base/decorators/Injection";
+import { useAppsService } from "../../apps";
 import { ActivityDetails } from "../base";
 import { IActivityUpload, UploaderInfo } from "./types";
 
@@ -48,8 +50,8 @@ export class ActivityUploadFactory {
         this.uploaders.forEach( ui=> {
 
             const {service,uploader} = ui
-            
-            if (uploader.isConnected()) {
+
+            if (uploader.isConnected() && this.getAppsService().isEnabled(service,'ActivityUpload')) {
                 const promise = uploader.upload(activity,format)
                     .then(success=> ({service,success}))
                     .catch(err => ({service,success:false,error:err.message}))
@@ -64,6 +66,11 @@ export class ActivityUploadFactory {
             return result
         }
         else return []
+    }
+
+    @Injectable
+    protected getAppsService() {
+        return useAppsService()
     }
 
 }

@@ -7,6 +7,34 @@ import { createFromJson } from '../../routes'
 import sydney from '../../../__tests__/data/routes/sydney.json'
 import tryvann from '../../../__tests__/data/rlv/Tryvann.json'
 import { RouteApiDetail } from '../../routes/base/api/types'
+import { getRouteList } from '../../routes'
+import { useUserSettings } from '../../settings'
+import { useGoogleMaps } from '../../apps'
+import { useWorkoutList } from '../../workouts'
+
+jest.mock('../../routes', () => ({
+    ...jest.requireActual('../../routes'),
+    getRouteList: jest.fn(),
+}))
+
+jest.mock('../../settings', () => ({
+    ...jest.requireActual('../../settings'),
+    useUserSettings: jest.fn(() => ({
+        isInitialized: true,
+        getValue: jest.fn(),
+        isNewUser: jest.fn(),
+    })),
+}))
+
+jest.mock('../../apps', () => ({
+    ...jest.requireActual('../../apps'),
+    useGoogleMaps: jest.fn(),
+}))
+
+jest.mock('../../workouts', () => ({
+    ...jest.requireActual('../../workouts'),
+    useWorkoutList: jest.fn(),
+}))
 
 describe('DeviceRideService',()=>{
     describe('onData',()=>{
@@ -314,6 +342,73 @@ describe('DeviceRideService',()=>{
 
             })
 
+        })
+
+    })
+
+    describe('canEnforceSimulator',()=>{
+        let service: DeviceRideService
+
+        beforeEach( ()=>{
+            service = new DeviceRideService()
+        })
+
+        afterEach( ()=>{
+            service.reset()
+            jest.resetAllMocks()
+        })
+
+        test('workout selected, no route selected, returning user -> true', ()=>{
+            (useWorkoutList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue({ id:'workout1' }) })
+            ;(getRouteList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue(undefined) })
+            ;(useGoogleMaps as jest.Mock).mockReturnValue({ hasPersonalApiKey: jest.fn().mockReturnValue(false) })
+            ;(useUserSettings as jest.Mock).mockReturnValue({ getValue: jest.fn().mockReturnValue(null), isNewUser: jest.fn().mockReturnValue(false) })
+
+            const res = service.canEnforceSimulator()
+            expect(res).toBe(true)
+        })
+
+        test('no workout, no route selected, returning user -> false', ()=>{
+            (useWorkoutList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue(undefined) })
+            ;(getRouteList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue(undefined) })
+            ;(useGoogleMaps as jest.Mock).mockReturnValue({ hasPersonalApiKey: jest.fn().mockReturnValue(false) })
+            ;(useUserSettings as jest.Mock).mockReturnValue({ getValue: jest.fn().mockReturnValue(null), isNewUser: jest.fn().mockReturnValue(false) })
+
+            const res = service.canEnforceSimulator()
+            expect(res).toBe(false)
+        })
+
+        test('no workout, route selected with video -> true', ()=>{
+            (useWorkoutList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue(undefined) })
+            ;(getRouteList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue({ description: { hasVideo:true } }) })
+            ;(useGoogleMaps as jest.Mock).mockReturnValue({ hasPersonalApiKey: jest.fn().mockReturnValue(false) })
+            ;(useUserSettings as jest.Mock).mockReturnValue({ getValue: jest.fn().mockReturnValue(null), isNewUser: jest.fn().mockReturnValue(false) })
+
+            const res = service.canEnforceSimulator()
+            expect(res).toBe(true)
+        })
+
+        // combo ride (workout attached to a route): the workout bypass must not override the
+        // route's own abuse-prevention gate - a returning user riding a route+workout combo with
+        // no video/personal key/map-view should still be denied, same as a route-only ride.
+        test('workout AND route selected, route has no video, returning user -> false', ()=>{
+            (useWorkoutList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue({ id:'workout1' }) })
+            ;(getRouteList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue({ description: { hasVideo:false } }) })
+            ;(useGoogleMaps as jest.Mock).mockReturnValue({ hasPersonalApiKey: jest.fn().mockReturnValue(false) })
+            ;(useUserSettings as jest.Mock).mockReturnValue({ getValue: jest.fn().mockReturnValue(null), isNewUser: jest.fn().mockReturnValue(false) })
+
+            const res = service.canEnforceSimulator()
+            expect(res).toBe(false)
+        })
+
+        test('workout AND route selected, route has video -> true (via route gate, not workout bypass)', ()=>{
+            (useWorkoutList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue({ id:'workout1' }) })
+            ;(getRouteList as jest.Mock).mockReturnValue({ getSelected: jest.fn().mockReturnValue({ description: { hasVideo:true } }) })
+            ;(useGoogleMaps as jest.Mock).mockReturnValue({ hasPersonalApiKey: jest.fn().mockReturnValue(false) })
+            ;(useUserSettings as jest.Mock).mockReturnValue({ getValue: jest.fn().mockReturnValue(null), isNewUser: jest.fn().mockReturnValue(false) })
+
+            const res = service.canEnforceSimulator()
+            expect(res).toBe(true)
         })
 
     })
