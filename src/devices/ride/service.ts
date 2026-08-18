@@ -1806,10 +1806,11 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     canEnforceSimulator():boolean {
-        if (this.getWorkoutList().getSelected())
+        const selected = getRouteList().getSelected()
+
+        if (this.getWorkoutList().getSelected() && !selected)
             return true
 
-        const selected = getRouteList().getSelected()
         const personalApiKey = this.getGoogleMaps().hasPersonalApiKey()
 
         if (!selected?.description)
