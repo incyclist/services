@@ -68,6 +68,16 @@ export class ActivityUploadFactory {
         else return []
     }
 
+    isUploadEnabled(service:string):boolean {
+        const requested = this.uploaders.find( ui=> ui.service===service)
+        if (!requested)
+            return false;
+
+        const uploader = requested.uploader
+
+        return (uploader.isConnected() && this.getAppsService().isEnabled(service,'ActivityUpload'))
+    }
+
     @Injectable
     protected getAppsService() {
         return useAppsService()

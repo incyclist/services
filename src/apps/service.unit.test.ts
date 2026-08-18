@@ -23,7 +23,8 @@ describe ('AppService',()=>{
             const setupMocks = ( mockDef:Record<string, Partial<IActivityUpload>>)=>{
 
                 service.inject('ActivityUploadFactory', {
-                    get:jest.fn( (service:string) => mockDef[service])
+                    get:jest.fn( (service:string) => mockDef[service]),
+                    isUploadEnabled:jest.fn( (service:string) => mockDef[service]?.isConnected())
                 })
     
             }

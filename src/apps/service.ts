@@ -114,10 +114,15 @@ export class AppsService extends IncyclistService   {
         const available = this.services[operation]
 
         if (operation === 'ActivityUpload') {
-            const uploaders = available.map( a => this.getActivityUploadFactory().get(a))
+            const factory = this.getActivityUploadFactory()
+
+            const uploaders = available.map( a => factory.get(a))
             const connected = uploaders.map( (u,idx) => ({connected:u?.isConnected(), key:available[idx]}) )
                 .filter( s => s.connected)
-            return this.serviceMap.filter( s => connected.find( c => c.key===s.key))
+            const enabled = connected    
+                .filter( s => factory.isUploadEnabled(s.key))
+
+            return this.serviceMap.filter( s => enabled.find( c => c.key===s.key))
         }
         else if (operation === 'WorkoutDownload') {
             return this.serviceMap.filter( s => available.includes(s.key) && s.connection.isConnected())

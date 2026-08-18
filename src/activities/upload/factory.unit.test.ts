@@ -151,4 +151,47 @@ describe ('ActivityUploadFactory',()=>{
             ])
         })
     })
+
+    describe('isUploadEnabled',()=>{
+        let factory
+        let appsService
+        beforeEach( ()=>{
+            factory = new ActivityUploadFactory()
+            appsService = { isEnabled: jest.fn().mockReturnValue(true) }
+            Inject('AppsService', appsService)
+        })
+        afterEach( ()=>{
+            factory.uploaders = []
+            Inject('AppsService', null)
+        })
+
+        test('service unknown',()=>{
+            expect(factory.isUploadEnabled('s1')).toBe(false)
+            expect(appsService.isEnabled).not.toHaveBeenCalled()
+        })
+
+        test('connected and enabled',()=>{
+            const u1 = new MockUploader(jest.fn().mockResolvedValue(true))
+            factory.add('s1', u1)
+
+            expect(factory.isUploadEnabled('s1')).toBe(true)
+            expect(appsService.isEnabled).toHaveBeenCalledWith('s1','ActivityUpload')
+        })
+
+        test('connected but disabled',()=>{
+            const u1 = new MockUploader(jest.fn().mockResolvedValue(true))
+            factory.add('s1', u1)
+            appsService.isEnabled.mockReturnValue(false)
+
+            expect(factory.isUploadEnabled('s1')).toBe(false)
+        })
+
+        test('not connected',()=>{
+            const u1 = new MockUploader(jest.fn().mockResolvedValue(true), false)
+            factory.add('s1', u1)
+
+            expect(factory.isUploadEnabled('s1')).toBe(false)
+            expect(appsService.isEnabled).not.toHaveBeenCalled()
+        })
+    })
 })
