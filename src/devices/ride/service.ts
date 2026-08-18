@@ -12,6 +12,7 @@ import { Singleton } from "../../base/types";
 import { Injectable } from "../../base/decorators/Injection";
 import { Route } from "../../routes/base/model/route";
 import { useGoogleMaps } from "../../apps";
+import { useWorkoutList } from "../../workouts";
 import { RouteApiDetail } from "../../routes/base/api/types";
 import { DaumEppProgramEntry, RoutePoint } from "../../routes/base/types";
 
@@ -1805,6 +1806,9 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     canEnforceSimulator():boolean {
+        if (this.getWorkoutList().getSelected())
+            return true
+
         const selected = getRouteList().getSelected()
         const personalApiKey = this.getGoogleMaps().hasPersonalApiKey()
 
@@ -1880,6 +1884,11 @@ export class DeviceRideService  extends IncyclistService{
     @Injectable
     protected getGoogleMaps() {
         return useGoogleMaps()
+    }
+
+    @Injectable
+    protected getWorkoutList() {
+        return useWorkoutList()
     }
 
 
