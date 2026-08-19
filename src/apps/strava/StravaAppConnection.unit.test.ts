@@ -38,8 +38,14 @@ const ApiMock = (props:{tokenUpdate?:StravaConfig,initError?:boolean }):Partial<
     return result
 }
 
-const SecretMock = ():Partial<ISecretBinding> => ({    
-    getSecret:jest.fn( (key) => 'very secret')     
+const SecretMock = ():Partial<ISecretBinding> => ({
+    getSecret:jest.fn( (key) => 'very secret')
+})
+
+// STRAVA_CLIENT_ID/STRAVA_CLIENT_SECRET are no longer required client-side (FIXES_BACKLOG #61) -
+// this mock simulates a client that never receives them (e.g. a version-gated secrets response)
+const NoSecretMock = ():Partial<ISecretBinding> => ({
+    getSecret:jest.fn( () => undefined)
 })
 
 
@@ -99,6 +105,25 @@ describe ('StravaAppConnection', ()=>{
 
         })
 
+
+        test('connects even without STRAVA_CLIENT_ID/STRAVA_CLIENT_SECRET secrets (relaxed gate, matches IntervalsAppConnection)',()=>{
+
+            const credentials:StravaCredentials = {accesstoken:'1',refreshtoken:'2',expiration:new Date(Date.now()+1000).toISOString()}
+
+            const mocks: MockDefinition = {
+                userSettings: UserSettingsMock(true, credentials,'12345678-0000-1111-2222-123456789abc'),
+                bindings: NoSecretMock(),
+                api: ApiMock({})
+            };
+            setupMocks(mocks);
+
+            const success = service.init();
+            expect(success).toBe(true)
+            expect(logSpy).toHaveBeenCalledWith({message:'Strava init done', hasCredentials:true})
+            expect(service.isConnected()).toBe(true)
+            expect(service.isConnecting()).toBe(false)
+
+        })
 
         test('alread initialized',()=>{
             const credentials:StravaCredentials = {accesstoken:'1',refreshtoken:'2',expiration:new Date(Date.now()+1000).toISOString()}
