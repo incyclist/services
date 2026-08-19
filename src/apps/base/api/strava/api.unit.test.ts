@@ -1,6 +1,6 @@
 import {StravaApi} from "./api";
 import { AxiosFormPost } from "../../../../../__tests__/utils/formPost";
-import { StravaUploadProps } from "./types";
+import { StravaConfig, StravaUploadProps } from "./types";
 
 
 
@@ -69,6 +69,94 @@ describe ('Strava API',()=> {
 
             await expect( async () =>{ await api.upload(file,info)}).rejects.toThrow('Activity already exists: id=12699650316')
             
+        })
+
+    })
+
+
+    describe( 'refreshToken',()=>{
+        let api;
+        let restClient
+        let settings
+
+        const initialConfig:StravaConfig = {
+            accessToken:'old-access-token',
+            refreshToken:'old-refresh-token',
+            clientId:'some-client-id',
+            clientSecret:'some-client-secret'
+        }
+
+        beforeEach( ()=>{
+            api = new StravaApi()
+            api.init({...initialConfig})
+
+            restClient = { request: jest.fn() }
+            settings = { get: jest.fn( (key,def) => def) }
+
+            api.getApi = jest.fn( ()=> restClient)
+            api.getUserSettings = jest.fn( ()=> settings)
+        })
+
+        test('calls the auth-server refresh endpoint, not Strava directly, and sends only the refresh token',async ()=>{
+            restClient.request.mockResolvedValue( {data:{
+                access_token:'new-access-token',
+                refresh_token:'new-refresh-token',
+                expires_at: 1700000000,
+                expires_in: 21600
+            }})
+
+            await api.refreshToken()
+
+            expect(restClient.request).toHaveBeenCalledTimes(1)
+            const request = restClient.request.mock.calls[0][0]
+
+            expect(request.method).toBe('post')
+            expect(request.url).toBe('https://auth.incyclist.com/strava/refresh')
+            expect(request.data).toEqual({refresh_token:'old-refresh-token'})
+
+            // must never read/send client_id or client_secret for this call
+            expect(request.data.client_id).toBeUndefined()
+            expect(request.data.client_secret).toBeUndefined()
+            expect(JSON.stringify(request.data)).not.toMatch(/client_?[iI]d|client_?[sS]ecret/)
+        })
+
+        test('updates access token, refresh token and expiration on success',async ()=>{
+            restClient.request.mockResolvedValue( {data:{
+                access_token:'new-access-token',
+                refresh_token:'new-refresh-token',
+                expires_at: 1700000000,
+                expires_in: 21600
+            }})
+
+            const tokenUpdated = jest.fn()
+            api.observer.on('token.updated', tokenUpdated)
+
+            await api.refreshToken()
+
+            expect(api.config.accessToken).toBe('new-access-token')
+            expect(api.config.refreshToken).toBe('new-refresh-token')
+            expect(api.config.expiration).toEqual( new Date(1700000000*1000))
+            expect(tokenUpdated).toHaveBeenCalledWith(api.config)
+        })
+
+        test('respects a STRAVA_AUTH_SERVER_URL settings override',async ()=>{
+            settings.get = jest.fn( (key,def) => key==='STRAVA_AUTH_SERVER_URL' ? 'https://auth.staging.incyclist.com' : def)
+            restClient.request.mockResolvedValue( {data:{access_token:'a',refresh_token:'b',expires_at:1700000000,expires_in:1}})
+
+            await api.refreshToken()
+
+            const request = restClient.request.mock.calls[0][0]
+            expect(request.url).toBe('https://auth.staging.incyclist.com/strava/refresh')
+        })
+
+        test('does not throw and logs the error when the auth-server call fails',async ()=>{
+            restClient.request.mockRejectedValue( new Error('network error'))
+
+            await expect( api.refreshToken()).resolves.not.toThrow()
+
+            // config must remain unchanged
+            expect(api.config.accessToken).toBe('old-access-token')
+            expect(api.config.refreshToken).toBe('old-refresh-token')
         })
 
     })

@@ -8,6 +8,7 @@ import { sleep } from "../../../../utils/sleep"
 
 const API_BASE_URL = 'https://www.strava.com/api/v3'
 const OAUTH_URL = 'https://www.strava.com/oauth'
+const AUTH_SERVER_URL = 'https://auth.incyclist.com'
 
 /**
  * Represents a client implementation of a subset of the Strava v3 API
@@ -250,29 +251,36 @@ export class StravaApi extends AppApiBase{
     }
 
     
+    /**
+     * Refreshes the Strava access token.
+     *
+     * The refresh is performed server-side by `auth-server`'s `POST /strava/refresh`
+     * endpoint, which holds the real Strava client secret and calls Strava's own
+     * `/oauth/token` on the client's behalf. The client only ever sends the refresh
+     * token it already has and receives back a fresh access/refresh token pair -
+     * `client_id`/`client_secret` are never read or sent from here (see FIXES_BACKLOG #61).
+     */
     protected async refreshToken():Promise<void> {
         this.logger.logEvent({message: 'Strava refresh Token start'});
 
         let requestData;
+        const url = this.getAuthServerUrl()+'/strava/refresh'
 
         try {
             requestData =  {
-                grant_type : 'refresh_token',
-                refresh_token : this.config.refreshToken,
-                client_secret: this.config.clientSecret,
-                client_id : this.config.clientId
+                refresh_token : this.config.refreshToken
             }
             const response = await this.getApi().request( {
                 method:'post',
-                url: this.getOauthBaseUrl()+'/token',
+                url,
                 data:requestData
             })
-            
+
             this.logger.logEvent({message: 'Strava refresh Token result',status:'success'});
 
             const data = response.data as StravaRefreshTokenResponse;
 
-            const expiration = new Date( data.expires_at *1000 ); 
+            const expiration = new Date( data.expires_at *1000 );
             this.config.accessToken =data.access_token;
             this.config.refreshToken = data.refresh_token;
             this.config.expiration = expiration;
@@ -284,9 +292,9 @@ export class StravaApi extends AppApiBase{
             let errorStr = err.message
             if (err.response) {
                 const {response} = err;
-                errorStr = `HTTP error ${response.status}: ${response.statusText}, url:${this.getOauthBaseUrl()+'/token'}, data:${JSON.stringify(requestData)}`
+                errorStr = `HTTP error ${response.status}: ${response.statusText}, url:${url}, data:${JSON.stringify(requestData)}`
             }
-                
+
             this.logger.logEvent({message: 'Strava refresh Token result',status:'error',error:errorStr});
         }
     }
@@ -315,7 +323,16 @@ export class StravaApi extends AppApiBase{
         catch {
             return OAUTH_URL
         }
-                
+
+    }
+
+    protected getAuthServerUrl() {
+        try {
+            return this.getUserSettings().get('STRAVA_AUTH_SERVER_URL',AUTH_SERVER_URL)
+        }
+        catch {
+            return AUTH_SERVER_URL
+        }
     }
 
     protected getBaseUrl() {

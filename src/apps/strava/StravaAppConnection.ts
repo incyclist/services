@@ -101,11 +101,8 @@ export class StravaAppConnection extends ConnectedAppService<StravaCredentials> 
 
         try {
             const auth = this.getCredentials();
-            const clientId = this.getSecret('STRAVA_CLIENT_ID');
-            const clientSecret = this.getSecret('STRAVA_CLIENT_SECRET');
 
-
-            if (clientId && clientSecret && auth) {
+            if (auth) {
                 this.logEvent({ message: 'Strava init done', hasCredentials: true });
                 this.config = this.buildConfigFromCredentials(auth)
                 this.initApi(this.config);

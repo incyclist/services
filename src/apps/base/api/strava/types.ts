@@ -16,15 +16,6 @@ export type StravaConfig = {
 }
 
 export type StravaRefreshTokenRequest = {
-    
-    /** Client ID (Required for oauth) */
-    clientId:string 
-
-    /** Client Secret (Required for oauth) */
-    clientSecret:string, 
-
-    /** The grant type for the request. When refreshing an access token, must always be "refresh_token". */
-    grant_type:string
 
     /** The refresh token for this user, to be used to get the next access token for this user. Please expect that this value can change anytime you retrieve a new access token. Once a new refresh token code has been returned, the older code will no longer work.*/
     refresh_token: string
