@@ -123,9 +123,9 @@ describe('FeatureToggleSyncService', () => {
         })
 
         test('applies a valid toggle-change message with value:false', () => {
-            emit(`incyclist/features/${UUID}/CONTROLLERS`, JSON.stringify({ value: false }))
+            emit(`incyclist/features/${UUID}/XYZ`, JSON.stringify({ value: false }))
 
-            expect(settings.set).toHaveBeenCalledWith('CONTROLLERS', false)
+            expect(settings.set).toHaveBeenCalledWith('XYZ', false)
         })
 
         test('accepts a Uint8Array payload (as delivered by some mq bindings)', () => {

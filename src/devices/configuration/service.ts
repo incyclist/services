@@ -1070,10 +1070,7 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.verifyCapabilityExists(IncyclistCapability.HeartRate)
         this.verifyCapabilityExists(IncyclistCapability.Speed)
         this.verifyCapabilityExists(IncyclistCapability.Cadence)
-
-        if ( this.hasFTControllers()) {
-            this.verifyCapabilityExists(IncyclistCapability.AppControl)
-        }
+        this.verifyCapabilityExists(IncyclistCapability.AppControl)
 
         if (bikeCapIdx!==-1) {
             capabilities.splice( bikeCapIdx,1)
@@ -1126,10 +1123,6 @@ export class DeviceConfigurationService  extends IncyclistService{
 
         if (isEnabled('wifi') && !isConfigured('wifi'))
             this.initWifiInterface()
-    }
-
-    protected hasFTControllers():boolean {
-        return this.getUserSettings().getValue('CONTROLLERS',false)
     }
 
     protected doesAppSupportsWifi():boolean {
