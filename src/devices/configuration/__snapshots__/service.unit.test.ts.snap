@@ -33,6 +33,12 @@ exports[`DeviceConfigurationService init empty configuration 1`] = `
       "disabled": false,
       "selected": undefined,
     },
+    {
+      "capability": "app_control",
+      "devices": [],
+      "disabled": false,
+      "selected": undefined,
+    },
   ],
   "devices": [],
   "interfaces": [
@@ -92,6 +98,12 @@ exports[`DeviceConfigurationService init no capabilities 1`] = `
   },
   {
     "capability": "heartrate",
+    "devices": [],
+    "disabled": false,
+    "selected": undefined,
+  },
+  {
+    "capability": "app_control",
     "devices": [],
     "disabled": false,
     "selected": undefined,
