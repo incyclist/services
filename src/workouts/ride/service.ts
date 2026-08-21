@@ -442,6 +442,55 @@ export class WorkoutRide extends IncyclistService{
     }
 
     /**
+     * Resolves whether `power` (an absolute-Watt, i.e. `type:'watt'`, limit) is protected from
+     * swipe-based adjustment: the step's own `power.locked` wins when set, otherwise falls back to
+     * the Workout's `lockedPowerTargets` default (`false`/adjustable when neither is set). Has no
+     * bearing on `'pct of FTP'` limits - those always track FTP regardless of this flag, so callers
+     * only need to consult it for `type:'watt'` limits.
+     */
+    private isPowerLocked(power?:PowerLimit):boolean {
+        return power?.locked ?? this.workout?.lockedPowerTargets ?? false
+    }
+
+    /**
+     * True when `powerUp()`/`powerDown()`'s FTP-scaling fallback (no headroom left to nudge
+     * `targetPower` within the current step's range, or a fixed target with no range at all) should
+     * instead move the current step's own Watt value directly and leave FTP untouched - i.e. the
+     * current step's limits are absolute Watts (`type:'watt'`) and not `isPowerLocked()`. Shared by
+     * `powerUp()`/`powerDown()` (to decide what they adjust) and `getLoadButtonLabels()` (to decide
+     * whether the fallback button label should read in Watt or in % of FTP).
+     */
+    private isWattFallbackAdjustment():boolean {
+        const power = this.currentStep?.power
+        return power?.type==='watt' && !this.isPowerLocked(power)
+    }
+
+    /**
+     * Called after `setCurrentLimits()` has just re-resolved `currentLimits` inside
+     * `powerUp()`/`powerDown()`'s fallback branch (no headroom to nudge `targetPower` within the
+     * current step's range, or a fixed target with no range at all). `createLimitRequest()` only
+     * recomputes `targetPower` from scratch when the step is a genuinely fixed target
+     * (`minPower===maxPower`); for a range step it otherwise just carries the pre-swipe `targetPower`
+     * forward unchanged (`refresh` path) - which is correct for a locked/unaffected step (min/max
+     * didn't move either, so the old target is still exactly where it should be), but leaves the
+     * target stranded away from the boundary once min/max *did* move: an unlocked absolute-Watt
+     * step's window shifting, or a 'pct of FTP' step's window rescaling with the new FTP.
+     *
+     * Re-pinning the target to the boundary it was sitting at before the swipe unifies all four
+     * fallback cases correctly in one place: a no-op for a fixed target or an unaffected (locked)
+     * step (new boundary === old boundary === old target already), and the fix for a 'pct of FTP' or
+     * unlocked absolute-Watt range step (new boundary !== old boundary, target now correctly follows
+     * it).
+     *
+     * @param increase true for `powerUp()` (track `maxPower`), false for `powerDown()` (track `minPower`)
+     */
+    private trackTargetToBoundary(increase:boolean):void {
+        if (this.currentLimits?.maxPower===undefined)
+            return
+        this.currentLimits.targetPower = increase ? this.currentLimits.maxPower : this.currentLimits.minPower
+    }
+
+    /**
      * The nominal Watt step `powerUp()`/`powerDown()` nudge `targetPower` by once
      * `isPowerRangeAdjustable()` is true: a fixed 5W/50W (matching mobile's swipe-gesture step
      * size, see `useWorkoutRideGestures.ts`) when the workout has an FTP configured, or the
@@ -503,19 +552,30 @@ export class WorkoutRide extends IncyclistService{
     }
 
     /**
-     * Builds the labels for the dashboard's load ("+5%"/"+1%"/"-1%"/"-5%") buttons, reflecting
-     * what a click on each of them will actually do right now: `isPowerRangeAdjustable()` decides
-     * per-button (using the same boundary logic `powerUp()`/`powerDown()` use to act) whether the
-     * click will nudge `targetPower` (Watt-labelled, with the real, headroom-clamped amount via
-     * `getPowerRangeAdjustmentWatts()`) or scale the Workout FTP (%-labelled).
+     * Builds the labels for the dashboard's load ("+5%"/"+1%"/"-1%"/"-5%"/"+5W"/...) buttons,
+     * reflecting what a click on each of them will actually do right now:
+     * - `isPowerRangeAdjustable()` true: nudges `targetPower` within the current step's authored
+     *   range (Watt-labelled, with the real, headroom-clamped amount via `getPowerRangeAdjustmentWatts()`)
+     * - `isPowerRangeAdjustable()` false and `isWattFallbackAdjustment()` true (an unlocked, absolute-Watt
+     *   step with no headroom left, or no range at all): moves the step's own Watt value directly by
+     *   the button's raw magnitude (Watt-labelled) - deliberately *not* `getPowerRangeDeltaVal()`'s
+     *   5W/50W nominal step, which only ever applied to the range-nudge case above; this fallback's
+     *   `powerUp()`/`powerDown()` implementation adds the raw magnitude to `manualPowerOffset`
+     *   directly (a founding behaviour of this method, predating the 5W/50W mechanism), so the label
+     *   must match that, not the unrelated range-nudge convention
+     * - otherwise (a `'pct of FTP'` step, or a locked absolute-Watt step): scales the Workout FTP (%-labelled)
+     *
+     * Mirrors the exact branching `powerUp()`/`powerDown()` use to act, keeping label and effect in sync.
      */
     private getLoadButtonLabels():WorkoutDisplayProperties['loadButtons'] {
         const label = (magnitude:number, increase:boolean):string => {
             const sign = increase ? '+' : '-'
             const delta = increase ? magnitude : -magnitude
-            return this.isPowerRangeAdjustable(delta)
-                ? `${sign}${this.getPowerRangeAdjustmentWatts(magnitude, increase)}W`
-                : `${sign}${magnitude}%`
+            if (this.isPowerRangeAdjustable(delta))
+                return `${sign}${this.getPowerRangeAdjustmentWatts(magnitude, increase)}W`
+            if (this.isWattFallbackAdjustment())
+                return `${sign}${magnitude}W`
+            return `${sign}${magnitude}%`
         }
         return {
             inc5: label(5, true),
@@ -531,15 +591,33 @@ export class WorkoutRide extends IncyclistService{
      * This allows the user to increase the instensity of a workout.
      *
      * Depending on how the the step limits are defined, this will have different impact
-     * - Step defined in "percentage of FTP": The FTP will be increased by _delta_ %
-     * - Step defined in "Watts": The power limit will be increased by _delta_ Watts
-     * 
+     * - Step defined in "percentage of FTP": The FTP will be increased by _delta_ %, defaulting the
+     *   starting point to `DEFAULT_FTP` (200) if the Workout has no FTP configured yet - `init()`
+     *   already guarantees one is set before a ride can reach this method, so this only matters for
+     *   direct/test-only invocations.
+     * - Step defined in "Watts", unlocked (`!isPowerLocked()`, the default): the power limit itself
+     *   will be increased by _delta_ Watts - within the authored range while there is headroom
+     *   (`isPowerRangeAdjustable()`), or by extending past the authored boundary once there isn't
+     *   (including a fixed target, which has no headroom by definition). FTP is left untouched, since
+     *   an absolute-Watt value is independent of FTP.
+     * - Step defined in "Watts", locked (`isPowerLocked()`, e.g. a structured test interval that must
+     *   hold an exact wattage): the power limit is left untouched; FTP is scaled instead, exactly like
+     *   a "percentage of FTP" step - useful so a locked step's swipe can still raise FTP for the
+     *   benefit of later, unlocked/percentage-based steps in the same workout.
+     *
+     * `manualPowerOffset` (the accumulator behind the Watt case above) only ever accumulates from a
+     * swipe that actually took the unlocked-Watt branch - never from a swipe that scaled FTP (whether
+     * because the step was 'pct of FTP' or a locked Watt step). This keeps the two dials fully
+     * separate: an FTP-only swipe during e.g. a warmup must never silently shift the start of a later,
+     * unrelated, unlocked-Watt step (such as a ramp test) that the rider never touched.
+     *
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
      * @returns which quantity was adjusted and its resulting value (in Watt): `{type:'targetPower'}`
      *          when the current step allows a power range (`minPower!==maxPower`) and the target is
-     *          nudged directly within that range; `{type:'ftp'}` when the Workout FTP itself was
-     *          scaled; `undefined` if no FTP is configured for this workout (e.g. a purely Watt-based
-     *          workout, outside a range step) or the result could not be determined
+     *          nudged directly within that range, or when an unlocked absolute-Watt step's value is
+     *          moved directly (in or out of range); `{type:'ftp'}` when the Workout FTP itself was
+     *          scaled; `undefined` only when the load buttons are hidden for the current cycling mode
+     *          or an error occurred
      *
      */
     powerUp(delta:number):PowerAdjustmentResult|undefined {
@@ -569,18 +647,26 @@ export class WorkoutRide extends IncyclistService{
                 return { type: 'targetPower', value: this.currentLimits.targetPower };
             }
 
-            let adjustedFtp:number|undefined
-            if (this.settings?.ftp) {
-                this.settings.ftp = this.settings.ftp * (1+delta/100)
+            const wattFallback = this.isWattFallbackAdjustment()
+
+            if (wattFallback)
+                this.manualPowerOffset += delta
+            else {
+                this.settings.ftp = (this.settings.ftp??DEFAULT_FTP) * (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
                 this.logEvent({message: 'workout FTP adjusted', ftp:this.settings.ftp})
-                adjustedFtp = Math.round(this.settings.ftp)
             }
-            this.manualPowerOffset += delta
 
             this.setCurrentLimits()
+            this.trackTargetToBoundary(true)
             this.emit('update', this.getDashboardDisplayProperties())
-            return adjustedFtp!==undefined ? { type: 'ftp', value: adjustedFtp } : undefined
+
+            if (wattFallback) {
+                this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
+                return { type: 'targetPower', value: this.currentLimits.targetPower }
+            }
+
+            return { type: 'ftp', value: Math.round(this.settings.ftp) }
         }
         catch(err) {
             this.logError(err,'powerUp')
@@ -591,18 +677,36 @@ export class WorkoutRide extends IncyclistService{
     /**
      * Adjusts the base level of th workout
      * 
-     * This allows the user to decrease the instensity of a workout. 
-     * 
+     * This allows the user to decrease the instensity of a workout.
+     *
      * Depending on how the the step limits are defined, this will have different impact
-     * - Step defined in "percentage of FTP": The FTP will be decreased by _delta_ %
-     * - Step defined in "Watts": The power limit will be decreased by _delta_ Watts
-     * 
+     * - Step defined in "percentage of FTP": The FTP will be decreased by _delta_ %, defaulting the
+     *   starting point to `DEFAULT_FTP` (200) if the Workout has no FTP configured yet - `init()`
+     *   already guarantees one is set before a ride can reach this method, so this only matters for
+     *   direct/test-only invocations.
+     * - Step defined in "Watts", unlocked (`!isPowerLocked()`, the default): the power limit itself
+     *   will be decreased by _delta_ Watts - within the authored range while there is headroom
+     *   (`isPowerRangeAdjustable()`), or by extending past the authored boundary once there isn't
+     *   (including a fixed target, which has no headroom by definition). FTP is left untouched, since
+     *   an absolute-Watt value is independent of FTP.
+     * - Step defined in "Watts", locked (`isPowerLocked()`, e.g. a structured test interval that must
+     *   hold an exact wattage): the power limit is left untouched; FTP is scaled instead, exactly like
+     *   a "percentage of FTP" step - useful so a locked step's swipe can still lower FTP for the
+     *   benefit of later, unlocked/percentage-based steps in the same workout.
+     *
+     * `manualPowerOffset` (the accumulator behind the Watt case above) only ever accumulates from a
+     * swipe that actually took the unlocked-Watt branch - never from a swipe that scaled FTP (whether
+     * because the step was 'pct of FTP' or a locked Watt step). This keeps the two dials fully
+     * separate: an FTP-only swipe during e.g. a warmup must never silently shift the start of a later,
+     * unrelated, unlocked-Watt step (such as a ramp test) that the rider never touched.
+     *
      * @param delta adjustment of the FTP(in%) or current Power (in Watt)
      * @returns which quantity was adjusted and its resulting value (in Watt): `{type:'targetPower'}`
      *          when the current step allows a power range (`minPower!==maxPower`) and the target is
-     *          nudged directly within that range; `{type:'ftp'}` when the Workout FTP itself was
-     *          scaled; `undefined` if no FTP is configured for this workout (e.g. a purely Watt-based
-     *          workout, outside a range step) or the result could not be determined
+     *          nudged directly within that range, or when an unlocked absolute-Watt step's value is
+     *          moved directly (in or out of range); `{type:'ftp'}` when the Workout FTP itself was
+     *          scaled; `undefined` only when the load buttons are hidden for the current cycling mode
+     *          or an error occurred
      *
      */
     powerDown(delta:number):PowerAdjustmentResult|undefined {
@@ -627,20 +731,26 @@ export class WorkoutRide extends IncyclistService{
                 return { type: 'targetPower', value: this.currentLimits.targetPower };
             }
 
+            const wattFallback = this.isWattFallbackAdjustment()
 
-            let adjustedFtp:number|undefined
-            if (this.settings?.ftp) {
-                this.settings.ftp = this.settings.ftp / (1+delta/100)
+            if (wattFallback)
+                this.manualPowerOffset -= delta
+            else {
+                this.settings.ftp = (this.settings.ftp??DEFAULT_FTP) / (1+delta/100)
                 this.workoutList.setStartSettings(this.settings)
                 this.logEvent({message: 'workout FTP adjusted', ftp:this.settings.ftp})
-                adjustedFtp = Math.round(this.settings.ftp)
             }
 
-            this.manualPowerOffset -= delta
-
             this.setCurrentLimits()
+            this.trackTargetToBoundary(false)
             this.emit('update', this.getDashboardDisplayProperties())
-            return adjustedFtp!==undefined ? { type: 'ftp', value: adjustedFtp } : undefined
+
+            if (wattFallback) {
+                this.logEvent({message: 'workout target power adjusted', targetPower:this.currentLimits.targetPower})
+                return { type: 'targetPower', value: this.currentLimits.targetPower }
+            }
+
+            return { type: 'ftp', value: Math.round(this.settings.ftp) }
         }
         catch(err) {
             this.logError(err,'powerDown')
@@ -1052,9 +1162,11 @@ export class WorkoutRide extends IncyclistService{
         if ( power.type === 'pct of FTP') {
             const pct = val
             const ftp = this.settings.ftp??DEFAULT_FTP
-            const ftpVal = this.settings.ftp??ftp+this.manualPowerOffset
-            return Math.round(pct * ftpVal/100);
+            return Math.round(pct * ftp/100);
         }
+
+        if (this.isPowerLocked(power))
+            return Math.round(val)
 
         return Math.round(val+this.manualPowerOffset);
 

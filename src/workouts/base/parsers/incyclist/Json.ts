@@ -19,9 +19,9 @@ export class JsonParser implements WorkoutParser<string>{
         try {
             const str = await this.getData(file,data)
             const parsedData = JSON.parse(str);
-            const {name,description,category,steps,type='workout'} = parsedData;
+            const {name,description,category,steps,type='workout',lockedPowerTargets} = parsedData;
 
-            const workout =  new Workout({type,name,description,category,isLocal:true});
+            const workout =  new Workout({type,name,description,category,isLocal:true,lockedPowerTargets});
             steps.forEach(step => {
                 if ( step.type==='step') {
                     workout.addStep(step)

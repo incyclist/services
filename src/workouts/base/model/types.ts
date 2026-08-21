@@ -9,7 +9,12 @@ export type PowerLimitType = 'watt' | 'pct of FTP'
 
 export interface PowerLimit extends Limit {
     /** @public defines the type of the power limit (either percentage of FTP or absolute) */
-    type?:PowerLimitType    
+    type?:PowerLimitType
+    /** @public when true, protects this step's absolute-Watt (type:'watt') power target/window from
+     *  swipe-based adjustment during a ride - only the Workout FTP may still change. Has no effect on
+     *  'pct of FTP' limits, which always track FTP regardless of this flag. If unset, falls back to
+     *  the Workout's `lockedPowerTargets` default. */
+    locked?:boolean
 }
 
 export type DataType = 'step' | 'segment' | 'workout' | 'plan' | 'scheduled'
@@ -102,6 +107,10 @@ export interface WorkoutDefinition extends SegmentDefinition {
     isLocal?:boolean
     /** @public true if the user has deleted this workout - kept as a tombstone (not physically removed) for non-local workouts, so a future sync does not resurrect it */
     isDeleted?:boolean
+    /** @public default lock state for absolute-Watt (type:'watt') power targets in this workout, used
+     *  by any step whose own `PowerLimit.locked` is not explicitly set. Defaults to false (adjustable)
+     *  when omitted. Has no effect on 'pct of FTP' limits. */
+    lockedPowerTargets?:boolean
 }
 
 export interface ScheduledWorkout {
