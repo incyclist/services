@@ -25,10 +25,10 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
     if (name===undefined && fileName!==undefined) {
         const parts = fileName.split(/[/\\]/)
 
-        const match  = /([^\\/]+)\.json/.exec(parts.at(-1))
-        if (match?.[1]) 
-            name = match[1]
-        
+        const last = parts.at(-1)
+        if (last?.endsWith('.json'))
+            name = last.slice(0, -5)
+
     }
 
     let startTime:number

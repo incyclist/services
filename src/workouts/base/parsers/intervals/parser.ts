@@ -97,7 +97,7 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
             throw new Error('Could not open file')
         }        
         const resData:string = typeof(res.data)==='string' ? res.data : res.data.toString('utf-8')
-        const cleaned = resData.charCodeAt(0) === 0xFEFF ? resData.slice(1) : resData
+        const cleaned = resData.codePointAt(0) === 0xFEFF ? resData.slice(1) : resData
 
         return cleaned
 
