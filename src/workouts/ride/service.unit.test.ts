@@ -660,20 +660,26 @@ describe('WorkoutRide',()=>{
             service.powerUp(10)
 
             expect( setStartSettings).toHaveBeenCalledWith( expect.objectContaining({ftp:expect.closeTo(220,0)}))
-            expect( s.manualPowerOffset).toBe(10)
+            // this swipe scaled FTP (currentStep is undefined here, so isWattFallbackAdjustment() is
+            // false) - manualPowerOffset is the Watt-side dial and must stay untouched by an FTP-side
+            // adjustment (regression: an FTP-only swipe during a warmup was silently shifting the
+            // start of a later, unrelated, unlocked-Watt ramp step the rider never touched)
+            expect( s.manualPowerOffset).toBe(0)
             expect( emit).toHaveBeenCalledWith('request-update',expect.anything())
             expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({ftp:expect.closeTo(220,0)}))
 
         })
-        test('no FTP set',()=>{
+        // `init()` always guarantees settings.ftp is populated before a ride can reach powerUp(), so
+        // this only exercises the defensive DEFAULT_FTP fallback directly.
+        test('no FTP set - defaults to DEFAULT_FTP (200)',()=>{
             s.settings={}
             const result = service.powerUp(10)
 
-            expect( setStartSettings).not.toHaveBeenCalled()
-            expect( s.manualPowerOffset).toBe(10)
+            expect( setStartSettings).toHaveBeenCalledWith( expect.objectContaining({ftp:expect.closeTo(220,0)}))
+            expect( s.manualPowerOffset).toBe(0)
             expect( emit).toHaveBeenCalledWith('request-update',expect.anything())
-            expect( emit).toHaveBeenCalledWith('update', expect.not.objectContaining({ftp:expect.anything()}))
-            expect(result).toBeUndefined()
+            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({ftp:expect.closeTo(220,0)}))
+            expect(result).toEqual({ type: 'ftp', value: 220 })
 
         })
 
@@ -720,6 +726,221 @@ describe('WorkoutRide',()=>{
             expect(s.currentLimits.targetPower).toBe(300)
         })
 
+        // The 7-scenario matrix below (type watt/pct-of-FTP x shape fixed/mid-range/at-boundary x
+        // lock state, where lock only applies to watt) was worked out with the reporter of the
+        // original bug (a fixed-Watt step's targetPower shifting on swipe) after realising the
+        // originally-proposed "always frozen" fix would make every absolute-Watt step immovable,
+        // which is wrong for a normal ride (only a structured test interval actually needs that).
+        // `PowerLimit.locked` (falling back to `Workout.lockedPowerTargets`) makes it opt-in per
+        // step/workout, defaulting to unlocked/adjustable.
+
+        // Scenario 1: pct-of-FTP, fixed (minPower===maxPower) - mode-independent, target always
+        // recalculates directly from the new FTP since target===min===max by definition. Already
+        // exercised by the 'normal' test above; this adds the explicit currentLimits assertion.
+        test('pct-of-FTP fixed target recalculates directly from the new FTP',()=>{
+            const woPctFixed = new Workout({type:'workout',name:'Pct Fixed Workout'})
+            woPctFixed.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Fixed Step'}
+            ] })
+            s.workout = woPctFixed
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'ftp', value: 220 })
+            expect(s.currentLimits.minPower).toBe(220)
+            expect(s.currentLimits.maxPower).toBe(220)
+            expect(s.currentLimits.targetPower).toBe(220)
+        })
+
+        // Scenario 2b: pct-of-FTP, range, at boundary (no headroom left to nudge) - FTP scales and
+        // the target must track it to the new boundary, not freeze at its pre-swipe absolute value.
+        test('pct-of-FTP range step at boundary: FTP scales and targetPower follows it',()=>{
+            const woPct = new Workout({type:'workout',name:'Pct Range Workout'})
+            woPct.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:50,max:100,type:'pct of FTP'}, text:'Range Step'}
+            ] })
+            s.workout = woPct
+            s.settings = {ftp:200}
+            s.setCurrentLimits() // range resolves to 100-200W
+            s.currentLimits.targetPower = s.currentLimits.maxPower // pin to the upper boundary (200)
+
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'ftp', value: 220 })
+            expect(s.currentLimits.minPower).toBe(110)
+            expect(s.currentLimits.maxPower).toBe(220)
+            expect(s.currentLimits.targetPower).toBe(220)
+        })
+
+        // Scenario 3, unlocked (default): the original bug report's exact case - a fixed absolute-Watt
+        // target (minPower===maxPower, type:'watt', e.g. "ride at exactly 150W"). With the agreed
+        // default (unlocked/adjustable), the target itself now moves directly by the swipe's Watt
+        // delta and FTP is left untouched, since an absolute-Watt value is independent of FTP.
+        test('unlocked (default) fixed absolute-Watt target moves directly by the swipe delta, FTP untouched',()=>{
+            const wattWorkout = new Workout({type:'workout',name:'Watt Workout'})
+            wattWorkout.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt'}, text:'Fixed Watt Step'}
+            ] })
+            s.workout = wattWorkout
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'targetPower', value: 160 })
+            expect(setStartSettings).not.toHaveBeenCalled()
+            expect(s.settings.ftp).toBe(200)
+            expect(s.currentLimits.minPower).toBe(160)
+            expect(s.currentLimits.maxPower).toBe(160)
+            expect(s.currentLimits.targetPower).toBe(160)
+        })
+
+        // Scenario 3, locked (step-level `power.locked:true`, e.g. a structured FTP-test interval
+        // that must hold an exact wattage): the power target is frozen and FTP is scaled instead -
+        // this is the original bug's fix, now opt-in rather than the default.
+        test('locked (step-level) fixed absolute-Watt target stays frozen, FTP changes instead',()=>{
+            const woWattLocked = new Workout({type:'workout',name:'Watt Locked Workout'})
+            woWattLocked.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt',locked:true}, text:'Locked Fixed Step'}
+            ] })
+            s.workout = woWattLocked
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'ftp', value: 220 })
+            expect(s.currentLimits.minPower).toBe(150)
+            expect(s.currentLimits.maxPower).toBe(150)
+            expect(s.currentLimits.targetPower).toBe(150)
+        })
+
+        // Scenario 4b, unlocked (default): Watt range step at its upper boundary (no headroom left).
+        // The window extends past the authored boundary by the swipe delta and the target tracks the
+        // new boundary; FTP stays untouched.
+        test('unlocked (default) Watt range step at boundary: window extends by the delta, FTP untouched',()=>{
+            const woWatt = new Workout({type:'workout',name:'Watt Range Workout'})
+            woWatt.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:200,type:'watt'}, text:'Range Step'}
+            ] })
+            s.workout = woWatt
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+            s.currentLimits.targetPower = s.currentLimits.maxPower // pin to the upper boundary (200)
+
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'targetPower', value: 210 })
+            expect(s.settings.ftp).toBe(200)
+            expect(s.currentLimits.minPower).toBe(110)
+            expect(s.currentLimits.maxPower).toBe(210)
+            expect(s.currentLimits.targetPower).toBe(210)
+        })
+
+        // Scenario 4b, locked (step-level): the exact case the user asked to confirm explicitly -
+        // "FTP changes and targetPower does not change (stays at current boundary)".
+        test('locked (step-level) Watt range step at boundary: window/target stay put, FTP changes',()=>{
+            const woWattRangeLocked = new Workout({type:'workout',name:'Watt Range Locked Workout'})
+            woWattRangeLocked.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:200,type:'watt',locked:true}, text:'Locked Range Step'}
+            ] })
+            s.workout = woWattRangeLocked
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+            s.currentLimits.targetPower = s.currentLimits.maxPower
+
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'ftp', value: 220 })
+            expect(s.currentLimits.minPower).toBe(100)
+            expect(s.currentLimits.maxPower).toBe(200)
+            expect(s.currentLimits.targetPower).toBe(200)
+        })
+
+        // Workout-level default: a step with no `locked` flag of its own falls back to the Workout's
+        // `lockedPowerTargets`, letting an author lock every absolute-Watt step in a test workout at
+        // once instead of annotating each one.
+        test('workout-level lockedPowerTargets locks a step with no step-level flag of its own',()=>{
+            const woLevel = new Workout({type:'workout',name:'Workout-level Locked', lockedPowerTargets:true})
+            woLevel.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt'}, text:'Fixed Step, no step-level flag'}
+            ] })
+            s.workout = woLevel
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'ftp', value: 220 })
+            expect(s.currentLimits.targetPower).toBe(150)
+        })
+
+        // Step-level `locked` always wins over the workout-level default in either direction - here
+        // an explicit `locked:false` un-locks a step inside an otherwise-locked workout.
+        test('step-level locked:false overrides workout-level lockedPowerTargets:true',()=>{
+            const woLevelOverride = new Workout({type:'workout',name:'Workout-level Locked, step override', lockedPowerTargets:true})
+            woLevelOverride.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt',locked:false}, text:'Fixed Step, explicit unlock'}
+            ] })
+            s.workout = woLevelOverride
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'targetPower', value: 160 })
+            expect(s.settings.ftp).toBe(200)
+            expect(s.currentLimits.targetPower).toBe(160)
+        })
+
+        // Regression: a ramp test with a 'pct of FTP' warmup followed by an unlocked absolute-Watt
+        // ramp (e.g. 100W->400W) - swiping during the warmup must scale FTP only, and must not leak
+        // into the ramp's start value once the ride reaches it, even though the rider never swiped
+        // during the ramp itself. Reproduces the real report: the ramp started at 110W instead of
+        // 100W purely because of an earlier, unrelated FTP-only swipe.
+        test('an FTP-only swipe during a warmup does not shift the start of a later unlocked-Watt ramp',()=>{
+            const woRamp = new Workout({type:'workout',name:'Ramp Test'})
+            woRamp.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:60, power:{min:50,max:50,type:'pct of FTP'}, text:'Warmup'},
+                {type:'step', steady:false, work:true, duration:300, power:{min:100,max:400,type:'watt'}, text:'Ramp'},
+            ] })
+            s.workout = woRamp
+            s.settings = {ftp:200}
+            s.setCurrentLimits(0)
+
+            const result = service.powerUp(10) // swipe during the warmup only
+
+            expect(result).toEqual({ type: 'ftp', value: 220 })
+            expect(s.manualPowerOffset).toBe(0)
+
+            s.setCurrentLimits(60) // ride time advances into the ramp - no swipe here
+
+            expect(s.currentLimits.minPower).toBe(100)
+            expect(s.currentLimits.maxPower).toBe(100)
+        })
+
+        // Scenario 5: no power limit at all (e.g. a free-ride/rest step) - FTP still updates, nothing
+        // else exists to shift, no crash.
+        test('no power limit step: FTP still changes, nothing else to shift',()=>{
+            const woFree = new Workout({type:'workout',name:'Free Workout'})
+            woFree.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, text:'Free Step'}
+            ] })
+            s.workout = woFree
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+            expect(s.isFreeRide).toBe(true)
+
+            const result = service.powerUp(10)
+
+            expect(result).toEqual({ type: 'ftp', value: 220 })
+            expect(s.currentLimits.minPower).toBeUndefined()
+            expect(s.currentLimits.maxPower).toBeUndefined()
+            expect(s.currentLimits.targetPower).toBeUndefined()
+        })
+
     })
     describe('powerDown',()=>{
 
@@ -756,20 +977,27 @@ describe('WorkoutRide',()=>{
             service.powerDown(10)
 
             expect( setStartSettings).toHaveBeenCalledWith( expect.objectContaining({ftp:100/1.1}))
-            expect( s.manualPowerOffset).toBe(-10)
+            // this swipe scaled FTP (currentStep is undefined here, so isWattFallbackAdjustment() is
+            // false) - manualPowerOffset is the Watt-side dial and must stay untouched by an FTP-side
+            // adjustment (regression: an FTP-only swipe during a warmup was silently shifting the
+            // start of a later, unrelated, unlocked-Watt ramp step the rider never touched)
+            expect( s.manualPowerOffset).toBe(0)
             expect( emit).toHaveBeenCalledWith('request-update',expect.anything())
             expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({ftp:100/1.1}))
 
         })
-        test('no FTP set',()=>{
+        // `init()` always guarantees settings.ftp is populated before a ride can reach powerDown(),
+        // so this only exercises the defensive DEFAULT_FTP fallback directly.
+        test('no FTP set - defaults to DEFAULT_FTP (200)',()=>{
             s.settings={}
             const result = service.powerDown(10)
 
-            expect( setStartSettings).not.toHaveBeenCalled()
-            expect( s.manualPowerOffset).toBe(-10)
+            const ftp = Math.round(200/1.1)
+            expect( setStartSettings).toHaveBeenCalledWith( expect.objectContaining({ftp:expect.closeTo(200/1.1,5)}))
+            expect( s.manualPowerOffset).toBe(0)
             expect( emit).toHaveBeenCalledWith('request-update',expect.anything())
-            expect( emit).toHaveBeenCalledWith('update', expect.not.objectContaining({ftp:expect.anything()}))
-            expect(result).toBeUndefined()
+            expect( emit).toHaveBeenCalledWith('update', expect.objectContaining({ftp:expect.closeTo(200/1.1,5)}))
+            expect(result).toEqual({ type: 'ftp', value: ftp })
 
         })
 
@@ -814,6 +1042,185 @@ describe('WorkoutRide',()=>{
 
             expect(result).toEqual({ type: 'targetPower', value: 100 })
             expect(s.currentLimits.targetPower).toBe(100)
+        })
+
+        // Mirror of the powerUp() 7-scenario matrix - see the powerUp describe block for the full
+        // rationale (locked/unlocked design worked out with the bug reporter; lock only applies to
+        // type:'watt', defaults to unlocked/adjustable).
+
+        // Scenario 1: pct-of-FTP, fixed - mode-independent, recalculates directly from the new FTP.
+        test('pct-of-FTP fixed target recalculates directly from the new FTP',()=>{
+            const woPctFixed = new Workout({type:'workout',name:'Pct Fixed Workout'})
+            woPctFixed.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Fixed Step'}
+            ] })
+            s.workout = woPctFixed
+            s.settings = {ftp:100}
+            s.setCurrentLimits()
+
+            const result = service.powerDown(10)
+
+            const ftp = Math.round(100/1.1)
+            expect(result).toEqual({ type: 'ftp', value: ftp })
+            expect(s.currentLimits.minPower).toBe(ftp)
+            expect(s.currentLimits.maxPower).toBe(ftp)
+            expect(s.currentLimits.targetPower).toBe(ftp)
+        })
+
+        // Scenario 2b: pct-of-FTP, range, at (lower) boundary - FTP scales and the target tracks it
+        // down to the new lower boundary instead of freezing at its pre-swipe absolute value.
+        test('pct-of-FTP range step at boundary: FTP scales and targetPower follows it',()=>{
+            const woPct = new Workout({type:'workout',name:'Pct Range Workout'})
+            woPct.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:50,max:100,type:'pct of FTP'}, text:'Range Step'}
+            ] })
+            s.workout = woPct
+            s.settings = {ftp:200}
+            s.setCurrentLimits() // range resolves to 100-200W
+            s.currentLimits.targetPower = s.currentLimits.minPower // pin to the lower boundary (100)
+
+            const result = service.powerDown(10)
+
+            const ftp = Math.round(200/1.1)
+            expect(result).toEqual({ type: 'ftp', value: ftp })
+            expect(s.currentLimits.minPower).toBe(Math.round(0.5*ftp))
+            expect(s.currentLimits.maxPower).toBe(ftp)
+            expect(s.currentLimits.targetPower).toBe(Math.round(0.5*ftp))
+        })
+
+        // Scenario 3, unlocked (default): the original bug report's exact case - a fixed absolute-Watt
+        // target. Target moves directly by the swipe's Watt delta; FTP is left untouched.
+        test('unlocked (default) fixed absolute-Watt target moves directly by the swipe delta, FTP untouched',()=>{
+            const wattWorkout = new Workout({type:'workout',name:'Watt Workout'})
+            wattWorkout.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt'}, text:'Fixed Watt Step'}
+            ] })
+            s.workout = wattWorkout
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+
+            const result = service.powerDown(10)
+
+            expect(result).toEqual({ type: 'targetPower', value: 140 })
+            expect(setStartSettings).not.toHaveBeenCalled()
+            expect(s.settings.ftp).toBe(200)
+            expect(s.currentLimits.minPower).toBe(140)
+            expect(s.currentLimits.maxPower).toBe(140)
+            expect(s.currentLimits.targetPower).toBe(140)
+        })
+
+        // Scenario 3, locked (step-level `power.locked:true`): the power target is frozen and FTP is
+        // scaled instead - the original bug's fix, now opt-in rather than the default.
+        test('locked (step-level) fixed absolute-Watt target stays frozen, FTP changes instead',()=>{
+            const woWattLocked = new Workout({type:'workout',name:'Watt Locked Workout'})
+            woWattLocked.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt',locked:true}, text:'Locked Fixed Step'}
+            ] })
+            s.workout = woWattLocked
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+
+            const result = service.powerDown(10)
+
+            expect(result).toEqual({ type: 'ftp', value: Math.round(200/1.1) })
+            expect(s.currentLimits.minPower).toBe(150)
+            expect(s.currentLimits.maxPower).toBe(150)
+            expect(s.currentLimits.targetPower).toBe(150)
+        })
+
+        // Scenario 4b, unlocked (default): Watt range step at its lower boundary. The window extends
+        // past the authored boundary by the swipe delta and the target tracks the new boundary; FTP
+        // stays untouched.
+        test('unlocked (default) Watt range step at boundary: window extends by the delta, FTP untouched',()=>{
+            const woWatt = new Workout({type:'workout',name:'Watt Range Workout'})
+            woWatt.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:200,type:'watt'}, text:'Range Step'}
+            ] })
+            s.workout = woWatt
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+            s.currentLimits.targetPower = s.currentLimits.minPower // pin to the lower boundary (100)
+
+            const result = service.powerDown(10)
+
+            expect(result).toEqual({ type: 'targetPower', value: 90 })
+            expect(s.settings.ftp).toBe(200)
+            expect(s.currentLimits.minPower).toBe(90)
+            expect(s.currentLimits.maxPower).toBe(190)
+            expect(s.currentLimits.targetPower).toBe(90)
+        })
+
+        // Scenario 4b, locked (step-level): "FTP changes and targetPower does not change (stays at
+        // current boundary)".
+        test('locked (step-level) Watt range step at boundary: window/target stay put, FTP changes',()=>{
+            const woWattRangeLocked = new Workout({type:'workout',name:'Watt Range Locked Workout'})
+            woWattRangeLocked.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:100,max:200,type:'watt',locked:true}, text:'Locked Range Step'}
+            ] })
+            s.workout = woWattRangeLocked
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+            s.currentLimits.targetPower = s.currentLimits.minPower
+
+            const result = service.powerDown(10)
+
+            expect(result).toEqual({ type: 'ftp', value: Math.round(200/1.1) })
+            expect(s.currentLimits.minPower).toBe(100)
+            expect(s.currentLimits.maxPower).toBe(200)
+            expect(s.currentLimits.targetPower).toBe(100)
+        })
+
+        // Workout-level default: a step with no `locked` flag of its own falls back to the Workout's
+        // `lockedPowerTargets`.
+        test('workout-level lockedPowerTargets locks a step with no step-level flag of its own',()=>{
+            const woLevel = new Workout({type:'workout',name:'Workout-level Locked', lockedPowerTargets:true})
+            woLevel.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt'}, text:'Fixed Step, no step-level flag'}
+            ] })
+            s.workout = woLevel
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+
+            const result = service.powerDown(10)
+
+            expect(result).toEqual({ type: 'ftp', value: Math.round(200/1.1) })
+            expect(s.currentLimits.targetPower).toBe(150)
+        })
+
+        // Step-level `locked` always wins over the workout-level default.
+        test('step-level locked:false overrides workout-level lockedPowerTargets:true',()=>{
+            const woLevelOverride = new Workout({type:'workout',name:'Workout-level Locked, step override', lockedPowerTargets:true})
+            woLevelOverride.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt',locked:false}, text:'Fixed Step, explicit unlock'}
+            ] })
+            s.workout = woLevelOverride
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+
+            const result = service.powerDown(10)
+
+            expect(result).toEqual({ type: 'targetPower', value: 140 })
+            expect(s.settings.ftp).toBe(200)
+            expect(s.currentLimits.targetPower).toBe(140)
+        })
+
+        // Scenario 5: no power limit at all - FTP still updates, nothing else exists to shift, no crash.
+        test('no power limit step: FTP still changes, nothing else to shift',()=>{
+            const woFree = new Workout({type:'workout',name:'Free Workout'})
+            woFree.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, text:'Free Step'}
+            ] })
+            s.workout = woFree
+            s.settings = {ftp:200}
+            s.setCurrentLimits()
+            expect(s.isFreeRide).toBe(true)
+
+            const result = service.powerDown(10)
+
+            expect(result).toEqual({ type: 'ftp', value: Math.round(200/1.1) })
+            expect(s.currentLimits.minPower).toBeUndefined()
+            expect(s.currentLimits.maxPower).toBeUndefined()
+            expect(s.currentLimits.targetPower).toBeUndefined()
         })
 
     })
@@ -1015,6 +1422,38 @@ describe('WorkoutRide',()=>{
 
         test('single fixed-target step (minPower===maxPower): always %, regardless of targetPower',()=>{
             s.currentLimits = { time:0, duration:0, remaining:0, minPower:150, maxPower:150, targetPower:150 }
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-1%', dec5:'-5%' })
+        })
+
+        // Regression: the fallback that moves an unlocked absolute-Watt step's value directly
+        // (isWattFallbackAdjustment()) is a different, older code path than the range-nudge case
+        // above - it applies the button's raw magnitude (1W/5W) via manualPowerOffset, not the
+        // range-nudge's 5W/50W nominal step, so its label must say +1W/+5W, not +5W/+50W.
+        test('unlocked fixed absolute-Watt target: label shows the raw 1W/5W magnitude, not the 5W/50W range-nudge step',()=>{
+            const wattWorkout = new Workout({type:'workout',name:'Watt Workout'})
+            wattWorkout.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt'}, text:'Fixed Watt Step'}
+            ] })
+            s.workout = wattWorkout
+            s.setCurrentLimits(0)
+
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(dp.loadButtons).toEqual({ inc5:'+5W', inc1:'+1W', dec1:'-1W', dec5:'-5W' })
+        })
+
+        // Locked steps take the FTP-scaling path instead (isWattFallbackAdjustment() is false), so
+        // the label reverts to '%' exactly like a 'pct of FTP' fixed step.
+        test('locked fixed absolute-Watt target: label reverts to %, matching the FTP-scaling path it actually takes',()=>{
+            const wattWorkoutLocked = new Workout({type:'workout',name:'Watt Locked Workout'})
+            wattWorkoutLocked.addSegment( {type:'segment', text:'Test Segment', steps: [
+                {type:'step', steady:true, work:true, duration:120, power:{min:150,max:150,type:'watt',locked:true}, text:'Locked Fixed Step'}
+            ] })
+            s.workout = wattWorkoutLocked
+            s.setCurrentLimits(0)
+
             const dp = service.getDashboardDisplayProperties()
 
             expect(dp.loadButtons).toEqual({ inc5:'+5%', inc1:'+1%', dec1:'-1%', dec5:'-5%' })
