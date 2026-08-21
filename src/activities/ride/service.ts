@@ -1048,7 +1048,7 @@ export class ActivityRideService extends IncyclistService {
     protected calculateTimeGap(sameDistance,current) { 
         const s = sameDistance.distance-current.distance
         const v = sameDistance.speed/3.6
-        const t = v===0  ? Infinity : s/v 
+        const t = Math.abs(v)<1e-6  ? Infinity : s/v
         sameDistance.time-=t;         
 
         const timeDelta = sameDistance.time-current.time
@@ -1548,7 +1548,7 @@ export class ActivityRideService extends IncyclistService {
             this.activity.distance+=distance
             this.current.routeDistance+=distance
             
-            if (distance!==0 && this.activity.routeType!=='None') {
+            if (Math.abs(distance)>1e-6 && this.activity.routeType!=='None') {
 
                 // update position and elevation gain
                 const prev = this.current.position

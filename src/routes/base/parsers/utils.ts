@@ -339,7 +339,7 @@ export const getUtf8Data = (res: string | Buffer): string => {
     //   - string properly decoded as UTF-8: BOM appears as single U+FEFF codepoint
     //   - string decoded as binary/latin1: BOM appears as three raw bytes EF BB BF
     const str = typeof res === 'string' ? res : buf.toString('utf-8');
-    if (str.charCodeAt(0) === 0xFEFF) return str.slice(1);
+    if (str.codePointAt(0) === 0xFEFF) return str.slice(1);
     if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) return buf.subarray(3).toString('utf-8');
     return str;
     

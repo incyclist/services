@@ -163,7 +163,7 @@ export class IncyclistUpdatesApi extends IncyclistService{
                 return;
             
             const final = lines[lines.length-1]
-            const versionMatch = /.* incyclist-(.*)-full.nupkg/.exec(final)
+            const versionMatch = / incyclist-([^\s]+)-full\.nupkg/.exec(final)
             const version = versionMatch?.length===2 ? versionMatch[1] : undefined
 
             const path = `incyclist-${version}-setup.exe`

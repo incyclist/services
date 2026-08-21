@@ -3,6 +3,7 @@ import sydney from '../../../__tests__/data/routes/sydney.json'
 import video from '../../../__tests__/data/routes/demo.json'
 import sydney1 from '../../../__tests__/data/routes/sydney1.json'
 import { createFromJson} from "../../routes/base/utils/route"
+import * as routeUtils from "../../routes/base/utils/route"
 import { RouteApiDetail } from "../../routes/base/api/types"
 import { EventEmitter } from "stream"
 import { waitNextTick } from "../../utils"
@@ -887,11 +888,99 @@ describe('ActivityRideService',()=>{
             prepareList(15,14)
 
             const res = service.getPrevRidesListDisplay(5)
-            expect(getList(res)).toBe('1,2,3,current,15')           
+            expect(getList(res)).toBe('1,2,3,current,15')
         })
 
 
 
+    })
+
+    describe('calculateTimeGap',()=>{
+        // FIXES_BACKLOG #64 (typescript:S1244): a near-zero-but-nonzero speed must still be
+        // treated as "no movement" (Infinity time gap), not divided through to a huge-but-finite value.
+
+        let service:ActivityRideService
+
+        beforeEach( ()=>{
+            service = new ActivityRideService()
+        })
+
+        afterEach( ()=>{
+            resetSingleton(service)
+            jest.resetAllMocks();
+        })
+
+        test('near-zero-but-nonzero speed falls back to Infinity (not a huge finite time)',()=>{
+            const sameDistance = {distance:100, speed:0.0000001, time:500}
+            const current = {distance:50, time:400}
+
+            const gap = protectedMember(service,'calculateTimeGap')(sameDistance,current)
+
+            // with the old exact-zero guard (v===0), this tiny-but-nonzero speed would have
+            // divided through to a huge finite time (s/v), formatting as a large-but-sane
+            // "-HH:MM:SS". With the epsilon guard it correctly falls back to Infinity.
+            expect(gap.startsWith('-Infinity')).toBe(true)
+        })
+
+        test('speed clearly above the epsilon still computes a normal finite gap',()=>{
+            const sameDistance = {distance:100, speed:36, time:500} // 10 m/s
+            const current = {distance:50, time:400}
+
+            const gap = protectedMember(service,'calculateTimeGap')(sameDistance,current)
+
+            expect(gap.includes('Infinity')).toBe(false)
+        })
+    })
+
+    describe('updateActivityState',()=>{
+        // FIXES_BACKLOG #64 (typescript:S1244): a near-zero-but-nonzero distance must not
+        // trigger a real position/elevation update for what is actually a stationary rider.
+
+        let service:ActivityRideService
+        const route  = createFromJson(sydney as unknown as RouteApiDetail)
+
+        let getNextPositionSpy:jest.SpyInstance
+        let getElevationGainAtSpy:jest.SpyInstance
+
+        beforeEach( ()=>{
+            service = new ActivityRideService()
+            jest.useFakeTimers().setSystemTime(new Date('2020-01-01'));
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'}})
+            service.init()
+            service.start()
+
+            getNextPositionSpy = jest.spyOn(routeUtils,'getNextPosition')
+            getElevationGainAtSpy = jest.spyOn(routeUtils,'getElevationGainAt')
+        })
+
+        afterEach( ()=>{
+            service.stop()
+            resetSingleton(service)
+            jest.resetAllMocks();
+            jest.useRealTimers()
+        })
+
+        test('near-zero-but-nonzero distance does not trigger a position/elevation update',()=>{
+            const current = protectedMember(service,'current')
+            current.deviceData = {speed:0.0000001} // v ~ 2.8e-8 m/s
+            current.tsUpdate = Date.now()-1000       // 1s elapsed -> distance ~2.8e-8, below the 1e-6 epsilon
+
+            ;(service as any).updateActivityState()
+
+            expect(getNextPositionSpy).not.toHaveBeenCalled()
+            expect(getElevationGainAtSpy).not.toHaveBeenCalled()
+        })
+
+        test('distance clearly above the epsilon still triggers a position/elevation update',()=>{
+            const current = protectedMember(service,'current')
+            current.deviceData = {speed:36} // 10 m/s
+            current.tsUpdate = Date.now()-1000 // 1s elapsed -> distance = 10m, well above the epsilon
+
+            ;(service as any).updateActivityState()
+
+            expect(getNextPositionSpy).toHaveBeenCalled()
+            expect(getElevationGainAtSpy).toHaveBeenCalled()
+        })
     })
 
 })

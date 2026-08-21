@@ -109,7 +109,7 @@ export class VideoConversion extends IncyclistService {
         const frames = mapping?.length>0 ? Math.max( ...mapping.map(m=>m.frame))  : 0
         const framerate = this.route.details?.video?.framerate
         const time =  framerate ? Math.round(info.frames/framerate) : parseTime(info.timemark);
-        const pct = (frames && !isNaN(frames)) ? Math.floor(info.frames/frames *100) : undefined
+        const pct = (frames && !Number.isNaN(frames)) ? Math.floor(info.frames/frames *100) : undefined
         const cpu = this.getCpuStats(info)
         
         if (frames||time) {

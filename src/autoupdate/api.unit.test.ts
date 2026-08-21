@@ -84,6 +84,22 @@ describe( 'IncyclistUpdatesApi',()=>{
             expect(res).toBeUndefined()
         })
 
+        test('windows - last line has no -full.nupkg version segment -> version is undefined, no hang',async ()=>{
+            // FIXES_BACKLOG #64 (typescript:S8786): the old regex (/.* incyclist-(.*)-full.nupkg/)
+            // had two adjacent unbounded wildcard groups - a catastrophic-backtracking shape.
+            // A feed line that never reaches "-full.nupkg" is exactly the kind of input that
+            // would previously make the engine backtrack extensively. It must still resolve
+            // quickly and simply fail to extract a version.
+            mockServerResult = '08E38ACE91E5F22678CAEA107D63C87403A36358 incyclist-0.9.6-delta.nupkg 104184594'
+
+            const start = Date.now()
+            const res = await api.getLatestAppVersion('win32')
+            const elapsed = Date.now()-start
+
+            expect(res.version).toBeUndefined()
+            expect(elapsed).toBeLessThan(1000)
+        })
+
 
         test('unknown platform',async ()=>{
 
