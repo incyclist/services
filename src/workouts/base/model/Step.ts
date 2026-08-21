@@ -209,8 +209,7 @@ export class Step implements StepDefinition {
 
         const sl = (limits) => this.getRemainder( isPower ? { ...limits, type, locked} : limits, includeStepInfo)
 
-        const type = isPower ? limit.type : undefined
-        const locked = isPower ? limit.locked : undefined
+        const { type, locked } = isPower ? limit : { type: undefined, locked: undefined }
         const part = (ts-this.start) / this.duration;
 
 
