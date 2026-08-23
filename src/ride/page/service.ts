@@ -417,7 +417,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
         const displayProps: VideoRidePageDisplayProps = {
             ...base,
-            ...this.buildWorkoutOverlayProps(props, base.startOverlayProps === null),
+            ...this.buildWorkoutOverlayProps(props),
             video: props.video,
             videos: props.videos,
             route: props.route
@@ -431,7 +431,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
         const displayProps: GPXRidePageDisplayProps = {
             ...base,
-            ...this.buildWorkoutOverlayProps(props, base.startOverlayProps === null),
+            ...this.buildWorkoutOverlayProps(props),
             rideView: props.rideView,
             route: props.route,
             displayObserver: props.displayObserver,
@@ -443,9 +443,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     /**
      * The workout half of a combo ride's display props (Video/GPX ride with an attached workout).
-     * Mirrors getWorkoutRideDisplayProps()'s builders exactly (same graph/steps/dashboard/hint/
-     * increment sources) so the two ride shapes can never drift apart - a combo ride's
-     * WorkoutDashboard must show what a workout-only ride shows.
+     * Mirrors getWorkoutRideDisplayProps()'s builders exactly (same graph/steps/dashboard sources)
+     * so the two ride shapes can never drift apart - a combo ride's WorkoutDashboard must show what
+     * a workout-only ride shows. gestureHint/loadIncrement/loadButtonMode are NOT computed here
+     * (moved to buildBaseDisplayProps() - they apply to every ride type, not just a workout-attached
+     * one) - see that method's comment.
      *
      * Also honours RideDisplayService's own `showWorkout` (already computed for every ride type,
      * and what desktop renders off): it adds the "not while the ride is still starting" and "not
@@ -456,8 +458,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * branch below, not just the "workout visible" one.
      */
     protected buildWorkoutOverlayProps(
-        props: CurrentRideDisplayProps & { showWorkout?: boolean },
-        startOverlayCleared: boolean
+        props: CurrentRideDisplayProps & { showWorkout?: boolean }
     ): Partial<RidePageDisplayProps> {
         const cornerWidget = this.getCornerWidget()
 
@@ -473,10 +474,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                 title:           wo.title ?? '',
                 graph:           this.buildGraphPlan(props.workout, wo.ftp),
                 steps:           this.buildUpcomingSteps(props.workout, wo.ftp),
-                dashboard:       this.buildDashboardLine(wo),
-                gestureHint:     this.buildGestureHint(startOverlayCleared),
-                loadIncrement:   this.getLoadIncrement(),
-                loadButtonMode:  wo.loadButtonMode ?? 'power'
+                dashboard:       this.buildDashboardLine(wo)
             }
         }
         catch (err: any) {
@@ -796,10 +794,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                 title: wo.title ?? '',
                 graph: this.buildGraphPlan(current, wo.ftp),
                 steps: this.buildUpcomingSteps(current, wo.ftp),
-                dashboard: this.buildDashboardLine(wo),
-                gestureHint: this.buildGestureHint(base.startOverlayProps === null),
-                loadIncrement: this.getLoadIncrement(),
-                loadButtonMode: wo.loadButtonMode ?? 'power'
+                dashboard: this.buildDashboardLine(wo)
             }
         }
         catch (err: any) {
@@ -1092,8 +1087,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      *
      * A 'Workout' ride short-circuits to true unconditionally - a workout-only ride is Phase 1,
      * already shipped, and doesn't go through WorkoutRideService.inUse() at all.
+     *
+     * Public (not protected) - part of IRidePageService, called live by useRideGestures.ts's
+     * left/right swipe handler (see that interface method's comment).
      */
-    protected isWorkoutAttached(): boolean {
+    isWorkoutAttached(): boolean {
         try {
             if (this.isRideType('Workout'))
                 return true
@@ -1119,16 +1117,26 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             : { showResume: false, finished: true }
     }
 
+    // gestureHint/loadIncrement/loadButtonMode live here (not in buildWorkoutOverlayProps()'s
+    // workout-attached branch, where they used to be computed) because the swipe gesture itself
+    // (RidePageService.adjustLoad()/onStepBack()/onStepForward(), §4.4.5) already works correctly
+    // on a plain, no-workout Video/GPX ride - mobile's gesture-hint overlay and its content
+    // (getGestureHintContent(), incyclist-mobile) need these unconditionally too, or a plain ride
+    // never gets a hint at all, even though the gesture underneath it is fully functional.
     protected buildBaseDisplayProps() {
         const state = this.getRideDisplay().getState()
         const isStarting = state === 'Idle' || state === 'Starting' || state === 'Error'
+        const startOverlayProps = isStarting ? this.getRideDisplay().getStartOverlayProps() : null
 
         return {
             rideState: state,
             rideType: this.getRideDisplay().getRideType(),
-            startOverlayProps: isStarting ? this.getRideDisplay().getStartOverlayProps() : null,
+            startOverlayProps,
             menuProps: this.menuProps,
-            startGateProps: this.startGateProps
+            startGateProps: this.startGateProps,
+            gestureHint: this.buildGestureHint(startOverlayProps === null),
+            loadIncrement: this.getLoadIncrement(),
+            loadButtonMode: this.getLoadButtonMode()
         }
     }
 
