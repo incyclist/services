@@ -1108,11 +1108,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
         if (mode.getName()==='Simulator') {
             this.simulatorPowerUp(mode,inc)
-            return { type: 'targetPower', value: NaN }
+            return { type: 'targetPower', value: Number.NaN }
         }
         else if (mode.isERG()) {
             this.getRideModeService().sendUpdate({targetPowerDelta:inc} )
-            return { type: 'targetPower', value: NaN }
+            return { type: 'targetPower', value: Number.NaN }
         }
         else if (mode.isSIM() || mode.isResistance()) {
             let gearDelta = inc/5
