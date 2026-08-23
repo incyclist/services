@@ -37,7 +37,8 @@ const setupMocks = (rideType: string = 'GPX') => {
         getRideType: jest.fn().mockReturnValue(rideType),
         getState: jest.fn().mockReturnValue('Idle'),
         getStartOverlayProps: jest.fn().mockReturnValue({ mode: rideType, rideState: 'Idle', devices: [], readyToStart: false }),
-        getDisplayProperties: jest.fn().mockReturnValue({ state: 'Idle' })
+        getDisplayProperties: jest.fn().mockReturnValue({ state: 'Idle' }),
+        adjustDevicePower: jest.fn()
     }
     MockWorkoutRide = {
         getObserver: jest.fn(),
@@ -853,14 +854,19 @@ describe('RidePageService', () => {
             MockRideDisplay.getRideType.mockReturnValue('Workout')
         })
 
-        test.each(['power', 'gear', 'hidden'] as const)('surfaces WorkoutRide.getDashboardDisplayProperties().loadButtonMode verbatim (%s)', (mode) => {
-            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({ loadButtonMode: mode })
+        // buildBaseDisplayProps() gets loadButtonMode from RidePageService.getLoadButtonMode()
+        // directly (WorkoutRide.getLoadButtonMode(), the single, state-independent source of
+        // truth) rather than through getDashboardDisplayProperties() - that method returns {}
+        // whenever the workout is idle/completed, which would wrongly go missing on a plain
+        // (no-workout) GPX/Video ride instead of reflecting the actual cycling mode.
+        test.each(['power', 'gear', 'hidden'] as const)('surfaces WorkoutRide.getLoadButtonMode() verbatim (%s)', (mode) => {
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue(mode)
             const props = s.getPageDisplayProps()
             expect((props as any).loadButtonMode).toBe(mode)
         })
 
-        test('defaults to "power" when the workout dashboard props do not report a mode', () => {
-            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({})
+        test('falls back to "power" when WorkoutRide.getLoadButtonMode() throws',()=>{
+            MockWorkoutRide.getLoadButtonMode.mockImplementation(() => { throw new Error('boom') })
             const props = s.getPageDisplayProps()
             expect((props as any).loadButtonMode).toBe('power')
         })
@@ -1192,6 +1198,12 @@ describe('RidePageService', () => {
     describe('adjustLoad', () => {
         beforeEach(() => {
             MockRideDisplay.getRideType.mockReturnValue('Workout')
+            // These tests are about WorkoutRide.powerUp()/powerDown() forwarding, so they need a
+            // workout actually in use - MockWorkoutRide's own default (inUse:false) represents a
+            // plain (no-workout) ride instead, which now correctly reroutes to
+            // RideDisplayService.adjustDevicePower() (see the 'plain ERG-mode ride (no workout)'
+            // tests below for that case).
+            MockWorkoutRide.inUse.mockReturnValue(true)
         })
 
         test('positive delta -> powerUp', () => {
@@ -1249,6 +1261,50 @@ describe('RidePageService', () => {
 
             expect(MockWorkoutRide.powerUp).toHaveBeenCalledWith(7)
             expect(MockWorkoutRide.powerDown).toHaveBeenCalledWith(7)
+        })
+
+        // Regression: a plain (no-workout) ERG-mode ride's swipe/menu load adjustment was silently
+        // a no-op - WorkoutRideService.settings is undefined without a workout, so
+        // powerUp()/powerDown()'s FTP/targetPower branch threw internally, got swallowed by its own
+        // try/catch, and returned undefined. Nothing reached the trainer, even though the swipe
+        // feedback toast still showed as if it had worked. Gear mode and 'hidden' mode are
+        // unaffected by this fix (§4.4.5, see the dedicated NOT-workout-gated describe block) -
+        // their WorkoutRideService.powerUp()/powerDown() branches never touch `settings` at all and
+        // already worked correctly with no workout in use.
+        describe('plain ERG-mode ride (no workout)', () => {
+            beforeEach(() => {
+                MockWorkoutRide.inUse.mockReturnValue(false)
+                MockWorkoutRide.getLoadButtonMode.mockReturnValue('power')
+            })
+
+            test('routes to RideDisplayService.adjustDevicePower() instead of WorkoutRide, with a nominal 5W step for magnitude 1',()=>{
+                MockRideDisplay.adjustDevicePower.mockReturnValue({ type: 'gear', value: 1 })
+                const result = s.adjustLoad(1)
+
+                expect(MockRideDisplay.adjustDevicePower).toHaveBeenCalledWith(5)
+                expect(MockWorkoutRide.powerUp).not.toHaveBeenCalled()
+                expect(MockWorkoutRide.powerDown).not.toHaveBeenCalled()
+                expect(result).toEqual({ type: 'gear', value: 1 })
+            })
+
+            test('a nominal 50W step for any other magnitude (e.g. 5)',()=>{
+                s.adjustLoad(5)
+                expect(MockRideDisplay.adjustDevicePower).toHaveBeenCalledWith(50)
+            })
+
+            test('negative delta -> negative nominal step',()=>{
+                s.adjustLoad(-1)
+                expect(MockRideDisplay.adjustDevicePower).toHaveBeenCalledWith(-5)
+
+                s.adjustLoad(-5)
+                expect(MockRideDisplay.adjustDevicePower).toHaveBeenCalledWith(-50)
+            })
+
+            test('forwards whatever adjustDevicePower() reports, verbatim',()=>{
+                MockRideDisplay.adjustDevicePower.mockReturnValue({ type: 'targetPower', value: NaN })
+                const result = s.adjustLoad(1)
+                expect(result).toEqual({ type: 'targetPower', value: NaN })
+            })
         })
     })
 
@@ -1432,30 +1488,30 @@ describe('RidePageService', () => {
     describe('isWorkoutAttached', () => {
         test('Workout ride -> always true', () => {
             MockRideDisplay.getRideType.mockReturnValue('Workout')
-            expect((s as any).isWorkoutAttached()).toBe(true)
+            expect(s.isWorkoutAttached()).toBe(true)
         })
 
         test('(b) Video/GPX ride, workout in use -> true', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockWorkoutRide.inUse.mockReturnValue(true)
-            expect((s as any).isWorkoutAttached()).toBe(true)
+            expect(s.isWorkoutAttached()).toBe(true)
         })
 
         test('(d) Video/GPX ride, no workout in use -> false', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockWorkoutRide.inUse.mockReturnValue(false)
-            expect((s as any).isWorkoutAttached()).toBe(false)
+            expect(s.isWorkoutAttached()).toBe(false)
         })
 
         test('other/unknown ride type -> false', () => {
             MockRideDisplay.getRideType.mockReturnValue('Free-Ride')
-            expect((s as any).isWorkoutAttached()).toBe(false)
+            expect(s.isWorkoutAttached()).toBe(false)
         })
 
         test('logs and returns false if the underlying call throws', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockWorkoutRide.inUse.mockImplementation(() => { throw new Error('boom') })
-            expect((s as any).isWorkoutAttached()).toBe(false)
+            expect(s.isWorkoutAttached()).toBe(false)
             expect(s.logError).toHaveBeenCalled()
         })
     })
@@ -1463,6 +1519,10 @@ describe('RidePageService', () => {
     describe('getPageDisplayProps - Video/GPX combo, fixture (b): workout attached', () => {
         beforeEach(() => {
             MockWorkoutRide.inUse.mockReturnValue(true)
+            // loadButtonMode is surfaced via getLoadButtonMode() directly (buildBaseDisplayProps()),
+            // not through getDashboardDisplayProperties() - both are set here to stay consistent
+            // with the real code's invariant that they always report the same value.
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('gear')
             MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
                 title: 'Test Workout', ftp: 250, mode: null, canShowBackward: true, canShowForward: true, loadButtonMode: 'gear'
             })
@@ -1596,6 +1656,16 @@ describe('RidePageService', () => {
                 expect(props.workoutAttached).toBeFalsy()
                 expect(props.graph).toBeUndefined()
                 expect(props.cornerWidget).toBeUndefined()
+
+                // Regression: gestureHint/loadIncrement/loadButtonMode used to only be computed
+                // inside buildWorkoutOverlayProps()'s workout-attached branch, so a plain (no
+                // workout) GPX/Video ride never got a gesture-hint overlay at all, even though the
+                // swipe gesture underneath it (adjustLoad()/onStepBack()/onStepForward()) already
+                // worked correctly. Moved to buildBaseDisplayProps() - unlike the workout-only
+                // fields above, these three ARE expected to be populated here now.
+                expect(props.gestureHint).toBeDefined()
+                expect(props.loadIncrement).toBe(1)
+                expect(props.loadButtonMode).toBe('power')
 
                 s.openPage()
                 const updateSpy = jest.fn()

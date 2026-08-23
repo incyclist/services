@@ -17,6 +17,7 @@ import { WorkoutDisplayService } from "../workout/WorkoutDisplayService";
 import { INativeUI } from "../../api/ui";
 import { getBindings } from "../../api";
 import { CurrentRideDisplayProps, ICurrentRideService, PrevRidesDisplayProps, StartOverlayProps } from "../base/types";
+import { PowerAdjustmentResult } from "../../workouts/ride/types";
 import { RouteSettings } from "../../routes/list/cards/types";
 import { FreeRideOption } from "../../routes/list/types";
 import { RLVDisplayService } from "../route/RLVDisplayService";
@@ -1076,27 +1077,53 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     protected devicePowerUp(inc:number, gearFallback:boolean = true) {
+        this.adjustDevicePower(inc, gearFallback)
+    }
+
+    /**
+     * The actual ERG/Simulator/SIM+Resistance branching `devicePowerUp()` performs for a plain
+     * (no workout in use) power/gear adjustment - `devicePowerUp()` itself just delegates here and
+     * discards the result, since its existing callers (desktop keyboard shortcuts, gamepad) are
+     * fire-and-forget with no feedback UI to update. This variant returns a `PowerAdjustmentResult`
+     * for callers that do need to report what happened (mobile's swipe-feedback toast, wired up for
+     * a plain GPX/Video ride via `RidePageService.adjustLoad()`).
+     *
+     * The resulting absolute target power isn't tracked synchronously for a real ERG device (only
+     * the delta is sent; `sendUpdate()` doesn't wait for device confirmation), so `value` is `NaN`
+     * for the `'targetPower'` case - the mobile-side formatter already treats a `NaN` value as
+     * "unavailable" and omits the "(XXXW)" suffix rather than showing something inaccurate. The
+     * `'gear'` case's value is exact (the actual `gearDelta` applied).
+     *
+     * @param inc the signed Watt delta to apply (already resolved to a nominal step by the caller,
+     *            e.g. a 5W/50W step matching `WorkoutRideService.getPowerRangeDeltaVal()`'s convention)
+     * @param gearFallback unused - kept for signature parity with `devicePowerUp()`
+     */
+    adjustDevicePower(inc:number, gearFallback:boolean = true): PowerAdjustmentResult | undefined {
 
         const device = this.getDeviceRide().getControlAdapter()
-        if (!device ) 
-            return;
+        if (!device )
+            return undefined;
 
         const mode = this.getDeviceRide().getCyclingMode(device.udid) as CyclingMode;
 
         if (mode.getName()==='Simulator') {
             this.simulatorPowerUp(mode,inc)
+            return { type: 'targetPower', value: Number.NaN }
         }
         else if (mode.isERG()) {
             this.getRideModeService().sendUpdate({targetPowerDelta:inc} )
-        }      
+            return { type: 'targetPower', value: Number.NaN }
+        }
         else if (mode.isSIM() || mode.isResistance()) {
-            let gearDelta = inc/5 
+            let gearDelta = inc/5
             if (Math.abs(gearDelta)>1) {
                 gearDelta = Math.sign(gearDelta)*5
             }
             this.gearChange(gearDelta)
+            return { type: 'gear', value: gearDelta }
         }
 
+        return undefined
     }
 
     protected gearChange( gearDelta:number) {

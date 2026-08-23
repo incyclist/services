@@ -106,6 +106,116 @@ describe('RideDisplayService', () => {
         })
     })
 
+    // Regression: RidePageService.adjustLoad() needed a plain (no-workout) power/gear adjustment
+    // that returns a PowerAdjustmentResult (devicePowerUp() itself is void, fire-and-forget) -
+    // adjustDevicePower() is the same branching devicePowerUp() already performed, factored out so
+    // both a returning and a void caller can share it.
+    describe('adjustDevicePower', () => {
+        let service: any
+        let sendUpdate: jest.Mock
+        let gearChange: jest.Mock
+        let simulatorPowerUp: jest.Mock
+        let getControlAdapter: jest.Mock
+        let getCyclingMode: jest.Mock
+
+        const mockMode = (overrides: object) => ({
+            getName: jest.fn().mockReturnValue('Trainer'),
+            isERG: jest.fn().mockReturnValue(false),
+            isSIM: jest.fn().mockReturnValue(false),
+            isResistance: jest.fn().mockReturnValue(false),
+            ...overrides
+        })
+
+        beforeEach(() => {
+            service = new RideDisplayService()
+            sendUpdate = jest.fn()
+            gearChange = jest.fn()
+            simulatorPowerUp = jest.fn()
+            getControlAdapter = jest.fn().mockReturnValue({ udid: '123' })
+            getCyclingMode = jest.fn()
+
+            service.getDeviceRide = jest.fn().mockReturnValue({ getControlAdapter, getCyclingMode })
+            service.getRideModeService = jest.fn().mockReturnValue({ sendUpdate })
+            service.gearChange = gearChange
+            service.simulatorPowerUp = simulatorPowerUp
+        })
+
+        // RideDisplayService is a @Singleton - without this, the instance stubs above would leak
+        // into every later describe block's `new RideDisplayService()` in this file.
+        afterEach(() => {
+            service.reset()
+        })
+
+        test('no control adapter -> undefined, nothing called', () => {
+            getControlAdapter.mockReturnValue(undefined)
+
+            const result = service.adjustDevicePower(50)
+
+            expect(result).toBeUndefined()
+            expect(sendUpdate).not.toHaveBeenCalled()
+            expect(gearChange).not.toHaveBeenCalled()
+        })
+
+        test('Simulator mode -> simulatorPowerUp(), reports targetPower with an unknown (NaN) value', () => {
+            getCyclingMode.mockReturnValue(mockMode({ getName: jest.fn().mockReturnValue('Simulator') }))
+
+            const result = service.adjustDevicePower(50)
+
+            expect(simulatorPowerUp).toHaveBeenCalledWith(expect.anything(), 50)
+            expect(result).toEqual({ type: 'targetPower', value: NaN })
+        })
+
+        test('ERG mode -> sends targetPowerDelta, reports targetPower with an unknown (NaN) value', () => {
+            getCyclingMode.mockReturnValue(mockMode({ isERG: jest.fn().mockReturnValue(true) }))
+
+            const result = service.adjustDevicePower(50)
+
+            expect(sendUpdate).toHaveBeenCalledWith({ targetPowerDelta: 50 })
+            expect(result).toEqual({ type: 'targetPower', value: NaN })
+        })
+
+        test('SIM mode -> gear shift, clamped to +/-5 and reported exactly',()=>{
+            getCyclingMode.mockReturnValue(mockMode({ isSIM: jest.fn().mockReturnValue(true) }))
+
+            const resultSmall = service.adjustDevicePower(5)
+            expect(gearChange).toHaveBeenCalledWith(1)
+            expect(resultSmall).toEqual({ type: 'gear', value: 1 })
+
+            const resultLarge = service.adjustDevicePower(50)
+            expect(gearChange).toHaveBeenCalledWith(5)
+            expect(resultLarge).toEqual({ type: 'gear', value: 5 })
+        })
+
+        test('Resistance mode -> same gear-shift handling as SIM mode',()=>{
+            getCyclingMode.mockReturnValue(mockMode({ isResistance: jest.fn().mockReturnValue(true) }))
+
+            const result = service.adjustDevicePower(-50)
+
+            expect(gearChange).toHaveBeenCalledWith(-5)
+            expect(result).toEqual({ type: 'gear', value: -5 })
+        })
+
+        test('an unrecognised mode -> undefined, nothing called', () => {
+            getCyclingMode.mockReturnValue(mockMode({}))
+
+            const result = service.adjustDevicePower(50)
+
+            expect(result).toBeUndefined()
+            expect(sendUpdate).not.toHaveBeenCalled()
+            expect(gearChange).not.toHaveBeenCalled()
+            expect(simulatorPowerUp).not.toHaveBeenCalled()
+        })
+
+        test('devicePowerUp() delegates here and discards the result (existing void contract preserved)',()=>{
+            getCyclingMode.mockReturnValue(mockMode({ isERG: jest.fn().mockReturnValue(true) }))
+
+            const returned = service.devicePowerUp(50)
+
+            expect(sendUpdate).toHaveBeenCalledWith({ targetPowerDelta: 50 })
+            expect(returned).toBeUndefined()
+        })
+    })
+
     describe('toggleAllOverlays', () => {
 
         let service: RideDisplayService

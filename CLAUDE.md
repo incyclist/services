@@ -118,12 +118,13 @@ There is no auto-formatter (no Prettier). ESLint (`eslint.config.mjs`) enforces 
 - Target is ES2024; avoid hacks for older targets.
 - No lax `any` — use proper types or `unknown`.
 - Types and interfaces live in `types.ts`; keep implementation files clean of type sprawl.
-- These are recurring SonarQube findings — apply them while first writing code, not as a post-hoc fix pass:
+- These are recurring SonarQube findings — apply them while first writing code, not as a post-hoc fix pass. SonarCloud only reports back after a push/PR, so it cannot be the first line of defense: before considering any change to this repo done, re-read your own diff once specifically against this list (not just against functional correctness) — this has been missed repeatedly.
   - Built-in Node module imports use the `node:` protocol prefix (`import fs from 'node:fs'`), never a bare specifier (`'fs'`).
   - Last array element: `arr.at(-1)`, not `arr[arr.length - 1]`.
   - NaN checks: `Number.isNaN(x)`, not the global `isNaN(x)`.
+  - NaN value: `Number.NaN`, not the bare global `NaN` literal (e.g. `{ value: Number.NaN }`, not `{ value: NaN }`).
   - Existence + property chains: optional chaining (`step?.power === undefined`), not `step === undefined || step.power === undefined`.
-  - Cognitive complexity: SonarQube flags functions above ~15. When a function accumulates many nested if/else branches (e.g. dual-branch formatting logic, multi-case builders), extract small named helpers per logical concern as you write it, rather than one large function refactored later.
+  - Cognitive complexity: SonarQube flags functions above ~15. When a function accumulates many nested if/else branches (e.g. dual-branch formatting logic, multi-case builders), extract small named helpers per logical concern as you write it, rather than one large function refactored later. This applies to a function you're *extending*, not just ones you write from scratch — adding even one more branch/ternary to an already-dense function can push it over the threshold, so re-check complexity on touched functions too.
 
 ### Documentation
 

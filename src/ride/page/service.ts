@@ -417,7 +417,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
         const displayProps: VideoRidePageDisplayProps = {
             ...base,
-            ...this.buildWorkoutOverlayProps(props, base.startOverlayProps === null),
+            ...this.buildWorkoutOverlayProps(props),
             video: props.video,
             videos: props.videos,
             route: props.route
@@ -431,7 +431,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
         const displayProps: GPXRidePageDisplayProps = {
             ...base,
-            ...this.buildWorkoutOverlayProps(props, base.startOverlayProps === null),
+            ...this.buildWorkoutOverlayProps(props),
             rideView: props.rideView,
             route: props.route,
             displayObserver: props.displayObserver,
@@ -443,9 +443,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     /**
      * The workout half of a combo ride's display props (Video/GPX ride with an attached workout).
-     * Mirrors getWorkoutRideDisplayProps()'s builders exactly (same graph/steps/dashboard/hint/
-     * increment sources) so the two ride shapes can never drift apart - a combo ride's
-     * WorkoutDashboard must show what a workout-only ride shows.
+     * Mirrors getWorkoutRideDisplayProps()'s builders exactly (same graph/steps/dashboard sources)
+     * so the two ride shapes can never drift apart - a combo ride's WorkoutDashboard must show what
+     * a workout-only ride shows. gestureHint/loadIncrement/loadButtonMode are NOT computed here
+     * (moved to buildBaseDisplayProps() - they apply to every ride type, not just a workout-attached
+     * one) - see that method's comment.
      *
      * Also honours RideDisplayService's own `showWorkout` (already computed for every ride type,
      * and what desktop renders off): it adds the "not while the ride is still starting" and "not
@@ -456,8 +458,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * branch below, not just the "workout visible" one.
      */
     protected buildWorkoutOverlayProps(
-        props: CurrentRideDisplayProps & { showWorkout?: boolean },
-        startOverlayCleared: boolean
+        props: CurrentRideDisplayProps & { showWorkout?: boolean }
     ): Partial<RidePageDisplayProps> {
         const cornerWidget = this.getCornerWidget()
 
@@ -473,10 +474,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                 title:           wo.title ?? '',
                 graph:           this.buildGraphPlan(props.workout, wo.ftp),
                 steps:           this.buildUpcomingSteps(props.workout, wo.ftp),
-                dashboard:       this.buildDashboardLine(wo),
-                gestureHint:     this.buildGestureHint(startOverlayCleared),
-                loadIncrement:   this.getLoadIncrement(),
-                loadButtonMode:  wo.loadButtonMode ?? 'power'
+                dashboard:       this.buildDashboardLine(wo)
             }
         }
         catch (err: any) {
@@ -707,19 +705,41 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * Adjusts the workout load (intensity) by the given percentage.
+     * Adjusts the ride's load (intensity) by the given magnitude.
      *
-     * @param deltaPct positive to increase, negative to decrease the load
+     * §4.4.5 kept this workout-independent for gear (and hidden) mode on purpose - gating it on
+     * `isWorkoutAttached()`/`inUse()` would have broken gear shifting on a plain SIM-mode ride,
+     * since `WorkoutRideService.powerUp()`/`powerDown()`'s gear branch (and its `'hidden'` no-op)
+     * already touch no workout state at all and work correctly with no workout in use. Only a plain
+     * (no-workout) **ERG-mode** adjustment was actually broken: with no workout, `WorkoutRideService.settings`
+     * is `undefined`, so its FTP/targetPower branch throws internally, gets swallowed by its own
+     * try/catch, and silently no-ops - nothing reaches the trainer. That specific case (and only
+     * that one) is rerouted to `RideDisplayService.adjustDevicePower()`, mirroring the ERG branch of
+     * `RideDisplayService.adjustPower()` (the existing web-ui/keyboard-shortcut equivalent for a
+     * plain ride), just with a return value.
+     *
+     * @param deltaPct positive to increase, negative to decrease the load; while routed through the
+     *        Workout this is the raw magnitude `powerUp()`/`powerDown()` expect (e.g. `1`/`5`,
+     *        matching the configured `loadIncrement`); for the plain-ERG reroute it's resolved to a
+     *        nominal 5W/50W step via the same `magnitude===1 ? 5 : 50` convention
+     *        `getPowerRangeDeltaVal()` uses
      * @returns which quantity was adjusted and its resulting value (in Watt) - see
-     *          `WorkoutRideService.powerUp()`/`powerDown()`; `undefined` if it could not be
-     *          determined (e.g. no FTP configured and the current step isn't a power range).
+     *          `WorkoutRideService.powerUp()`/`powerDown()` and `RideDisplayService.adjustDevicePower()`;
+     *          `undefined` if it could not be determined
      */
     adjustLoad(deltaPct: number): PowerAdjustmentResult | undefined {
         try {
-            if (deltaPct >= 0)
-                return this.getWorkoutRide().powerUp(deltaPct)
-            else
-                return this.getWorkoutRide().powerDown(-deltaPct)
+            const plainErgAdjustment = !this.getWorkoutRide().inUse() && this.getLoadButtonMode()==='power'
+
+            if (plainErgAdjustment) {
+                const sign = deltaPct >= 0 ? 1 : -1
+                const nominal = Math.abs(deltaPct) === 1 ? 5 : 50
+                return this.getRideDisplay().adjustDevicePower(sign * nominal)
+            }
+
+            return deltaPct >= 0
+                ? this.getWorkoutRide().powerUp(deltaPct)
+                : this.getWorkoutRide().powerDown(-deltaPct)
         }
         catch (err: any) {
             this.logError(err, 'adjustLoad')
@@ -774,10 +794,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                 title: wo.title ?? '',
                 graph: this.buildGraphPlan(current, wo.ftp),
                 steps: this.buildUpcomingSteps(current, wo.ftp),
-                dashboard: this.buildDashboardLine(wo),
-                gestureHint: this.buildGestureHint(base.startOverlayProps === null),
-                loadIncrement: this.getLoadIncrement(),
-                loadButtonMode: wo.loadButtonMode ?? 'power'
+                dashboard: this.buildDashboardLine(wo)
             }
         }
         catch (err: any) {
@@ -1070,8 +1087,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      *
      * A 'Workout' ride short-circuits to true unconditionally - a workout-only ride is Phase 1,
      * already shipped, and doesn't go through WorkoutRideService.inUse() at all.
+     *
+     * Public (not protected) - part of IRidePageService, called live by useRideGestures.ts's
+     * left/right swipe handler (see that interface method's comment).
      */
-    protected isWorkoutAttached(): boolean {
+    isWorkoutAttached(): boolean {
         try {
             if (this.isRideType('Workout'))
                 return true
@@ -1097,16 +1117,26 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             : { showResume: false, finished: true }
     }
 
+    // gestureHint/loadIncrement/loadButtonMode live here (not in buildWorkoutOverlayProps()'s
+    // workout-attached branch, where they used to be computed) because the swipe gesture itself
+    // (RidePageService.adjustLoad()/onStepBack()/onStepForward(), §4.4.5) already works correctly
+    // on a plain, no-workout Video/GPX ride - mobile's gesture-hint overlay and its content
+    // (getGestureHintContent(), incyclist-mobile) need these unconditionally too, or a plain ride
+    // never gets a hint at all, even though the gesture underneath it is fully functional.
     protected buildBaseDisplayProps() {
         const state = this.getRideDisplay().getState()
         const isStarting = state === 'Idle' || state === 'Starting' || state === 'Error'
+        const startOverlayProps = isStarting ? this.getRideDisplay().getStartOverlayProps() : null
 
         return {
             rideState: state,
             rideType: this.getRideDisplay().getRideType(),
-            startOverlayProps: isStarting ? this.getRideDisplay().getStartOverlayProps() : null,
+            startOverlayProps,
             menuProps: this.menuProps,
-            startGateProps: this.startGateProps
+            startGateProps: this.startGateProps,
+            gestureHint: this.buildGestureHint(startOverlayProps === null),
+            loadIncrement: this.getLoadIncrement(),
+            loadButtonMode: this.getLoadButtonMode()
         }
     }
 

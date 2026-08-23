@@ -134,10 +134,15 @@ export interface IRidePageService extends RidePageCallbacks, IPageService{
 
     getGraphActuals(): WorkoutGraphActuals
     adjustLoad(deltaPct: number): PowerAdjustmentResult | undefined
-    // FIXES_BACKLOG #37: callers (useWorkoutRideGestures.ts's swipe handler, a future menu/settings
+    // FIXES_BACKLOG #37: callers (useRideGestures.ts's swipe handler, a future menu/settings
     // surface) must call this fresh at gesture/tap time - cycling mode can change mid-ride - rather
     // than caching a value read from getPageDisplayProps().loadButtonMode.
     getLoadButtonMode(): LoadButtonMode
+    // True for a Workout ride, or a Video/GPX ride with a workout attached - useRideGestures.ts's
+    // left/right swipe handler needs this fresh at gesture time (mirrors getLoadButtonMode() above)
+    // to decide whether "step back/forward" is actually going to do anything, rather than showing
+    // that feedback toast on a plain ride where it would be a silent, misleading no-op.
+    isWorkoutAttached(): boolean
 }
 
 // ---- Workout-specific display types (relocated from src/workouts/ride/page/types.ts as part of
