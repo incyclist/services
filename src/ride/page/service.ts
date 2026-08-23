@@ -707,19 +707,41 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * Adjusts the workout load (intensity) by the given percentage.
+     * Adjusts the ride's load (intensity) by the given magnitude.
      *
-     * @param deltaPct positive to increase, negative to decrease the load
+     * §4.4.5 kept this workout-independent for gear (and hidden) mode on purpose - gating it on
+     * `isWorkoutAttached()`/`inUse()` would have broken gear shifting on a plain SIM-mode ride,
+     * since `WorkoutRideService.powerUp()`/`powerDown()`'s gear branch (and its `'hidden'` no-op)
+     * already touch no workout state at all and work correctly with no workout in use. Only a plain
+     * (no-workout) **ERG-mode** adjustment was actually broken: with no workout, `WorkoutRideService.settings`
+     * is `undefined`, so its FTP/targetPower branch throws internally, gets swallowed by its own
+     * try/catch, and silently no-ops - nothing reaches the trainer. That specific case (and only
+     * that one) is rerouted to `RideDisplayService.adjustDevicePower()`, mirroring the ERG branch of
+     * `RideDisplayService.adjustPower()` (the existing web-ui/keyboard-shortcut equivalent for a
+     * plain ride), just with a return value.
+     *
+     * @param deltaPct positive to increase, negative to decrease the load; while routed through the
+     *        Workout this is the raw magnitude `powerUp()`/`powerDown()` expect (e.g. `1`/`5`,
+     *        matching the configured `loadIncrement`); for the plain-ERG reroute it's resolved to a
+     *        nominal 5W/50W step via the same `magnitude===1 ? 5 : 50` convention
+     *        `getPowerRangeDeltaVal()` uses
      * @returns which quantity was adjusted and its resulting value (in Watt) - see
-     *          `WorkoutRideService.powerUp()`/`powerDown()`; `undefined` if it could not be
-     *          determined (e.g. no FTP configured and the current step isn't a power range).
+     *          `WorkoutRideService.powerUp()`/`powerDown()` and `RideDisplayService.adjustDevicePower()`;
+     *          `undefined` if it could not be determined
      */
     adjustLoad(deltaPct: number): PowerAdjustmentResult | undefined {
         try {
-            if (deltaPct >= 0)
-                return this.getWorkoutRide().powerUp(deltaPct)
-            else
-                return this.getWorkoutRide().powerDown(-deltaPct)
+            const plainErgAdjustment = !this.getWorkoutRide().inUse() && this.getLoadButtonMode()==='power'
+
+            if (plainErgAdjustment) {
+                const sign = deltaPct >= 0 ? 1 : -1
+                const nominal = Math.abs(deltaPct) === 1 ? 5 : 50
+                return this.getRideDisplay().adjustDevicePower(sign * nominal)
+            }
+
+            return deltaPct >= 0
+                ? this.getWorkoutRide().powerUp(deltaPct)
+                : this.getWorkoutRide().powerDown(-deltaPct)
         }
         catch (err: any) {
             this.logError(err, 'adjustLoad')

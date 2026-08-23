@@ -37,7 +37,8 @@ const setupMocks = (rideType: string = 'GPX') => {
         getRideType: jest.fn().mockReturnValue(rideType),
         getState: jest.fn().mockReturnValue('Idle'),
         getStartOverlayProps: jest.fn().mockReturnValue({ mode: rideType, rideState: 'Idle', devices: [], readyToStart: false }),
-        getDisplayProperties: jest.fn().mockReturnValue({ state: 'Idle' })
+        getDisplayProperties: jest.fn().mockReturnValue({ state: 'Idle' }),
+        adjustDevicePower: jest.fn()
     }
     MockWorkoutRide = {
         getObserver: jest.fn(),
@@ -1192,6 +1193,12 @@ describe('RidePageService', () => {
     describe('adjustLoad', () => {
         beforeEach(() => {
             MockRideDisplay.getRideType.mockReturnValue('Workout')
+            // These tests are about WorkoutRide.powerUp()/powerDown() forwarding, so they need a
+            // workout actually in use - MockWorkoutRide's own default (inUse:false) represents a
+            // plain (no-workout) ride instead, which now correctly reroutes to
+            // RideDisplayService.adjustDevicePower() (see the 'plain ERG-mode ride (no workout)'
+            // tests below for that case).
+            MockWorkoutRide.inUse.mockReturnValue(true)
         })
 
         test('positive delta -> powerUp', () => {
@@ -1249,6 +1256,50 @@ describe('RidePageService', () => {
 
             expect(MockWorkoutRide.powerUp).toHaveBeenCalledWith(7)
             expect(MockWorkoutRide.powerDown).toHaveBeenCalledWith(7)
+        })
+
+        // Regression: a plain (no-workout) ERG-mode ride's swipe/menu load adjustment was silently
+        // a no-op - WorkoutRideService.settings is undefined without a workout, so
+        // powerUp()/powerDown()'s FTP/targetPower branch threw internally, got swallowed by its own
+        // try/catch, and returned undefined. Nothing reached the trainer, even though the swipe
+        // feedback toast still showed as if it had worked. Gear mode and 'hidden' mode are
+        // unaffected by this fix (§4.4.5, see the dedicated NOT-workout-gated describe block) -
+        // their WorkoutRideService.powerUp()/powerDown() branches never touch `settings` at all and
+        // already worked correctly with no workout in use.
+        describe('plain ERG-mode ride (no workout)', () => {
+            beforeEach(() => {
+                MockWorkoutRide.inUse.mockReturnValue(false)
+                MockWorkoutRide.getLoadButtonMode.mockReturnValue('power')
+            })
+
+            test('routes to RideDisplayService.adjustDevicePower() instead of WorkoutRide, with a nominal 5W step for magnitude 1',()=>{
+                MockRideDisplay.adjustDevicePower.mockReturnValue({ type: 'gear', value: 1 })
+                const result = s.adjustLoad(1)
+
+                expect(MockRideDisplay.adjustDevicePower).toHaveBeenCalledWith(5)
+                expect(MockWorkoutRide.powerUp).not.toHaveBeenCalled()
+                expect(MockWorkoutRide.powerDown).not.toHaveBeenCalled()
+                expect(result).toEqual({ type: 'gear', value: 1 })
+            })
+
+            test('a nominal 50W step for any other magnitude (e.g. 5)',()=>{
+                s.adjustLoad(5)
+                expect(MockRideDisplay.adjustDevicePower).toHaveBeenCalledWith(50)
+            })
+
+            test('negative delta -> negative nominal step',()=>{
+                s.adjustLoad(-1)
+                expect(MockRideDisplay.adjustDevicePower).toHaveBeenCalledWith(-5)
+
+                s.adjustLoad(-5)
+                expect(MockRideDisplay.adjustDevicePower).toHaveBeenCalledWith(-50)
+            })
+
+            test('forwards whatever adjustDevicePower() reports, verbatim',()=>{
+                MockRideDisplay.adjustDevicePower.mockReturnValue({ type: 'targetPower', value: NaN })
+                const result = s.adjustLoad(1)
+                expect(result).toEqual({ type: 'targetPower', value: NaN })
+            })
         })
     })
 
