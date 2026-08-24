@@ -40,11 +40,11 @@ const HINTS_WORKOUT_GESTURES_KEY = 'hints.workoutRideGestures'
 // Same key mobile's useWorkoutRideGestures.ts (session 5.4) already reads - do not introduce a
 // second key for the same setting.
 const LOAD_INCREMENT_SETTING_KEY = 'preferences.workouts.loadIncrement'
-// Phone-fallback corner-widget toggle (ride-overlay-layout-design.md §6.4) - which of the
-// competing corner widgets (elevation graph, workout info, previous rides) a ride currently shows.
+// Phone-fallback corner-widget toggle - which of the competing corner widgets (elevation graph,
+// workout info, previous rides) a ride currently shows.
 const CORNER_WIDGET_SETTING_KEY = 'preferences.workouts.rideCornerWidget'
-// race-against-yourself-mobile-design.md §5 - visibleRows before the view has ever reported a
-// value via setPrevRidesVisibleRows() (screen geometry the service has no visibility into).
+// Fallback row count before the view has ever reported a value via setPrevRidesVisibleRows()
+// (screen geometry the service has no visibility into).
 const DEFAULT_PREV_RIDES_VISIBLE_ROWS = 1
 
 /**
@@ -68,11 +68,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     protected isInitialized: boolean = false
     protected startGateProps: StartGateProps | null = null
 
-    // race-against-yourself-mobile-design.md §5/§6.3 - reported by the mobile view
-    // (setPrevRidesVisibleRows()), and the phone-only condensed/expanded toggle
-    // (onExpandPrevRides()/onCollapsePrevRides(), or the view's own setPrevRidesMode() override).
-    // Defaults to 'list' - phone-vs-tablet/expanded-vs-not is a view-layer concern (§5); the view
-    // overrides this for the phone-collapsed default via setPrevRidesMode().
+    // prevRidesVisibleRows is reported by the mobile view (setPrevRidesVisibleRows());
+    // prevRidesMode is flipped by the phone-only condensed/expanded toggle
+    // (onExpandPrevRides()/onCollapsePrevRides()), or set directly by the view via
+    // setPrevRidesMode(). Defaults to 'list' - phone-vs-tablet/expanded-vs-not is a view-layer
+    // concern, so the view overrides this for the phone-collapsed default.
     protected prevRidesVisibleRows: number = DEFAULT_PREV_RIDES_VISIBLE_ROWS
     protected prevRidesMode: 'condensed' | 'list' = 'list'
 
@@ -497,8 +497,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * Phone-fallback corner-widget preference (ride-overlay-layout-design.md §6.4,
-     * race-against-yourself-mobile-design.md §6.3) - which of the competing corner widgets
+     * Phone-fallback corner-widget preference - which of the competing corner widgets
      * (elevation graph, workout info, previous rides) a ride currently shows. 'elevation' is
      * always eligible when this method is reached at all; 'workout' only when a workout is
      * attached; 'prevRides' only when prevRides is actually shown (mode !== 'hidden'). Undefined
@@ -537,9 +536,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * '[x]'-style toggle for the phone-fallback corner widget (ride-overlay-layout-design.md §6.4,
-     * race-against-yourself-mobile-design.md §6.3) - advances through whichever states are
-     * currently eligible (getCornerWidgetStates()), wrapping back to the start. Mirrors
+     * '[x]'-style toggle for the phone-fallback corner widget - advances through whichever states
+     * are currently eligible (getCornerWidgetStates()), wrapping back to the start. Mirrors
      * onSetLoadIncrement(): write the setting via getUserSettings(), then updatePageDisplay().
      */
     onToggleCornerWidget(): void {
@@ -556,9 +554,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * Phone-only (race-against-yourself-mobile-design.md §6.3) - the corner-slot chevron's
-     * expand/collapse. No-op on tablet callers (prevRides.mode is always 'list' there via the
-     * view's own setPrevRidesMode() - see that setter).
+     * Phone-only - the corner-slot chevron's expand/collapse. No-op on tablet callers
+     * (prevRides.mode is always 'list' there via the view's own setPrevRidesMode() - see that
+     * setter).
      */
     onExpandPrevRides(): void {
         this.setPrevRidesMode('list')
@@ -569,9 +567,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * race-against-yourself-mobile-design.md §5 - how many rows of prevRides actually fit
-     * (screen geometry the service has no visibility into). Reported by the mobile view whenever
-     * the relevant geometry changes (ear resize, rotation, panel open/close).
+     * How many rows of prevRides actually fit (screen geometry the service has no visibility
+     * into). Reported by the mobile view whenever the relevant geometry changes (ear resize,
+     * rotation, panel open/close).
      */
     setPrevRidesVisibleRows(n: number): void {
         try {
@@ -584,8 +582,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * race-against-yourself-mobile-design.md §5 - companion setter to setPrevRidesVisibleRows(),
-     * kept separate rather than folded into it: this is a phone-vs-tablet/expanded-vs-not view
+     * Companion setter to setPrevRidesVisibleRows(), kept separate rather than folded into it:
+     * this is a phone-vs-tablet/expanded-vs-not view
      * decision (an interaction/layout-tier concern), while setPrevRidesVisibleRows() is a pure
      * geometry report - mixing the two into one call would make either call ambiguous about which
      * concern it's actually reporting. onExpandPrevRides()/onCollapsePrevRides() already cover the
@@ -1223,12 +1221,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * race-against-yourself-mobile-design.md §5 - built here (not buildWorkoutOverlayProps()) so
-     * it's present for every ride type, exactly like gestureHint/loadIncrement/loadButtonMode
-     * above. For a route-less Workout ride this naturally resolves to 'hidden': ActivityRideService
-     * never populates prevRidesLogs for one (initPrevActivities() is gated on settings.type ===
-     * 'Route'), so getPrevRidesListDisplay() always returns an empty array there - no separate
-     * route-less-workout guard needed (design doc §3/§5).
+     * Built here (not buildWorkoutOverlayProps()) so it's present for every ride type, exactly
+     * like gestureHint/loadIncrement/loadButtonMode above. For a route-less Workout ride this
+     * naturally resolves to 'hidden': ActivityRideService never populates prevRidesLogs for one
+     * (initPrevActivities() is gated on settings.type === 'Route'), so getPrevRidesListDisplay()
+     * always returns an empty array there - no separate route-less-workout guard needed.
      */
     protected buildPrevRides(): RidePageDisplayProps['prevRides'] {
         try {

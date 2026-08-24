@@ -55,7 +55,8 @@ export interface RidePageDisplayProps {
 
     // Built by RidePageService from ActivityRideService.getPrevRidesListDisplay() - see
     // PrevRidesRowProps below for row shape. 'hidden' when showPrev is off, there are no eligible
-    // previous rides, or this is a route-less Workout ride (falls out naturally - see design doc §3/§5).
+    // previous rides, or this is a route-less Workout ride (falls out naturally - a route-less
+    // workout never has eligible previous rides to begin with).
     prevRides?: {
         mode:    'hidden' | 'condensed' | 'list'
         rows:    PrevRidesRowProps[]        // empty for 'hidden'
@@ -63,9 +64,9 @@ export interface RidePageDisplayProps {
     }
 }
 
-// race-against-yourself-mobile-design.md §6.4 - one shape, both platforms. RidePageService always
-// populates every field it has (avatar/speed/power/heartrate included) regardless of tablet/phone
-// tier; the mobile view decides which fields to actually render for the current tier.
+// One shape, both platforms. RidePageService always populates every field it has
+// (avatar/speed/power/heartrate included) regardless of tablet/phone tier; the mobile view
+// decides which fields to actually render for the current tier.
 export interface PrevRidesRowProps {
     position:     number
     label:        string              // phone: short date or "You". Tablet: full name/date (view formats further)
@@ -175,8 +176,8 @@ export interface IRidePageService extends RidePageCallbacks, IPageService{
     // so the mobile view (tablet ear / phone corner-slot/panel) reports it here whenever the
     // relevant geometry changes.
     setPrevRidesVisibleRows(n: number): void
-    // Companion setter to setPrevRidesVisibleRows() (design doc §5) - the phone-vs-tablet /
-    // expanded-vs-not tier decision, kept separate from the geometry report above. Lets the view
+    // Companion setter to setPrevRidesVisibleRows() - the phone-vs-tablet / expanded-vs-not tier
+    // decision, kept separate from the geometry report above. Lets the view
     // set the tier-appropriate mode directly (e.g. phone defaulting to 'condensed' on mount,
     // tablet always 'list') without going through the chevron's onExpandPrevRides()/
     // onCollapsePrevRides() callbacks.

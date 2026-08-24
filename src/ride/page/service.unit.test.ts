@@ -11,8 +11,8 @@ let MockBindings
 let MockOnlineStatusMonitoring
 let MockUserSettings
 
-// race-against-yourself-mobile-design.md §6.4 row shape (as returned by
-// ActivityRideService.getPrevRidesListDisplay(), before RidePageService maps it to PrevRidesRowProps).
+// The row shape as returned by ActivityRideService.getPrevRidesListDisplay(), before
+// RidePageService maps it to PrevRidesRowProps.
 const makePrevRideRow = (overrides: Record<string, unknown> = {}) => ({
     position: 1,
     title: '8/1/2026',
@@ -1853,7 +1853,7 @@ describe('RidePageService', () => {
             expect((s.getPageDisplayProps() as any).cornerWidget).toBe('workout')
         })
 
-        // race-against-yourself-mobile-design.md §6.3 - the gate/cycle generalization
+        // the gate/cycle generalization to cover prevRides as a third corner-widget candidate
         test('populated ("elevation" default) when prevRides is eligible, even with no workout attached', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockWorkoutRide.inUse.mockReturnValue(false)
@@ -1968,7 +1968,6 @@ describe('RidePageService', () => {
         })
     })
 
-    // race-against-yourself-mobile-design.md §5/§6.3
     describe('prevRides', () => {
         beforeEach(() => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
