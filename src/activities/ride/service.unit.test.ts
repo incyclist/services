@@ -833,65 +833,76 @@ describe('ActivityRideService',()=>{
             resetSingleton(service)            
         })
 
-        test('less than max entries',()=>{
+        test('field smaller than maxEntries - no trimming',()=>{
             prepareList(5,3)
 
             const res = service.getPrevRidesListDisplay(5)
             expect(res.length).toBe(5)
-            expect(getList(res)).toBe('1,2,current,4,5')           
+            expect(getList(res)).toBe('1,2,current,4,5')
         })
-        test('exactly max entries',()=>{
+        test('field equal to maxEntries - no trimming',()=>{
             prepareList(5,5)
 
             const res = service.getPrevRidesListDisplay(5)
             expect(res.length).toBe(5)
-            expect(getList(res)).toBe('1,2,3,4,current')           
+            expect(getList(res)).toBe('1,2,3,4,current')
         })
 
-        test('max+1 entries, current is max+1',()=>{
-            prepareList(6,6)
-
-            const res = service.getPrevRidesListDisplay(5)            
-            expect(getList(res)).toBe('1,2,3,4,current')           
-        })
-        test('max+1 entries, current is last but one',()=>{
-            prepareList(6,5)
+        test('field larger than maxEntries - leader, last place, current and neighbors are kept',()=>{
+            prepareList(15,8)
 
             const res = service.getPrevRidesListDisplay(5)
-            expect(getList(res)).toBe('1,2,3,current,6')           
+            expect(res.length).toBe(5)
+            expect(getList(res)).toBe('1,7,current,9,15')
         })
-        test('max+1 entries, current is last but two',()=>{
-            prepareList(6,4)
+        test('current is the leader - no duplicate row',()=>{
+            prepareList(15,1)
 
             const res = service.getPrevRidesListDisplay(5)
-            expect(getList(res)).toBe('1,2,3,current,+2')           
+            expect(res.length).toBe(5)
+            expect(getList(res)).toBe('current,2,3,4,15')
         })
-        test('max+10 entries, current is somewhere in the middle',()=>{
-            prepareList(15,7)
+        test('current is last place - no duplicate row',()=>{
+            prepareList(15,15)
 
             const res = service.getPrevRidesListDisplay(5)
-            expect(getList(res)).toBe('1,2,3,current,+8')           
+            expect(res.length).toBe(5)
+            expect(getList(res)).toBe('1,12,13,14,current')
         })
-        test('max+10 entries, current=maxEntries',()=>{
-            prepareList(15,5)
+        test('current is one neighbor away from the leader',()=>{
+            prepareList(15,2)
 
             const res = service.getPrevRidesListDisplay(5)
-            expect(getList(res)).toBe('1,2,3,current,+10')           
+            expect(res.length).toBe(5)
+            expect(getList(res)).toBe('1,current,3,4,15')
         })
-        test('max+10 entries, current=maxEntries-1',()=>{
-            prepareList(15,4)
-
-            const res = service.getPrevRidesListDisplay(5)
-            expect(getList(res)).toBe('1,2,3,current,+11')           
-        })
-        test('max+10 entries, current=total-1',()=>{
+        test('current is one neighbor away from last place',()=>{
             prepareList(15,14)
 
             const res = service.getPrevRidesListDisplay(5)
-            expect(getList(res)).toBe('1,2,3,current,15')
+            expect(res.length).toBe(5)
+            expect(getList(res)).toBe('1,12,13,current,15')
         })
+        test('result is re-sorted by position',()=>{
+            prepareList(15,8)
 
+            const res = service.getPrevRidesListDisplay(5)
+            const positions = res.map((e:any)=>e.position)
+            expect(positions).toEqual([...positions].sort((a,b)=>a-b))
+        })
+        test('degenerate case maxEntries=1 with a small field - current + nearest rival only',()=>{
+            prepareList(2,1)
 
+            const res = service.getPrevRidesListDisplay(1)
+            expect(res.length).toBe(2)
+            expect(getList(res)).toBe('current,2')
+        })
+        test('degenerate case maxEntries=1 with current in the middle - mandatory rows still kept',()=>{
+            prepareList(15,8)
+
+            const res = service.getPrevRidesListDisplay(1)
+            expect(getList(res)).toBe('1,current,15')
+        })
 
     })
 

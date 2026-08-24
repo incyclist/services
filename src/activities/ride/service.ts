@@ -872,41 +872,7 @@ export class ActivityRideService extends IncyclistService {
             return {position,avatar,...a}
         })
 
-        if (props.length>maxEntries) {
-            const currentIdx = props.findIndex( a=> a.title==='current')
-            if (currentIdx<maxEntries-1) {
-
-
-                const deleted = props.splice(maxEntries-1)
-                props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})
-            }
-            else if (currentIdx>maxEntries-1){
-                // last two records
-                if (currentIdx<props.length-2) {
-                    const deleted = props.splice(currentIdx+1)
-                    props.splice( maxEntries-2, currentIdx-(maxEntries-2))
-                    props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})
-                }
-                else if (currentIdx===props.length-2) {
-                    props.splice( maxEntries-2, props.length-maxEntries)
-                }
-                else {
-                    const keep = maxEntries-1
-                    const cut = props.length-maxEntries
-                    props.splice( keep,cut)
-                }
-
-            }
-            else if (currentIdx===props.length-2) {
-                props.splice( maxEntries-2, props.length-maxEntries)
-            }
-            else if (currentIdx===maxEntries-1) {
-                const deleted = props.splice( currentIdx+1, props.length-currentIdx)
-                props.push({title:`+${deleted.length}`,tsStart:null, distanceGap:'',timeGap:''})   
-                props.splice( currentIdx-1, 1)
-            }
-            
-        }
+        const selected = this.selectPrevRidesRows(props, maxEntries)
 
         let logInfo = ''
         try {
@@ -916,19 +882,64 @@ export class ActivityRideService extends IncyclistService {
                 return `${pr.position}:${pr.avatar?.shirt}-${pr.avatar?.helmet}:${pr.title}:${pr.timeGap}:${distanceGap}`
             }
 
-            logInfo = `(${props.length}/${prevRides.length})`
-                      + props.map(buildLog).join(',')
+            logInfo = `(${selected.length}/${prevRides.length})`
+                      + selected.map(buildLog).join(',')
 
         }
-        catch { // ignore            
+        catch { // ignore
         }
         this.logEvent({message:'PrevRides', prevRides:logInfo})
-        
 
 
-        return props
+
+        return selected
     }
-    
+
+    /**
+     * Selects which rows of an already position-sorted field to display, per
+     * race-against-yourself-mobile-design.md §4.
+     *
+     * Always keeps the current-position leader, last place and the "current" (live) rider
+     * (deduplicated - a rider can occupy more than one of those roles), then fills any remaining
+     * budget by walking outward from the current rider, alternating one neighbor above / below.
+     */
+    protected selectPrevRidesRows( props:Array<PrevRidesListDisplayProps>, maxEntries:number):Array<PrevRidesListDisplayProps> {
+        if (props.length<=maxEntries)
+            return props
+
+        const currentIdx = props.findIndex( a=> a.title==='current')
+
+        const selectedIdx = new Set<number>([0, props.length-1])
+        if (currentIdx>=0)
+            selectedIdx.add(currentIdx)
+
+        let above = currentIdx-1
+        let below = currentIdx+1
+        let takeAbove = true
+
+        while (selectedIdx.size<maxEntries && (above>=0 || below<props.length)) {
+            if (takeAbove && above>=0) {
+                selectedIdx.add(above)
+                above--
+            }
+            else if (!takeAbove && below<props.length) {
+                selectedIdx.add(below)
+                below++
+            }
+            else if (above>=0) {
+                selectedIdx.add(above)
+                above--
+            }
+            else if (below<props.length) {
+                selectedIdx.add(below)
+                below++
+            }
+            takeAbove = !takeAbove
+        }
+
+        return Array.from(selectedIdx).sort((a,b)=>a-b).map( i=>props[i])
+    }
+
 
 
     protected getPrevActivityLog(ai:ActivityInfo,current:ActivityLogRecord):PastActivityLogEntry|null {
