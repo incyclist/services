@@ -918,19 +918,15 @@ export class ActivityRideService extends IncyclistService {
         let takeAbove = true
 
         while (selectedIdx.size<maxEntries && (above>=0 || below<props.length)) {
-            if (takeAbove && above>=0) {
+            const canAbove = above>=0
+            const canBelow = below<props.length
+            const useAbove = canAbove && (takeAbove || !canBelow)
+
+            if (useAbove) {
                 selectedIdx.add(above)
                 above--
             }
-            else if (!takeAbove && below<props.length) {
-                selectedIdx.add(below)
-                below++
-            }
-            else if (above>=0) {
-                selectedIdx.add(above)
-                above--
-            }
-            else if (below<props.length) {
+            else {
                 selectedIdx.add(below)
                 below++
             }
