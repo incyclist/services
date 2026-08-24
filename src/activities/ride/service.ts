@@ -896,12 +896,13 @@ export class ActivityRideService extends IncyclistService {
     }
 
     /**
-     * Selects which rows of an already position-sorted field to display, per
-     * race-against-yourself-mobile-design.md §4.
+     * Selects which rows of an already position-sorted field to display.
      *
-     * Always keeps the current-position leader, last place and the "current" (live) rider
-     * (deduplicated - a rider can occupy more than one of those roles), then fills any remaining
-     * budget by walking outward from the current rider, alternating one neighbor above / below.
+     * At maxEntries>=3, always keeps the current-position leader, last place and the "current"
+     * (live) rider (deduplicated - a rider can occupy more than one of those roles). Below that
+     * threshold the leader/last-place guarantee is dropped (it would alone exceed the budget) and
+     * only the current rider is mandatory. Either way, any remaining budget is filled by walking
+     * outward from the current rider, alternating one neighbor above / below.
      */
     protected selectPrevRidesRows( props:Array<PrevRidesListDisplayProps>, maxEntries:number):Array<PrevRidesListDisplayProps> {
         if (props.length<=maxEntries)
@@ -909,7 +910,11 @@ export class ActivityRideService extends IncyclistService {
 
         const currentIdx = props.findIndex( a=> a.title==='current')
 
-        const selectedIdx = new Set<number>([0, props.length-1])
+        const selectedIdx = new Set<number>()
+        if (maxEntries>=3) {
+            selectedIdx.add(0)
+            selectedIdx.add(props.length-1)
+        }
         if (currentIdx>=0)
             selectedIdx.add(currentIdx)
 

@@ -890,17 +890,32 @@ describe('ActivityRideService',()=>{
             const positions = res.map((e:any)=>e.position)
             expect(positions).toEqual([...positions].sort((a,b)=>a-b))
         })
-        test('degenerate case maxEntries=1 with a small field - current + nearest rival only',()=>{
+        test('degenerate case maxEntries=1 with a small field - current only',()=>{
             prepareList(2,1)
 
             const res = service.getPrevRidesListDisplay(1)
-            expect(res.length).toBe(2)
-            expect(getList(res)).toBe('current,2')
+            expect(res.length).toBe(1)
+            expect(getList(res)).toBe('current')
         })
-        test('degenerate case maxEntries=1 with current in the middle - mandatory rows still kept',()=>{
+        test('degenerate case maxEntries=1 with current in the middle - current only, leader/last place dropped',()=>{
             prepareList(15,8)
 
             const res = service.getPrevRidesListDisplay(1)
+            expect(res.length).toBe(1)
+            expect(getList(res)).toBe('current')
+        })
+        test('degenerate case maxEntries=2 - current + nearest neighbor, leader/last place still dropped',()=>{
+            prepareList(15,8)
+
+            const res = service.getPrevRidesListDisplay(2)
+            expect(res.length).toBe(2)
+            expect(getList(res)).toBe('7,current')
+        })
+        test('boundary maxEntries=3 - leader/last place guarantee kicks back in exactly here',()=>{
+            prepareList(15,8)
+
+            const res = service.getPrevRidesListDisplay(3)
+            expect(res.length).toBe(3)
             expect(getList(res)).toBe('1,current,15')
         })
 
