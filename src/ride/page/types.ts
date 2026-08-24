@@ -4,6 +4,7 @@ import { IObserver, RideType } from "../../types"
 import { CurrentPosition, CurrentRideState, GPXStartOverlayProps, RideViewType, StartOverlayProps, StreetViewEvent, VideoDisplayProps, VideoStartOverlayProps } from "../types"
 import type { LoadButtonMode, PowerAdjustmentResult } from "../../workouts/ride/types"
 import type { WorkoutGraphPlanBar } from "../../workouts/base/graph/types"
+import type { Avatar } from "../../avatars"
 
 
 export interface StartGateProps {
@@ -41,18 +42,40 @@ export interface RidePageDisplayProps {
     gestureHint?:       WorkoutGestureHint | null
     loadIncrement?:    number
 
-    // NEW - Phase 2. True when the workout surface is live (see RidePageService.isWorkoutAttached()).
     // Always true for a 'Workout' ride; for 'Video'/'GPX' it is the combo flag the ride screen and
     // the Wave-3 overlay-arrangement hook branch on. Absent/false = render exactly as today.
     workoutAttached?:  boolean
-    // NEW - Phase 2. Was previously only on the WorkoutRidePageDisplayProps narrowing; a combo ride
     // needs it too. WorkoutRidePageDisplayProps keeps narrowing it to required.
     loadButtonMode?:   LoadButtonMode
-    // NEW - Phase 2 (ride-overlay-layout-design.md §6.4). Phone-fallback corner-widget preference -
-    // which of the two competing corner widgets (elevation graph vs. workout info) a combo ride
-    // currently shows. Only populated for a Video/GPX ride with a workout attached AND the combo
-    // toggle on (RidePageService.getCornerWidget()); undefined elsewhere (default 'elevation').
-    cornerWidget?:     'elevation' | 'workout'
+    // which of the competing corner widgets (elevation graph, workout info, previous rides) a ride
+    // currently shows. Populated whenever there's more than one candidate to toggle between
+    // (RidePageService.getCornerWidget()); undefined when there's nothing to toggle (default
+    // 'elevation' once populated).
+    cornerWidget?:     'elevation' | 'workout' | 'prevRides'
+
+    // Built by RidePageService from ActivityRideService.getPrevRidesListDisplay() - see
+    // PrevRidesRowProps below for row shape. 'hidden' when showPrev is off, there are no eligible
+    // previous rides, or this is a route-less Workout ride (falls out naturally - see design doc §3/§5).
+    prevRides?: {
+        mode:    'hidden' | 'condensed' | 'list'
+        rows:    PrevRidesRowProps[]        // empty for 'hidden'
+        hasMore: boolean                    // true when the eligible field was trimmed to fit rows
+    }
+}
+
+// race-against-yourself-mobile-design.md §6.4 - one shape, both platforms. RidePageService always
+// populates every field it has (avatar/speed/power/heartrate included) regardless of tablet/phone
+// tier; the mobile view decides which fields to actually render for the current tier.
+export interface PrevRidesRowProps {
+    position:     number
+    label:        string              // phone: short date or "You". Tablet: full name/date (view formats further)
+    timeGap:      string              // "+0:08", "-1:24", ...
+    distanceGap?: string              // tablet only
+    isCurrent:    boolean
+    avatar?:      Avatar              // tablet only
+    speed?:       number              // tablet only
+    power?:       number              // tablet only
+    heartrate?:   number              // tablet only
 }
 
 // Video ride -- extends base with video-specific props
@@ -112,10 +135,14 @@ interface RidePageCallbacks {
     onSetLoadIncrement(value: number): void
     onGestureHintDismissed(props: { dontShowAgain: boolean }): void
 
-    // NEW - Phase 2 (ride-overlay-layout-design.md §6.4). Phone-fallback corner-widget toggle -
     // additive and inert until session 5.1 wires up the RideMenu row and the corner-slot tap
     // handler.
     onToggleCornerWidget(): void
+
+    // corner-slot chevron: expand the condensed prevRides row into the full list panel, and
+    // collapse it back. No-op on tablet (prevRides is always 'list' there, no expand/collapse UI).
+    onExpandPrevRides?():   void
+    onCollapsePrevRides?(): void
 }
 
 // Single merged interface (FIXES_BACKLOG #24), implemented in full by the single RidePageService
@@ -143,6 +170,17 @@ export interface IRidePageService extends RidePageCallbacks, IPageService{
     // to decide whether "step back/forward" is actually going to do anything, rather than showing
     // that feedback toast on a plain ride where it would be a silent, misleading no-op.
     isWorkoutAttached(): boolean
+
+    // How many prevRides rows actually fit - screen geometry the service has no visibility into,
+    // so the mobile view (tablet ear / phone corner-slot/panel) reports it here whenever the
+    // relevant geometry changes.
+    setPrevRidesVisibleRows(n: number): void
+    // Companion setter to setPrevRidesVisibleRows() (design doc §5) - the phone-vs-tablet /
+    // expanded-vs-not tier decision, kept separate from the geometry report above. Lets the view
+    // set the tier-appropriate mode directly (e.g. phone defaulting to 'condensed' on mount,
+    // tablet always 'list') without going through the chevron's onExpandPrevRides()/
+    // onCollapsePrevRides() callbacks.
+    setPrevRidesMode(mode: 'condensed' | 'list'): void
 }
 
 // ---- Workout-specific display types (relocated from src/workouts/ride/page/types.ts as part of

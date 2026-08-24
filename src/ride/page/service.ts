@@ -6,6 +6,7 @@ import {
     AnyRidePageDisplayProps,
     GPXRidePageDisplayProps,
     IRidePageService,
+    PrevRidesRowProps,
     RideMenuProps,
     RidePageDisplayProps,
     StartGateProps,
@@ -24,7 +25,7 @@ import { useRideDisplay } from "../display";
 import { sleep } from "../../utils/sleep";
 import { ISecretBinding } from "../../api/secret";
 import { useOnlineStatusMonitoring } from "../../monitoring";
-import { useActivityRide } from "../../activities";
+import { PrevRidesListDisplayProps, useActivityRide } from "../../activities";
 import { useUserSettings } from "../../settings";
 import { useWorkoutRide } from "../../workouts/ride/service";
 import type { LoadButtonMode, PowerAdjustmentResult, WorkoutDisplayProperties } from "../../workouts/ride/types";
@@ -39,9 +40,12 @@ const HINTS_WORKOUT_GESTURES_KEY = 'hints.workoutRideGestures'
 // Same key mobile's useWorkoutRideGestures.ts (session 5.4) already reads - do not introduce a
 // second key for the same setting.
 const LOAD_INCREMENT_SETTING_KEY = 'preferences.workouts.loadIncrement'
-// Phone-fallback corner-widget toggle (ride-overlay-layout-design.md §6.4) - which of the two
-// competing corner widgets (elevation graph vs. workout info) a combo ride currently shows.
+// Phone-fallback corner-widget toggle (ride-overlay-layout-design.md §6.4) - which of the
+// competing corner widgets (elevation graph, workout info, previous rides) a ride currently shows.
 const CORNER_WIDGET_SETTING_KEY = 'preferences.workouts.rideCornerWidget'
+// race-against-yourself-mobile-design.md §5 - visibleRows before the view has ever reported a
+// value via setPrevRidesVisibleRows() (screen geometry the service has no visibility into).
+const DEFAULT_PREV_RIDES_VISIBLE_ROWS = 1
 
 /**
  * Single page service for all ride types (Video/GPX/Workout) - FIXES_BACKLOG #24. Previously
@@ -63,6 +67,14 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     protected menuProps: RideMenuProps | null = null
     protected isInitialized: boolean = false
     protected startGateProps: StartGateProps | null = null
+
+    // race-against-yourself-mobile-design.md §5/§6.3 - reported by the mobile view
+    // (setPrevRidesVisibleRows()), and the phone-only condensed/expanded toggle
+    // (onExpandPrevRides()/onCollapsePrevRides(), or the view's own setPrevRidesMode() override).
+    // Defaults to 'list' - phone-vs-tablet/expanded-vs-not is a view-layer concern (§5); the view
+    // overrides this for the phone-collapsed default via setPrevRidesMode().
+    protected prevRidesVisibleRows: number = DEFAULT_PREV_RIDES_VISIBLE_ROWS
+    protected prevRidesMode: 'condensed' | 'list' = 'list'
 
     // this-ride-only suppression of the gesture-hint overlay (reset on every openPage()) -
     // distinct from the persisted hints.workoutRideGestures flag, which suppresses it forever.
@@ -417,7 +429,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
         const displayProps: VideoRidePageDisplayProps = {
             ...base,
-            ...this.buildWorkoutOverlayProps(props),
+            ...this.buildWorkoutOverlayProps(props, base.prevRides),
             video: props.video,
             videos: props.videos,
             route: props.route
@@ -431,7 +443,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
         const displayProps: GPXRidePageDisplayProps = {
             ...base,
-            ...this.buildWorkoutOverlayProps(props),
+            ...this.buildWorkoutOverlayProps(props, base.prevRides),
             rideView: props.rideView,
             route: props.route,
             displayObserver: props.displayObserver,
@@ -458,9 +470,10 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * branch below, not just the "workout visible" one.
      */
     protected buildWorkoutOverlayProps(
-        props: CurrentRideDisplayProps & { showWorkout?: boolean }
+        props: CurrentRideDisplayProps & { showWorkout?: boolean },
+        prevRides: RidePageDisplayProps['prevRides']
     ): Partial<RidePageDisplayProps> {
-        const cornerWidget = this.getCornerWidget()
+        const cornerWidget = this.getCornerWidget(prevRides)
 
         if (!this.isWorkoutAttached() || !props?.showWorkout)
             return { workoutAttached: false, cornerWidget }
@@ -484,18 +497,24 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * Phone-fallback corner-widget preference (ride-overlay-layout-design.md §6.4) - which of the
-     * two competing corner widgets (elevation graph vs. workout info) a combo ride currently shows.
-     * Only meaningful for a Video/GPX ride with a workout actually attached - a plain route ride
-     * has nothing to toggle. Only buildWorkoutOverlayProps() (Video/GPX) calls this; a Workout-only
-     * ride goes through getWorkoutRideDisplayProps() instead and never reaches it. Undefined
-     * (default 'elevation') otherwise.
+     * Phone-fallback corner-widget preference (ride-overlay-layout-design.md §6.4,
+     * race-against-yourself-mobile-design.md §6.3) - which of the competing corner widgets
+     * (elevation graph, workout info, previous rides) a ride currently shows. 'elevation' is
+     * always eligible when this method is reached at all; 'workout' only when a workout is
+     * attached; 'prevRides' only when prevRides is actually shown (mode !== 'hidden'). Undefined
+     * only when there's nothing else to toggle to (no workout AND no prevRides) - a plain route
+     * ride with prevRides off has nothing here, same as today's plain-ride case. Only
+     * buildWorkoutOverlayProps() (Video/GPX) calls this; a Workout-only ride goes through
+     * getWorkoutRideDisplayProps() instead and never reaches it.
      */
-    protected getCornerWidget(): 'elevation' | 'workout' | undefined {
+    protected getCornerWidget(prevRides: RidePageDisplayProps['prevRides']): 'elevation' | 'workout' | 'prevRides' | undefined {
         try {
-            if (!this.isWorkoutAttached())
+            const available = this.getCornerWidgetStates(prevRides)
+            if (available.length <= 1)
                 return undefined
-            return this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'elevation')
+
+            const current = this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'elevation')
+            return available.includes(current) ? current : available[0]
         }
         catch (err: any) {
             this.logError(err, 'getCornerWidget')
@@ -504,20 +523,82 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * '[x]'-style toggle for the phone-fallback corner widget (ride-overlay-layout-design.md §6.4).
-     * Mirrors onSetLoadIncrement() exactly: write the setting via getUserSettings(), then
-     * updatePageDisplay(). Additive and inert until session 5.1 wires up the RideMenu row and the
-     * corner-slot tap handler.
+     * The corner-widget states eligible for the current ride, in cycle order. 'elevation' is
+     * always included - callers decide "nothing to toggle" by checking the list length, not by
+     * elevation's presence/absence.
+     */
+    protected getCornerWidgetStates(prevRides: RidePageDisplayProps['prevRides']): Array<'elevation' | 'workout' | 'prevRides'> {
+        const states: Array<'elevation' | 'workout' | 'prevRides'> = ['elevation']
+        if (this.isWorkoutAttached())
+            states.push('workout')
+        if (!!prevRides && prevRides.mode !== 'hidden')
+            states.push('prevRides')
+        return states
+    }
+
+    /**
+     * '[x]'-style toggle for the phone-fallback corner widget (ride-overlay-layout-design.md §6.4,
+     * race-against-yourself-mobile-design.md §6.3) - advances through whichever states are
+     * currently eligible (getCornerWidgetStates()), wrapping back to the start. Mirrors
+     * onSetLoadIncrement(): write the setting via getUserSettings(), then updatePageDisplay().
      */
     onToggleCornerWidget(): void {
         try {
+            const available = this.getCornerWidgetStates(this.buildPrevRides())
             const current = this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'elevation')
-            const next = current === 'elevation' ? 'workout' : 'elevation'
+            const next = available[(available.indexOf(current) + 1) % available.length]
             this.getUserSettings().set(CORNER_WIDGET_SETTING_KEY, next)
             this.updatePageDisplay()
         }
         catch (err: any) {
             this.logError(err, 'onToggleCornerWidget')
+        }
+    }
+
+    /**
+     * Phone-only (race-against-yourself-mobile-design.md §6.3) - the corner-slot chevron's
+     * expand/collapse. No-op on tablet callers (prevRides.mode is always 'list' there via the
+     * view's own setPrevRidesMode() - see that setter).
+     */
+    onExpandPrevRides(): void {
+        this.setPrevRidesMode('list')
+    }
+
+    onCollapsePrevRides(): void {
+        this.setPrevRidesMode('condensed')
+    }
+
+    /**
+     * race-against-yourself-mobile-design.md §5 - how many rows of prevRides actually fit
+     * (screen geometry the service has no visibility into). Reported by the mobile view whenever
+     * the relevant geometry changes (ear resize, rotation, panel open/close).
+     */
+    setPrevRidesVisibleRows(n: number): void {
+        try {
+            this.prevRidesVisibleRows = n
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'setPrevRidesVisibleRows')
+        }
+    }
+
+    /**
+     * race-against-yourself-mobile-design.md §5 - companion setter to setPrevRidesVisibleRows(),
+     * kept separate rather than folded into it: this is a phone-vs-tablet/expanded-vs-not view
+     * decision (an interaction/layout-tier concern), while setPrevRidesVisibleRows() is a pure
+     * geometry report - mixing the two into one call would make either call ambiguous about which
+     * concern it's actually reporting. onExpandPrevRides()/onCollapsePrevRides() already cover the
+     * phone chevron's own toggle; this exists for the view to set the tier-appropriate mode
+     * directly (e.g. phone defaulting to 'condensed' on mount, tablet always 'list').
+     */
+    setPrevRidesMode(mode: 'condensed' | 'list'): void {
+        try {
+            this.prevRidesMode = mode
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'setPrevRidesMode')
         }
     }
 
@@ -1136,7 +1217,60 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             startGateProps: this.startGateProps,
             gestureHint: this.buildGestureHint(startOverlayProps === null),
             loadIncrement: this.getLoadIncrement(),
-            loadButtonMode: this.getLoadButtonMode()
+            loadButtonMode: this.getLoadButtonMode(),
+            prevRides: this.buildPrevRides()
+        }
+    }
+
+    /**
+     * race-against-yourself-mobile-design.md §5 - built here (not buildWorkoutOverlayProps()) so
+     * it's present for every ride type, exactly like gestureHint/loadIncrement/loadButtonMode
+     * above. For a route-less Workout ride this naturally resolves to 'hidden': ActivityRideService
+     * never populates prevRidesLogs for one (initPrevActivities() is gated on settings.type ===
+     * 'Route'), so getPrevRidesListDisplay() always returns an empty array there - no separate
+     * route-less-workout guard needed (design doc §3/§5).
+     */
+    protected buildPrevRides(): RidePageDisplayProps['prevRides'] {
+        try {
+            const rows = this.getActivityRide().getPrevRidesListDisplay(this.prevRidesVisibleRows) ?? []
+            if (rows.length === 0)
+                return { mode: 'hidden', rows: [], hasMore: false }
+
+            // Every row's `position` is assigned over the FULL sorted field before trimming
+            // (ActivityRideService.getPrevRidesListDisplay()) - so the last (highest-position) row
+            // exceeding the returned row count is exactly the "field was trimmed" signal, with no
+            // second call (and no second 'PrevRides' log line) needed to learn the untrimmed size.
+            const hasMore = (rows.at(-1)?.position ?? rows.length) > rows.length
+
+            return {
+                mode: this.prevRidesMode,
+                rows: rows.map(row => this.mapPrevRidesRow(row)),
+                hasMore
+            }
+        }
+        catch (err: any) {
+            this.logError(err, 'buildPrevRides')
+            return { mode: 'hidden', rows: [], hasMore: false }
+        }
+    }
+
+    protected mapPrevRidesRow(row: PrevRidesListDisplayProps): PrevRidesRowProps {
+        const isCurrent = row.title === 'current'
+        const speed = typeof row.speed === 'object' ? row.speed?.value : row.speed
+        const distanceGap = typeof row.distanceGap === 'object'
+            ? `${row.distanceGap.value}${row.distanceGap.unit}`
+            : row.distanceGap
+
+        return {
+            position: row.position ?? 0,
+            label: isCurrent ? 'You' : row.title,
+            timeGap: row.timeGap,
+            distanceGap,
+            isCurrent,
+            avatar: row.avatar,
+            speed,
+            power: row.power,
+            heartrate: row.heartrate
         }
     }
 

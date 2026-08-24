@@ -11,6 +11,21 @@ let MockBindings
 let MockOnlineStatusMonitoring
 let MockUserSettings
 
+// race-against-yourself-mobile-design.md §6.4 row shape (as returned by
+// ActivityRideService.getPrevRidesListDisplay(), before RidePageService maps it to PrevRidesRowProps).
+const makePrevRideRow = (overrides: Record<string, unknown> = {}) => ({
+    position: 1,
+    title: '8/1/2026',
+    tsStart: 1000,
+    timeGap: '+0:08',
+    distanceGap: '12m',
+    speed: 24.5,
+    power: 180,
+    heartrate: 140,
+    avatar: { shirt: 'red', helmet: 'blue' },
+    ...overrides
+})
+
 const makeCurrentWorkout = () => new Workout({
     type: 'workout', name: 'Test Workout',
     steps: [
@@ -51,7 +66,8 @@ const setupMocks = (rideType: string = 'GPX') => {
     }
     MockActivityRide = {
         getActivity: jest.fn().mockReturnValue({ logs: [], time: 0 }),
-        getCurrentValues: jest.fn().mockReturnValue({ cadence: 0 })
+        getCurrentValues: jest.fn().mockReturnValue({ cadence: 0 }),
+        getPrevRidesListDisplay: jest.fn().mockReturnValue([])
     }
     MockAppState = {
         hasFeature: jest.fn().mockReturnValue(true),
@@ -1837,8 +1853,41 @@ describe('RidePageService', () => {
             expect((s.getPageDisplayProps() as any).cornerWidget).toBe('workout')
         })
 
+        // race-against-yourself-mobile-design.md §6.3 - the gate/cycle generalization
+        test('populated ("elevation" default) when prevRides is eligible, even with no workout attached', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockWorkoutRide.inUse.mockReturnValue(false)
+            MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map' })
+
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('elevation')
+        })
+
+        test('a plain ride (no workout, prevRides eligible) can read "prevRides" from settings, but never "workout"', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockWorkoutRide.inUse.mockReturnValue(false)
+            MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map' })
+            MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'workout' : defValue)
+
+            // stored preference is 'workout', but this ride has no workout attached - falls back
+            // to the first eligible state rather than surfacing an ineligible one.
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('elevation')
+        })
+
+        test('undefined when neither workout nor prevRides is eligible', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockWorkoutRide.inUse.mockReturnValue(false)
+            MockActivityRide.getPrevRidesListDisplay.mockReturnValue([])
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map' })
+
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBeUndefined()
+        })
+
         describe('onToggleCornerWidget', () => {
-            test('flips "elevation" -> "workout" and emits page-update', () => {
+            test('workout attached (2-way): flips "elevation" -> "workout" and emits page-update', () => {
+                MockRideDisplay.getRideType.mockReturnValue('GPX')
+                MockWorkoutRide.inUse.mockReturnValue(true)
                 s.openPage()
                 const updateSpy = jest.fn()
                 s.getPageObserver().on('page-update', updateSpy)
@@ -1850,7 +1899,9 @@ describe('RidePageService', () => {
                 expect(updateSpy).toHaveBeenCalled()
             })
 
-            test('flips "workout" -> "elevation"', () => {
+            test('workout attached (2-way): flips "workout" -> "elevation"', () => {
+                MockRideDisplay.getRideType.mockReturnValue('GPX')
+                MockWorkoutRide.inUse.mockReturnValue(true)
                 MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'workout' : defValue)
 
                 s.onToggleCornerWidget()
@@ -1858,10 +1909,234 @@ describe('RidePageService', () => {
                 expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'elevation')
             })
 
+            test('nothing eligible (no workout, no prevRides): wraps back to "elevation" regardless of stored value', () => {
+                MockRideDisplay.getRideType.mockReturnValue('GPX')
+                MockWorkoutRide.inUse.mockReturnValue(false)
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([])
+                MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'workout' : defValue)
+
+                s.onToggleCornerWidget()
+
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'elevation')
+            })
+
+            test('plain ride, prevRides eligible (2-way): flips "elevation" -> "prevRides"', () => {
+                MockRideDisplay.getRideType.mockReturnValue('GPX')
+                MockWorkoutRide.inUse.mockReturnValue(false)
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+                MockUserSettings.get.mockImplementation((_key: string, defValue: unknown) => defValue)
+
+                s.onToggleCornerWidget()
+
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'prevRides')
+            })
+
+            test('plain ride, prevRides eligible (2-way): flips "prevRides" -> "elevation" (never offers "workout")', () => {
+                MockRideDisplay.getRideType.mockReturnValue('GPX')
+                MockWorkoutRide.inUse.mockReturnValue(false)
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+                MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'prevRides' : defValue)
+
+                s.onToggleCornerWidget()
+
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'elevation')
+            })
+
+            test('combo ride (3-way): cycles elevation -> workout -> prevRides -> elevation', () => {
+                MockRideDisplay.getRideType.mockReturnValue('GPX')
+                MockWorkoutRide.inUse.mockReturnValue(true)
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+                let stored = 'elevation'
+                MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? stored : defValue)
+                MockUserSettings.set.mockImplementation((_key: string, value: string) => { stored = value })
+
+                s.onToggleCornerWidget()
+                expect(stored).toBe('workout')
+
+                s.onToggleCornerWidget()
+                expect(stored).toBe('prevRides')
+
+                s.onToggleCornerWidget()
+                expect(stored).toBe('elevation')
+            })
+
             test('logs and swallows errors', () => {
                 MockUserSettings.set.mockImplementation(() => { throw new Error('boom') })
                 expect(() => s.onToggleCornerWidget()).not.toThrow()
                 expect(s.logError).toHaveBeenCalled()
+            })
+        })
+    })
+
+    // race-against-yourself-mobile-design.md §5/§6.3
+    describe('prevRides', () => {
+        beforeEach(() => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map' })
+        })
+
+        describe('mode: hidden/populated matrix (workout-attached x showPrev x has-eligible-rows)', () => {
+            const cases: [string, boolean, unknown[]][] = [
+                ['no workout, no eligible rows (showPrev off or nothing eligible)', false, []],
+                ['workout attached, no eligible rows', true, []],
+            ]
+
+            cases.forEach(([name, workoutInUse, rows]) => {
+                test(`${name} -> hidden, empty rows, hasMore false`, () => {
+                    MockWorkoutRide.inUse.mockReturnValue(workoutInUse)
+                    MockActivityRide.getPrevRidesListDisplay.mockReturnValue(rows)
+
+                    const props: any = s.getPageDisplayProps()
+
+                    expect(props.prevRides).toEqual({ mode: 'hidden', rows: [], hasMore: false })
+                })
+            })
+
+            const populatedCases: [string, boolean][] = [
+                ['no workout, eligible rows present', false],
+                ['workout attached, eligible rows present', true],
+            ]
+
+            populatedCases.forEach(([name, workoutInUse]) => {
+                test(`${name} -> populated ('list' by default)`, () => {
+                    MockWorkoutRide.inUse.mockReturnValue(workoutInUse)
+                    MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+
+                    const props: any = s.getPageDisplayProps()
+
+                    expect(props.prevRides.mode).toBe('list')
+                    expect(props.prevRides.rows).toHaveLength(1)
+                })
+            })
+
+            test('route-less Workout ride -> hidden by construction (no explicit guard needed - ActivityRideService never has eligible rows for it)', () => {
+                MockRideDisplay.getRideType.mockReturnValue('Workout')
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([])
+
+                const props: any = s.getPageDisplayProps()
+
+                expect(props.prevRides).toEqual({ mode: 'hidden', rows: [], hasMore: false })
+            })
+        })
+
+        describe('row mapping', () => {
+            test('maps a previous rider row: label = date title, tablet fields carried through', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+
+                const props: any = s.getPageDisplayProps()
+
+                expect(props.prevRides.rows[0]).toEqual({
+                    position: 1,
+                    label: '8/1/2026',
+                    timeGap: '+0:08',
+                    distanceGap: '12m',
+                    isCurrent: false,
+                    avatar: { shirt: 'red', helmet: 'blue' },
+                    speed: 24.5,
+                    power: 180,
+                    heartrate: 140
+                })
+            })
+
+            test('maps the current rider row: title "current" -> label "You", isCurrent true', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow({ title: 'current', position: 2 })])
+
+                const props: any = s.getPageDisplayProps()
+
+                expect(props.prevRides.rows[0].label).toBe('You')
+                expect(props.prevRides.rows[0].isCurrent).toBe(true)
+            })
+
+            test('formats FormattedNumber speed/distanceGap down to the plain shapes PrevRidesRowProps expects', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow({
+                    speed: { value: 30, unit: 'km/h' },
+                    distanceGap: { value: 45, unit: 'm' }
+                })])
+
+                const props: any = s.getPageDisplayProps()
+
+                expect(props.prevRides.rows[0].speed).toBe(30)
+                expect(props.prevRides.rows[0].distanceGap).toBe('45m')
+            })
+        })
+
+        describe('hasMore', () => {
+            test('false when the returned rows already cover the full field', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([
+                    makePrevRideRow({ position: 1 }),
+                    makePrevRideRow({ position: 2 })
+                ])
+
+                const props: any = s.getPageDisplayProps()
+
+                expect(props.prevRides.hasMore).toBe(false)
+            })
+
+            test('true when the last row\'s position exceeds the returned row count (field was trimmed)', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([
+                    makePrevRideRow({ position: 1 }),
+                    makePrevRideRow({ position: 5 })
+                ])
+
+                const props: any = s.getPageDisplayProps()
+
+                expect(props.prevRides.hasMore).toBe(true)
+            })
+        })
+
+        describe('setPrevRidesVisibleRows', () => {
+            test('passes the value through to getPrevRidesListDisplay() and emits page-update', () => {
+                s.openPage()
+                const updateSpy = jest.fn()
+                s.getPageObserver().on('page-update', updateSpy)
+
+                s.setPrevRidesVisibleRows(4)
+                s.getPageDisplayProps()
+
+                expect(MockActivityRide.getPrevRidesListDisplay).toHaveBeenCalledWith(4)
+                expect(updateSpy).toHaveBeenCalled()
+            })
+
+            test('logs and swallows errors', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockImplementation(() => { throw new Error('boom') })
+                expect(() => s.setPrevRidesVisibleRows(4)).not.toThrow()
+            })
+        })
+
+        describe('setPrevRidesMode / onExpandPrevRides / onCollapsePrevRides', () => {
+            test('defaults to "list"', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+
+                expect((s.getPageDisplayProps() as any).prevRides.mode).toBe('list')
+            })
+
+            test('setPrevRidesMode("condensed") switches the mode and emits page-update', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+                s.openPage()
+                const updateSpy = jest.fn()
+                s.getPageObserver().on('page-update', updateSpy)
+
+                s.setPrevRidesMode('condensed')
+
+                expect((s.getPageDisplayProps() as any).prevRides.mode).toBe('condensed')
+                expect(updateSpy).toHaveBeenCalled()
+            })
+
+            test('onExpandPrevRides() switches "condensed" -> "list"', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+                s.setPrevRidesMode('condensed')
+
+                s.onExpandPrevRides()
+
+                expect((s.getPageDisplayProps() as any).prevRides.mode).toBe('list')
+            })
+
+            test('onCollapsePrevRides() switches "list" -> "condensed"', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+
+                s.onCollapsePrevRides()
+
+                expect((s.getPageDisplayProps() as any).prevRides.mode).toBe('condensed')
             })
         })
     })
