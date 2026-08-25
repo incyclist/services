@@ -23,6 +23,8 @@ const makePrevRideRow = (overrides: Record<string, unknown> = {}) => ({
     power: 180,
     heartrate: 140,
     avatar: { shirt: 'red', helmet: 'blue' },
+    lat: 51.1,
+    lng: 6.2,
     ...overrides
 })
 
@@ -2033,8 +2035,23 @@ describe('RidePageService', () => {
                     avatar: { shirt: 'red', helmet: 'blue' },
                     speed: 24.5,
                     power: 180,
-                    heartrate: 140
+                    heartrate: 140,
+                    lat: 51.1,
+                    lng: 6.2,
+                    tsStart: 1000
                 })
+            })
+
+            test('carries lat/lng/tsStart through for map-marker placement (race-against-yourself §7); undefined when the source row has none', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([
+                    makePrevRideRow({ lat: undefined, lng: undefined, tsStart: undefined })
+                ])
+
+                const props: any = s.getPageDisplayProps()
+
+                expect(props.prevRides.rows[0].lat).toBeUndefined()
+                expect(props.prevRides.rows[0].lng).toBeUndefined()
+                expect(props.prevRides.rows[0].tsStart).toBeUndefined()
             })
 
             test('maps the current rider row: title "current" -> label "You", isCurrent true', () => {

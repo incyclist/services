@@ -77,6 +77,13 @@ export interface PrevRidesRowProps {
     speed?:       number              // tablet only
     power?:       number              // tablet only
     heartrate?:   number              // tablet only
+    // Live position, for map markers (race-against-yourself §7) — undefined whenever the source
+    // log entry didn't carry a position (e.g. before the rider started pedaling).
+    lat?:         number
+    lng?:         number
+    // Stable per-rider key across ticks, for a map marker's React key/identity. Same source field
+    // desktop's PastActivityLogEntry already carries.
+    tsStart?:     number
 }
 
 // Video ride -- extends base with video-specific props
