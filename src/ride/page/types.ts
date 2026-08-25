@@ -77,7 +77,7 @@ export interface PrevRidesRowProps {
     speed?:       number              // tablet only
     power?:       number              // tablet only
     heartrate?:   number              // tablet only
-    // Live position, for map markers (race-against-yourself §7) — undefined whenever the source
+    // Live position, for map markers — undefined whenever the source
     // log entry didn't carry a position (e.g. before the rider started pedaling).
     lat?:         number
     lng?:         number

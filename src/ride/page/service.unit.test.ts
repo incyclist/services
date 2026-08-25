@@ -2042,7 +2042,7 @@ describe('RidePageService', () => {
                 })
             })
 
-            test('carries lat/lng/tsStart through for map-marker placement (race-against-yourself §7); undefined when the source row has none', () => {
+            test('carries lat/lng/tsStart through for map-marker placement; undefined when the source row has none', () => {
                 MockActivityRide.getPrevRidesListDisplay.mockReturnValue([
                     makePrevRideRow({ lat: undefined, lng: undefined, tsStart: undefined })
                 ])
