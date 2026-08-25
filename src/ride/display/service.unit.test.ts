@@ -318,4 +318,61 @@ describe('RideDisplayService', () => {
 
     })
 
+    describe('createActivity — previous-rides refresh wiring', () => {
+        let service: RideDisplayService
+
+        afterEach(() => {
+            Inject('ActivityRide', null)
+        })
+
+        test('re-emits on the service\'s own observer on every ActivityRideService "prevRides" tick', () => {
+            const activityObserver = new Observer()
+            Inject('ActivityRide', {
+                init: jest.fn().mockReturnValue(activityObserver),
+            })
+
+            service = new RideDisplayService()
+            ;(service as any).observer = new Observer()
+            const emit = jest.spyOn((service as any).observer, 'emit')
+
+            ;(service as any).createActivity()
+            activityObserver.emit('prevRides', [{ title: 'someone' }])
+
+            expect(emit).toHaveBeenCalledWith('prev-rides-update')
+        })
+
+        test('does not fire before the first tick', () => {
+            const activityObserver = new Observer()
+            Inject('ActivityRide', {
+                init: jest.fn().mockReturnValue(activityObserver),
+            })
+
+            service = new RideDisplayService()
+            ;(service as any).observer = new Observer()
+            const emit = jest.spyOn((service as any).observer, 'emit')
+
+            ;(service as any).createActivity()
+
+            expect(emit).not.toHaveBeenCalledWith('prev-rides-update')
+        })
+
+        test('re-fires on every tick, not just the first (drives the mobile view\'s live row refresh)', () => {
+            const activityObserver = new Observer()
+            Inject('ActivityRide', {
+                init: jest.fn().mockReturnValue(activityObserver),
+            })
+
+            service = new RideDisplayService()
+            ;(service as any).observer = new Observer()
+            const emit = jest.spyOn((service as any).observer, 'emit')
+
+            ;(service as any).createActivity()
+            activityObserver.emit('prevRides', [{ title: 'a' }])
+            activityObserver.emit('prevRides', [{ title: 'b' }])
+            activityObserver.emit('prevRides', [{ title: 'c' }])
+
+            expect(emit.mock.calls.filter(([event]) => event === 'prev-rides-update')).toHaveLength(3)
+        })
+    })
+
 })   
