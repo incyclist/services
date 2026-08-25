@@ -1267,7 +1267,10 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             avatar: row.avatar,
             speed,
             power: row.power,
-            heartrate: row.heartrate
+            heartrate: row.heartrate,
+            lat: row.lat,
+            lng: row.lng,
+            tsStart: row.tsStart
         }
     }
 
