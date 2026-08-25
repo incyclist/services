@@ -1035,10 +1035,10 @@ export class ActivityRideService extends IncyclistService {
         let distanceGap
         if (units==='metric') {
             if (distanceDelta<1000)
-                 distanceGap = { value:C(distanceDelta,'distance',{to:'m', digits:0}),units:'m'}
+                 distanceGap = { value:C(distanceDelta,'distance',{to:'m', digits:0}),unit:'m'}
             else  {
                 const digits = distanceDelta<10000 ? 1: 0
-                distanceGap = { value:C(distanceDelta,'distance',{to:'km', digits}),units:'km'}
+                distanceGap = { value:C(distanceDelta,'distance',{to:'km', digits}),unit:'km'}
             }
         }
         else {
@@ -1046,10 +1046,10 @@ export class ActivityRideService extends IncyclistService {
             const miles = C(distanceDelta,'distance',{from:'m',to:'mi'})
 
             if (yards<1000)
-                 distanceGap = { value:C(distanceDelta,'distance',{to:'yd', digits:0}),units:'yd'}
+                 distanceGap = { value:C(distanceDelta,'distance',{to:'yd', digits:0}),unit:'yd'}
             else  {
                 const digits = miles<10 ? 1: 0
-                distanceGap = { value:C(distanceDelta,'distance',{to:'mi', digits}),units:'mi'}
+                distanceGap = { value:C(distanceDelta,'distance',{to:'mi', digits}),unit:'mi'}
             }
 
         }

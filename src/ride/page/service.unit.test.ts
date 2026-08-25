@@ -1363,6 +1363,30 @@ describe('RidePageService', () => {
             rideObserver.emit('route-update')
             expect(updateSpy).toHaveBeenCalled()
         })
+
+        test('prev-rides-update -> page-update, the first time rows are actually non-empty', () => {
+            MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+            updateSpy.mockClear()
+            rideObserver.emit('prev-rides-update')
+            expect(updateSpy).toHaveBeenCalled()
+        })
+
+        test('prev-rides-update -> no page-update while rows are still empty (fetch not resolved yet)', () => {
+            MockActivityRide.getPrevRidesListDisplay.mockReturnValue([])
+            updateSpy.mockClear()
+            rideObserver.emit('prev-rides-update')
+            expect(updateSpy).not.toHaveBeenCalled()
+        })
+
+        test('prev-rides-update -> only the first non-empty tick triggers page-update, not every tick', () => {
+            MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+            rideObserver.emit('prev-rides-update')
+            updateSpy.mockClear()
+
+            rideObserver.emit('prev-rides-update')
+            rideObserver.emit('prev-rides-update')
+            expect(updateSpy).not.toHaveBeenCalled()
+        })
     })
 
     describe('ride observer state-update handling (Workout)', () => {
@@ -1855,29 +1879,20 @@ describe('RidePageService', () => {
             expect((s.getPageDisplayProps() as any).cornerWidget).toBe('workout')
         })
 
-        // the gate/cycle generalization to cover prevRides as a third corner-widget candidate
-        test('populated ("elevation" default) when prevRides is eligible, even with no workout attached', () => {
+        // repo-owner review (2026-08-25): previous-rides is no longer a corner-widget cycle
+        // candidate - it renders as its own always-visible-when-eligible panel instead (see the
+        // 'prevRides' describe block below). cornerWidget only ever cycles elevation/workout now,
+        // regardless of prevRides eligibility.
+        test('undefined when no workout is attached, even with prevRides eligible', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockWorkoutRide.inUse.mockReturnValue(false)
             MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
             MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map' })
 
-            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('elevation')
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBeUndefined()
         })
 
-        test('a plain ride (no workout, prevRides eligible) can read "prevRides" from settings, but never "workout"', () => {
-            MockRideDisplay.getRideType.mockReturnValue('GPX')
-            MockWorkoutRide.inUse.mockReturnValue(false)
-            MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
-            MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map' })
-            MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'workout' : defValue)
-
-            // stored preference is 'workout', but this ride has no workout attached - falls back
-            // to the first eligible state rather than surfacing an ineligible one.
-            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('elevation')
-        })
-
-        test('undefined when neither workout nor prevRides is eligible', () => {
+        test('undefined when neither workout is attached nor prevRides is eligible', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockWorkoutRide.inUse.mockReturnValue(false)
             MockActivityRide.getPrevRidesListDisplay.mockReturnValue([])
@@ -1922,7 +1937,7 @@ describe('RidePageService', () => {
                 expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'elevation')
             })
 
-            test('plain ride, prevRides eligible (2-way): flips "elevation" -> "prevRides"', () => {
+            test('plain ride, prevRides eligible: nothing to cycle to (prevRides is not a candidate) - stays "elevation"', () => {
                 MockRideDisplay.getRideType.mockReturnValue('GPX')
                 MockWorkoutRide.inUse.mockReturnValue(false)
                 MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
@@ -1930,21 +1945,10 @@ describe('RidePageService', () => {
 
                 s.onToggleCornerWidget()
 
-                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'prevRides')
-            })
-
-            test('plain ride, prevRides eligible (2-way): flips "prevRides" -> "elevation" (never offers "workout")', () => {
-                MockRideDisplay.getRideType.mockReturnValue('GPX')
-                MockWorkoutRide.inUse.mockReturnValue(false)
-                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
-                MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'prevRides' : defValue)
-
-                s.onToggleCornerWidget()
-
                 expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'elevation')
             })
 
-            test('combo ride (3-way): cycles elevation -> workout -> prevRides -> elevation', () => {
+            test('combo ride (2-way): cycles elevation -> workout -> elevation, prevRides eligibility has no effect', () => {
                 MockRideDisplay.getRideType.mockReturnValue('GPX')
                 MockWorkoutRide.inUse.mockReturnValue(true)
                 MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
@@ -1954,9 +1958,6 @@ describe('RidePageService', () => {
 
                 s.onToggleCornerWidget()
                 expect(stored).toBe('workout')
-
-                s.onToggleCornerWidget()
-                expect(stored).toBe('prevRides')
 
                 s.onToggleCornerWidget()
                 expect(stored).toBe('elevation')
@@ -2116,6 +2117,21 @@ describe('RidePageService', () => {
             test('logs and swallows errors', () => {
                 MockActivityRide.getPrevRidesListDisplay.mockImplementation(() => { throw new Error('boom') })
                 expect(() => s.setPrevRidesVisibleRows(4)).not.toThrow()
+            })
+        })
+
+        describe('getPrevRidesRows', () => {
+            test('returns the live rows, independent of the page-update cycle', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow()])
+                expect(s.getPrevRidesRows()).toHaveLength(1)
+
+                MockActivityRide.getPrevRidesListDisplay.mockReturnValue([makePrevRideRow(), makePrevRideRow({ position: 2 })])
+                expect(s.getPrevRidesRows()).toHaveLength(2)
+            })
+
+            test('returns an empty array and swallows errors', () => {
+                MockActivityRide.getPrevRidesListDisplay.mockImplementation(() => { throw new Error('boom') })
+                expect(s.getPrevRidesRows()).toEqual([])
             })
         })
 

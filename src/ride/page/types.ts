@@ -47,11 +47,12 @@ export interface RidePageDisplayProps {
     workoutAttached?:  boolean
     // needs it too. WorkoutRidePageDisplayProps keeps narrowing it to required.
     loadButtonMode?:   LoadButtonMode
-    // which of the competing corner widgets (elevation graph, workout info, previous rides) a ride
-    // currently shows. Populated whenever there's more than one candidate to toggle between
+    // which of the competing corner widgets (elevation graph, workout info) a ride currently
+    // shows. Populated whenever there's more than one candidate to toggle between
     // (RidePageService.getCornerWidget()); undefined when there's nothing to toggle (default
-    // 'elevation' once populated).
-    cornerWidget?:     'elevation' | 'workout' | 'prevRides'
+    // 'elevation' once populated). previous-rides is NOT part of this cycle - see prevRides
+    // below, it renders as its own always-visible-when-eligible panel instead.
+    cornerWidget?:     'elevation' | 'workout'
 
     // Built by RidePageService from ActivityRideService.getPrevRidesListDisplay() - see
     // PrevRidesRowProps below for row shape. 'hidden' when showPrev is off, there are no eligible
@@ -147,8 +148,10 @@ interface RidePageCallbacks {
     // handler.
     onToggleCornerWidget(): void
 
-    // corner-slot chevron: expand the condensed prevRides row into the full list panel, and
-    // collapse it back. No-op on tablet (prevRides is always 'list' there, no expand/collapse UI).
+    // Phone-only previous-rides panel's own collapse/expand chevron - independent of
+    // cornerWidget/elevation/workout, which stay visible regardless (repo-owner review
+    // 2026-08-25). No-op on tablet (its own prevRides list has no collapse/expand UI - always
+    // shown when eligible).
     onExpandPrevRides?():   void
     onCollapsePrevRides?(): void
 }
@@ -184,11 +187,16 @@ export interface IRidePageService extends RidePageCallbacks, IPageService{
     // relevant geometry changes.
     setPrevRidesVisibleRows(n: number): void
     // Companion setter to setPrevRidesVisibleRows() - the phone-vs-tablet / expanded-vs-not tier
-    // decision, kept separate from the geometry report above. Lets the view
-    // set the tier-appropriate mode directly (e.g. phone defaulting to 'condensed' on mount,
-    // tablet always 'list') without going through the chevron's onExpandPrevRides()/
+    // decision, kept separate from the geometry report above. Lets the view set the
+    // tier-appropriate mode directly on mount (both tiers currently default to 'list' - see
+    // PrevRidesCornerPanel.tsx's own defaultExpanded for the phone panel's independent
+    // collapse/expand state) without going through the chevron's onExpandPrevRides()/
     // onCollapsePrevRides() callbacks.
     setPrevRidesMode(mode: 'condensed' | 'list'): void
+    // Live row values, called fresh on every tick (mirrors getGraphActuals()'s <Dynamic>
+    // precedent) - independent of the page-update cycle prevRides.rows on RidePageDisplayProps
+    // rides on, so the mobile view can refresh row content without a full page re-render.
+    getPrevRidesRows(): PrevRidesRowProps[]
 }
 
 // ---- Workout-specific display types (relocated from src/workouts/ride/page/types.ts as part of

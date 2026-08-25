@@ -608,9 +608,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
         observer.once('started', ()=>{ this.onActivityWentActive()} )
         observer.on('paused', (autoResume)=>{ this.onActivityPaused(autoResume)} )
-        observer.on('resumed', ()=>{ this.onActivityResumed()} )       
-        observer.on('data',this.onActivityUpdate.bind(this) )   
-//        observer.on('prevRides', this.onPrevRidesUpdate.bind(this))
+        observer.on('resumed', ()=>{ this.onActivityResumed()} )
+        observer.on('data',this.onActivityUpdate.bind(this) )
+        observer.on('prevRides', this.onPrevRidesUpdate.bind(this))
     }
 
     protected updateActivityWorkout() {
@@ -658,11 +658,18 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
     }
 
-    // protected onPrevRidesUpdate(list: PrevRidesListDisplayProps) {
-    //     this.prevRides = list
-    //     this.observer.emit( 'prev-rides-update', this.getDisplayProperties())
-
-    // }
+    /**
+     * ActivityRideService emits 'prevRides' on every activity tick once showPrev is on (~once per
+     * second, right after getPrevRideStats() has interpolated the comparison rows for the current
+     * elapsed time/distance) - not once at fetch-resolution time. Re-emits on this service's own
+     * observer on every tick: RidePageService uses this both to trigger a one-time page-update the
+     * first time the list actually has data (closing the "stays hidden until an unrelated event"
+     * gap), and as the live-refresh signal for the mobile view's <Dynamic> row rendering, which
+     * pulls fresh rows on each tick without a full page re-render.
+     */
+    protected onPrevRidesUpdate() {
+        this.observer?.emit('prev-rides-update')
+    }
 
     protected onWorkoutStopped() {
         this.logEvent({message: 'Workout stopped by user', activity:this.activity?.id });

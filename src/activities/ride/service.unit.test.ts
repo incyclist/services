@@ -729,7 +729,7 @@ describe('ActivityRideService',()=>{
 
             expect (data.length).toBe(2)
             expect(data[1]?.title).toBe('current')
-            expect(data[0]?.distanceGap).toEqual({"units": "m", "value": -16})
+            expect(data[0]?.distanceGap).toEqual({"unit": "m", "value": -16})
             expect(data[0]?.timeGap).toBe('-3.7s')
         })
 
@@ -747,7 +747,7 @@ describe('ActivityRideService',()=>{
 
             const res = data.find(a=>a?.title==='6/19/2024' )
             
-            expect(res?.distanceGap).toEqual({"units": "m", "value": -1})
+            expect(res?.distanceGap).toEqual({"unit": "m", "value": -1})
             expect(res?.timeGap).toBe('-0.2s')
         })
 
@@ -761,7 +761,7 @@ describe('ActivityRideService',()=>{
 
             expect (data.length).toBe(2)
             expect(data[1]?.title).toBe('current')
-            expect(data[0]?.distanceGap).toEqual({"units": "m", "value": -110})
+            expect(data[0]?.distanceGap).toEqual({"unit": "m", "value": -110})
             expect(data[0]?.timeGap).toBe('-44.1s')
         })
 
@@ -788,7 +788,7 @@ describe('ActivityRideService',()=>{
 
             expect (data.length).toBe(2)
             expect(data[0]?.title).toBe('current')
-            expect(data[1]?.distanceGap).toEqual({"units": "m", "value": 10})
+            expect(data[1]?.distanceGap).toEqual({"unit": "m", "value": 10})
             expect(data[1]?.timeGap).toBe('+2.5s')
         })
 

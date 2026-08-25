@@ -80,6 +80,13 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     // distinct from the persisted hints.workoutRideGestures flag, which suppresses it forever.
     protected gestureHintDismissed = false
 
+    // Set once buildPrevRides() first returns a non-empty row set - closes the "prevRides stays
+    // hidden until an unrelated page-update happens" gap (ActivityRideService's own list is
+    // async and resolves some time after the ride starts) without forcing a full page-update on
+    // every 'prev-rides-update' tick thereafter - see onPrevRidesTick(). Row VALUES still refresh
+    // live after this, via getPrevRidesRows() + the mobile view's own <Dynamic> subscription.
+    protected prevRidesShown = false
+
     // Set by onViewChanged() (route-ends-first mid-ride type flip, §4.5.1), consumed by the
     // closePage()/openPage() pair that the resulting page-component swap triggers. Guards the
     // outgoing page's teardown from stopping a still-running ride, and the incoming page's mount
@@ -92,6 +99,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.eventHandler['state-update'] = this.onDisplayStateUpdate.bind(this)
         this.eventHandler['route-update'] = this.onRouteUpdate.bind(this)
         this.eventHandler['view-changed'] = this.onViewChanged.bind(this)
+        this.eventHandler['prev-rides-update'] = this.onPrevRidesTick.bind(this)
 
         this.workoutEventHandler['step-changed'] = this.onWorkoutUpdate.bind(this)
         this.workoutEventHandler['update'] = this.onWorkoutUpdate.bind(this)
@@ -137,6 +145,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             EventLogger.setGlobalConfig('page', pageLogName)
 
             this.gestureHintDismissed = false
+            this.prevRidesShown = false
             super.openPage()
 
             try {
@@ -429,7 +438,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
         const displayProps: VideoRidePageDisplayProps = {
             ...base,
-            ...this.buildWorkoutOverlayProps(props, base.prevRides),
+            ...this.buildWorkoutOverlayProps(props),
             video: props.video,
             videos: props.videos,
             route: props.route
@@ -443,7 +452,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
         const displayProps: GPXRidePageDisplayProps = {
             ...base,
-            ...this.buildWorkoutOverlayProps(props, base.prevRides),
+            ...this.buildWorkoutOverlayProps(props),
             rideView: props.rideView,
             route: props.route,
             displayObserver: props.displayObserver,
@@ -470,10 +479,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * branch below, not just the "workout visible" one.
      */
     protected buildWorkoutOverlayProps(
-        props: CurrentRideDisplayProps & { showWorkout?: boolean },
-        prevRides: RidePageDisplayProps['prevRides']
+        props: CurrentRideDisplayProps & { showWorkout?: boolean }
     ): Partial<RidePageDisplayProps> {
-        const cornerWidget = this.getCornerWidget(prevRides)
+        const cornerWidget = this.getCornerWidget()
 
         if (!this.isWorkoutAttached() || !props?.showWorkout)
             return { workoutAttached: false, cornerWidget }
@@ -497,18 +505,22 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     /**
-     * Phone-fallback corner-widget preference - which of the competing corner widgets
-     * (elevation graph, workout info, previous rides) a ride currently shows. 'elevation' is
-     * always eligible when this method is reached at all; 'workout' only when a workout is
-     * attached; 'prevRides' only when prevRides is actually shown (mode !== 'hidden'). Undefined
-     * only when there's nothing else to toggle to (no workout AND no prevRides) - a plain route
-     * ride with prevRides off has nothing here, same as today's plain-ride case. Only
-     * buildWorkoutOverlayProps() (Video/GPX) calls this; a Workout-only ride goes through
-     * getWorkoutRideDisplayProps() instead and never reaches it.
+     * Phone-fallback corner-widget preference - which of the competing corner widgets (elevation
+     * graph, workout info) a ride currently shows. 'elevation' is always eligible when this
+     * method is reached at all; 'workout' only when a workout is attached. Undefined only when
+     * there's nothing else to toggle to (no workout attached) - a plain route ride has nothing
+     * here, same as today's plain-ride case. Only buildWorkoutOverlayProps() (Video/GPX) calls
+     * this; a Workout-only ride goes through getWorkoutRideDisplayProps() instead and never
+     * reaches it.
+     *
+     * previous-rides is deliberately NOT part of this cycle (repo-owner review 2026-08-25) - it
+     * renders as its own always-visible-when-eligible panel, anchored below whichever of
+     * elevation/workout this method picks, with its own independent collapse/expand affordance
+     * (PrevRidesCornerPanel on the mobile side) rather than competing for the same slot.
      */
-    protected getCornerWidget(prevRides: RidePageDisplayProps['prevRides']): 'elevation' | 'workout' | 'prevRides' | undefined {
+    protected getCornerWidget(): 'elevation' | 'workout' | undefined {
         try {
-            const available = this.getCornerWidgetStates(prevRides)
+            const available = this.getCornerWidgetStates()
             if (available.length <= 1)
                 return undefined
 
@@ -526,12 +538,10 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * always included - callers decide "nothing to toggle" by checking the list length, not by
      * elevation's presence/absence.
      */
-    protected getCornerWidgetStates(prevRides: RidePageDisplayProps['prevRides']): Array<'elevation' | 'workout' | 'prevRides'> {
-        const states: Array<'elevation' | 'workout' | 'prevRides'> = ['elevation']
+    protected getCornerWidgetStates(): Array<'elevation' | 'workout'> {
+        const states: Array<'elevation' | 'workout'> = ['elevation']
         if (this.isWorkoutAttached())
             states.push('workout')
-        if (!!prevRides && prevRides.mode !== 'hidden')
-            states.push('prevRides')
         return states
     }
 
@@ -542,7 +552,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      */
     onToggleCornerWidget(): void {
         try {
-            const available = this.getCornerWidgetStates(this.buildPrevRides())
+            const available = this.getCornerWidgetStates()
             const current = this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'elevation')
             const next = available[(available.indexOf(current) + 1) % available.length]
             this.getUserSettings().set(CORNER_WIDGET_SETTING_KEY, next)
@@ -1248,6 +1258,43 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         catch (err: any) {
             this.logError(err, 'buildPrevRides')
             return { mode: 'hidden', rows: [], hasMore: false }
+        }
+    }
+
+    /**
+     * RideDisplayService re-emits 'prev-rides-update' on every activity tick once showPrev is on
+     * (mirroring ActivityRideService's own ~1s 'prevRides' cadence) - this is the one-time
+     * transition out of 'hidden' onto the normal page-update path; it does not fire on every tick
+     * thereafter, that would mean a full page re-render at the same cadence <Dynamic> was built
+     * specifically to avoid. Row VALUES keep refreshing live afterwards via getPrevRidesRows().
+     */
+    protected onPrevRidesTick(): void {
+        try {
+            if (this.prevRidesShown)
+                return
+            if (this.buildPrevRides().rows.length === 0)
+                return
+            this.prevRidesShown = true
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onPrevRidesTick')
+        }
+    }
+
+    /**
+     * Live row values for the mobile view's <Dynamic> subscription (getGraphActuals()'s
+     * precedent) - called fresh on every 'prev-rides-update' tick, independent of the page-update
+     * cycle onPrevRidesTick() above drives. mode/hasMore (rarer, discrete changes) stay on the
+     * normal page-update path via buildPrevRides()/buildBaseDisplayProps().
+     */
+    getPrevRidesRows(): PrevRidesRowProps[] {
+        try {
+            return this.buildPrevRides()?.rows ?? []
+        }
+        catch (err: any) {
+            this.logError(err, 'getPrevRidesRows')
+            return []
         }
     }
 
