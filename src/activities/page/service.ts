@@ -6,6 +6,8 @@ import { IObserver } from "../../types";
 import { ActivityListDisplayProperties, useActivityList } from "../list";
 import { sleep } from "../../utils/sleep";
 import { useWorkoutList } from "../../workouts";
+import { useDevicePairing } from "../../devices";
+import { RouteInfo } from "../../routes/base/types";
 
 @Singleton
 export class ActivitiesPageService extends IncyclistPageService implements IActivitiesPageService { 
@@ -143,6 +145,31 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
         }
     }
 
+    /**
+     * Decides where "Ride Again" should send the user once `ActivityListService.rideAgain()`
+     * has confirmed the activity's route can be started again, and navigates there.
+     *
+     * Mirrors `RoutesPageService.start()`: if devices are already paired and ready
+     * (`DevicePairingService.isReadyToStart()`), the Devices/pairing screen is skipped and the
+     * user goes straight to the ride; otherwise they are sent to pairing first. Ride Again
+     * always resolves to a route (never a bare workout), so the ready-to-start destination is
+     * the same one Routes/Workouts already use.
+     */
+    onRideAgain(route?: RouteInfo): void {
+        try {
+            const pairing = this.getDevicePairing()
+            const readyToStart = pairing.isReadyToStart()
+
+            this.logEvent({message:'Attempting to start a ride again', id: route?.id, title: route?.title, readyToStart})
+
+            const next = readyToStart ? '/rideDeviceOK' : '/pairingStart'
+            this.moveTo(next)
+        }
+        catch(err) {
+            this.logError(err,'onRideAgain')
+        }
+    }
+
     /** '[x]' on the "Workout: <name>" row (HLD §4.2). */
     onClearWorkoutSelection(): void {
         try {
@@ -195,6 +222,11 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
     @Injectable
     protected getWorkoutList() {
         return useWorkoutList()
+    }
+
+    @Injectable
+    protected getDevicePairing() {
+        return useDevicePairing()
     }
 
 }

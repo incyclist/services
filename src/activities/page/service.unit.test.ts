@@ -10,6 +10,8 @@ describe('ActivitiesPageService',()=>{
 
     let MockAppState
     let MockWorkoutList
+    let MockDevicePairing
+    let MockBindings
 
     const setupMocks = ()=>{
         MockAppState = {
@@ -22,14 +24,24 @@ describe('ActivitiesPageService',()=>{
             getSelected: jest.fn().mockReturnValue(undefined),
             unselect: jest.fn()
         }
+        MockDevicePairing = {
+            isReadyToStart: jest.fn().mockReturnValue(false)
+        }
+        MockBindings = {
+            ui: { openPage: jest.fn() }
+        }
 
         Inject('AppState', MockAppState)
         Inject('WorkoutList', MockWorkoutList)
+        Inject('DevicePairing', MockDevicePairing)
+        Inject('Bindings', MockBindings)
     }
 
     const resetMocks = ()=>{
         Inject('AppState', null)
         Inject('WorkoutList', null)
+        Inject('DevicePairing', null)
+        Inject('Bindings', null)
     }
 
     describe('getActivityDetailsProps',()=>{
@@ -68,6 +80,51 @@ describe('ActivitiesPageService',()=>{
             const props = service.getActivityDetailsProps('activity-1')
             expect(props).toEqual({ activityId:'activity-1', attachedWorkout:null })
             expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'getActivityDetailsProps')
+        })
+    })
+
+    describe('onRideAgain',()=>{
+        let s,service
+
+        beforeEach( ()=>{
+            setupMocks()
+            s = service = new ActivitiesPageService()
+            s.logError = jest.fn()
+        })
+
+        afterEach( ()=>{
+            resetMocks()
+            s.reset()
+        })
+
+        test('devices are ready to start -> navigates straight to the ride, skipping pairing',()=>{
+            MockDevicePairing.isReadyToStart.mockReturnValue(true)
+
+            service.onRideAgain({ id:'route-1', title:'Route 1' })
+
+            expect(MockBindings.ui.openPage).toHaveBeenCalledWith('/rideDeviceOK')
+        })
+
+        test('devices are not ready to start -> navigates to pairing',()=>{
+            MockDevicePairing.isReadyToStart.mockReturnValue(false)
+
+            service.onRideAgain({ id:'route-1', title:'Route 1' })
+
+            expect(MockBindings.ui.openPage).toHaveBeenCalledWith('/pairingStart')
+        })
+
+        test('no route passed -> still navigates based on device readiness, no throw',()=>{
+            MockDevicePairing.isReadyToStart.mockReturnValue(true)
+
+            expect( ()=>service.onRideAgain()).not.toThrow()
+            expect(MockBindings.ui.openPage).toHaveBeenCalledWith('/rideDeviceOK')
+        })
+
+        test('error is logged, not thrown',()=>{
+            MockDevicePairing.isReadyToStart.mockImplementation( ()=>{ throw new Error('boom') })
+
+            expect( ()=>service.onRideAgain({ id:'route-1' })).not.toThrow()
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'onRideAgain')
         })
     })
 

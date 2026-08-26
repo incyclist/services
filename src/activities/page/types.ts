@@ -1,6 +1,7 @@
 import { IPageService } from "../../base/pages";
 import { ActivityInfoUI } from "../base";
 import { AttachedWorkoutProps } from "../../routes/page/types";
+import { RouteInfo } from "../../routes/base/types";
 
 export interface ActivitiesPageDisplayProps {
     loading: boolean;       // indicates that the service is still loading the activities
@@ -24,4 +25,5 @@ export interface IActivitiesPageService extends IPageService  {
     getPageDisplayProps():ActivitiesPageDisplayProps
     getActivityDetailsProps(activityId: string): ActivityDetailsProps
     onClearWorkoutSelection(): void   // '[x]' on the "Workout: <name>" row (Phase 2, HLD §4.2)
+    onRideAgain(route?: RouteInfo): void   // navigates to ride or pairing, depending on device readiness
 }
