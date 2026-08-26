@@ -201,7 +201,9 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
     }
 
 
-    protected onStateUpdate() {
+    protected onStateUpdate(state?: ActivityListDisplayProperties) {
+        if (state)
+            this.listState = state
         this.updatePageDisplay()
     }
 

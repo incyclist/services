@@ -470,6 +470,78 @@ describe('ActivityRideService',()=>{
 
     })
 
+    // Regression: delete() used to call this.stop() without awaiting it. stop()'s body runs
+    // synchronously up to (and including) its own `emit('completed')`, so that event had already
+    // fired before delete()'s next line could attach a 'completed' listener - the listener missed
+    // it and the returned promise hung forever on a ride that wasn't already 'completed' (e.g.
+    // right after "End Ride", which only pauses, never stops/completes the ride).
+    describe('delete',()=>{
+        let service:ActivityRideService
+        let observer:Observer
+        let repoDelete:jest.Mock
+        const route  = createFromJson(sydney as unknown as RouteApiDetail)
+
+        beforeEach( ()=>{
+            observer = new Observer()
+            service = new ActivityRideService()
+            repoDelete = jest.fn()
+        })
+
+        afterEach( ()=>{
+            resetSingleton(service)
+            jest.resetAllMocks();
+        })
+
+        const setup = (state:'active'|'paused'|'completed') => {
+            const activity:Partial<ActivityDetails> = {id:'activity-1',startTime:'2020-01-01T00:00:00.000Z'}
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'},
+                init:{ state,tsStart:Date.now(), activity,observer }
+            })
+            service.getRepo = jest.fn(()=>({
+                getFilename: jest.fn(name=> `/tmp/${name}.json`),
+                save: jest.fn( async () => {return}),
+                delete: repoDelete
+            })) as any
+            return activity
+        }
+
+        test('ride only paused (the timing "End Ride" actually hits) -> stop() is awaited, repo delete happens, does not hang',async ()=>{
+            const activity = setup('paused')
+
+            await service.delete()
+
+            expect(repoDelete).toHaveBeenCalledWith(activity.id)
+            expect(protectedMember(service,'state')).toBe('idle')
+        })
+
+        test('ride already completed -> stop() is not called again, repo delete still happens',async ()=>{
+            const activity = setup('completed')
+
+            await service.delete()
+
+            expect(repoDelete).toHaveBeenCalledWith(activity.id)
+            expect(protectedMember(service,'state')).toBe('idle')
+        })
+
+        test('no observer (already torn down) -> resolves without touching the repo',async ()=>{
+            setup('paused')
+            delete (service as any).observer
+
+            await service.delete()
+
+            expect(repoDelete).not.toHaveBeenCalled()
+        })
+
+        test('idle -> resolves without touching the repo',async ()=>{
+            setup('paused')
+            ;(service as any).state = 'idle'
+
+            await service.delete()
+
+            expect(repoDelete).not.toHaveBeenCalled()
+        })
+    })
+
     describe('typical ride',()=>{
         let service:ActivityRideService
         const ride   = new EventEmitter()
