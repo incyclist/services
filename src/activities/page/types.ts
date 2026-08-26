@@ -24,4 +24,5 @@ export interface IActivitiesPageService extends IPageService  {
     getPageDisplayProps():ActivitiesPageDisplayProps
     getActivityDetailsProps(activityId: string): ActivityDetailsProps
     onClearWorkoutSelection(): void   // '[x]' on the "Workout: <name>" row (Phase 2, HLD §4.2)
+    onDeleteActivity(id: string): Promise<boolean>
 }
