@@ -1,7 +1,47 @@
 import { ActivitiesRepository } from "./db"
+import { ActivityInfo } from "../model"
 import fs from 'fs/promises'
 
 describe('ActivityDB',()=>{
+
+    describe('search', ()=>{
+
+        let db:ActivitiesRepository
+
+        const buildActivity = (id:string, rideTime:number):ActivityInfo => ({
+            summary: {
+                id,
+                title: 'Incyclist Ride',
+                name: `Incyclist Ride-${id}`,
+                routeId: 'route-1',
+                routeHash: 'hash-1',
+                startTime: 1709745255915,
+                rideTime,
+                distance: 1000,
+                startPos: 0,
+                realityFactor: 100,
+                totalElevation: 10,
+                uploadStatus: [],
+            }
+        } as unknown as ActivityInfo)
+
+        beforeEach(()=>{
+            db = new ActivitiesRepository()
+        })
+
+        afterEach(()=>{
+            db.reset()
+        })
+
+        test('a saved ride shorter than 30s is still returned', ()=>{
+            (db as unknown as {activities:Array<ActivityInfo>}).activities = [buildActivity('short-ride', 15)]
+
+            const result = db.search({})
+
+            expect(result.map(a=>a.summary.id)).toContain('short-ride')
+        })
+
+    })
 
     describe('migrate', ()=>{
 
