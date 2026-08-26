@@ -745,12 +745,11 @@ export class ActivityRideService extends IncyclistService {
             return;
 
         if (this.state!=='completed') {
-            this.stop()
-            await new Promise( done => {this.observer.on( 'completed', done) })
+            await this.stop()
         }
 
         this.getRepo().delete(this.activity.id)
-        this.state = 'idle'        
+        this.state = 'idle'
     }
 
 

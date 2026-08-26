@@ -174,6 +174,45 @@ describe('ActivitiesPageService',()=>{
         })
     })
 
+    // Regression test: the 'updated'/'loaded' handler used to discard the event payload and only
+    // re-emit a page update, leaving `listState` permanently pinned to the snapshot taken in
+    // openPage() - so a real deletion never reached the UI until the page was closed/reopened.
+    describe('onStateUpdate',()=>{
+        let s,service
+
+        beforeEach( ()=>{
+            setupMocks()
+            s = service = new ActivitiesPageService()
+            s.logError = jest.fn()
+            ;(service as any).pageObserver = new Observer()
+            ;(service as any).listState = { loading:false, activities:[{id:'activity-1'}] }
+        })
+
+        afterEach( ()=>{
+            resetMocks()
+            s.reset()
+        })
+
+        test('refreshes listState from the emitted display properties before emitting the page update',()=>{
+            const emitSpy = jest.spyOn(service.getPageObserver(),'emit')
+            const newState = { loading:false, activities:[] }
+
+            ;(service as any).onStateUpdate(newState)
+
+            expect(service.getPageDisplayProps().activities).toEqual([])
+            expect(emitSpy).toHaveBeenCalledWith('page-update')
+        })
+
+        test('no payload -> keeps the existing listState, still emits the page update',()=>{
+            const emitSpy = jest.spyOn(service.getPageObserver(),'emit')
+
+            ;(service as any).onStateUpdate()
+
+            expect(service.getPageDisplayProps().activities).toEqual([{id:'activity-1'}])
+            expect(emitSpy).toHaveBeenCalledWith('page-update')
+        })
+    })
+
     describe('onClearWorkoutSelection',()=>{
         let s,service
 
