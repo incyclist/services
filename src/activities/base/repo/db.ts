@@ -307,7 +307,7 @@ export class ActivitiesRepository {
     search( criteria:ActivitySearchCriteria):Array<ActivityInfo> {
 
         
-        let result = this.activities?.filter(ai => ai.summary.rideTime>30)
+        let result = this.activities
 
         result = this.checkIdFilter(result, criteria);
         result = this.checkHashFilter(result, criteria);
