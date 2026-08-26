@@ -18,6 +18,15 @@ import { Injectable } from "../../base/decorators";
 const DEFAULT_FTP = 200;
 const WORKOUT_ZOOM = 1200;
 
+/** Countdown thresholds (seconds before a leaf-step with a known duration ends) at which
+ *  'step-countdown' fires - descending, so a multi-threshold skip in one update() call (e.g.
+ *  forward()/backward()) resolves to the threshold closest to zero via Math.min(). */
+const STEP_COUNTDOWN_THRESHOLDS = [4, 3, 2, 1] as const
+
+const hasValidDuration = (duration: number | undefined): boolean => {
+    return typeof duration === 'number' && Number.isFinite(duration) && duration > 0
+}
+
 /**
  * This service is used by the Front-End to manage the state of the previously selected workout
  * and to implement the business logic to display the content for a workout dashboard
@@ -31,7 +40,10 @@ const WORKOUT_ZOOM = 1200;
  * - 'initialized' - The workout has been initialized and is ready to be used in a ride
  * - 'update' - There was an update, which requires the dashboard to be updated
  * - 'step-changed' - There was a new step selected, which requires the dashboard to be updated
- * - 'request-update' - There was an update, which requires to send updated requests to the SmartTrainer 
+ * - 'step-countdown' - Fired once per second in the last 4s before a leaf-step with a known duration
+ *   ends (payload: StepCountdownTick). Not fired across group/repeat-block boundaries or step
+ *   changes without a known duration.
+ * - 'request-update' - There was an update, which requires to send updated requests to the SmartTrainer
  *  
  * - 'started' - The workout has been started
  * - 'paused' - The workout has been paused
@@ -928,16 +940,21 @@ export class WorkoutRide extends IncyclistService{
 
 
             const prevStep = this.currentStep
+            const prevRemaining = this.currentLimits?.remaining
+            const prevDuration = this.currentLimits?.duration
             this.setCurrentLimits(time)
 
 
             if (this.currentStep!==prevStep) {
-                this.onStepChange(prevStep);
+                this.onStepChange(prevStep, hasValidDuration(prevDuration));
             }
-            else if (Math.round(time)!==prevTime) {
-                this.emit('update', this.getDashboardDisplayProperties())
+            else {
+                this.checkStepCountdown(prevRemaining, this.currentLimits?.remaining, this.currentLimits?.duration)
+                if (Math.round(time)!==prevTime) {
+                    this.emit('update', this.getDashboardDisplayProperties())
+                }
             }
-    
+
         }
         catch(err) {
             this.logError(err,'update')
@@ -945,7 +962,7 @@ export class WorkoutRide extends IncyclistService{
 
     }
 
-    private onStepChange(prevStep: StepDefinition) {
+    private onStepChange(prevStep: StepDefinition, prevStepHadValidDuration: boolean) {
         if (!this.currentStep.power && prevStep.power) {
             this.startFreeRide();
         }
@@ -953,7 +970,25 @@ export class WorkoutRide extends IncyclistService{
             this.stopFreeRide();
         }
 
-        this.emit('step-changed', this.getDashboardDisplayProperties());
+        this.emit('step-changed', { ...this.getDashboardDisplayProperties(), stepChangeSignal: prevStepHadValidDuration });
+    }
+
+    /**
+     * Detects a threshold crossing (4s/3s/2s/1s before the current step ends) between two
+     * consecutive `remaining` readings and emits 'step-countdown' at most once per update() call.
+     * Guarded on the step's duration being known/valid - defensive: Workout.addStep() always
+     * resolves a duration today, so a step without one isn't an expected case, just a safety net.
+     */
+    private checkStepCountdown(prevRemaining: number | undefined, remaining: number | undefined, duration: number | undefined): void {
+        if (!hasValidDuration(duration) || prevRemaining===undefined || remaining===undefined)
+            return
+
+        const crossed = STEP_COUNTDOWN_THRESHOLDS.filter( t => prevRemaining>t && remaining<=t)
+        if (crossed.length===0)
+            return
+
+        const secondsRemaining = Math.min(...crossed) as 4|3|2|1
+        this.emit('step-countdown', { secondsRemaining })
     }
 
     private checkIfDone() {

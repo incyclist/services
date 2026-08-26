@@ -28,7 +28,7 @@ import { useOnlineStatusMonitoring } from "../../monitoring";
 import { PrevRidesListDisplayProps, useActivityRide } from "../../activities";
 import { useUserSettings } from "../../settings";
 import { useWorkoutRide } from "../../workouts/ride/service";
-import type { LoadButtonMode, PowerAdjustmentResult, WorkoutDisplayProperties } from "../../workouts/ride/types";
+import type { LoadButtonMode, PowerAdjustmentResult, StepCountdownTick, WorkoutDisplayProperties } from "../../workouts/ride/types";
 import { getFlattenedSteps, getStepDuration, getStepTargetText, getWorkoutGraphSeries } from "../../workouts/base/graph";
 import type { Workout } from "../../workouts/base/model";
 import type { StepDefinition } from "../../workouts/base/model/types";
@@ -101,7 +101,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.eventHandler['view-changed'] = this.onViewChanged.bind(this)
         this.eventHandler['prev-rides-update'] = this.onPrevRidesTick.bind(this)
 
-        this.workoutEventHandler['step-changed'] = this.onWorkoutUpdate.bind(this)
+        this.workoutEventHandler['step-changed'] = this.onWorkoutStepChanged.bind(this)
+        this.workoutEventHandler['step-countdown'] = this.onWorkoutStepCountdown.bind(this)
         this.workoutEventHandler['update'] = this.onWorkoutUpdate.bind(this)
         this.workoutEventHandler['forward'] = this.onWorkoutUpdate.bind(this)
         this.workoutEventHandler['backward'] = this.onWorkoutUpdate.bind(this)
@@ -896,6 +897,27 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     protected onWorkoutUpdate(): void {
         this.updatePageDisplay()
+    }
+
+    /**
+     * 'step-changed' passthrough: still triggers the existing full page-display rebuild (unchanged
+     * consumers depend on this), and additionally forwards the payload directly onto the page
+     * observer under the same event name, for consumers (e.g. mobile's step-change audio/visual
+     * signal) that only need the edge-triggered signal without paying for a full rebuild.
+     */
+    protected onWorkoutStepChanged(update?: WorkoutDisplayProperties): void {
+        this.onWorkoutUpdate()
+        this.getPageObserver()?.emit('step-changed', update)
+    }
+
+    /**
+     * 'step-countdown' passthrough - forwarded as-is onto the page observer. Deliberately does not
+     * go through updatePageDisplay()/'page-update': a once-per-second edge-triggered tick doesn't
+     * fit the pull-model full-rebuild path, and firing a full rebuild at that frequency would be
+     * wasteful.
+     */
+    protected onWorkoutStepCountdown(tick?: StepCountdownTick): void {
+        this.getPageObserver()?.emit('step-countdown', tick)
     }
 
     /**

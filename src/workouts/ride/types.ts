@@ -61,4 +61,18 @@ export interface WorkoutDisplayProperties {
      *  `ShiftingControl`'s existing button-text convention. Undefined when the workout isn't active
      *  (same states under which the rest of this object is empty). */
     loadButtons?: { inc5:string, inc1:string, dec1:string, dec5:string }
+    /** Set only on the payload of the 'step-changed' event: whether the leaf step that just ended
+     *  had a known/valid duration. Audio/visual step-change-signal consumers must gate the
+     *  transition tone/flash on this - false means suppress the signal for this transition.
+     *  Defensive: Workout.addStep() always resolves a duration today, so this is normally always
+     *  true. Absent on every other WorkoutDisplayProperties use (e.g. the 'update' event, or a
+     *  direct getDashboardDisplayProperties() call). */
+    stepChangeSignal?: boolean
+}
+
+/** Payload of WorkoutRide's 'step-countdown' event - fired once per second in the last 4 seconds
+ *  before a leaf step with a known duration ends. Not fired across group/repeat-block boundaries,
+ *  or when the ending step's duration is unknown. */
+export interface StepCountdownTick {
+    secondsRemaining: 4 | 3 | 2 | 1
 }

@@ -485,7 +485,7 @@ describe('WorkoutRide',()=>{
 
             expect(s.manualTimeOffset).toBe(119)
             expect( emit).toHaveBeenCalledWith('request-update',expect.objectContaining({duration:60,minPower:50,maxPower:50 }))
-            expect( emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({title:'Test Workout: Test Segment(1/10) - Test Relax',current:expect.objectContaining({duration:60,minPower:50,maxPower:50 })}))
+            expect( emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({title:'Test Workout: Test Segment(1/10) - Test Relax',current:expect.objectContaining({duration:60,minPower:50,maxPower:50 }),stepChangeSignal:true}))
         })
 
         test('during last step',()=>{
@@ -514,11 +514,125 @@ describe('WorkoutRide',()=>{
     })
 
 
+    describe('update - step-countdown',()=>{
+        const workout = new Workout({type:'workout',name:'Test Workout'})
+        workout.addSegment( {type:'segment', text:'Test Segment', steps: [
+            {type:'step', steady:true, work:true, duration:10, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
+            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'}
+        ] })
+
+        let s,service:WorkoutRide
+        let emit;
+
+        beforeEach( ()=>{
+            setupMocks(workout)
+            s = service = new WorkoutRide()
+            s.init()
+            s.start()
+            emit = jest.spyOn(s,'emit')
+        })
+        afterEach( ()=>{
+            s.stopWorker()
+            s.reset()
+            resetMocks()
+            jest.resetAllMocks()
+        })
+
+        const countdownCalls = () => emit.mock.calls.filter( (call:any[]) => call[0]==='step-countdown')
+
+        test('does not emit above the 4s threshold',()=>{
+            s.manualTimeOffset = 5.4 // remaining ~4.6s
+            s.update()
+            expect(countdownCalls()).toHaveLength(0)
+        })
+
+        test('emits {secondsRemaining:4} on crossing from above to at/below 4s',()=>{
+            s.manualTimeOffset = 5.4 // remaining ~4.6s
+            s.update()
+            s.manualTimeOffset = 6.2 // remaining ~3.8s
+            s.update()
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:4})
+        })
+
+        test('emits {secondsRemaining:1} on crossing from above to at/below 1s',()=>{
+            s.manualTimeOffset = 8.5 // remaining ~1.5s
+            s.update()
+            s.manualTimeOffset = 9.2 // remaining ~0.8s
+            s.update()
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:1})
+        })
+
+        test('does not re-emit the same threshold on a subsequent tick with no further crossing',()=>{
+            s.manualTimeOffset = 5.4 // remaining ~4.6s
+            s.update()
+            s.manualTimeOffset = 6.2 // remaining ~3.8s, crosses 4
+            s.update()
+            expect(countdownCalls()).toHaveLength(1)
+
+            s.update() // no change in manualTimeOffset, negligible further time passes
+            expect(countdownCalls()).toHaveLength(1)
+        })
+
+        test('emits only the threshold closest to zero when multiple thresholds are skipped in one tick',()=>{
+            s.manualTimeOffset = 5.4 // remaining ~4.6s
+            s.update()
+            s.manualTimeOffset = 9.9 // remaining ~0.1s - skips 4,3,2 in one jump
+            s.update()
+            expect(countdownCalls()).toHaveLength(1)
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:1})
+        })
+
+        test('does not emit when the current step has no valid duration',()=>{
+            s.manualTimeOffset = 5.4 // remaining ~4.6s, valid duration
+            s.update()
+
+            const realGetLimits = s.workout.getLimits.bind(s.workout)
+            s.workout.getLimits = jest.fn( (ts:number, includeStepInfo?:boolean) => {
+                const limits = realGetLimits(ts, includeStepInfo)
+                return limits && {...limits, duration:undefined}
+            })
+
+            s.manualTimeOffset = 6.2 // would cross the 4s threshold, but duration is now invalid
+            s.update()
+            expect(countdownCalls()).toHaveLength(0)
+
+            s.workout.getLimits = realGetLimits // workout is shared across tests in this describe block
+        })
+
+        test('does not emit on the same tick as a step transition',()=>{
+            s.manualTimeOffset = 9.99 // last moment of step 1 (duration 10s) - also crosses all thresholds
+            s.update()
+            const countBeforeTransition = countdownCalls().length
+
+            s.manualTimeOffset = 10.5 // crosses into step 2
+            s.update()
+            expect(countdownCalls()).toHaveLength(countBeforeTransition) // no additional emit on the transition tick itself
+            expect(emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({stepChangeSignal:true}))
+        })
+
+        test('stepChangeSignal is false on the transition when the departing step had no valid duration',()=>{
+            const realGetLimits = s.workout.getLimits.bind(s.workout)
+            s.workout.getLimits = jest.fn( (ts:number, includeStepInfo?:boolean) => {
+                const limits = realGetLimits(ts, includeStepInfo)
+                return limits && {...limits, duration:undefined}
+            })
+            s.manualTimeOffset = 5.4 // establishes currentLimits with an invalid duration
+            s.update()
+
+            s.workout.getLimits = realGetLimits
+            s.manualTimeOffset = 10.5 // transitions into step 2
+            s.update()
+            expect(emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({stepChangeSignal:false}))
+        })
+
+    })
+
+
     describe('backward',()=>{
         const workout = new Workout({type:'workout',name:'Test Workout'})
-        workout.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [ 
+        workout.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [
             {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
-            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'} 
+            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'}
         ] })
 
 
