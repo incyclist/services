@@ -128,6 +128,52 @@ describe('ActivitiesPageService',()=>{
         })
     })
 
+    describe('onDeleteActivity',()=>{
+        let s,service
+        let MockActivityList
+
+        beforeEach( ()=>{
+            setupMocks()
+            MockActivityList = {
+                delete: jest.fn().mockResolvedValue(true)
+            }
+            Inject('ActivityList', MockActivityList)
+
+            s = service = new ActivitiesPageService()
+            s.logError = jest.fn()
+        })
+
+        afterEach( ()=>{
+            Inject('ActivityList', null)
+            resetMocks()
+            s.reset()
+        })
+
+        test('deletes via ActivityListService.delete() and resolves true',async ()=>{
+            const result = await service.onDeleteActivity('activity-1')
+
+            expect(MockActivityList.delete).toHaveBeenCalledWith('activity-1')
+            expect(result).toBe(true)
+        })
+
+        test('ActivityListService.delete() resolving false is passed through',async ()=>{
+            MockActivityList.delete.mockResolvedValue(false)
+
+            const result = await service.onDeleteActivity('activity-1')
+
+            expect(result).toBe(false)
+        })
+
+        test('ActivityListService.delete() throwing -> error logged, resolves false',async ()=>{
+            MockActivityList.delete.mockRejectedValue(new Error('boom'))
+
+            const result = await service.onDeleteActivity('activity-1')
+
+            expect(result).toBe(false)
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'onDeleteActivity')
+        })
+    })
+
     describe('onClearWorkoutSelection',()=>{
         let s,service
 

@@ -26,4 +26,5 @@ export interface IActivitiesPageService extends IPageService  {
     getActivityDetailsProps(activityId: string): ActivityDetailsProps
     onClearWorkoutSelection(): void   // '[x]' on the "Workout: <name>" row (Phase 2, HLD §4.2)
     onRideAgain(route?: RouteInfo): void   // navigates to ride or pairing, depending on device readiness
+    onDeleteActivity(id: string): Promise<boolean>
 }

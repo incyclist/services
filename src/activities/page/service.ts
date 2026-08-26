@@ -181,6 +181,21 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
         }
     }
 
+    /**
+     * Deletes an activity from the list, for the swipe-to-delete action on the Activities list.
+     * `ActivityListService.delete()` emits its own 'updated' event on success, which
+     * `startEventListener()` already forwards into a page update - no extra refresh needed here.
+     */
+    async onDeleteActivity(id: string): Promise<boolean> {
+        try {
+            return await this.getActivityList().delete(id)
+        }
+        catch (err) {
+            this.logError(err, 'onDeleteActivity')
+            return false
+        }
+    }
+
     protected updatePageDisplay() {
         this.getPageObserver()?.emit('page-update')
     }
