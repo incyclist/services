@@ -283,7 +283,7 @@ export class ActivityRideService extends IncyclistService {
 
         this.updateActivityTime();
 
-        this._save()            
+        await this._save()
 
         this.emit('completed')
         this.tsPauseStart = undefined
@@ -748,7 +748,7 @@ export class ActivityRideService extends IncyclistService {
             await this.stop()
         }
 
-        this.getRepo().delete(this.activity.id)
+        await this.getRepo().delete(this.activity.id)
         this.state = 'idle'
     }
 
@@ -773,7 +773,7 @@ export class ActivityRideService extends IncyclistService {
             try {
                 emit('start',success)
 
-                await this._save()
+                this._save()            
                 success = await this._convertAndUpload()
 
                 sleep(0).then( ()=> { 
@@ -1346,7 +1346,7 @@ export class ActivityRideService extends IncyclistService {
                 await fs.writeFile(fileName, Buffer.from(data as string))
                 this.activity.tcxFileName = fileName
             }
-            await this._save()
+            this._save()            
             emit('save.done',format,true)
 
             return true

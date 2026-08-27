@@ -104,8 +104,8 @@ export class ActivitiesRepository {
         }
 
         if (writeDetails) {
-            this.writeDetails(activity)
-        }    
+            await this.writeDetails(activity)
+        }
 
 
     }
@@ -675,7 +675,7 @@ export class ActivitiesRepository {
 
     protected async writeDetails(activity:ActivityInfo):Promise<void> {
         const name = activity.summary.name
-        this.getRepo().write( name,activity.details as unknown as JSONObject)
+        await this.getRepo().write( name,activity.details as unknown as JSONObject)
     }
 
     /**
