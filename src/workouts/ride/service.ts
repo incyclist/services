@@ -981,6 +981,18 @@ export class WorkoutRide extends IncyclistService{
             this.stopFreeRide();
         }
 
+        // Race guard: the transition itself is detected here by the 500ms poll loop, independent
+        // of the precisely-scheduled secondsRemaining:0 timer for the SAME instant (see
+        // rescheduleStepCountdown()). If this poll tick wins the race and notices the transition a
+        // few ms before that timer fires, resetCountdownProgress()+rescheduleStepCountdown() below
+        // would cancel it (via clearCountdownTimers()) before it ever runs, silently dropping the
+        // step-change tone/flash for this transition. Emit it here instead, exactly once - only
+        // when the precise timer hasn't already fired it (the common case, since it targets the
+        // same deadline this poll tick is merely sampling towards).
+        if (!this.firedCountdownThresholds.has(0)) {
+            this.emit('step-countdown', { secondsRemaining: 0 })
+        }
+
         this.emit('step-changed', this.getDashboardDisplayProperties());
         this.resetCountdownProgress()
         this.rescheduleStepCountdown()

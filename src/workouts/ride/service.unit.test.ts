@@ -602,8 +602,14 @@ describe('WorkoutRide',()=>{
 
         test('forward() reschedules for the next step',()=>{
             s.forward() // jumps to the start of step 2 (duration 60s)
+            // The departing step (step 1) never reached its own natural end - its precise 0-tick
+            // hadn't fired yet, so onStepChange's race guard fires it immediately here, confirming
+            // the manual skip. This is the same transition-tone contract as a natural step-end.
+            expect(countdownCalls()).toHaveLength(1)
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:0})
+
             jest.advanceTimersByTime(55999)
-            expect(countdownCalls()).toHaveLength(0)
+            expect(countdownCalls()).toHaveLength(1)
             jest.advanceTimersByTime(1)
             expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:4})
         })
