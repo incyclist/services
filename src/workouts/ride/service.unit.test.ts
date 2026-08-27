@@ -1806,6 +1806,14 @@ describe('WorkoutRide',()=>{
                 expect(service.getLoadButtonMode()).toBe('gear')
             })
 
+            // A mode that is neither ERG, SIM, nor Resistance (e.g. PowerMeter - power/cadence
+            // read straight from the device, nothing controllable) is hidden, not a silent
+            // fallback to 'power'.
+            test('mode that is neither ERG, SIM, nor Resistance (e.g. PowerMeter) => hidden',()=>{
+                setDeviceMode(mockMode({}))
+                expect(service.getLoadButtonMode()).toBe('hidden')
+            })
+
             test('error accessing device/mode => power (fail safe)',()=>{
                 Inject('DeviceRide', { getCyclingMode: jest.fn().mockImplementation(()=>{throw new Error('err')}) })
                 s.logError = jest.fn()

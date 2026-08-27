@@ -12,6 +12,16 @@ export interface StartGateProps {
     body: string
 }
 
+// Small/big two-tier magnitude labels for the menu's Load/Gear row (mirrors the swipe gesture's
+// own small=up/down vs big=left/right split, matching WorkoutDisplayProperties['loadButtons']'s
+// key names for a workout ride's real FTP/range-aware values).
+export interface LoadControlButtonLabels {
+    inc1: string
+    dec1: string
+    inc5: string
+    dec5: string
+}
+
 export interface RideMenuProps {
     showResume?: boolean    // true = Resume button, false = Pause button
     finished?:boolean       // true = Activity is completed (finished)
@@ -21,6 +31,21 @@ export interface RideMenuProps {
     // see WorkoutRideMenuProps below for a variant that guarantees them.
     canStepBack?: boolean
     canStepForward?: boolean
+
+    // Resolved menu-item state for the Load/Gear row - mobile must render this as-is, not branch
+    // on LoadButtonMode itself (services drives *what*, mobile drives *how* - workspace
+    // CLAUDE.md). `visible:false` (loadButtonMode==='hidden') means the row must not be rendered
+    // at all; `label`/`buttons` are only meaningful when `visible` is true. Governed purely by
+    // cycling mode (getLoadButtonMode()), NOT by whether a workout is attached - a plain route
+    // ride in ERG mode still needs Load buttons, a plain SIM ride with virtual shifting still
+    // needs Gear buttons, exactly like a workout ride does. Always populated whenever menuProps
+    // itself is.
+    loadControl?: { visible: boolean, label?: 'Load' | 'Gear', buttons?: LoadControlButtonLabels }
+
+    // Whether the "Ride Settings" (Ride View / Street View selector) tile applies - true for any
+    // ride with a route (GPX/Video, workout-attached or not), false for a route-less Workout-only
+    // ride, which has no view to select. Always populated whenever menuProps is.
+    showRideSettings?: boolean
 }
 
 // Base -- common to all ride types. Workout-only fields (graph/steps/dashboard/title/gestureHint/
@@ -133,7 +158,7 @@ interface RidePageCallbacks {
     // Workout ride callbacks
     onStop        (): void
 
-    // "Stop Workout, keep riding" (mobile Phase 2 session 5.3) - Video/GPX+workout combo only;
+    // "Stop Workout, keep riding"  - Video/GPX+workout combo only;
     // detaches the workout, the ride itself keeps going. Distinct from onStop() above.
     onStopWorkout (): void
 
@@ -144,8 +169,6 @@ interface RidePageCallbacks {
     onSetLoadIncrement(value: number): void
     onGestureHintDismissed(props: { dontShowAgain: boolean }): void
 
-    // additive and inert until session 5.1 wires up the RideMenu row and the corner-slot tap
-    // handler.
     onToggleCornerWidget(): void
 
     // Phone-only previous-rides panel's own collapse/expand chevron - independent of
@@ -156,7 +179,7 @@ interface RidePageCallbacks {
     onCollapsePrevRides?(): void
 }
 
-// Single merged interface (FIXES_BACKLOG #24), implemented in full by the single RidePageService
+// Single merged interface, implemented in full by the single RidePageService
 // class (src/ride/page/service.ts), which handles Video/GPX/Workout ride types internally - so
 // getRidePageService() callers never need an instanceof check or cast.
 export interface IRidePageService extends RidePageCallbacks, IPageService{
@@ -172,7 +195,7 @@ export interface IRidePageService extends RidePageCallbacks, IPageService{
 
     getGraphActuals(): WorkoutGraphActuals
     adjustLoad(deltaPct: number): PowerAdjustmentResult | undefined
-    // FIXES_BACKLOG #37: callers (useRideGestures.ts's swipe handler, a future menu/settings
+    // callers (useRideGestures.ts's swipe handler, a future menu/settings
     // surface) must call this fresh at gesture/tap time - cycling mode can change mid-ride - rather
     // than caching a value read from getPageDisplayProps().loadButtonMode.
     getLoadButtonMode(): LoadButtonMode
@@ -199,8 +222,7 @@ export interface IRidePageService extends RidePageCallbacks, IPageService{
     getPrevRidesRows(): PrevRidesRowProps[]
 }
 
-// ---- Workout-specific display types (relocated from src/workouts/ride/page/types.ts as part of
-// the RidePageService/WorkoutRidePageService merge, FIXES_BACKLOG #24) --------------------------
+// ---- Workout-specific display types 
 
 // ---- graph -------------------------------------------------------------------
 
@@ -254,8 +276,7 @@ export interface WorkoutDashboardLine {
     // Fully composed, e.g. "260W at 100-120HR for 5min - VO2 max (3/5)" (getStepTargetText's
     // target description + getStepDuration's duration, then the step title/rep count). No
     // separate numeric power/duration/remaining fields - those are already shown live by
-    // WorkoutStepsList's current-step row; duplicating them here was the pre-1.0 design and is
-    // now considered wrong (session 3.3 rework).
+    // WorkoutStepsList's current-step row; 
     text: string
     mode: string | null                 // cycling-mode toggle text ('ERG'|'SIM') or null when not toggleable
 }
@@ -263,12 +284,14 @@ export interface WorkoutDashboardLine {
 // ---- menu ----------------------------------------------------------------------
 
 // RideMenuProps (above) already carries canStepBack/canStepForward as optional, folded in as
-// part of the RidePageService/WorkoutRidePageService merge (FIXES_BACKLOG #24) - this alias just
+// part of the RidePageService/WorkoutRidePageService merge - this alias just
 // narrows them back to required for callers that specifically know they're dealing with a
 // workout ride's menu.
 export type WorkoutRideMenuProps = RideMenuProps & {
     canStepBack: boolean      // = WorkoutDisplayProperties.canShowBackward
     canStepForward: boolean   // = WorkoutDisplayProperties.canShowForward
+    loadControl: { visible: boolean, label?: 'Load' | 'Gear', buttons?: LoadControlButtonLabels }
+    showRideSettings: boolean
 }
 
 // ---- gesture discoverability overlay ----------------------------------------------
@@ -280,7 +303,7 @@ export interface WorkoutGestureHint {
 // ---- page display props ---------------------------------------------------------
 
 // RidePageDisplayProps (above) already carries these fields as optional, folded in as part of
-// the RidePageService/WorkoutRidePageService merge (FIXES_BACKLOG #24) - this alias just narrows
+// the RidePageService/WorkoutRidePageService merge  - this alias just narrows
 // them back to required for callers that specifically know they're dealing with a workout ride's
 // display props (RidePageService.getWorkoutRideDisplayProps(), mobile's WorkoutRidePage/View).
 export type WorkoutRidePageDisplayProps = RidePageDisplayProps & {
@@ -296,11 +319,11 @@ export type WorkoutRidePageDisplayProps = RidePageDisplayProps & {
     // data to decide its own visibility.
     gestureHint: WorkoutGestureHint | null
     // Current `preferences.workouts.loadIncrement` setting (%) - the same key the swipe gesture
-    // (session 5.4) and the menu's Increase/Decrease Load buttons (session 5.5) already read via
+    // and the menu's Increase/Decrease Load buttons  already read via
     // their own DEFAULT_LOAD_INCREMENT-driven callbacks. Exposed here so WorkoutSettingsDialog
-    // (session 5.10) can display/edit the live value without a second settings key.
+    // can display/edit the live value without a second settings key.
     loadIncrement: number
-    // What a load-adjust action currently does (FIXES_BACKLOG #37) - see
+    // What a load-adjust action currently does - see
     // IRidePageService.getLoadButtonMode(), the live version of this callers must re-check
     // at gesture/tap time rather than caching. Mirrored here for UI that only re-renders on a
     // getPageDisplayProps() refresh (e.g. a future settings/menu surface).
