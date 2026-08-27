@@ -1,5 +1,7 @@
 import { Activity } from './activity'
 import { ActivityInfo } from '../model'
+import { useRouteList } from '../../../routes'
+import { Route } from '../../../routes/base/model/route'
 
 describe('Activity', () => {
 
@@ -131,6 +133,76 @@ describe('Activity', () => {
             const result = await activity['getExportFileName']('tcx')
 
             expect(result).toBe('/app/activities/complex_name_123.tcx')
+        })
+
+    })
+
+    describe('canStart', () => {
+
+        let routeList: any
+
+        const createWorkoutOnlyActivity = (): Activity => {
+            const mockInfo: ActivityInfo = {
+                summary: {
+                    id: 'test-none-1',
+                    title: 'Workout Only Ride',
+                    name: 'workout-only-ride',
+                    startTime: Date.now(),
+                    rideTime: 1800,
+                    distance: 0,
+                    totalElevation: 0,
+                    startPos: 0,
+                    realityFactor: 100,
+                    uploadStatus: []
+                },
+                details: {
+                    type: 'IncyclistActivity',
+                    version: '5',
+                    title: 'Workout Only Ride',
+                    id: 'test-none-1',
+                    user: { uuid: 'user-1', weight: 75 },
+                    // a workout-only ride has no route id - see
+                    // services/src/activities/ride/service.ts ~line 1493, which builds
+                    // `route = {name, hash, title}` without an `id` for routeType 'None'
+                    route: { name: 'Workout', hash: '' },
+                    startTime: new Date().toISOString(),
+                    time: 1800,
+                    timeTotal: 1800,
+                    timePause: 0,
+                    startPos: 0,
+                    distance: 0,
+                    totalElevation: 0,
+                    logs: [],
+                    routeType: 'None',
+                    realityFactor: 100
+                } as unknown as ActivityInfo['details']
+            }
+            return new Activity(mockInfo)
+        }
+
+        beforeEach(() => {
+            routeList = useRouteList() as any
+        })
+
+        afterEach(() => {
+            routeList.reset()
+        })
+
+        test('workout-only activity (routeType None) cannot be started', () => {
+            const activity = createWorkoutOnlyActivity()
+            expect(activity.canStart()).toBe(false)
+        })
+
+        test('workout-only activity (routeType None) cannot be started even when an unrelated, not-yet-synced route (no id) is in the route list', () => {
+            // reproduces a real-world route list state: a locally imported route sits in
+            // RouteListService.routes with description.id===undefined until it is synced/assigned
+            // a server id. getRouteDescription()/getRoute() do an unguarded
+            // `find(r => r.description.id === id)`, so looking up `undefined` (the workout-only
+            // activity's missing route id) can false-positive match this unrelated entry.
+            routeList.routes = [new Route({ title: 'Locally imported route' } as any)]
+
+            const activity = createWorkoutOnlyActivity()
+            expect(activity.canStart()).toBe(false)
         })
 
     })

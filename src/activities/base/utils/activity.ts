@@ -251,7 +251,7 @@ export class Activity implements ActivityInfo{
     isRouteAvailable() {
         if (!this.details?.route) return false
 
-        if (this.details.routeType==='Free-Ride')
+        if (this.details.routeType==='Free-Ride' || this.details.routeType==='None')
             return false
 
         return this.getRouteList().getRouteDescription(this.details.route.id)!==undefined
@@ -287,7 +287,7 @@ export class Activity implements ActivityInfo{
     canStart() {
         if (!this.details?.route) return false
 
-        if (this.details.routeType==='Free-Ride')
+        if (this.details.routeType==='Free-Ride' || this.details.routeType==='None')
             return false
 
         if (this.details.routeType==='Video' ) {
