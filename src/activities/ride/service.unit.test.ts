@@ -540,6 +540,34 @@ describe('ActivityRideService',()=>{
 
             expect(repoDelete).not.toHaveBeenCalled()
         })
+
+        // Regression: stop() fired its autosave (repo.save()) without awaiting it, so a fast
+        // "End Ride" -> "Delete" (e.g. a very short ride) could reach repo.delete() while that
+        // save was still writing the activity's JSON file to disk - the file then either didn't
+        // exist yet or was recreated after the delete, surfacing as an ENOENT during the save.
+        test('the autosave triggered by stop() fully completes before the file is deleted',async ()=>{
+            const activity = setup('paused')
+
+            const order:Array<string> = []
+            // a real macrotask delay - not just an unresolved promise - so a fire-and-forget
+            // save() in stop() would have every opportunity to lose the race and let delete()
+            // run first, the way it did against real (slow) disk I/O in production
+            const save = jest.fn( () => new Promise<void>(resolve => {
+                order.push('save-start')
+                setTimeout( ()=> { order.push('save-done'); resolve() }, 20)
+            }))
+
+            service.getRepo = jest.fn(()=>({
+                getFilename: jest.fn(name=> `/tmp/${name}.json`),
+                save,
+                delete: jest.fn( async (id) => { order.push('delete'); return repoDelete(id) })
+            })) as any
+
+            await service.delete()
+
+            expect(order).toEqual(['save-start','save-done','delete'])
+            expect(repoDelete).toHaveBeenCalledWith(activity.id)
+        })
     })
 
     describe('typical ride',()=>{
