@@ -1869,13 +1869,13 @@ describe('RidePageService', () => {
     // corner-slot tap handler; covered with the same set/read/gate test pattern as the existing
     // load-increment setting.
     describe('cornerWidget', () => {
-        test('populated ("elevation" default) when isWorkoutAttached() is true', () => {
+        test('populated ("workout" default) when isWorkoutAttached() is true', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockRideDisplay.getState.mockReturnValue('Active')
             MockWorkoutRide.inUse.mockReturnValue(true)
             MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map', workout: makeCurrentWorkout(), showWorkout: true })
 
-            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('elevation')
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('workout')
         })
 
         test('undefined when no workout is attached', () => {
@@ -1892,13 +1892,13 @@ describe('RidePageService', () => {
             expect((s.getPageDisplayProps() as any).cornerWidget).toBeUndefined()
         })
 
-        test('reads the persisted preferences.workouts.rideCornerWidget setting', () => {
+        test('reads the persisted preferences.workouts.rideCornerWidget setting, overriding the default', () => {
             MockRideDisplay.getRideType.mockReturnValue('GPX')
             MockWorkoutRide.inUse.mockReturnValue(true)
             MockRideDisplay.getDisplayProperties.mockReturnValue({ state: 'Active', rideView: 'map', workout: makeCurrentWorkout(), showWorkout: true })
-            MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'workout' : defValue)
+            MockUserSettings.get.mockImplementation((key: string, defValue: unknown) => key === 'preferences.workouts.rideCornerWidget' ? 'elevation' : defValue)
 
-            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('workout')
+            expect((s.getPageDisplayProps() as any).cornerWidget).toBe('elevation')
         })
 
         // repo-owner review (2026-08-25): previous-rides is no longer a corner-widget cycle
@@ -1924,7 +1924,7 @@ describe('RidePageService', () => {
         })
 
         describe('onToggleCornerWidget', () => {
-            test('workout attached (2-way): flips "elevation" -> "workout" and emits page-update', () => {
+            test('workout attached (2-way), unset preference (default "workout"): flips "workout" -> "elevation" and emits page-update', () => {
                 MockRideDisplay.getRideType.mockReturnValue('GPX')
                 MockWorkoutRide.inUse.mockReturnValue(true)
                 s.openPage()
@@ -1934,7 +1934,7 @@ describe('RidePageService', () => {
 
                 s.onToggleCornerWidget()
 
-                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'workout')
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workouts.rideCornerWidget', 'elevation')
                 expect(updateSpy).toHaveBeenCalled()
             })
 

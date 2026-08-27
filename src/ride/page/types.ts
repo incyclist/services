@@ -50,7 +50,7 @@ export interface RidePageDisplayProps {
     // which of the competing corner widgets (elevation graph, workout info) a ride currently
     // shows. Populated whenever there's more than one candidate to toggle between
     // (RidePageService.getCornerWidget()); undefined when there's nothing to toggle (default
-    // 'elevation' once populated). previous-rides is NOT part of this cycle - see prevRides
+    // 'workout' once populated). previous-rides is NOT part of this cycle - see prevRides
     // below, it renders as its own always-visible-when-eligible panel instead.
     cornerWidget?:     'elevation' | 'workout'
 

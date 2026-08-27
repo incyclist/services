@@ -525,7 +525,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             if (available.length <= 1)
                 return undefined
 
-            const current = this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'elevation')
+            const current = this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'workout')
             return available.includes(current) ? current : available[0]
         }
         catch (err: any) {
@@ -554,7 +554,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     onToggleCornerWidget(): void {
         try {
             const available = this.getCornerWidgetStates()
-            const current = this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'elevation')
+            const current = this.getUserSettings().get(CORNER_WIDGET_SETTING_KEY, 'workout')
             const next = available[(available.indexOf(current) + 1) % available.length]
             this.getUserSettings().set(CORNER_WIDGET_SETTING_KEY, next)
             this.updatePageDisplay()
