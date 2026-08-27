@@ -1,5 +1,7 @@
 import { ActivitiesRepository } from "./db"
 import { ActivityInfo } from "../model"
+import { getBindings } from "../../../api"
+import { IAppInfo } from "../../../api/appInfo"
 import fs from 'fs/promises'
 
 describe('ActivityDB',()=>{
@@ -8,14 +10,14 @@ describe('ActivityDB',()=>{
 
         let db:ActivitiesRepository
 
-        const buildActivity = (id:string, rideTime:number):ActivityInfo => ({
+        const buildActivity = (id:string, rideTime:number, startTime:number=1709745255915):ActivityInfo => ({
             summary: {
                 id,
                 title: 'Incyclist Ride',
                 name: `Incyclist Ride-${id}`,
                 routeId: 'route-1',
                 routeHash: 'hash-1',
-                startTime: 1709745255915,
+                startTime,
                 rideTime,
                 distance: 1000,
                 startPos: 0,
@@ -25,20 +27,63 @@ describe('ActivityDB',()=>{
             }
         } as unknown as ActivityInfo)
 
+        const setChannel = (channel:'mobile'|'desktop') => {
+            getBindings().appInfo = {
+                getChannel: jest.fn().mockReturnValue(channel)
+            } as unknown as IAppInfo
+        }
+
         beforeEach(()=>{
             db = new ActivitiesRepository()
         })
 
         afterEach(()=>{
             db.reset()
+            delete getBindings().appInfo
         })
 
-        test('a saved ride shorter than 30s is still returned', ()=>{
+        test('on mobile, a saved ride shorter than 30s is still returned', ()=>{
+            setChannel('mobile');
             (db as unknown as {activities:Array<ActivityInfo>}).activities = [buildActivity('short-ride', 15)]
 
             const result = db.search({})
 
             expect(result.map(a=>a.summary.id)).toContain('short-ride')
+        })
+
+        test('on desktop, a legacy ride (before rollout) shorter than 30s is hidden', ()=>{
+            setChannel('desktop');
+            (db as unknown as {activities:Array<ActivityInfo>}).activities = [buildActivity('legacy-short-ride', 15, new Date('2026-08-01').getTime())]
+
+            const result = db.search({})
+
+            expect(result.map(a=>a.summary.id)).not.toContain('legacy-short-ride')
+        })
+
+        test('on desktop, a new ride (after rollout) shorter than 30s is still returned', ()=>{
+            setChannel('desktop');
+            (db as unknown as {activities:Array<ActivityInfo>}).activities = [buildActivity('new-short-ride', 15, new Date('2026-08-28').getTime())]
+
+            const result = db.search({})
+
+            expect(result.map(a=>a.summary.id)).toContain('new-short-ride')
+        })
+
+        test('on desktop, a ride shorter than 1s is hidden regardless of date', ()=>{
+            setChannel('desktop');
+            (db as unknown as {activities:Array<ActivityInfo>}).activities = [buildActivity('near-zero-ride', 0.5, new Date('2026-08-28').getTime())]
+
+            const result = db.search({})
+
+            expect(result.map(a=>a.summary.id)).not.toContain('near-zero-ride')
+        })
+
+        test('without appInfo binding, desktop filtering is applied by default', ()=>{
+            (db as unknown as {activities:Array<ActivityInfo>}).activities = [buildActivity('legacy-short-ride', 15, new Date('2026-08-01').getTime())]
+
+            const result = db.search({})
+
+            expect(result.map(a=>a.summary.id)).not.toContain('legacy-short-ride')
         })
 
     })

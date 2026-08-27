@@ -15,6 +15,12 @@ import { useUnitConverter } from "../../../i18n";
 export const DB_VERSION = '5'
 export const DB_NAME = 'db'
 
+// Cutoff for the rollback of the "stop hiding activities shorter than 30s" fix (commit
+// c5f226d): desktop users with a long activity history could suddenly see a wall of legacy
+// sub-30s entries they'd never seen before. Legacy short rides stay hidden on desktop; short
+// rides recorded from this date onward (the actual bug being fixed) are still shown.
+const SHORT_RIDE_FILTER_CUTOFF = new Date('2026-08-28').getTime()
+
 /**
  * This class is used to load Activities from the local database
  * 
@@ -306,8 +312,18 @@ export class ActivitiesRepository {
      */
     search( criteria:ActivitySearchCriteria):Array<ActivityInfo> {
 
-        
+
         let result = this.activities
+        if (!this.isMobile()) {
+            result = result?.filter(ai => {
+                const {rideTime,startTime} = ai.summary
+                if (rideTime<1)
+                    return false
+                if (rideTime<=30 && startTime<SHORT_RIDE_FILTER_CUTOFF)
+                    return false
+                return true
+            })
+        }
 
         result = this.checkIdFilter(result, criteria);
         result = this.checkHashFilter(result, criteria);
@@ -711,6 +727,16 @@ export class ActivitiesRepository {
     protected getRouteList()
     {
         return useRouteList()
+    }
+
+    protected isMobile():boolean {
+        const {appInfo} = this.getBindings()
+
+        // istanbul ignore next
+        if (!appInfo) {
+            return false
+        }
+        return appInfo?.getChannel()==='mobile'
     }
 
     @Injectable
