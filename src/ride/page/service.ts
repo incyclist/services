@@ -7,6 +7,7 @@ import {
     GPXRidePageDisplayProps,
     IRidePageService,
     PrevRidesRowProps,
+    LoadControlButtonLabels,
     RideMenuProps,
     RidePageDisplayProps,
     StartGateProps,
@@ -22,6 +23,7 @@ import {
     WorkoutUpcomingSteps
 } from "./types";
 import { useRideDisplay } from "../display";
+import { useDeviceConfiguration } from "../../devices";
 import { sleep } from "../../utils/sleep";
 import { ISecretBinding } from "../../api/secret";
 import { useOnlineStatusMonitoring } from "../../monitoring";
@@ -37,7 +39,7 @@ const BACKGROUND_PAUSE_TIMEOUT_MS = 300000
 const UPCOMING_STEPS_COUNT = 3
 const DEFAULT_LOAD_INCREMENT = 1
 const HINTS_WORKOUT_GESTURES_KEY = 'hints.workoutRideGestures'
-// Same key mobile's useWorkoutRideGestures.ts (session 5.4) already reads - do not introduce a
+// Same key mobile's useWorkoutRideGestures.ts already reads - do not introduce a
 // second key for the same setting.
 const LOAD_INCREMENT_SETTING_KEY = 'preferences.workouts.loadIncrement'
 // Phone-fallback corner-widget toggle - which of the competing corner widgets (elevation graph,
@@ -48,10 +50,9 @@ const CORNER_WIDGET_SETTING_KEY = 'preferences.workouts.rideCornerWidget'
 const DEFAULT_PREV_RIDES_VISIBLE_ROWS = 1
 
 /**
- * Single page service for all ride types (Video/GPX/Workout) - FIXES_BACKLOG #24. Previously
+ * Single page service for all ride types (Video/GPX/Workout) . Previously
  * split into RidePageService (Video/GPX) and WorkoutRidePageService (Workout) behind a shared
- * RidePageServiceBase; collapsed into one concrete class per explicit repo-owner review feedback
- * (see the FIXES_BACKLOG #24 status note). Ride-type-specific methods are just plain methods
+ * RidePageServiceBase; collapsed into one concrete class. Ride-type-specific methods are just plain methods
  * here - they're only ever invoked by UI that's already specific to that ride type, so there's
  * no need for instanceof checks, casts, or no-op overrides.
  */
@@ -67,6 +68,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     protected menuProps: RideMenuProps | null = null
     protected isInitialized: boolean = false
     protected startGateProps: StartGateProps | null = null
+    // Bound once so on()/off() target the exact same listener reference.
+    protected onDeviceModeChangedBound = this.onDeviceModeChanged.bind(this)
 
     // prevRidesVisibleRows is reported by the mobile view (setPrevRidesVisibleRows());
     // prevRidesMode is flipped by the phone-only condensed/expanded toggle
@@ -87,7 +90,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     // live after this, via getPrevRidesRows() + the mobile view's own <Dynamic> subscription.
     protected prevRidesShown = false
 
-    // Set by onViewChanged() (route-ends-first mid-ride type flip, §4.5.1), consumed by the
+    // Set by onViewChanged() (route-ends-first mid-ride type flip), consumed by the
     // closePage()/openPage() pair that the resulting page-component swap triggers. Guards the
     // outgoing page's teardown from stopping a still-running ride, and the incoming page's mount
     // from re-running init()/start() against it.
@@ -127,7 +130,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     openPage(simulate?: boolean): IObserver {
-        // Second half of a mid-ride view transition (onViewChanged(), §4.5.1): the ride is
+        // Second half of a mid-ride view transition (onViewChanged()): the ride is
         // already running and the ride/workout observer handlers are still attached (closePage()
         // below was suppressed for the same flag). Re-emit so the incoming page paints itself
         // from current state, and return without touching init()/start() - see registerAndStart().
@@ -159,6 +162,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                     // (or, on the very first ride, undefined) observer that start() never emits on.
                     this.registerHandlers(this.rideObserver, this.eventHandler)
                     this.subscribeToWorkoutObserver()
+                    this.getDeviceConfiguration().on('mode-changed', this.onDeviceModeChangedBound)
 
                     // Should be unreachable: openPage() returns early on a view transition (above),
                     // and every other openPage() path runs against an Idle/Finished ride. If this
@@ -219,7 +223,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     closePage(): void {
-        // A mid-ride view transition (onViewChanged(), §4.5.1) unmounts the outgoing ride page,
+        // A mid-ride view transition (onViewChanged()) unmounts the outgoing ride page,
         // whose unmount effect calls closePage() - but the *ride* is still running and must not be
         // stopped or torn down. Swallow exactly that one close and leave the flag set for the
         // matching openPage() above. Any other closePage() (End Ride, navigate away, unmount for
@@ -234,6 +238,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.getRideDisplay().stop()
             this.unregisterHandlers(this.rideObserver, this.eventHandler)
             this.unsubscribeFromWorkoutObserver()
+            this.getDeviceConfiguration().off('mode-changed', this.onDeviceModeChangedBound)
             this.menuProps = null
             this.isInitialized = false
             super.closePage()
@@ -338,16 +343,18 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     // ---- menu callbacks ----------------------------------------------------------------
     //
     // onMenuOpen()/onMenuClose() genuinely diverge between Ride (Video/GPX) and Workout - this is
-    // real, not accidental duplication (FIXES_BACKLOG #24 review). Ride's onMenuClose() has a
+    // real, not accidental duplication . Ride's onMenuClose() has a
     // Finished-state special case (navigate away + close the page) that Workout's doesn't have -
     // both behaviors are preserved below, branched on ride type.
 
     onMenuOpen(): void {
         try {
             const state = this.getRideDisplay().getState()
+            const loadControl = this.getLoadControlProps()
+            const showRideSettings = !this.isRideType('Workout')
             this.menuProps = this.isWorkoutAttached()
-                ? { showResume: state === 'Paused', ...this.getStepFlags() }
-                : { showResume: state === 'Paused' }
+                ? { showResume: state === 'Paused', ...this.getStepFlags(), loadControl, showRideSettings }
+                : { showResume: state === 'Paused', loadControl, showRideSettings }
             this.updatePageDisplay()
         }
         catch (err: any) {
@@ -364,7 +371,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             }
 
             // Video/GPX only: a Finished ride navigates away and closes the page instead of just
-            // clearing the menu - see FIXES_BACKLOG #24.
+            // clearing the menu
             const state = this.getRideDisplay().getState()
             if (state === 'Finished' || this.menuProps?.finished) {
                 this.moveToPreviousPage()
@@ -514,7 +521,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * this; a Workout-only ride goes through getWorkoutRideDisplayProps() instead and never
      * reaches it.
      *
-     * previous-rides is deliberately NOT part of this cycle (repo-owner review 2026-08-25) - it
+     * previous-rides is deliberately NOT part of this cycle  - it
      * renders as its own always-visible-when-eligible panel, anchored below whichever of
      * elevation/workout this method picks, with its own independent collapse/expand affordance
      * (PrevRidesCornerPanel on the mobile side) rather than competing for the same slot.
@@ -649,7 +656,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * Workout, when the route completed while the workout was still running
      * (RideDisplayService.onRouteCompleted()). The route is already unselected and the display
      * service already replaced by the time this fires; the page layer's job is purely to move the
-     * UI to the matching ride screen (§4.5.1).
+     * UI to the matching ride screen.
      *
      * Emits 'ride-type-update' on the page observer - the event all three mobile ride pages
      * already subscribe to (and which, before this, nothing in services ever emitted).
@@ -718,8 +725,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
-    // "Stop Workout, keep riding" (workout-mobile-hld-phase2.md §6.3/§8.3, mobile Phase 2 session
-    // 5.3) - distinct from onStop() above, which ends the whole ride. This only detaches the
+    // "Stop Workout, keep riding" 
+    //  - distinct from onStop() above, which ends the whole ride. This only detaches the
     // workout; the ride continues as a plain Video/GPX ride. isWorkoutAttached() flips false on
     // the next page-update as a side effect of RideDisplayService.stopWorkout() (WorkoutRide.stop()
     // clears WorkoutRide.inUse()), which is what actually drops the overlay - updatePageDisplay()
@@ -758,9 +765,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
-    // Per workout-ride-page-service-design.md §6.5: "The menu 'Increase Load' action uses the
-    // same increment" as the swipe gesture - both must read the live, user-configurable
-    // preferences.workouts.loadIncrement setting (session 5.4/5.10), not a hardcoded default.
+    // The menu 'Increase Load' action uses the same increment as the swipe gesture
+    // - both must read the live, user-configurable preferences.workouts.loadIncrement setting, 
+    // not a hardcoded default.
     onIncreaseLoad(): void {
         this.adjustLoad(this.getLoadIncrement())
     }
@@ -769,7 +776,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.adjustLoad(-this.getLoadIncrement())
     }
 
-    // WorkoutSettingsDialog (session 5.10) - writes the same preferences.workouts.loadIncrement
+    // WorkoutSettingsDialog- writes the same preferences.workouts.loadIncrement
     // key onIncreaseLoad/onDecreaseLoad and the swipe gesture already read from.
     onSetLoadIncrement(value: number): void {
         try {
@@ -797,7 +804,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     /**
      * Adjusts the ride's load (intensity) by the given magnitude.
      *
-     * §4.4.5 kept this workout-independent for gear (and hidden) mode on purpose - gating it on
+     * kept this workout-independent for gear (and hidden) mode on purpose - gating it on
      * `isWorkoutAttached()`/`inUse()` would have broken gear shifting on a plain SIM-mode ride,
      * since `WorkoutRideService.powerUp()`/`powerDown()`'s gear branch (and its `'hidden'` no-op)
      * already touch no workout state at all and work correctly with no workout in use. Only a plain
@@ -823,8 +830,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
             if (plainErgAdjustment) {
                 const sign = deltaPct >= 0 ? 1 : -1
-                const nominal = Math.abs(deltaPct) === 1 ? 5 : 50
-                return this.getRideDisplay().adjustDevicePower(sign * nominal)
+                return this.getRideDisplay().adjustDevicePower(sign * this.getNominalErgWatts(deltaPct))
             }
 
             return deltaPct >= 0
@@ -839,7 +845,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     /**
      * What a load-adjust action (swipe gesture, menu "Increase/Decrease Load") currently does
-     * (FIXES_BACKLOG #37) - `'power'` (nudges targetPower/FTP, ERG mode), `'gear'` (performs a
+     * - `'power'` (nudges targetPower/FTP, ERG mode), `'gear'` (performs a
      * gear shift, SIM/Resistance mode with virtual shifting enabled) or `'hidden'` (meaningless,
      * SIM/Resistance mode with virtual shifting disabled - callers should not surface a load-adjust
      * control at all in this mode). Callers must re-check this at the moment of the gesture/tap
@@ -924,9 +930,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * The workout ended (completed on its own, or stopped by the rider) - NOT necessarily the ride.
      *
      * A workout-only ride ends with its workout: it has no route to fall back to, so the menu flips
-     * to its terminal 'finished' shape and the rider lands on the Activity Summary (FIXES_BACKLOG
-     * #24, bug 2/2 - the finalisation itself is RideDisplayService.onWorkoutCompleted()'s
-     * stopRide(), not this method's).
+     * to its terminal 'finished' shape and the rider lands on the Activity Summary 
      *
      * A route ride does not: the workout dropping away just returns it to a plain GPX/Video ride,
      * still running. RideDisplayService.onWorkoutCompleted() already makes exactly this distinction
@@ -987,7 +991,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.workoutObserverSubscribed = false
     }
 
-    // ---- workout display-props builders (§6.6-§6.8) --------------------------------------
+    // ---- workout display-props builders  --------------------------------------
 
     // Non-null only when the start overlay has fully cleared AND elapsed ride time is 0 AND
     // cadence is 0 (genuinely no pedaling yet - these two are checked separately from
@@ -1133,6 +1137,76 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         return { canStepBack: !!wo.canShowBackward, canStepForward: !!wo.canShowForward }
     }
 
+    // Resolves LoadButtonMode into the menu's Load/Gear row state - mobile renders this as-is
+    // rather than branching on LoadButtonMode itself, matching the label convention
+    // WorkoutRideService.getGearButtonLabels() already established for the dashboard. `buttons`
+    // gives the menu the same small/big two-tier magnitude the swipe gesture already offers
+    // (small = getLoadIncrement(), via onIncreaseLoad()/onDecreaseLoad(); big = the mobile
+    // LARGE_LOAD_INCREMENT convention, via adjustLoad(±5) directly) - each button carries its own
+    // resolved label rather than mobile deciding wording from the raw magnitude.
+    protected getLoadControlProps(): { visible: boolean, label?: 'Load' | 'Gear', buttons?: LoadControlButtonLabels } {
+        const mode = this.getLoadButtonMode()
+        if (mode === 'hidden')
+            return { visible: false }
+
+        if (mode === 'gear')
+            return { visible: true, label: 'Gear', buttons: { inc1: '+1', dec1: '-1', inc5: '+5', dec5: '-5' } }
+
+        // 'power': reuse the dashboard's own FTP/range-aware labels for a workout ride (the exact
+        // values getDashboardDisplayProperties() already computes for WorkoutDashboard elsewhere,
+        // matching what powerUp()/powerDown() will actually do); a plain (no-workout) ride has no
+        // FTP/step range to be aware of, so it gets the same nominal 5W/50W convention
+        // adjustLoad()'s plain-ERG branch already applies.
+        if (this.isWorkoutAttached()) {
+            const buttons = this.getWorkoutRide().getDashboardDisplayProperties().loadButtons
+            return { visible: true, label: 'Load', buttons }
+        }
+
+        const small = this.getNominalErgWatts(1)
+        const big = this.getNominalErgWatts(5)
+        return {
+            visible: true,
+            label: 'Load',
+            buttons: { inc1: `+${small}W`, dec1: `-${small}W`, inc5: `+${big}W`, dec5: `-${big}W` }
+        }
+    }
+
+    // Single source for the nominal Watt step a plain (no-workout) ERG-mode load adjustment
+    // applies - shared by adjustLoad() (which applies it) and getLoadControlProps() (which labels
+    // the menu buttons that trigger it), so the two can never drift apart.
+    protected getNominalErgWatts(magnitude: number): number {
+        return Math.abs(magnitude) === 1 ? 5 : 50
+    }
+
+    // Refreshes the Load/Gear row when the rider changes cycling mode via Gear Settings while the
+    // Ride Menu stays open behind that dialog - menuProps is a cached snapshot (only rebuilt on
+    // onMenuOpen()/pause/finish), so nothing else refreshes loadControl on a mid-menu mode change.
+    //
+    // The read is deferred one tick (confirmed via on-device log, 2 rounds): DeviceRideService's
+    // own 'mode-changed' listener (devices/ride/service.ts, onCyclingModeChanged()) is what
+    // actually applies the change to the live CyclingMode object (adapter.setCyclingMode(...) for
+    // a mode-name change, currentMode.setSettings(...) for a same-mode settings change) - but
+    // EventEmitter calls listeners in registration order, and DeviceRideService's registers lazily
+    // (DeviceRideService.lazyInit(), triggered from ride-start/pairing paths) rather than
+    // up front, so it is not guaranteed to run before this listener. Reading getLoadControlProps()
+    // synchronously here was observed to always resolve the *previous* mode/settings, one event
+    // behind, regardless of which mode/setting actually changed. A macrotask defer runs after the
+    // full synchronous emit() call (every listener, including DeviceRideService's synchronous
+    // mutation) has completed, independent of registration order.
+    protected onDeviceModeChanged(): void {
+        setTimeout(() => {
+            try {
+                if (!this.menuProps)
+                    return
+                this.menuProps = { ...this.menuProps, loadControl: this.getLoadControlProps() }
+                this.updatePageDisplay()
+            }
+            catch (err: any) {
+                this.logError(err, 'onDeviceModeChanged')
+            }
+        }, 0)
+    }
+
     protected getLastLogTime(): number {
         const logs = this.getActivityRide().getActivity()?.logs
         if (!logs || logs.length === 0)
@@ -1217,20 +1291,24 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     protected buildPausedMenuProps(): RideMenuProps | WorkoutRideMenuProps {
+        const loadControl = this.getLoadControlProps()
+        const showRideSettings = !this.isRideType('Workout')
         return this.isWorkoutAttached()
-            ? { showResume: true, ...this.getStepFlags() }
-            : { showResume: true }
+            ? { showResume: true, ...this.getStepFlags(), loadControl, showRideSettings }
+            : { showResume: true, loadControl, showRideSettings }
     }
 
     protected buildFinishedMenuProps(): RideMenuProps | WorkoutRideMenuProps {
+        const loadControl = this.getLoadControlProps()
+        const showRideSettings = !this.isRideType('Workout')
         return this.isWorkoutAttached()
-            ? { showResume: false, finished: true, canStepBack: false, canStepForward: false }
-            : { showResume: false, finished: true }
+            ? { showResume: false, finished: true, canStepBack: false, canStepForward: false, loadControl, showRideSettings }
+            : { showResume: false, finished: true, loadControl, showRideSettings }
     }
 
     // gestureHint/loadIncrement/loadButtonMode live here (not in buildWorkoutOverlayProps()'s
     // workout-attached branch, where they used to be computed) because the swipe gesture itself
-    // (RidePageService.adjustLoad()/onStepBack()/onStepForward(), §4.4.5) already works correctly
+    // (RidePageService.adjustLoad()/onStepBack()/onStepForward()) already works correctly
     // on a plain, no-workout Video/GPX ride - mobile's gesture-hint overlay and its content
     // (getGestureHintContent(), incyclist-mobile) need these unconditionally too, or a plain ride
     // never gets a hint at all, even though the gesture underneath it is fully functional.
@@ -1418,11 +1496,16 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         return useOnlineStatusMonitoring()
     }
 
+    @Injectable
+    protected getDeviceConfiguration() {
+        return useDeviceConfiguration()
+    }
+
 }
 
 
 /**
- * Single factory for the ride page service (FIXES_BACKLOG #24) - RidePageService handles
+ * Single factory for the ride page service - RidePageService handles
  * Video/GPX/Workout ride types internally, so this is just the @Singleton-backed accessor, with
  * no ride-type branching or instanceof checks needed at any call site.
  */

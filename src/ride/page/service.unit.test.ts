@@ -10,6 +10,7 @@ let MockAppState
 let MockBindings
 let MockOnlineStatusMonitoring
 let MockUserSettings
+let MockDeviceConfiguration
 
 // The row shape as returned by ActivityRideService.getPrevRidesListDisplay(), before
 // RidePageService maps it to PrevRidesRowProps.
@@ -90,6 +91,10 @@ const setupMocks = (rideType: string = 'GPX') => {
         get: jest.fn((_key: string, defValue: unknown) => defValue),
         set: jest.fn()
     }
+    MockDeviceConfiguration = {
+        on: jest.fn(),
+        off: jest.fn()
+    }
 
     Inject('RideDisplay', MockRideDisplay)
     Inject('WorkoutRide', MockWorkoutRide)
@@ -98,6 +103,7 @@ const setupMocks = (rideType: string = 'GPX') => {
     Inject('Bindings', MockBindings)
     Inject('OnlineStatusMonitoring', MockOnlineStatusMonitoring)
     Inject('UserSettings', MockUserSettings)
+    Inject('DeviceConfiguration', MockDeviceConfiguration)
 }
 
 const resetMocks = () => {
@@ -108,6 +114,7 @@ const resetMocks = () => {
     Inject('Bindings', null)
     Inject('OnlineStatusMonitoring', null)
     Inject('UserSettings', null)
+    Inject('DeviceConfiguration', null)
 }
 
 // flush the microtask queue so that already-settled promises' .then() handlers get to run
@@ -191,7 +198,7 @@ describe('RidePageService', () => {
 
             // the handler bound as part of openPage() must fire on the fresh observer
             freshObserver.emit('state-update', 'Paused')
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true })
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, loadControl: { visible: true, label: 'Load', buttons: { inc1: '+5W', dec1: '-5W', inc5: '+50W', dec5: '-50W' } }, showRideSettings: true })
 
             // and must NOT have been (mistakenly) bound to the stale/previous observer
             expect(staleHandler).not.toHaveBeenCalled()
@@ -1028,14 +1035,14 @@ describe('RidePageService', () => {
 
             s.onMenuOpen()
 
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true })
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, loadControl: { visible: true, label: 'Load', buttons: { inc1: '+5W', dec1: '-5W', inc5: '+50W', dec5: '-50W' } }, showRideSettings: true })
             expect(updateSpy).toHaveBeenCalled()
         })
 
         test('onMenuOpen with an Active ride -> showResume false', () => {
             MockRideDisplay.getState.mockReturnValue('Active')
             s.onMenuOpen()
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: false })
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: false, loadControl: { visible: true, label: 'Load', buttons: { inc1: '+5W', dec1: '-5W', inc5: '+50W', dec5: '-50W' } }, showRideSettings: true })
         })
 
         test('onMenuClose clears menuProps on a normal (non-finished) ride', () => {
@@ -1081,7 +1088,7 @@ describe('RidePageService', () => {
 
             s.onMenuOpen()
 
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, canStepBack: true, canStepForward: true })
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, canStepBack: true, canStepForward: true, loadControl: { visible: true, label: 'Load' }, showRideSettings: false })
             expect(updateSpy).toHaveBeenCalled()
         })
 
@@ -1101,12 +1108,224 @@ describe('RidePageService', () => {
         })
     })
 
+    // The Load/Gear menu row's visible+label state must be resolved here, from
+    // WorkoutRide.getLoadButtonMode() - mobile renders menuProps.loadControl as-is rather than
+    // interpreting LoadButtonMode itself.
+    describe('menuProps.loadControl (Workout)', () => {
+        beforeEach(() => {
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            MockRideDisplay.getState.mockReturnValue('Paused')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({ canShowBackward: true, canShowForward: true })
+        })
+
+        test('ERG mode (power) -> visible Load row', () => {
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('power')
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps?.loadControl).toEqual({ visible: true, label: 'Load' })
+        })
+
+        // ERG mode on a workout ride reuses the dashboard's own FTP/range-aware button labels
+        // (getDashboardDisplayProperties().loadButtons) rather than the plain-ride nominal 5W/50W
+        // convention - the menu buttons must match what the dashboard already shows and what
+        // powerUp()/powerDown() will actually do for this specific step.
+        test('ERG mode (power) reuses the dashboard\'s own FTP/range-aware button labels', () => {
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('power')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({
+                canShowBackward: true, canShowForward: true,
+                loadButtons: { inc1: '+1%', dec1: '-1%', inc5: '+50W', dec5: '-50W' }
+            })
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps?.loadControl).toEqual({
+                visible: true, label: 'Load', buttons: { inc1: '+1%', dec1: '-1%', inc5: '+50W', dec5: '-50W' }
+            })
+        })
+
+        test('SIM mode with virtual shifting (gear) -> visible Gear row', () => {
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('gear')
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps?.loadControl).toEqual({ visible: true, label: 'Gear', buttons: { inc1: '+1', dec1: '-1', inc5: '+5', dec5: '-5' } })
+        })
+
+        test('SIM mode without virtual shifting (hidden) -> row not visible', () => {
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('hidden')
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps?.loadControl).toEqual({ visible: false })
+        })
+
+        test('a combo (GPX + attached workout) ride resolves loadControl the same way as a Workout-only ride', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('gear')
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps?.loadControl).toEqual({ visible: true, label: 'Gear', buttons: { inc1: '+1', dec1: '-1', inc5: '+5', dec5: '-5' } })
+        })
+    })
+
+    // loadControl must NOT be gated on isWorkoutAttached() - a plain route ride (no workout at
+    // all) still needs Load/Gear buttons whenever cycling mode calls for them.
+    describe('menuProps.loadControl (plain route ride, no workout attached)', () => {
+        beforeEach(() => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockRideDisplay.getState.mockReturnValue('Paused')
+            MockWorkoutRide.inUse.mockReturnValue(false)
+        })
+
+        test('ERG mode -> visible Load row, even with no workout attached', () => {
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('power')
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, loadControl: { visible: true, label: 'Load', buttons: { inc1: '+5W', dec1: '-5W', inc5: '+50W', dec5: '-50W' } }, showRideSettings: true })
+        })
+
+        test('SIM mode with virtual shifting -> visible Gear row, even with no workout attached', () => {
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('gear')
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, loadControl: { visible: true, label: 'Gear', buttons: { inc1: '+1', dec1: '-1', inc5: '+5', dec5: '-5' } }, showRideSettings: true })
+        })
+
+        test('SIM mode without virtual shifting -> row not visible', () => {
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('hidden')
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, loadControl: { visible: false }, showRideSettings: true })
+        })
+    })
+
+    // A route-less Workout-only ride's menu must not show "Ride Settings" (Ride View selector) -
+    // there is no route/view to select there.
+    describe('menuProps.showRideSettings', () => {
+        test('true for a Video/GPX ride (has a route), no workout attached', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockRideDisplay.getState.mockReturnValue('Paused')
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps?.showRideSettings).toBe(true)
+        })
+
+        test('false for a route-less Workout-only ride', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            MockRideDisplay.getState.mockReturnValue('Paused')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({ canShowBackward: true, canShowForward: true })
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps?.showRideSettings).toBe(false)
+        })
+
+        test('true for a GPX ride with an attached workout (combo ride still has a route)', () => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockRideDisplay.getState.mockReturnValue('Paused')
+            MockWorkoutRide.inUse.mockReturnValue(true)
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({ canShowBackward: true, canShowForward: true })
+            s.onMenuOpen()
+            expect(s.getPageDisplayProps().menuProps?.showRideSettings).toBe(true)
+        })
+    })
+
+    // Changing cycling mode via Gear Settings while the Ride Menu stays open (behind that dialog)
+    // must not leave the menu showing stale Load/Gear content - menuProps is a cached snapshot,
+    // only rebuilt on onMenuOpen()/pause/finish, so nothing else refreshes loadControl on a
+    // mid-menu mode change without this.
+    describe('onDeviceModeChanged (mode-changed reactivity)', () => {
+        beforeEach(() => {
+            MockRideDisplay.getState.mockReturnValue('Paused');
+            (s as any).isInitialized = true // skip the async init dance so handlers register synchronously
+            jest.useFakeTimers()
+        })
+
+        afterEach(() => {
+            jest.useRealTimers()
+        })
+
+        test('openPage() subscribes to DeviceConfigurationService "mode-changed"', () => {
+            s.openPage()
+            expect(MockDeviceConfiguration.on).toHaveBeenCalledWith('mode-changed', expect.any(Function))
+        })
+
+        test('closePage() unsubscribes the same listener that openPage() registered', () => {
+            s.openPage()
+            const [, listener] = MockDeviceConfiguration.on.mock.calls.find(([event]) => event === 'mode-changed')
+            s.closePage()
+            expect(MockDeviceConfiguration.off).toHaveBeenCalledWith('mode-changed', listener)
+        })
+
+        // Reading getLoadButtonMode() must happen after DeviceRideService's own 'mode-changed'
+        // listener has actually applied the change to the live CyclingMode object - confirmed via
+        // on-device testing that reading synchronously (no defer) always resolved the *previous*
+        // mode/settings, one event behind, since listener execution order isn't guaranteed
+        // (DeviceRideService registers its listener lazily). jest.advanceTimersByTime(0) fires only
+        // the deferred setTimeout(...,0) here, not the unrelated 5ms sleep() openPage() also
+        // schedules for Video/GPX rides.
+        test('mode change while the menu is open refreshes loadControl (deferred) and emits page-update', () => {
+            s.openPage()
+            s.onMenuOpen()
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('gear')
+            const [, listener] = MockDeviceConfiguration.on.mock.calls.find(([event]) => event === 'mode-changed')
+            listener()
+
+            // Not yet applied - still queued behind the deferred read.
+            expect(updateSpy).not.toHaveBeenCalled()
+
+            jest.advanceTimersByTime(0)
+
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, loadControl: { visible: true, label: 'Gear', buttons: { inc1: '+1', dec1: '-1', inc5: '+5', dec5: '-5' } }, showRideSettings: true })
+            expect(updateSpy).toHaveBeenCalled()
+        })
+
+        test('mode change while the menu is closed is a no-op (nothing to refresh, no page-update)', () => {
+            s.openPage()
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+
+            const [, listener] = MockDeviceConfiguration.on.mock.calls.find(([event]) => event === 'mode-changed')
+            listener()
+            jest.advanceTimersByTime(0)
+
+            expect(s.getPageDisplayProps().menuProps).toBeNull()
+            expect(updateSpy).not.toHaveBeenCalled()
+        })
+
+        test('preserves other menuProps fields (e.g. step flags) when refreshing loadControl', () => {
+            MockRideDisplay.getRideType.mockReturnValue('Workout')
+            MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({ canShowBackward: true, canShowForward: false })
+            s.openPage()
+            s.onMenuOpen()
+
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('hidden')
+            const [, listener] = MockDeviceConfiguration.on.mock.calls.find(([event]) => event === 'mode-changed')
+            listener()
+            jest.advanceTimersByTime(0)
+
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, canStepBack: true, canStepForward: false, loadControl: { visible: false }, showRideSettings: false })
+        })
+
+        // The actual bug found via on-device testing: reading getLoadButtonMode() synchronously
+        // inside the 'mode-changed' handler always resolved the *previous* mode's result, because
+        // DeviceRideService's own listener (the one that actually mutates the live CyclingMode
+        // object) is registered lazily and isn't guaranteed to run before this one within the same
+        // emit() call. This simulates that: the mock still reflects the old mode at the moment
+        // listener() is invoked, and only changes to the new mode afterwards (as a same-tick
+        // listener registered after this one, mutating synchronously, would) - the deferred read
+        // must still pick up the new value, not whatever was current when the event fired.
+        test('reads whatever getLoadButtonMode() resolves to when the deferred read actually runs, not at the moment mode-changed fired', () => {
+            s.openPage()
+            s.onMenuOpen()
+
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('power')
+            const [, listener] = MockDeviceConfiguration.on.mock.calls.find(([event]) => event === 'mode-changed')
+            listener()
+
+            MockWorkoutRide.getLoadButtonMode.mockReturnValue('gear')
+            jest.advanceTimersByTime(0)
+
+            expect(s.getPageDisplayProps().menuProps?.loadControl?.label).toBe('Gear')
+        })
+    })
+
     describe('ride control callbacks (Video/GPX)', () => {
         test('onPause pauses the ride as "user" and opens the menu on Resume', () => {
             s.openPage()
             s.onPause()
             expect(MockRideDisplay.pause).toHaveBeenCalledWith('user')
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true })
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, loadControl: { visible: true, label: 'Load', buttons: { inc1: '+5W', dec1: '-5W', inc5: '+50W', dec5: '-50W' } }, showRideSettings: true })
         })
 
         test('onResume resumes the ride and closes the menu', () => {
@@ -1341,13 +1560,13 @@ describe('RidePageService', () => {
 
         test('Paused -> menuProps opens with showResume, page-update', () => {
             rideObserver.emit('state-update', 'Paused')
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true })
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, loadControl: { visible: true, label: 'Load', buttons: { inc1: '+5W', dec1: '-5W', inc5: '+50W', dec5: '-50W' } }, showRideSettings: true })
             expect(updateSpy).toHaveBeenCalled()
         })
 
         test('Finished -> menuProps set to finished, page-update (no navigation)', () => {
             rideObserver.emit('state-update', 'Finished')
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: false, finished: true })
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: false, finished: true, loadControl: { visible: true, label: 'Load', buttons: { inc1: '+5W', dec1: '-5W', inc5: '+50W', dec5: '-50W' } }, showRideSettings: true })
             expect(updateSpy).toHaveBeenCalled()
             expect(MockBindings.ui.openPage).not.toHaveBeenCalled()
         })
@@ -1406,7 +1625,7 @@ describe('RidePageService', () => {
             MockWorkoutRide.getDashboardDisplayProperties.mockReturnValue({ canShowBackward: true, canShowForward: true })
             rideObserver.emit('state-update', 'Paused')
 
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, canStepBack: true, canStepForward: true })
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, canStepBack: true, canStepForward: true, loadControl: { visible: true, label: 'Load' }, showRideSettings: false })
             expect(updateSpy).toHaveBeenCalled()
         })
 
@@ -1422,7 +1641,7 @@ describe('RidePageService', () => {
         test('Finished -> menuProps set to finished (with step flags cleared), page-update, no navigation', () => {
             updateSpy.mockClear()
             rideObserver.emit('state-update', 'Finished')
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: false, finished: true, canStepBack: false, canStepForward: false })
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: false, finished: true, canStepBack: false, canStepForward: false, loadControl: { visible: true, label: 'Load' }, showRideSettings: false })
             expect(updateSpy).toHaveBeenCalled()
             expect(MockBindings.ui.openPage).not.toHaveBeenCalled()
         })
@@ -1668,7 +1887,11 @@ describe('RidePageService', () => {
 
             s.onMenuOpen()
 
-            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, canStepBack: true, canStepForward: true })
+            // fixture (b)'s beforeEach sets getLoadButtonMode() to 'gear' (SIM/virtual-shifting) -
+            // confirms a combo ride resolves loadControl exactly like a Workout-only ride would.
+            // showRideSettings stays true here (unlike a Workout-only ride) - rideType is still
+            // GPX, this ride still has a route.
+            expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: true, canStepBack: true, canStepForward: true, loadControl: { visible: true, label: 'Gear', buttons: { inc1: '+1', dec1: '-1', inc5: '+5', dec5: '-5' } }, showRideSettings: true })
         })
 
         test('onStepBack / onStepForward delegate to RideDisplay when a workout is attached to a route ride', () => {
@@ -1745,9 +1968,10 @@ describe('RidePageService', () => {
                 s.onStopWorkout()
                 expect(MockRideDisplay.stopWorkout).not.toHaveBeenCalled()
 
-                // menu carries no step flags either - identical to today's plain route-ride menu
+                // menu carries no step flags either - identical to today's plain route-ride menu,
+                // but does still carry loadControl/showRideSettings (these are not workout-gated)
                 s.onMenuOpen()
-                expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: false })
+                expect(s.getPageDisplayProps().menuProps).toEqual({ showResume: false, loadControl: { visible: true, label: 'Load', buttons: { inc1: '+5W', dec1: '-5W', inc5: '+50W', dec5: '-50W' } }, showRideSettings: true })
             })
         })
     })
