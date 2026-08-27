@@ -18,10 +18,10 @@ import { Injectable } from "../../base/decorators";
 const DEFAULT_FTP = 200;
 const WORKOUT_ZOOM = 1200;
 
-/** Countdown thresholds (seconds before a leaf-step with a known duration ends) at which
- *  'step-countdown' fires - descending, so a multi-threshold skip in one update() call (e.g.
- *  forward()/backward()) resolves to the threshold closest to zero via Math.min(). */
-const STEP_COUNTDOWN_THRESHOLDS = [4, 3, 2, 1] as const
+/** Seconds-before-step-end at which 'step-countdown' fires - precisely scheduled via wall-clock
+ *  timers (see WorkoutRide.rescheduleStepCountdown()), not detected reactively. 0 is the
+ *  transition instant itself (step-change tone/flash). */
+const STEP_COUNTDOWN_THRESHOLDS = [4, 3, 2, 1, 0] as const
 
 const hasValidDuration = (duration: number | undefined): boolean => {
     return typeof duration === 'number' && Number.isFinite(duration) && duration > 0
@@ -40,9 +40,10 @@ const hasValidDuration = (duration: number | undefined): boolean => {
  * - 'initialized' - The workout has been initialized and is ready to be used in a ride
  * - 'update' - There was an update, which requires the dashboard to be updated
  * - 'step-changed' - There was a new step selected, which requires the dashboard to be updated
- * - 'step-countdown' - Fired once per second in the last 4s before a leaf-step with a known duration
- *   ends (payload: StepCountdownTick). Not fired across group/repeat-block boundaries or step
- *   changes without a known duration.
+ * - 'step-countdown' - Fired at 4s, 3s, 2s, 1s and 0s (the transition instant) before/at a leaf-step
+ *   with a known duration ending (payload: StepCountdownTick). Precisely scheduled via wall-clock
+ *   timers rather than detected on the polling loop, so it isn't subject to that loop's jitter. Not
+ *   fired across group/repeat-block boundaries or for a step without a known duration.
  * - 'request-update' - There was an update, which requires to send updated requests to the SmartTrainer
  *  
  * - 'started' - The workout has been started
@@ -108,6 +109,13 @@ export class WorkoutRide extends IncyclistService{
     protected tsCurrent:number
     protected trainingTime:number
     protected currentLimits:ActiveWorkoutLimit
+    private countdownTimers: ReturnType<typeof setTimeout>[] = []
+    // Thresholds already emitted for the CURRENT step position - prevents resume() (which
+    // recomputes a fresh schedule from the current position) from re-firing a tick that already
+    // fired before the pause. Cleared whenever the position within the step is reset (a new step
+    // via onStepChange(), or a backward()/forward() jump) - NOT cleared by pause()/resume(), which
+    // don't change position.
+    private firedCountdownThresholds: Set<number> = new Set()
     protected updateInterval:NodeJS.Timeout
     protected currentStep: StepDefinition
     protected isFreeRide: boolean
@@ -200,8 +208,10 @@ export class WorkoutRide extends IncyclistService{
             this.emit('started')
             this.logEvent( {message:'workout started',settings:this.settings})
 
-            if (!this.updateInterval)  { 
+            if (!this.updateInterval)  {
                 this.update()
+                this.resetCountdownProgress() // the first step's own onStepChange() never fires (currentStep is already set from init()'s setCurrentLimits(0), so update() sees no change) - bootstrap its schedule explicitly
+                this.rescheduleStepCountdown()
                 this.updateInterval = setInterval( ()=>{ this.update()}, 500)
             }
             
@@ -232,9 +242,10 @@ export class WorkoutRide extends IncyclistService{
             }
 
             const ts = Date.now();
-            this.tsPauseStart=ts 
+            this.tsPauseStart=ts
             this.tsCurrent=ts
             this.state='paused'
+            this.clearCountdownTimers()
 
             this.emit('paused')
             this.logger.logEvent( {message:'workout paused'})
@@ -275,6 +286,7 @@ export class WorkoutRide extends IncyclistService{
             this.tsCurrent = ts
            
             this.state='active'
+            this.rescheduleStepCountdown()
             this.logger.logEvent( {message:'workout resumed',offset:this.offset})
             this.emit('resumed')
     
@@ -348,8 +360,10 @@ export class WorkoutRide extends IncyclistService{
             }
 
             
-            this.manualTimeOffset += limits.remaining   
+            this.manualTimeOffset += limits.remaining
             this.update()
+            this.resetCountdownProgress()
+            this.rescheduleStepCountdown()
             this.observer.emit('forward',ts,limits.remaining )
         }
         catch(err) {
@@ -411,6 +425,8 @@ export class WorkoutRide extends IncyclistService{
             }
 
             this.update()
+            this.resetCountdownProgress()
+            this.rescheduleStepCountdown()
             this.observer.emit('backward',ts,diff,jumpType,limits?.step, target )
 
 
@@ -940,19 +956,14 @@ export class WorkoutRide extends IncyclistService{
 
 
             const prevStep = this.currentStep
-            const prevRemaining = this.currentLimits?.remaining
-            const prevDuration = this.currentLimits?.duration
             this.setCurrentLimits(time)
 
 
             if (this.currentStep!==prevStep) {
-                this.onStepChange(prevStep, hasValidDuration(prevDuration));
+                this.onStepChange(prevStep);
             }
-            else {
-                this.checkStepCountdown(prevRemaining, this.currentLimits?.remaining, this.currentLimits?.duration)
-                if (Math.round(time)!==prevTime) {
-                    this.emit('update', this.getDashboardDisplayProperties())
-                }
+            else if (Math.round(time)!==prevTime) {
+                this.emit('update', this.getDashboardDisplayProperties())
             }
 
         }
@@ -962,7 +973,7 @@ export class WorkoutRide extends IncyclistService{
 
     }
 
-    private onStepChange(prevStep: StepDefinition, prevStepHadValidDuration: boolean) {
+    private onStepChange(prevStep: StepDefinition) {
         if (!this.currentStep.power && prevStep.power) {
             this.startFreeRide();
         }
@@ -970,25 +981,68 @@ export class WorkoutRide extends IncyclistService{
             this.stopFreeRide();
         }
 
-        this.emit('step-changed', { ...this.getDashboardDisplayProperties(), stepChangeSignal: prevStepHadValidDuration });
+        this.emit('step-changed', this.getDashboardDisplayProperties());
+        this.resetCountdownProgress()
+        this.rescheduleStepCountdown()
+    }
+
+    private clearCountdownTimers(): void {
+        this.countdownTimers.forEach( t => clearTimeout(t))
+        this.countdownTimers = []
+    }
+
+    private resetCountdownProgress(): void {
+        this.firedCountdownThresholds = new Set()
     }
 
     /**
-     * Detects a threshold crossing (4s/3s/2s/1s before the current step ends) between two
-     * consecutive `remaining` readings and emits 'step-countdown' at most once per update() call.
-     * Guarded on the step's duration being known/valid - defensive: Workout.addStep() always
-     * resolves a duration today, so a step without one isn't an expected case, just a safety net.
+     * (Re)schedules the current step's countdown/step-change tone events (4s,3s,2s,1s,0s before/at
+     * the step's end) as precise wall-clock timers, rather than detecting threshold crossings
+     * reactively on the 500ms poll loop. The step's end is a fixed point once the step has started,
+     * so the exact wall-clock deadline for each event can be computed up front - the timer then
+     * fires it precisely, independent of how often/regularly update() itself happens to run
+     * (device-data event-loop scheduling can otherwise delay the poll loop enough to make reactive
+     * detection audibly jittery, including on the transition tone itself).
+     *
+     * Must be re-run (via clearCountdownTimers() + this) whenever the wall-clock<->training-time
+     * mapping changes - resume() after a pause (offset changes), forward()/backward()
+     * (manualTimeOffset changes, including a backward() jump that resets to the CURRENT step's
+     * start without actually changing `currentStep`) - or a new step starts (onStepChange()). A
+     * schedule computed against a stale mapping would fire at the wrong wall-clock instant.
      */
-    private checkStepCountdown(prevRemaining: number | undefined, remaining: number | undefined, duration: number | undefined): void {
-        if (!hasValidDuration(duration) || prevRemaining===undefined || remaining===undefined)
+    private rescheduleStepCountdown(): void {
+        this.clearCountdownTimers()
+
+        if (this.state!=='active')
             return
 
-        const crossed = STEP_COUNTDOWN_THRESHOLDS.filter( t => prevRemaining>t && remaining<=t)
-        if (crossed.length===0)
+        const duration = this.currentLimits?.duration
+        const remaining = this.currentLimits?.remaining
+        const trainingTime = this.trainingTime
+        if (!hasValidDuration(duration) || remaining===undefined || trainingTime===undefined)
             return
 
-        const secondsRemaining = Math.min(...crossed) as 4|3|2|1
-        this.emit('step-countdown', { secondsRemaining })
+        const stepEnd = trainingTime + remaining
+
+        STEP_COUNTDOWN_THRESHOLDS.forEach( secondsRemaining => {
+            if (this.firedCountdownThresholds.has(secondsRemaining))
+                return // already fired for this step position - a resume() must not re-fire it
+
+            const targetTrainingTime = stepEnd - secondsRemaining
+            if (targetTrainingTime < trainingTime)
+                return // already past this threshold (e.g. a step shorter than the threshold) - nothing to schedule
+
+            const wallClockDeadline = this.tsStart + (this.offset??0) + (targetTrainingTime - (this.manualTimeOffset??0)) * 1000
+            const delayMs = wallClockDeadline - Date.now()
+            if (delayMs < 0)
+                return
+
+            const timer = setTimeout( () => {
+                this.firedCountdownThresholds.add(secondsRemaining)
+                this.emit('step-countdown', { secondsRemaining })
+            }, delayMs)
+            this.countdownTimers.push(timer)
+        })
     }
 
     private checkIfDone() {
@@ -1241,6 +1295,7 @@ export class WorkoutRide extends IncyclistService{
             clearInterval(this.updateInterval);
             this.updateInterval = undefined;
         }
+        this.clearCountdownTimers()
     }
 
     protected getCyclingModeText():string {

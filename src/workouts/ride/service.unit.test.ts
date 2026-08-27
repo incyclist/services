@@ -485,7 +485,7 @@ describe('WorkoutRide',()=>{
 
             expect(s.manualTimeOffset).toBe(119)
             expect( emit).toHaveBeenCalledWith('request-update',expect.objectContaining({duration:60,minPower:50,maxPower:50 }))
-            expect( emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({title:'Test Workout: Test Segment(1/10) - Test Relax',current:expect.objectContaining({duration:60,minPower:50,maxPower:50 }),stepChangeSignal:true}))
+            expect( emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({title:'Test Workout: Test Segment(1/10) - Test Relax',current:expect.objectContaining({duration:60,minPower:50,maxPower:50 })}))
         })
 
         test('during last step',()=>{
@@ -514,7 +514,10 @@ describe('WorkoutRide',()=>{
     })
 
 
-    describe('update - step-countdown',()=>{
+    describe('step-countdown scheduling',()=>{
+        // Precisely scheduled via wall-clock setTimeout()s (see rescheduleStepCountdown()), not
+        // detected reactively on the poll loop - so these tests drive fake timers rather than
+        // calling update() directly with manipulated offsets.
         const workout = new Workout({type:'workout',name:'Test Workout'})
         workout.addSegment( {type:'segment', text:'Test Segment', steps: [
             {type:'step', steady:true, work:true, duration:10, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
@@ -525,6 +528,7 @@ describe('WorkoutRide',()=>{
         let emit;
 
         beforeEach( ()=>{
+            jest.useFakeTimers()
             setupMocks(workout)
             s = service = new WorkoutRide()
             s.init()
@@ -535,94 +539,124 @@ describe('WorkoutRide',()=>{
             s.stopWorker()
             s.reset()
             resetMocks()
+            jest.clearAllTimers()
+            jest.useRealTimers()
             jest.resetAllMocks()
         })
 
         const countdownCalls = () => emit.mock.calls.filter( (call:any[]) => call[0]==='step-countdown')
+        const countdownValues = (spy=emit) => spy.mock.calls.filter( (call:any[]) => call[0]==='step-countdown').map( (call:any[]) => call[1].secondsRemaining)
 
-        test('does not emit above the 4s threshold',()=>{
-            s.manualTimeOffset = 5.4 // remaining ~4.6s
-            s.update()
+        test('fires all 5 events precisely at the steps deadline (duration 10s: at 6,7,8,9,10s)',()=>{
+            jest.advanceTimersByTime(5999)
             expect(countdownCalls()).toHaveLength(0)
+
+            jest.advanceTimersByTime(1) // 6.000s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:4})
+
+            jest.advanceTimersByTime(1000) // 7.000s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:3})
+
+            jest.advanceTimersByTime(1000) // 8.000s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:2})
+
+            jest.advanceTimersByTime(1000) // 9.000s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:1})
+
+            jest.advanceTimersByTime(1000) // 10.000s - the transition instant itself
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:0})
+            expect(countdownCalls()).toHaveLength(5)
         })
 
-        test('emits {secondsRemaining:4} on crossing from above to at/below 4s',()=>{
-            s.manualTimeOffset = 5.4 // remaining ~4.6s
-            s.update()
-            s.manualTimeOffset = 6.2 // remaining ~3.8s
-            s.update()
+        test('pause() cancels all pending countdown timers',()=>{
+            jest.advanceTimersByTime(6000) // secondsRemaining:4 fires
+            expect(countdownCalls()).toHaveLength(1)
+
+            s.pause()
+            jest.advanceTimersByTime(10000) // would fire 3,2,1,0 if not cancelled
+            expect(countdownCalls()).toHaveLength(1)
+        })
+
+        test('resume() reschedules the remaining ticks from the paused position',()=>{
+            jest.advanceTimersByTime(6000) // secondsRemaining:4 fires (6s of the 10s step elapsed)
+            s.pause()
+            jest.advanceTimersByTime(5000) // wall-clock passes while paused - must not count as training time
+            s.resume()
+
+            jest.advanceTimersByTime(999)
+            expect(countdownCalls()).toHaveLength(1) // still just the pre-pause tick
+            jest.advanceTimersByTime(1) // training time now reaches 7s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:3})
+        })
+
+        test('backward() to the start of the current step reschedules even though currentStep does not change',()=>{
+            jest.advanceTimersByTime(6000) // secondsRemaining:4 fires, 4s remain in the 10s step
+            expect(countdownCalls()).toHaveLength(1)
+
+            s.backward() // step 1 starts at training-time 0, so this resets to its beginning
+            jest.advanceTimersByTime(5999) // just before the (freshly repositioned) 4s-remaining mark
+            expect(countdownCalls()).toHaveLength(1) // no stale early fire from the cancelled schedule
+            jest.advanceTimersByTime(1)
             expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:4})
         })
 
-        test('emits {secondsRemaining:1} on crossing from above to at/below 1s',()=>{
-            s.manualTimeOffset = 8.5 // remaining ~1.5s
-            s.update()
-            s.manualTimeOffset = 9.2 // remaining ~0.8s
-            s.update()
-            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:1})
-        })
-
-        test('does not re-emit the same threshold on a subsequent tick with no further crossing',()=>{
-            s.manualTimeOffset = 5.4 // remaining ~4.6s
-            s.update()
-            s.manualTimeOffset = 6.2 // remaining ~3.8s, crosses 4
-            s.update()
-            expect(countdownCalls()).toHaveLength(1)
-
-            s.update() // no change in manualTimeOffset, negligible further time passes
-            expect(countdownCalls()).toHaveLength(1)
-        })
-
-        test('emits only the threshold closest to zero when multiple thresholds are skipped in one tick',()=>{
-            s.manualTimeOffset = 5.4 // remaining ~4.6s
-            s.update()
-            s.manualTimeOffset = 9.9 // remaining ~0.1s - skips 4,3,2 in one jump
-            s.update()
-            expect(countdownCalls()).toHaveLength(1)
-            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:1})
-        })
-
-        test('does not emit when the current step has no valid duration',()=>{
-            s.manualTimeOffset = 5.4 // remaining ~4.6s, valid duration
-            s.update()
-
-            const realGetLimits = s.workout.getLimits.bind(s.workout)
-            s.workout.getLimits = jest.fn( (ts:number, includeStepInfo?:boolean) => {
-                const limits = realGetLimits(ts, includeStepInfo)
-                return limits && {...limits, duration:undefined}
-            })
-
-            s.manualTimeOffset = 6.2 // would cross the 4s threshold, but duration is now invalid
-            s.update()
+        test('forward() reschedules for the next step',()=>{
+            s.forward() // jumps to the start of step 2 (duration 60s)
+            jest.advanceTimersByTime(55999)
             expect(countdownCalls()).toHaveLength(0)
-
-            s.workout.getLimits = realGetLimits // workout is shared across tests in this describe block
+            jest.advanceTimersByTime(1)
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:4})
         })
 
-        test('does not emit on the same tick as a step transition',()=>{
-            s.manualTimeOffset = 9.99 // last moment of step 1 (duration 10s) - also crosses all thresholds
-            s.update()
-            const countBeforeTransition = countdownCalls().length
+        test('does not schedule when the current step has no valid duration',()=>{
+            // WorkoutRide is a @Singleton - `new WorkoutRide()` would otherwise just return the
+            // same instance `s` from this describe's beforeEach, whose own pending timers (for the
+            // valid 10s workout) would still be live and fire during this test's time-advance.
+            s.stopWorker()
+            s.reset()
 
-            s.manualTimeOffset = 10.5 // crosses into step 2
-            s.update()
-            expect(countdownCalls()).toHaveLength(countBeforeTransition) // no additional emit on the transition tick itself
-            expect(emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({stepChangeSignal:true}))
-        })
+            const invalidWorkout = new Workout({type:'workout',name:'Invalid'})
+            invalidWorkout.addSegment( {type:'segment', text:'S', steps: [
+                {type:'step', steady:true, work:true, duration:10, power:{min:100,max:100,type:'pct of FTP'}, text:'Invalid'}
+            ]})
+            setupMocks(invalidWorkout)
+            const invalidService = new WorkoutRide()
+            invalidService.init()
 
-        test('stepChangeSignal is false on the transition when the departing step had no valid duration',()=>{
-            const realGetLimits = s.workout.getLimits.bind(s.workout)
-            s.workout.getLimits = jest.fn( (ts:number, includeStepInfo?:boolean) => {
+            const realGetLimits = invalidService.workout.getLimits.bind(invalidService.workout)
+            invalidService.workout.getLimits = jest.fn( (ts:number, includeStepInfo?:boolean) => {
                 const limits = realGetLimits(ts, includeStepInfo)
                 return limits && {...limits, duration:undefined}
             })
-            s.manualTimeOffset = 5.4 // establishes currentLimits with an invalid duration
-            s.update()
 
-            s.workout.getLimits = realGetLimits
-            s.manualTimeOffset = 10.5 // transitions into step 2
-            s.update()
-            expect(emit).toHaveBeenCalledWith('step-changed', expect.objectContaining({stepChangeSignal:false}))
+            invalidService.start()
+            const invalidEmit = jest.spyOn(invalidService,'emit')
+
+            jest.advanceTimersByTime(15000)
+            expect(countdownValues(invalidEmit)).toHaveLength(0)
+
+            invalidService.stopWorker()
+        })
+
+        test('a step shorter than 4s clips to only the thresholds that fit',()=>{
+            // See the previous test's note - reset the @Singleton before creating a "new" instance.
+            s.stopWorker()
+            s.reset()
+
+            const shortWorkout = new Workout({type:'workout',name:'Short'})
+            shortWorkout.addSegment( {type:'segment', text:'S', steps: [
+                {type:'step', steady:true, work:true, duration:2, power:{min:100,max:100,type:'pct of FTP'}, text:'Short'}
+            ]})
+            setupMocks(shortWorkout)
+            const shortService = new WorkoutRide()
+            shortService.init()
+            shortService.start()
+            const shortEmit = jest.spyOn(shortService,'emit')
+
+            jest.advanceTimersByTime(2000)
+            expect(countdownValues(shortEmit).sort((a:number,b:number)=>b-a)).toEqual([2,1,0])
+
+            shortService.stopWorker()
         })
 
     })

@@ -61,18 +61,16 @@ export interface WorkoutDisplayProperties {
      *  `ShiftingControl`'s existing button-text convention. Undefined when the workout isn't active
      *  (same states under which the rest of this object is empty). */
     loadButtons?: { inc5:string, inc1:string, dec1:string, dec5:string }
-    /** Set only on the payload of the 'step-changed' event: whether the leaf step that just ended
-     *  had a known/valid duration. Audio/visual step-change-signal consumers must gate the
-     *  transition tone/flash on this - false means suppress the signal for this transition.
-     *  Defensive: Workout.addStep() always resolves a duration today, so this is normally always
-     *  true. Absent on every other WorkoutDisplayProperties use (e.g. the 'update' event, or a
-     *  direct getDashboardDisplayProperties() call). */
-    stepChangeSignal?: boolean
 }
 
-/** Payload of WorkoutRide's 'step-countdown' event - fired once per second in the last 4 seconds
- *  before a leaf step with a known duration ends. Not fired across group/repeat-block boundaries,
- *  or when the ending step's duration is unknown. */
+/** Payload of WorkoutRide's 'step-countdown' event - fired at 4s, 3s, 2s, 1s and 0s (the
+ *  transition instant itself) before/at a leaf step with a known duration ends. Not fired across
+ *  group/repeat-block boundaries, or when the step's duration is unknown. Precisely scheduled via
+ *  wall-clock timers (see WorkoutRide.rescheduleStepCountdown()) rather than detected reactively
+ *  on the polling loop, so consumers can rely on this for audio/visual cue timing without the
+ *  jitter of 'step-changed'/'update' (which are tied to that 500ms loop and can be delayed under
+ *  event-loop load). secondsRemaining:0 is the step-change tone/flash trigger - consumers no
+ *  longer need to also watch 'step-changed' for that. */
 export interface StepCountdownTick {
-    secondsRemaining: 4 | 3 | 2 | 1
+    secondsRemaining: 4 | 3 | 2 | 1 | 0
 }
