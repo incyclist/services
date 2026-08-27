@@ -771,6 +771,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     getRouteDescription(id:string) {
         try {
+            if (!id) return undefined
             return this.getVisibleRoutes().find( r => r.description.id===id)?.description
         }
         catch(err) {
@@ -779,6 +780,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
     getRoute(id:string) {
         try {
+            if (!id) return undefined
             return this.getVisibleRoutes().find( r => r.description.id===id)
         }
         catch(err) {
