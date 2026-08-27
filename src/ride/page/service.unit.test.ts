@@ -1471,6 +1471,28 @@ describe('RidePageService', () => {
             const menuProps = s.getPageDisplayProps().menuProps
             expect(menuProps).toMatchObject({ showResume: false, finished: true })
         })
+
+        test('step-changed also forwards its payload directly on the page observer', () => {
+            const payload = { title: 'x', stepChangeSignal: true } as any
+            const stepChangedSpy = jest.fn()
+            s.getPageObserver().on('step-changed', stepChangedSpy)
+
+            workoutObserver.emit('step-changed', payload)
+
+            expect(stepChangedSpy).toHaveBeenCalledWith(payload)
+            expect(updateSpy).toHaveBeenCalled() // the existing full page-update rebuild still happens too
+        })
+
+        test('step-countdown forwards its payload on the page observer without a page-update rebuild', () => {
+            const tick = { secondsRemaining: 4 } as any
+            const countdownSpy = jest.fn()
+            s.getPageObserver().on('step-countdown', countdownSpy)
+
+            workoutObserver.emit('step-countdown', tick)
+
+            expect(countdownSpy).toHaveBeenCalledWith(tick)
+            expect(updateSpy).not.toHaveBeenCalled()
+        })
     })
 
     describe('onRefreshSecrets / onContinueAnyway', () => {

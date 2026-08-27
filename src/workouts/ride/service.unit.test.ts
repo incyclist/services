@@ -514,11 +514,165 @@ describe('WorkoutRide',()=>{
     })
 
 
+    describe('step-countdown scheduling',()=>{
+        // Precisely scheduled via wall-clock setTimeout()s (see rescheduleStepCountdown()), not
+        // detected reactively on the poll loop - so these tests drive fake timers rather than
+        // calling update() directly with manipulated offsets.
+        const workout = new Workout({type:'workout',name:'Test Workout'})
+        workout.addSegment( {type:'segment', text:'Test Segment', steps: [
+            {type:'step', steady:true, work:true, duration:10, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
+            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'}
+        ] })
+
+        let s,service:WorkoutRide
+        let emit;
+
+        beforeEach( ()=>{
+            jest.useFakeTimers()
+            setupMocks(workout)
+            s = service = new WorkoutRide()
+            s.init()
+            s.start()
+            emit = jest.spyOn(s,'emit')
+        })
+        afterEach( ()=>{
+            s.stopWorker()
+            s.reset()
+            resetMocks()
+            jest.clearAllTimers()
+            jest.useRealTimers()
+            jest.resetAllMocks()
+        })
+
+        const countdownCalls = () => emit.mock.calls.filter( (call:any[]) => call[0]==='step-countdown')
+        const countdownValues = (spy=emit) => spy.mock.calls.filter( (call:any[]) => call[0]==='step-countdown').map( (call:any[]) => call[1].secondsRemaining)
+
+        test('fires all 5 events precisely at the steps deadline (duration 10s: at 6,7,8,9,10s)',()=>{
+            jest.advanceTimersByTime(5999)
+            expect(countdownCalls()).toHaveLength(0)
+
+            jest.advanceTimersByTime(1) // 6.000s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:4})
+
+            jest.advanceTimersByTime(1000) // 7.000s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:3})
+
+            jest.advanceTimersByTime(1000) // 8.000s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:2})
+
+            jest.advanceTimersByTime(1000) // 9.000s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:1})
+
+            jest.advanceTimersByTime(1000) // 10.000s - the transition instant itself
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:0})
+            expect(countdownCalls()).toHaveLength(5)
+        })
+
+        test('pause() cancels all pending countdown timers',()=>{
+            jest.advanceTimersByTime(6000) // secondsRemaining:4 fires
+            expect(countdownCalls()).toHaveLength(1)
+
+            s.pause()
+            jest.advanceTimersByTime(10000) // would fire 3,2,1,0 if not cancelled
+            expect(countdownCalls()).toHaveLength(1)
+        })
+
+        test('resume() reschedules the remaining ticks from the paused position',()=>{
+            jest.advanceTimersByTime(6000) // secondsRemaining:4 fires (6s of the 10s step elapsed)
+            s.pause()
+            jest.advanceTimersByTime(5000) // wall-clock passes while paused - must not count as training time
+            s.resume()
+
+            jest.advanceTimersByTime(999)
+            expect(countdownCalls()).toHaveLength(1) // still just the pre-pause tick
+            jest.advanceTimersByTime(1) // training time now reaches 7s
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:3})
+        })
+
+        test('backward() to the start of the current step reschedules even though currentStep does not change',()=>{
+            jest.advanceTimersByTime(6000) // secondsRemaining:4 fires, 4s remain in the 10s step
+            expect(countdownCalls()).toHaveLength(1)
+
+            s.backward() // step 1 starts at training-time 0, so this resets to its beginning
+            jest.advanceTimersByTime(5999) // just before the (freshly repositioned) 4s-remaining mark
+            expect(countdownCalls()).toHaveLength(1) // no stale early fire from the cancelled schedule
+            jest.advanceTimersByTime(1)
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:4})
+        })
+
+        test('forward() reschedules for the next step',()=>{
+            s.forward() // jumps to the start of step 2 (duration 60s)
+            // The departing step (step 1) never reached its own natural end - its precise 0-tick
+            // hadn't fired yet, so onStepChange's race guard fires it immediately here, confirming
+            // the manual skip. This is the same transition-tone contract as a natural step-end.
+            expect(countdownCalls()).toHaveLength(1)
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:0})
+
+            jest.advanceTimersByTime(55999)
+            expect(countdownCalls()).toHaveLength(1)
+            jest.advanceTimersByTime(1)
+            expect(emit).toHaveBeenCalledWith('step-countdown', {secondsRemaining:4})
+        })
+
+        test('does not schedule when the current step has no valid duration',()=>{
+            // WorkoutRide is a @Singleton - `new WorkoutRide()` would otherwise just return the
+            // same instance `s` from this describe's beforeEach, whose own pending timers (for the
+            // valid 10s workout) would still be live and fire during this test's time-advance.
+            s.stopWorker()
+            s.reset()
+
+            const invalidWorkout = new Workout({type:'workout',name:'Invalid'})
+            invalidWorkout.addSegment( {type:'segment', text:'S', steps: [
+                {type:'step', steady:true, work:true, duration:10, power:{min:100,max:100,type:'pct of FTP'}, text:'Invalid'}
+            ]})
+            setupMocks(invalidWorkout)
+            const invalidService = new WorkoutRide()
+            invalidService.init()
+
+            const realGetLimits = invalidService.workout.getLimits.bind(invalidService.workout)
+            invalidService.workout.getLimits = jest.fn( (ts:number, includeStepInfo?:boolean) => {
+                const limits = realGetLimits(ts, includeStepInfo)
+                return limits && {...limits, duration:undefined}
+            })
+
+            invalidService.start()
+            const invalidEmit = jest.spyOn(invalidService,'emit')
+
+            jest.advanceTimersByTime(15000)
+            expect(countdownValues(invalidEmit)).toHaveLength(0)
+
+            invalidService.stopWorker()
+        })
+
+        test('a step shorter than 4s clips to only the thresholds that fit',()=>{
+            // See the previous test's note - reset the @Singleton before creating a "new" instance.
+            s.stopWorker()
+            s.reset()
+
+            const shortWorkout = new Workout({type:'workout',name:'Short'})
+            shortWorkout.addSegment( {type:'segment', text:'S', steps: [
+                {type:'step', steady:true, work:true, duration:2, power:{min:100,max:100,type:'pct of FTP'}, text:'Short'}
+            ]})
+            setupMocks(shortWorkout)
+            const shortService = new WorkoutRide()
+            shortService.init()
+            shortService.start()
+            const shortEmit = jest.spyOn(shortService,'emit')
+
+            jest.advanceTimersByTime(2000)
+            expect(countdownValues(shortEmit).sort((a:number,b:number)=>b-a)).toEqual([2,1,0])
+
+            shortService.stopWorker()
+        })
+
+    })
+
+
     describe('backward',()=>{
         const workout = new Workout({type:'workout',name:'Test Workout'})
-        workout.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [ 
+        workout.addSegment( {type:'segment', text:'Test Segment', repeat:10, steps: [
             {type:'step', steady:true, work:true, duration:120, power:{min:100,max:100,type:'pct of FTP'}, text:'Test Work'},
-            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'} 
+            {type:'step', steady:true, work:false, duration:60, power:{min:50,max:50,type:'pct of FTP'},text:'Test Relax'}
         ] })
 
 

@@ -62,3 +62,15 @@ export interface WorkoutDisplayProperties {
      *  (same states under which the rest of this object is empty). */
     loadButtons?: { inc5:string, inc1:string, dec1:string, dec5:string }
 }
+
+/** Payload of WorkoutRide's 'step-countdown' event - fired at 4s, 3s, 2s, 1s and 0s (the
+ *  transition instant itself) before/at a leaf step with a known duration ends. Not fired across
+ *  group/repeat-block boundaries, or when the step's duration is unknown. Precisely scheduled via
+ *  wall-clock timers (see WorkoutRide.rescheduleStepCountdown()) rather than detected reactively
+ *  on the polling loop, so consumers can rely on this for audio/visual cue timing without the
+ *  jitter of 'step-changed'/'update' (which are tied to that 500ms loop and can be delayed under
+ *  event-loop load). secondsRemaining:0 is the step-change tone/flash trigger - consumers no
+ *  longer need to also watch 'step-changed' for that. */
+export interface StepCountdownTick {
+    secondsRemaining: 4 | 3 | 2 | 1 | 0
+}
