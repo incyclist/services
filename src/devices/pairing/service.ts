@@ -655,7 +655,7 @@ export class DevicePairingService  extends IncyclistService{
 
         }
 
-        this.state.capabilities.forEach(c => c.connectState='waiting')
+        (this.state.capabilities??[]).forEach(c => c.connectState='waiting')
         this.state.waiting = true;
     }
 
@@ -2024,7 +2024,7 @@ export class DevicePairingService  extends IncyclistService{
         if (!adapters)
             return;
 
-        const capabilities = this.state.capabilities;
+        const capabilities = this.state.capabilities??[];
 
         capabilities.forEach(c => {
             if (!enforced && !c.selected && c.connectState === 'failed')
@@ -2039,7 +2039,7 @@ export class DevicePairingService  extends IncyclistService{
         if (!adapters?.length)
             return;
 
-        const capabilities = this.state.capabilities;
+        const capabilities = this.state.capabilities??[];
 
         capabilities.forEach(c => {
             if (!c.selected && c.connectState === 'failed')

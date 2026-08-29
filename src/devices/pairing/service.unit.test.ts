@@ -607,7 +607,27 @@ describe('PairingService',()=>{
                 svc.stop()
             })
         })
-        describe('stop',()=>{})
+        describe('stop',()=>{
+
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            test('exit before pairing was ever started (capabilities never loaded)',async ()=>{
+                const logError = jest.spyOn(svc as any,'logError')
+
+                await svc.exit()
+
+                expect(logError).not.toHaveBeenCalled()
+                expect(svc.getState().stopped).toBe(true)
+            })
+        })
 
         describe('startDeviceSelection',()=>{
 
