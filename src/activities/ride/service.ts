@@ -579,6 +579,7 @@ export class ActivityRideService extends IncyclistService {
             // routeType!=='None' and correctly gets a map/preview like any other route ride.
             const showWorkoutSummary = this.activity?.routeType==='None'
             const showSave = this.activity!==undefined && !this.isSaveDone;
+            const showDelete = this.activity!==undefined && !this.isSaveDone;
             const showContinue = this.state!=='completed'
 
             const hasGPX = this.activity?.logs?.some( (log) => !!log.lat && !!log.lng)
@@ -596,6 +597,7 @@ export class ActivityRideService extends IncyclistService {
                 activity: createUIActivityDetails(this.activity),
 
                 showSave,
+                showDelete,
                 showContinue,
                 showMap,
                 showWorkoutSummary,
