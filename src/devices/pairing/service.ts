@@ -1532,7 +1532,7 @@ export class DevicePairingService  extends IncyclistService{
         // running (see prepareStart()) - don't start a second, overlapping attempt against hardware
         // that may already be connecting/connected. The still-running operation will emit its own
         // 'pairing-done' once it completes, which a freshly (re-)registered page picks up.
-        if (this.isPairing() && this.state.check?.promise) {
+        if (this.isPairing() && this.state.check?.promise !== undefined) {
             return;
         }
 
