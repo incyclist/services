@@ -35,11 +35,11 @@ const makeActiveRideRow = (overrides: Record<string, unknown> = {}) => ({
     isUser: false,
     isPaused: false,
     name: 'Jane',
-    distance: 1200,
-    diffDistance: 45,
+    distance: { value: 1.2, unit: 'km' },
+    diffDistance: { value: 45, unit: 'm' },
     power: 180,
     mpower: 175,
-    speed: 32.5,
+    speed: { value: 32.5, unit: 'km/h' },
     avatar: { shirt: 'red', helmet: 'blue', gender: 'F' },
     lat: 51.1,
     lng: 6.2,
@@ -1646,7 +1646,11 @@ describe('RidePageService', () => {
             rideObserver.on('nearby-riders-update', nearbySpy)
             rideObserver.emit('state-update', 'Active')
 
-            const userRow = makeActiveRideRow({ isUser: true, name: 'You', distance: 1000, diffDistance: 0, avatar: { shirt: 'blue', helmet: 'red', gender: 'M' } })
+            const userRow = makeActiveRideRow({
+                isUser: true, name: 'You',
+                distance: { value: 1, unit: 'km' }, diffDistance: { value: 0, unit: 'm' },
+                avatar: { shirt: 'blue', helmet: 'red', gender: 'M' }
+            })
             const otherRow = makeActiveRideRow({ isPaused: true, isCoach: true, backgroundColor: '#123', textColor: '#fff' })
             activeRidesObserver.emit('update', [userRow, otherRow])
 
@@ -1654,16 +1658,16 @@ describe('RidePageService', () => {
                 rows: [
                     {
                         isUser: true, isPaused: false, isCoach: false,
-                        name: 'You', distance: 1000, diffDistance: 0,
-                        power: 180, mpower: 175, speed: 32.5,
+                        name: 'You', distance: { value: 1, unit: 'km' }, diffDistance: { value: 0, unit: 'm' },
+                        power: 180, mpower: 175, speed: { value: 32.5, unit: 'km/h' },
                         avatar: { shirt: 'blue', helmet: 'red', gender: 'M' },
                         backgroundColor: undefined, textColor: undefined,
                         lat: 51.1, lng: 6.2
                     },
                     {
                         isUser: false, isPaused: true, isCoach: true,
-                        name: 'Jane', distance: 1200, diffDistance: 45,
-                        power: 180, mpower: 175, speed: 32.5,
+                        name: 'Jane', distance: { value: 1.2, unit: 'km' }, diffDistance: { value: 45, unit: 'm' },
+                        power: 180, mpower: 175, speed: { value: 32.5, unit: 'km/h' },
                         avatar: { shirt: 'red', helmet: 'blue', gender: 'F' },
                         backgroundColor: '#123', textColor: '#fff',
                         lat: 51.1, lng: 6.2
@@ -1675,7 +1679,7 @@ describe('RidePageService', () => {
             expect(props.nearbyRiders).toEqual(nearbySpy.mock.calls[0][0])
         })
 
-        test('normalizes {value,unit} distance/diffDistance/speed shapes to plain numbers', () => {
+        test('passes {value,unit} distance/diffDistance/speed shapes through unchanged (no unwrapping)', () => {
             rideObserver.emit('state-update', 'Active')
 
             const row = makeActiveRideRow({
@@ -1687,7 +1691,11 @@ describe('RidePageService', () => {
 
             const props: any = s.getPageDisplayProps()
             expect(props.nearbyRiders.rows[0]).toEqual(
-                expect.objectContaining({ distance: 500, diffDistance: -20, speed: 28 })
+                expect.objectContaining({
+                    distance: { value: 500, unit: 'm' },
+                    diffDistance: { value: -20, unit: 'm' },
+                    speed: { value: 28, unit: 'km/h' }
+                })
             )
         })
 

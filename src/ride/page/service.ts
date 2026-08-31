@@ -1469,20 +1469,19 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     protected mapNearbyRiderRow(row: ActiveRideListDisplayItem): NearbyRiderRowProps {
-        const distance = typeof row.distance === 'object' ? row.distance?.value : row.distance
-        const diffDistance = typeof row.diffDistance === 'object' ? row.diffDistance?.value : row.diffDistance
-        const speed = typeof row.speed === 'object' ? row.speed?.value : row.speed
-
+        // distance/diffDistance/speed are already unit-converted {value,unit} objects
+        // (ActiveRidesService.getDistance()/getDistanceDiff()/getSpeed()) - pass them through
+        // unchanged, do not unwrap to a bare number (see Correction 2, nearby-riders-mobile-design.md §4).
         return {
             isUser: !!row.isUser,
             isPaused: !!row.isPaused,
             isCoach: !!row.isCoach,
             name: row.name,
-            distance: distance ?? 0,
-            diffDistance: diffDistance ?? 0,
+            distance: (row.distance as { value: number, unit: string }) ?? { value: 0, unit: '' },
+            diffDistance: (row.diffDistance as { value: number, unit: string }) ?? { value: 0, unit: '' },
             power: row.power,
             mpower: row.mpower,
-            speed,
+            speed: row.speed as { value: number, unit: string } | undefined,
             avatar: row.avatar as NearbyRiderRowProps['avatar'],
             backgroundColor: row.backgroundColor,
             textColor: row.textColor,

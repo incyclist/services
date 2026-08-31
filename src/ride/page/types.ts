@@ -127,16 +127,20 @@ export interface PrevRidesRowProps {
 // active-rides/types.ts) - deliberately NOT PrevRidesRowProps' shape. One row shape for both
 // tablet and phone tiers - unlike PrevRidesRowProps, no tier-conditional fields here; every field
 // renders in every tier, regardless of phone/tablet.
+// distance/diffDistance/speed arrive already converted to the user's display preference (km/mi,
+// km/h/mph) by ActiveRidesService.getDistance()/getDistanceDiff()/getSpeed() - {value,unit} carries
+// that unit through unchanged instead of being unwrapped to a bare number (see Correction 2,
+// nearby-riders-mobile-design.md §4). power/mpower stay plain numbers - confirmed NOT unit-converted.
 export interface NearbyRiderRowProps {
     isUser:       boolean
     isPaused:     boolean
     isCoach:      boolean
     name:         string
-    distance:     number
-    diffDistance: number          // gap to current user - web's "time/distance gap" column
+    distance:     { value: number, unit: string }
+    diffDistance: { value: number, unit: string }  // gap to current user - web's "time/distance gap" column
     power?:       number
     mpower?:      number          // avg/normalized power, mirrors web
-    speed?:       number
+    speed?:       { value: number, unit: string }
     avatar:       ActiveRideListAvatar   // shirt/helmet/gender - same shape FreeMap's marker avatar uses
     backgroundColor?: string
     textColor?:       string
