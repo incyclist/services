@@ -445,8 +445,8 @@ export class DevicesPageService extends IncyclistPageService {
 
     }
 
-    protected onOK():void {
-        this.getDevicePairing().prepareStart()
+    protected async onOK():Promise<void> {
+        await this.getDevicePairing().prepareStart()
         this.getDevicePairing().setReadyToStart()
         this.getAppState().setState('paired',true)
         
@@ -465,10 +465,10 @@ export class DevicesPageService extends IncyclistPageService {
 
     }
 
-    protected onSimulate():void {
+    protected async onSimulate():Promise<void> {
 
         const simulator = this.getDeviceConfiguration().getSimulatorAdapterId()
-        this.getDevicePairing().prepareStart([simulator])
+        await this.getDevicePairing().prepareStart([simulator])
 
         const prevContentPage = this.getPrevContentPage()
 
