@@ -91,6 +91,85 @@ describe('ActiveRides',()=>{
         expect(userRow.isCoach).toBeFalsy()
     })
 
+    describe('getDisplayProps - sort order', () => {
+
+        // diffDistance is {value,unit} - comparing the objects directly with `>` always evaluates
+        // false either way (both coerce to "[object Object]"), silently no-op'ing the sort and
+        // leaving get()'s insertion order ([current, ...others, ...coaches], self always first)
+        // untouched regardless of actual position. Found via real multi-device testing: both
+        // devices showed "self first" instead of a consistent leaderboard order.
+
+        test('ascending by diffDistance, not insertion order - viewer behind the other rider', () => {
+            service = useActiveRides()
+            setupMocks(service)
+
+            const s: any = service
+            s.session = 'MOBILE'
+            s.current = {
+                id: 'current', user: { id: 'mobile-user', name: 'MobileMe' },
+                ride: { isLap: false, distance: 40000 }, sessionId: 'MOBILE',
+                currentRideDistance: 11000,
+            }
+            s.others = [{
+                id: 'other1', sessionId: 'DESKTOP', user: { id: 'desktop-user', name: 'DesktopThem' },
+                currentRideDistance: 11500, // 500m ahead of "me"
+            }]
+
+            const displayProps = s.getDisplayProps()
+
+            // ahead-of-me rider (negative diffDistance) sorts before me, not after - self is not
+            // pinned first just because get() built the array that way
+            expect(displayProps.map((r: any) => r.name)).toEqual(['DesktopThem', 'MobileMe'])
+        })
+
+        test('ascending by diffDistance - viewer ahead of the other rider', () => {
+            service = useActiveRides()
+            setupMocks(service)
+
+            const s: any = service
+            s.session = 'DESKTOP'
+            s.current = {
+                id: 'current', user: { id: 'desktop-user', name: 'DesktopMe' },
+                ride: { isLap: false, distance: 40000 }, sessionId: 'DESKTOP',
+                currentRideDistance: 11500,
+            }
+            s.others = [{
+                id: 'other1', sessionId: 'MOBILE', user: { id: 'mobile-user', name: 'MobileThem' },
+                currentRideDistance: 11000, // 500m behind "me"
+            }]
+
+            const displayProps = s.getDisplayProps()
+
+            expect(displayProps.map((r: any) => r.name)).toEqual(['DesktopMe', 'MobileThem'])
+        })
+
+        test('closest-N trim (maxLength) also compares by value, not the {value,unit} object', () => {
+            service = useActiveRides()
+            setupMocks(service)
+
+            const s: any = service
+            s.session = 'ME'
+            s.maxLength = 2
+            s.current = {
+                id: 'current', user: { id: 'me', name: 'Me' },
+                ride: { isLap: false, distance: 40000 }, sessionId: 'ME',
+                currentRideDistance: 10000,
+            }
+            s.others = [
+                { id: 'far-ahead', sessionId: 'A', user: { id: 'a', name: 'FarAhead' }, currentRideDistance: 15000 },
+                { id: 'close-behind', sessionId: 'B', user: { id: 'b', name: 'CloseBehind' }, currentRideDistance: 9800 },
+                { id: 'far-behind', sessionId: 'C', user: { id: 'c', name: 'FarBehind' }, currentRideDistance: 5000 },
+            ]
+
+            const displayProps = s.getDisplayProps()
+
+            // trimmed to the 2 closest by absolute gap: Me (0) and CloseBehind (-200m) - the two
+            // far entries must not survive just because Math.abs() on the {value,unit} object was
+            // silently NaN for everyone
+            expect(displayProps.map((r: any) => r.name).sort()).toEqual(['CloseBehind', 'Me'].sort())
+        })
+    })
+
     describe('MQTT activity event handlers emit update', () => {
 
         let observerEmit: jest.Mock
