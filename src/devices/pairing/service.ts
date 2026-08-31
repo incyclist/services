@@ -275,21 +275,25 @@ export class DevicePairingService  extends IncyclistService{
         try {
             this.pauseAdapters(adapters.filter( a=> !adapterFilter.includes(a.udid)));
 
-            if (this.isPairing()) {
-                this.removePairingCallbacks()
-                
-            }
-            
+            // Pairing is intentionally left running in the background here: the user is only
+            // skipping the pairing *page*, not asking to abandon devices that may still connect.
+            // Do NOT remove the pairing callbacks or discard state.check while a pairing operation
+            // is genuinely in flight - they are the only way the background operation can still
+            // update this.state.capabilities and be recognized as already-paired (via
+            // isPairing()/checkPairingComplete()) if the Devices page is reopened before it completes.
+
             if (this.isScanning()) {
                 this.state.stopRequested = true;
-                await this._stop();                
+                await this._stop();
             }
 
             this.removeConfigHandlers()
             this.settings = {}
             this.state.initialized = false
             this.state.waiting = false;
-            this.state.check = null;
+            if (!stillPairing) {
+                this.state.check = null;
+            }
             this.state.scan = null;
             this.state.stopRequested = false;
             this.state.stopped = true
@@ -1521,6 +1525,14 @@ export class DevicePairingService  extends IncyclistService{
         if (this.checkPairingComplete())  {
             if (this.usage==='page')
                 this.emit('pairing-done');
+            return;
+        }
+
+        // a pairing operation from an earlier (possibly already-closed) session is still genuinely
+        // running (see prepareStart()) - don't start a second, overlapping attempt against hardware
+        // that may already be connecting/connected. The still-running operation will emit its own
+        // 'pairing-done' once it completes, which a freshly (re-)registered page picks up.
+        if (this.isPairing() && this.state.check?.promise !== undefined) {
             return;
         }
 
