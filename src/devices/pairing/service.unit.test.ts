@@ -629,6 +629,89 @@ describe('PairingService',()=>{
             })
         })
 
+        // "Simulate"/"OK" must leave an in-flight pairing running in the background instead of
+        // abandoning it - see prepareStart()/startPairing() in service.ts
+        describe('prepareStart',()=>{
+
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            test('pairing still in flight: keeps pairing callbacks attached and state.check intact, so a later background completion is still recorded',async ()=>{
+                svc.simulatePairing()
+                svc.setupMockData( 'control', [ {udid:'1', selected:true} ])
+
+                const listenersBefore = ride.listenerCount('pair-success')
+                expect(listenersBefore).toBeGreaterThan(0)
+
+                await svc.prepareStart()
+
+                expect(ride.listenerCount('pair-success')).toBe(listenersBefore)
+                expect(svc.isPairing()).toBe(true)
+
+                // the abandoned background pairing operation now succeeds
+                ride.emit('pair-success','1')
+
+                expect(svc.getCapabilityData('control')).toMatchObject({connectState:'connected'})
+            })
+
+            test('scanning still in flight: cancels the scan exactly as before (unchanged behaviour)',async ()=>{
+                svc.simulateScanning()
+                const stop = jest.spyOn(svc as any,'_stop')
+
+                await svc.prepareStart()
+
+                expect(stop).toHaveBeenCalled()
+                expect(svc.isScanning()).toBe(false)
+            })
+
+            test('nothing in flight: clears pairing state for a clean restart',async ()=>{
+                await svc.prepareStart()
+
+                expect(svc.isPairing()).toBe(false)
+            })
+        })
+
+        describe('startPairing',()=>{
+
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+                svc.usage = 'page'
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            test('does not start a second, overlapping pairing attempt while a previous page session left one genuinely in flight',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true} ])
+                svc.simulatePairing()
+
+                await svc.startPairing(svc.getState().adapters, {})
+
+                expect(ride.startAdapters).not.toHaveBeenCalled()
+            })
+
+            test('starts pairing normally when nothing is in flight',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true} ])
+                ride.startAdapters = jest.fn().mockResolvedValue(true)
+
+                await svc.startPairing(svc.getState().adapters, {})
+
+                expect(ride.startAdapters).toHaveBeenCalled()
+            })
+        })
+
         describe('startDeviceSelection',()=>{
 
             let _run;
