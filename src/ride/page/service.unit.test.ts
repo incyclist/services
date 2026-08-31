@@ -1722,6 +1722,18 @@ describe('RidePageService', () => {
             rideObserver.emit('state-update', 'Active')
             expect(getActiveRidesObserverMock).toHaveBeenCalledTimes(2)
         })
+
+        test('an ActiveRidesService update triggers a page-update, not just nearby-riders-update', () => {
+            rideObserver.emit('state-update', 'Active')
+
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+
+            const row = makeActiveRideRow({ isUser: true, name: 'You' })
+            activeRidesObserver.emit('update', [row])
+
+            expect(updateSpy).toHaveBeenCalled()
+        })
     })
 
     describe('nearby riders - no active-rides observer available (no active ride / route-less workout)', () => {

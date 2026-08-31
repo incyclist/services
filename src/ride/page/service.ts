@@ -1459,6 +1459,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             observer.on('update', (rows: ActiveRideListDisplayItem[]) => {
                 this.nearbyRiders = { rows: (rows ?? []).map(row => this.mapNearbyRiderRow(row)) }
                 this.rideObserver?.emit('nearby-riders-update', this.nearbyRiders)
+                this.updatePageDisplay()
             })
             this.nearbyRidersSubscribed = true
         }
