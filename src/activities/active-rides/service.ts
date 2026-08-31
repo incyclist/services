@@ -406,20 +406,27 @@ export class ActiveRidesService extends IncyclistService {
                 displayProps.push(displayItem )
             })
 
+            // diffDistance is {value,unit} (getDistanceDiff() always converts to display units) -
+            // comparing the objects directly with > always evaluates false either way (both
+            // coerce to "[object Object]"), silently no-op'ing every sort below and leaving
+            // get()'s insertion order ([current, ...others, ...coaches] - self always first)
+            // untouched regardless of actual position. Compare .value, not the object itself.
+            const diffValue = (r) => r.diffDistance?.value ?? 0
+
             if (displayProps.length>this.maxLength) {
-                const absDiff = (r) => Math.abs(r.diffDistance) 
+                const absDiff = (r) => Math.abs(diffValue(r))
 
                 displayProps.sort( (a,b) => {
                     return absDiff(b) > absDiff(a) ? -1 : 1
                 })
-                
-                return displayProps.filter( (_r,idx) => idx<this.maxLength)    
-            
+
+                return displayProps.filter( (_r,idx) => idx<this.maxLength)
+
             }
 
             displayProps.sort( (a,b) => {
-                return b.diffDistance > a.diffDistance ? -1 : 1
-            })    
+                return diffValue(b) > diffValue(a) ? -1 : 1
+            })
 
             return displayProps
 
