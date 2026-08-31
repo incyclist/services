@@ -29,6 +29,23 @@ const makePrevRideRow = (overrides: Record<string, unknown> = {}) => ({
     ...overrides
 })
 
+// The row shape as emitted by ActiveRidesService's observer 'update' event
+// (ActiveRideListDisplayItem), before RidePageService maps it to NearbyRiderRowProps.
+const makeActiveRideRow = (overrides: Record<string, unknown> = {}) => ({
+    isUser: false,
+    isPaused: false,
+    name: 'Jane',
+    distance: { value: 1.2, unit: 'km' },
+    diffDistance: { value: 45, unit: 'm' },
+    power: 180,
+    mpower: 175,
+    speed: { value: 32.5, unit: 'km/h' },
+    avatar: { shirt: 'red', helmet: 'blue', gender: 'F' },
+    lat: 51.1,
+    lng: 6.2,
+    ...overrides
+})
+
 const makeCurrentWorkout = () => new Workout({
     type: 'workout', name: 'Test Workout',
     steps: [
@@ -56,7 +73,8 @@ const setupMocks = (rideType: string = 'GPX') => {
         getState: jest.fn().mockReturnValue('Idle'),
         getStartOverlayProps: jest.fn().mockReturnValue({ mode: rideType, rideState: 'Idle', devices: [], readyToStart: false }),
         getDisplayProperties: jest.fn().mockReturnValue({ state: 'Idle' }),
-        adjustDevicePower: jest.fn()
+        adjustDevicePower: jest.fn(),
+        getRideModeService: jest.fn().mockReturnValue(undefined)
     }
     MockWorkoutRide = {
         getObserver: jest.fn(),
@@ -1605,6 +1623,149 @@ describe('RidePageService', () => {
             rideObserver.emit('prev-rides-update')
             rideObserver.emit('prev-rides-update')
             expect(updateSpy).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('nearby riders wiring', () => {
+        let rideObserver: Observer
+        let activeRidesObserver: Observer
+        let getActiveRidesObserverMock: jest.Mock
+
+        beforeEach(() => {
+            rideObserver = new Observer()
+            activeRidesObserver = new Observer()
+            getActiveRidesObserverMock = jest.fn().mockReturnValue(activeRidesObserver)
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver)
+            MockRideDisplay.getRideModeService.mockReturnValue({ getActiveRidesObserver: getActiveRidesObserverMock });
+            (s as any).isInitialized = true
+            s.openPage()
+        })
+
+        test('maps ActiveRideListDisplayItem rows to NearbyRiderRowProps and emits nearby-riders-update on the rideObserver, current user included with isUser:true', () => {
+            const nearbySpy = jest.fn()
+            rideObserver.on('nearby-riders-update', nearbySpy)
+            rideObserver.emit('state-update', 'Active')
+
+            const userRow = makeActiveRideRow({
+                isUser: true, name: 'You',
+                distance: { value: 1, unit: 'km' }, diffDistance: { value: 0, unit: 'm' },
+                avatar: { shirt: 'blue', helmet: 'red', gender: 'M' }
+            })
+            const otherRow = makeActiveRideRow({ isPaused: true, isCoach: true, backgroundColor: '#123', textColor: '#fff' })
+            activeRidesObserver.emit('update', [userRow, otherRow])
+
+            expect(nearbySpy).toHaveBeenCalledWith({
+                rows: [
+                    {
+                        isUser: true, isPaused: false, isCoach: false,
+                        name: 'You', distance: { value: 1, unit: 'km' }, diffDistance: { value: 0, unit: 'm' },
+                        power: 180, mpower: 175, speed: { value: 32.5, unit: 'km/h' },
+                        avatar: { shirt: 'blue', helmet: 'red', gender: 'M' },
+                        backgroundColor: undefined, textColor: undefined,
+                        lat: 51.1, lng: 6.2
+                    },
+                    {
+                        isUser: false, isPaused: true, isCoach: true,
+                        name: 'Jane', distance: { value: 1.2, unit: 'km' }, diffDistance: { value: 45, unit: 'm' },
+                        power: 180, mpower: 175, speed: { value: 32.5, unit: 'km/h' },
+                        avatar: { shirt: 'red', helmet: 'blue', gender: 'F' },
+                        backgroundColor: '#123', textColor: '#fff',
+                        lat: 51.1, lng: 6.2
+                    }
+                ]
+            })
+
+            const props: any = s.getPageDisplayProps()
+            expect(props.nearbyRiders).toEqual(nearbySpy.mock.calls[0][0])
+        })
+
+        test('passes {value,unit} distance/diffDistance/speed shapes through unchanged (no unwrapping)', () => {
+            rideObserver.emit('state-update', 'Active')
+
+            const row = makeActiveRideRow({
+                distance: { value: 500, unit: 'm' },
+                diffDistance: { value: -20, unit: 'm' },
+                speed: { value: 28, unit: 'km/h' }
+            })
+            activeRidesObserver.emit('update', [row])
+
+            const props: any = s.getPageDisplayProps()
+            expect(props.nearbyRiders.rows[0]).toEqual(
+                expect.objectContaining({
+                    distance: { value: 500, unit: 'm' },
+                    diffDistance: { value: -20, unit: 'm' },
+                    speed: { value: 28, unit: 'km/h' }
+                })
+            )
+        })
+
+        test('lat/lng pass through undefined when the source row has no position', () => {
+            rideObserver.emit('state-update', 'Active')
+
+            const row = makeActiveRideRow({ lat: undefined, lng: undefined })
+            activeRidesObserver.emit('update', [row])
+
+            const props: any = s.getPageDisplayProps()
+            expect(props.nearbyRiders.rows[0]).toEqual(
+                expect.objectContaining({ lat: undefined, lng: undefined })
+            )
+        })
+
+        test('subscribes to the ActiveRidesService observer once per ride, not on every state-update tick', () => {
+            rideObserver.emit('state-update', 'Started')
+            rideObserver.emit('state-update', 'Active')
+            rideObserver.emit('state-update', 'Paused')
+
+            expect(getActiveRidesObserverMock).toHaveBeenCalledTimes(1)
+        })
+
+        test('re-subscribes on the next ride after openPage() resets the guard', () => {
+            rideObserver.emit('state-update', 'Active')
+            expect(getActiveRidesObserverMock).toHaveBeenCalledTimes(1)
+
+            const secondActiveRidesObserver = new Observer()
+            getActiveRidesObserverMock.mockReturnValue(secondActiveRidesObserver)
+
+            s.openPage()
+            rideObserver.emit('state-update', 'Active')
+            expect(getActiveRidesObserverMock).toHaveBeenCalledTimes(2)
+        })
+
+        test('an ActiveRidesService update triggers a page-update, not just nearby-riders-update', () => {
+            rideObserver.emit('state-update', 'Active')
+
+            const updateSpy = jest.fn()
+            s.getPageObserver().on('page-update', updateSpy)
+
+            const row = makeActiveRideRow({ isUser: true, name: 'You' })
+            activeRidesObserver.emit('update', [row])
+
+            expect(updateSpy).toHaveBeenCalled()
+        })
+    })
+
+    describe('nearby riders - no active-rides observer available (no active ride / route-less workout)', () => {
+        let rideObserver: Observer
+
+        beforeEach(() => {
+            rideObserver = new Observer()
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver)
+            MockRideDisplay.getRideModeService.mockReturnValue(undefined);
+            (s as any).isInitialized = true
+            s.openPage()
+        })
+
+        test('getPageDisplayProps().nearbyRiders stays undefined when getRideModeService() returns nothing', () => {
+            rideObserver.emit('state-update', 'Active')
+            const props: any = s.getPageDisplayProps()
+            expect(props.nearbyRiders).toBeUndefined()
+        })
+
+        test('does not throw when the current mode service has no getActiveRidesObserver method (e.g. a route-less Workout ride)', () => {
+            MockRideDisplay.getRideModeService.mockReturnValue({})
+            expect(() => rideObserver.emit('state-update', 'Active')).not.toThrow()
+            const props: any = s.getPageDisplayProps()
+            expect(props.nearbyRiders).toBeUndefined()
         })
     })
 

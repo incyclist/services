@@ -7,6 +7,7 @@ import {
     GPXRidePageDisplayProps,
     IRidePageService,
     PrevRidesRowProps,
+    NearbyRiderRowProps,
     LoadControlButtonLabels,
     RideMenuProps,
     RidePageDisplayProps,
@@ -27,7 +28,7 @@ import { useDeviceConfiguration } from "../../devices";
 import { sleep } from "../../utils/sleep";
 import { ISecretBinding } from "../../api/secret";
 import { useOnlineStatusMonitoring } from "../../monitoring";
-import { PrevRidesListDisplayProps, useActivityRide } from "../../activities";
+import { ActiveRideListDisplayItem, PrevRidesListDisplayProps, useActivityRide } from "../../activities";
 import { useUserSettings } from "../../settings";
 import { useWorkoutRide } from "../../workouts/ride/service";
 import type { LoadButtonMode, PowerAdjustmentResult, StepCountdownTick, WorkoutDisplayProperties } from "../../workouts/ride/types";
@@ -90,6 +91,21 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     // live after this, via getPrevRidesRows() + the mobile view's own <Dynamic> subscription.
     protected prevRidesShown = false
 
+    // Live nearbyRiders snapshot, refreshed by subscribeToNearbyRiders()'s 'update' handler and
+    // read by buildBaseDisplayProps() for the page-update path - the mobile view can derive map
+    // markers from this same displayProps field, at page-update cadence, without needing a
+    // separate per-tick subscription. Row VALUES also flow to the mobile view's <Dynamic>
+    // subscription via the 'nearby-riders-update' event emitted alongside this assignment - see
+    // subscribeToNearbyRiders().
+    protected nearbyRiders?: RidePageDisplayProps['nearbyRiders']
+
+    // Guards the ActiveRidesService-observer subscription so it only happens once per ride (mirrors
+    // prevRidesShown's per-ride reset), not on every onDisplayStateUpdate() call. Needed because,
+    // unlike prevRides (which piggybacks on rideObserver's own re-emitted 'prev-rides-update'
+    // event), nearbyRiders is sourced from a second, independent Observer instance
+    // (RouteDisplayService.getActiveRidesObserver()) that has to be actively subscribed to.
+    protected nearbyRidersSubscribed = false
+
     // Set by onViewChanged() (route-ends-first mid-ride type flip), consumed by the
     // closePage()/openPage() pair that the resulting page-component swap triggers. Guards the
     // outgoing page's teardown from stopping a still-running ride, and the incoming page's mount
@@ -150,6 +166,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
             this.gestureHintDismissed = false
             this.prevRidesShown = false
+            this.nearbyRidersSubscribed = false
             super.openPage()
 
             try {
@@ -1326,7 +1343,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             gestureHint: this.buildGestureHint(startOverlayProps === null),
             loadIncrement: this.getLoadIncrement(),
             loadButtonMode: this.getLoadButtonMode(),
-            prevRides: this.buildPrevRides()
+            prevRides: this.buildPrevRides(),
+            nearbyRiders: this.nearbyRiders
         }
     }
 
@@ -1421,10 +1439,86 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
+    /**
+     * Subscribes once per ride to the ActiveRidesService observer RouteDisplayService already owns
+     * (RouteDisplayService.getActiveRidesObserver(), via prepareActiveRides()). Safe to call on
+     * every state-update: no-ops once already subscribed, and simply retries next time if the
+     * observer isn't available yet (no active ride, or RouteDisplayService.onStarted() hasn't run
+     * yet - both naturally resolve to getActiveRidesObserver() returning undefined, no separate
+     * route-hash/route-less-workout guard needed here).
+     */
+    protected subscribeToNearbyRiders(): void {
+        try {
+            if (this.nearbyRidersSubscribed)
+                return
+
+            const observer = this.getActiveRidesObserver()
+            if (!observer)
+                return
+
+            observer.on('update', (rows: ActiveRideListDisplayItem[]) => {
+                this.nearbyRiders = { rows: (rows ?? []).map(row => this.mapNearbyRiderRow(row)) }
+                this.rideObserver?.emit('nearby-riders-update', this.nearbyRiders)
+                this.updatePageDisplay()
+            })
+            this.nearbyRidersSubscribed = true
+        }
+        catch (err: any) {
+            this.logError(err, 'subscribeToNearbyRiders')
+        }
+    }
+
+    protected mapNearbyRiderRow(row: ActiveRideListDisplayItem): NearbyRiderRowProps {
+        // distance/diffDistance/speed are already unit-converted {value,unit} objects
+        // (ActiveRidesService.getDistance()/getDistanceDiff()/getSpeed()) - pass them through
+        // unchanged, do not unwrap to a bare number (see Correction 2, nearby-riders-mobile-design.md §4).
+        return {
+            isUser: !!row.isUser,
+            isPaused: !!row.isPaused,
+            isCoach: !!row.isCoach,
+            name: row.name,
+            distance: (row.distance as { value: number, unit: string }) ?? { value: 0, unit: '' },
+            diffDistance: (row.diffDistance as { value: number, unit: string }) ?? { value: 0, unit: '' },
+            power: row.power,
+            mpower: row.mpower,
+            speed: row.speed as { value: number, unit: string } | undefined,
+            avatar: row.avatar as NearbyRiderRowProps['avatar'],
+            backgroundColor: row.backgroundColor,
+            textColor: row.textColor,
+            lat: row.lat,
+            lng: row.lng
+        }
+    }
+
+    /**
+     * Bridges to the accessor RouteDisplayService/GpxDisplayService/RLVDisplayService expose for
+     * the ActiveRidesService observer they already create in prepareActiveRides() (see
+     * RouteDisplayService.getActiveRidesObserver()). getRideDisplay() only returns the ride-type-
+     * agnostic RideDisplayService, so this reaches into its current mode service via
+     * getRideModeService() - WorkoutDisplayService (route-less Workout rides) doesn't implement the
+     * accessor, so the duck-typed call below naturally resolves to undefined there. That's the
+     * correct "not eligible" outcome for a route-less ride (it has no route hash to group riders
+     * by), so no separate guard is needed here.
+     */
+    protected getActiveRidesObserver(): IObserver | undefined {
+        try {
+            const modeService = this.getRideDisplay()?.getRideModeService?.() as
+                Partial<{ getActiveRidesObserver(): IObserver | undefined }> | undefined
+            return modeService?.getActiveRidesObserver?.()
+        }
+        catch (err: any) {
+            this.logError(err, 'getActiveRidesObserver')
+            return undefined
+        }
+    }
+
     protected onDisplayStateUpdate(state: CurrentRideState) {
         // The workout observer may only become available once the ride is actually running -
         // (re-)subscribe here in addition to onRideHandlersRegistered's initial attempt.
         this.subscribeToWorkoutObserver()
+        // Same reasoning as above, for the ActiveRidesService observer RouteDisplayService.
+        // onStarted() creates - it may not exist yet the first time this fires.
+        this.subscribeToNearbyRiders()
 
         switch (state) {
             case 'Paused':

@@ -46,6 +46,13 @@ export class RouteDisplayService extends RideModeService {
     protected nearbyRiders?: ActiveRideListDisplayItem[]
     protected _startSettings?: RouteSettings
 
+    // The ActiveRidesService observer prepareActiveRides() creates below - retained so
+    // getActiveRidesObserver() can expose it to consumers (e.g. RidePageService) that want to
+    // subscribe to the same 'update' events without owning the ActiveRidesService lifecycle
+    // themselves. Cleared in cleanupActiveRides() so the accessor correctly reports "no active
+    // ride" once the ride stops.
+    protected activeRidesObserver?: Observer
+
 
 
     /**
@@ -559,6 +566,7 @@ export class RouteDisplayService extends RideModeService {
 
         try {
             const observer = this.getActiveRides().init( session)
+            this.activeRidesObserver = observer
 
             observer.on('update',(data)=>{
                  this.nearbyRiders = data.filter( ar=>!ar.isUser)
@@ -573,12 +581,26 @@ export class RouteDisplayService extends RideModeService {
     cleanupActiveRides() {
         try {
             this.getActiveRides().stop()
+            delete this.activeRidesObserver
         }
         /* istanbul ignore catch */
         catch(err:any) {
             this.logError(err,'cleanupActiveRides')
         }
 
+    }
+
+    /**
+     * Exposes the ActiveRidesService observer this service already creates and subscribes to in
+     * prepareActiveRides() - read-only accessor for consumers (RidePageService) that want to
+     * receive the same 'update' events without calling useActiveRides().init()/.stop() themselves;
+     * that lifecycle stays owned here, driven by onStarted()/onStopped().
+     *
+     * @returns the live observer while a ride is active; undefined when no ride is active (no
+     * onStarted() has run yet, or onStopped() already cleared it)
+     */
+    getActiveRidesObserver(): Observer | undefined {
+        return this.activeRidesObserver
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

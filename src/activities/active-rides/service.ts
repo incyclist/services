@@ -391,6 +391,7 @@ export class ActiveRidesService extends IncyclistService {
 
                 const displayItem:ActiveRideListDisplayItem = {
                     isUser: item.sessionId===this.session,
+                    isCoach: item.isCoach,
                     name: this.getName(item),
                     diffDistance: this.getDistanceDiff(item),
                     distance: this.getDistance(item),
@@ -843,6 +844,8 @@ export class ActiveRidesService extends IncyclistService {
             if (!payload.user) {
                 this.getRemoteActivityDetails(session)
             }
+
+            this.observer.emit('update', this.getDisplayProps())
         }
         catch(err) {
             this.logError(err,'onActivityStartEvent')
@@ -938,11 +941,13 @@ export class ActiveRidesService extends IncyclistService {
                     this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), remote})
                 }
                 else {
-                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), remote} )    
+                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), remote} )
                 }
 
-                
+
             }
+
+            this.observer.emit('update', this.getDisplayProps())
 
         }
         catch(err) {
@@ -979,8 +984,11 @@ export class ActiveRidesService extends IncyclistService {
             return
         
         const idx = this.others.findIndex( ar=> ar.sessionId===session)
-        if (idx!==-1) 
-            this.others.splice(idx,1)
+        if (idx===-1)
+            return
+
+        this.others.splice(idx,1)
+        this.observer.emit('update', this.getDisplayProps())
 
         if (!this.isStarted)
             return
