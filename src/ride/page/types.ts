@@ -5,6 +5,7 @@ import { CurrentPosition, CurrentRideState, GPXStartOverlayProps, RideViewType, 
 import type { LoadButtonMode, PowerAdjustmentResult } from "../../workouts/ride/types"
 import type { WorkoutGraphPlanBar } from "../../workouts/base/graph/types"
 import type { Avatar } from "../../avatars"
+import type { ActiveRideListAvatar } from "../../activities"
 
 
 export interface StartGateProps {
@@ -88,6 +89,16 @@ export interface RidePageDisplayProps {
         rows:    PrevRidesRowProps[]        // empty for 'hidden'
         hasMore: boolean                    // true when the eligible field was trimmed to fit rows
     }
+
+    // Built by RidePageService from the ActiveRidesService observer RouteDisplayService already
+    // owns (RouteDisplayService.getActiveRidesObserver()) - see NearbyRiderRowProps below for row
+    // shape. Absent whenever there's no active ride to group by (no route hash - including a
+    // route-less Workout ride - or the ride hasn't started the subscription yet); no separate
+    // 'hidden' mode, unlike prevRides - ActiveRidesService already sorts/caps server-side, so an
+    // empty/absent nearbyRiders is simply "nothing to show", not a distinct display state.
+    nearbyRiders?: {
+        rows: NearbyRiderRowProps[]
+    }
 }
 
 // One shape, both platforms. RidePageService always populates every field it has
@@ -110,6 +121,29 @@ export interface PrevRidesRowProps {
     // Stable per-rider key across ticks, for a map marker's React key/identity. Same source field
     // desktop's PastActivityLogEntry already carries.
     tsStart?:     number
+}
+
+// Mirrors web-ui's RiderInfo fields (ActiveRideListDisplayItem, services/src/activities/
+// active-rides/types.ts) - deliberately NOT PrevRidesRowProps' shape. One row shape for both
+// tablet and phone tiers - unlike PrevRidesRowProps, no tier-conditional fields here; every field
+// renders in every tier, regardless of phone/tablet.
+export interface NearbyRiderRowProps {
+    isUser:       boolean
+    isPaused:     boolean
+    isCoach:      boolean
+    name:         string
+    distance:     number
+    diffDistance: number          // gap to current user - web's "time/distance gap" column
+    power?:       number
+    mpower?:      number          // avg/normalized power, mirrors web
+    speed?:       number
+    avatar:       ActiveRideListAvatar   // shirt/helmet/gender - same shape FreeMap's marker avatar uses
+    backgroundColor?: string
+    textColor?:       string
+    // Live position, for map markers (session 3.1's buildNearbyRiderMarkers()) - undefined
+    // whenever the source ActiveRideListDisplayItem didn't carry a position.
+    lat?:         number
+    lng?:         number
 }
 
 // Video ride -- extends base with video-specific props

@@ -391,6 +391,7 @@ export class ActiveRidesService extends IncyclistService {
 
                 const displayItem:ActiveRideListDisplayItem = {
                     isUser: item.sessionId===this.session,
+                    isCoach: item.isCoach,
                     name: this.getName(item),
                     diffDistance: this.getDistanceDiff(item),
                     distance: this.getDistance(item),

@@ -54,6 +54,43 @@ describe('ActiveRides',()=>{
 
     })
 
+    test('getDisplayProps - coach entry surfaces isCoach:true, regular rider stays isCoach:false',()=>{
+        service = useActiveRides()
+        setupMocks(service)
+
+        const s:any = service
+        s.session = 'S1'
+        s.current = {
+            id: 'current',
+            user: { id: 'u1', name: 'Me' },
+            ride: { isLap: false, distance: 10000 },
+            sessionId: 'S1',
+            currentRideDistance: 1000,
+        }
+        s.getCoachesService = jest.fn().mockReturnValue({
+            getCoaches: jest.fn().mockReturnValue([
+                {
+                    getRidersListDisplayProperties: () => ({
+                        user: { id: 'coach1', name: 'Coach Bot' },
+                        isCoach: true,
+                        currentPower: 150,
+                        currentRideDistance: 500,
+                    })
+                }
+            ])
+        })
+
+        const displayProps = s.getDisplayProps()
+
+        const userRow = displayProps.find((r:any) => r.name === 'Me')
+        const coachRow = displayProps.find((r:any) => r.name === 'Coach Bot')
+
+        expect(coachRow).toBeDefined()
+        expect(coachRow.isCoach).toBe(true)
+        expect(userRow).toBeDefined()
+        expect(userRow.isCoach).toBeFalsy()
+    })
+
     test('getName',()=>{
         service = useActiveRides()
         setupMocks(service)

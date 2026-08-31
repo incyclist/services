@@ -90,7 +90,8 @@ export type ActiveRideListAvatar = {
 export type ActiveRideListDisplayItem = {
     isUser?: boolean
     avatar?:ActiveRideListAvatar
-    isPaused?: boolean   
+    isPaused?: boolean
+    isCoach?: boolean,
     name: string,
     distance?: number|{value:number, unit:Unit}
     lapDistance?:number,

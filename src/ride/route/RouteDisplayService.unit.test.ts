@@ -302,6 +302,38 @@ describe( 'RouteDisplayService', () => {
         })
     })
 
+    describe('getActiveRidesObserver', () => {
+        let service: RouteDisplayService
+
+        beforeEach(() => {
+            service = new RouteDisplayService()
+        })
+
+        afterEach(() => {
+            cleanupMocks(service)
+        })
+
+        test('returns undefined before a ride has started', () => {
+            setupMocks(service, {mockRideService: true})
+            expect(service.getActiveRidesObserver()).toBeUndefined()
+        })
+
+        test('returns the observer prepareActiveRides() created, once the ride has started', () => {
+            setupMocks(service, {mockRideService: true})
+            service.onStarted()
+            expect(service.getActiveRidesObserver()).toBe(mockObserver)
+        })
+
+        test('returns undefined again once the ride has stopped', () => {
+            setupMocks(service, {mockRideService: true})
+            service.onStarted()
+            expect(service.getActiveRidesObserver()).toBe(mockObserver)
+
+            service.onStopped()
+            expect(service.getActiveRidesObserver()).toBeUndefined()
+        })
+    })
+
     describe('getDeviceStartSettings', () => {
         let service: RouteDisplayService
 
