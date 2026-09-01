@@ -84,3 +84,28 @@ describe('RouteCard.videoExists', () => {
         expect(existsFile).not.toHaveBeenCalled();
     });
 });
+
+describe('RouteCard.updateStartPos', () => {
+
+    const createCard = (info: RouteInfo = {}) => new RouteCard(new Route(info));
+
+    const data = { startPos: { value: 0, unit: 'km' }, realityFactor: 1 } as any;
+
+    test('does not throw and returns null when called with undefined (malformed UI input)', () => {
+        const card = createCard();
+        expect(() => card.updateStartPos(undefined as any, data)).not.toThrow();
+        expect(card.updateStartPos(undefined as any, data)).toBeNull();
+    });
+
+    test('does not throw and returns null when called with null', () => {
+        const card = createCard();
+        expect(() => card.updateStartPos(null as any, data)).not.toThrow();
+        expect(card.updateStartPos(null as any, data)).toBeNull();
+    });
+
+    test('still updates the start position when called with a plain number', () => {
+        const card = createCard();
+        const updated = card.updateStartPos(5, data);
+        expect(updated?.startPos.value).toBe(5);
+    });
+});
