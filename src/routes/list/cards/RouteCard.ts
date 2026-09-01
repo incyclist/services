@@ -498,6 +498,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const [C,U] = getUnitConversionShortcuts()
 
 
+        if (p===undefined || p===null)
+            return null
+
         let value
         if (typeof p==='number')
             value = p
