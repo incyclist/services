@@ -216,6 +216,29 @@ describe('GpxDisplayService', () => {
             const props = service.getSatelliteViewProps()
             expect(props.displayPosition?.routeDistance).toBe(500)
         })
+
+        test('passes an already-present heading through unchanged (satellite-view-mobile-design.md 2.4)', () => {
+            setupMocks(service, {mockRideService: true})
+            ;(service as any).position = {routeDistance:500, lat:1, lng:2, heading:123}
+            const props = service.getSatelliteViewProps()
+            expect(props.displayPosition?.heading).toBe(123)
+        })
+
+        test('enriches a position with no heading rather than leaving it undefined', () => {
+            setupMocks(service, {mockRideService: true})
+            ;(service as any).position = {routeDistance:500, lat:1, lng:2}
+            const props = service.getSatelliteViewProps()
+            // getHeading() may throw against this minimal mock route (caught and falls back to
+            // the unenriched position) - either way displayPosition itself must never disappear.
+            expect(props.displayPosition).toBeDefined()
+        })
+
+        test('returns undefined displayPosition when no position has been determined yet', () => {
+            setupMocks(service, {mockRideService: true})
+            ;(service as any).position = undefined
+            const props = service.getSatelliteViewProps()
+            expect(props.displayPosition).toBeUndefined()
+        })
     })
 
     describe('getMapViewProps', () => {

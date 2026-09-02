@@ -6,7 +6,7 @@ import { getHeading } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { useRideSettingsDisplay } from "../../settings/display";
 import { RoutePoint } from "../../types";
-import { CurrentRideDisplayProps, GpxDisplayProps,  RouteDisplayProps } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, GpxDisplayProps,  RouteDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 import { SatelliteViewEvent, StreetViewEvent } from "./types";
 
@@ -147,7 +147,26 @@ export class GpxDisplayService extends RouteDisplayService {
      * panorama in the middle of the Atlantic.
      */
     protected getInitialStreetViewPosition() {
-        const position = this.position
+        return this.enrichWithHeading(this.position, 'getInitialStreetViewPosition')
+    }
+
+    /**
+     * Current position enriched with the heading the rider is facing, for the native
+     * Satellite View component's rotating camera (satellite-view-mobile-design.md 2.4 -
+     * mirrors desktop's `setOptions({center, heading, tilt:45})` on every update). Same
+     * enrichment Street View's start position already gets - see enrichWithHeading().
+     */
+    protected getSatelliteViewPosition() {
+        return this.enrichWithHeading(this.position, 'getSatelliteViewPosition')
+    }
+
+    /**
+     * Adds `heading` to a position if it is not already present, computed from the rider's
+     * progress along the route. Returns undefined while no position has been determined yet -
+     * the mobile component must not be given a (0,0) fallback, which would request/render
+     * imagery in the middle of the Atlantic.
+     */
+    protected enrichWithHeading(position: CurrentPosition|undefined, logContext: string) {
         if (!position)
             return undefined
         if (position.heading !== undefined)
@@ -157,7 +176,7 @@ export class GpxDisplayService extends RouteDisplayService {
             return {...position, heading: getHeading(this.getOriginalRoute(), position)}
         }
         catch (err) {
-            this.logError(err, 'getInitialStreetViewPosition')
+            this.logError(err, logContext)
             return position
         }
     }
@@ -192,9 +211,7 @@ export class GpxDisplayService extends RouteDisplayService {
     getSatelliteViewProps() {
         return {
             onDisplayEvent: this.onSatelliteViewEvent.bind(this),
-            displayPosition: this.position
-
-
+            displayPosition: this.getSatelliteViewPosition()
         }
     }
 
