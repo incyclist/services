@@ -27,6 +27,13 @@ const SV_MIN_DELAY = 1000
 const SV_START_TIMEOUT = 15000
 
 /**
+ * Maximum time the start overlay waits for the Satellite View component to report 'Loaded'
+ * before the ride is started anyway. Mirrors SV_START_TIMEOUT - see its comment for the
+ * rationale. Overridable via the `SAT_START_TIMEOUT` user setting.
+ */
+const SAT_START_TIMEOUT = 15000
+
+/**
  * Service for managing GPX-based route ride display with multiple view modes.
  *
  * Extends RouteDisplayService to add support for Street View, Satellite View, and
@@ -57,7 +64,10 @@ export class GpxDisplayService extends RouteDisplayService {
     /** set once the start overlay stopped waiting for the Street View 'Loaded' event */
     protected svStartTimedOut: boolean = false
     protected svStartTimeout: NodeJS.Timeout
-    
+    /** set once the start overlay stopped waiting for the Satellite View 'Loaded' event */
+    protected satStartTimedOut: boolean = false
+    protected satStartTimeout: NodeJS.Timeout
+
     
 
     constructor() {
@@ -78,8 +88,12 @@ export class GpxDisplayService extends RouteDisplayService {
                 if (this.waitsForStreetView())
                     this.armStreetViewStartTimeout()
             }
+            else if ( rideView==='sat') {
+                if (this.waitsForSatelliteView())
+                    this.armSatelliteViewStartTimeout()
+            }
 
-            
+
         }
         /* istanbul ignore catch */
         catch(err) {
@@ -159,6 +173,14 @@ export class GpxDisplayService extends RouteDisplayService {
     }
 
     /**
+     * True when the start overlay has to wait for the Satellite View component to report
+     * 'Loaded'. Mirrors waitsForStreetView() - see its comment for the rationale.
+     */
+    protected waitsForSatelliteView(): boolean {
+        return this.isMobile() && this.getRideSettingsDisplay().getRideView() === 'sat'
+    }
+
+    /**
      * Gets Satellite View display properties for the current ride position.
      *
      * Provides satellite/aerial imagery view of the route with the current position
@@ -210,7 +232,7 @@ export class GpxDisplayService extends RouteDisplayService {
         const rideView = this.getRideSettingsDisplay().getRideView()
 
 
-        if (rideView === 'map' || (this.isMobile() && !this.waitsForStreetView())) {
+        if (rideView === 'map' || (this.isMobile() && !this.waitsForStreetView() && !this.waitsForSatelliteView())) {
             return {
                 mapType: this.getRideViewName(),
                 mapState: 'Loaded'
@@ -235,13 +257,13 @@ export class GpxDisplayService extends RouteDisplayService {
      */
     isStartRideCompleted(): boolean {
         const rideView = this.getRideSettingsDisplay().getRideView()
-        if (rideView==='map' || (this.isMobile() && !this.waitsForStreetView())) {
+        if (rideView==='map' || (this.isMobile() && !this.waitsForStreetView() && !this.waitsForSatelliteView())) {
             this.mapLoaded = true
             return true;
         }
 
-        // Never block the rider indefinitely on a panorama that may never resolve.
-        if (this.svStartTimedOut)
+        // Never block the rider indefinitely on a panorama/satellite image that may never resolve.
+        if (this.svStartTimedOut || this.satStartTimedOut)
             return true
 
         return this.mapLoaded
@@ -298,6 +320,7 @@ export class GpxDisplayService extends RouteDisplayService {
     protected onSatelliteViewEvent(state:SatelliteViewEvent,error?:string) {
         if (state==='Loaded') {
             this.mapLoaded = true
+            this.clearSatelliteViewStartTimeout()
         }
         else if (state==='Error') {
             this.logEvent({message:'sat view error', error:this.mapError})
@@ -420,13 +443,42 @@ export class GpxDisplayService extends RouteDisplayService {
         return this.getNumSetting('SV_START_TIMEOUT') ?? SV_START_TIMEOUT
     }
 
+    protected armSatelliteViewStartTimeout() {
+        this.clearSatelliteViewStartTimeout()
+
+        const timeout = this.getSatelliteViewStartTimeout()
+        this.satStartTimeout = setTimeout( ()=>{
+            this.satStartTimeout = undefined
+            if (this.mapLoaded)
+                return
+
+            this.satStartTimedOut = true
+            this.logEvent({message:'satellite view start timeout', timeout})
+            // re-trigger the start check, which now no longer waits for the view
+            this.emit('state-update')
+        }, timeout)
+    }
+
+    protected clearSatelliteViewStartTimeout() {
+        if (this.satStartTimeout) {
+            clearTimeout(this.satStartTimeout)
+            this.satStartTimeout = undefined
+        }
+    }
+
+    protected getSatelliteViewStartTimeout() {
+        return this.getNumSetting('SAT_START_TIMEOUT') ?? SAT_START_TIMEOUT
+    }
+
     onStarted(): void {
         this.clearStreetViewStartTimeout()
+        this.clearSatelliteViewStartTimeout()
         super.onStarted()
     }
 
     async stop(): Promise<void> {
         this.clearStreetViewStartTimeout()
+        this.clearSatelliteViewStartTimeout()
         return super.stop()
     }
 
