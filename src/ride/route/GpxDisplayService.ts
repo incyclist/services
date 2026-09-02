@@ -150,12 +150,7 @@ export class GpxDisplayService extends RouteDisplayService {
         return this.enrichWithHeading(this.position, 'getInitialStreetViewPosition')
     }
 
-    /**
-     * Current position enriched with the heading the rider is facing, for the native
-     * Satellite View component's rotating camera (satellite-view-mobile-design.md 2.4 -
-     * mirrors desktop's `setOptions({center, heading, tilt:45})` on every update). Same
-     * enrichment Street View's start position already gets - see enrichWithHeading().
-     */
+    /** Current position enriched with heading, for the satellite camera to rotate with. */
     protected getSatelliteViewPosition() {
         return this.enrichWithHeading(this.position, 'getSatelliteViewPosition')
     }

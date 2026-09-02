@@ -217,7 +217,7 @@ describe('GpxDisplayService', () => {
             expect(props.displayPosition?.routeDistance).toBe(500)
         })
 
-        test('passes an already-present heading through unchanged (satellite-view-mobile-design.md 2.4)', () => {
+        test('passes an already-present heading through unchanged', () => {
             setupMocks(service, {mockRideService: true})
             ;(service as any).position = {routeDistance:500, lat:1, lng:2, heading:123}
             const props = service.getSatelliteViewProps()
