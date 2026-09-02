@@ -216,6 +216,29 @@ describe('GpxDisplayService', () => {
             const props = service.getSatelliteViewProps()
             expect(props.displayPosition?.routeDistance).toBe(500)
         })
+
+        test('passes an already-present heading through unchanged (satellite-view-mobile-design.md 2.4)', () => {
+            setupMocks(service, {mockRideService: true})
+            ;(service as any).position = {routeDistance:500, lat:1, lng:2, heading:123}
+            const props = service.getSatelliteViewProps()
+            expect(props.displayPosition?.heading).toBe(123)
+        })
+
+        test('enriches a position with no heading rather than leaving it undefined', () => {
+            setupMocks(service, {mockRideService: true})
+            ;(service as any).position = {routeDistance:500, lat:1, lng:2}
+            const props = service.getSatelliteViewProps()
+            // getHeading() may throw against this minimal mock route (caught and falls back to
+            // the unenriched position) - either way displayPosition itself must never disappear.
+            expect(props.displayPosition).toBeDefined()
+        })
+
+        test('returns undefined displayPosition when no position has been determined yet', () => {
+            setupMocks(service, {mockRideService: true})
+            ;(service as any).position = undefined
+            const props = service.getSatelliteViewProps()
+            expect(props.displayPosition).toBeUndefined()
+        })
     })
 
     describe('getMapViewProps', () => {
@@ -399,10 +422,10 @@ describe('GpxDisplayService', () => {
             expect(service.getStartOverlayProps().mapState).toBe('Loaded')
         })
 
-        test('other mobile ride views still complete immediately', () => {
+        test('map view still completes immediately', () => {
             setupSVMocks(service, svMobile({
                 userSettingsGet: jest.fn((key, def) => {
-                    if (key === 'preferences.rideView') return 'sat'
+                    if (key === 'preferences.rideView') return 'map'
                     return def
                 })
             }))
@@ -468,6 +491,178 @@ describe('GpxDisplayService', () => {
             service['onStreetViewEvent']('pano_changed', undefined)
 
             expect(service['updateDurations'].length).toBe(1)
+        })
+    })
+
+    describe('waitsForSatelliteView', () => {
+        let service: GpxDisplayService
+
+        // On mobile, getRideView() falls back to 'map' unless the secrets binding is
+        // healthy (see 'street view start on mobile' below) - so satellite tests need the
+        // same Bindings shape as the street view ones to actually reach the 'sat' path.
+        const setupSatMocks = (s:any, options:any) => {
+            setupMocks(s, options)
+            Inject('Bindings', {
+                appInfo: {
+                    getChannel: jest.fn().mockReturnValue(options.channel ?? 'desktop'),
+                    getOS: jest.fn().mockReturnValue({platform: 'android'})
+                },
+                secret: {
+                    getSecretsStatus: jest.fn().mockReturnValue('valid')
+                }
+            })
+        }
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            cleanupMocks(service)
+        })
+
+        test('true on mobile with sat ride view', () => {
+            setupSatMocks(service, {
+                mockRideService: true,
+                channel: 'mobile',
+                userSettingsGet: jest.fn((key, def) => {
+                    if (key === 'preferences.rideView') return 'sat'
+                    return def
+                })
+            })
+            expect(service['waitsForSatelliteView']()).toBe(true)
+        })
+
+        test('false on mobile with sv ride view', () => {
+            setupSatMocks(service, {
+                mockRideService: true,
+                channel: 'mobile',
+                userSettingsGet: jest.fn((key, def) => {
+                    if (key === 'preferences.rideView') return 'sv'
+                    return def
+                })
+            })
+            expect(service['waitsForSatelliteView']()).toBe(false)
+        })
+
+        test('false on mobile with map ride view', () => {
+            setupSatMocks(service, {
+                mockRideService: true,
+                channel: 'mobile',
+                userSettingsGet: jest.fn((key, def) => {
+                    if (key === 'preferences.rideView') return 'map'
+                    return def
+                })
+            })
+            expect(service['waitsForSatelliteView']()).toBe(false)
+        })
+
+        test('false on desktop with sat ride view', () => {
+            setupSatMocks(service, {
+                mockRideService: true,
+                channel: 'desktop',
+                userSettingsGet: jest.fn((key, def) => {
+                    if (key === 'preferences.rideView') return 'sat'
+                    return def
+                })
+            })
+            expect(service['waitsForSatelliteView']()).toBe(false)
+        })
+    })
+
+    describe('satellite view start on mobile', () => {
+        let service: GpxDisplayService
+
+        const satMobile = (overrides:any = {}) => ({
+            mockRideService: true,
+            channel: 'mobile',
+            userSettingsGet: jest.fn((key, def) => {
+                if (key === 'preferences.rideView') return 'sat'
+                return def
+            }),
+            ...overrides
+        })
+
+        // Same Bindings shape as street view's mobile tests - getRideView() falls back to
+        // 'map' on mobile unless the secrets binding reports 'valid'.
+        const setupSatMocks = (s:any, options:any) => {
+            setupMocks(s, options)
+            Inject('Bindings', {
+                appInfo: {
+                    getChannel: jest.fn().mockReturnValue(options.channel ?? 'desktop'),
+                    getOS: jest.fn().mockReturnValue({platform: 'android'})
+                },
+                secret: {
+                    getSecretsStatus: jest.fn().mockReturnValue('valid')
+                }
+            })
+        }
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            service['clearSatelliteViewStartTimeout']()
+            cleanupMocks(service)
+        })
+
+        test('waits for the Loaded event instead of completing immediately', () => {
+            setupSatMocks(service, satMobile())
+
+            expect(service.isStartRideCompleted()).toBe(false)
+            expect(service.getStartOverlayProps().mapState).toBe('Loading')
+        })
+
+        test('completes once the view reports Loaded', () => {
+            setupSatMocks(service, satMobile())
+
+            service['onSatelliteViewEvent']('Loaded', undefined)
+
+            expect(service.isStartRideCompleted()).toBe(true)
+            expect(service.getStartOverlayProps().mapState).toBe('Loaded')
+        })
+
+        test('desktop behaviour is unchanged', () => {
+            setupSatMocks(service, satMobile({channel: 'desktop'}))
+
+            // On desktop, isMobile() is false so the "always Loaded" branch never applies -
+            // desktop has always waited for mapLoaded here, same as street view.
+            expect(service['waitsForSatelliteView']()).toBe(false)
+            expect(service.isStartRideCompleted()).toBe(false)
+        })
+
+        test('start is no longer blocked once the start timeout expires', () => {
+            jest.useFakeTimers()
+            try {
+                setupSatMocks(service, satMobile())
+                service['armSatelliteViewStartTimeout']()
+
+                expect(service.isStartRideCompleted()).toBe(false)
+
+                jest.advanceTimersByTime(15000)
+
+                expect(service.isStartRideCompleted()).toBe(true)
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+
+        test('the start timeout is cancelled by the Loaded event', () => {
+            jest.useFakeTimers()
+            try {
+                setupSatMocks(service, satMobile())
+                service['armSatelliteViewStartTimeout']()
+                service['onSatelliteViewEvent']('Loaded', undefined)
+
+                jest.advanceTimersByTime(15000)
+
+                expect(service['satStartTimedOut']).toBe(false)
+            }
+            finally {
+                jest.useRealTimers()
+            }
         })
     })
 

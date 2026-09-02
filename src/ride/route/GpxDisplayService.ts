@@ -6,7 +6,7 @@ import { getHeading } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { useRideSettingsDisplay } from "../../settings/display";
 import { RoutePoint } from "../../types";
-import { CurrentRideDisplayProps, GpxDisplayProps,  RouteDisplayProps } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, GpxDisplayProps,  RouteDisplayProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 import { SatelliteViewEvent, StreetViewEvent } from "./types";
 
@@ -25,6 +25,13 @@ const SV_MIN_DELAY = 1000
  * Overridable via the `SV_START_TIMEOUT` user setting.
  */
 const SV_START_TIMEOUT = 15000
+
+/**
+ * Maximum time the start overlay waits for the Satellite View component to report 'Loaded'
+ * before the ride is started anyway. Mirrors SV_START_TIMEOUT - see its comment for the
+ * rationale. Overridable via the `SAT_START_TIMEOUT` user setting.
+ */
+const SAT_START_TIMEOUT = 15000
 
 /**
  * Service for managing GPX-based route ride display with multiple view modes.
@@ -57,7 +64,10 @@ export class GpxDisplayService extends RouteDisplayService {
     /** set once the start overlay stopped waiting for the Street View 'Loaded' event */
     protected svStartTimedOut: boolean = false
     protected svStartTimeout: NodeJS.Timeout
-    
+    /** set once the start overlay stopped waiting for the Satellite View 'Loaded' event */
+    protected satStartTimedOut: boolean = false
+    protected satStartTimeout: NodeJS.Timeout
+
     
 
     constructor() {
@@ -78,8 +88,12 @@ export class GpxDisplayService extends RouteDisplayService {
                 if (this.waitsForStreetView())
                     this.armStreetViewStartTimeout()
             }
+            else if ( rideView==='sat') {
+                if (this.waitsForSatelliteView())
+                    this.armSatelliteViewStartTimeout()
+            }
 
-            
+
         }
         /* istanbul ignore catch */
         catch(err) {
@@ -133,7 +147,26 @@ export class GpxDisplayService extends RouteDisplayService {
      * panorama in the middle of the Atlantic.
      */
     protected getInitialStreetViewPosition() {
-        const position = this.position
+        return this.enrichWithHeading(this.position, 'getInitialStreetViewPosition')
+    }
+
+    /**
+     * Current position enriched with the heading the rider is facing, for the native
+     * Satellite View component's rotating camera (satellite-view-mobile-design.md 2.4 -
+     * mirrors desktop's `setOptions({center, heading, tilt:45})` on every update). Same
+     * enrichment Street View's start position already gets - see enrichWithHeading().
+     */
+    protected getSatelliteViewPosition() {
+        return this.enrichWithHeading(this.position, 'getSatelliteViewPosition')
+    }
+
+    /**
+     * Adds `heading` to a position if it is not already present, computed from the rider's
+     * progress along the route. Returns undefined while no position has been determined yet -
+     * the mobile component must not be given a (0,0) fallback, which would request/render
+     * imagery in the middle of the Atlantic.
+     */
+    protected enrichWithHeading(position: CurrentPosition|undefined, logContext: string) {
         if (!position)
             return undefined
         if (position.heading !== undefined)
@@ -143,7 +176,7 @@ export class GpxDisplayService extends RouteDisplayService {
             return {...position, heading: getHeading(this.getOriginalRoute(), position)}
         }
         catch (err) {
-            this.logError(err, 'getInitialStreetViewPosition')
+            this.logError(err, logContext)
             return position
         }
     }
@@ -159,6 +192,14 @@ export class GpxDisplayService extends RouteDisplayService {
     }
 
     /**
+     * True when the start overlay has to wait for the Satellite View component to report
+     * 'Loaded'. Mirrors waitsForStreetView() - see its comment for the rationale.
+     */
+    protected waitsForSatelliteView(): boolean {
+        return this.isMobile() && this.getRideSettingsDisplay().getRideView() === 'sat'
+    }
+
+    /**
      * Gets Satellite View display properties for the current ride position.
      *
      * Provides satellite/aerial imagery view of the route with the current position
@@ -170,9 +211,7 @@ export class GpxDisplayService extends RouteDisplayService {
     getSatelliteViewProps() {
         return {
             onDisplayEvent: this.onSatelliteViewEvent.bind(this),
-            displayPosition: this.position
-
-
+            displayPosition: this.getSatelliteViewPosition()
         }
     }
 
@@ -210,7 +249,7 @@ export class GpxDisplayService extends RouteDisplayService {
         const rideView = this.getRideSettingsDisplay().getRideView()
 
 
-        if (rideView === 'map' || (this.isMobile() && !this.waitsForStreetView())) {
+        if (rideView === 'map' || (this.isMobile() && !this.waitsForStreetView() && !this.waitsForSatelliteView())) {
             return {
                 mapType: this.getRideViewName(),
                 mapState: 'Loaded'
@@ -235,13 +274,13 @@ export class GpxDisplayService extends RouteDisplayService {
      */
     isStartRideCompleted(): boolean {
         const rideView = this.getRideSettingsDisplay().getRideView()
-        if (rideView==='map' || (this.isMobile() && !this.waitsForStreetView())) {
+        if (rideView==='map' || (this.isMobile() && !this.waitsForStreetView() && !this.waitsForSatelliteView())) {
             this.mapLoaded = true
             return true;
         }
 
-        // Never block the rider indefinitely on a panorama that may never resolve.
-        if (this.svStartTimedOut)
+        // Never block the rider indefinitely on a panorama/satellite image that may never resolve.
+        if (this.svStartTimedOut || this.satStartTimedOut)
             return true
 
         return this.mapLoaded
@@ -298,6 +337,7 @@ export class GpxDisplayService extends RouteDisplayService {
     protected onSatelliteViewEvent(state:SatelliteViewEvent,error?:string) {
         if (state==='Loaded') {
             this.mapLoaded = true
+            this.clearSatelliteViewStartTimeout()
         }
         else if (state==='Error') {
             this.logEvent({message:'sat view error', error:this.mapError})
@@ -420,13 +460,42 @@ export class GpxDisplayService extends RouteDisplayService {
         return this.getNumSetting('SV_START_TIMEOUT') ?? SV_START_TIMEOUT
     }
 
+    protected armSatelliteViewStartTimeout() {
+        this.clearSatelliteViewStartTimeout()
+
+        const timeout = this.getSatelliteViewStartTimeout()
+        this.satStartTimeout = setTimeout( ()=>{
+            this.satStartTimeout = undefined
+            if (this.mapLoaded)
+                return
+
+            this.satStartTimedOut = true
+            this.logEvent({message:'satellite view start timeout', timeout})
+            // re-trigger the start check, which now no longer waits for the view
+            this.emit('state-update')
+        }, timeout)
+    }
+
+    protected clearSatelliteViewStartTimeout() {
+        if (this.satStartTimeout) {
+            clearTimeout(this.satStartTimeout)
+            this.satStartTimeout = undefined
+        }
+    }
+
+    protected getSatelliteViewStartTimeout() {
+        return this.getNumSetting('SAT_START_TIMEOUT') ?? SAT_START_TIMEOUT
+    }
+
     onStarted(): void {
         this.clearStreetViewStartTimeout()
+        this.clearSatelliteViewStartTimeout()
         super.onStarted()
     }
 
     async stop(): Promise<void> {
         this.clearStreetViewStartTimeout()
+        this.clearSatelliteViewStartTimeout()
         return super.stop()
     }
 
