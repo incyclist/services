@@ -94,11 +94,14 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             
 
-            if (!route.hasVideo || !(route.isLocal||route.isDownloaded) || route.videoUrl?.startsWith('http')) 
-                return isOnline 
+            if (!route.hasVideo || !(route.isLocal||route.isDownloaded) || route.videoUrl?.startsWith('http'))
+                return isOnline
 
-            if (route.requiresDownload)
-                return isOnline  
+            // requiresDownload describes the route, not its current state - it stays true after the
+            // video has been downloaded. Without the isDownloaded guard an already-downloaded video
+            // stays gated on connectivity, even though it plays entirely from local storage.
+            if (route.requiresDownload && !route.isDownloaded)
+                return isOnline
 
             return true
         }

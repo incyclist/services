@@ -109,3 +109,74 @@ describe('RouteCard.updateStartPos', () => {
         expect(updated?.startPos.value).toBe(5);
     });
 });
+
+describe('RouteCard.canStart', () => {
+
+    const createCard = (info: RouteInfo) => new RouteCard(new Route(info));
+
+    const downloadedVideo: RouteInfo = {
+        hasVideo: true,
+        isDownloaded: true,
+        requiresDownload: true,
+        videoUrl: 'video:///home/user/Videos/route.mp4'
+    } as RouteInfo;
+
+    describe('video already available on this device', () => {
+
+        test('a downloaded video can be started while offline', () => {
+            const card = createCard(downloadedVideo);
+            expect(card.canStart({ isOnline: false } as any)).toBe(true);
+        });
+
+        test('a downloaded video can be started while online', () => {
+            const card = createCard(downloadedVideo);
+            expect(card.canStart({ isOnline: true } as any)).toBe(true);
+        });
+
+        test('a local (imported) video can be started while offline', () => {
+            const card = createCard({
+                hasVideo: true, isLocal: true, requiresDownload: false,
+                videoUrl: 'video:///home/user/Videos/route.mp4'
+            } as RouteInfo);
+            expect(card.canStart({ isOnline: false } as any)).toBe(true);
+        });
+    });
+
+    describe('video not (yet) available on this device', () => {
+
+        test('a route still awaiting its download stays gated on connectivity', () => {
+            const card = createCard({
+                hasVideo: true, isDownloaded: false, requiresDownload: true,
+                downloadUrl: 'https://example.com/route.mp4'
+            } as RouteInfo);
+            expect(card.canStart({ isOnline: false } as any)).toBe(false);
+            expect(card.canStart({ isOnline: true } as any)).toBe(true);
+        });
+
+        test('a video still streamed over http stays gated on connectivity', () => {
+            const card = createCard({
+                hasVideo: true, isDownloaded: true, requiresDownload: false,
+                videoUrl: 'https://example.com/route.mp4'
+            } as RouteInfo);
+            expect(card.canStart({ isOnline: false } as any)).toBe(false);
+        });
+    });
+
+    describe('GPX routes', () => {
+
+        test('are blocked while offline, as no map can be rendered', () => {
+            const card = createCard({ hasVideo: false } as RouteInfo);
+            expect(card.canStart({ isOnline: false } as any)).toBe(false);
+        });
+
+        test('can be started while online', () => {
+            const card = createCard({ hasVideo: false } as RouteInfo);
+            expect(card.canStart({ isOnline: true } as any)).toBe(true);
+        });
+    });
+
+    test('returns false when the card carries no route', () => {
+        const card = new RouteCard(undefined as any);
+        expect(card.canStart({ isOnline: true } as any)).toBe(false);
+    });
+});
