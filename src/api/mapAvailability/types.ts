@@ -4,7 +4,7 @@ export type AvailabilityStatus = 'available' | 'unavailable' | 'not-supported'
 
 export interface AvailabilityResult {
     status: AvailabilityStatus
-    messageKey?: string   // i18n key explaining what the user needs to do, when 'unavailable'
+    messageKey?: string   // internal reason code, when 'unavailable' - resolved to display text by services, never exposed to the UI layer as-is
 }
 
 export interface IMapAvailabilityBinding {

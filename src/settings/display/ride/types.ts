@@ -4,7 +4,7 @@ export type TRideView = 'sv'|'sat'|'map'
 export interface TRideViewOption {
     label: string
     disabled?: boolean
-    messageKey?: string
+    message?: string
 }
 
 export interface RideSettingsDisplayProps  {

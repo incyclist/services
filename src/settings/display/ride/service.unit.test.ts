@@ -31,7 +31,7 @@ describe('RideSettingsDisplayService', () => {
 
         test('map is always present and never disabled, regardless of availability', () => {
             setup({
-                mapAvailability: { isAvailable: () => ({ status: 'unavailable', messageKey: 'x' }) }
+                mapAvailability: { isAvailable: () => ({ status: 'unavailable', messageKey: 'need.playservices' }) }
             })
 
             const res = service.getRideViewOptions()
@@ -50,15 +50,25 @@ describe('RideSettingsDisplayService', () => {
             expect(res.get('sat')).toEqual({ label: 'Satellite View' })
         })
 
-        test('status "unavailable": key included, disabled, messageKey passed through', () => {
+        test('status "unavailable": key included, disabled, messageKey resolved to display text', () => {
             setup({
                 mapAvailability: { isAvailable: () => ({ status: 'unavailable', messageKey: 'need.playservices' }) }
             })
 
             const res = service.getRideViewOptions()
 
-            expect(res.get('sv')).toEqual({ label: 'Street View', disabled: true, messageKey: 'need.playservices' })
-            expect(res.get('sat')).toEqual({ label: 'Satellite View', disabled: true, messageKey: 'need.playservices' })
+            expect(res.get('sv')).toEqual({ label: 'Street View', disabled: true, message: 'Install Google Play Services to use this view' })
+            expect(res.get('sat')).toEqual({ label: 'Satellite View', disabled: true, message: 'Install Google Play Services to use this view' })
+        })
+
+        test('status "unavailable" with an unrecognized messageKey: falls back to a generic message', () => {
+            setup({
+                mapAvailability: { isAvailable: () => ({ status: 'unavailable', messageKey: 'some.unknown.key' }) }
+            })
+
+            const res = service.getRideViewOptions()
+
+            expect(res.get('sv')?.message).toBe('This view is currently unavailable on your device')
         })
 
         test('status "not-supported": key omitted entirely', () => {

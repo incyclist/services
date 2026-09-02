@@ -6,6 +6,13 @@ import { IObserver } from "../../../types";
 import { UserSettingsService, useUserSettings } from "../../service";
 import { RideSettingsDisplayProps, TRideView, TRideViewOption } from "./types";
 
+// English-only for now - no i18n system exists yet. Resolving a reason code to display text is
+// a WHAT decision (what to tell the user), so it belongs here in services, not in mobile/web-ui.
+const UNAVAILABLE_MESSAGES: Record<string,string> = {
+    'need.playservices': 'Install Google Play Services to use this view',
+}
+const DEFAULT_UNAVAILABLE_MESSAGE = 'This view is currently unavailable on your device'
+
 @Singleton
 export class RideSettingsDisplayService extends IncyclistService {
 
@@ -81,7 +88,8 @@ export class RideSettingsDisplayService extends IncyclistService {
             return
 
         if (availability?.status === 'unavailable') {
-            map.set(key,{label, disabled:true, messageKey:availability.messageKey})
+            const message = UNAVAILABLE_MESSAGES[availability.messageKey??''] ?? DEFAULT_UNAVAILABLE_MESSAGE
+            map.set(key,{label, disabled:true, message})
             return
         }
 
