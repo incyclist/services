@@ -1,10 +1,10 @@
-import { getBindings, ISecretBinding } from "../../../api";
+import { getBindings } from "../../../api";
 import { Injectable, Singleton } from "../../../base/decorators";
 import { IncyclistService } from "../../../base/service";
 import { Observer } from "../../../base/types";
 import { IObserver } from "../../../types";
 import { UserSettingsService, useUserSettings } from "../../service";
-import { RideSettingsDisplayProps, TRideView } from "./types";
+import { RideSettingsDisplayProps, TRideView, TRideViewOption } from "./types";
 
 @Singleton
 export class RideSettingsDisplayService extends IncyclistService {
@@ -38,9 +38,6 @@ export class RideSettingsDisplayService extends IncyclistService {
     }
 
     setRideView(rideView:TRideView) {
-        if (this.isRestricted())
-            return;
-
         try {
             this.getUserSettings().set('preferences.rideView',rideView)       
         }
@@ -57,39 +54,38 @@ export class RideSettingsDisplayService extends IncyclistService {
 
 
     getRideView():TRideView {
-        if (this.isRestricted())
+        const rideView = this.getUserSettings().get('preferences.rideView','sv')
+
+        const availability = this.getBindings().mapAvailability?.isAvailable(rideView)
+        if (availability?.status === 'unavailable' || availability?.status === 'not-supported')
             return 'map'
 
-       
-        const rideView = this.getUserSettings().get('preferences.rideView','sv')       
         return rideView
 
     }
 
-    getRideViewOptions():Map<TRideView,string> {
-        const map:Map<TRideView,string> = new Map()
+    getRideViewOptions():Map<TRideView,TRideViewOption> {
+        const map:Map<TRideView,TRideViewOption> = new Map()
 
-        if (this.isRestricted()) {
-            map.set('map','Map')    
-            return map;
-        }
+        this.addRideViewOption(map,'sv','Street View')
+        map.set('map',{label:'Map'})
+        this.addRideViewOption(map,'sat','Satellite View')
 
-        map.set('sv','Street View')
-        map.set('map','Map')
-
-        if (!this.isMobile())
-            map.set('sat','Satellite View')
-        
         return map
     }
 
-    protected isRestricted() {
-        if (this.isMobile()) {
-            const secretsStatus = this.getSecretBinding()?.getSecretsStatus?.() 
-            return  (secretsStatus === 'stale' || secretsStatus === 'missing' || secretsStatus===undefined) 
-        }
-        return false
+    protected addRideViewOption(map:Map<TRideView,TRideViewOption>, key:TRideView, label:string) {
+        const availability = this.getBindings().mapAvailability?.isAvailable(key)
 
+        if (availability?.status === 'not-supported')
+            return
+
+        if (availability?.status === 'unavailable') {
+            map.set(key,{label, disabled:true, messageKey:availability.messageKey})
+            return
+        }
+
+        map.set(key,{label})
     }
 
     protected isMobile() {
@@ -114,10 +110,6 @@ export class RideSettingsDisplayService extends IncyclistService {
     @Injectable
     protected getBindings() {
         return getBindings()
-    }
-
-    protected getSecretBinding(): ISecretBinding|undefined {
-        return this.getBindings().secret
     }
 
 }
