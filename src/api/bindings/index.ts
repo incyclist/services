@@ -14,6 +14,7 @@ import type { ISecretBinding } from '../secret'
 import type { ISerialBinding } from '../serial/types'
 import type { ICryptoBinding } from '../crypto/types'
 import type { IFetchBinding } from '../fetch/types'
+import type { IMapAvailabilityBinding } from '../mapAvailability/types'
 
 
 export interface IUserSettingsBinding {
@@ -35,6 +36,7 @@ export class IncyclistBindings {
     public downloadManager?: IDownloadManager
     public form?:IFormPostBinding;
     public secret?:ISecretBinding
+    public mapAvailability?:IMapAvailabilityBinding
     public mq: IMessageQueueBinding
     public ui: INativeUI
     public settings: IUserSettingsBinding
