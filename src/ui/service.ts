@@ -156,7 +156,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
             this.backgroundTimer = setTimeout(()=> {
                 this.backgroundPausedByService = true
-                this.pause()
+                this.pause().catch( (err)=> { this.logError(err,'onAppPause:pause') })
             },BACKGROUND_PAUSE_TIMEOUT_MS)
         }
         catch(err) {
@@ -189,7 +189,7 @@ export class UserInterfaceServcie extends IncyclistService {
             this.appState = 'Active'
 
             if (resumeRequired) {
-                this.resume()
+                this.resume().catch( (err)=> { this.logError(err,'onAppResume:resume') })
             }
         }
         catch(err) {
@@ -240,19 +240,63 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
     protected async pause() {
-        await IncyclistPageService.pausePage()
-        await useDeviceAccess().disconnect()
-        if (this.getMessageQueue().disconnect)
-            this.getMessageQueue().disconnect()
+        // Each step is guarded separately: a failure in one must not skip the others, as
+        // that would silently leave device interfaces scanning and the message queue connected.
+        this.logEvent({message:'pause started'})
 
+        try {
+            await IncyclistPageService.pausePage()
+        }
+        catch(err) {
+            this.logError(err,'pause:pausePage')
+        }
 
+        try {
+            await useDeviceAccess().disconnect()
+        }
+        catch(err) {
+            this.logError(err,'pause:disconnect')
+        }
+
+        try {
+            if (this.getMessageQueue().disconnect)
+                this.getMessageQueue().disconnect()
+        }
+        catch(err) {
+            this.logError(err,'pause:mqDisconnect')
+        }
+
+        this.logEvent({message:'pause finished'})
     }
 
     protected async resume() {
-        if (this.getMessageQueue().connect)
-            this.getMessageQueue().connect()
-        await useDeviceAccess().connect()
-        await IncyclistPageService.resumePage()
+        // Guarded per step for the same reason as pause(): one failing step must not
+        // leave the app half-resumed.
+        this.logEvent({message:'resume started'})
+
+        try {
+            if (this.getMessageQueue().connect)
+                this.getMessageQueue().connect()
+        }
+        catch(err) {
+            this.logError(err,'resume:mqConnect')
+        }
+
+        try {
+            await useDeviceAccess().connect()
+        }
+        catch(err) {
+            this.logError(err,'resume:connect')
+        }
+
+        try {
+            await IncyclistPageService.resumePage()
+        }
+        catch(err) {
+            this.logError(err,'resume:resumePage')
+        }
+
+        this.logEvent({message:'resume finished'})
     }
 
     protected startHeartbeatWorker() {

@@ -164,3 +164,56 @@ describe('UserInterfaceServcie - onAppExit', () => {
         expect(service['isTerminated']).toBe(true)
     })
 })
+
+describe('UserInterfaceServcie - pause', () => {
+
+    let service: UserInterfaceServcie
+    let disconnect: jest.Mock
+    let mqDisconnect: jest.Mock
+
+    const setupMocks = () => {
+        disconnect = jest.fn().mockResolvedValue(true)
+        mqDisconnect = jest.fn()
+        jest.spyOn(IncyclistPageService, 'pausePage').mockResolvedValue(undefined as never)
+        jest.spyOn(devices, 'useDeviceAccess').mockReturnValue({ disconnect } as never)
+        ;(service as any).getMessageQueue = jest.fn().mockReturnValue({ disconnect: mqDisconnect })
+        ;(service as any).logEvent = jest.fn()
+        ;(service as any).logError = jest.fn()
+    }
+
+    beforeEach(() => {
+        service = new UserInterfaceServcie()
+        setupMocks()
+    })
+
+    afterEach(() => {
+        jest.restoreAllMocks()
+    })
+
+    test('disconnects device access and message queue', async () => {
+        await (service as any).pause()
+
+        expect(disconnect).toHaveBeenCalled()
+        expect(mqDisconnect).toHaveBeenCalled()
+    })
+
+    test('still disconnects when pausing the page fails', async () => {
+        jest.spyOn(IncyclistPageService, 'pausePage').mockRejectedValue(new Error('X'))
+
+        await (service as any).pause()
+
+        expect(disconnect).toHaveBeenCalled()
+        expect(mqDisconnect).toHaveBeenCalled()
+        expect((service as any).logError).toHaveBeenCalledWith(expect.any(Error), 'pause:pausePage')
+    })
+
+    test('still disconnects the message queue when device access disconnect fails', async () => {
+        disconnect.mockRejectedValue(new Error('X'))
+
+        await (service as any).pause()
+
+        expect(mqDisconnect).toHaveBeenCalled()
+        expect((service as any).logError).toHaveBeenCalledWith(expect.any(Error), 'pause:disconnect')
+    })
+
+})
