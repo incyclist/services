@@ -626,7 +626,7 @@ describe('WorkoutRide',()=>{
                 {type:'step', steady:true, work:true, duration:10, power:{min:100,max:100,type:'pct of FTP'}, text:'Invalid'}
             ]})
             setupMocks(invalidWorkout)
-            const invalidService = new WorkoutRide()
+            const invalidService = new WorkoutRide() as any
             invalidService.init()
 
             const realGetLimits = invalidService.workout.getLimits.bind(invalidService.workout)
@@ -654,7 +654,7 @@ describe('WorkoutRide',()=>{
                 {type:'step', steady:true, work:true, duration:2, power:{min:100,max:100,type:'pct of FTP'}, text:'Short'}
             ]})
             setupMocks(shortWorkout)
-            const shortService = new WorkoutRide()
+            const shortService = new WorkoutRide() as any
             shortService.init()
             shortService.start()
             const shortEmit = jest.spyOn(shortService,'emit')

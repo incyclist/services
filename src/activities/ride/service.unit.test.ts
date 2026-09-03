@@ -497,11 +497,11 @@ describe('ActivityRideService',()=>{
             mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'},
                 init:{ state,tsStart:Date.now(), activity,observer }
             })
-            service.getRepo = jest.fn(()=>({
+            ;(service as any).getRepo = jest.fn(()=>({
                 getFilename: jest.fn(name=> `/tmp/${name}.json`),
                 save: jest.fn( async () => {return}),
                 delete: repoDelete
-            })) as any
+            }))
             return activity
         }
 
@@ -557,11 +557,11 @@ describe('ActivityRideService',()=>{
                 setTimeout( ()=> { order.push('save-done'); resolve() }, 20)
             }))
 
-            service.getRepo = jest.fn(()=>({
+            ;(service as any).getRepo = jest.fn(()=>({
                 getFilename: jest.fn(name=> `/tmp/${name}.json`),
                 save,
                 delete: jest.fn( async (id) => { order.push('delete'); return repoDelete(id) })
-            })) as any
+            }))
 
             await service.delete()
 

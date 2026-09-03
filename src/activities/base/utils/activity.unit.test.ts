@@ -147,6 +147,9 @@ describe('Activity', () => {
                     id: 'test-none-1',
                     title: 'Workout Only Ride',
                     name: 'workout-only-ride',
+                    // a workout-only ride has no route: buildSummary() derives both from route?.id / route?.hash
+                    routeId: undefined,
+                    routeHash: undefined,
                     startTime: Date.now(),
                     rideTime: 1800,
                     distance: 0,

@@ -41,6 +41,7 @@
     "build": "npm run build:esm && npm run build:cjs",
     "build:esm": "tsc -p tsconfig.esm.json",
     "build:cjs": "tsc -p tsconfig.cjs.json",
+    "typecheck": "tsc --noEmit",
     "test:all": "npx jest",
     "test:e2e": "npx jest --coverage -c jest.e2e-config.cjs  --coverageDirectory coverage.e2e",
     "test:unit": "npx jest --coverage -c jest.unit-config.cjs  ",

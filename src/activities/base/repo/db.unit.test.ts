@@ -38,7 +38,7 @@ describe('ActivityDB',()=>{
         })
 
         afterEach(()=>{
-            db.reset()
+            (db as any).reset()
             delete getBindings().appInfo
         })
 
