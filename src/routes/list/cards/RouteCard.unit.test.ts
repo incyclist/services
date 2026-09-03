@@ -180,3 +180,54 @@ describe('RouteCard.canStart', () => {
         expect(card.canStart({ isOnline: true } as any)).toBe(false);
     });
 });
+
+describe('RouteCard.openSettings', () => {
+
+    const createCard = (info: RouteInfo, details?: any) => {
+        const card = new RouteCard(new Route(info));
+        if (details)
+            card.getData().details = details;
+        return card;
+    };
+
+    const videoRouteAwaitingDetails: RouteInfo = { hasVideo: true } as RouteInfo;
+
+    test('does not throw for a video route whose details have not been loaded yet', () => {
+        const card = createCard(videoRouteAwaitingDetails);
+
+        expect(card.getRouteData()).toBeUndefined();
+        expect(() => card.openSettings()).not.toThrow();
+    });
+
+    test('reports that the details are not available yet', () => {
+        const card = createCard(videoRouteAwaitingDetails);
+
+        expect(card.openSettings().detailsAvailable).toBe(false);
+    });
+
+    test('does not claim the video is missing while the details are still unknown', () => {
+        const card = createCard(videoRouteAwaitingDetails);
+
+        const props = card.openSettings();
+
+        expect(props.videoMissing).toBeFalsy();
+        expect(props.canStart).toBe(false);
+    });
+
+    test('claims the video is missing once loaded details turn out to carry no video', () => {
+        const card = createCard(videoRouteAwaitingDetails, { video: {} });
+
+        const props = card.openSettings();
+
+        expect(props.detailsAvailable).toBe(true);
+        expect(props.videoMissing).toBe(true);
+        expect(props.canStart).toBe(false);
+    });
+
+    test('reports the details as available for a GPX route once they are loaded', () => {
+        const card = createCard({ hasVideo: false } as RouteInfo, { points: [] });
+
+        expect(card.openSettings().detailsAvailable).toBe(true);
+    });
+
+});

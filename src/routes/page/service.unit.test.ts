@@ -174,10 +174,9 @@ describe('RoutesPageService',()=>{
         })
     })
 
-    // Regression guard (§9.4 tripwire, workout-combo-service-design.md §5.1/§5.3): this design
-    // touches NO shared/domain service. RouteCard.openSettings() is called directly by
-    // web-ui/src/.../RouteDetails/wrapper.jsx - its shape must survive this session byte-identical.
-    // Session 2.2 does not modify RouteCard at all; this test exists to keep it that way.
+    // Regression guard: RouteCard.openSettings() is called directly by
+    // web-ui/src/.../RouteDetails/wrapper.jsx, so its shape is a published contract. Fields may
+    // only ever be added here - removing or renaming one breaks that caller silently.
     describe('regression guard - RouteCard.openSettings() unchanged shape (design §5.3)',()=>{
 
         afterEach( ()=>{
@@ -195,9 +194,9 @@ describe('RoutesPageService',()=>{
             const props = card.openSettings()
 
             expect(Object.keys(props).sort()).toEqual([
-                'canStart', 'hasWorkout', 'settings', 'showLoopOverwrite', 'showNextOverwrite',
-                'showWorkoutOption', 'totalDistance', 'totalElevation', 'updateMarkers', 'updateStartPos',
-                'videoChecking', 'videoMissing', 'xScale', 'yScale'
+                'canStart', 'detailsAvailable', 'hasWorkout', 'settings', 'showLoopOverwrite',
+                'showNextOverwrite', 'showWorkoutOption', 'totalDistance', 'totalElevation',
+                'updateMarkers', 'updateStartPos', 'videoChecking', 'videoMissing', 'xScale', 'yScale'
             ].sort())
 
             expect(typeof props.hasWorkout).toBe('boolean')
