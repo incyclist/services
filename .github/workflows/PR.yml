@@ -44,7 +44,7 @@ jobs:
       # diagnostics off - so neither the build nor the test run type-checks a test.
       # The root tsconfig.json includes them, which is what this step covers.
     - name: type check
-      run: npx tsc --noEmit
+      run: npm run typecheck
     - run: npm run lint
     - run: npm run test:unit
       env:
