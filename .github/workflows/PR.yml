@@ -40,6 +40,11 @@ jobs:
         node-version: ${{ matrix.node-version }}
     - run: npm ci --ignore-scripts
     - run: npm run build --if-present
+      # tsconfig.esm/cjs.json exclude test files, and ts-jest transpiles them with
+      # diagnostics off - so neither the build nor the test run type-checks a test.
+      # The root tsconfig.json includes them, which is what this step covers.
+    - name: type check
+      run: npx tsc --noEmit
     - run: npm run lint
     - run: npm run test:unit
       env:
