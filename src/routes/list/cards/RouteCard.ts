@@ -430,9 +430,20 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
         
 
+        // The route's full details are loaded lazily, so a card can legitimately be asked for its
+        // settings before they have arrived. Everything derived from them is therefore provisional,
+        // and `detailsAvailable` tells the caller whether it needs to read the settings again once
+        // the load completes.
+        const details = this.getRouteData()
+        const detailsAvailable = valid(details)
+
         if (descr?.hasVideo && !descr.videoUrl) {
-            const details = this.getRouteData()
-            if (details.video?.url) {
+            if (!detailsAvailable) {
+                // Without the details there is no way to tell whether the video is reachable, so the
+                // ride cannot be started yet - but it must not be reported as missing either.
+                canStart = false
+            }
+            else if (details.video?.url) {
                 canStart = false            
                 videoChecking = true
                 videoMissing = this.isVideoMissing()
@@ -488,7 +499,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const xScale = { value: C( 1, 'distance'), unit: uDist }
         const yScale = { value: C( 1, 'elevation'), unit: uEl }
 
-        return {settings:uiSettings,totalDistance, totalElevation, showLoopOverwrite,showNextOverwrite,hasWorkout,showWorkoutOption,canStart, videoChecking, videoMissing,
+        return {settings:uiSettings,totalDistance, totalElevation, showLoopOverwrite,showNextOverwrite,hasWorkout,showWorkoutOption,canStart, videoChecking, videoMissing, detailsAvailable,
                 xScale, yScale,
                 updateStartPos: this.updateStartPos.bind(this),
                 updateMarkers: this.updateMarkers.bind(this)

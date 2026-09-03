@@ -81,6 +81,9 @@ export type RouteCardProps = {
     canStart?:boolean
     videoMissing?:Promise<boolean>
     videoChecking?:boolean
+    /** false while the route's details are still being loaded - everything derived from them
+     *  (distance, elevation, video availability) is provisional until this turns true */
+    detailsAvailable?:boolean
     totalDistance: { value:number, unit:Unit},
     totalElevation: { value:number, unit:Unit},
     xScale?: { value:number, unit:Unit},
