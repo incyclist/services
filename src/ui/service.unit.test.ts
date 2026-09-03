@@ -164,3 +164,123 @@ describe('UserInterfaceServcie - onAppExit', () => {
         expect(service['isTerminated']).toBe(true)
     })
 })
+
+describe('UserInterfaceServcie - pause', () => {
+
+    let service: UserInterfaceServcie
+    let disconnect: jest.Mock
+    let mqDisconnect: jest.Mock
+
+    const setupMocks = () => {
+        disconnect = jest.fn().mockResolvedValue(true)
+        mqDisconnect = jest.fn()
+        jest.spyOn(IncyclistPageService, 'pausePage').mockResolvedValue(undefined as never)
+        jest.spyOn(devices, 'useDeviceAccess').mockReturnValue({ disconnect } as never)
+        ;(service as any).getMessageQueue = jest.fn().mockReturnValue({ disconnect: mqDisconnect })
+        ;(service as any).logEvent = jest.fn()
+        ;(service as any).logError = jest.fn()
+    }
+
+    beforeEach(() => {
+        service = new UserInterfaceServcie()
+        setupMocks()
+    })
+
+    afterEach(() => {
+        jest.restoreAllMocks()
+    })
+
+    test('disconnects device access and message queue', async () => {
+        await (service as any).pause()
+
+        expect(disconnect).toHaveBeenCalled()
+        expect(mqDisconnect).toHaveBeenCalled()
+    })
+
+    test('still disconnects when pausing the page fails', async () => {
+        jest.spyOn(IncyclistPageService, 'pausePage').mockRejectedValue(new Error('X'))
+
+        await (service as any).pause()
+
+        expect(disconnect).toHaveBeenCalled()
+        expect(mqDisconnect).toHaveBeenCalled()
+        expect((service as any).logError).toHaveBeenCalledWith(expect.any(Error), 'pause:pausePage')
+    })
+
+    test('still disconnects the message queue when device access disconnect fails', async () => {
+        disconnect.mockRejectedValue(new Error('X'))
+
+        await (service as any).pause()
+
+        expect(mqDisconnect).toHaveBeenCalled()
+        expect((service as any).logError).toHaveBeenCalledWith(expect.any(Error), 'pause:disconnect')
+    })
+
+})
+
+describe('UserInterfaceServcie - onAppPause / onAppResume background activity', () => {
+
+    let service: UserInterfaceServcie
+    let pauseBackgroundActivity: jest.Mock
+    let resumeBackgroundActivity: jest.Mock
+
+    beforeEach(() => {
+        service = new UserInterfaceServcie()
+        pauseBackgroundActivity = jest.fn().mockResolvedValue(undefined)
+        resumeBackgroundActivity = jest.fn().mockResolvedValue(undefined)
+        jest.spyOn(devices, 'useDeviceAccess').mockReturnValue({
+            pauseBackgroundActivity, resumeBackgroundActivity
+        } as never)
+        ;(service as any).stopHeartbeatWorker = jest.fn()
+        ;(service as any).startHeartbeatWorker = jest.fn()
+        ;(service as any).logEvent = jest.fn()
+        ;(service as any).logError = jest.fn()
+        // UserInterfaceServcie is @Singleton, so `new` returns the instance shared by every
+        // describe block in this file. Reset the guards onAppPause/onAppResume check, so this
+        // block's outcome does not depend on what earlier blocks (e.g. onAppExit) left behind.
+        ;(service as any).isTerminated = false
+        ;(service as any).isTerminating = false
+        ;(service as any).backgroundTimer = undefined
+    })
+
+    afterEach(() => {
+        // onAppPause() schedules a real 5-minute backgroundTimer; left running it keeps the
+        // Jest worker process alive after the test completes.
+        clearTimeout((service as any).backgroundTimer)
+        jest.restoreAllMocks()
+    })
+
+    test('onAppPause suspends background activity immediately, not behind the teardown timeout', async () => {
+        await service.onAppPause()
+
+        expect(pauseBackgroundActivity).toHaveBeenCalled()
+    })
+
+    test('a rejected pauseBackgroundActivity is caught and logged, not left unhandled', async () => {
+        pauseBackgroundActivity.mockRejectedValue(new Error('X'))
+
+        await expect(service.onAppPause()).resolves.toBe(true)
+        // allow the un-awaited .catch() chain to settle
+        await Promise.resolve()
+        await Promise.resolve()
+
+        expect((service as any).logError).toHaveBeenCalledWith(expect.any(Error), 'onAppPause:pauseBackgroundActivity')
+    })
+
+    test('onAppResume resumes background activity', async () => {
+        await service.onAppResume()
+
+        expect(resumeBackgroundActivity).toHaveBeenCalled()
+    })
+
+    test('a rejected resumeBackgroundActivity is caught and logged, not left unhandled', async () => {
+        resumeBackgroundActivity.mockRejectedValue(new Error('X'))
+
+        await expect(service.onAppResume()).resolves.toBe(true)
+        await Promise.resolve()
+        await Promise.resolve()
+
+        expect((service as any).logError).toHaveBeenCalledWith(expect.any(Error), 'onAppResume:resumeBackgroundActivity')
+    })
+
+})

@@ -147,6 +147,56 @@ describe('DeviceAccessService', () => {
 
 
   /*
+  describe('pauseBackgroundActivity/resumeBackgroundActivity', () => {
+    let service: DeviceAccessService
+
+    const setupInterfaces = (impls: Record<string, any>) => {
+      (service as any).interfaces = Object.fromEntries(
+        Object.entries(impls).map(([name, interfaceImpl]) => [name, { interface: interfaceImpl }])
+      )
+    }
+
+    beforeEach(() => {
+      service = new DeviceAccessService()
+    })
+
+    test('calls pauseBackgroundActivity on every interface that implements it', async () => {
+      const ble = { pauseBackgroundActivity: jest.fn().mockResolvedValue(undefined) }
+      const ant = {} // no pauseBackgroundActivity - e.g. AntInterface today
+      setupInterfaces({ ble, ant })
+
+      await service.pauseBackgroundActivity()
+
+      expect(ble.pauseBackgroundActivity).toHaveBeenCalled()
+    })
+
+    test('calls resumeBackgroundActivity on every interface that implements it', async () => {
+      const ble = { resumeBackgroundActivity: jest.fn().mockResolvedValue(undefined) }
+      setupInterfaces({ ble })
+
+      await service.resumeBackgroundActivity()
+
+      expect(ble.resumeBackgroundActivity).toHaveBeenCalled()
+    })
+
+    test('one interface rejecting does not stop the others from being paused', async () => {
+      const ble = { pauseBackgroundActivity: jest.fn().mockRejectedValue(new Error('X')) }
+      const dc = { pauseBackgroundActivity: jest.fn().mockResolvedValue(undefined) }
+      setupInterfaces({ ble, dc })
+
+      await expect(service.pauseBackgroundActivity()).resolves.toBeUndefined()
+
+      expect(dc.pauseBackgroundActivity).toHaveBeenCalled()
+    })
+
+    test('does nothing when no interfaces are registered', async () => {
+      setupInterfaces({})
+
+      await expect(service.pauseBackgroundActivity()).resolves.toBeUndefined()
+      await expect(service.resumeBackgroundActivity()).resolves.toBeUndefined()
+    })
+  })
+
   describe('initInterface', () => {})
   describe('disableInterface', () => {})
   describe('setInterfaceProperties', () => {})
