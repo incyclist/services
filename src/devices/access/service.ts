@@ -431,6 +431,31 @@ export class DeviceAccessService  extends IncyclistService{
         return disconnected
     }
 
+    /**
+     * Suspends unsolicited background work on all interfaces, i.e. the peripheral scan BLE keeps
+     * running and the mDNS browsers Direct Connect keeps open, so that they do not drain the
+     * battery while the app is not in use.
+     *
+     * Connected devices are unaffected and keep streaming, and an explicit scan still runs.
+     * Interfaces that do not implement this are skipped.
+     */
+    async pauseBackgroundActivity():Promise<void> {
+        const promises = Object.keys(this.interfaces).map( (name) =>
+            this.getInterface(name)?.pauseBackgroundActivity?.()
+        )
+        await Promise.allSettled(promises)
+    }
+
+    /**
+     * Resumes the background work suspended by [[pauseBackgroundActivity]].
+     */
+    async resumeBackgroundActivity():Promise<void> {
+        const promises = Object.keys(this.interfaces).map( (name) =>
+            this.getInterface(name)?.resumeBackgroundActivity?.()
+        )
+        await Promise.allSettled(promises)
+    }
+
     async terminate(ifaceName?:string):Promise<void> { 
 
         await this.disconnect(ifaceName);

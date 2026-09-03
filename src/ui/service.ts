@@ -154,6 +154,12 @@ export class UserInterfaceServcie extends IncyclistService {
 
             this.stopHeartbeatWorker()
 
+            // Suspended immediately rather than with the teardown below: the interfaces' own
+            // background discovery is of no use while the app is not in the foreground, and
+            // unlike the teardown it costs nothing to reverse if the user comes straight back.
+            useDeviceAccess().pauseBackgroundActivity()
+                .catch( (err)=> { this.logError(err,'onAppPause:pauseBackgroundActivity') })
+
             this.backgroundTimer = setTimeout(()=> {
                 this.backgroundPausedByService = true
                 this.pause().catch( (err)=> { this.logError(err,'onAppPause:pause') })
@@ -187,6 +193,9 @@ export class UserInterfaceServcie extends IncyclistService {
             this.startHeartbeatWorker()
             this.backgroundPausedByService = false
             this.appState = 'Active'
+
+            useDeviceAccess().resumeBackgroundActivity()
+                .catch( (err)=> { this.logError(err,'onAppResume:resumeBackgroundActivity') })
 
             if (resumeRequired) {
                 this.resume().catch( (err)=> { this.logError(err,'onAppResume:resume') })
