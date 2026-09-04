@@ -699,7 +699,7 @@ export class ActiveRidesService extends IncyclistService {
             if (this.isOnline)
                 this.onConnect({initial:true})
 
-            this.getOnlineStatusMonitoring().start('activeRides',this.onOnlineStatusChange )
+            this.getOnlineStatusMonitoring().start('activeRides',this.onlineStatusHandler)
         }
     }
 
