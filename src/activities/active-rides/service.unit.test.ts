@@ -54,6 +54,34 @@ describe('ActiveRides',()=>{
 
     })
 
+    test('online status handler stays bound to the service instance', ()=>{
+        // Regression test: startOnlineCheck() used to register the unbound
+        // this.onOnlineStatusChange as the 'onlineStatus' listener instead of the
+        // pre-bound this.onlineStatusHandler. EventEmitter invokes listeners without
+        // preserving the original `this`, so on a later transition `this` resolved to
+        // the emitter instead of the service, and this.onDisconnect()/this.onConnect()
+        // - and then this.logError() in the catch block - were "not a function",
+        // crashing the app uncaught.
+        service = useActiveRides()
+        setupMocks(service)
+
+        const monitoring = (service as any).getOnlineStatusMonitoring()
+        const startSpy = jest.spyOn(monitoring,'start')
+
+        service.init('123')
+
+        const [,registeredHandler] = (startSpy.mock.calls.find( ([context])=>context==='activeRides') ?? []) as [string, (online:boolean)=>void]
+        expect(registeredHandler).toBeDefined()
+
+        // simulate how the EventEmitter actually invokes listeners: with a receiver
+        // that is not the service instance
+        const foreignReceiver = {}
+        expect( ()=>registeredHandler.call(foreignReceiver,true)).not.toThrow()
+        expect( ()=>registeredHandler.call(foreignReceiver,false)).not.toThrow()
+
+        monitoring.stop('activeRides')
+    })
+
     test('getDisplayProps - coach entry surfaces isCoach:true, regular rider stays isCoach:false',()=>{
         service = useActiveRides()
         setupMocks(service)
