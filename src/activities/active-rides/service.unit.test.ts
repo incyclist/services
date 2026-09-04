@@ -70,7 +70,7 @@ describe('ActiveRides',()=>{
 
         service.init('123')
 
-        const [,registeredHandler] = startSpy.mock.calls.find( ([context])=>context==='activeRides') ?? []
+        const [,registeredHandler] = (startSpy.mock.calls.find( ([context])=>context==='activeRides') ?? []) as [string, (online:boolean)=>void]
         expect(registeredHandler).toBeDefined()
 
         // simulate how the EventEmitter actually invokes listeners: with a receiver
