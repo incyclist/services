@@ -110,6 +110,11 @@ export interface    RouteInfo extends RouteBase{
     routeHash?:string,
     isLocal?:boolean;
     hasGpx?: boolean;
+    /**
+     * Where the route's points originally came from. Optional: absence means "unknown",
+     * which is the case for every route imported before this field existed.
+     */
+    pointsSource?: 'gpx'|'strava'|'embedded';
     hasVideo?: boolean;
     isDemo?: boolean;
     requiresDownload?: boolean;

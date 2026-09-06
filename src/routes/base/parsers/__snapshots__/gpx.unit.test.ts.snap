@@ -1788,6 +1788,7 @@ exports[`GPXParser GPX import valid file 1`] = `
         "slope": -1.538070353153081,
       },
     ],
+    "pointsSource": "gpx",
     "previewUrl": undefined,
     "requiresDownload": false,
     "title": "X-BIONIC® Etzel Bergzeitfahren",

@@ -48298,6 +48298,7 @@ exports[`IncyclistParser Incyclist-XML import valid file 1`] = `
         "slope": -4.553142668934501,
       },
     ],
+    "pointsSource": "gpx",
     "previewUrl": undefined,
     "requiresDownload": false,
     "routeHash": "da5b5123fad9ce3df554856035b28dc6",

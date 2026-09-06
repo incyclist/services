@@ -259,6 +259,86 @@ export const applySmoothing = (route: Route, level: number): Route => {
     return smoothed
 }
 
+/** below this, there is not enough of a track to filter meaningfully */
+const MIN_ELIGIBLE_POINTS = 8
+
+/** the point array the route actually rides on */
+const getRoutePoints = (route: Route): Array<RoutePoint> => {
+    const points = route?.points ?? route?.details?.points ?? route?.description?.points
+    return Array.isArray(points) ? points : []
+}
+
+/**
+ * True if the route carries a video, i.e. its points may not have come from a GPX track.
+ *
+ * Both the flag and the underlying object are checked: unlike `hasGpx`, every producer of
+ * `hasVideo` means the same thing by it ("a video descriptor exists"), so this is cheap
+ * belt-and-braces rather than a workaround.
+ */
+const isVideoRoute = (route: Route): boolean =>
+    route?.description?.hasVideo === true || route?.details?.video !== undefined
+
+/**
+ * For video routes only: positive evidence that the points came from the GPX pipeline.
+ *
+ * Newly imported routes say so directly via `pointsSource`. For routes imported before that
+ * field existed, two structural fingerprints stand in, both of which only the Incyclist-XML
+ * import can produce: `isCut` (set nowhere else) and `point.time` (set only by the GPX parser
+ * that this import always runs; other video formats use `videoTime`, a different field).
+ *
+ * The default is "not eligible", so an unrecognised route is under-offered rather than
+ * offered a control that would corrupt its profile.
+ */
+const isInScopeVideoRoute = (route: Route): boolean => {
+    if (route?.description?.pointsSource === 'gpx') return true
+
+    const points = route?.details?.points
+    if (!Array.isArray(points)) return false
+
+    return points.some((p) => p?.isCut === true) || points.some((p) => Number.isFinite(p?.time))
+}
+
+/**
+ * Decides whether smoothing may be offered for a route.
+ *
+ * Total and non-throwing: any malformed or partial route (including `undefined`) yields false.
+ *
+ * The rule takes positive evidence of a real, smoothable elevation track from the point data
+ * itself, and reads stored flags only where they are *negative*, so it can never be more
+ * permissive than the route detail screens already are.
+ *
+ * Note the lat/lng check is recomputed from the points rather than read from
+ * `description.hasGpx`. That flag has several producers in this codebase which compute it from
+ * different questions (some only check that a point array is non-empty), so its positive value
+ * cannot be trusted; only its explicit `false` can.
+ */
+export const isSmoothingEligible = (route: Route): boolean => {
+    try {
+        const points = getRoutePoints(route)
+
+        // 1. positive evidence of a real, smoothable elevation track
+        if (points.length < MIN_ELIGIBLE_POINTS) return false
+        if (!points.every((p) => Number.isFinite(p?.elevation))) return false
+        // a uniformly flat track (free ride synthesises elevation 0) would pass every other
+        // clause while offering a control that provably cannot change anything
+        if (new Set(points.map((p) => Math.round(p.elevation))).size < 2) return false
+        if (!points.some((p) => p?.lat && p?.lng)) return false
+
+        // 2. respect explicit negatives
+        if (route?.description?.hasGpx === false) return false
+        if (route?.details?.gpxDisabled) return false
+
+        // 3. resistance must actually derive from the points, not from an uploaded program
+        if (route?.details?.epp) return false
+
+        // 4. provenance - only consulted for video routes; a route with no video can only have
+        //    got its points from the GPX pipeline, since every other format is video-bearing
+        return !isVideoRoute(route) || isInScopeVideoRoute(route)
+    } catch {
+        return false
+    }
+}
+
 const getElevationGain = (points: Array<RoutePoint>): number => {
     let gain = 0
     for (let i = 1; i < points.length; i++) {

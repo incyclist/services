@@ -1,7 +1,7 @@
 import { EventLogger } from 'gd-eventlog';
 import { JSONObject, parseTime } from '../../../utils';
 import { RouteApiDetail } from '../api/types';
-import { RoutePoint, VideoMapping } from '../types';
+import { RouteInfo, RoutePoint, VideoMapping } from '../types';
 import { validateRoute } from '../utils';
 import { fixAnomalies } from '../utils/points';
 import { EnhancedRoutePoint, GPXParser } from './gpx';
@@ -26,6 +26,15 @@ export class IncyclistXMLParser extends XMLParser{
         this.logger = new EventLogger('IncyclistParser')
     }
 
+
+    protected async buildInfo(context: IncyclistParserContext): Promise<RouteInfo> {
+        const info = await super.buildInfo(context)
+
+        // this format always loads its points from a companion GPX/GeoJSON file, so the point
+        // data comes out of the GPX pipeline even though the container is an XML descriptor
+        info.pointsSource = 'gpx'
+        return info
+    }
 
     protected async loadDescription(context: IncyclistParserContext): Promise<void> {
         await super.loadDescription(context)

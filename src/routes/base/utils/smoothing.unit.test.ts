@@ -1,9 +1,11 @@
+import { RouteApiDetail } from '../api/types'
 import { Route } from '../model/route'
-import { RoutePoint } from '../types'
+import { RouteInfo, RoutePoint, VideoDescription } from '../types'
 import {
     analyseElevationNoise,
     applySmoothing,
     getSmoothingProfile,
+    isSmoothingEligible,
     smoothElevation,
     MAX_SMOOTHING_LEVEL,
 } from './smoothing'
@@ -316,6 +318,115 @@ describe('smoothing', () => {
             const before = JSON.stringify(points)
             analyseElevationNoise(points)
             expect(JSON.stringify(points)).toBe(before)
+        })
+    })
+
+    describe('isSmoothingEligible', () => {
+        // buildPoints() sets `time` on every point, which is one of the video fingerprints -
+        // strip it wherever a test needs a video route that must NOT be recognised
+        const withoutTime = (points: Array<RoutePoint>): Array<RoutePoint> =>
+            points.map(({ time, ...rest }) => rest as RoutePoint)
+
+        const withoutPosition = (points: Array<RoutePoint>): Array<RoutePoint> =>
+            points.map(({ lat, lng, ...rest }) => rest as RoutePoint)
+
+        const buildEligibilityRoute = (
+            description: Partial<RouteInfo> = {},
+            details: Partial<RouteApiDetail> = {}
+        ): Route =>
+            new Route({ id: 'e1', title: 'Eligibility Route', ...description } as RouteInfo, {
+                id: 'e1',
+                title: 'Eligibility Route',
+                points: ramp(12),
+                ...details,
+            } as RouteApiDetail)
+
+        const video = { file: 'route.avi', framerate: 30, mappings: [] } as unknown as VideoDescription
+
+        test('a plain GPX route is eligible', () => {
+            const route = buildEligibilityRoute({ hasGpx: true, hasVideo: false })
+            expect(isSmoothingEligible(route)).toBe(true)
+        })
+
+        test('a mapping-only route with no usable track is not eligible', () => {
+            const route = buildEligibilityRoute(
+                { hasVideo: true },
+                { points: withoutPosition(withoutTime(ramp(12))), video }
+            )
+            expect(isSmoothingEligible(route)).toBe(false)
+        })
+
+        test('a Daum EPP route is not eligible', () => {
+            const route = buildEligibilityRoute({ hasGpx: true, hasVideo: false }, {
+                epp: { programData: [] },
+            } as unknown as Partial<RouteApiDetail>)
+            expect(isSmoothingEligible(route)).toBe(false)
+        })
+
+        test('a Kettler-style video route with lat/lng but no fingerprint is not eligible', () => {
+            const route = buildEligibilityRoute(
+                { hasGpx: true, hasVideo: true },
+                { points: withoutTime(ramp(12)), video }
+            )
+            expect(isSmoothingEligible(route)).toBe(false)
+        })
+
+        test('a gpx-import video route with isCut points is eligible', () => {
+            const points = withoutTime(ramp(12))
+            points[6].isCut = true
+
+            const route = buildEligibilityRoute({ hasGpx: true, hasVideo: true }, { points, video })
+            expect(isSmoothingEligible(route)).toBe(true)
+        })
+
+        test('a gpx-import video route with point.time is eligible', () => {
+            const route = buildEligibilityRoute({ hasGpx: true, hasVideo: true }, { points: ramp(12), video })
+            expect(isSmoothingEligible(route)).toBe(true)
+        })
+
+        test('a persisted pointsSource of gpx makes a video route eligible', () => {
+            const route = buildEligibilityRoute(
+                { hasGpx: true, hasVideo: true, pointsSource: 'gpx' },
+                { points: withoutTime(ramp(12)), video }
+            )
+            expect(isSmoothingEligible(route)).toBe(true)
+        })
+
+        test('a flat all-zero track is not eligible', () => {
+            const points = buildPoints(Array.from({ length: 12 }, () => 0))
+            const route = buildEligibilityRoute({ hasGpx: true, hasVideo: false }, { points })
+            expect(isSmoothingEligible(route)).toBe(false)
+        })
+
+        test('hasGpx===false blocks, but an absent hasGpx does not', () => {
+            expect(isSmoothingEligible(buildEligibilityRoute({ hasGpx: false }))).toBe(false)
+            expect(isSmoothingEligible(buildEligibilityRoute({}))).toBe(true)
+        })
+
+        test('gpxDisabled blocks', () => {
+            expect(isSmoothingEligible(buildEligibilityRoute({ hasGpx: true }, { gpxDisabled: true }))).toBe(false)
+        })
+
+        test('fewer than 8 points blocks', () => {
+            expect(isSmoothingEligible(buildEligibilityRoute({ hasGpx: true }, { points: ramp(7) }))).toBe(false)
+            expect(isSmoothingEligible(buildEligibilityRoute({ hasGpx: true }, { points: ramp(8) }))).toBe(true)
+        })
+
+        test('a non-finite elevation anywhere blocks', () => {
+            const points = ramp(12)
+            points[5].elevation = undefined
+
+            expect(isSmoothingEligible(buildEligibilityRoute({ hasGpx: true }, { points }))).toBe(false)
+        })
+
+        test('undefined and malformed routes return false without throwing', () => {
+            expect(isSmoothingEligible(undefined)).toBe(false)
+            expect(isSmoothingEligible({} as Route)).toBe(false)
+            expect(isSmoothingEligible({ description: null, details: null } as unknown as Route)).toBe(false)
+            expect(isSmoothingEligible({ details: { points: 'nope' } } as unknown as Route)).toBe(false)
+            expect(
+                isSmoothingEligible({ details: { points: [null, undefined, 1] } } as unknown as Route)
+            ).toBe(false)
         })
     })
 })
