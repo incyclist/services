@@ -273,6 +273,121 @@ describe('RouteListService.getRideRoute',()=>{
         })
     })
 
+    describe('noise statistics',()=>{
+
+        const noiseLog = (log:jest.SpyInstance) =>
+            log.mock.calls.map( c=>c[0]).filter( e=> e?.message==='route elevation noise')
+
+        test('are recorded once when the ride starts',()=>{
+            const log = jest.spyOn(service,'logEvent')
+            service.setStartSettings(startSettings(3))
+
+            service.getRideRoute()
+            service.getRideRoute()
+            service.getRideRoute()
+
+            const recorded = noiseLog(log)
+            expect(recorded).toHaveLength(1)
+            expect(recorded[0]).toEqual( expect.objectContaining({
+                message:'route elevation noise',
+                routeHash:'hash-route-1',
+                gainRatio: expect.any(Number),
+                reversalDensity: expect.any(Number),
+                pointCount: 40,
+                medianSpacing: 20
+            }))
+            // nothing beyond the geometry and the hash - 'ts' is added by the logger itself
+            expect(Object.keys(recorded[0]).filter(k=>k!=='ts').sort()).toEqual(
+                ['gainRatio','medianSpacing','message','pointCount','reversalDensity','routeHash'])
+            // a noisy track carries gain that a road does not have
+            expect(recorded[0].gainRatio).toBeGreaterThan(1.5)
+            expect(recorded[0].reversalDensity).toBeGreaterThan(0)
+        })
+
+        test('are recorded again for the next ride',()=>{
+            const log = jest.spyOn(service,'logEvent')
+
+            service.setStartSettings(startSettings(3))
+            service.getRideRoute()
+            service.setStartSettings(startSettings(3))
+            service.getRideRoute()
+
+            expect(noiseLog(log)).toHaveLength(2)
+        })
+
+        test('are recorded while the feature is switched off',()=>{
+            const log = jest.spyOn(service,'logEvent')
+            service.isSmoothingEnabled = jest.fn().mockReturnValue(false)
+            service.setStartSettings(startSettings(0))
+
+            service.getRideRoute()
+
+            expect(noiseLog(log)).toHaveLength(1)
+        })
+
+        test('are recorded for a route that may not be smoothed',()=>{
+            const log = jest.spyOn(service,'logEvent')
+            route = buildRoute('route-epp', buildPoints(40,noisy), {}, { epp: {} as never })
+            service.routes = [route]
+            service.select(route)
+            service.setStartSettings(startSettings(4))
+
+            service.getRideRoute()
+
+            expect(noiseLog(log)).toHaveLength(1)
+        })
+
+        test('are not recorded for chained segments',()=>{
+            const log = jest.spyOn(service,'logEvent')
+            const next = buildRoute('route-next', buildPoints(40,noisy))
+            service.routes = [route,next]
+            service.setStartSettings(startSettings(3))
+
+            service.getRideRoute('route-next')
+
+            expect(noiseLog(log)).toHaveLength(0)
+        })
+
+        test('are skipped, without a throw, when there is nothing to measure',()=>{
+            const log = jest.spyOn(service,'logEvent')
+            service.unselect()
+
+            expect( ()=>service.getRideRoute()).not.toThrow()
+            expect(noiseLog(log)).toHaveLength(0)
+        })
+
+        test('do not let a malformed route stop the ride',()=>{
+            const log = jest.spyOn(service,'logEvent')
+            const points = buildPoints(40,noisy)
+            points[5].elevation = undefined
+            points[9].routeDistance = undefined
+            delete points[12].elevation
+
+            route = buildRoute('route-broken', points)
+            service.routes = [route]
+            service.select(route)
+            service.setStartSettings(startSettings(3))
+
+            let ride
+            expect( ()=> { ride = service.getRideRoute() }).not.toThrow()
+            expect(ride).toBeDefined()
+            expect(noiseLog(log)).toHaveLength(1)
+        })
+
+        test('survive a route that cannot even be read',()=>{
+            const log = jest.spyOn(service,'logEvent')
+            const broken = {
+                get points() { throw new Error('no points') },
+                get description() { return {routeHash:'hash-broken'} },
+                clone() { return this }
+            }
+            service.setStartSettings(startSettings(3))
+
+            expect( ()=> service.logNoiseStats(broken)).not.toThrow()
+            expect(noiseLog(log)).toHaveLength(0)
+        })
+    })
+
     describe('end of ride',()=>{
 
         test('unselect drops the copy and the level of the finished ride',()=>{

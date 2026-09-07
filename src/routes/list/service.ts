@@ -7,7 +7,7 @@ import { RouteApiDetail } from "../base/api/types";
 import { Route } from "../base/model/route";
 import { RouteParser  } from "../base/parsers";
 import { RouteInfo } from "../base/types";
-import { applySmoothing, isSmoothingEligible } from "../base/utils/smoothing";
+import { analyseElevationNoise, applySmoothing, isSmoothingEligible } from "../base/utils/smoothing";
 import { RoutesApiLoader } from "./loaders/api";
 import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
@@ -36,6 +36,14 @@ import { IObserver } from "../../types";
 
 
 const SYNC_INTERVAL = 5* 60*1000
+
+/** keeps logged measurements readable - they are calibration input, not exact quantities */
+const round = (value:number, digits:number):number => {
+    if (!Number.isFinite(value))
+        return value
+    const factor = 10**digits
+    return Math.round(value*factor)/factor
+}
 const PRELOAD_DESKTOP = 20
 const PRELOAD_MOBILE = 10
 
@@ -827,9 +835,45 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const selected = this.getSelected()
         if (!this.rideRoute || this.rideRoute.source!==selected) {
             this.rideRoute = { source: selected, route: this.buildRideRoute(selected) }
+            this.logNoiseStats(selected)
         }
 
         return this.rideRoute.route
+    }
+
+    /**
+     * Records how noisy the elevation track of the route being ridden is.
+     *
+     * Recorded for every ride, whether or not smoothing is switched on and whether or not it
+     * would be offered for this route, so the numbers describe the routes people actually ride
+     * rather than only the ones already being smoothed.
+     *
+     * Only derived geometry is recorded - no coordinates, and nothing identifying beyond the
+     * route hash, which the ride path logs anyway.
+     *
+     * Sits in the branch that builds the ride copy, so it is written exactly once per ride:
+     * the copy is built on the first request after a ride was started and reused afterwards.
+     * Chained segments are asked for by id and do not pass through here.
+     */
+    protected logNoiseStats(route:Route):void {
+        try {
+            const points = route?.points
+            if (!points?.length)
+                return
+
+            const {gainRatio,reversalDensity,pointCount,medianSpacing} = analyseElevationNoise(points)
+
+            this.logEvent({message:'route elevation noise',
+                routeHash: route.description?.routeHash,
+                gainRatio: round(gainRatio,3),
+                reversalDensity: round(reversalDensity,1),
+                pointCount,
+                medianSpacing: round(medianSpacing,1)
+            })
+        }
+        catch {
+            // a measurement must never be able to hold up the start of a ride
+        }
     }
 
     /**
