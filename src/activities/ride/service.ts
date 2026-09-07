@@ -1419,7 +1419,9 @@ export class ActivityRideService extends IncyclistService {
         const {weight,ftp} = user
         const uuid = this.getUserSettings().get('uuid',undefined)
                 
-        let selectedRoute = this.getRouteList().getSelected()?.clone()
+        // the activity has to aggregate over the very same route the ride is ridden against,
+        // otherwise its total elevation and its per-sample elevations disagree
+        let selectedRoute = this.getRouteList().getRideRoute()
         const startSettings:RouteStartSettings = this.getRouteList().getStartSettings()
 
 
