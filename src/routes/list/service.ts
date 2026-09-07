@@ -13,7 +13,7 @@ import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard } from "./cards/RouteCard";
-import { SummaryCardDisplayProps } from "./cards/types";
+import { RouteSettings, SummaryCardDisplayProps } from "./cards/types";
 import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
@@ -866,11 +866,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     /**
      * The one place that decides whether elevation smoothing may be applied at all.
      *
-     * TODO: return the app state's toggle for this feature once that toggle exists. Until then
-     * the answer is "no", which is exactly the behaviour of the app before smoothing existed.
+     * Gating here as well as on the card means turning the toggle off fully reverts ride
+     * behaviour while leaving any levels the user already chose stored and inert.
      */
     protected isSmoothingEnabled():boolean {
-        return false
+        try {
+            return this.getAppState().hasFeature('ROUTE_SMOOTHING')
+        }
+        catch {
+            return false
+        }
     }
 
     /** seam around the transform, so it can be observed and replaced in tests */
@@ -906,7 +911,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * Tolerates the field being missing or not a number - both mean "no smoothing".
      */
     protected readSmoothingLevel(settings:RouteStartSettings):number {
-        const level = (settings as unknown as {smoothingLevel?:number})?.smoothingLevel
+        const level = (settings as RouteSettings)?.smoothingLevel
         return Number.isFinite(level) ? level : 0
     }
 
