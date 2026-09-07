@@ -162,6 +162,7 @@ export interface CurrentRideDisplayProps extends IRideModeServiceDisplayProps {
     startOverlayProps?:StartOverlayProps,
     prevRides?: PrevRidesDisplayProps
     hideAll?: boolean
+    shiftingPinned?: boolean
 
 }
 

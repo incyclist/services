@@ -1432,6 +1432,19 @@ describe('WorkoutRide',()=>{
             expect(s.logError).toHaveBeenCalled()
         })
 
+        test('pinned reflects RideDisplayService.isOverlayPinned for the workout-control overlay',()=>{
+            s.trainingTime = 10
+            const isOverlayPinned = jest.fn().mockReturnValue(true)
+            Inject('RideDisplay', { isOverlayPinned })
+
+            const dp = service.getDashboardDisplayProperties()
+
+            expect(isOverlayPinned).toHaveBeenCalledWith('workout-control')
+            expect(dp.pinned).toBe(true)
+
+            Inject('RideDisplay', null)
+        })
+
 
         test('check title - segmment with no segment text',()=>{
             s.trainingTime = 10
@@ -1547,6 +1560,52 @@ describe('WorkoutRide',()=>{
         })
 
 
+
+    })
+
+    describe('setOverlayPinned',()=>{
+        let s,service:WorkoutRide
+        const workout = new Workout({type:'workout',name:'Test Workout'})
+
+        beforeEach( ()=>{
+            s = service = new WorkoutRide
+            s.workout = workout
+            s.settings = {ftp:200}
+            s.state='active'
+        })
+
+        afterEach( ()=>{
+            s.reset()
+            Inject('RideDisplay', null)
+            jest.resetAllMocks()
+        })
+
+        test('delegates persistence to RideDisplayService for the workout-control overlay',()=>{
+            const setOverlayPinned = jest.fn()
+            Inject('RideDisplay', { isOverlayPinned: jest.fn().mockReturnValue(false), setOverlayPinned })
+
+            service.setOverlayPinned(true)
+
+            expect(setOverlayPinned).toHaveBeenCalledWith('workout-control', true)
+        })
+
+        test('emits an update event with the refreshed dashboard display properties',()=>{
+            const emit = jest.fn()
+            s.emit = emit
+            Inject('RideDisplay', { isOverlayPinned: jest.fn().mockReturnValue(true), setOverlayPinned: jest.fn() })
+
+            service.setOverlayPinned(true)
+
+            expect(emit).toHaveBeenCalledWith('update', expect.objectContaining({pinned:true}))
+        })
+
+        test('does not throw when RideDisplayService access fails',()=>{
+            Inject('RideDisplay', { isOverlayPinned: jest.fn(), setOverlayPinned: jest.fn(()=>{throw new Error('boom')}) })
+            s.logError = jest.fn()
+
+            expect(()=>service.setOverlayPinned(true)).not.toThrow()
+            expect(s.logError).toHaveBeenCalled()
+        })
 
     })
 

@@ -61,6 +61,9 @@ export interface WorkoutDisplayProperties {
      *  `ShiftingControl`'s existing button-text convention. Undefined when the workout isn't active
      *  (same states under which the rest of this object is empty). */
     loadButtons?: { inc5:string, inc1:string, dec1:string, dec5:string }
+    /** Whether the workout control overlay should stay visible instead of auto-hiding.
+     *  Persisted via `RideDisplayService.isOverlayPinned('workout-control')`. */
+    pinned?: boolean
 }
 
 /** Payload of WorkoutRide's 'step-countdown' event - fired at 4s, 3s, 2s, 1s and 0s (the

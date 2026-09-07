@@ -323,6 +323,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     setOverlayPinned(overlay:string, pinned:boolean) {
         try {
             this.getUserSettings().set(`preferences.rideOverlays.${overlay}.pinned`,pinned)
+            this.observer?.emit('overlay-update', this.getDisplayProperties())
         }
         catch(err) {
             this.logError(err,'setOverlayPinned')
@@ -406,14 +407,15 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             const virtualShiftingEnabled = this.isVirtualShiftingEnabled()
             const showShiftingButtons = virtualShiftingEnabled && !this.actualWorkout && !!this.activity
 
-            const props = { 
+            const props = {
                 workout: this.actualWorkout, route: this.route, activity: this.activity,  state:this.state,
                 startOverlayProps,
                 prevRides: this.getPrevRidesProps(),
                 hideAll: this.hideAll,
                 showShiftingButtons,
                 showDashboard,
-                showWorkout
+                showWorkout,
+                shiftingPinned: this.isOverlayPinned('shifting')
                 }
 
             const childProps = this.getRideModeService()?.getDisplayProperties(props)??{}

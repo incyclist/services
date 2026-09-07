@@ -371,6 +371,19 @@ describe('RideDisplayService', () => {
             expect(() => service.setOverlayPinned('workout-control', false)).not.toThrow()
         })
 
+        test('setOverlayPinned emits overlay-update with the refreshed display properties, so pinning components react without local state', () => {
+            const getFn = jest.fn().mockReturnValue(true)
+            setupMocks(getFn)
+            const emit = jest.fn()
+            const s = service as any
+            s.observer = new Observer()
+            s.observer.emit = emit
+
+            service.setOverlayPinned('shifting', true)
+
+            expect(emit).toHaveBeenCalledWith('overlay-update', expect.objectContaining({ shiftingPinned: true }))
+        })
+
     })
 
     describe('createActivity — previous-rides refresh wiring', () => {

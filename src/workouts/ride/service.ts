@@ -14,6 +14,9 @@ import { WorkoutListService, useWorkoutList } from "../list";
 import { WorkoutSettings } from "../list/cards/types";
 import { ActiveWorkoutLimit, LoadButtonMode, PowerAdjustmentResult, WorkoutDisplayProperties } from "./types";
 import { Injectable } from "../../base/decorators";
+import { useRideDisplay } from "../../ride/display/service";
+
+const PINNED_OVERLAY_ID = 'workout-control'
 
 const DEFAULT_FTP = 200;
 const WORKOUT_ZOOM = 1200;
@@ -815,6 +818,21 @@ export class WorkoutRide extends IncyclistService{
 
         this.emit('update', this.getDashboardDisplayProperties())    }
 
+    /**
+     * Pins/unpins the workout control overlay, so it stays visible instead of auto-hiding.
+     * Persistence is owned by RideDisplayService - this just delegates to it and re-emits
+     * 'update' so the dashboard reflects the new value via the usual display-properties flow.
+     */
+    setOverlayPinned(pinned:boolean):void {
+        try {
+            this.getRideDisplay().setOverlayPinned(PINNED_OVERLAY_ID, pinned)
+            this.emit('update', this.getDashboardDisplayProperties())
+        }
+        catch(err) {
+            this.logError(err,'setOverlayPinned')
+        }
+    }
+
 
     /**
      * Provides the information that should be displayed in the dashboard
@@ -852,7 +870,8 @@ export class WorkoutRide extends IncyclistService{
                 canShowBackward,
                 canShowForward:true,
                 loadButtonMode,
-                loadButtons: loadButtonMode==='power' ? this.getLoadButtonLabels() : this.getGearButtonLabels()
+                loadButtons: loadButtonMode==='power' ? this.getLoadButtonLabels() : this.getGearButtonLabels(),
+                pinned: this.getRideDisplay().isOverlayPinned(PINNED_OVERLAY_ID)
             }
 
             return props
@@ -1338,6 +1357,11 @@ export class WorkoutRide extends IncyclistService{
     @Injectable
     protected getDeviceRide():DeviceRideService {
         return useDeviceRide()
+    }
+
+    @Injectable
+    protected getRideDisplay() {
+        return useRideDisplay()
     }
 
 }
