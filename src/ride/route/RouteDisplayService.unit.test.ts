@@ -44,6 +44,7 @@ describe( 'RouteDisplayService', () => {
         })
         mockRouteList = {
             getSelected: jest.fn().mockReturnValue(options.route??sydneyRoute),
+            getRideRoute: jest.fn( ()=> mockRouteList.getSelected()?.clone()),
             getStartSettings: jest.fn().mockReturnValue(options.startSettings??defaultStartSettings)
         }
         Inject('RouteList', mockRouteList)

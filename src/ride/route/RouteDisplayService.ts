@@ -91,7 +91,9 @@ export class RouteDisplayService extends RideModeService {
      */
     getDeviceStartSettings() {
         const startSettings:RouteSettings = this.getRouteList().getStartSettings() as RouteSettings
-        const route = this.getRouteList().getSelected()
+        // some devices (Daum Classic) are sent a complete elevation program built from this route
+        // at the start of the ride, so it has to be the same route the ride is displayed against
+        const route = this.getRouteList().getRideRoute()
         const {realityFactor=100,startPos=0} = startSettings
 
         return {realityFactor,startPos,route}
@@ -399,7 +401,7 @@ export class RouteDisplayService extends RideModeService {
     }
 
     protected initRoute() { 
-        this.currentRoute =  this.getRouteList().getSelected().clone()
+        this.currentRoute =  this.getRouteList().getRideRoute()
     }
 
     protected initView() { /* logic can be defined by subclasses */ }
