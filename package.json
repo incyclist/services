@@ -25,7 +25,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^10.9.1",
     "formdata-node": "^6.0.3",
-    "globals": "^17.9.0",
+    "globals": "^17.12.0",
     "jest": "^30.5.0",
     "jsdoc": "^4.0.5",
     "ts-jest": "^29.4.9",
