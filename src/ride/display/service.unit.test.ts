@@ -318,6 +318,61 @@ describe('RideDisplayService', () => {
 
     })
 
+    describe('overlay pin state', () => {
+
+        let service: RideDisplayService
+
+        const setupMocks = (getFn?, setFn?) => {
+            Inject('UserSettings', {
+                get: getFn ?? jest.fn().mockReturnValue(false),
+                set: setFn ?? jest.fn()
+            })
+        }
+
+        beforeEach(() => {
+            service = new RideDisplayService()
+        })
+
+        afterEach(() => {
+            Inject('UserSettings', null)
+            jest.resetAllMocks()
+        })
+
+        test('isOverlayPinned reads the overlay-specific settings key, defaulting to false', () => {
+            const getFn = jest.fn().mockReturnValue(true)
+            setupMocks(getFn)
+
+            const result = service.isOverlayPinned('shifting')
+
+            expect(getFn).toHaveBeenCalledWith('preferences.rideOverlays.shifting.pinned', false)
+            expect(result).toBe(true)
+        })
+
+        test('isOverlayPinned returns false and logs when settings access throws', () => {
+            const getFn = jest.fn().mockImplementation(() => { throw new Error('boom') })
+            setupMocks(getFn)
+
+            expect(service.isOverlayPinned('shifting')).toBe(false)
+        })
+
+        test('setOverlayPinned writes the overlay-specific settings key', () => {
+            const setFn = jest.fn()
+            setupMocks(undefined, setFn)
+
+            service.setOverlayPinned('workout-control', true)
+
+            expect(setFn).toHaveBeenCalledWith('preferences.rideOverlays.workout-control.pinned', true)
+        })
+
+        test('setOverlayPinned does not throw when settings access throws', () => {
+            const setFn = jest.fn().mockImplementation(() => { throw new Error('boom') })
+            setupMocks(undefined, setFn)
+
+            expect(() => service.setOverlayPinned('workout-control', false)).not.toThrow()
+        })
+
+    })
+
     describe('createActivity — previous-rides refresh wiring', () => {
         let service: RideDisplayService
 

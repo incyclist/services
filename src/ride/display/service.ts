@@ -307,7 +307,26 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     
     toggleRightSideView() {
         this.toggleOverlay('sv-right')
-        
+
+    }
+
+    isOverlayPinned(overlay:string):boolean {
+        try {
+            return this.getUserSettings().get(`preferences.rideOverlays.${overlay}.pinned`,false)
+        }
+        catch(err) {
+            this.logError(err,'isOverlayPinned')
+            return false
+        }
+    }
+
+    setOverlayPinned(overlay:string, pinned:boolean) {
+        try {
+            this.getUserSettings().set(`preferences.rideOverlays.${overlay}.pinned`,pinned)
+        }
+        catch(err) {
+            this.logError(err,'setOverlayPinned')
+        }
     }
 
     onArrowKey(event) {
