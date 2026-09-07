@@ -195,8 +195,8 @@ describe('RoutesPageService',()=>{
 
             expect(Object.keys(props).sort()).toEqual([
                 'canStart', 'detailsAvailable', 'hasWorkout', 'settings', 'showLoopOverwrite',
-                'showNextOverwrite', 'showWorkoutOption', 'smoothedElevation', 'smoothedPoints',
-                'smoothingAvailable', 'smoothingMaxLevel', 'totalDistance', 'totalElevation',
+                'showNextOverwrite', 'showWorkoutOption', 'smoothedElevation', 'smoothedGradient',
+                'smoothedPoints', 'smoothingAvailable', 'smoothingMaxLevel', 'totalDistance', 'totalElevation',
                 'updateMarkers', 'updateStartPos', 'videoChecking', 'videoMissing', 'xScale', 'yScale'
             ].sort())
 

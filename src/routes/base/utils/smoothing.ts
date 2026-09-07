@@ -339,6 +339,87 @@ export const isSmoothingEligible = (route: Route): boolean => {
     }
 }
 
+/**
+ * Steepest gradient carried by a point array, in percent.
+ *
+ * The sign is dropped: a 20% descent is exactly as steep as a 20% climb, and the trainer
+ * reproduces the magnitude either way.
+ *
+ * Reads the slopes the points already carry rather than deriving new ones, so the figure is the
+ * one the profile chart draws and the one the trainer will be driven with.
+ *
+ * Total and non-throwing: points without a finite slope are skipped, and an empty or entirely
+ * unusable array yields 0.
+ */
+export const getSteepestGradient = (points: Array<RoutePoint>): number => {
+    if (!Array.isArray(points)) return 0
+
+    let steepest = 0
+    for (const p of points) {
+        const slope = p?.slope
+        if (!Number.isFinite(slope)) continue
+
+        const magnitude = Math.abs(slope)
+        if (magnitude > steepest) steepest = magnitude
+    }
+
+    return steepest
+}
+
+/**
+ * What a smoothing level does to the gradient - the axis the rider actually feels through the
+ * trainer, and the one that carries the signal: the same transform that moves a real track's
+ * elevation curve by a fraction of a pixel moves its steepest gradient by a factor.
+ */
+export interface SmoothingGradient {
+    /** steepest gradient of the route's own points, in percent */
+    routeSteepest: number
+    /** steepest gradient after smoothing, in percent */
+    smoothedSteepest: number
+    /** false when this level barely changes this route, so the UI can say so instead of
+     *  reading as a broken control */
+    hasVisibleEffect: boolean
+}
+
+/** below this steepest-gradient move (percentage points), a level is a candidate for "barely
+ *  changes this route" - but only if the gain move is also small, see getSmoothingGradient() */
+const MIN_VISIBLE_GRADIENT_DELTA = 0.5
+
+/** below this elevation-gain move (as a fraction of the route's own gain), same caveat */
+const MIN_VISIBLE_GAIN_RATIO = 0.02
+
+/**
+ * Compares a route's own gradient/gain to a smoothed level's, and decides whether the change is
+ * worth showing as "this ride records less elevation gain" or as "this level barely changes this
+ * route - try a higher one" (ux.md's third copy state).
+ *
+ * `hasVisibleEffect` is false only when BOTH moves are small - a level that visibly changes
+ * either axis has an effect worth reporting, even if the other axis barely moves. A track sampled
+ * coarsely (~100 m spacing) genuinely carries no sub-120m detail for a mid-range level to remove,
+ * so "almost nothing happened" is a legitimate outcome here, not a defect to hide.
+ *
+ * Total and non-throwing: absent/non-finite gains are treated as "no evidence of a gain move".
+ */
+export const getSmoothingGradient = (
+    routePoints: Array<RoutePoint>,
+    smoothedPoints: Array<RoutePoint>,
+    routeGain?: number,
+    smoothedGain?: number
+): SmoothingGradient => {
+    const routeSteepest = getSteepestGradient(routePoints)
+    const smoothedSteepest = getSteepestGradient(smoothedPoints)
+    const gradientDelta = Math.abs(routeSteepest - smoothedSteepest)
+
+    const gainRatio =
+        Number.isFinite(routeGain) && routeGain > 0 && Number.isFinite(smoothedGain)
+            ? Math.abs(routeGain - smoothedGain) / routeGain
+            : 0
+
+    const hasVisibleEffect = gradientDelta >= MIN_VISIBLE_GRADIENT_DELTA || gainRatio >= MIN_VISIBLE_GAIN_RATIO
+
+    return { routeSteepest, smoothedSteepest, hasVisibleEffect }
+}
+
 const getElevationGain = (points: Array<RoutePoint>): number => {
     let gain = 0
     for (let i = 1; i < points.length; i++) {

@@ -2,6 +2,7 @@ import { ImportFilter } from "../../../base/cardlist/types";
 import { Observer } from "../../../base/types/observer";
 import { Unit } from "../../../i18n";
 import { RouteInfo, RoutePoint } from "../../base/types";
+import { SmoothingGradient } from "../../base/utils/smoothing";
 import { DownloadObserver } from "../../download/types";
 import { RouteStartSettings } from "../types";
 
@@ -100,14 +101,16 @@ export type RouteCardProps = {
     smoothedElevation?: { value:number, unit:Unit},
     /** the preview curve for the elevation profile; present only while a level of 1..5 is in effect */
     smoothedPoints?: Array<RoutePoint>,
+    /** what the level does to the gradient; present only while a level of 1..5 is in effect */
+    smoothedGradient?: SmoothingGradient,
     updateStartPos?: (updated:number)=>{ value:number, unit:Unit}
     updateMarkers?: (settings: UIRouteSettings)=> UIRouteSettings
 }
 
 /**
- * Result of previewing a smoothing level. Both fields are absent when there is nothing to
+ * Result of previewing a smoothing level. All fields are absent when there is nothing to
  * preview - level 0, an ineligible route, or a transform that could not be computed.
  */
-export type SmoothingPreview = Pick<RouteCardProps,'smoothedElevation'|'smoothedPoints'>
+export type SmoothingPreview = Pick<RouteCardProps,'smoothedElevation'|'smoothedPoints'|'smoothedGradient'>
 
 

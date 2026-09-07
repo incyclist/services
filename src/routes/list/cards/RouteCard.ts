@@ -16,7 +16,7 @@ import { DownloadObserver } from "../../download/types";
 import { useRouteDownload } from "../../download/service";
 import { EventLogger } from "gd-eventlog";
 import { checkIsLoop, getNextVideoId, hasNextVideo, getPosition, updateSlopes} from "../../base/utils/route";
-import { applySmoothing, isSmoothingEligible, MAX_SMOOTHING_LEVEL } from "../../base/utils/smoothing";
+import { applySmoothing, getSmoothingGradient, isSmoothingEligible, MAX_SMOOTHING_LEVEL, SmoothingGradient } from "../../base/utils/smoothing";
 import { getWorkoutList } from "../../../workouts";
 import { checkIsNew } from "../utils";
 import { useOnlineStatusMonitoring } from "../../../monitoring";
@@ -67,7 +67,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected ready:boolean
     protected logger:EventLogger
     protected cntActive: number=0
-    protected smoothingPreview?: {key:string, points:Array<RoutePoint>, elevation?:number}
+    protected smoothingPreview?: {key:string, points:Array<RoutePoint>, elevation?:number, gradient:SmoothingGradient}
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
         super()
@@ -506,11 +506,11 @@ export class RouteCard extends BaseCard implements Card<Route> {
         // a stored level takes effect immediately, before the user touches the control: showing the
         // original profile while an active setting says otherwise would mean starting a ride on
         // terrain that was never displayed
-        const {smoothedPoints, smoothedElevation} = this.getSmoothingPreview(uiSettings.smoothingLevel)
+        const {smoothedPoints, smoothedElevation, smoothedGradient} = this.getSmoothingPreview(uiSettings.smoothingLevel)
 
         return {settings:uiSettings,totalDistance, totalElevation, showLoopOverwrite,showNextOverwrite,hasWorkout,showWorkoutOption,canStart, videoChecking, videoMissing, detailsAvailable,
                 xScale, yScale,
-                smoothingAvailable, smoothingMaxLevel: MAX_SMOOTHING_LEVEL, smoothedPoints, smoothedElevation,
+                smoothingAvailable, smoothingMaxLevel: MAX_SMOOTHING_LEVEL, smoothedPoints, smoothedElevation, smoothedGradient,
                 updateStartPos: this.updateStartPos.bind(this),
                 updateMarkers: this.updateMarkers.bind(this)
         }
@@ -631,23 +631,28 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 if (!points?.length)
                     return none
 
+                const elevation = smoothed.description?.elevation ?? smoothed.details?.elevation
+                const routeElevation = this.route.description?.elevation ?? this.route.details?.elevation
+
                 this.smoothingPreview = {
                     key,
                     points,
                     // in metres, as stored on the route; the display unit is applied per call, so a
                     // change of unit preference is picked up without invalidating the cache
-                    elevation: smoothed.description?.elevation ?? smoothed.details?.elevation
+                    elevation,
+                    gradient: getSmoothingGradient(this.route.points, points, routeElevation, elevation)
                 }
             }
 
-            const {points:smoothedPoints, elevation} = this.smoothingPreview
+            const {points:smoothedPoints, elevation, gradient} = this.smoothingPreview
             const [C,U] = getUnitConversionShortcuts()
 
             return {
                 smoothedPoints,
                 smoothedElevation: Number.isFinite(elevation)
                     ? { value: C(elevation,'elevation',{digits:0}), unit: U('elevation') }
-                    : undefined
+                    : undefined,
+                smoothedGradient: gradient
             }
         }
         catch(err:any) {

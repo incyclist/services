@@ -4,7 +4,9 @@ import { RouteInfo, RoutePoint, VideoDescription } from '../types'
 import {
     analyseElevationNoise,
     applySmoothing,
+    getSmoothingGradient,
     getSmoothingProfile,
+    getSteepestGradient,
     isSmoothingEligible,
     smoothElevation,
     MAX_SMOOTHING_LEVEL,
@@ -318,6 +320,61 @@ describe('smoothing', () => {
             const before = JSON.stringify(points)
             analyseElevationNoise(points)
             expect(JSON.stringify(points)).toBe(before)
+        })
+    })
+
+    describe('getSteepestGradient', () => {
+        const withSlopes = (slopes: Array<number | undefined>): Array<RoutePoint> =>
+            buildPoints(slopes.map((_, i) => i * 10)).map((p, i) => ({ ...p, slope: slopes[i] }))
+
+        test('returns the largest magnitude, ignoring sign', () => {
+            expect(getSteepestGradient(withSlopes([1, -20.4, 3, 8.5]))).toBe(20.4)
+        })
+
+        test('skips points without a finite slope', () => {
+            expect(getSteepestGradient(withSlopes([undefined, Number.NaN, 5, 2]))).toBe(5)
+        })
+
+        test('handles empty and malformed input without throwing', () => {
+            expect(getSteepestGradient([])).toBe(0)
+            expect(getSteepestGradient(undefined as unknown as Array<RoutePoint>)).toBe(0)
+            expect(getSteepestGradient([null, undefined] as unknown as Array<RoutePoint>)).toBe(0)
+        })
+    })
+
+    describe('getSmoothingGradient', () => {
+        const withSlope = (slope: number): RoutePoint => ({ slope } as RoutePoint)
+        const routePoints = [withSlope(2), withSlope(20.4), withSlope(-5)]
+        const smoothedPoints = [withSlope(1.5), withSlope(8.5), withSlope(-4)]
+
+        test('reports the steepest gradient before and after', () => {
+            const gradient = getSmoothingGradient(routePoints, smoothedPoints, 1240, 1180)
+
+            expect(gradient.routeSteepest).toBe(20.4)
+            expect(gradient.smoothedSteepest).toBe(8.5)
+        })
+
+        test('has a visible effect when the steepest gradient moves enough', () => {
+            expect(getSmoothingGradient(routePoints, smoothedPoints, 1240, 1240).hasVisibleEffect).toBe(true)
+        })
+
+        test('has a visible effect when only the elevation gain moves enough, gradient barely moving', () => {
+            const flat = getSmoothingGradient([withSlope(5)], [withSlope(4.9)], 1000, 950)
+            expect(flat.hasVisibleEffect).toBe(true)
+        })
+
+        test('has no visible effect when both the gradient and the gain barely move', () => {
+            const barely = getSmoothingGradient([withSlope(5)], [withSlope(4.9)], 1000, 995)
+            expect(barely.hasVisibleEffect).toBe(false)
+        })
+
+        test('treats missing or non-finite gains as no gain move', () => {
+            const gradient = getSmoothingGradient([withSlope(5)], [withSlope(4.9)], undefined, undefined)
+            expect(gradient.hasVisibleEffect).toBe(false)
+        })
+
+        test('does not throw on empty point arrays', () => {
+            expect(() => getSmoothingGradient([], [], 100, 90)).not.toThrow()
         })
     })
 

@@ -2,6 +2,7 @@ import { Inject } from "../../../base/decorators"
 import { useUserSettings } from "../../../settings"
 import { Route } from "../../base/model/route"
 import { RouteInfo, RoutePoint } from "../../base/types"
+import { updateSlopes } from "../../base/utils/route"
 import { RouteCard } from "./RouteCard"
 import { RouteSettings, UIRouteSettings } from "./types"
 
@@ -18,7 +19,13 @@ describe('RouteCard - elevation smoothing', () => {
     let settings
     let hasFeature: jest.Mock
 
-    /** a noisy but plausible climb: enough points, real coordinates, varying elevation */
+    /**
+     * A noisy but plausible climb: enough points, real coordinates, varying elevation.
+     *
+     * Slopes are computed the same way the real parse/load pipeline does (`updateSlopes`), not
+     * left absent as a raw fixture would - `getSteepestGradient` reads the slope points already
+     * carry rather than deriving its own, precisely so it agrees with what the chart renders.
+     */
     const buildPoints = (cnt: number): Array<RoutePoint> => {
         const points: Array<RoutePoint> = []
         for (let i = 0; i < cnt; i++) {
@@ -30,6 +37,7 @@ describe('RouteCard - elevation smoothing', () => {
                 cnt: i
             } as RoutePoint)
         }
+        updateSlopes(points)
         return points
     }
 
@@ -165,6 +173,17 @@ describe('RouteCard - elevation smoothing', () => {
             expect(props.smoothedElevation.value).toEqual(expect.any(Number))
         })
 
+        test('returns the steepest gradient before and after alongside the profile', () => {
+            store[settingsKey()] = { startPos: 0, realityFactor: 100, smoothingLevel: 3 }
+
+            const props = createCard().openSettings()
+
+            expect(props.smoothedGradient).toBeDefined()
+            expect(props.smoothedGradient.routeSteepest).toEqual(expect.any(Number))
+            expect(props.smoothedGradient.smoothedSteepest).toEqual(expect.any(Number))
+            expect(typeof props.smoothedGradient.hasVisibleEffect).toBe('boolean')
+        })
+
         test('the smoothed profile actually differs from the stored one', () => {
             store[settingsKey()] = { startPos: 0, realityFactor: 100, smoothingLevel: 3 }
 
@@ -190,6 +209,7 @@ describe('RouteCard - elevation smoothing', () => {
 
             expect(props.smoothedPoints).toBeUndefined()
             expect(props.smoothedElevation).toBeUndefined()
+            expect(props.smoothedGradient).toBeUndefined()
         })
 
         test('returns no smoothed profile when the stored level is 0', () => {
@@ -213,6 +233,14 @@ describe('RouteCard - elevation smoothing', () => {
 
             expect(preview.smoothedPoints.length).toBe(24)
             expect(preview.smoothedElevation.value).toEqual(expect.any(Number))
+        })
+
+        test('returns the gradient comparison for the requested level', () => {
+            const preview = createCard().getSmoothingPreview(3)
+
+            expect(preview.smoothedGradient).toBeDefined()
+            expect(preview.smoothedGradient.routeSteepest).toBeGreaterThan(0)
+            expect(typeof preview.smoothedGradient.hasVisibleEffect).toBe('boolean')
         })
 
         test('does not write to the user settings', () => {
