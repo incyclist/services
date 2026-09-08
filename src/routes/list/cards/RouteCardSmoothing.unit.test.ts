@@ -4,7 +4,7 @@ import { Route } from "../../base/model/route"
 import { RouteInfo, RoutePoint } from "../../base/types"
 import { updateSlopes } from "../../base/utils/route"
 import { RouteCard } from "./RouteCard"
-import { RouteSettings, UIRouteSettings } from "./types"
+import { RouteSettings, UIRouteSettings, UIStartSettings } from "./types"
 
 jest.mock('../../base/utils/smoothing', () => {
     const actual = jest.requireActual('../../base/utils/smoothing')
@@ -132,9 +132,9 @@ describe('RouteCard - elevation smoothing', () => {
             expect(settingsRead.smoothingLevel).toBe(1)
         })
 
-        // architecture.md §9.7 defect 1: a caller with no opinion on smoothing (e.g. opening the
-        // route from the map, not from Ride Again) must not silently reset the level someone
-        // already chose - only an explicit value may change it.
+        // a caller with no opinion on smoothing (e.g. opening the route from the map, not from
+        // Ride Again) must not silently reset the level someone already chose - only an explicit
+        // value may change it. This was a real defect, not a hypothetical.
         test('a change with no opinion on smoothing does not reset an already-stored level', () => {
             const card = createCard()
             card.changeSettings({ startPos: 0, realityFactor: 100, smoothingLevel: 3 } as RouteSettings)
@@ -144,8 +144,8 @@ describe('RouteCard - elevation smoothing', () => {
             expect(store[settingsKey()].smoothingLevel).toBe(3)
         })
 
-        // §9.6.4: reproducing the ride's conditions is the point of Ride Again - the activity's
-        // own stored level must win over whatever the route currently has, in both directions.
+        // reproducing the ride's conditions is the point of Ride Again - the activity's own
+        // stored level must win over whatever the route currently has, in both directions.
         test('an explicit level from Ride Again overrides whatever the route currently has stored', () => {
             const card = createCard()
             card.changeSettings({ startPos: 0, realityFactor: 100, smoothingLevel: 3 } as RouteSettings)
@@ -315,6 +315,71 @@ describe('RouteCard - elevation smoothing', () => {
             createCard({ id: 'route-2' }).getSmoothingPreview(3)
 
             expect(smoothing.applySmoothing).toHaveBeenCalledTimes(2)
+        })
+    })
+
+    // the previous-rides comparison criteria, owned here so both UIs stop hand-building it (and
+    // re-deriving eligibility, which they must not do themselves).
+    describe('getPrevRidesFilter', () => {
+
+        const baseSettings: UIStartSettings = {
+            startPos: { value: 0, unit: 'km' },
+            endPos: { value: 10, unit: 'km' },
+            realityFactor: 100,
+        }
+
+        test('matches on routeHash when the route has one, not routeId', () => {
+            const card = createCard({ info: { routeHash: 'hash-1' } })
+
+            const filter = card.getPrevRidesFilter(baseSettings)
+
+            expect(filter.routeHash).toBe('hash-1')
+            expect(filter.routeId).toBeUndefined()
+        })
+
+        test('falls back to routeId only when there is no routeHash', () => {
+            const card = createCard({ info: { routeHash: undefined } })
+
+            const filter = card.getPrevRidesFilter(baseSettings)
+
+            expect(filter.routeId).toBe('route-1')
+            expect(filter.routeHash).toBeUndefined()
+        })
+
+        test('passes startPos, endPos and realityFactor through unchanged', () => {
+            const card = createCard()
+
+            const filter = card.getPrevRidesFilter({ ...baseSettings, realityFactor: 70 })
+
+            expect(filter.startPos).toEqual(baseSettings.startPos)
+            expect(filter.endPos).toEqual(baseSettings.endPos)
+            expect(filter.realityFactor).toBe(70)
+        })
+
+        test('predicts the requested level for an eligible route', () => {
+            const card = createCard()
+
+            const filter = card.getPrevRidesFilter({ ...baseSettings, smoothingLevel: 3 })
+
+            expect(filter.smoothingLevel).toBe(3)
+        })
+
+        test('predicts 0 when no level has been chosen yet', () => {
+            const card = createCard()
+
+            const filter = card.getPrevRidesFilter(baseSettings)
+
+            expect(filter.smoothingLevel).toBe(0)
+        })
+
+        // the whole reason this lives on RouteCard rather than being hand-built by each UI: a
+        // caller cannot get this right without isSmoothingAvailable(), which is protected
+        test('predicts 0 for a route that is not smoothing-eligible, regardless of the requested level', () => {
+            const card = createCard({ points: 4 })
+
+            const filter = card.getPrevRidesFilter({ ...baseSettings, smoothingLevel: 5 })
+
+            expect(filter.smoothingLevel).toBe(0)
         })
     })
 })

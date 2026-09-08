@@ -326,8 +326,8 @@ export class Activity implements ActivityInfo{
                 realityFactor,
                 // reproducing the ride's conditions is the point of Ride Again - a route's own
                 // currently-stored level must not override what this specific activity was ridden
-                // with (see RouteCard.changeSettings() and design/features/route-smoothing
-                // /architecture.md §9.6.4)
+                // with. RouteCard.changeSettings() has the other half: an explicit value here must
+                // win over the route's stored level, but an absent one must not wipe it either.
                 smoothingLevel,
                 showPrev:true,
                 type:card?.getCardType()??'Route'

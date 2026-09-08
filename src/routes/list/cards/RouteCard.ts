@@ -18,6 +18,7 @@ import { EventLogger } from "gd-eventlog";
 import { checkIsLoop, getNextVideoId, hasNextVideo, getPosition, updateSlopes} from "../../base/utils/route";
 import { applySmoothing, getSmoothingGradient, isSmoothingEligible, MAX_SMOOTHING_LEVEL, SmoothingGradient } from "../../base/utils/smoothing";
 import { getWorkoutList } from "../../../workouts";
+import { ActivitySearchCriteria } from "../../../activities/base/repo/types";
 import { checkIsNew } from "../utils";
 import { useOnlineStatusMonitoring } from "../../../monitoring";
 import { distanceBetween } from "../../../utils/geo";
@@ -572,9 +573,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite,
                     // an explicit `undefined` here (e.g. a caller with no opinion on smoothing)
                     // would otherwise overwrite the spread above and silently reset the route's
-                    // stored level to "off" - see design/features/route-smoothing/architecture.md
-                    // §9.7 defect 1. `??` only falls through on null/undefined, so an explicit 0
-                    // ("off", e.g. from Ride Again on an unsmoothed activity) is preserved as 0.
+                    // stored level to "off" without the user touching the control - this was a
+                    // real defect (opening an activity's route from the activity list reset it).
+                    // `??` only falls through on null/undefined, so an explicit 0 ("off", e.g.
+                    // from Ride Again on an unsmoothed activity) is still preserved as 0.
                     smoothingLevel: smoothingLevel ?? this.startSettings?.smoothingLevel
                 }
             }
@@ -671,6 +673,36 @@ export class RouteCard extends BaseCard implements Card<Route> {
     /** true when the smoothing control may be offered for this route */
     protected isSmoothingAvailable():boolean {
         return isSmoothingEligible(this.route)
+    }
+
+    /**
+     * The previous-rides comparison criteria for this route, given the settings currently being
+     * previewed. Owned here, not duplicated per UI, because building it correctly requires
+     * isSmoothingAvailable() - the actual eligibility rule - which callers must not reconstruct
+     * themselves; that would be a *how* decision leaking out of the *what* decision this class
+     * already owns.
+     *
+     * A prediction, not a fact: no ride copy exists yet at this point, so the smoothing level
+     * here mirrors what buildRideRoute() would end up applying (0 when the route is not actually
+     * eligible) rather than the raw previewed value. `initPrevActivities()` (in-ride) builds its
+     * own criteria instead of calling this: it has the fact, via getAppliedSmoothingLevel(), and
+     * using a prediction there would be a regression, not a simplification.
+     */
+    getPrevRidesFilter(settings:UIStartSettings):ActivitySearchCriteria {
+        const routeHash = this.getRouteDescription()?.routeHash
+        // routeId only stands in when there is no hash to match on - sending both would AND them
+        // together, which could rule out a legitimate match rather than widen the search.
+        const routeId = routeHash ? undefined : this.getRouteDescription()?.id
+        const smoothingLevel = this.isSmoothingAvailable() ? (settings.smoothingLevel ?? 0) : 0
+
+        return {
+            routeHash,
+            routeId,
+            startPos: settings.startPos,
+            endPos: settings.endPos,
+            realityFactor: settings.realityFactor,
+            smoothingLevel,
+        }
     }
 
     protected adjustStartPosAvi(settings:RouteSettings|UIStartSettings) {
