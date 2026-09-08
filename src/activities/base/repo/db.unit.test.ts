@@ -86,9 +86,8 @@ describe('ActivityDB',()=>{
             expect(result.map(a=>a.summary.id)).not.toContain('legacy-short-ride')
         })
 
-        // design/features/route-smoothing/architecture.md §9.5: rides under different smoothing
-        // levels felt a measurably different elevation/resistance profile, so they must not be
-        // offered as comparison ghosts for each other.
+        // rides under different smoothing levels felt a measurably different elevation/resistance
+        // profile, so they must not be offered as comparison ghosts for each other.
         describe('smoothingLevel',()=>{
 
             const buildSmoothed = (id:string, smoothingLevel?:number):ActivityInfo => {

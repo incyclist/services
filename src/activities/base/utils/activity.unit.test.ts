@@ -137,9 +137,9 @@ describe('Activity', () => {
 
     })
 
-    // architecture.md §9.6.4: Ride Again must reproduce the ride's own conditions, which requires
-    // the activity's own stored smoothing level to flow through - not the route's currently-stored
-    // one (see RouteCard.changeSettings(), fixed separately).
+    // Ride Again must reproduce the ride's own conditions, which requires the activity's own
+    // stored smoothing level to flow through - not the route's currently-stored one (see
+    // RouteCard.changeSettings(), which has the other half of this fix).
     describe('createStartSettings', () => {
 
         const createActivityWith = (smoothingLevel?: number): Activity => {

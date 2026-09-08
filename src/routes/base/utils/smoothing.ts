@@ -56,6 +56,24 @@ export type NoiseStats = {
 /** level used as the reference when measuring how much spurious micro-gain a track carries */
 const NOISE_REFERENCE_LEVEL = 3
 
+/**
+ * FROZEN once released - these values are persisted-data semantics, not tuning constants, and
+ * must not change.
+ *
+ * A rider's chosen level (1-5) is stored on their activity as just the number, so that activities
+ * can be matched for a "compare against previous rides" feature: rides at different levels felt a
+ * measurably different resistance profile, so only same-level rides are valid comparisons. The
+ * stored number's *meaning* is entirely defined by this table. Retune level 3 here, and every
+ * activity ever recorded at level 3 silently starts meaning something different from a level-3
+ * activity ridden after the change - they would still match each other in comparisons, wrongly,
+ * with nothing to detect it. `LAG_SHIFT_RATIO` below is under the same freeze, for the same reason.
+ *
+ * If these values ever need retuning: do not edit this table in place. Instead, add a new field
+ * alongside the stored level (e.g. a profile id or version) so old and new activities can be told
+ * apart, and add a migration for the activities that predate that new field - their correct
+ * default is "the profile this table had before the change", never "whatever this table
+ * currently says".
+ */
 const PROFILES: Record<number, SmoothingOptions> = {
     1: { windowLength: 30, passes: 1, spikeThreshold: 5 },
     2: { windowLength: 60, passes: 1, spikeThreshold: 4 },
@@ -206,6 +224,9 @@ const boxFilterRange = (points: Array<RoutePoint>, start: number, end: number, w
  * them (~0.07 and ~0.20 of window length) depending on the terrain's own shape around the peak, so
  * no constant is exact everywhere. 0.15 splits that range. A single pass measured at noise-floor
  * (no correction needed) on both climbs, hence the passes===2 gate in getLagShiftDistance.
+ *
+ * FROZEN under the same rule as PROFILES above, for the same reason: it is baked into what a
+ * stored level means for activity comparison, not a free-standing tuning knob.
  */
 const LAG_SHIFT_RATIO = 0.15
 
@@ -534,7 +555,7 @@ const MIN_VISIBLE_GAIN_RATIO = 0.02
 /**
  * Compares a route's own gradient/gain to a smoothed level's, and decides whether the change is
  * worth showing as "this ride records less elevation gain" or as "this level barely changes this
- * route - try a higher one" (ux.md's third copy state).
+ * route - try a higher one" - the third of three copy states the UI can be in for this control.
  *
  * `hasVisibleEffect` is false only when BOTH moves are small - a level that visibly changes
  * either axis has an effect worth reporting, even if the other axis barely moves. A track sampled

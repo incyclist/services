@@ -573,9 +573,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite,
                     // an explicit `undefined` here (e.g. a caller with no opinion on smoothing)
                     // would otherwise overwrite the spread above and silently reset the route's
-                    // stored level to "off" - see design/features/route-smoothing/architecture.md
-                    // §9.7 defect 1. `??` only falls through on null/undefined, so an explicit 0
-                    // ("off", e.g. from Ride Again on an unsmoothed activity) is preserved as 0.
+                    // stored level to "off" without the user touching the control - this was a
+                    // real defect (opening an activity's route from the activity list reset it).
+                    // `??` only falls through on null/undefined, so an explicit 0 ("off", e.g.
+                    // from Ride Again on an unsmoothed activity) is still preserved as 0.
                     smoothingLevel: smoothingLevel ?? this.startSettings?.smoothingLevel
                 }
             }

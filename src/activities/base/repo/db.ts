@@ -393,10 +393,10 @@ export class ActivitiesRepository {
     }
 
     // rides under different smoothing levels felt a measurably different elevation/resistance
-    // profile on the same route, so they are not comparable as ghosts - see
-    // design/features/route-smoothing/architecture.md §9. Same `?? default` shape as
+    // profile on the same route, so they are not comparable as ghosts. Same `?? default` shape as
     // checkRealityFactorFilter, since an activity that predates this field was, as a fact, ridden
-    // unsmoothed (§9.4.2) rather than merely defaulted to it.
+    // unsmoothed rather than merely defaulted to it - smoothing did not exist yet when it was
+    // recorded, so absence here is a true statement about the ride, not an assumption.
     private checkSmoothingFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
         if (result?.length > 0 && criteria?.smoothingLevel !== undefined) {
             result = result.filter(ai => (ai.summary.smoothingLevel ?? 0) === criteria.smoothingLevel);

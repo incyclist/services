@@ -1181,7 +1181,8 @@ export class ActivityRideService extends IncyclistService {
             const routeId = this.activity.route.id
             const routeHash = this.activity.route.hash
             // the ride copy already exists by this point (init() calls createActivity() first),
-            // so this is the fact of what was applied, not a prediction - see §9.5/§9.4.1
+            // so this is the fact of what was actually applied, not a prediction of it - unlike
+            // the pre-ride dialogs, which have no ride copy yet to ask
             const smoothingLevel = this.getRouteList().getAppliedSmoothingLevel()
             const filter = { routeId,routeHash,startPos,realityFactor,smoothingLevel,minTime:30, minDistance:500}
 

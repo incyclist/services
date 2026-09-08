@@ -132,9 +132,9 @@ describe('RouteCard - elevation smoothing', () => {
             expect(settingsRead.smoothingLevel).toBe(1)
         })
 
-        // architecture.md §9.7 defect 1: a caller with no opinion on smoothing (e.g. opening the
-        // route from the map, not from Ride Again) must not silently reset the level someone
-        // already chose - only an explicit value may change it.
+        // a caller with no opinion on smoothing (e.g. opening the route from the map, not from
+        // Ride Again) must not silently reset the level someone already chose - only an explicit
+        // value may change it. This was a real defect, not a hypothetical.
         test('a change with no opinion on smoothing does not reset an already-stored level', () => {
             const card = createCard()
             card.changeSettings({ startPos: 0, realityFactor: 100, smoothingLevel: 3 } as RouteSettings)
@@ -144,8 +144,8 @@ describe('RouteCard - elevation smoothing', () => {
             expect(store[settingsKey()].smoothingLevel).toBe(3)
         })
 
-        // §9.6.4: reproducing the ride's conditions is the point of Ride Again - the activity's
-        // own stored level must win over whatever the route currently has, in both directions.
+        // reproducing the ride's conditions is the point of Ride Again - the activity's own
+        // stored level must win over whatever the route currently has, in both directions.
         test('an explicit level from Ride Again overrides whatever the route currently has stored', () => {
             const card = createCard()
             card.changeSettings({ startPos: 0, realityFactor: 100, smoothingLevel: 3 } as RouteSettings)
@@ -318,8 +318,8 @@ describe('RouteCard - elevation smoothing', () => {
         })
     })
 
-    // architecture.md §9.6.3: the previous-rides comparison criteria, owned here so both UIs stop
-    // hand-building it (and re-deriving eligibility, which they must not do themselves).
+    // the previous-rides comparison criteria, owned here so both UIs stop hand-building it (and
+    // re-deriving eligibility, which they must not do themselves).
     describe('getPrevRidesFilter', () => {
 
         const baseSettings: UIStartSettings = {
