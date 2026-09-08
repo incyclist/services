@@ -307,7 +307,27 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     
     toggleRightSideView() {
         this.toggleOverlay('sv-right')
-        
+
+    }
+
+    isOverlayPinned(overlay:string):boolean {
+        try {
+            return this.getUserSettings().get(`preferences.rideOverlays.${overlay}.pinned`,false)
+        }
+        catch(err) {
+            this.logError(err,'isOverlayPinned')
+            return false
+        }
+    }
+
+    setOverlayPinned(overlay:string, pinned:boolean) {
+        try {
+            this.getUserSettings().set(`preferences.rideOverlays.${overlay}.pinned`,pinned)
+            this.observer?.emit('overlay-update', this.getDisplayProperties())
+        }
+        catch(err) {
+            this.logError(err,'setOverlayPinned')
+        }
     }
 
     onArrowKey(event) {
@@ -387,14 +407,15 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             const virtualShiftingEnabled = this.isVirtualShiftingEnabled()
             const showShiftingButtons = virtualShiftingEnabled && !this.actualWorkout && !!this.activity
 
-            const props = { 
+            const props = {
                 workout: this.actualWorkout, route: this.route, activity: this.activity,  state:this.state,
                 startOverlayProps,
                 prevRides: this.getPrevRidesProps(),
                 hideAll: this.hideAll,
                 showShiftingButtons,
                 showDashboard,
-                showWorkout
+                showWorkout,
+                shiftingPinned: this.isOverlayPinned('shifting')
                 }
 
             const childProps = this.getRideModeService()?.getDisplayProperties(props)??{}
