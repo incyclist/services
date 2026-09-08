@@ -378,8 +378,13 @@ export class PairingPageStateMachine {
             this.performCheck()
         }
         else if(this.state==='Pairing') {
-            this.getDevicePairing().stopPairing()
-            this.selectionTimeout = setTimeout( this.onDeviceSelectionTimeout.bind(this), 1000)
+            // the 3s grace period is over and the in-flight pairing attempt (for some other
+            // capability) still hasn't finished - abandon it and honour the user's request to
+            // see devices for the capability they opened instead. It isn't lost: the normal
+            // retry cycle (see onPairingFinished()) picks it up again once we're back at 'Idle'.
+            await this.getDevicePairing().stopPairing()
+            this._selectState = 'Active'
+            this.performCheck()
         }
     }
 

@@ -186,4 +186,51 @@ describe('PairingPage state machine',()=> {
         expect(sm.state).toBe('Idle')
     })
 
+    test('device selector opened while Pairing should give up after the 3s grace period and start scanning, not loop forever',async ()=> {
+        setupMocks()
+
+        const callback = jest.fn()
+
+        configMock.canStartRide = jest.fn().mockReturnValue(true)
+        configMock.getAdapters = jest.fn().mockReturnValue([])
+        pairingMock.pairingSuccess = true
+        pairingMock.pairingComplete = false
+
+        // startPairing() never resolves within this test - mirrors a device (e.g. a trainer)
+        // that's still trying to (re)connect when the user opens the selector for a
+        // different capability
+        pairingMock.startPairing = jest.fn().mockImplementation( ()=> new Promise<void>( ()=>{}) )
+
+        const stopPairingCalls:number[] = []
+        pairingMock.stopPairing = jest.fn().mockImplementation( async ()=> { stopPairingCalls.push(Date.now()) })
+
+        let startScanningCalls = 0
+        pairingMock.startScanning = jest.fn().mockImplementation( async ()=> { startScanningCalls++; return new Promise<void>( ()=>{}) })
+
+        sm.start(callback)
+        sm.onPageReady()
+        expect(sm.state).toBe('Pairing')
+
+        // user opens the device selector for a different capability while pairing is still
+        // in flight
+        sm.onDeviceSelectionOpened(jest.fn())
+        expect(sm.selectState).toBe('Waiting')
+
+        // let the 3s grace period expire
+        await jest.advanceTimersByTimeAsync(3000)
+
+        // the stale pairing attempt should be abandoned exactly once and the state machine
+        // should move on to scanning for the requested capability, not sit in 'Waiting'
+        // re-cancelling the same pairing attempt every second forever
+        expect(stopPairingCalls).toHaveLength(1)
+        expect(sm.selectState).toBe('Active')
+        expect(startScanningCalls).toBe(1)
+        expect(sm.state).toBe('Scanning')
+
+        // confirm it really has stopped looping, not just that it hasn't looped yet
+        await jest.advanceTimersByTimeAsync(5000)
+        expect(stopPairingCalls).toHaveLength(1)
+        expect(startScanningCalls).toBe(1)
+    })
+
 })
