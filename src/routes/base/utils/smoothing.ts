@@ -150,7 +150,7 @@ const despikeRange = (points: Array<RoutePoint>, start: number, end: number, thr
  */
 const boxFilterRange = (points: Array<RoutePoint>, start: number, end: number, windowLength: number): void => {
     const n = end - start
-    if (n < 3 || !(windowLength > 0)) return
+    if (n < 3 || windowLength <= 0) return
 
     const d = new Array<number>(n)
     const e = new Array<number>(n)
@@ -160,7 +160,7 @@ const boxFilterRange = (points: Array<RoutePoint>, start: number, end: number, w
     }
 
     const total = d[n - 1]
-    if (!(total > 0)) return
+    if (total <= 0) return
 
     // trapezoidal prefix sums: cum[i] = integral of e(d) from d[0] to d[i]
     const cum = new Array<number>(n)
@@ -187,7 +187,7 @@ const boxFilterRange = (points: Array<RoutePoint>, start: number, end: number, w
     const smoothed = new Array<number>(n)
     for (let i = 0; i < n; i++) {
         const w = Math.min(windowLength, 2 * d[i], 2 * (total - d[i]))
-        if (!(w > 0)) {
+        if (w <= 0) {
             // endpoints (and any point sharing their distance) are anchored exactly
             smoothed[i] = e[i]
             continue
@@ -256,7 +256,7 @@ const buildElevationLookup = (d: Array<number>, e: Array<number>): ((x: number) 
  */
 const applyLagShift = (points: Array<RoutePoint>, start: number, end: number, shiftDistance: number): void => {
     const n = end - start
-    if (n < 2 || !(shiftDistance > 0)) return
+    if (n < 2 || shiftDistance <= 0) return
 
     const d = new Array<number>(n)
     const e = new Array<number>(n)
@@ -264,7 +264,7 @@ const applyLagShift = (points: Array<RoutePoint>, start: number, end: number, sh
         d[i] = points[start + i].routeDistance - points[start].routeDistance
         e[i] = points[start + i].elevation
     }
-    if (!(d[n - 1] > 0)) return
+    if (d[n - 1] <= 0) return
 
     const elevationAt = buildElevationLookup(d, e)
     const reference = elevationAt(shiftDistance)
@@ -274,17 +274,6 @@ const applyLagShift = (points: Array<RoutePoint>, start: number, end: number, sh
     }
 }
 
-/**
- * Smooths the elevation profile of a point array.
- *
- * Returns a NEW array of NEW point objects - the input is never modified. Point count is
- * preserved exactly, and every field other than `elevation` (lat, lng, routeDistance,
- * videoSpeed, videoTime, isCut, cnt, time, ...) is carried over untouched, so `routeDistance`
- * stays monotonic by construction.
- *
- * Derived fields (`slope`, `elevationGain`) are NOT recomputed here - that is the caller's
- * job, see applySmoothing().
- */
 /**
  * Generous padding for a loop's wrap-around smoothing context - deliberately much larger than any
  * profile's own window/lag-shift needs (at most ~325m combined, at level 5). Computing more than
@@ -311,7 +300,7 @@ const padForLoop = (
     padDistance: number
 ): { padded: Array<RoutePoint>; headCount: number } => {
     const total = points.at(-1)?.routeDistance ?? 0
-    if (!(total > 0)) return { padded: points, headCount: 0 }
+    if (total <= 0) return { padded: points, headCount: 0 }
 
     const tail = points.filter((p) => total - p.routeDistance <= padDistance)
     const head = points.filter((p) => p.routeDistance <= padDistance)
@@ -322,6 +311,17 @@ const padForLoop = (
     return { padded: [...before, ...points, ...after], headCount: before.length }
 }
 
+/**
+ * Smooths the elevation profile of a point array.
+ *
+ * Returns a NEW array of NEW point objects - the input is never modified. Point count is
+ * preserved exactly, and every field other than `elevation` (lat, lng, routeDistance,
+ * videoSpeed, videoTime, isCut, cnt, time, ...) is carried over untouched, so `routeDistance`
+ * stays monotonic by construction.
+ *
+ * Derived fields (`slope`, `elevationGain`) are NOT recomputed here - that is the caller's
+ * job, see applySmoothing().
+ */
 export const smoothElevation = (points: Array<RoutePoint>, opts: SmoothingOptions): Array<RoutePoint> => {
     if (!points?.length) return []
 

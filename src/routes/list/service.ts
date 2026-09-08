@@ -833,6 +833,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             return this.buildRideRoute(this.getRoute(id)).route
 
         const selected = this.getSelected()
+        // deliberately not `this.rideRoute?.source !== selected` (Sonar S1940): when nothing has
+        // been selected yet, both sides are undefined and optional-chaining would read that as
+        // "unchanged", skipping the build below and returning `this.rideRoute.route` while
+        // `this.rideRoute` is still unset - see "is nothing when nothing is selected"
         if (!this.rideRoute || this.rideRoute.source!==selected) {
             const {route, level} = this.buildRideRoute(selected)
             this.rideRoute = { source: selected, route, appliedLevel: level }
@@ -903,7 +907,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         const level = this.sessionSmoothingLevel
 
-        if (!(level>=1) || !isSmoothingEligible(route))
+        if (level<1 || !isSmoothingEligible(route))
             return {route: route.clone(), level:0}
 
         try {
@@ -941,6 +945,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         for (let i=0;i<points.length;i++) {
             if (!Number.isFinite(points[i]?.elevation))
                 return false
+            // deliberately not `points[i].routeDistance<points[i-1].routeDistance` (Sonar S1940):
+            // this function's whole job is catching an implausible transform result, and a NaN
+            // distance must be rejected, not silently pass a `<` comparison that is always false
             if (i>0 && !(points[i].routeDistance>=points[i-1].routeDistance))
                 return false
         }
