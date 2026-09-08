@@ -86,6 +86,58 @@ describe('ActivityDB',()=>{
             expect(result.map(a=>a.summary.id)).not.toContain('legacy-short-ride')
         })
 
+        // design/features/route-smoothing/architecture.md §9.5: rides under different smoothing
+        // levels felt a measurably different elevation/resistance profile, so they must not be
+        // offered as comparison ghosts for each other.
+        describe('smoothingLevel',()=>{
+
+            const buildSmoothed = (id:string, smoothingLevel?:number):ActivityInfo => {
+                const activity = buildActivity(id, 60)
+                activity.summary.smoothingLevel = smoothingLevel
+                return activity
+            }
+
+            beforeEach(()=>{
+                setChannel('desktop');
+                (db as unknown as {activities:Array<ActivityInfo>}).activities = [
+                    buildSmoothed('unsmoothed', 0),
+                    buildSmoothed('level-3', 3),
+                    buildSmoothed('level-5', 5),
+                    buildSmoothed('predates-the-field', undefined),
+                ]
+            })
+
+            test('an unspecified criterion matches every activity, regardless of its level',()=>{
+                const result = db.search({})
+
+                expect(result.map(a=>a.summary.id)).toEqual(
+                    expect.arrayContaining(['unsmoothed','level-3','level-5','predates-the-field'])
+                )
+            })
+
+            test('matches only activities ridden at the requested level',()=>{
+                const result = db.search({smoothingLevel:3})
+
+                expect(result.map(a=>a.summary.id)).toEqual(['level-3'])
+            })
+
+            test('requesting level 0 matches both explicit 0 and an activity that predates the field',()=>{
+                const result = db.search({smoothingLevel:0})
+
+                expect(result.map(a=>a.summary.id)).toEqual(
+                    expect.arrayContaining(['unsmoothed','predates-the-field'])
+                )
+                expect(result.map(a=>a.summary.id)).not.toContain('level-3')
+                expect(result.map(a=>a.summary.id)).not.toContain('level-5')
+            })
+
+            test('a level with no matching activities returns nothing, not everything',()=>{
+                const result = db.search({smoothingLevel:4})
+
+                expect(result).toEqual([])
+            })
+        })
+
     })
 
     describe('migrate', ()=>{

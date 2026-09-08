@@ -137,6 +137,52 @@ describe('Activity', () => {
 
     })
 
+    // architecture.md §9.6.4: Ride Again must reproduce the ride's own conditions, which requires
+    // the activity's own stored smoothing level to flow through - not the route's currently-stored
+    // one (see RouteCard.changeSettings(), fixed separately).
+    describe('createStartSettings', () => {
+
+        const createActivityWith = (smoothingLevel?: number): Activity => {
+            const mockInfo: ActivityInfo = {
+                summary: {
+                    id: 'test-1', title: 'Test Activity', name: 'test-activity',
+                    routeId: 'route-1', routeHash: 'hash-1',
+                    startTime: Date.now(), rideTime: 3600, distance: 50000, totalElevation: 500,
+                    startPos: 0, realityFactor: 100, uploadStatus: []
+                },
+                details: {
+                    type: 'IncyclistActivity', version: '5', title: 'Test Activity', id: 'test-1',
+                    user: { uuid: 'user-1', weight: 75 },
+                    route: { id: 'route-1', hash: 'hash-1', name: 'Test Route' },
+                    startTime: new Date().toISOString(),
+                    time: 3600, timeTotal: 3600, timePause: 0,
+                    startPos: 0, distance: 50000, totalElevation: 500, logs: [],
+                    routeType: 'GPX', realityFactor: 100,
+                    smoothingLevel
+                } as unknown as ActivityInfo['details']
+            }
+            return new Activity(mockInfo)
+        }
+
+        test('carries the activity’s own stored level forward', () => {
+            const settings = createActivityWith(3).createStartSettings()
+
+            expect(settings.smoothingLevel).toBe(3)
+        })
+
+        test('carries an explicit "off" (0) forward too, not as "no opinion"', () => {
+            const settings = createActivityWith(0).createStartSettings()
+
+            expect(settings.smoothingLevel).toBe(0)
+        })
+
+        test('is undefined for an activity that predates the field, not defaulted to a level', () => {
+            const settings = createActivityWith(undefined).createStartSettings()
+
+            expect(settings.smoothingLevel).toBeUndefined()
+        })
+    })
+
     describe('canStart', () => {
 
         let routeList: any

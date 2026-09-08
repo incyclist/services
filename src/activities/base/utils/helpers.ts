@@ -2,7 +2,7 @@ export * from './activity'
 import { ActivityDetails, ActivitySummary, DEFAULT_ACTIVITY_TITLE, DEFAULT_SPORT_ACTIVITY_TITLE } from "../model"
 
 export const buildSummary = (activity:ActivityDetails,proposedName?:string):ActivitySummary =>{
-    const {id, route,screenshots,startTime: startTimeUTC,time: rideTime,distance,startPos,endPos, realityFactor=100,links,laps,fileName} = activity
+    const {id, route,screenshots,startTime: startTimeUTC,time: rideTime,distance,startPos,endPos, realityFactor=100,smoothingLevel,links,laps,fileName} = activity
 
     let name = proposedName ?? activity.name
     const routeId = route?.id
@@ -41,7 +41,7 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
     }
 
     return {
-        id,title,name, routeId, routeHash, previewImage,startTime,rideTime,distance,totalElevation, startPos,endPos,realityFactor,uploadStatus,laps
+        id,title,name, routeId, routeHash, previewImage,startTime,rideTime,distance,totalElevation, startPos,endPos,realityFactor,smoothingLevel,uploadStatus,laps
     }
 }
 

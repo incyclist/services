@@ -1180,7 +1180,10 @@ export class ActivityRideService extends IncyclistService {
             const {startPos,realityFactor} = settings
             const routeId = this.activity.route.id
             const routeHash = this.activity.route.hash
-            const filter = { routeId,routeHash,startPos,realityFactor,minTime:30, minDistance:500}
+            // the ride copy already exists by this point (init() calls createActivity() first),
+            // so this is the fact of what was applied, not a prediction - see §9.5/§9.4.1
+            const smoothingLevel = this.getRouteList().getAppliedSmoothingLevel()
+            const filter = { routeId,routeHash,startPos,realityFactor,smoothingLevel,minTime:30, minDistance:500}
 
             useActivityList()
                 .getPastActivitiesWithDetails(filter)
@@ -1423,6 +1426,9 @@ export class ActivityRideService extends IncyclistService {
         // otherwise its total elevation and its per-sample elevations disagree
         let selectedRoute = this.getRouteList().getRideRoute()
         const startSettings:RouteStartSettings = this.getRouteList().getStartSettings()
+        // the level actually applied, never the one requested (see getAppliedSmoothingLevel) -
+        // this is what makes the activity a true record of the conditions the ride was under
+        const smoothingLevel = this.getRouteList().getAppliedSmoothingLevel()
 
 
 
@@ -1521,7 +1527,7 @@ export class ActivityRideService extends IncyclistService {
             distance:0,
             totalElevation:0,
             logs:[],
-            startPos,endPos,segment,realityFactor,
+            startPos,endPos,segment,realityFactor,smoothingLevel,
             fileName,
             sport
         }

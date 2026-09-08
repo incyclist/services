@@ -569,7 +569,13 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 
                 this.startSettings = {
                     ...this.startSettings,
-                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite,smoothingLevel
+                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite,
+                    // an explicit `undefined` here (e.g. a caller with no opinion on smoothing)
+                    // would otherwise overwrite the spread above and silently reset the route's
+                    // stored level to "off" - see design/features/route-smoothing/architecture.md
+                    // §9.7 defect 1. `??` only falls through on null/undefined, so an explicit 0
+                    // ("off", e.g. from Ride Again on an unsmoothed activity) is preserved as 0.
+                    smoothingLevel: smoothingLevel ?? this.startSettings?.smoothingLevel
                 }
             }
             else {
@@ -577,7 +583,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
                 this.startSettings = {
                     ...this.startSettings,
-                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite,smoothingLevel
+                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite,
+                    smoothingLevel: smoothingLevel ?? this.startSettings?.smoothingLevel
                 }
 
             }
@@ -663,16 +670,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     /** true when the smoothing control may be offered for this route */
     protected isSmoothingAvailable():boolean {
-        try {
-            if (!this.getAppState().hasFeature('ROUTE_SMOOTHING'))
-                return false
-
-            return isSmoothingEligible(this.route)
-        }
-        catch(err:any) {
-            this.logError(err,'isSmoothingAvailable')
-            return false
-        }
+        return isSmoothingEligible(this.route)
     }
 
     protected adjustStartPosAvi(settings:RouteSettings|UIStartSettings) {

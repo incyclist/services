@@ -302,6 +302,7 @@ export class ActivitiesRepository {
      * - routeId: returns all activities for a given route
      * - startPos: return all activities with a given start position (typically used together with routeId)
      * - realityFactor: return all activities with a given reality factor (typically used together with routeId)
+     * - smoothingLevel: return all activities ridden with a given elevation smoothing level (typically used together with routeId)
      * - uploadStatus: can be used to identify routes that have not yet been synced with third party app(s)
      * - isSaved: can be used to identified routes that were not saved yet ( as FIT/TCX)
      * 
@@ -330,7 +331,8 @@ export class ActivitiesRepository {
         result = this.checkStartPosFilter(result, criteria);
         result = this.checkEndPosFilter(result, criteria);
         result = this.checkRealityFactorFilter(result, criteria);
-        result = this.checkIsSavedFilter(result, criteria);        
+        result = this.checkSmoothingFilter(result, criteria);
+        result = this.checkIsSavedFilter(result, criteria);
         result = this.checkUploadStatusFilter(result, criteria);
         result = this.checkTimeFilter(result, criteria);
         result = this.checkDistanceFilter(result, criteria);
@@ -386,6 +388,18 @@ export class ActivitiesRepository {
     private checkRealityFactorFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
         if (result?.length > 0 && criteria?.realityFactor !== undefined) {
             result = result.filter(ai => (ai.summary.realityFactor ?? 100) === criteria.realityFactor);
+        }
+        return result;
+    }
+
+    // rides under different smoothing levels felt a measurably different elevation/resistance
+    // profile on the same route, so they are not comparable as ghosts - see
+    // design/features/route-smoothing/architecture.md §9. Same `?? default` shape as
+    // checkRealityFactorFilter, since an activity that predates this field was, as a fact, ridden
+    // unsmoothed (§9.4.2) rather than merely defaulted to it.
+    private checkSmoothingFilter(result: ActivityInfo[], criteria: ActivitySearchCriteria) {
+        if (result?.length > 0 && criteria?.smoothingLevel !== undefined) {
+            result = result.filter(ai => (ai.summary.smoothingLevel ?? 0) === criteria.smoothingLevel);
         }
         return result;
     }

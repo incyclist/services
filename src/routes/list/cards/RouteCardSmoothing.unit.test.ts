@@ -131,24 +131,39 @@ describe('RouteCard - elevation smoothing', () => {
             expect(settingsRead.showPrev).toBe(true)
             expect(settingsRead.smoothingLevel).toBe(1)
         })
+
+        // architecture.md §9.7 defect 1: a caller with no opinion on smoothing (e.g. opening the
+        // route from the map, not from Ride Again) must not silently reset the level someone
+        // already chose - only an explicit value may change it.
+        test('a change with no opinion on smoothing does not reset an already-stored level', () => {
+            const card = createCard()
+            card.changeSettings({ startPos: 0, realityFactor: 100, smoothingLevel: 3 } as RouteSettings)
+
+            card.changeSettings({ startPos: 0, realityFactor: 100 } as RouteSettings)
+
+            expect(store[settingsKey()].smoothingLevel).toBe(3)
+        })
+
+        // §9.6.4: reproducing the ride's conditions is the point of Ride Again - the activity's
+        // own stored level must win over whatever the route currently has, in both directions.
+        test('an explicit level from Ride Again overrides whatever the route currently has stored', () => {
+            const card = createCard()
+            card.changeSettings({ startPos: 0, realityFactor: 100, smoothingLevel: 3 } as RouteSettings)
+
+            card.changeSettings({ startPos: 0, realityFactor: 100, smoothingLevel: 1 } as RouteSettings)
+            expect(store[settingsKey()].smoothingLevel).toBe(1)
+
+            // and an activity ridden unsmoothed (explicit 0) must win too, not be treated as "no
+            // opinion" and fall back to the route's currently-stored level
+            card.changeSettings({ startPos: 0, realityFactor: 100, smoothingLevel: 0 } as RouteSettings)
+            expect(store[settingsKey()].smoothingLevel).toBe(0)
+        })
     })
 
     describe('availability', () => {
 
-        test('is true for an eligible route while the feature is on', () => {
+        test('is true for an eligible route', () => {
             expect(createCard().openSettings().smoothingAvailable).toBe(true)
-        })
-
-        test('is false while the feature is off, even for an eligible route', () => {
-            hasFeature.mockReturnValue(false)
-
-            expect(createCard().openSettings().smoothingAvailable).toBe(false)
-        })
-
-        test('is gated on the ROUTE_SMOOTHING toggle', () => {
-            createCard().openSettings()
-
-            expect(hasFeature).toHaveBeenCalledWith('ROUTE_SMOOTHING')
         })
 
         test('is false for a route that is not eligible', () => {
@@ -218,12 +233,6 @@ describe('RouteCard - elevation smoothing', () => {
             expect(createCard().openSettings().smoothedPoints).toBeUndefined()
         })
 
-        test('returns no smoothed profile while the feature is off', () => {
-            store[settingsKey()] = { startPos: 0, realityFactor: 100, smoothingLevel: 3 }
-            hasFeature.mockReturnValue(false)
-
-            expect(createCard().openSettings().smoothedPoints).toBeUndefined()
-        })
     })
 
     describe('getSmoothingPreview', () => {
@@ -267,11 +276,6 @@ describe('RouteCard - elevation smoothing', () => {
             expect(createCard().getSmoothingPreview()).toEqual({})
         })
 
-        test('returns nothing while the feature is off', () => {
-            hasFeature.mockReturnValue(false)
-
-            expect(createCard().getSmoothingPreview(3)).toEqual({})
-        })
 
         test('returns nothing for a route that is not eligible', () => {
             expect(createCard({ points: 4 }).getSmoothingPreview(3)).toEqual({})

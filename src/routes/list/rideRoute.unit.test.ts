@@ -60,8 +60,6 @@ describe('RouteListService.getRideRoute',()=>{
         Inject('UserSettings', userSettings)
 
         service = new RouteListService()
-        // the feature toggle is not wired yet - the tests that need smoothing switch it on
-        service.isSmoothingEnabled = jest.fn().mockReturnValue(true)
 
         route = buildRoute('route-1', buildPoints(40,noisy))
         original = elevations(route)
@@ -139,13 +137,6 @@ describe('RouteListService.getRideRoute',()=>{
             expect(elevations(service.getRideRoute())).toEqual(original)
         })
 
-        test('is a plain copy while the feature is switched off',()=>{
-            service.isSmoothingEnabled = jest.fn().mockReturnValue(false)
-            service.setStartSettings(startSettings(5))
-
-            expect(elevations(service.getRideRoute())).toEqual(original)
-        })
-
         test('is a plain copy for a route that must not be smoothed',()=>{
             // an uploaded elevation program is what the ride is resisted against, so the points
             // are not what is being ridden
@@ -163,6 +154,46 @@ describe('RouteListService.getRideRoute',()=>{
 
             // same answer as getSelected() - no route to build a copy of, and no throw
             expect(service.getRideRoute()).toBeFalsy()
+        })
+    })
+
+    describe('getAppliedSmoothingLevel',()=>{
+
+        test('reports the level that was actually applied',()=>{
+            service.setStartSettings(startSettings(3))
+
+            expect(service.getAppliedSmoothingLevel()).toBe(3)
+        })
+
+        test('is 0 when no level was chosen, even though a route is selected',()=>{
+            service.setStartSettings(startSettings())
+
+            expect(service.getAppliedSmoothingLevel()).toBe(0)
+        })
+
+        // the requested level and the applied level must never be conflated - see buildRideRoute():
+        // a request that could not be honoured rode the original terrain and must be recorded as such
+        test('is 0, not the requested level, when the route may not be smoothed', () => {
+            route = buildRoute('route-epp', buildPoints(40,noisy), {}, { epp: {} as never })
+            service.routes = [route]
+            service.select(route)
+            service.setStartSettings(startSettings(4))
+
+            expect(service.getAppliedSmoothingLevel()).toBe(0)
+        })
+
+        test('builds the ride copy itself if nothing has asked for it yet',()=>{
+            const transform = jest.spyOn(service,'smoothRoute')
+            service.setStartSettings(startSettings(2))
+
+            expect(service.getAppliedSmoothingLevel()).toBe(2)
+            expect(transform).toHaveBeenCalledTimes(1)
+        })
+
+        test('is 0 when nothing is selected',()=>{
+            service.unselect()
+
+            expect(service.getAppliedSmoothingLevel()).toBe(0)
         })
     })
 
@@ -313,16 +344,6 @@ describe('RouteListService.getRideRoute',()=>{
             service.getRideRoute()
 
             expect(noiseLog(log)).toHaveLength(2)
-        })
-
-        test('are recorded while the feature is switched off',()=>{
-            const log = jest.spyOn(service,'logEvent')
-            service.isSmoothingEnabled = jest.fn().mockReturnValue(false)
-            service.setStartSettings(startSettings(0))
-
-            service.getRideRoute()
-
-            expect(noiseLog(log)).toHaveLength(1)
         })
 
         test('are recorded for a route that may not be smoothed',()=>{

@@ -65,7 +65,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     /** elevation smoothing level for the running ride, captured when the ride is started */
     protected sessionSmoothingLevel: number
     /** the ride copy of the selected route, built once per ride - see getRideRoute() */
-    protected rideRoute: { source: Route, route: Route }
+    protected rideRoute: { source: Route, route: Route, appliedLevel: number }
     protected screenProps;    
     protected language
     protected api : RoutesApiLoader
@@ -830,15 +830,29 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      */
     getRideRoute(id?:string):Route {
         if (id!==undefined)
-            return this.buildRideRoute(this.getRoute(id))
+            return this.buildRideRoute(this.getRoute(id)).route
 
         const selected = this.getSelected()
         if (!this.rideRoute || this.rideRoute.source!==selected) {
-            this.rideRoute = { source: selected, route: this.buildRideRoute(selected) }
+            const {route, level} = this.buildRideRoute(selected)
+            this.rideRoute = { source: selected, route, appliedLevel: level }
             this.logNoiseStats(selected)
         }
 
         return this.rideRoute.route
+    }
+
+    /**
+     * The elevation smoothing level actually applied to this ride's route copy - never the level
+     * the user requested, see buildRideRoute(). 0 when nothing was smoothed, including when
+     * nothing is selected.
+     *
+     * Calls getRideRoute() itself (memoised, so this is free) rather than reading the cached
+     * value directly, so there is no ordering dependency on the ride copy having been built yet.
+     */
+    getAppliedSmoothingLevel():number {
+        this.getRideRoute()
+        return this.rideRoute?.appliedLevel ?? 0
     }
 
     /**
@@ -883,19 +897,19 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * the transform or a result that does not pass the sanity check - is logged and answered
      * with the unsmoothed copy.
      */
-    protected buildRideRoute(route:Route):Route {
+    protected buildRideRoute(route:Route):{route:Route, level:number} {
         if (!route)
-            return route
+            return {route, level:0}
 
         const level = this.sessionSmoothingLevel
 
-        if (!this.isSmoothingEnabled() || !(level>=1) || !isSmoothingEligible(route))
-            return route.clone()
+        if (!(level>=1) || !isSmoothingEligible(route))
+            return {route: route.clone(), level:0}
 
         try {
             const smoothed = this.smoothRoute(route,level)
             if (this.isRideRouteValid(route,smoothed))
-                return smoothed
+                return {route: smoothed, level}
 
             this.logEvent({message:'elevation smoothing skipped', reason:'implausible result',
                 routeHash:route.description?.routeHash, level})
@@ -904,22 +918,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.logError(err,'getRideRoute',{routeHash:route.description?.routeHash, level})
         }
 
-        return route.clone()
-    }
-
-    /**
-     * The one place that decides whether elevation smoothing may be applied at all.
-     *
-     * Gating here as well as on the card means turning the toggle off fully reverts ride
-     * behaviour while leaving any levels the user already chose stored and inert.
-     */
-    protected isSmoothingEnabled():boolean {
-        try {
-            return this.getAppState().hasFeature('ROUTE_SMOOTHING')
-        }
-        catch {
-            return false
-        }
+        return {route: route.clone(), level:0}
     }
 
     /** seam around the transform, so it can be observed and replaced in tests */
