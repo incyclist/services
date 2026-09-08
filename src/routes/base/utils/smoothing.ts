@@ -1,20 +1,31 @@
 import { Route } from "../model/route";
 import { RoutePoint } from "../types";
-import { updateCnt, updateElevationGain, updateSlopes } from "./route";
+import { checkIsLoop, updateCnt, updateElevationGain, updateSlopes } from "./route";
 
 /**
  * Elevation smoothing for routes.
  *
  * Pure module: no I/O, no bindings, no service lifecycle, no singletons.
  *
- * The transform runs in three stages, in this order:
+ * The transform runs in four stages, in this order:
  *   1. despike   - median-3 outlier rejection, removes single-sample GPS/barometric spikes.
  *                  Must run first: a linear filter would smear a single spike across the
  *                  whole window instead of removing it.
  *   2. box filter - centred moving average in the *distance* domain (not the sample-index
  *                  domain), so a given level always means the same physical smoothing
  *                  length regardless of point spacing.
- *   3. derived fields - slope and elevationGain are recomputed from the new elevations.
+ *   3. lag correction - a centred single pass is zero-phase (a peak's apex doesn't move), but a
+ *                  *second* pass measurably delays where a slope change reads as felt on a
+ *                  trainer - confirmed against real recorded climbs, not just derived from
+ *                  theory (see getLagShiftDistance). Only levels with two box-filter passes get
+ *                  a correction; a single pass needs none.
+ *   4. derived fields - slope and elevationGain are recomputed from the new elevations.
+ *
+ * `smoothElevation` itself is route-agnostic and has no notion of a loop - that awareness lives
+ * one level up, in `applySmoothing`, which pads a loop's points with its own wrap-around context
+ * (see padForLoop) before calling it, so stages 2-3 see the route's real continuation at both
+ * boundaries instead of a hard array edge, then trims the padding back off and re-closes the
+ * elevation seam as a second pass (see the `updateSlopes` call there).
  *
  * CAUTION: calling `validateRoute()` with `reset=true` recomputes all slopes from scratch and
  * would destroy the smoothing applied here. Today only FreeRideDisplayService calls it that
@@ -189,6 +200,81 @@ const boxFilterRange = (points: Array<RoutePoint>, start: number, end: number, w
 }
 
 /**
+ * Fraction of a (two-pass) box-filter window that the second pass delays a slope transition by.
+ * Measured against two real recorded climbs (not derived from theory - a single centred pass is
+ * provably zero-phase, but empirically the second pass isn't): the actual ratio varied 3x between
+ * them (~0.07 and ~0.20 of window length) depending on the terrain's own shape around the peak, so
+ * no constant is exact everywhere. 0.15 splits that range. A single pass measured at noise-floor
+ * (no correction needed) on both climbs, hence the passes===2 gate in getLagShiftDistance.
+ */
+const LAG_SHIFT_RATIO = 0.15
+
+/** metres to correct the lag by for a given profile - 0 for a single pass, see LAG_SHIFT_RATIO */
+const getLagShiftDistance = (opts: SmoothingOptions): number =>
+    opts.passes === 2 ? opts.windowLength * LAG_SHIFT_RATIO : 0
+
+/**
+ * Value the (already box-filtered) run's elevation curve would show at distance x - including
+ * beyond either end of the run, extrapolated linearly from that end's own boundary slope, so a
+ * lag-shifted lookup past the run's extent still gets a sensible answer.
+ *
+ * Callers must only query non-decreasing x (matches applyLagShift's own access pattern), which
+ * lets this keep a single forward cursor rather than rescanning from the start each call.
+ */
+const buildElevationLookup = (d: Array<number>, e: Array<number>): ((x: number) => number) => {
+    const n = d.length
+    let cursor = 0
+
+    return (x: number): number => {
+        if (x >= d[n - 1]) {
+            const span = d[n - 1] - d[n - 2]
+            const slope = span > 0 ? (e[n - 1] - e[n - 2]) / span : 0
+            return e[n - 1] + slope * (x - d[n - 1])
+        }
+        while (cursor < n - 2 && d[cursor + 1] < x) cursor++
+        if (x <= d[cursor]) return e[cursor]
+        const span = d[cursor + 1] - d[cursor]
+        const t = span > 0 ? (x - d[cursor]) / span : 0
+        return e[cursor] + (e[cursor + 1] - e[cursor]) * t
+    }
+}
+
+/**
+ * Stage 3, one run: corrects the delay the second box-filter pass introduces at slope
+ * transitions, by re-reading each point's elevation from `shiftDistance` metres further along the
+ * (already box-filtered) curve.
+ *
+ * Anchored so a run with no curvature at all is returned completely unchanged: shifting a
+ * *constant-gradient* run's elevation naively would add a spurious `slope * shiftDistance` offset
+ * to every point (there is nothing to correct on a straight grade - the lag only exists at
+ * transitions), so every point is re-based against `elevationAt(shiftDistance)` - the same
+ * reference the run's own first point is implicitly measured against. For a straight run this
+ * reference exactly cancels the shift's would-be offset; for a curved one, it doesn't, which is
+ * the correction actually taking effect. This also means the run's last point - unlike the box
+ * filter's own output - is generally NOT left exactly where it was: if the lag being corrected
+ * reaches the run's end, the end is exactly where it should move.
+ */
+const applyLagShift = (points: Array<RoutePoint>, start: number, end: number, shiftDistance: number): void => {
+    const n = end - start
+    if (n < 2 || !(shiftDistance > 0)) return
+
+    const d = new Array<number>(n)
+    const e = new Array<number>(n)
+    for (let i = 0; i < n; i++) {
+        d[i] = points[start + i].routeDistance - points[start].routeDistance
+        e[i] = points[start + i].elevation
+    }
+    if (!(d[n - 1] > 0)) return
+
+    const elevationAt = buildElevationLookup(d, e)
+    const reference = elevationAt(shiftDistance)
+
+    for (let i = 0; i < n; i++) {
+        points[start + i].elevation = e[0] + elevationAt(d[i] + shiftDistance) - reference
+    }
+}
+
+/**
  * Smooths the elevation profile of a point array.
  *
  * Returns a NEW array of NEW point objects - the input is never modified. Point count is
@@ -199,6 +285,43 @@ const boxFilterRange = (points: Array<RoutePoint>, start: number, end: number, w
  * Derived fields (`slope`, `elevationGain`) are NOT recomputed here - that is the caller's
  * job, see applySmoothing().
  */
+/**
+ * Generous padding for a loop's wrap-around smoothing context - deliberately much larger than any
+ * profile's own window/lag-shift needs (at most ~325m combined, at level 5). Computing more than
+ * strictly necessary costs a few milliseconds; a comfortable margin measurably improves quality at
+ * the seam, so this is not tuned tighter than that.
+ */
+const LOOP_PADDING_DISTANCE = 800
+
+/**
+ * Wraps a loop's own end onto its start and its own start onto its end, so a run's boundary-
+ * clamped box-filter window and the lag correction's extrapolation both see the route's real
+ * continuation (itself) at both boundaries, instead of guessing at either one.
+ *
+ * `isCut` is stripped from the padding copies - they are a continuation, not a real cut - and
+ * `routeDistance` is offset so the whole padded array stays monotonic; every other field is
+ * carried over as a plain shallow copy (smoothElevation never reads it).
+ *
+ * Returns `padded` together with `headCount` (how much was prepended), so the caller can trim the
+ * padding back off after smoothing: `padded.slice(headCount, headCount + points.length)` recovers
+ * exactly the original points, in order, with only their `elevation` changed.
+ */
+const padForLoop = (
+    points: Array<RoutePoint>,
+    padDistance: number
+): { padded: Array<RoutePoint>; headCount: number } => {
+    const total = points.at(-1)?.routeDistance ?? 0
+    if (!(total > 0)) return { padded: points, headCount: 0 }
+
+    const tail = points.filter((p) => total - p.routeDistance <= padDistance)
+    const head = points.filter((p) => p.routeDistance <= padDistance)
+
+    const before = tail.map((p) => ({ ...p, routeDistance: p.routeDistance - total, isCut: false }))
+    const after = head.map((p) => ({ ...p, routeDistance: p.routeDistance + total, isCut: false }))
+
+    return { padded: [...before, ...points, ...after], headCount: before.length }
+}
+
 export const smoothElevation = (points: Array<RoutePoint>, opts: SmoothingOptions): Array<RoutePoint> => {
     if (!points?.length) return []
 
@@ -206,12 +329,14 @@ export const smoothElevation = (points: Array<RoutePoint>, opts: SmoothingOption
     if (!opts) return result
 
     const passes = opts.passes === 2 ? 2 : 1
+    const lagShiftDistance = getLagShiftDistance(opts)
 
     getSegmentRanges(result).forEach(([start, end]) => {
         if (!isUsable(result, start, end)) return
 
         despikeRange(result, start, end, opts.spikeThreshold)
         for (let pass = 0; pass < passes; pass++) boxFilterRange(result, start, end, opts.windowLength)
+        applyLagShift(result, start, end, lagShiftDistance)
     })
 
     return result
@@ -231,7 +356,18 @@ export const applySmoothing = (route: Route, level: number): Route => {
     const source = smoothed.details?.points ?? smoothed.description?.points
     if (!source?.length) return smoothed
 
-    const points = smoothElevation(source, getSmoothingProfile(level))
+    const profile = getSmoothingProfile(level)
+
+    // a loop's own end/start pad each other's smoothing context - see padForLoop - so the box
+    // filter and lag correction have real data to work with at both boundaries instead of the
+    // hard array edge every other route has there
+    let points: Array<RoutePoint>
+    if (checkIsLoop(source)) {
+        const { padded, headCount } = padForLoop(source, LOOP_PADDING_DISTANCE)
+        points = smoothElevation(padded, profile).slice(headCount, headCount + source.length)
+    } else {
+        points = smoothElevation(source, profile)
+    }
 
     if (smoothed.details?.points) smoothed.details.points = points
     if (smoothed.description?.points) smoothed.description.points = points
@@ -244,10 +380,13 @@ export const applySmoothing = (route: Route, level: number): Route => {
     })
     if (points.some((p) => !Number.isFinite(p.cnt))) updateCnt(points)
 
-    // validateOnly=true is deliberate: with every slope deleted it still recomputes them all,
-    // but skips the loop-elevation shift, which may already have been applied to this route
-    // and must never be applied twice
-    updateSlopes(points, true)
+    // validateOnly=false, unlike the pre-smoothing pass: the lag correction no longer pins a
+    // run's last point exactly (see applyLagShift), so smoothing can reopen the very seam the
+    // pre-smoothing ramp had closed - this re-closes it as a second pass. updateSlopes runs its
+    // own checkIsLoop internally and no-ops the ramp for a non-loop route either way, and every
+    // slope was just deleted above regardless, so validateOnly's other effect (skip slopes that
+    // are already defined) never applied here in the first place
+    updateSlopes(points, false)
     updateElevationGain(points)
 
     const elevation = points.at(-1)?.elevationGain
@@ -327,6 +466,10 @@ export const isSmoothingEligible = (route: Route): boolean => {
         // 2. respect explicit negatives
         if (route?.description?.hasGpx === false) return false
         if (route?.details?.gpxDisabled) return false
+        // this route's elevation timing was already hand-corrected by its author for a different
+        // problem (video/GPS misalignment, see IncyclistXMLParser.processElevationShift) - our own
+        // smoothing has no awareness of that correction and could interact with it unpredictably
+        if (route?.details?.elevationShifted) return false
 
         // 3. resistance must actually derive from the points, not from an uploaded program
         if (route?.details?.epp) return false

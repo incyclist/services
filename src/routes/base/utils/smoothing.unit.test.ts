@@ -102,14 +102,31 @@ describe('smoothing', () => {
             })
         })
 
-        test('leaves the endpoints exactly where they were', () => {
+        test('leaves the endpoints exactly where they were, on a single-pass level', () => {
+            const elevations = [100, 108, 96, 121, 104, 99, 130, 102, 111, 95, 118, 103]
+            const points = buildPoints(elevations)
+
+            // level 2: single box-filter pass, no lag correction (getLagShiftDistance is 0) - the
+            // box filter alone pins both ends of a run exactly, unconditionally
+            const smoothed = smoothElevation(points, getSmoothingProfile(2))
+
+            expect(smoothed[0].elevation).toBe(elevations[0])
+            expect(smoothed.at(-1).elevation).toBe(elevations.at(-1))
+        })
+
+        // On a two-pass level, the lag correction re-reads each point from further along the
+        // curve - see applyLagShift. The run's first point is always exactly anchored (it is the
+        // correction's own reference point), but the last point is deliberately NOT pinned any
+        // more: if the delay being corrected reaches the run's end, moving the end is the fix,
+        // not a regression.
+        test('a two-pass level still anchors the first point exactly, but may move the last', () => {
             const elevations = [100, 108, 96, 121, 104, 99, 130, 102, 111, 95, 118, 103]
             const points = buildPoints(elevations)
 
             const smoothed = smoothElevation(points, getSmoothingProfile(5))
 
             expect(smoothed[0].elevation).toBe(elevations[0])
-            expect(smoothed.at(-1).elevation).toBe(elevations.at(-1))
+            expect(smoothed.at(-1).elevation).not.toBe(elevations.at(-1))
         })
 
         test('preserves the point count and every non-elevation field', () => {
@@ -233,6 +250,37 @@ describe('smoothing', () => {
             expect(smoothed).toBeLessThan(raw)
             expect(smoothed).toBeGreaterThan(0)
         })
+
+        describe('the lag correction', () => {
+            // A symmetric tent peaking at the midpoint - climbs at a constant grade, then
+            // descends at the mirror-image grade. Isolates the `passes` gate from `windowLength`
+            // by calling smoothElevation directly with hand-built options rather than a canned
+            // level, since PROFILES ties them together.
+            const tent = buildPoints(
+                Array.from({ length: 41 }, (_, i) => 100 - Math.abs(i - 20))
+            )
+            const peakIndex = 20
+            const pastPeak = 28 // 80m past the peak - inside the 120m window used below
+
+            test('a single pass leaves the curve past the peak unmoved by a second pass', () => {
+                const onePass = smoothElevation(tent, { windowLength: 120, passes: 1, spikeThreshold: 5 })
+                const alsoOnePass = smoothElevation(tent, { windowLength: 120, passes: 1, spikeThreshold: 5 })
+
+                expect(onePass[pastPeak].elevation).toBeCloseTo(alsoOnePass[pastPeak].elevation, 9)
+            })
+
+            test('a second pass reads further into the descent than a single pass does, at the same distance', () => {
+                const onePass = smoothElevation(tent, { windowLength: 120, passes: 1, spikeThreshold: 5 })
+                const twoPasses = smoothElevation(tent, { windowLength: 120, passes: 2, spikeThreshold: 5 })
+
+                // corrected (two-pass) reads lower past the peak - the fix for a slope that
+                // otherwise still felt like climbing after the true crest. (Not a symmetric
+                // mirror-image check before the peak: a second box-filter pass smooths
+                // differently from a single one even with no lag correction at all, so only the
+                // signed direction of the *intended* correction is asserted here.)
+                expect(twoPasses[pastPeak].elevation).toBeLessThan(onePass[pastPeak].elevation)
+            })
+        })
     })
 
     describe('applySmoothing', () => {
@@ -261,6 +309,59 @@ describe('smoothing', () => {
             expect(smoothed.description.elevation).toBe(last)
             expect(smoothed.details.elevation).toBe(last)
             expect(smoothed.description.elevation).toBeLessThan(200)
+        })
+
+        describe('loop wrap-around padding', () => {
+            // A loop: first and last point share the same lat/lng (well within checkIsLoop's
+            // threshold). A bump sits right at the very end, where a non-loop route's box filter
+            // has nothing beyond the array boundary to work with - a loop wraps its own start in
+            // there instead (see padForLoop).
+            const buildLoopish = (elevations: Array<number>, loop: boolean): Array<RoutePoint> =>
+                elevations.map((elevation, i) => ({
+                    lat: loop ? 50 : 50 + i * 0.01,
+                    lng: 8.5,
+                    cnt: i,
+                    routeDistance: i * 10,
+                    distance: i === 0 ? 0 : 10,
+                    elevation,
+                }))
+
+            const elevations = [
+                ...Array.from({ length: 50 }, () => 100),
+                ...[102, 106, 112, 108, 104, 101, 100, 100, 100, 100],
+            ]
+
+            test('pads the boundary with the loop’s own wrap-around context', () => {
+                const loop = applySmoothing(buildRoute(buildLoopish(elevations, true)), 5)
+                const nonLoop = applySmoothing(buildRoute(buildLoopish(elevations, false)), 5)
+
+                // near the end, where the bump sits: the loop route's box filter sees the flat
+                // start wrapped in beyond the bump; the non-loop route has nothing there but a
+                // hard edge - the two must disagree, or padding isn't doing anything
+                expect(loop.points[54].elevation).not.toBeCloseTo(nonLoop.points[54].elevation, 3)
+            })
+
+            test('closes the elevation seam as a second pass, even though the lag correction may reopen it', () => {
+                const loop = applySmoothing(buildRoute(buildLoopish(elevations, true)), 5)
+
+                expect(loop.points[0].elevation).toBeCloseTo(loop.points.at(-1).elevation, 6)
+            })
+
+            test('does not change the point count or routeDistance', () => {
+                const points = buildLoopish(elevations, true)
+                const loop = applySmoothing(buildRoute(points), 5)
+
+                expect(loop.points).toHaveLength(points.length)
+                loop.points.forEach((p, i) => expect(p.routeDistance).toBe(points[i].routeDistance))
+            })
+
+            test('a non-loop route takes the same path as calling smoothElevation directly', () => {
+                const points = buildLoopish(elevations, false)
+                const direct = smoothElevation(points, getSmoothingProfile(5))
+                const viaApplySmoothing = applySmoothing(buildRoute(points), 5).points
+
+                viaApplySmoothing.forEach((p, i) => expect(p.elevation).toBeCloseTo(direct[i].elevation, 6))
+            })
         })
 
         test('level 0 returns an unmodified clone', () => {
@@ -462,6 +563,11 @@ describe('smoothing', () => {
 
         test('gpxDisabled blocks', () => {
             expect(isSmoothingEligible(buildEligibilityRoute({ hasGpx: true }, { gpxDisabled: true }))).toBe(false)
+        })
+
+        test('a route whose elevation timing was already shift-corrected is not eligible', () => {
+            expect(isSmoothingEligible(buildEligibilityRoute({ hasGpx: true }, { elevationShifted: true }))).toBe(false)
+            expect(isSmoothingEligible(buildEligibilityRoute({ hasGpx: true }, { elevationShifted: false }))).toBe(true)
         })
 
         test('fewer than 8 points blocks', () => {

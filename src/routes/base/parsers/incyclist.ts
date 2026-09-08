@@ -241,8 +241,11 @@ export class IncyclistXMLParser extends XMLParser{
             this.processCuts(data,route)
         }
 
-        if (data['elevation-shift'])
-            this.processElevationShift( Number(data['elevation-shift']) ,route.points)
+        if (data['elevation-shift']) {
+            const applied = this.processElevationShift( Number(data['elevation-shift']) ,route.points)
+            if (applied)
+                route.elevationShifted = true
+        }
 
 
 
@@ -253,12 +256,13 @@ export class IncyclistXMLParser extends XMLParser{
      * Used to correct elevation timing misalignment in video playback.
      * @param elevationShift The number of points to shift elevation data
      * @param points The route points to apply the shift to
+     * @returns true if the shift was actually applied
      */
-    protected processElevationShift(elevationShift:number,points:RoutePoint[]):void {
+    protected processElevationShift(elevationShift:number,points:RoutePoint[]):boolean {
 
 
         if (!elevationShift ||!points || points.length<2 || points.length<elevationShift)
-            return;
+            return false;
 
         const cuts = points.filter( p => p.isCut) || []
         const lastPoints = []
@@ -287,7 +291,7 @@ export class IncyclistXMLParser extends XMLParser{
             }
         })
 
-
+        return true;
     }
 
 }
