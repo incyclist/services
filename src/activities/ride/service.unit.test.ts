@@ -44,7 +44,9 @@ describe('ActivityRideService',()=>{
         }))
         svc.getRouteList = jest.fn( ()=> ({
             getSelected: jest.fn().mockReturnValue(props?.route),
-            getStartSettings: jest.fn().mockReturnValue(props?.startSettings)
+            getRideRoute: jest.fn().mockImplementation( ()=> props?.route?.clone()),
+            getStartSettings: jest.fn().mockReturnValue(props?.startSettings),
+            getAppliedSmoothingLevel: jest.fn().mockReturnValue(props?.appliedSmoothingLevel ?? 0)
         }))
         svc.getRepo = jest.fn( ()=> ({
             getFilename: jest.fn(name=> props?.filename??`/tmp/${name}.json`),

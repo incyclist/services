@@ -308,6 +308,7 @@ export class GPXParser extends XMLParser {
             points: route.points,
             requiresDownload: false,
             hasGpx: route.points?.length>0,
+            pointsSource: 'gpx',
             hasVideo: false,
             isDemo: false,
             isLocal: true,

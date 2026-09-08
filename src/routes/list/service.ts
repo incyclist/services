@@ -7,12 +7,13 @@ import { RouteApiDetail } from "../base/api/types";
 import { Route } from "../base/model/route";
 import { RouteParser  } from "../base/parsers";
 import { RouteInfo } from "../base/types";
+import { analyseElevationNoise, applySmoothing, isSmoothingEligible } from "../base/utils/smoothing";
 import { RoutesApiLoader } from "./loaders/api";
 import { RouteImportCard } from "./cards/RouteImportCard";
 import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard } from "./cards/RouteCard";
-import { SummaryCardDisplayProps } from "./cards/types";
+import { RouteSettings, SummaryCardDisplayProps } from "./cards/types";
 import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
@@ -35,6 +36,14 @@ import { IObserver } from "../../types";
 
 
 const SYNC_INTERVAL = 5* 60*1000
+
+/** keeps logged measurements readable - they are calibration input, not exact quantities */
+const round = (value:number, digits:number):number => {
+    if (!Number.isFinite(value))
+        return value
+    const factor = 10**digits
+    return Math.round(value*factor)/factor
+}
 const PRELOAD_DESKTOP = 20
 const PRELOAD_MOBILE = 10
 
@@ -53,6 +62,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected initialized: boolean
     protected selectedRoute: Route
     protected startSettings: RouteStartSettings
+    /** elevation smoothing level for the running ride, captured when the ride is started */
+    protected sessionSmoothingLevel: number
+    /** the ride copy of the selected route, built once per ride - see getRideRoute() */
+    protected rideRoute: { source: Route, route: Route, appliedLevel: number }
     protected screenProps;    
     protected language
     protected api : RoutesApiLoader
@@ -98,7 +111,15 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     setLanguage(language:string) {this.language = language}
     getLanguage():string {return this.language}
     getStartSettings():RouteStartSettings { return this.startSettings; }
-    setStartSettings(settings:RouteStartSettings) { this.startSettings = settings }
+    setStartSettings(settings:RouteStartSettings) {
+        this.startSettings = settings
+
+        // this is the moment the ride is started, so this is where the elevation smoothing level
+        // is locked for the whole ride: every later change to the route's stored settings is
+        // ignored until the next start.
+        this.sessionSmoothingLevel = this.readSmoothingLevel(settings)
+        this.rideRoute = undefined
+    }
     getSelected():Route { return this.selectedRoute }
     setScreenProps(props) {this.screenProps = props }
     getScreenProps() { return this.screenProps}
@@ -788,6 +809,162 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
+    /**
+     * Provides the route copy that a ride should actually be ridden against.
+     *
+     * Every ride-time consumer - position tracking, the video segments, the elevation program
+     * uploaded to devices that need one, and the activity - must agree on exactly the same
+     * points, so they all take their copy from here rather than cloning the selected route
+     * themselves.
+     *
+     * Without an id the copy of the currently selected route is returned. It is built on the
+     * first call after the ride was started and kept for the rest of the ride, so the elevation
+     * profile can not change underneath a running ride.
+     *
+     * With an id the copy of that route is built on the spot. This is the chained-segment case:
+     * the level applied is the one captured at the start of the ride, never the segment's own
+     * stored level, so riding a chain can not overwrite what the user chose for a later segment.
+     *
+     * @param id  id of the route to build the copy for; the selected route if omitted
+     * @returns a copy of the route, never the route itself
+     */
+    getRideRoute(id?:string):Route {
+        if (id!==undefined)
+            return this.buildRideRoute(this.getRoute(id)).route
+
+        const selected = this.getSelected()
+        // deliberately not `this.rideRoute?.source !== selected` (Sonar S1940): when nothing has
+        // been selected yet, both sides are undefined and optional-chaining would read that as
+        // "unchanged", skipping the build below and returning `this.rideRoute.route` while
+        // `this.rideRoute` is still unset - see "is nothing when nothing is selected"
+        if (!this.rideRoute || this.rideRoute.source!==selected) {
+            const {route, level} = this.buildRideRoute(selected)
+            this.rideRoute = { source: selected, route, appliedLevel: level }
+            this.logNoiseStats(selected)
+        }
+
+        return this.rideRoute.route
+    }
+
+    /**
+     * The elevation smoothing level actually applied to this ride's route copy - never the level
+     * the user requested, see buildRideRoute(). 0 when nothing was smoothed, including when
+     * nothing is selected.
+     *
+     * Calls getRideRoute() itself (memoised, so this is free) rather than reading the cached
+     * value directly, so there is no ordering dependency on the ride copy having been built yet.
+     */
+    getAppliedSmoothingLevel():number {
+        this.getRideRoute()
+        return this.rideRoute?.appliedLevel ?? 0
+    }
+
+    /**
+     * Records how noisy the elevation track of the route being ridden is.
+     *
+     * Recorded for every ride, whether or not smoothing is switched on and whether or not it
+     * would be offered for this route, so the numbers describe the routes people actually ride
+     * rather than only the ones already being smoothed.
+     *
+     * Only derived geometry is recorded - no coordinates, and nothing identifying beyond the
+     * route hash, which the ride path logs anyway.
+     *
+     * Sits in the branch that builds the ride copy, so it is written exactly once per ride:
+     * the copy is built on the first request after a ride was started and reused afterwards.
+     * Chained segments are asked for by id and do not pass through here.
+     */
+    protected logNoiseStats(route:Route):void {
+        try {
+            const points = route?.points
+            if (!points?.length)
+                return
+
+            const {gainRatio,reversalDensity,pointCount,medianSpacing} = analyseElevationNoise(points)
+
+            this.logEvent({message:'route elevation noise',
+                routeHash: route.description?.routeHash,
+                gainRatio: round(gainRatio,3),
+                reversalDensity: round(reversalDensity,1),
+                pointCount,
+                medianSpacing: round(medianSpacing,1)
+            })
+        }
+        catch {
+            // a measurement must never be able to hold up the start of a ride
+        }
+    }
+
+    /**
+     * Builds one ride copy, smoothing it if the ride was started with smoothing on.
+     *
+     * Smoothing must never be able to stop a ride from starting, so any failure - a throw from
+     * the transform or a result that does not pass the sanity check - is logged and answered
+     * with the unsmoothed copy.
+     */
+    protected buildRideRoute(route:Route):{route:Route, level:number} {
+        if (!route)
+            return {route, level:0}
+
+        const level = this.sessionSmoothingLevel
+
+        if (level<1 || !isSmoothingEligible(route))
+            return {route: route.clone(), level:0}
+
+        try {
+            const smoothed = this.smoothRoute(route,level)
+            if (this.isRideRouteValid(route,smoothed))
+                return {route: smoothed, level}
+
+            this.logEvent({message:'elevation smoothing skipped', reason:'implausible result',
+                routeHash:route.description?.routeHash, level})
+        }
+        catch(err) {
+            this.logError(err,'getRideRoute',{routeHash:route.description?.routeHash, level})
+        }
+
+        return {route: route.clone(), level:0}
+    }
+
+    /** seam around the transform, so it can be observed and replaced in tests */
+    protected smoothRoute(route:Route, level:number):Route {
+        return applySmoothing(route,level)
+    }
+
+    /**
+     * Guards against a transform that returned something a ride could not sensibly use.
+     *
+     * Deliberately checks the properties the rest of the ride relies on rather than the
+     * transform's internals: same number of points, usable elevations, and distances that still
+     * only ever grow.
+     */
+    protected isRideRouteValid(original:Route, candidate:Route):boolean {
+        const points = candidate?.points
+        if (!points?.length || points.length!==original?.points?.length)
+            return false
+
+        for (let i=0;i<points.length;i++) {
+            if (!Number.isFinite(points[i]?.elevation))
+                return false
+            // deliberately not `points[i].routeDistance<points[i-1].routeDistance` (Sonar S1940):
+            // this function's whole job is catching an implausible transform result, and a NaN
+            // distance must be rejected, not silently pass a `<` comparison that is always false
+            if (i>0 && !(points[i].routeDistance>=points[i-1].routeDistance))
+                return false
+        }
+
+        return true
+    }
+
+    /**
+     * Reads the elevation smoothing level out of the settings a ride was started with.
+     *
+     * Tolerates the field being missing or not a number - both mean "no smoothing".
+     */
+    protected readSmoothingLevel(settings:RouteStartSettings):number {
+        const level = (settings as RouteSettings)?.smoothingLevel
+        return Number.isFinite(level) ? level : 0
+    }
+
     async getSelectedRouteDetails():Promise<RouteApiDetail> {
         try {
             const selected = this.getSelected()
@@ -806,6 +983,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         this.selectedRoute = null
         this.startSettings = null;
+        this.sessionSmoothingLevel = undefined
+        this.rideRoute = undefined
 
         this.observer?.emit('selected', null)
     }

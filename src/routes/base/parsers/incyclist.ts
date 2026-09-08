@@ -1,7 +1,7 @@
 import { EventLogger } from 'gd-eventlog';
 import { JSONObject, parseTime } from '../../../utils';
 import { RouteApiDetail } from '../api/types';
-import { RoutePoint, VideoMapping } from '../types';
+import { RouteInfo, RoutePoint, VideoMapping } from '../types';
 import { validateRoute } from '../utils';
 import { fixAnomalies } from '../utils/points';
 import { EnhancedRoutePoint, GPXParser } from './gpx';
@@ -26,6 +26,15 @@ export class IncyclistXMLParser extends XMLParser{
         this.logger = new EventLogger('IncyclistParser')
     }
 
+
+    protected async buildInfo(context: IncyclistParserContext): Promise<RouteInfo> {
+        const info = await super.buildInfo(context)
+
+        // this format always loads its points from a companion GPX/GeoJSON file, so the point
+        // data comes out of the GPX pipeline even though the container is an XML descriptor
+        info.pointsSource = 'gpx'
+        return info
+    }
 
     protected async loadDescription(context: IncyclistParserContext): Promise<void> {
         await super.loadDescription(context)
@@ -232,8 +241,11 @@ export class IncyclistXMLParser extends XMLParser{
             this.processCuts(data,route)
         }
 
-        if (data['elevation-shift'])
-            this.processElevationShift( Number(data['elevation-shift']) ,route.points)
+        if (data['elevation-shift']) {
+            const applied = this.processElevationShift( Number(data['elevation-shift']) ,route.points)
+            if (applied)
+                route.elevationShifted = true
+        }
 
 
 
@@ -244,12 +256,13 @@ export class IncyclistXMLParser extends XMLParser{
      * Used to correct elevation timing misalignment in video playback.
      * @param elevationShift The number of points to shift elevation data
      * @param points The route points to apply the shift to
+     * @returns true if the shift was actually applied
      */
-    protected processElevationShift(elevationShift:number,points:RoutePoint[]):void {
+    protected processElevationShift(elevationShift:number,points:RoutePoint[]):boolean {
 
 
         if (!elevationShift ||!points || points.length<2 || points.length<elevationShift)
-            return;
+            return false;
 
         const cuts = points.filter( p => p.isCut) || []
         const lastPoints = []
@@ -278,7 +291,7 @@ export class IncyclistXMLParser extends XMLParser{
             }
         })
 
-
+        return true;
     }
 
 }

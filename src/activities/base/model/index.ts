@@ -117,6 +117,8 @@ export type ActivitySummaryBase  = {
     endPos?:number
     segment?:string,
     realityFactor: number
+    /** elevation smoothing actually applied during the ride: 0 or absent = none */
+    smoothingLevel?: number
 
     uploadStatus: Array<UploadInfo>
     isCompleted?: boolean
@@ -255,6 +257,9 @@ interface ActivityDetailsBase  {
 
     /** selected reality factor  */
     realityFactor: number;
+
+    /** elevation smoothing actually applied during the ride: 0 or absent = none */
+    smoothingLevel?: number
 
     /** information about all laps taken in a loop route   */
     laps?: Array<LapSummary>

@@ -315,7 +315,7 @@ export class Activity implements ActivityInfo{
         // const [C,U] = getUnitConversionShortcuts()
 
         try {
-            const {startPos,realityFactor,segment,endPos} = this.details
+            const {startPos,realityFactor,segment,endPos,smoothingLevel} = this.details
             const card = this.getRouteCard()
             const settings =  {
                 // startPos: { value: C(startPos,'distance',{digits:1}), unit: U('distance') },
@@ -324,6 +324,11 @@ export class Activity implements ActivityInfo{
                 endPos,
                 segment,
                 realityFactor,
+                // reproducing the ride's conditions is the point of Ride Again - a route's own
+                // currently-stored level must not override what this specific activity was ridden
+                // with (see RouteCard.changeSettings() and design/features/route-smoothing
+                // /architecture.md §9.6.4)
+                smoothingLevel,
                 showPrev:true,
                 type:card?.getCardType()??'Route'
             }

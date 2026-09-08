@@ -62,6 +62,13 @@ export type RouteApiDetail = {
     downloadUrl?:string
     downloadType?: string
     gpxDisabled?: boolean
+    /**
+     * True when the Incyclist-XML import applied an author-specified `elevation-shift` (a fixed
+     * correction for video/GPS timing misalignment in that specific recording). Unrelated to the
+     * route-smoothing feature's own algorithm, but a route whose elevation timing was already
+     * hand-corrected this way is not offered smoothing - see isSmoothingEligible().
+     */
+    elevationShifted?: boolean
     version?:string;
     category?: RouteCategory
     provider?: RouteProvider

@@ -77,7 +77,7 @@ export class RLVDisplayService extends RouteDisplayService {
         this.videos = []
         delete this.startTime
 
-        this.addVideo(this.getOriginalRoute(), true).then( ()=>{
+        this.addVideo(this.getRouteList().getRideRoute(), true).then( ()=>{
             this.videosInitialized = true
             this.emit('state-update')
         })
@@ -800,7 +800,8 @@ export class RLVDisplayService extends RouteDisplayService {
         }
 
         const current = this.videos.find(v => v.route?.details?.id === route.details.id)
-        const nextRoute  = this.getRouteList().getRoute(nextId)
+        // the chained segment is prepared the same way as the one the ride was started with
+        const nextRoute  = this.getRouteList().getRideRoute(nextId)
         if (!nextRoute) {
             return false
         }

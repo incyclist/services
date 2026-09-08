@@ -1,7 +1,8 @@
 import { ImportFilter } from "../../../base/cardlist/types";
 import { Observer } from "../../../base/types/observer";
 import { Unit } from "../../../i18n";
-import { RouteInfo } from "../../base/types";
+import { RouteInfo, RoutePoint } from "../../base/types";
+import { SmoothingGradient } from "../../base/utils/smoothing";
 import { DownloadObserver } from "../../download/types";
 import { RouteStartSettings } from "../types";
 
@@ -52,6 +53,8 @@ export interface StartSettings {
     loopOverwrite?: boolean,
     nextOverwrite?:boolean,
     showPrev?:boolean
+    /** elevation smoothing strength: 0 (or absent) = off, 1..5 = increasing */
+    smoothingLevel?:number
 
 }
 export interface UIStartSettings {
@@ -64,6 +67,8 @@ export interface UIStartSettings {
     loopOverwrite?: boolean,
     nextOverwrite?:boolean,
     showPrev?:boolean
+    /** identical to the stored value - a level has no unit, so no conversion applies */
+    smoothingLevel?:number
 
 }
 
@@ -88,8 +93,24 @@ export type RouteCardProps = {
     totalElevation: { value:number, unit:Unit},
     xScale?: { value:number, unit:Unit},
     yScale?: { value:number, unit:Unit},
+    /** false => the UI omits the smoothing row entirely (no disabled state, no caption) */
+    smoothingAvailable: boolean,
+    /** highest selectable level, so the UI does not have to hardcode the range */
+    smoothingMaxLevel: number,
+    /** present only while a level of 1..5 is in effect */
+    smoothedElevation?: { value:number, unit:Unit},
+    /** the preview curve for the elevation profile; present only while a level of 1..5 is in effect */
+    smoothedPoints?: Array<RoutePoint>,
+    /** what the level does to the gradient; present only while a level of 1..5 is in effect */
+    smoothedGradient?: SmoothingGradient,
     updateStartPos?: (updated:number)=>{ value:number, unit:Unit}
     updateMarkers?: (settings: UIRouteSettings)=> UIRouteSettings
 }
+
+/**
+ * Result of previewing a smoothing level. All fields are absent when there is nothing to
+ * preview - level 0, an ineligible route, or a transform that could not be computed.
+ */
+export type SmoothingPreview = Pick<RouteCardProps,'smoothedElevation'|'smoothedPoints'|'smoothedGradient'>
 
 

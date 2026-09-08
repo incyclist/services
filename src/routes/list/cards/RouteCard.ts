@@ -7,7 +7,7 @@ import { RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo, RoutePoint,AppStatus  } from "../../base/types";
 import { BaseCard } from "./base";
-import { RouteCardProps, RouteCardType, RouteSettings, SummaryCardDisplayProps, UIRouteSettings, UIStartSettings } from "./types";
+import { RouteCardProps, RouteCardType, RouteSettings, SmoothingPreview, SummaryCardDisplayProps, UIRouteSettings, UIStartSettings } from "./types";
 import { getRouteList, useRouteList } from "../service";
 import { RoutesDbLoader } from "../loaders/db";
 import { valid } from "../../../utils/valid";
@@ -16,6 +16,7 @@ import { DownloadObserver } from "../../download/types";
 import { useRouteDownload } from "../../download/service";
 import { EventLogger } from "gd-eventlog";
 import { checkIsLoop, getNextVideoId, hasNextVideo, getPosition, updateSlopes} from "../../base/utils/route";
+import { applySmoothing, getSmoothingGradient, isSmoothingEligible, MAX_SMOOTHING_LEVEL, SmoothingGradient } from "../../base/utils/smoothing";
 import { getWorkoutList } from "../../../workouts";
 import { checkIsNew } from "../utils";
 import { useOnlineStatusMonitoring } from "../../../monitoring";
@@ -66,6 +67,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected ready:boolean
     protected logger:EventLogger
     protected cntActive: number=0
+    protected smoothingPreview?: {key:string, points:Array<RoutePoint>, elevation?:number, gradient:SmoothingGradient}
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
         super()
@@ -499,8 +501,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const xScale = { value: C( 1, 'distance'), unit: uDist }
         const yScale = { value: C( 1, 'elevation'), unit: uEl }
 
+        const smoothingAvailable = this.isSmoothingAvailable()
+
+        // a stored level takes effect immediately, before the user touches the control: showing the
+        // original profile while an active setting says otherwise would mean starting a ride on
+        // terrain that was never displayed
+        const {smoothedPoints, smoothedElevation, smoothedGradient} = this.getSmoothingPreview(uiSettings.smoothingLevel)
+
         return {settings:uiSettings,totalDistance, totalElevation, showLoopOverwrite,showNextOverwrite,hasWorkout,showWorkoutOption,canStart, videoChecking, videoMissing, detailsAvailable,
                 xScale, yScale,
+                smoothingAvailable, smoothingMaxLevel: MAX_SMOOTHING_LEVEL, smoothedPoints, smoothedElevation, smoothedGradient,
                 updateStartPos: this.updateStartPos.bind(this),
                 updateMarkers: this.updateMarkers.bind(this)
         }
@@ -552,22 +562,29 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             if (isUI) {
                 const  uiProps  = props as UIRouteSettings
-                const {realityFactor, segment, showPrev, loopOverwrite,nextOverwrite} = uiProps
+                const {realityFactor, segment, showPrev, loopOverwrite,nextOverwrite,smoothingLevel} = uiProps
 
                 const startPos:number= C(uiProps.startPos.value,'distance',{from:U('distance'), to:'m'})??0
                 const endPos:number|undefined= uiProps.endPos===undefined ? undefined : C(uiProps.endPos.value,'distance',{from:U('distance'), to:'m'})
                 
                 this.startSettings = {
                     ...this.startSettings,
-                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite
+                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite,
+                    // an explicit `undefined` here (e.g. a caller with no opinion on smoothing)
+                    // would otherwise overwrite the spread above and silently reset the route's
+                    // stored level to "off" - see design/features/route-smoothing/architecture.md
+                    // §9.7 defect 1. `??` only falls through on null/undefined, so an explicit 0
+                    // ("off", e.g. from Ride Again on an unsmoothed activity) is preserved as 0.
+                    smoothingLevel: smoothingLevel ?? this.startSettings?.smoothingLevel
                 }
             }
             else {
-                const {startPos, endPos, realityFactor, segment, showPrev,loopOverwrite,nextOverwrite} = props as RouteSettings
+                const {startPos, endPos, realityFactor, segment, showPrev,loopOverwrite,nextOverwrite,smoothingLevel} = props as RouteSettings
 
                 this.startSettings = {
                     ...this.startSettings,
-                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite
+                    startPos, endPos, realityFactor, segment, showPrev, loopOverwrite,nextOverwrite,
+                    smoothingLevel: smoothingLevel ?? this.startSettings?.smoothingLevel
                 }
 
             }
@@ -587,6 +604,73 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.logError(err,'changeSettings')
         }
             
+    }
+
+    /**
+     * Computes the elevation profile this route would have at a given smoothing level.
+     *
+     * This is a pure query: it never writes to the user settings, so the UI can let the user
+     * compare levels freely and only persist the choice (via {@link changeSettings}) when the
+     * ride is actually started.
+     *
+     * Returns an empty result - never throws - when there is nothing to show: the feature is
+     * turned off, the route is not eligible, the level is 0/absent, or the transform failed.
+     *
+     * @param level smoothing level; 0 or absent means off
+     * @returns the preview points and the elevation gain they add up to, or `{}`
+     */
+    getSmoothingPreview(level?:number):SmoothingPreview {
+        const none:SmoothingPreview = {}
+
+        try {
+            if (!Number.isFinite(level) || level<1)
+                return none
+
+            if (!this.isSmoothingAvailable())
+                return none
+
+            const key = `${this.getRouteDescription()?.id}:${Math.round(level)}`
+
+            if (this.smoothingPreview?.key!==key) {
+                const smoothed = applySmoothing(this.route, level)
+                const points = smoothed?.points
+
+                if (!points?.length)
+                    return none
+
+                const elevation = smoothed.description?.elevation ?? smoothed.details?.elevation
+                const routeElevation = this.route.description?.elevation ?? this.route.details?.elevation
+
+                this.smoothingPreview = {
+                    key,
+                    points,
+                    // in metres, as stored on the route; the display unit is applied per call, so a
+                    // change of unit preference is picked up without invalidating the cache
+                    elevation,
+                    gradient: getSmoothingGradient(this.route.points, points, routeElevation, elevation)
+                }
+            }
+
+            const {points:smoothedPoints, elevation, gradient} = this.smoothingPreview
+            const [C,U] = getUnitConversionShortcuts()
+
+            return {
+                smoothedPoints,
+                smoothedElevation: Number.isFinite(elevation)
+                    ? { value: C(elevation,'elevation',{digits:0}), unit: U('elevation') }
+                    : undefined,
+                smoothedGradient: gradient
+            }
+        }
+        catch(err:any) {
+            this.logError(err,'getSmoothingPreview')
+            return none
+        }
+    }
+
+    /** true when the smoothing control may be offered for this route */
+    protected isSmoothingAvailable():boolean {
+        return isSmoothingEligible(this.route)
     }
 
     protected adjustStartPosAvi(settings:RouteSettings|UIStartSettings) {

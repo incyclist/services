@@ -205,7 +205,18 @@ describe('IncyclistParser',()=>{
 
                 const elevations = points.map(p=>p.elevation).join(',')
                 expect(elevations).toBe('6,8,10,12,14,16,18,20,22,24')
-                    
+
+            })
+
+            test('returns true when the shift is applied, so the caller can flag the route',()=>{
+                expect(p.processElevationShift(3,points)).toBe(true)
+            })
+
+            test('returns false without touching the points when the shift cannot be applied',()=>{
+                const before = points.map(pp=>pp.elevation).join(',')
+                expect(p.processElevationShift(0,points)).toBe(false)
+                expect(p.processElevationShift(3,[])).toBe(false)
+                expect(points.map(pp=>pp.elevation).join(',')).toBe(before)
             })
 
             test('slope change',()=>{

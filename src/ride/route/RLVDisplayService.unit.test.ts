@@ -48,38 +48,11 @@ describe('RLVDisplayService', () => {
   let service: RLVDisplayService;
 
   // Test route factory
+  // a clone of a route is a route, so it has to be cloneable itself - the ride path clones more
+  // than once (route list -> ride copy -> video copy)
   const createMockRoute = (overrides: any = {}) => ({
     clone: jest.fn(function () {
-      const baseRoute = {
-        description: {
-          id: 'route1',
-          title: 'Test Route',
-          distance: 10000,
-          hasGpx: true,
-          videoFormat: 'mp4',
-          videoUrl: 'https://example.com/video.mp4',
-        },
-        details: {
-          id: 'route1',
-          title: 'Test Route',
-          distance: 10000,
-          points: [{ distance: 0, elevation: 0, lat: 0, lng: 0 }],
-          video: {
-            url: 'https://example.com/video.mp4',
-            file: '',
-            framerate: 30,
-            mappings: [],
-            format: 'mp4',
-            selectableSegments: []
-          },
-          infoTexts: [],
-        },
-      };
-      return {
-        ...baseRoute,
-        description: { ...baseRoute.description, ...overrides.description },
-        details: { ...baseRoute.details, ...overrides.details },
-      };
+      return createMockRoute(overrides);
     }),
     description: {
       id: 'route1',
@@ -170,6 +143,8 @@ describe('RLVDisplayService', () => {
       realityFactor: 100,
     }),
     getSelected: jest.fn().mockReturnValue(mockRoute),
+    getRideRoute: jest.fn( (id?:string) =>
+      id!==undefined ? mockRouteList.getRoute(id)?.clone() : mockRouteList.getSelected()?.clone()),
   };
 
   const setupMocks = (routeToUse = mockRoute) => {
