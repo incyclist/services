@@ -445,7 +445,7 @@ export class RLVDisplayService extends RouteDisplayService {
             route: this.getOriginalRoute().description.title,
             showPrev,
             realityFactor: `${realityFactor}%`,
-            smoothing: smoothingLevel, 
+            smoothingLevel, 
             start: startPos,
             end:endPos,
             segment,
