@@ -439,12 +439,13 @@ export class RLVDisplayService extends RouteDisplayService {
     getLogProps(): object {
         const bikeProps = this.getBikeLogProps()
         const {realityFactor,startPos,endPos,segment,showPrev,loopOverwrite, nextOverwrite} = this.startSettings 
-
+        const smoothingLevel = this.getRouteList().getAppliedSmoothingLevel()
         return {
             mode: 'video',
             route: this.getOriginalRoute().description.title,
             showPrev,
             realityFactor: `${realityFactor}%`,
+            smoothing: smoothingLevel, 
             start: startPos,
             end:endPos,
             segment,

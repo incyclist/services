@@ -8,6 +8,7 @@ export class FollowRouteDisplayService extends GpxDisplayService {
         const settings  = this.startSettings
         const rideView = this.getRideView()
         const bikeProps = this.getBikeLogProps()
+        const smoothingLevel = this.getRouteList().getAppliedSmoothingLevel()
 
         const props =  {
             mode:'follow route',
@@ -15,6 +16,7 @@ export class FollowRouteDisplayService extends GpxDisplayService {
             route: route.description.title,
             start: settings.startPos,
             realityFactor: `${settings.realityFactor}%`,
+            smoothingLevel,
             showPrev: settings.showPrev,
             finishAtEndOfLoop: settings.loopOverwrite,          
             ...bikeProps
