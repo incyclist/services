@@ -138,6 +138,7 @@ describe('RLVDisplayService', () => {
   const mockRouteList = {
     getRouteDetails: jest.fn().mockResolvedValue(null),
     getRoute: jest.fn().mockReturnValue(null),
+    getAppliedSmoothingLevel: jest.fn().mockReturnValue(0),
     getStartSettings: jest.fn().mockReturnValue({
       startPos: 0,
       realityFactor: 100,

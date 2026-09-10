@@ -42,7 +42,9 @@ describe('FollowRouteDisplayService', () => {
         mockRouteList = {
             getSelected: jest.fn().mockReturnValue(options.route ?? sydneyRoute),
             getRideRoute: jest.fn( () => mockRouteList.getSelected()?.clone()),
-            getStartSettings: jest.fn().mockReturnValue(options.startSettings ?? defaultStartSettings)
+            getStartSettings: jest.fn().mockReturnValue(options.startSettings ?? defaultStartSettings),
+            getAppliedSmoothingLevel: jest.fn().mockReturnValue(0),
+
         }
         Inject('RouteList', mockRouteList)
 
