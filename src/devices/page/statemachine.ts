@@ -60,7 +60,6 @@ export class PairingPageStateMachine {
         }
     }
     stop() {     
-        console.log('# statemachin stop') 
         try {
             const prev = this.state
             this.unregisterServiceEventHandlers()

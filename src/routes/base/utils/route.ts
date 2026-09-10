@@ -427,7 +427,7 @@ export interface GetNextPositionProps {
 }
 
 export const getNextPosition = ( route:Route, props:GetNextPositionProps ):LapPoint => {
-    const points = route.points
+    const points = route?.points
 
     if (!points?.length) {
         return
