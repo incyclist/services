@@ -191,6 +191,25 @@ describe( 'Route Utils',()=>{
             expect(res.routeDistance).toEqual(testRoute.description.distance)
         })
 
+        // Regression: a ride started as a workout only, without any route, has no route object
+        // at all. RouteListService.unselect() leaves the selected route as null (not undefined),
+        // so null - not just undefined - reaches here for the whole duration of such a ride.
+        test('no route - null - returns nothing instead of throwing',()=>{
+            expect( ()=> getNextPosition(null,{routeDistance:100,prev:undefined}) ).not.toThrow()
+            expect( getNextPosition(null,{routeDistance:100,prev:undefined}) ).toBeUndefined()
+        })
+
+        test('no route - undefined - returns nothing instead of throwing',()=>{
+            expect( ()=> getNextPosition(undefined,{routeDistance:100,prev:undefined}) ).not.toThrow()
+            expect( getNextPosition(undefined,{routeDistance:100,prev:undefined}) ).toBeUndefined()
+        })
+
+        test('route without points returns nothing instead of throwing',()=>{
+            expect( getNextPosition({} as Route,{routeDistance:100}) ).toBeUndefined()
+            expect( getNextPosition({points:null} as unknown as Route,{routeDistance:100}) ).toBeUndefined()
+            expect( getNextPosition({points:[]} as unknown as Route,{routeDistance:100}) ).toBeUndefined()
+        })
+
     })
 
 

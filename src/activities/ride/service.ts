@@ -1487,7 +1487,12 @@ export class ActivityRideService extends IncyclistService {
                 }
                 break;
             default:
-                if (selectedRoute===undefined ) { // Workout only mode
+                if (!selectedRoute) { // Workout only mode - getRideRoute() can hand back
+                                       // `null` (not just `undefined`) once RouteListService.
+                                       // unselect() has run, so both must be treated the same
+                                       // way here or routeType is left unset instead of 'None'
+                                       // and updateActivityState() keeps calling into route
+                                       // logic with no route for the rest of the ride.
                     realityFactor = 0
                     routeName = 'Workout'
                     routeType = 'None'

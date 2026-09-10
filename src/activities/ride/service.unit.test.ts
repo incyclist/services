@@ -44,7 +44,10 @@ describe('ActivityRideService',()=>{
         }))
         svc.getRouteList = jest.fn( ()=> ({
             getSelected: jest.fn().mockReturnValue(props?.route),
-            getRideRoute: jest.fn().mockImplementation( ()=> props?.route?.clone()),
+            // `route:null` models the route list after unselect() - which is what a workout-only
+            // ride leaves behind. getRideRoute() then really does hand out null, not undefined,
+            // because buildRideRoute() passes a falsy route straight back through.
+            getRideRoute: jest.fn().mockImplementation( ()=> props?.route===null ? null : props?.route?.clone()),
             getStartSettings: jest.fn().mockReturnValue(props?.startSettings),
             getAppliedSmoothingLevel: jest.fn().mockReturnValue(props?.appliedSmoothingLevel ?? 0)
         }))
@@ -1108,6 +1111,111 @@ describe('ActivityRideService',()=>{
 
             expect(getNextPositionSpy).toHaveBeenCalled()
             expect(getElevationGainAtSpy).toHaveBeenCalled()
+        })
+    })
+
+    describe('updateActivityState - workout-only ride (no route)',()=>{
+        // Regression: production logged thousands of
+        // `fn:updateActivityState,error:Cannot read properties of null (reading 'points')`.
+        //
+        // Root cause (two bugs, both fixed): a workout started without a route
+        // (WorkoutCard.select() with settings.noRoute=true) calls RouteListService.unselect(),
+        // which sets selectedRoute = null - not undefined. getRideRoute() (via
+        // buildRideRoute()) hands that `null` straight back out, and createActivity()'s
+        // `selectedRoute===undefined` check did not catch it (null !== undefined), so
+        // `this.activity.routeType` was left unset instead of becoming 'None' and
+        // `this.current.route` stayed `null` for the whole ride (fixed: that check is now
+        // `!selectedRoute`). With routeType never 'None', updateActivityState() kept entering
+        // its route-update block on every device-data tick and calling
+        // getNextPosition(null, ...), which dereferenced `route.points` on that null route and
+        // threw (fixed defensively too: getNextPosition() now guards with `route?.points`).
+        //
+        // This exercises the real message flow (init -> start -> device 'data' events), the
+        // same path production hits, rather than calling getNextPosition() directly - a fix
+        // confined to getNextPosition() alone (see route.unit.test.ts) would not prove that
+        // this class correctly skips the route-update block for a route-less workout.
+
+        let service:ActivityRideService
+        const ride = new EventEmitter()
+
+        let getNextPositionSpy:jest.SpyInstance
+
+        beforeEach( ()=>{
+            service = new ActivityRideService()
+            jest.useFakeTimers().setSystemTime(new Date('2020-01-01'));
+            // route:null (not undefined) reproduces exactly what getRideRoute() returns once
+            // unselect() has run - see mockServices() above.
+            mockServices(service,{route:null, startSettings:undefined, ride})
+
+            // restore first: an earlier describe block spies on the same module-level export
+            // and tears down with resetAllMocks() (not restoreAllMocks()), which leaves the
+            // real getNextPosition permanently replaced by an empty mock - so without this,
+            // the spy below would silently stop calling through to the real implementation
+            // and this test would pass for the wrong reason regardless of run order.
+            jest.restoreAllMocks()
+            getNextPositionSpy = jest.spyOn(routeUtils,'getNextPosition')
+        })
+
+        afterEach( ()=>{
+            service.stop()
+            resetSingleton(service)
+            jest.resetAllMocks();
+            jest.useRealTimers()
+        })
+
+        test('device data arriving on a route-less workout does not crash, skips route/position updates, and still progresses the ride',()=>{
+            const logErrorSpy = jest.spyOn(service as any,'logError')
+
+            const observer = service.init()
+            const onData = jest.fn()
+            observer.on('data',onData)
+
+            // routeType correctly resolved to 'None' - the route-update block below must never
+            // be entered for this ride
+            expect(service.getActivity().routeType).toBe('None')
+
+            service.start()
+
+            // simulate the device sending regular data updates, same as a real ride
+            const values = {power:150,speed:36,cadence:90,heartrate:149}
+            ride.emit('data',values)
+            for (let i=0;i<10;i++) {
+                jest.advanceTimersByTime(1000)
+                ride.emit('data',values)
+            }
+
+            // the route-update block is skipped entirely for a workout-only ride
+            expect(getNextPositionSpy).not.toHaveBeenCalled()
+
+            // and nothing blew up updateActivityState() along the way
+            expect(logErrorSpy).not.toHaveBeenCalled()
+
+            const activity = service.getActivity()
+            expect(activity.time).toBeGreaterThan(0)
+            expect(activity.distance).toBeGreaterThan(0)
+        })
+
+        // Defense in depth: even if the routeType/skip guard above ever regresses again (as it
+        // did in production), a null route reaching updateActivityState()'s route-update block
+        // must not crash it - this pins down the getNextPosition() null-safety fix at the class
+        // boundary, not just in route.unit.test.ts.
+        test('a null route that still reaches the route-update block does not crash updateActivityState()',()=>{
+            const logErrorSpy = jest.spyOn(service as any,'logError')
+
+            service.init()
+            service.start()
+
+            const activity:any = service.getActivity()
+            activity.routeType = 'GPX' // force entry into the route-update block despite no route
+            const current = protectedMember(service,'current')
+            current.route = null
+            current.deviceData = {speed:36} // 10 m/s
+            current.tsUpdate = Date.now()-1000
+
+            ;(service as any).updateActivityState()
+
+            expect(getNextPositionSpy).toHaveBeenCalled()
+            expect(logErrorSpy).not.toHaveBeenCalled()
         })
     })
 
