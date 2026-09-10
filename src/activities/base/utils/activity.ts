@@ -348,8 +348,6 @@ export class Activity implements ActivityInfo{
     }
 
     protected save(withDetails?:boolean):Promise<void> {
-
-        console.log('~~~ SAVE REPO', this.info,withDetails)
         return this.getRepo().save(this.info,withDetails)        
     }
 

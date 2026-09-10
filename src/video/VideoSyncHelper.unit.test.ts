@@ -97,7 +97,6 @@ describe('VideoSyncHelper',()=>{
             const videoSyncHelper = new VideoSyncHelper(route,0,{loopMode:true})
             const totalDistance = route.description.distance??0
             
-            console.log(totalDistance)
             initMock(videoSyncHelper, { routeDistance:3, speed:30, rate:1, time:9000}, {routeDistance:16595, speed:30})
             videoSyncHelper.onUpdate(['activity:lap','activity:sped'])      
             

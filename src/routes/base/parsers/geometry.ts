@@ -130,10 +130,6 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
         geo = geo.filter((v,idx) => idx===0 || v.distance!==geo[idx-1].distance)
         video = video.filter((v,idx) => idx===0 || v.time!==video[idx-1].time)
 
-        if (!video.length) {
-            console.log('# no video information')
-        }
-
         const points = geo.map( (g,idx)=> {
             return {
                 cnt: idx,

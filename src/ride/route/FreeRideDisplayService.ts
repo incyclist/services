@@ -256,7 +256,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
             
         }
         else {
-            console.log('# FreeRideDisplayService onTurn', this.position, {found:false})
+            // console.log('# FreeRideDisplayService onTurn', this.position, {found:false})
         }
 
         delete this.turnPosition
@@ -579,8 +579,8 @@ export class FreeRideDisplayService extends GpxDisplayService {
             return route
         }
         /* istanbul ignore catch */
-        catch(err) {
-            console.log('# error',err)
+        catch(err:any) {
+            this.logError(err,'createRoute')
         }
 
     }
