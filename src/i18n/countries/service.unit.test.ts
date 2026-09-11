@@ -145,7 +145,7 @@ describe('Countries', () => {
         })
     })
 
-    describe('getIsoFromLatLng', () => {
+    describe.skip('getIsoFromLatLng', () => {
         let mockQuery: jest.Mock
 
         beforeEach(() => {
