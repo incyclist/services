@@ -134,6 +134,10 @@ export class Countries extends IncyclistService {
      * const iso = await countries.getIsoFromLatLng({ lat: 51.5074, lng: -0.1278 }); // 'GB' (London)
      */
     async getIsoFromLatLng(point: LatLng): Promise<string> {
+
+        return 
+        /* --- Temporary disabled: I need to find a solution to reduce load on the overpass API ---
+
         const { lat, lng } = point;
         const query = `[out:json][timeout:10];is_in(${lat},${lng})->.a;rel(pivot.a)['admin_level'='2']['boundary'='administrative'];out tags;`;
 
@@ -154,6 +158,7 @@ export class Countries extends IncyclistService {
         catch {
             return undefined;
         }
+            */
     }
 
     /**
