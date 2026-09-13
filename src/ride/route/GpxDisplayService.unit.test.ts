@@ -435,10 +435,14 @@ describe('GpxDisplayService', () => {
             expect(service.getStartOverlayProps().mapState).toBe('Loaded')
         })
 
-        test('desktop behaviour is unchanged', () => {
+        test('desktop also waits for the Loaded event, same as mobile', () => {
             setupSVMocks(service, svMobile({channel: 'desktop'}))
 
-            expect(service['waitsForStreetView']()).toBe(false)
+            // Desktop already waited for mapLoaded before this fix (isStartRideCompleted()
+            // falls through to `return this.mapLoaded` regardless of platform) - what changed
+            // is that waitsForStreetView() now also returns true on desktop, so initView()
+            // arms the same start timeout fallback desktop previously lacked.
+            expect(service['waitsForStreetView']()).toBe(true)
             expect(service.isStartRideCompleted()).toBe(false)
         })
 
@@ -469,6 +473,30 @@ describe('GpxDisplayService', () => {
                 jest.advanceTimersByTime(15000)
 
                 expect(service['svStartTimedOut']).toBe(false)
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+
+        // Regression: previously waitsForStreetView() was gated on isMobile(), so
+        // initView() never armed the start timeout on desktop - a panorama that never
+        // fired 'Loaded' (e.g. a stalled Street View API request) could hang the start
+        // overlay indefinitely on desktop, unlike mobile which already had this fallback.
+        test('desktop gets the same start-timeout fallback as mobile so it cannot hang indefinitely', () => {
+            jest.useFakeTimers()
+            try {
+                setupSVMocks(service, svMobile({channel: 'desktop'}))
+
+                expect(service['waitsForStreetView']()).toBe(true)
+                service['armStreetViewStartTimeout']()
+
+                expect(service.isStartRideCompleted()).toBe(false)
+
+                jest.advanceTimersByTime(15000)
+
+                expect(service.isStartRideCompleted()).toBe(true)
+                expect(service['svStartTimedOut']).toBe(true)
             }
             finally {
                 jest.useRealTimers()
@@ -558,7 +586,7 @@ describe('GpxDisplayService', () => {
             expect(service['waitsForSatelliteView']()).toBe(false)
         })
 
-        test('false on desktop with sat ride view', () => {
+        test('true on desktop with sat ride view', () => {
             setupSatMocks(service, {
                 mockRideService: true,
                 channel: 'desktop',
@@ -567,7 +595,7 @@ describe('GpxDisplayService', () => {
                     return def
                 })
             })
-            expect(service['waitsForSatelliteView']()).toBe(false)
+            expect(service['waitsForSatelliteView']()).toBe(true)
         })
     })
 
@@ -624,12 +652,13 @@ describe('GpxDisplayService', () => {
             expect(service.getStartOverlayProps().mapState).toBe('Loaded')
         })
 
-        test('desktop behaviour is unchanged', () => {
+        test('desktop also waits for the Loaded event, same as mobile', () => {
             setupSatMocks(service, satMobile({channel: 'desktop'}))
 
-            // On desktop, isMobile() is false so the "always Loaded" branch never applies -
-            // desktop has always waited for mapLoaded here, same as street view.
-            expect(service['waitsForSatelliteView']()).toBe(false)
+            // isStartRideCompleted() already fell through to `return this.mapLoaded` on
+            // desktop before this fix - what changed is that waitsForSatelliteView() now
+            // also returns true on desktop, so initView() arms the start timeout fallback.
+            expect(service['waitsForSatelliteView']()).toBe(true)
             expect(service.isStartRideCompleted()).toBe(false)
         })
 
@@ -660,6 +689,29 @@ describe('GpxDisplayService', () => {
                 jest.advanceTimersByTime(15000)
 
                 expect(service['satStartTimedOut']).toBe(false)
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+
+        // Regression: waitsForSatelliteView() used to be gated on isMobile(), so
+        // initView() never armed the start timeout on desktop - a satellite image that
+        // never fired 'Loaded' could hang the start overlay indefinitely on desktop.
+        test('desktop gets the same start-timeout fallback as mobile so it cannot hang indefinitely', () => {
+            jest.useFakeTimers()
+            try {
+                setupSatMocks(service, satMobile({channel: 'desktop'}))
+
+                expect(service['waitsForSatelliteView']()).toBe(true)
+                service['armSatelliteViewStartTimeout']()
+
+                expect(service.isStartRideCompleted()).toBe(false)
+
+                jest.advanceTimersByTime(15000)
+
+                expect(service.isStartRideCompleted()).toBe(true)
+                expect(service['satStartTimedOut']).toBe(true)
             }
             finally {
                 jest.useRealTimers()
@@ -775,6 +827,22 @@ describe('GpxDisplayService', () => {
             props.onDisplayEvent('Error', errorMsg)
             expect(service['mapError']).toBe(errorMsg)
             expect(service.emit).toHaveBeenCalledWith('state-update')
+        })
+
+        // Regression: the log line used to fire before `this.mapError` was updated, so the
+        // logged event always carried the *previous* error (undefined on a first error)
+        // instead of the one that just occurred. The Street View handler already assigns
+        // before logging - this brings the Satellite View handler in line with it.
+        test('logs the current error, not the previous one', () => {
+            setupMocks(service, {mockRideService: true})
+            const logEvent = jest.spyOn(service as any, 'logEvent')
+            const props = service.getSatelliteViewProps() as any
+
+            props.onDisplayEvent('Error', 'first error')
+            expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({message: 'sat view error', error: 'first error'}))
+
+            props.onDisplayEvent('Error', 'second error')
+            expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({message: 'sat view error', error: 'second error'}))
         })
     })
 

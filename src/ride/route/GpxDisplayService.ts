@@ -178,12 +178,14 @@ export class GpxDisplayService extends RouteDisplayService {
 
     /**
      * True when the start overlay has to wait for the Street View component to report
-     * 'Loaded'. Only relevant on mobile: desktop already waits (it has always received the
-     * component's events), while mobile used to skip the wait entirely and therefore tore
-     * the overlay down onto a panorama that had not loaded yet - a black screen.
+     * 'Loaded'. This is the case on both mobile and desktop: mobile used to skip the wait
+     * entirely and therefore tore the overlay down onto a panorama that had not loaded yet -
+     * a black screen; desktop already waited for 'Loaded' via isStartRideCompleted(), but
+     * (before the timeout below was armed unconditionally) had no fallback if the component
+     * never fired the event, so it could block the start overlay indefinitely.
      */
     protected waitsForStreetView(): boolean {
-        return this.isMobile() && this.getRideSettingsDisplay().getRideView() === 'sv'
+        return this.getRideSettingsDisplay().getRideView() === 'sv'
     }
 
     /**
@@ -191,7 +193,7 @@ export class GpxDisplayService extends RouteDisplayService {
      * 'Loaded'. Mirrors waitsForStreetView() - see its comment for the rationale.
      */
     protected waitsForSatelliteView(): boolean {
-        return this.isMobile() && this.getRideSettingsDisplay().getRideView() === 'sat'
+        return this.getRideSettingsDisplay().getRideView() === 'sat'
     }
 
     /**
@@ -335,8 +337,8 @@ export class GpxDisplayService extends RouteDisplayService {
             this.clearSatelliteViewStartTimeout()
         }
         else if (state==='Error') {
-            this.logEvent({message:'sat view error', error:this.mapError})
             this.mapError = error
+            this.logEvent({message:'sat view error', error:this.mapError})
         }
         this.emit('state-update')
 

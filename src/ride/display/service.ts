@@ -495,11 +495,13 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected async stopRide( props:{exit?:boolean, noStateUpdates?:boolean}={} ):Promise<void> {
 
         try {
-            if ( this.state !== 'Starting' && this.state !=='Idle') {
-                this.logEvent({ message: "activity stopped",activity: this.activity?.id, lastState:this.state});                   
+            const prevState = this.state
+            const isRedundantCall = prevState==='Finished' || prevState==='Idle' || prevState==='Closing'
+
+            if ( !isRedundantCall && this.activity) {
+                this.logEvent({ message: "activity stopped",activity: this.activity?.id, lastState:prevState});
             }
 
-            const prevState = this.state
             this.state = prevState==='Starting' ? 'Closing' : 'Finished' // only update state internally, don't yet emit to UI
 
             this.observer?.stop({immediately:props.noStateUpdates})
@@ -510,9 +512,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 waitNextTick().then( () => { if (this.observer === observerToClear) delete this.observer })
             }
 
-            if (prevState==='Finished' || prevState==='Idle' || prevState==='Closing') {
+            if (isRedundantCall) {
                 this.state = 'Idle'
-                return;    
+                return;
             }
 
             this.stopDevices(props.exit)
