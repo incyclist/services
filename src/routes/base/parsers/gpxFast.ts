@@ -22,15 +22,17 @@ import { JSONObject } from '../../../utils/xml'
 type RawGpxPoint = { $: { lat?: string, lon?: string }, ele?: string[], time?: string[] }
 
 const decodeEntities = (s: string): string =>
-    s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&')
+    s.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&quot;', '"').replaceAll('&apos;', "'").replaceAll('&amp;', '&')
 
 const parseAttrs = (tagText: string): Record<string, string> => {
     const attrs: Record<string, string> = {}
-    const re = /([\w:.-]+)\s*=\s*"([^"]*)"|([\w:.-]+)\s*=\s*'([^']*)'/g
+    // name captured once, quote style resolved via a single non-alternating group afterwards -
+    // avoids duplicating the name pattern across two alternatives (needlessly complex, and a
+    // shape static analysis flags for backtracking risk).
+    const re = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
     let m: RegExpExecArray | null
     while ((m = re.exec(tagText))) {
-        if (m[1] !== undefined) attrs[m[1]] = m[2]
-        else attrs[m[3]] = m[4]
+        attrs[m[1]] = m[2] !== undefined ? m[2] : m[3]
     }
     return attrs
 }
@@ -98,6 +100,29 @@ const extractBlocks = (text: string, tag: string): Array<{ body: string }> | und
     return blocks
 }
 
+/** Parses a single <trkpt> starting at `start`, returning the point and where the next scan should resume. */
+const parseOneTrkpt = (segBody: string, start: number): { point: RawGpxPoint, nextIdx: number } | undefined => {
+    const tagEnd = segBody.indexOf('>', start)
+    if (tagEnd === -1) return undefined
+
+    const attrs = parseAttrs(segBody.slice(start, tagEnd + 1))
+    const point: RawGpxPoint = { $: { lat: attrs.lat, lon: attrs.lon } }
+
+    if (segBody[tagEnd - 1] === '/')
+        return { point, nextIdx: tagEnd + 1 } // self-closing, no ele/time to read
+
+    const closeIdx = segBody.indexOf('</trkpt>', tagEnd)
+    if (closeIdx === -1) return undefined
+
+    const body = segBody.slice(tagEnd + 1, closeIdx)
+    const ele = extractLeaf(body, 'ele')
+    if (ele !== undefined) point.ele = [ele]
+    const time = extractLeaf(body, 'time')
+    if (time !== undefined) point.time = [time]
+
+    return { point, nextIdx: closeIdx + '</trkpt>'.length }
+}
+
 const extractTrkpts = (segBody: string): RawGpxPoint[] | undefined => {
     const points: RawGpxPoint[] = []
     let idx = 0
@@ -111,34 +136,59 @@ const extractTrkpts = (segBody: string): RawGpxPoint[] | undefined => {
             continue
         }
 
-        const tagEnd = segBody.indexOf('>', start)
-        if (tagEnd === -1) return undefined
+        const parsed = parseOneTrkpt(segBody, start)
+        if (!parsed) return undefined
 
-        const selfClosing = segBody[tagEnd - 1] === '/'
-        const attrs = parseAttrs(segBody.slice(start, tagEnd + 1))
-
-        const point: RawGpxPoint = { $: { lat: attrs.lat, lon: attrs.lon } }
-
-        if (selfClosing) {
-            idx = tagEnd + 1
-        }
-        else {
-            const closeIdx = segBody.indexOf('</trkpt>', tagEnd)
-            if (closeIdx === -1) return undefined
-            const body = segBody.slice(tagEnd + 1, closeIdx)
-
-            const ele = extractLeaf(body, 'ele')
-            if (ele !== undefined) point.ele = [ele]
-            const time = extractLeaf(body, 'time')
-            if (time !== undefined) point.time = [time]
-
-            idx = closeIdx + '</trkpt>'.length
-        }
-
-        points.push(point)
+        points.push(parsed.point)
+        idx = parsed.nextIdx
     }
     return points
 }
+
+/** Builds one <trk> entry (trkseg/trkpt plus optional name/desc), or undefined if anything inside it looks unexpected. */
+const buildTrk = (body: string): Record<string, JSONObject> | undefined => {
+    const segStart = body.search(/<trkseg[\s>]/)
+    const header = segStart === -1 ? body : body.slice(0, segStart)
+
+    const segBlocks = extractBlocks(body, 'trkseg')
+    if (!segBlocks)
+        return undefined
+
+    const trkseg: JSONObject[] = []
+    for (const seg of segBlocks) {
+        const points = extractTrkpts(seg.body)
+        if (!points)
+            return undefined
+        trkseg.push({ trkpt: points } as unknown as JSONObject)
+    }
+
+    const trkObj: Record<string, JSONObject> = { trkseg }
+    const name = extractLeaf(header, 'name')
+    if (name !== undefined) trkObj.name = [name]
+    const desc = extractLeaf(header, 'desc')
+    if (desc !== undefined) trkObj.desc = [desc]
+    return trkObj
+}
+
+/** Builds metadata's own name (if any), ignoring a nested <author><name> - see comment below. */
+const buildMetadata = (xmlText: string): JSONObject | undefined => {
+    const metaMatch = /<metadata[\s>][\s\S]*?<\/metadata>/.exec(xmlText)
+    if (!metaMatch)
+        return undefined
+
+    // <author> is the only standard GPX metadata child that can itself carry a <name>
+    // (personType: name/email/link) - strip it out before searching, rather than assuming
+    // metadata's own children appear in the schema's suggested order (real exporters, e.g.
+    // Garmin Connect, routinely put <link>/<time> before <name>).
+    const openEnd = metaMatch[0].indexOf('>')
+    const closeStart = metaMatch[0].lastIndexOf('</metadata>')
+    const body = metaMatch[0].slice(openEnd + 1, closeStart).replace(/<author[\s>][\s\S]*?<\/author>/, '')
+    const name = extractLeaf(body, 'name')
+    return name !== undefined ? { name: [name] } as unknown as JSONObject : undefined
+}
+
+const countPoints = (trk: JSONObject[]): number =>
+    trk.reduce((sum: number, t: any) => sum + t.trkseg.reduce((s: number, seg: any) => s + seg.trkpt.length, 0), 0)
 
 export const tryParseGpxRaw = (xmlText: string): JSONObject | undefined => {
     try {
@@ -151,52 +201,22 @@ export const tryParseGpxRaw = (xmlText: string): JSONObject | undefined => {
 
         const trk: JSONObject[] = []
         for (const { body } of trkBlocks) {
-            const segStart = body.search(/<trkseg[\s>]/)
-            const header = segStart === -1 ? body : body.slice(0, segStart)
-
-            const segBlocks = extractBlocks(body, 'trkseg')
-            if (!segBlocks)
+            const trkObj = buildTrk(body)
+            if (!trkObj)
                 return undefined
-
-            const trkseg: JSONObject[] = []
-            for (const seg of segBlocks) {
-                const points = extractTrkpts(seg.body)
-                if (!points)
-                    return undefined
-                trkseg.push({ trkpt: points } as unknown as JSONObject)
-            }
-
-            const trkObj: Record<string, JSONObject> = { trkseg }
-            const name = extractLeaf(header, 'name')
-            if (name !== undefined) trkObj.name = [name]
-            const desc = extractLeaf(header, 'desc')
-            if (desc !== undefined) trkObj.desc = [desc]
-
             trk.push(trkObj)
         }
 
         const gpx: Record<string, JSONObject> = { trk }
 
-        const metaMatch = /<metadata[\s>][\s\S]*?<\/metadata>/.exec(xmlText)
-        if (metaMatch) {
-            // <author> is the only standard GPX metadata child that can itself carry a <name>
-            // (personType: name/email/link) - strip it out before searching, rather than
-            // assuming metadata's own children appear in the schema's suggested order (real
-            // exporters, e.g. Garmin Connect, routinely put <link>/<time> before <name>).
-            const openEnd = metaMatch[0].indexOf('>')
-            const closeStart = metaMatch[0].lastIndexOf('</metadata>')
-            const body = metaMatch[0].slice(openEnd + 1, closeStart).replace(/<author[\s>][\s\S]*?<\/author>/, '')
-            const name = extractLeaf(body, 'name')
-            if (name !== undefined)
-                gpx.metadata = [{ name: [name] }] as unknown as JSONObject
-        }
+        const metadata = buildMetadata(xmlText)
+        if (metadata)
+            gpx.metadata = [metadata] as unknown as JSONObject
 
         // Safety net: if we somehow dropped or double-counted points relative to a plain
         // occurrence count of '<trkpt', don't risk silently corrupting the route - fall back.
-        const foundPoints = trk.reduce((sum: number, t: any) =>
-            sum + t.trkseg.reduce((s: number, seg: any) => s + seg.trkpt.length, 0), 0)
         const literalCount = (xmlText.match(/<trkpt[\s>]/g) ?? []).length
-        if (foundPoints !== literalCount)
+        if (countPoints(trk) !== literalCount)
             return undefined
 
         return { gpx } as unknown as JSONObject

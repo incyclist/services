@@ -100,6 +100,16 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         if (data)
             return data
 
+        const resData = await this.readAndDecode(file)
+        return await parseXml(resData)
+    }
+
+    /**
+     * Reads a route file and decodes it to a UTF-8 string, ready for XML parsing. Shared by
+     * XMLParser.getData() and GPXParser.getData() (which parses the same decoded text with a
+     * fast tokenizer first) so the file-read/error-handling logic exists in one place.
+     */
+    protected async readAndDecode(file:FileInfo):Promise<string> {
         const onError = ()=> {
             throw new Error('Could not open file: '+ getFileName(file))
         }
@@ -113,10 +123,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                 onError()
             }
 
-            const resData:string = getUtf8Data(res.data)
-            const xml = await parseXml(resData)
-
-            return xml
+            return getUtf8Data(res.data)
         }
         catch (err:any) {
             this.getLogger().logEvent({message:'[Parser] getData error', error:err.message})

@@ -1,13 +1,10 @@
-import { EventLogger } from "gd-eventlog";
 import { geo } from "../../../utils"
 import { num } from "../../../utils/math";
 import { valid } from "../../../utils/valid";
-import { FileInfo, getBindings } from "../../../api";
+import { FileInfo } from "../../../api";
 import { XmlJSON, parseXml } from "../../../utils/xml";
-import { getFileName } from "../../../utils";
 import { RouteInfo, RoutePoint } from "../types"
 import { checkIsLoop, getRouteHash } from "../utils/route"
-import { getUtf8Data } from "./utils"
 import { tryParseGpxRaw } from "./gpxFast"
 import { XMLParser, XmlParserContext } from "./xml"
 
@@ -60,30 +57,13 @@ export class GPXParser extends XMLParser {
         if (data)
             return data
 
-        const onError = () => {
-            throw new Error('Could not open file: ' + getFileName(file))
-        }
+        const resData = await this.readAndDecode(file)
 
-        const loader = getBindings().loader
-        try {
-            const res = await loader.open(file)
-            if (res.error) {
-                this.getLogger().logEvent({message:'[Parser] getData error', error:res.error})
-                onError()
-            }
+        const fast = tryParseGpxRaw(resData)
+        if (fast)
+            return new XmlJSON(fast, 'gpx')
 
-            const resData: string = getUtf8Data(res.data)
-
-            const fast = tryParseGpxRaw(resData)
-            if (fast)
-                return new XmlJSON(fast, 'gpx')
-
-            return await parseXml(resData)
-        }
-        catch (err: any) {
-            this.getLogger().logEvent({message:'[Parser] getData error', error:err.message})
-            onError()
-        }
+        return await parseXml(resData)
     }
 
     /**
