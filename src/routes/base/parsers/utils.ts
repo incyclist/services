@@ -192,9 +192,25 @@ export const safeEncode =(path:string):string=> {
     return encoded
 }
 
+/**
+ * Strips the fixed `file://` scheme prefix from an already-`file://`-prefixed
+ * path and rebuilds it via {@link buildFileUrl}, the single source of truth
+ * for `file://` URL construction (Unix absolute, Windows drive-letter absolute,
+ * and relative paths).
+ *
+ * Only the two literal slashes of the `file://` scheme are stripped here — never
+ * a third, optional one. An absolute Unix path's own leading `/` (e.g.
+ * `file:///private/var/...`) must survive the strip so that re-building via
+ * `buildFileUrl` reproduces the correct 3-slash form. The previous implementation
+ * used `/^file:\/\/\/?/`, which greedily consumed that third slash whenever
+ * present, silently dropping the path's own leading `/` and producing a
+ * malformed 2-slash URL (`file://private/var/...`) after rebuild — this made
+ * the strip-substitute-rebuild round trip in {@link buildUrlFromFile} lossy on
+ * slash count instead of being a no-op.
+ */
 const handleFileUrlPath = (fileName: string): string => {
-    const cleanPath = safeDecode(fileName.replace(/^file:\/\/\/?/, ''));
-    return `file://${encodeURI(cleanPath)}`;
+    const cleanPath = safeDecode(fileName.replace(/^file:\/\//, ''));
+    return buildFileUrl(cleanPath);
 }
 
 export const buildFileUrl = (normalizedPath: string): string => {
