@@ -447,6 +447,18 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
         route.elevation = 0;
         const points = []
 
+        // distance->height lookup built once, so getAltitude's fallback path doesn't have to
+        // rescan the whole altitudes array for every position (was O(positions x altitudes)).
+        // First occurrence wins, matching the array's former Array.find() semantics.
+        const altitudeByDistance = new Map<number, string|undefined>()
+        if (Array.isArray(altitudes)) {
+            altitudes.forEach(a => {
+                const d = Number.parseInt(a.distance)
+                if (!altitudeByDistance.has(d))
+                    altitudeByDistance.set(d, a.height)
+            })
+        }
+
         positions.forEach( (pos,i) => {
 
             if (i>0) {
@@ -456,7 +468,7 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
                 }
             }
 
-            const altitude = getAltitude(altitudes,positions,i,prevAltitude);
+            const altitude = getAltitude(altitudes,altitudeByDistance,positions,i,prevAltitude);
             const elevationGain = altitude-prevAltitude
 
             const pi  = createPoint(pos, altitude, prevDistance);
@@ -532,7 +544,7 @@ function createPoint(pos: Position, altitude: number, prevDistance: number) {
     return { point, prevDistance };
 }
 
-function getAltitude( altitudes:Array<Altitude>, positions: Array<Position>, i:number, prevAltitude: number) {
+function getAltitude( altitudes:Array<Altitude>, altitudeByDistance: Map<number,string|undefined>, positions: Array<Position>, i:number, prevAltitude: number) {
     const pos = positions[i]
     let height = altitudes[i]?.height;
 
@@ -542,8 +554,7 @@ function getAltitude( altitudes:Array<Altitude>, positions: Array<Position>, i:n
             return height!==undefined ? Number(height) : prevAltitude
         }
         else {
-            const altFound = altitudes.find(a => Number.parseInt(a.distance) === Number.parseInt(pos.distance));
-            height = altFound?.height
+            height = altitudeByDistance.get(Number.parseInt(pos.distance));
             return  height!==undefined ? Number(height) : prevAltitude;
         }
     }
