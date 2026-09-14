@@ -154,7 +154,7 @@ export class RLVDisplayService extends RouteDisplayService {
 
             const nextId = getNextVideoId(videoRoute)
 
-            this.logEvent({message: 'video added', id: videoRoute.description.id, title: videoRoute.description.title, segmentDistance: videoRoute.description.distance,next:nextId})
+            this.logEvent({message: 'video added', id: videoRoute.description.id, title: videoRoute.description.title, segmentDistance: videoRoute.description.distance,next:nextId, src:video?.source})
         }
         /* istanbul ignore catch */
         catch (err) {
@@ -741,7 +741,7 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
     protected cleanupUrl(url:string) {
-        return resolvePlaybackUrl(url, this.isMobile())
+        return resolvePlaybackUrl(url)
     }
 
     protected isLoopEnabled(): boolean {

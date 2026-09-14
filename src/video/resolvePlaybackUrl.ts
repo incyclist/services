@@ -1,18 +1,19 @@
 /**
  * Rewrites a route's stored video URL into the scheme actually used for playback.
  *
- * On desktop, native (non-avi) video playback uses a custom `video:` protocol instead of
- * `file:` for local files. This matters beyond just routing: Chromium treats `file:` as a
- * special scheme with lenient path normalization (e.g. collapses extra leading slashes),
- * while a custom, non-special scheme like `video:` does not get that normalization and is
- * passed through to the registered protocol handler literally. A malformed URL with an
- * extra slash can therefore fail to load via `video:` while playing back fine via `file:`.
+ * Non-avi local mp4 playback always uses `file:`, never the desktop-only `video:` custom
+ * protocol - that protocol is registered via Electron's legacy `protocol.registerFileProtocol`,
+ * which can't serve HTTP range/seek requests, so it fails to open large and/or non-"faststart"
+ * files (FIXES_BACKLOG #83/#85). Chromium's own `file:` loader has real range/seek support and
+ * also tolerates malformed paths (e.g. an extra leading slash) that the custom scheme does not,
+ * so any route-stored `video:` mp4 URL is rewritten back to `file:` too. `video:` is kept only
+ * for `.avi`, which feeds the ffmpeg conversion pipeline rather than direct playback.
  *
  * Extracted out of RLVDisplayService.cleanupUrl() so any other code that needs to know what
  * URL a real ride would actually use - such as VideoProbe's pre-flight decode check - stays
  * in sync with it rather than duplicating (and inevitably drifting from) this logic.
  */
-export const resolvePlaybackUrl = (url?: string, isMobile = false): string | undefined => {
+export const resolvePlaybackUrl = (url?: string): string | undefined => {
     if (!url)
         return undefined
 
@@ -24,9 +25,6 @@ export const resolvePlaybackUrl = (url?: string, isMobile = false): string | und
 
     if (fileName.startsWith('video:') && !lc.endsWith('.avi'))
         return fileName.replace('video:', 'file:')
-
-    if (fileName.startsWith('file:') && !lc.endsWith('.avi') && !isMobile)
-        return fileName.replace('file:', 'video:')
 
     if (fileName.startsWith('video:') && lc.endsWith('.avi'))
         return fileName
