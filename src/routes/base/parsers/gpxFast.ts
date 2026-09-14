@@ -27,6 +27,43 @@ const decodeEntities = (s: string): string =>
 const isTagWhitespace = (c: string): boolean => c === ' ' || c === '\t' || c === '\n' || c === '\r'
 const isAttrBoundary = (c: string): boolean => c === '=' || c === '>' || c === '/' || isTagWhitespace(c)
 
+const skipBoundary = (s: string, i: number): number => {
+    while (i < s.length && (s[i] === '<' || isAttrBoundary(s[i]))) i++
+    return i
+}
+
+const skipWhitespace = (s: string, i: number): number => {
+    while (i < s.length && isTagWhitespace(s[i])) i++
+    return i
+}
+
+const readToken = (s: string, i: number): { token: string, next: number } => {
+    const start = i
+    while (i < s.length && !isAttrBoundary(s[i])) i++
+    return { token: s.slice(start, i), next: i }
+}
+
+/** Reads one `name` or `name="value"`/`name='value'` starting at `i`. `value` is undefined when there's no '=...' part. */
+const readAttr = (s: string, i: number): { name: string, value?: string, next: number } => {
+    const { token: name, next: afterName } = readToken(s, i)
+
+    let j = skipWhitespace(s, afterName)
+    if (s[j] !== '=')
+        return { name, next: j }
+
+    j = skipWhitespace(s, j + 1)
+    const quote = s[j]
+    if (quote !== '"' && quote !== "'")
+        return { name, next: j }
+
+    const valueStart = j + 1
+    const closeIdx = s.indexOf(quote, valueStart)
+    if (closeIdx === -1)
+        return { name, next: s.length } // unterminated value - stop scanning this tag
+
+    return { name, value: s.slice(valueStart, closeIdx), next: closeIdx + 1 }
+}
+
 /**
  * Extracts name="value"/name='value' attribute pairs from a start tag's text, e.g.
  * `<trkpt lat="1.0" lon="2.0">`. A plain left-to-right scan rather than a regex - even a
@@ -35,31 +72,17 @@ const isAttrBoundary = (c: string): boolean => c === '=' || c === '>' || c === '
  */
 const parseAttrs = (tagText: string): Record<string, string> => {
     const attrs: Record<string, string> = {}
-    const len = tagText.length
     let i = 0
 
-    while (i < len) {
-        while (i < len && (tagText[i] === '<' || isAttrBoundary(tagText[i]))) i++
+    while (i < tagText.length) {
+        i = skipBoundary(tagText, i)
+        if (i >= tagText.length)
+            break
 
-        const nameStart = i
-        while (i < len && !isAttrBoundary(tagText[i])) i++
-        const name = tagText.slice(nameStart, i)
-
-        while (i < len && isTagWhitespace(tagText[i])) i++
-        if (tagText[i] !== '=') continue // no value for this token (e.g. the tag name itself)
-
-        i++ // past '='
-        while (i < len && isTagWhitespace(tagText[i])) i++
-        const quote = tagText[i]
-        if (quote !== '"' && quote !== "'") continue
-
-        i++
-        const valueStart = i
-        const closeIdx = tagText.indexOf(quote, i)
-        if (closeIdx === -1) break
-
-        if (name) attrs[name] = tagText.slice(valueStart, closeIdx)
-        i = closeIdx + 1
+        const { name, value, next } = readAttr(tagText, i)
+        if (name && value !== undefined)
+            attrs[name] = value
+        i = next
     }
     return attrs
 }
