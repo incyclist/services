@@ -92,7 +92,8 @@ const prepareMock = ( database, props) => {
         isConvertSuported:jest.fn().mockReturnValue(true),
         screenshot:jest.fn().mockResolvedValue('screenshot'),
         convert:jest.fn(),
-        convertOnline:jest.fn()
+        convertOnline:jest.fn(),
+        readHeadTail:jest.fn()
 
     }
     const access:JsonAccess = {

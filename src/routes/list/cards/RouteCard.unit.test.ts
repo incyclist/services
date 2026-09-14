@@ -1,7 +1,13 @@
+import { EventEmitter } from "events";
 import { RouteCard } from "./RouteCard";
 import { getBindings } from "../../../api";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
+import { parseMp4Boxes } from "../../../video";
+
+jest.mock("../../../video", () => ({
+    parseMp4Boxes: jest.fn(),
+}));
 
 describe('RouteCard.videoExists', () => {
 
@@ -228,6 +234,140 @@ describe('RouteCard.openSettings', () => {
         const card = createCard({ hasVideo: false } as RouteInfo, { points: [] });
 
         expect(card.openSettings().detailsAvailable).toBe(true);
+    });
+
+});
+
+describe('RouteCard.onVideoSelected', () => {
+
+    const MP4_PROBE_CHUNK_SIZE = 16 * 1024 * 1024;
+
+    const existsFile = jest.fn();
+    const readHeadTail = jest.fn();
+    const convert = jest.fn();
+    const mockParseMp4Boxes = parseMp4Boxes as jest.Mock;
+
+    const createCard = () => new RouteCard(new Route({} as RouteInfo, { video: {} } as any));
+
+    const dropped = (name: string, ext: string) => ({
+        type: 'file', url: `file:///videos/${name}.${ext}`, name, ext, dir: '/videos', delimiter: '/'
+    });
+
+    // flush pending microtask chains (the awaited binding calls inside remuxIfNotFaststart)
+    // before emitting the conversion event a test is waiting on
+    const emitOnNextTick = (emitter: EventEmitter, event: string, ...args) => {
+        setImmediate(() => emitter.emit(event, ...args));
+    };
+
+    beforeEach(() => {
+        existsFile.mockReset().mockResolvedValue(true);
+        readHeadTail.mockReset().mockResolvedValue({ head: Buffer.from('head'), tail: Buffer.from('tail') });
+        convert.mockReset();
+        mockParseMp4Boxes.mockReset();
+
+        getBindings().fs = { existsFile } as any;
+        getBindings().video = { readHeadTail, convert } as any;
+    });
+
+    test('rejects unsupported formats without touching the binding', async () => {
+        const card = createCard();
+        const result = await card.onVideoSelected(dropped('route', 'mkv') as any);
+
+        expect(result).toBe('Unsupported video format - Please select MP4 or AVI');
+        expect(readHeadTail).not.toHaveBeenCalled();
+        expect(convert).not.toHaveBeenCalled();
+    });
+
+    test('reports missing files without touching the binding', async () => {
+        existsFile.mockResolvedValue(false);
+        const card = createCard();
+        const result = await card.onVideoSelected(dropped('route', 'mp4') as any);
+
+        expect(result).toBe('Could not open file');
+        expect(readHeadTail).not.toHaveBeenCalled();
+    });
+
+    test('an already-faststart MP4 is probed but not remuxed', async () => {
+        mockParseMp4Boxes.mockReturnValue({ moovLocation: 'head' });
+
+        const card = createCard();
+        const result = await card.onVideoSelected(dropped('route', 'mp4') as any);
+
+        expect(result).toBeNull();
+        expect(readHeadTail).toHaveBeenCalledWith('file:///videos/route.mp4', MP4_PROBE_CHUNK_SIZE);
+        expect(parseMp4Boxes).toHaveBeenCalledWith(Buffer.from('head'), Buffer.from('tail'));
+        expect(convert).not.toHaveBeenCalled();
+        expect(card.getRouteDescription().videoUrl).toBe('file:///videos/route.mp4');
+        expect(card.getRouteData().video.url).toBe('file:///videos/route.mp4');
+    });
+
+    test('a non-faststart MP4 with moovLocation "tail" is remuxed, and the remuxed URL is stored', async () => {
+        mockParseMp4Boxes.mockReturnValue({ moovLocation: 'tail' });
+        const observer = new EventEmitter();
+        convert.mockResolvedValue(observer);
+
+        const card = createCard();
+        const promise = card.onVideoSelected(dropped('route', 'mp4') as any);
+        emitOnNextTick(observer, 'conversion.done', 'file:///videos/route.mp4');
+        const result = await promise;
+
+        expect(result).toBeNull();
+        expect(convert).toHaveBeenCalledWith('file:///videos/route.mp4', { enforceFast: true });
+        // the resulting file: URL is stored using the desktop video:// playback scheme,
+        // same convention as the existing (AVI) convert()/finishConversion() path
+        expect(card.getRouteDescription().videoUrl).toBe('video:///videos/route.mp4');
+        expect(card.getRouteData().video.url).toBe('video:///videos/route.mp4');
+    });
+
+    test('a non-faststart MP4 with moovLocation "not-found" is treated the same as "tail" and is remuxed', async () => {
+        mockParseMp4Boxes.mockReturnValue({ moovLocation: 'not-found' });
+        const observer = new EventEmitter();
+        convert.mockResolvedValue(observer);
+
+        const card = createCard();
+        const promise = card.onVideoSelected(dropped('route', 'mp4') as any);
+        emitOnNextTick(observer, 'conversion.done', 'file:///videos/route.mp4');
+        const result = await promise;
+
+        expect(result).toBeNull();
+        expect(convert).toHaveBeenCalledWith('file:///videos/route.mp4', { enforceFast: true });
+        expect(card.getRouteDescription().videoUrl).toBe('video:///videos/route.mp4');
+    });
+
+    test('AVI import is unaffected: the probe/remux path is never entered', async () => {
+        const card = createCard();
+        const result = await card.onVideoSelected(dropped('route', 'avi') as any);
+
+        expect(result).toBeNull();
+        expect(readHeadTail).not.toHaveBeenCalled();
+        expect(convert).not.toHaveBeenCalled();
+        expect(parseMp4Boxes).not.toHaveBeenCalled();
+        expect(card.getRouteDescription().videoUrl).toBe('file:///videos/route.avi');
+    });
+
+    test('a remux failure falls back to the original URL rather than blocking the import', async () => {
+        mockParseMp4Boxes.mockReturnValue({ moovLocation: 'tail' });
+        const observer = new EventEmitter();
+        convert.mockResolvedValue(observer);
+
+        const card = createCard();
+        const promise = card.onVideoSelected(dropped('route', 'mp4') as any);
+        emitOnNextTick(observer, 'conversion.error', new Error('ffmpeg failed'));
+        const result = await promise;
+
+        expect(result).toBeNull();
+        expect(card.getRouteDescription().videoUrl).toBe('file:///videos/route.mp4');
+    });
+
+    test('skips the check entirely when the platform binding does not support it (e.g. mobile)', async () => {
+        getBindings().video = {} as any;
+
+        const card = createCard();
+        const result = await card.onVideoSelected(dropped('route', 'mp4') as any);
+
+        expect(result).toBeNull();
+        expect(parseMp4Boxes).not.toHaveBeenCalled();
+        expect(card.getRouteDescription().videoUrl).toBe('file:///videos/route.mp4');
     });
 
 });

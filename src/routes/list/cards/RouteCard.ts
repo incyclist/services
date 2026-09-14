@@ -25,9 +25,19 @@ import { distanceBetween } from "../../../utils/geo";
 import { getUnitConversionShortcuts, Unit } from "../../../i18n";
 import { Injectable } from "../../../base/decorators";
 import { useAppState } from "../../../appstate";
+import { parseMp4Boxes } from "../../../video";
 
 
 export const DEFAULT_TITLE = 'Import Route';
+
+// Single bounded read, deliberately not an escalating ladder like the diagnostic VideoProbe
+// uses - this only needs to tell 'head' (already faststart, skip remux) apart from anything
+// else (remux, see onVideoSelected()). A moov box itself larger than this chunk can still be
+// misreported as not-found when it legitimately sits at the tail; that's an accepted, known
+// limitation (see onVideoSelected()) rather than something worth an escalation ladder for -
+// the cost is at most one avoidable remux, and remuxing an already-faststart file is a no-op
+// safety net, not a correctness bug.
+const MP4_PROBE_CHUNK_SIZE = 16 * 1024 * 1024;
 export const DEFAULT_FILTERS = [
     { name: 'Routes', extensions: ['gpx', 'epm', 'xml','rlv','pgmf'] },
     { name: 'Tracks', extensions: ['gpx'] },
@@ -928,19 +938,77 @@ export class RouteCard extends BaseCard implements Card<Route> {
             return 'Could not open file'
         }
 
+        let videoUrl = dropped.url
+        if (ext==='mp4') {
+            videoUrl = await this.remuxIfNotFaststart(dropped.url) ?? dropped.url
+        }
+
         const descr = this.getRouteDescription()
         const details = this.getRouteData()
-        descr.videoUrl = dropped.url
+        descr.videoUrl = videoUrl
         descr.videoFormat = ext
         details.video.file = undefined
-        details.video.url = dropped.url
+        details.video.url = videoUrl
         details.video.format = ext
-        
+
         this.save()
 
-        
+
         return null
 
+    }
+
+    /**
+     * Locally-imported MP4s whose `moov` metadata atom sits after `mdat` ("non-faststart" -
+     * typical of an unprocessed camera export) fail to play back on Linux desktop: the
+     * video:// scheme's file-protocol handler can't serve the seek needed to reach a moov box
+     * far from the start of a large file. Probe first (cheap, bounded reads) and only remux
+     * (expensive - scales with file size, ~70s even at 16.5GB) when the probe doesn't cleanly
+     * confirm 'head'. Returns the new (already faststart) video URL, or undefined when no
+     * remux was needed/possible - callers should fall back to the original URL in that case.
+     *
+     * Both 'tail' and 'not-found' are treated identically as "needs remuxing". This is
+     * deliberate: the probe has a known limitation (MP4_PROBE_CHUNK_SIZE only scans the last
+     * 16MB of the file for the moov signature), so a moov box itself larger than that can be
+     * misreported as 'not-found' even when it is correctly positioned at the tail. Treating
+     * both outcomes the same sidesteps fixing that separately - the cost is at most one
+     * avoidable remux, and remuxing an already-faststart file is a safe no-op, not a
+     * correctness bug.
+     *
+     * Only actually available where the platform binding implements it (desktop today) -
+     * elsewhere (e.g. mobile/browser) readHeadTail()/convert() throw 'not supported', which is
+     * caught below and treated the same as "no remux needed": keep the original file rather
+     * than blocking the import.
+     */
+    protected async remuxIfNotFaststart(url:string): Promise<string|undefined> {
+        const video = getBindings().video
+
+        if (!video)
+            return undefined
+
+        try {
+            const {head,tail} = await video.readHeadTail(url, MP4_PROBE_CHUNK_SIZE)
+            const {moovLocation} = parseMp4Boxes(head,tail)
+
+            if (moovLocation==='head')
+                return undefined
+
+            getRouteList().logEvent({message:'local mp4 import: remuxing to faststart before import', url, moovLocation})
+
+            const observer = await video.convert(url,{enforceFast:true})
+            return await new Promise<string>( (resolve,reject) => {
+                observer.once('conversion.done', (outUrl:string)=> resolve(this.toStoredVideoUrl(outUrl)))
+                observer.once('conversion.error', (err:Error)=> reject(err))
+            })
+        }
+        catch(err:any) {
+            this.logError(err,'remuxIfNotFaststart')
+            return undefined
+        }
+    }
+
+    protected toStoredVideoUrl(url:string):string {
+        return url.startsWith('file:') ? url.replace('file:','video:') : url
     }
 
     download(): Observer {
@@ -1169,8 +1237,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             const description = this.getRouteDescription()
             const details = this.getRouteData()
 
-            if (url.startsWith('file:'))
-                url = url.replace('file:','video:')
+            url = this.toStoredVideoUrl(url)
 
             description.videoUrl = url;
             description.videoFormat = 'mp4'
