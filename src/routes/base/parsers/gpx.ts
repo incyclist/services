@@ -1,8 +1,14 @@
+import { EventLogger } from "gd-eventlog";
 import { geo } from "../../../utils"
 import { num } from "../../../utils/math";
 import { valid } from "../../../utils/valid";
+import { FileInfo, getBindings } from "../../../api";
+import { XmlJSON, parseXml } from "../../../utils/xml";
+import { getFileName } from "../../../utils";
 import { RouteInfo, RoutePoint } from "../types"
 import { checkIsLoop, getRouteHash } from "../utils/route"
+import { getUtf8Data } from "./utils"
+import { tryParseGpxRaw } from "./gpxFast"
 import { XMLParser, XmlParserContext } from "./xml"
 
 
@@ -38,6 +44,46 @@ export class GPXParser extends XMLParser {
     constructor(props:GPXParserProps={} ) {
         super()
         this.props = props;
+    }
+
+    /**
+     * Reads and parses the GPX file. Tries a fast, GPX-specific tokenizer first (see
+     * gpxFast.ts) - real ride-recording GPX exports run to several MB / tens of thousands of
+     * points, and the generic xml2js-based pipeline (utils/xml.ts#parseXml) was measured at
+     * ~27x slower on a mobile JS engine than on V8 for the same file. The tokenizer only
+     * understands the handful of elements GPXParser actually reads (trk/trkseg/trkpt,
+     * lat/lon/ele/time, metadata/trk name+desc) and returns undefined for anything it isn't
+     * confident about, in which case this falls back to the exact same generic path every
+     * other XML-based format still uses.
+     */
+    async getData(file: FileInfo, data?: XmlJSON): Promise<XmlJSON> {
+        if (data)
+            return data
+
+        const onError = () => {
+            throw new Error('Could not open file: ' + getFileName(file))
+        }
+
+        const loader = getBindings().loader
+        try {
+            const res = await loader.open(file)
+            if (res.error) {
+                this.getLogger().logEvent({message:'[Parser] getData error', error:res.error})
+                onError()
+            }
+
+            const resData: string = getUtf8Data(res.data)
+
+            const fast = tryParseGpxRaw(resData)
+            if (fast)
+                return new XmlJSON(fast, 'gpx')
+
+            return await parseXml(resData)
+        }
+        catch (err: any) {
+            this.getLogger().logEvent({message:'[Parser] getData error', error:err.message})
+            onError()
+        }
     }
 
     /**
@@ -194,7 +240,7 @@ export class GPXParser extends XMLParser {
                         original: gpxPt,
                         parsed: point
                     }
-                    this.logger.logEvent({ message:'error', fn:'loadPoints',reason:'unvalid point', info})
+                    this.getLogger()?.logEvent({ message:'error', fn:'loadPoints',reason:'unvalid point', info})
                     return
                 }
 
