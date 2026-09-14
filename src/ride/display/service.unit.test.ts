@@ -443,4 +443,114 @@ describe('RideDisplayService', () => {
         })
     })
 
-})   
+    describe('stopRide', () => {
+        let service: any
+
+        const setupMocks = (s, props?: { activity?: any }) => {
+            Inject('ActivityRide', {
+                getActivity: jest.fn().mockReturnValue(props?.activity),
+                stop: jest.fn(),
+                cleanup: jest.fn(),
+            })
+            Inject('WorkoutRide', {
+                stop: jest.fn(),
+                pause: jest.fn(),
+                resume: jest.fn(),
+                inUse: jest.fn().mockReturnValue(false),
+            })
+            Inject('RouteList', {
+                getSelected: jest.fn().mockReturnValue(null),
+                getStartSettings: jest.fn().mockReturnValue({}),
+                unselect: jest.fn(),
+            })
+            Inject('DeviceRide', {
+                pause: jest.fn(),
+                stop: jest.fn(),
+                off: jest.fn(),
+                enforceSimulator: jest.fn(),
+            })
+            Inject('UIBinding', {
+                enableScreensaver: jest.fn(),
+                disableScreensaver: jest.fn(),
+            })
+
+            s.displayService = { stop: jest.fn() }
+            s.observer = new Observer()
+        }
+
+        const cleanupMocks = () => {
+            service?.reset()
+            Inject('ActivityRide', null)
+            Inject('WorkoutRide', null)
+            Inject('RouteList', null)
+            Inject('DeviceRide', null)
+            Inject('UIBinding', null)
+        }
+
+        afterEach(() => {
+            cleanupMocks()
+        })
+
+        // Regression: the "activity stopped" log used the *current* state (checked before
+        // prevState was captured) as its guard, while the redundancy short-circuit a few
+        // lines later used prevState - two different checks over almost the same thing. A
+        // ride aborted while still 'Starting' (e.g. cancelStart() mid-pairing) fell through
+        // the old guard entirely and was never logged.
+        test('logs "activity stopped" when a ride is aborted while still in Starting state', async () => {
+            service = new RideDisplayService()
+            setupMocks(service, { activity: { id: 'a1' } })
+            service.state = 'Starting'
+
+            const logEvent = jest.spyOn(service, 'logEvent')
+
+            await service.stopRide({ noStateUpdates: true })
+
+            expect(logEvent).toHaveBeenCalledWith(OC({ message: 'activity stopped', lastState: 'Starting' }))
+        })
+
+        test('does not log when cancelling before any activity was ever created', async () => {
+            service = new RideDisplayService()
+            setupMocks(service, { activity: undefined })
+            service.state = 'Starting'
+
+            const logEvent = jest.spyOn(service, 'logEvent')
+
+            await service.stopRide({ noStateUpdates: true })
+
+            expect(logEvent).not.toHaveBeenCalledWith(OC({ message: 'activity stopped' }))
+        })
+
+        test('logs once from Active state, and a redundant follow-up call does not log again', async () => {
+            service = new RideDisplayService()
+            setupMocks(service, { activity: { id: 'a1' } })
+            service.state = 'Active'
+
+            const logEvent = jest.spyOn(service, 'logEvent')
+
+            await service.stopRide({ noStateUpdates: true })
+            expect(logEvent).toHaveBeenCalledWith(OC({ message: 'activity stopped', lastState: 'Active' }))
+
+            logEvent.mockClear()
+            await service.stopRide({ noStateUpdates: true }) // redundant - state is now 'Finished'
+            expect(logEvent).not.toHaveBeenCalledWith(OC({ message: 'activity stopped' }))
+        })
+
+        // Regression: previously, a stopRide() call made while state was still the internal
+        // 'Closing' tick (left behind by an in-flight first call) passed the old log guard
+        // (state!=='Starting' && state!=='Idle') and logged a fake "activity stopped
+        // (Closing)" right before the redundancy guard returned without doing anything.
+        // 'Closing' is never a real user-facing state - it must never be logged as a stop.
+        test('does not log a fake stop for a call made while state is the internal "Closing" tick', async () => {
+            service = new RideDisplayService()
+            setupMocks(service, { activity: { id: 'a1' } })
+            service.state = 'Closing'
+
+            const logEvent = jest.spyOn(service, 'logEvent')
+
+            await service.stopRide({ noStateUpdates: true })
+
+            expect(logEvent).not.toHaveBeenCalledWith(OC({ message: 'activity stopped' }))
+        })
+    })
+
+})
