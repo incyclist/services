@@ -75,8 +75,15 @@ export class IncyclistXMLParser extends XMLParser{
                 gpxFile.url = gpxFile.url.replace(xmlBase,fileName)
         }
         else {
-            gpxFile.filename = gpxFile.filename.replace(xmlBase,fileName)
-
+            // fileInfo.filename/dir may still be percent-encoded even though fileInfo.base is not
+            // (e.g. an Android content:// URI - see mobile/src/bindings/path - decodes only the
+            // final path segment in path.parse()). A literal `.replace(xmlBase, fileName)` then
+            // silently no-ops whenever the control file's name has characters that get
+            // percent-encoded (a space being the common case), leaving gpxFile pointed at the XML
+            // container itself instead of the companion GPX file. Rebuilding from dir+delimiter
+            // instead of substring-replacing the old name sidesteps the encoding mismatch.
+            const encodedFileName = fileInfo.delimiter === '%2F' ? encodeURIComponent(fileName) : fileName
+            gpxFile.filename = `${fileInfo.dir}${fileInfo.delimiter}${encodedFileName}`
         }
 
         try {
