@@ -218,5 +218,52 @@ describe('Incyclist Parser Utils',()=>{
             })
         })
 
+        // Regression coverage for handleFileUrlPath() / buildUrlFromFile(): when info.filename is
+        // already a `file://`-prefixed URL (e.g. discovered via a mobile folder scan), substituting
+        // in a referenced companion file and rebuilding the URL must be a no-op on slash count for
+        // every path shape - it must not gain or lose a slash relative to the original.
+        describe('already file://-prefixed filename (round trip through handleFileUrlPath)', () => {
+            test('Unix absolute path keeps exactly 3 slashes after substitution',()=>{
+                const dir = '/private/var/mobile/Containers/Data/Application/ABC/Documents/routes'
+                const base = 'route.xml'
+                const fileInfo:FileInfo = {type:'file', filename:`file://${dir}/${base}`, name:'route', base, ext:'xml', dir, url:undefined, delimiter:'/'}
+
+                const res = getReferencedFileInfo(fileInfo, {file:'video.mp4'})
+                expect(res).toBe(`file://${dir}/video.mp4`)
+                expect(res).toBe('file:///private/var/mobile/Containers/Data/Application/ABC/Documents/routes/video.mp4')
+            })
+
+            test('Windows drive-letter absolute path keeps exactly 3 slashes after substitution',()=>{
+                const dir = 'C:/Users/user/Documents/routes'
+                const base = 'route.xml'
+                const fileInfo:FileInfo = {type:'file', filename:`file:///${dir}/${base}`, name:'route', base, ext:'xml', dir, url:undefined, delimiter:'/'}
+
+                const res = getReferencedFileInfo(fileInfo, {file:'video.mp4'})
+                expect(res).toBe(`file:///${dir}/video.mp4`)
+            })
+
+            test('relative path keeps exactly 2 slashes after substitution',()=>{
+                const dir = './__tests__/data'
+                const base = 'route.xml'
+                const fileInfo:FileInfo = {type:'file', filename:`file://${dir}/${base}`, name:'route', base, ext:'xml', dir, url:undefined, delimiter:'/'}
+
+                const res = getReferencedFileInfo(fileInfo, {file:'video.mp4'})
+                expect(res).toBe(`file://${dir}/video.mp4`)
+            })
+
+            test('exact malformed-vs-correct example from the bug report',()=>{
+                const dir = '/private/var/mobile/Containers/Data/Application/ABC/Documents/routes'
+                const base = 'route.xml'
+                const fileInfo:FileInfo = {type:'file', filename:`file://${dir}/${base}`, name:'route', base, ext:'xml', dir, url:undefined, delimiter:'/'}
+
+                const res = getReferencedFileInfo(fileInfo, {file:'video.mp4'})
+
+                // Correct: file:// (scheme) + /private/... (path's own leading slash) = 3 slashes total
+                expect(res).toBe('file:///private/var/mobile/Containers/Data/Application/ABC/Documents/routes/video.mp4')
+                // Must NOT regress to the malformed 2-slash form the bug produced
+                expect(res).not.toBe('file://private/var/mobile/Containers/Data/Application/ABC/Documents/routes/video.mp4')
+            })
+        })
+
     })
 })
