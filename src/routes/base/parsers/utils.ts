@@ -325,27 +325,33 @@ const decodeUtf16Be = (data: Buffer): string => {
 };
 
 export const getUtf8Data = (res: string | Buffer): string => {
-    // Use 'binary' so each char maps 1:1 to a byte, allowing BOM detection
-    // regardless of whether res was already decoded as a string or not.
-    const buf = Buffer.isBuffer(res) ? res : Buffer.from(res, 'binary');
+    // BOM sniffing only ever looks at the first 4 bytes. The previous version re-encoded
+    // the *entire* payload via Buffer.from(res,'binary') up front just to read those bytes -
+    // on a multi-MB route file, that full-string transcode (especially on RN's Buffer
+    // polyfill) cost several seconds. Sniff a small prefix instead, and only materialize
+    // a full Buffer inside the (rare) BOM branches that actually need one.
+    const prefix = Buffer.isBuffer(res) ? res.subarray(0, 4) : Buffer.from(res.slice(0, 4), 'binary');
 
     // UTF-16 BE BOM: FE FF
-    if (buf[0] === 0xFE && buf[1] === 0xFF) {
+    if (prefix[0] === 0xFE && prefix[1] === 0xFF) {
+        const buf = Buffer.isBuffer(res) ? res : Buffer.from(res, 'binary');
         return decodeUtf16Be(buf.subarray(2));
     }
 
     // UTF-16 LE BOM: FF FE
-    if (buf[0] === 0xFF && buf[1] === 0xFE) {
+    if (prefix[0] === 0xFF && prefix[1] === 0xFE) {
+        const buf = Buffer.isBuffer(res) ? res : Buffer.from(res, 'binary');
         return Buffer.from(buf.subarray(2).toString('utf16le')).toString('utf-8');
     }
 
     // Mangled BOM: FE FF or FF FE bytes were decoded as UTF-8 replacement chars (U+FFFD)
     // and re-encoded via 'binary', producing 0xFD 0xFD. Distinguish BE vs LE by null-byte position.
-    if (buf[0] === 0xFD && buf[1] === 0xFD) {
-        if (buf[2] === 0x00 && buf[3] === 0x3C) { // UTF-16 BE: <?
+    if (prefix[0] === 0xFD && prefix[1] === 0xFD) {
+        const buf = Buffer.isBuffer(res) ? res : Buffer.from(res, 'binary');
+        if (prefix[2] === 0x00 && prefix[3] === 0x3C) { // UTF-16 BE: <?
             return decodeUtf16Be(buf.subarray(2));
         }
-        if (buf[2] === 0x3C && buf[3] === 0x00) { // UTF-16 LE: <?
+        if (prefix[2] === 0x3C && prefix[3] === 0x00) { // UTF-16 LE: <?
             return Buffer.from(buf.subarray(2).toString('utf16le')).toString('utf-8');
         }
     }
@@ -354,9 +360,14 @@ export const getUtf8Data = (res: string | Buffer): string => {
     // Two cases:
     //   - string properly decoded as UTF-8: BOM appears as single U+FEFF codepoint
     //   - string decoded as binary/latin1: BOM appears as three raw bytes EF BB BF
-    const str = typeof res === 'string' ? res : buf.toString('utf-8');
+    const str = typeof res === 'string' ? res : res.toString('utf-8');
     if (str.codePointAt(0) === 0xFEFF) return str.slice(1);
-    if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) return buf.subarray(3).toString('utf-8');
+    if (prefix[0] === 0xEF && prefix[1] === 0xBB && prefix[2] === 0xBF) {
+        // res was a byte-per-char ("binary"/latin1) string or Buffer, not yet real UTF-8 text -
+        // re-decode the bytes after the BOM properly, same as the Buffer input case above.
+        const buf = Buffer.isBuffer(res) ? res : Buffer.from(res, 'binary');
+        return buf.subarray(3).toString('utf-8');
+    }
     return str;
-    
+
 }
