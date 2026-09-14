@@ -103,6 +103,14 @@ describe('gpxFast equivalence with the generic xml2js pipeline', () => {
         expect(mapped.metadata.name).toBe('RealMetadataName')
     })
 
+    it('handles single-quoted attributes (all real fixtures use double quotes, so this path is otherwise untested)', () => {
+        const xml = "<gpx><trk><trkseg><trkpt lat='1.5' lon='2.5'><ele>12</ele></trkpt></trkseg></trk></gpx>"
+        const raw = tryParseGpxRaw(xml)
+        expect(raw).toBeDefined()
+        const mapped = new XmlJSON(raw, 'gpx').json as any
+        expect(mapped.trk.trkseg.trkpt).toEqual({ lat: '1.5', lon: '2.5', ele: '12' })
+    })
+
     it('handles a self-closing trkpt with no children', () => {
         const xml = '<gpx><trk><trkseg><trkpt lat="1.0" lon="2.0"/></trkseg></trk></gpx>'
         const raw = tryParseGpxRaw(xml)

@@ -24,15 +24,42 @@ type RawGpxPoint = { $: { lat?: string, lon?: string }, ele?: string[], time?: s
 const decodeEntities = (s: string): string =>
     s.replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&quot;', '"').replaceAll('&apos;', "'").replaceAll('&amp;', '&')
 
+const isTagWhitespace = (c: string): boolean => c === ' ' || c === '\t' || c === '\n' || c === '\r'
+const isAttrBoundary = (c: string): boolean => c === '=' || c === '>' || c === '/' || isTagWhitespace(c)
+
+/**
+ * Extracts name="value"/name='value' attribute pairs from a start tag's text, e.g.
+ * `<trkpt lat="1.0" lon="2.0">`. A plain left-to-right scan rather than a regex - even a
+ * tightened regex here still reads as backtracking-risk-shaped to static analysis, and this
+ * runs once per point across tens of thousands of points.
+ */
 const parseAttrs = (tagText: string): Record<string, string> => {
     const attrs: Record<string, string> = {}
-    // name captured once, quote style resolved via a single non-alternating group afterwards -
-    // avoids duplicating the name pattern across two alternatives (needlessly complex, and a
-    // shape static analysis flags for backtracking risk).
-    const re = /([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
-    let m: RegExpExecArray | null
-    while ((m = re.exec(tagText))) {
-        attrs[m[1]] = m[2] !== undefined ? m[2] : m[3]
+    const len = tagText.length
+    let i = 0
+
+    while (i < len) {
+        while (i < len && (tagText[i] === '<' || isAttrBoundary(tagText[i]))) i++
+
+        const nameStart = i
+        while (i < len && !isAttrBoundary(tagText[i])) i++
+        const name = tagText.slice(nameStart, i)
+
+        while (i < len && isTagWhitespace(tagText[i])) i++
+        if (tagText[i] !== '=') continue // no value for this token (e.g. the tag name itself)
+
+        i++ // past '='
+        while (i < len && isTagWhitespace(tagText[i])) i++
+        const quote = tagText[i]
+        if (quote !== '"' && quote !== "'") continue
+
+        i++
+        const valueStart = i
+        const closeIdx = tagText.indexOf(quote, i)
+        if (closeIdx === -1) break
+
+        if (name) attrs[name] = tagText.slice(valueStart, closeIdx)
+        i = closeIdx + 1
     }
     return attrs
 }
