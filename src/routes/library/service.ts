@@ -459,6 +459,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             const file = this.buildFileInfo(target.controlFileUri, target.format)            
             this.importProps.routes.push( {
                 format: target.format,
+                parseState: 'waiting',
                 importable: false,
                 label: file.base,
                 id: target.controlFileUri,
@@ -495,8 +496,15 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         let result: Awaited<ReturnType<typeof RouteParser.parse>> | undefined
         const file = this.buildFileInfo(target.controlFileUri, target.format)
+        const importProps = this.importProps.routes.find( r => r.id===target.controlFileUri)??({} as RouteDisplayItem)
         try {
+
+            
+            importProps.parseState = 'parsing'            
+            observer.emit('updated',importProps)
+            
             result = await RouteParser.parse(file)
+            importProps.parseState = 'parsed'
 
             const route= new Route(result.data, result.details)
             
@@ -526,6 +534,8 @@ export class RouteLibraryScannerService extends IncyclistService {
             observer.emit('parse-result', parsed)
         }
         catch(err) {
+            importProps.parseState = 'parsed'
+
             const parsed:ParsedRoute = {
                 alreadyImported: false,
                 route: result ? new Route(result.data, result.details) : undefined,
@@ -714,6 +724,11 @@ export class RouteLibraryScannerService extends IncyclistService {
         }
     }
 
+    private getImportProps(parsed:ParsedRoute) {        
+        return this.importProps.routes.find( r=> r.id === parsed.controlFileUri)
+    }
+
+
     private buildRouteDisplayItem(parsed:ParsedRoute, observer?:IObserver):RouteDisplayItem {
         const {route,alreadyImported,parseError,format,controlFileUri} = parsed
         const descr = route?.description??{}
@@ -727,12 +742,14 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         const path = this.getBindings().path
         const info = path.parse(controlFileUri)
+        const importProps = this.getImportProps(parsed)
 
         return {
             id:route?.description?.id??info?.base,
             distance,
             label: route?.title??info?.base,
             alreadyImported,
+            parseState: importProps?.parseState??'waiting',
             importable: parseError==null,
             format,
             errorReason:parseError,

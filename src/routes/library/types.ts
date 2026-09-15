@@ -34,6 +34,8 @@ export interface ParsedRoute {
     observer?:IObserver
 }
 
+export type ParseState = 'waiting'|'parsing'|'parsed'
+
 // A display-ready row in the route selection list.
 // The service produces this — the view renders it directly.
 export interface RouteDisplayItem {
@@ -42,6 +44,7 @@ export interface RouteDisplayItem {
     distance?: FormattedNumber      // undefined until parsed
     format: RouteFormat
     alreadyImported: boolean
+    parseState: ParseState
     importable: boolean             // false if scanError or parseError is set
     errorReason?: string            // human-readable, shown inline when importable=false
     observer:IObserver
