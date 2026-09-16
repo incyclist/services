@@ -7,6 +7,8 @@ import path from 'path'
 import fs from 'fs/promises'
 import { IFileSystem } from '../../../api/fs'
 import { parseXml } from '../../../utils'
+import { createFileAccessBindingMock, FileAccessBindingMock } from '../../../../__tests__/utils/fileAccessMock'
+import { Inject } from '../../../base/decorators'
 
 describe('XMLParsers',()=>{
     let parser:XMLParser
@@ -62,6 +64,33 @@ describe('XMLParsers',()=>{
 
    })
 
+    })
+
+    describe('readAndDecode via openRouteFile (iCloud)',()=>{
+
+        let binding:FileAccessBindingMock
+        const fileInfo:FileInfo = {type:'file', filename:'/icloud/routes/route.xml', name:'route', base:'route.xml', ext:'xml',dir:'/icloud/routes',url:undefined, delimiter:'/'}
+
+        beforeEach(()=>{
+            parser = new KWTParser()
+            binding = createFileAccessBindingMock({ classifyLocation: jest.fn().mockReturnValue('icloud') })
+            getBindings().fileAccess = binding
+        })
+
+        afterEach(()=>{
+            delete (getBindings() as any).fileAccess
+            Inject('OnlineStatus', null)
+        })
+
+        test('a not-downloaded, offline iCloud file surfaces the iCloud reason, not the generic "Could not open" text',async ()=>{
+            binding.getAvailability.mockResolvedValue({ isUbiquitous:true, downloadStatus:'not-downloaded', isDownloading:false, downloadRequested:false })
+            Inject('OnlineStatus', { onlineStatus:false })
+
+            await expect((parser as any).readAndDecode(fileInfo)).rejects.toMatchObject({
+                code: 'ICLOUD_OFFLINE',
+                message: expect.stringContaining('no internet connection')
+            })
+        })
     })
 
 })

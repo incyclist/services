@@ -1,10 +1,10 @@
-import { FileInfo, getBindings } from "../../../api";
+import { FileInfo } from "../../../api";
 import { RouteApiDetail } from "../api/types";
 import { XmlJSON, parseXml } from "../../../utils/xml";
 import { XMLParser } from "./xml";
 
 import type  { ParseResult, Parser } from "./types";
-import { getUtf8Data } from "./utils";
+import { getUtf8Data, openRouteFile } from "./utils";
 
 /**
  * Parser for handling multiple XML file formats. Delegates to the appropriate specialized XML parser
@@ -82,8 +82,7 @@ export class MultipleXMLParser implements Parser<XmlJSON,RouteApiDetail> {
         if (data)
             return data
 
-        const loader = getBindings().loader
-        const res = await loader.open(info)
+        const res = await openRouteFile(info)
         if (res.error) {
             throw new Error('Could not open file')
         }

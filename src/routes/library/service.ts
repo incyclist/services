@@ -11,12 +11,17 @@ import { ParserFactory } from '../base/parsers/factory'
 import { RouteParser, useParsers } from '../base/parsers'
 import { useRouteList } from '../list/service'
 import { waitNextTick } from '../../utils'
-import { FailedRoute, FolderInfo, ImportDisplayProps, ImportedLibrary, ParsedRoute, RouteDisplayItem, ScannedRoute  } from './types'
+import { FailedRoute, FolderInfo, ImportDisplayProps, ImportedLibrary, ParsedRoute, RouteDisplayItem, RouteImportErrorCode, ScannedRoute  } from './types'
 import { useRoutesDbLoader } from '../list/loaders/db'
 import { Route } from '../base/model/route'
 import { sleep } from '../../utils/sleep'
 import { useUnitConverter } from '../../i18n'
 import { fixIncorrectFileInfo } from '../base/parsers/utils'
+import { RouteImportError, setImportCancelledCheck } from '../../fileaccess/externalFiles'
+
+/** A wait for the current route's companion files is considered "waiting for iCloud" once it
+ *  has been running this long, per `ImportDisplayProps.parseProgress.waitingForICloud`. */
+const WAITING_FOR_ICLOUD_THRESHOLD_MS = 2_000
 
 
 /**
@@ -29,9 +34,16 @@ export class RouteLibraryScannerService extends IncyclistService {
     private isCancelled: boolean = false
     private scanResult: ScannedRoute[] = []
     private importProps: ImportDisplayProps|undefined
+    /** Set while `_parseTarget` is awaiting `RouteParser.parse()` for the current route - the
+     *  basis for `parseProgress.waitingForICloud` (there's no visibility into the parser's
+     *  internal `ensureLocal` wait, so a long-running parse is used as the proxy). */
+    private currentParseStartedAt: number|undefined
 
     constructor() {
         super('RouteLibraryScanner')
+        // Lets `ExternalFileService.ensureLocal()` (via `openRouteFile()`) cancel a companion-
+        // file wait the moment the user cancels this import - see `isImportCancelled()`.
+        setImportCancelledCheck(() => this.isCancelled)
     }
 
     prepare() {
@@ -48,7 +60,29 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
     getDisplayProps():ImportDisplayProps {
-        return {hasICloudDownloadFailures:false, ...this.importProps}
+        const importProps:ImportDisplayProps = this.importProps ?? { phase:'landing', routes:[], hasICloudDownloadFailures:false }
+
+        const hasICloudDownloadFailures = importProps.routes.some(
+            r => r.errorCode==='ICLOUD_OFFLINE' || r.errorCode==='ICLOUD_DOWNLOAD_FAILED'
+        )
+
+        const parseProgress = importProps.parseProgress
+            ? { ...importProps.parseProgress, waitingForICloud: this.isWaitingForICloud() }
+            : importProps.parseProgress
+
+        return { ...importProps, hasICloudDownloadFailures, parseProgress }
+    }
+
+    /** Whether the file the current route's parse is reading has been running long enough to
+     *  count as "waiting for iCloud" - checked by the import dialog's `parseProgress`. */
+    private isWaitingForICloud():boolean {
+        return this.currentParseStartedAt!==undefined && (Date.now() - this.currentParseStartedAt) > WAITING_FOR_ICLOUD_THRESHOLD_MS
+    }
+
+    /** Whether the current import has been cancelled - checked by `ExternalFileService.ensureLocal`
+     *  (via `openRouteFile()`) while it's waiting for a companion file to download from iCloud. */
+    isImportCancelled():boolean {
+        return this.isCancelled
     }
 
 
@@ -501,10 +535,16 @@ export class RouteLibraryScannerService extends IncyclistService {
         try {
 
             
-            importProps.parseState = 'parsing'            
+            importProps.parseState = 'parsing'
             observer.emit('updated',importProps)
-            
-            result = await RouteParser.parse(file)
+
+            this.currentParseStartedAt = Date.now()
+            try {
+                result = await RouteParser.parse(file)
+            }
+            finally {
+                this.currentParseStartedAt = undefined
+            }
             importProps.parseState = 'parsed'
 
             const route= new Route(result.data, result.details)
@@ -543,11 +583,38 @@ export class RouteLibraryScannerService extends IncyclistService {
                 folderUri: target.folderUri,
                 controlFileUri: target.controlFileUri,
                 format: target.format,
-                parseError: err?.message ?? String(err)
-            }            
+                parseError: err?.message ?? String(err),
+                parseErrorCode: this.mapErrorToImportCode(err)
+            }
             this.logEvent({message:'could not parse route file',file:file.base, reason:err.message, stack:err.stack})
             observer.emit('parse-result', parsed)
         }
+    }
+
+    /**
+     * Classifies a parse/read failure into a stable `RouteImportErrorCode`, so the import
+     * dialog can map it to copy instead of matching on message text.
+     *
+     * `RouteImportError` (thrown by `openRouteFile()` for an iCloud-specific failure) already
+     * carries its code. Every other failure is classified from its message, matching today's
+     * text exactly so nothing about the existing (non-iCloud) failures changes.
+     */
+    private mapErrorToImportCode(err:any): RouteImportErrorCode {
+        if (err instanceof RouteImportError)
+            return err.code
+
+        const message = err?.message ?? String(err)
+
+        if (/AVI/i.test(message))
+            return 'AVI_NOT_SUPPORTED'
+        if (/no video/i.test(message))
+            return 'NO_VIDEO'
+        if (/^Could not (open|read)/i.test(message))
+            return 'READ_FAILED'
+        if (/pars(e|ing)/i.test(message))
+            return 'PARSE_FAILED'
+
+        return 'UNSUPPORTED'
     }
 
     private validateVideoUrl(route:Route,folderUri:string, folderFiles:ReadDirResult[]) {
@@ -656,7 +723,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             catch(err:any) {
                 const reason = err?.message ?? String(err)
                 errors++
-                failedRoutes.push({ name: route.title, reason })
+                failedRoutes.push({ name: route.title, reason, code: this.mapErrorToImportCode(err) })
                 observer.emit('ingest-error', { name: route.title, reason })
 
             }
@@ -754,6 +821,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             importable: parseError==null,
             format,
             errorReason:parseError,
+            errorCode: parsed.parseErrorCode,
             observer: observer??new Observer()
         }
 
