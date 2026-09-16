@@ -3,8 +3,7 @@ import { Injectable, Singleton } from '../base/decorators'
 import { IncyclistService } from '../base/service'
 import { sleep } from '../utils/sleep'
 import { useOnlineStatusMonitoring } from '../monitoring'
-import { EnsureLocalOptions, EnsureLocalResult } from './types'
-import type { RouteImportErrorCode } from '../routes/library/types'
+import { EnsureLocalFailure, EnsureLocalOptions, EnsureLocalResult, ExternalFileScope, ExternalFileScopeRecorder } from './types'
 
 /**
  * Companion files (XML/EPM/EPP/GPX/preview) are at most ~50-100kB, so once iCloud starts the
@@ -16,20 +15,52 @@ const INITIAL_POLL_INTERVAL_MS = 300
 const BACKOFF_POLL_INTERVAL_MS = 1_000
 
 /**
- * Stable, translatable reason a route import file could not be read. Thrown by
- * `openRouteFile()` (see `routes/base/parsers/utils.ts`) so the route parsers - and ultimately
- * the import dialog - can map a stable key to copy instead of matching on message text.
+ * A scope's recording state. Created by `beginScope()`, handed to the loader decorator through
+ * `getActiveScope()` and read back by the caller that opened it.
  */
-export class RouteImportError extends Error {
-    code: RouteImportErrorCode
+class ParseScope implements ExternalFileScopeRecorder {
 
-    constructor(code: RouteImportErrorCode, message: string) {
-        super(message)
-        this.name = 'RouteImportError'
-        this.code = code
-        // Restore the prototype chain so `instanceof RouteImportError` keeps working after
-        // compilation down-levels the `extends Error` (a well-known TS/ES5 pitfall).
-        Object.setPrototypeOf(this, RouteImportError.prototype)
+    private failure: EnsureLocalFailure|undefined
+    private failedPath: string|undefined
+    private waitStartedAt: number|undefined
+
+    constructor(
+        private readonly cancelledCheck: () => boolean,
+        private readonly onEnd: (scope: ParseScope) => void
+    ) {}
+
+    get lastFailure(): EnsureLocalFailure|undefined {
+        return this.failure
+    }
+
+    get failedFile(): string|undefined {
+        return this.failedPath
+    }
+
+    isCancelled(): boolean {
+        return this.cancelledCheck()
+    }
+
+    isWaiting(thresholdMs: number): boolean {
+        return this.waitStartedAt !== undefined && (Date.now() - this.waitStartedAt) > thresholdMs
+    }
+
+    beginWait(): void {
+        this.waitStartedAt = Date.now()
+    }
+
+    endWait(): void {
+        this.waitStartedAt = undefined
+    }
+
+    recordFailure(file: string, failure: EnsureLocalFailure): void {
+        this.failedPath = file
+        this.failure = failure
+    }
+
+    end(): void {
+        this.waitStartedAt = undefined
+        this.onEnd(this)
     }
 }
 
@@ -44,8 +75,32 @@ export class RouteImportError extends Error {
 @Singleton
 export class ExternalFileService extends IncyclistService {
 
+    /** The scopes currently open - see `beginScope()`. The innermost one records the reads. */
+    private scopes: ParseScope[] = []
+
     constructor() {
         super('ExternalFileService')
+    }
+
+    /**
+     * Brackets a unit of work that reads external files (one route's parse). The reads
+     * themselves keep reporting failures the ordinary way; the scope is how the caller learns
+     * that an external-file wait failed, or is still running, without any of the code in
+     * between having to know about it.
+     */
+    beginScope(opts?: { isCancelled?: () => boolean }): ExternalFileScope {
+        const scope = new ParseScope(
+            opts?.isCancelled ?? (() => false),
+            (ended) => { this.scopes = this.scopes.filter( s => s!==ended ) }
+        )
+
+        this.scopes.push(scope)
+        return scope
+    }
+
+    /** The scope a read happening right now should record into, if any. */
+    getActiveScope(): ExternalFileScopeRecorder|undefined {
+        return this.scopes.at(-1)
     }
 
     async ensureLocal(path: string, opts?: EnsureLocalOptions): Promise<EnsureLocalResult> {
@@ -155,24 +210,3 @@ export class ExternalFileService extends IncyclistService {
 }
 
 export const useExternalFileService = (): ExternalFileService => new ExternalFileService()
-
-type ImportCancelledCheck = () => boolean
-
-let importCancelledCheck: ImportCancelledCheck = () => false
-
-/**
- * Registered by the route library scanner (the only caller of `openRouteFile()`, see
- * `routes/base/parsers/utils.ts`) so a companion-file wait can be cancelled the same way the
- * rest of an in-progress import is.
- *
- * This indirection - rather than `openRouteFile`/`ensureLocal` importing the scanner directly -
- * exists because `routes/library/service.ts` imports `routes/base/parsers/index.ts` (to parse
- * routes), which eagerly loads every parser class at module scope (each extends `XMLParser`);
- * importing the scanner back from a parser-side module would form a require cycle and leave
- * those classes `undefined` at the point they're extended.
- */
-export const setImportCancelledCheck = (check: ImportCancelledCheck): void => {
-    importCancelledCheck = check
-}
-
-export const isImportCancelled = (): boolean => importCancelledCheck()

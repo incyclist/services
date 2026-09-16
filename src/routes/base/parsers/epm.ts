@@ -2,11 +2,10 @@ import { FileInfo, getBindings } from '../../../api';
 import { RouteApiDetail } from '../api/types';
 import { DaumEpp, DaumEppProgramEntry, RouteInfo, RoutePoint} from '../types';
 import { JSONObject } from '../../../utils/xml';
-import { BinaryReader, fixIncorrectFileInfo, openRouteFile } from './utils';
+import { BinaryReader, fixIncorrectFileInfo } from './utils';
 import { XMLParser, XmlParserContext } from './xml';
 import { getFileName } from '../../../utils';
 import { AppChannel } from '../../../api/appInfo';
-import { RouteImportError } from '../../../fileaccess/externalFiles';
 
 export interface EpmParserContext extends XmlParserContext {
     noPositions?:boolean
@@ -109,8 +108,9 @@ export class EPMParser extends XMLParser{
             throw new Error('Could not open EPP file: '+ nameInfo)
         }
 
+        const loader = getBindings().loader
         try {
-            const res = await openRouteFile(file)
+            const res = await loader.open(file)
             if (res.error) {
                 this.logger.logEvent({message:'could not load EPP file', file,reason:res.error})
                 onError()
@@ -118,9 +118,6 @@ export class EPMParser extends XMLParser{
             return res.data as Buffer
         }
         catch (err) {
-            if (err instanceof RouteImportError)
-                throw err
-
             this.logger.logEvent({message:'could not load EPP file', file,reason:err.message})
             onError()
         }

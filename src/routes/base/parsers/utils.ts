@@ -1,10 +1,7 @@
-import { FileInfo, FileLoaderResult, getBindings} from "../../../api";
+import { FileInfo,  getBindings} from "../../../api";
 import { RouteInfoText } from "../types";
 import { JSONObject } from "../../../utils/xml";
 import { LocalizedText } from "../../../i18n";
-import { getFileName } from "../../../utils";
-import { RouteImportError, isImportCancelled, useExternalFileService } from "../../../fileaccess/externalFiles";
-import type { EnsureLocalResult } from "../../../fileaccess/types";
 
 export class BinaryReader {
     protected pos:number
@@ -298,50 +295,6 @@ export const parseInformations =( informations?:Array<JSONObject>):Array<RouteIn
 
     })
 
-}
-
-/**
- * The single choke point the five route-file parsers read a control/companion file through
- * (replacing a bare `getBindings().loader.open(file)`). Before handing off to the platform
- * loader, it makes sure the file is locally present - the only case that actually does
- * anything is a not-yet-downloaded file in an iCloud folder during folder-scan import; every
- * other location (app storage - i.e. single-file import via `keepLocalCopy`, on-device, NAS,
- * Android content://) and every platform without a `fileAccess` binding resolve immediately
- * and read exactly as before.
- *
- * On an iCloud-specific failure (offline, timed out, or the download itself failed) this throws
- * a `RouteImportError` carrying a stable code and a ready-to-show message, so the caller doesn't
- * need to know about iCloud at all. Any other failure (access lost, not found, or the wait being
- * cancelled) is reported the same way `loader.open()` already reports a failure - via
- * `FileLoaderResult.error` - so each parser's existing "could not open file" handling still
- * applies unchanged.
- */
-export const openRouteFile = async (file: FileInfo): Promise<FileLoaderResult> => {
-    const path = file.filename ?? file.url
-
-    const result: EnsureLocalResult = await useExternalFileService().ensureLocal(path, {
-        isCancelled: isImportCancelled
-    })
-
-    if (result.ok) {
-        return getBindings().loader.open(file)
-    }
-
-    // The project's tsconfig doesn't enable strictNullChecks, so a plain `if (result.ok)`
-    // above doesn't narrow `result` for the compiler - cast explicitly instead.
-    const failure = result as Extract<EnsureLocalResult, { ok: false }>
-
-    switch (failure.reason) {
-        case 'offline':
-            throw new RouteImportError('ICLOUD_OFFLINE', `Could not download '${getFileName(file)}' from iCloud: no internet connection`)
-        case 'timeout':
-        case 'download-failed':
-            throw new RouteImportError('ICLOUD_DOWNLOAD_FAILED', `Could not download '${getFileName(file)}' from iCloud`)
-        default:
-            // access-lost / not-found / cancelled: no iCloud-specific copy - let the caller's
-            // own "could not open file" error handling take over, same as today.
-            return { error: { key: failure.reason, message: `Could not open file: ${getFileName(file)}` } }
-    }
 }
 
 export const fixIncorrectFileInfo = (file:Partial<FileInfo>) => {

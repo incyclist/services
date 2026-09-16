@@ -2,7 +2,6 @@ import { FileInfo } from "../../../api"
 import { GeometryParser, Geometry, GeometryPoint, VideoPoint, GeoParserData } from "./geometry"
 import type { ParseResult } from "./types"
 import * as utilsModule from "../../../utils"
-import { RouteImportError } from "../../../fileaccess/externalFiles"
 
 jest.mock("../../../api")
 jest.mock("../../../utils")
@@ -26,13 +25,6 @@ describe("GeometryParser", () => {
 
         jest.spyOn(parser as any, "getLoader").mockReturnValue(mockLoader)
         jest.spyOn(utilsModule, "getFileName").mockReturnValue("test-route")
-
-        // getData() now reads through openRouteFile() (./utils) instead of calling the loader
-        // directly - `jest.mock("./utils")` above auto-mocks it, so forward it to the same
-        // mockLoader the existing assertions in this file check.
-        jest.mocked(require("./utils").openRouteFile).mockImplementation(
-            (file: FileInfo) => mockLoader.open(file)
-        )
     })
 
     afterEach(() => {
@@ -214,13 +206,6 @@ describe("GeometryParser", () => {
             await expect(parser.getData(mockFile)).rejects.toThrow(
                 "Could not open file: test-route"
             )
-        })
-
-        test("a RouteImportError from openRouteFile (iCloud failure) propagates unchanged, not the generic message", async () => {
-            const icloudError = new RouteImportError('ICLOUD_OFFLINE', "Could not download 'test-route' from iCloud: no internet connection")
-            jest.mocked(require("./utils").openRouteFile).mockRejectedValue(icloudError)
-
-            await expect(parser.getData(mockFile)).rejects.toBe(icloudError)
         })
     })
 

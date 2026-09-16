@@ -5,9 +5,8 @@ import { RouteInfo, RoutePoint } from '../types';
 import { FileInfo, getBindings } from '../../../api';
 import { checkIsLoop, getRouteHash, getTotalElevation,getTotalDistance, updateSlopes, validateRoute } from '../utils/route'
 import { Position, Altitude } from './types';
-import { getReferencedFileInfo, getUtf8Data, openRouteFile, parseInformations } from './utils';
+import { getReferencedFileInfo, getUtf8Data, parseInformations } from './utils';
 import { getFileName } from '../../../utils';
-import { RouteImportError } from '../../../fileaccess/externalFiles';
 
 import type { ParseResult, Parser } from './types';
 
@@ -115,8 +114,9 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             throw new Error('Could not open file: '+ getFileName(file))
         }
 
+        const loader = getBindings().loader
         try {
-            const res = await openRouteFile(file)
+            const res = await loader.open(file)
             if (res.error) {
                 this.getLogger().logEvent({message:'[Parser] getData error', error:res.error})
 
@@ -126,9 +126,6 @@ export class XMLParser implements Parser<XmlJSON,RouteApiDetail> {
             return getUtf8Data(res.data)
         }
         catch (err:any) {
-            if (err instanceof RouteImportError)
-                throw err
-
             this.getLogger().logEvent({message:'[Parser] getData error', error:err.message})
             onError()
         }

@@ -17,7 +17,8 @@ import { Route } from '../base/model/route'
 import { sleep } from '../../utils/sleep'
 import { useUnitConverter } from '../../i18n'
 import { fixIncorrectFileInfo } from '../base/parsers/utils'
-import { RouteImportError, setImportCancelledCheck } from '../../fileaccess/externalFiles'
+import { useExternalFileService } from '../../fileaccess/externalFiles'
+import type { ExternalFileScope } from '../../fileaccess/types'
 
 /** A wait for the current route's companion files is considered "waiting for iCloud" once it
  *  has been running this long, per `ImportDisplayProps.parseProgress.waitingForICloud`. */
@@ -34,16 +35,12 @@ export class RouteLibraryScannerService extends IncyclistService {
     private isCancelled: boolean = false
     private scanResult: ScannedRoute[] = []
     private importProps: ImportDisplayProps|undefined
-    /** Set while `_parseTarget` is awaiting `RouteParser.parse()` for the current route - the
-     *  basis for `parseProgress.waitingForICloud` (there's no visibility into the parser's
-     *  internal `ensureLocal` wait, so a long-running parse is used as the proxy). */
-    private currentParseStartedAt: number|undefined
+    /** The external-file scope of the route currently being parsed - the basis for
+     *  `parseProgress.waitingForICloud` and for classifying a failed read. */
+    private currentScope: ExternalFileScope|undefined
 
     constructor() {
         super('RouteLibraryScanner')
-        // Lets `ExternalFileService.ensureLocal()` (via `openRouteFile()`) cancel a companion-
-        // file wait the moment the user cancels this import - see `isImportCancelled()`.
-        setImportCancelledCheck(() => this.isCancelled)
     }
 
     prepare() {
@@ -73,16 +70,11 @@ export class RouteLibraryScannerService extends IncyclistService {
         return { ...importProps, hasICloudDownloadFailures, parseProgress }
     }
 
-    /** Whether the file the current route's parse is reading has been running long enough to
-     *  count as "waiting for iCloud" - checked by the import dialog's `parseProgress`. */
+    /** Whether the current route's parse is actually waiting for a file to arrive from iCloud,
+     *  and has been waiting long enough to be worth showing - the import dialog's
+     *  `parseProgress` hint. A slow parse of a large local file never sets this. */
     private isWaitingForICloud():boolean {
-        return this.currentParseStartedAt!==undefined && (Date.now() - this.currentParseStartedAt) > WAITING_FOR_ICLOUD_THRESHOLD_MS
-    }
-
-    /** Whether the current import has been cancelled - checked by `ExternalFileService.ensureLocal`
-     *  (via `openRouteFile()`) while it's waiting for a companion file to download from iCloud. */
-    isImportCancelled():boolean {
-        return this.isCancelled
+        return this.currentScope?.isWaiting(WAITING_FOR_ICLOUD_THRESHOLD_MS) ?? false
     }
 
 
@@ -532,19 +524,32 @@ export class RouteLibraryScannerService extends IncyclistService {
         let result: Awaited<ReturnType<typeof RouteParser.parse>> | undefined
         const file = this.buildFileInfo(target.controlFileUri, target.format)
         const importProps = this.importProps.routes.find( r => r.id===target.controlFileUri)??({} as RouteDisplayItem)
+
+        // Brackets everything this route's parse reads, so a file that could not be made
+        // available locally can be reported even though the parsers report read failures the
+        // ordinary way (and some of them recover from one and return a route anyway).
+        const scope = useExternalFileService().beginScope({ isCancelled: () => this.isCancelled })
+        this.currentScope = scope
+
         try {
 
-            
+
             importProps.parseState = 'parsing'
             observer.emit('updated',importProps)
 
-            this.currentParseStartedAt = Date.now()
             try {
                 result = await RouteParser.parse(file)
             }
             finally {
-                this.currentParseStartedAt = undefined
+                scope.end()
+                this.currentScope = undefined
             }
+
+            if (scope.lastFailure) {
+                result = undefined
+                throw new Error(this.getReadFailureMessage(scope))
+            }
+
             importProps.parseState = 'parsed'
 
             const route= new Route(result.data, result.details)
@@ -583,8 +588,8 @@ export class RouteLibraryScannerService extends IncyclistService {
                 folderUri: target.folderUri,
                 controlFileUri: target.controlFileUri,
                 format: target.format,
-                parseError: err?.message ?? String(err),
-                parseErrorCode: this.mapErrorToImportCode(err)
+                parseError: scope.lastFailure ? this.getReadFailureMessage(scope) : (err?.message ?? String(err)),
+                parseErrorCode: this.mapErrorToImportCode(err, scope)
             }
             this.logEvent({message:'could not parse route file',file:file.base, reason:err.message, stack:err.stack})
             observer.emit('parse-result', parsed)
@@ -595,13 +600,20 @@ export class RouteLibraryScannerService extends IncyclistService {
      * Classifies a parse/read failure into a stable `RouteImportErrorCode`, so the import
      * dialog can map it to copy instead of matching on message text.
      *
-     * `RouteImportError` (thrown by `openRouteFile()` for an iCloud-specific failure) already
-     * carries its code. Every other failure is classified from its message, matching today's
-     * text exactly so nothing about the existing (non-iCloud) failures changes.
+     * A file that could not be made available locally is recorded in the parse scope, which
+     * says exactly why - that takes precedence. Every other failure is classified from its
+     * message, matching today's text exactly so nothing about the existing failures changes.
      */
-    private mapErrorToImportCode(err:any): RouteImportErrorCode {
-        if (err instanceof RouteImportError)
-            return err.code
+    private mapErrorToImportCode(err:any, scope?:ExternalFileScope): RouteImportErrorCode {
+        switch (scope?.lastFailure?.reason) {
+            case 'offline':
+                return 'ICLOUD_OFFLINE'
+            case 'timeout':
+            case 'download-failed':
+                return 'ICLOUD_DOWNLOAD_FAILED'
+            case 'access-lost':
+                return 'READ_FAILED'
+        }
 
         const message = err?.message ?? String(err)
 
@@ -615,6 +627,39 @@ export class RouteLibraryScannerService extends IncyclistService {
             return 'PARSE_FAILED'
 
         return 'UNSUPPORTED'
+    }
+
+    /**
+     * The text shown (and logged) for a route whose file could not be made available locally.
+     * Built here from what the scope recorded, so the reason survives even when the parser
+     * absorbed the read failure and reported its own generic message.
+     */
+    private getReadFailureMessage(scope:ExternalFileScope):string {
+        const name = this.getFileName(scope.failedFile)
+
+        switch (scope.lastFailure?.reason) {
+            case 'offline':
+                return `Could not download '${name}' from iCloud: no internet connection`
+            case 'timeout':
+            case 'download-failed':
+                return `Could not download '${name}' from iCloud`
+            case 'cancelled':
+                return `Could not open file: ${name} (import cancelled)`
+            default:
+                return `Could not open file: ${name}`
+        }
+    }
+
+    private getFileName(path?:string):string {
+        if (!path)
+            return ''
+
+        try {
+            return this.getBindings().path.parse(path).base ?? path
+        }
+        catch {
+            return path
+        }
     }
 
     private validateVideoUrl(route:Route,folderUri:string, folderFiles:ReadDirResult[]) {
