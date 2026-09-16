@@ -15,6 +15,7 @@ import type { ISerialBinding } from '../serial/types'
 import type { ICryptoBinding } from '../crypto/types'
 import type { IFetchBinding } from '../fetch/types'
 import type { IMapAvailabilityBinding } from '../mapAvailability/types'
+import type { IFileAccessBinding } from '../fileAccess/types'
 
 
 export interface IUserSettingsBinding {
@@ -44,6 +45,9 @@ export class IncyclistBindings {
     public serial: ISerialBinding
     public crypto: ICryptoBinding
     public fetch?: IFetchBinding
+    // iOS only: access to files outside the app sandbox. Absent everywhere else, and every
+    // feature built on it must stay inert when it is missing or reports isSupported()===false.
+    public fileAccess?: IFileAccessBinding
     public ant
     public ble
     public wifi

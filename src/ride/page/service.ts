@@ -1416,6 +1416,15 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
+    /**
+     * "Keep it" on the post-ride video removal notice. The availability service that owns the
+     * removal decision does not exist yet, so this is an intentional no-op for now: nothing is
+     * ever marked for removal, so there is nothing to keep.
+     */
+    onVideoKeepInstead(): void {
+        this.logEvent({ message: 'ride video action not implemented', action: 'onVideoKeepInstead' })
+    }
+
     protected mapPrevRidesRow(row: PrevRidesListDisplayProps): PrevRidesRowProps {
         const isCurrent = row.title === 'current'
         const speed = typeof row.speed === 'object' ? row.speed?.value : row.speed

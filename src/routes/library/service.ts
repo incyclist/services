@@ -37,7 +37,8 @@ export class RouteLibraryScannerService extends IncyclistService {
     prepare() {
         this.importProps= {
             phase:'landing',
-            routes:[]
+            routes:[],
+            hasICloudDownloadFailures: false
         }
     }
 
@@ -47,7 +48,7 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
     getDisplayProps():ImportDisplayProps {
-        return {...this.importProps}
+        return {hasICloudDownloadFailures:false, ...this.importProps}
     }
 
 

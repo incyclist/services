@@ -123,6 +123,11 @@ export interface    RouteInfo extends RouteBase{
     originalVideoUrl?:string;
     downloadUrl?:string,
     previewUrl?:string;
+    /**
+     * Original, external location of the preview image, kept while a private copy is still
+     * pending (or could not be made). Never set on platforms without the fileAccess binding.
+     */
+    previewSource?:string;
     points?: Array<RoutePoint>,
     segments?:Array<RouteSegment>,
     tsImported?: number,

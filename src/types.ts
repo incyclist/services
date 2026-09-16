@@ -1,6 +1,7 @@
 export type * from './base/typedefs'
 export type * from './devices/types'
 export type * from './api/types'
+export type * from './fileaccess/types'
 export type * from './routes/types'
 export type * from './activities/types'
 export type * from './ride/types'

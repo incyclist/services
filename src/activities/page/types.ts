@@ -1,12 +1,25 @@
 import { IPageService } from "../../base/pages";
 import { ActivityInfoUI } from "../base";
-import { AttachedWorkoutProps } from "../../routes/page/types";
+import { AttachedWorkoutProps, RouteVideoDisplayProps } from "../../routes/page/types";
 import { RouteInfo } from "../../routes/base/types";
 
 export interface ActivitiesPageDisplayProps {
     loading: boolean;       // indicates that the service is still loading the activities
     activities?: Array<ActivityInfoUI>,
     detailActivityId?: string
+    // Set when "Ride Again" could not start straight away because the route's video is not
+    // available yet - the UI shows a "Before you ride" step instead of navigating. null/absent
+    // means nothing is blocking, which is always the case without the fileAccess binding.
+    rideAgainCheck?: RideAgainCheckDisplayProps | null
+}
+
+export interface RideAgainCheckDisplayProps {
+    routeId: string
+    routeTitle: string
+    video: RouteVideoDisplayProps
+    // True once the video finished downloading while this step was on screen, so the UI can
+    // switch its primary button to "Start".
+    downloadedWhileOpen: boolean
 }
 
 // ---- cross-visibility (Phase 2, session 2.2) --------------------------------

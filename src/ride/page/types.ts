@@ -47,6 +47,12 @@ export interface RideMenuProps {
     // ride with a route (GPX/Video, workout-attached or not), false for a route-less Workout-only
     // ride, which has no view to select. Always populated whenever menuProps is.
     showRideSettings?: boolean
+
+    // Set only when this ride's video was downloaded just for this ride and is therefore due to
+    // be removed again when the rider leaves. `kept` flips to true once the rider chose to keep
+    // it instead. Absent means there is nothing to say - the normal case, and always the case on
+    // platforms without the fileAccess binding.
+    videoRemoval?: { pending: boolean, kept: boolean }
 }
 
 // Base -- common to all ride types. Workout-only fields (graph/steps/dashboard/title/gestureHint/
@@ -258,6 +264,10 @@ export interface IRidePageService extends RidePageCallbacks, IPageService{
     // precedent) - independent of the page-update cycle prevRides.rows on RidePageDisplayProps
     // rides on, so the mobile view can refresh row content without a full page re-render.
     getPrevRidesRows(): PrevRidesRowProps[]
+
+    // "Keep it" on the post-ride removal notice (RideMenuProps.videoRemoval): the video that was
+    // downloaded for this ride only is kept instead of being removed again.
+    onVideoKeepInstead(): void
 }
 
 // ---- Workout-specific display types 

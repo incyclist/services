@@ -15,6 +15,7 @@ import { DownloadObserver } from "../download/types";
 import { useRouteDownload } from "../download/service";
 import { useRouteLibraryScanner } from "../library/service";
 import { useWorkoutList } from "../../workouts";
+import { VideoKeepChoice } from "../video-availability/types";
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -397,6 +398,36 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         catch (err) {
             this.logError(err, 'onClearWorkoutSelection')
         }
+    }
+
+    // ---- route video actions -------------------------------------------------
+    //
+    // The video-availability service these forward to does not exist yet, so for now every
+    // action is an intentional no-op: the mobile UI can already be wired against this contract
+    // and will simply do nothing until the service lands. They must stay harmless on platforms
+    // without the fileAccess binding even once implemented.
+
+    onVideoDownloadPressed(routeId: string): void { this.logVideoActionStub('onVideoDownloadPressed', routeId) }
+    onVideoDownloadConfirmed(routeId: string, choice: VideoKeepChoice): void {
+        this.logVideoActionStub('onVideoDownloadConfirmed', routeId, { choice })
+    }
+    onVideoDownloadDismissed(routeId: string): void { this.logVideoActionStub('onVideoDownloadDismissed', routeId) }
+    onVideoStop(routeId: string): void { this.logVideoActionStub('onVideoStop', routeId) }
+    onVideoRetry(routeId: string): void { this.logVideoActionStub('onVideoRetry', routeId) }
+    onVideoKeepInstead(routeId: string): void { this.logVideoActionStub('onVideoKeepInstead', routeId) }
+    onVideoRemovePressed(routeId: string): void { this.logVideoActionStub('onVideoRemovePressed', routeId) }
+    onVideoRemoveConfirmed(routeId: string): void { this.logVideoActionStub('onVideoRemoveConfirmed', routeId) }
+    onVideoRemoveDismissed(routeId: string): void { this.logVideoActionStub('onVideoRemoveDismissed', routeId) }
+
+    async onConfirmAccess(routeId: string): Promise<void> { this.logVideoActionStub('onConfirmAccess', routeId) }
+
+    onDownloadStop(routeId: string): void { this.logVideoActionStub('onDownloadStop', routeId) }
+    onDownloadRetry(routeId: string): void { this.logVideoActionStub('onDownloadRetry', routeId) }
+    onDownloadDelete(routeId: string): void { this.logVideoActionStub('onDownloadDelete', routeId) }
+    onDownloadKeepInstead(routeId: string): void { this.logVideoActionStub('onDownloadKeepInstead', routeId) }
+
+    protected logVideoActionStub(action: string, routeId: string, info?: object) {
+        this.logEvent({ message: 'route video action not implemented', action, routeId, ...info })
     }
 
     protected getDownloadDisplayProps(): DownloadRowDisplayProps[] {
