@@ -1,3 +1,4 @@
+import nodePath from 'path'
 import { Inject } from '../../base/decorators'
 import { Observer } from '../../base/types'
 import { JsonRepository } from '../../api/repository/json'
@@ -8,6 +9,7 @@ import { FolderInfo, ParsedRoute, ScannedRoute } from './types'
 import { Route } from '../base/model/route'
 import { RouteInfo } from '../types'
 import { IObserver } from '../../types'
+import { RouteImportError } from '../../fileaccess/externalFiles'
 
 // Helpers to build mock ReadDirResult entries
 const dir = (name: string, uri: string) => ({ name, uri, isDirectory: true })
@@ -208,6 +210,163 @@ describe('RouteLibraryScannerService', () => {
                 existingId,
                 expect.objectContaining({ id: existingId, treeUri: 'content://root' })
             )
+        })
+    })
+
+    describe('parse', () => {
+
+        const makeScanned = (overrides: Partial<ScannedRoute> = {}): ScannedRoute => ({
+            controlFileUri: 'content://root/folder/route.xml',
+            folderUri: 'content://root/folder',
+            folderName: 'folder',
+            format: 'xml',
+            files: [],
+            ...overrides,
+        })
+
+        beforeEach(() => {
+            Inject('Bindings', { fs: fsMock, appInfo: appInfoMock, path: nodePath })
+            // _parseTarget() consults the route list for a duplicate-id/already-imported check;
+            // the outer beforeEach's mock doesn't define getRoute() since 'scan'/'ingest' never
+            // reach that far.
+            routeListMock.getRoute = jest.fn().mockReturnValue(undefined)
+        })
+
+        afterEach(() => {
+            jest.restoreAllMocks()
+            // always restore real timers, even if a fake-timer test failed mid-assertion and
+            // never reached its own jest.useRealTimers() call - otherwise every later test in
+            // this file hangs until Jest's real-time test timeout.
+            jest.useRealTimers()
+        })
+
+        const runParse = async (scanned: ScannedRoute | ScannedRoute[]) => {
+            const observer = service.parse(Array.isArray(scanned) ? scanned : [scanned])
+            await new Promise<void>(resolve => observer.once('parse-complete', resolve))
+        }
+
+        test('successful parse -> no errorCode, importable', async () => {
+            jest.spyOn(RouteParser, 'parse').mockResolvedValue({
+                data: { id: 'r1', title: 'route 1' } as any,
+                details: {} as any,
+            })
+
+            await runParse(makeScanned())
+
+            const [item] = service.getDisplayProps().routes
+            expect(item.importable).toBe(true)
+            expect(item.errorCode).toBeUndefined()
+            expect(service.getDisplayProps().hasICloudDownloadFailures).toBe(false)
+        })
+
+        test('a RouteImportError(ICLOUD_OFFLINE) sets errorCode and flips hasICloudDownloadFailures', async () => {
+            jest.spyOn(RouteParser, 'parse').mockRejectedValue(
+                new RouteImportError('ICLOUD_OFFLINE', "Could not download 'route.xml' from iCloud: no internet connection")
+            )
+
+            await runParse(makeScanned())
+
+            const [item] = service.getDisplayProps().routes
+            expect(item.importable).toBe(false)
+            expect(item.errorCode).toBe('ICLOUD_OFFLINE')
+            expect(item.errorReason).toContain('no internet connection')
+            expect(service.getDisplayProps().hasICloudDownloadFailures).toBe(true)
+        })
+
+        test('a RouteImportError(ICLOUD_DOWNLOAD_FAILED) also flips hasICloudDownloadFailures', async () => {
+            jest.spyOn(RouteParser, 'parse').mockRejectedValue(
+                new RouteImportError('ICLOUD_DOWNLOAD_FAILED', "Could not download 'route.xml' from iCloud")
+            )
+
+            await runParse(makeScanned())
+
+            expect(service.getDisplayProps().routes[0].errorCode).toBe('ICLOUD_DOWNLOAD_FAILED')
+            expect(service.getDisplayProps().hasICloudDownloadFailures).toBe(true)
+        })
+
+        test('a generic "Could not open file" error maps to READ_FAILED, and does not flip hasICloudDownloadFailures', async () => {
+            jest.spyOn(RouteParser, 'parse').mockRejectedValue(new Error('Could not open file: route.xml'))
+
+            await runParse(makeScanned())
+
+            expect(service.getDisplayProps().routes[0].errorCode).toBe('READ_FAILED')
+            expect(service.getDisplayProps().hasICloudDownloadFailures).toBe(false)
+        })
+
+        test('an AVI error maps to AVI_NOT_SUPPORTED', async () => {
+            jest.spyOn(RouteParser, 'parse').mockRejectedValue(new Error('AVI video not supported'))
+
+            await runParse(makeScanned())
+
+            expect(service.getDisplayProps().routes[0].errorCode).toBe('AVI_NOT_SUPPORTED')
+        })
+
+        test('a missing-video error maps to NO_VIDEO', async () => {
+            jest.spyOn(RouteParser, 'parse').mockRejectedValue(new Error('no video found'))
+
+            await runParse(makeScanned())
+
+            expect(service.getDisplayProps().routes[0].errorCode).toBe('NO_VIDEO')
+        })
+
+        test('an XML parse failure maps to PARSE_FAILED', async () => {
+            jest.spyOn(RouteParser, 'parse').mockRejectedValue(new Error('cannot parse <Track>'))
+
+            await runParse(makeScanned())
+
+            expect(service.getDisplayProps().routes[0].errorCode).toBe('PARSE_FAILED')
+        })
+
+        test('an unrecognized error maps to UNSUPPORTED', async () => {
+            jest.spyOn(RouteParser, 'parse').mockRejectedValue(new Error('something else entirely'))
+
+            await runParse(makeScanned())
+
+            expect(service.getDisplayProps().routes[0].errorCode).toBe('UNSUPPORTED')
+        })
+
+        test('hasICloudDownloadFailures is true only when at least one route has an iCloud errorCode', async () => {
+            jest.spyOn(RouteParser, 'parse')
+                .mockResolvedValueOnce({ data: { id: 'r1', title: 'ok' } as any, details: {} as any })
+                .mockRejectedValueOnce(new RouteImportError('ICLOUD_OFFLINE', 'offline'))
+
+            await runParse(makeScanned({ controlFileUri: 'content://root/folder/a.xml' }))
+            await runParse(makeScanned({ controlFileUri: 'content://root/folder/b.xml' }))
+
+            expect(service.getDisplayProps().hasICloudDownloadFailures).toBe(true)
+        })
+
+        test('parseProgress.waitingForICloud flips true only once the current parse has run past the threshold', async () => {
+            // Two routes: the first resolves immediately so the loop crosses a real await
+            // boundary (needed for the service's own 'parse-progress' listener - registered
+            // right after starting `_parse()` - to actually be attached before the *second*
+            // route's progress event fires); the second is held pending so its wait can be
+            // inspected mid-flight.
+            let resolveSecond: (v: any) => void
+            jest.spyOn(RouteParser, 'parse')
+                .mockResolvedValueOnce({ data: { id: 'r1', title: 'route 1' } as any, details: {} as any })
+                .mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve }))
+
+            const parsePromise = runParse([
+                makeScanned({ controlFileUri: 'content://root/folder/a.xml' }),
+                makeScanned({ controlFileUri: 'content://root/folder/b.xml' }),
+            ])
+
+            // let the first route finish and the second route's parse actually start
+            // (currentParseStartedAt set) - a real, short delay, since `RouteParser.parse`'s
+            // first mock resolves via a real microtask, not a fake timer.
+            await new Promise(resolve => setTimeout(resolve, 10))
+            expect(service.getDisplayProps().parseProgress?.waitingForICloud).toBe(false)
+
+            const realNow = Date.now()
+            jest.spyOn(Date, 'now').mockReturnValue(realNow + 2_001)
+            expect(service.getDisplayProps().parseProgress?.waitingForICloud).toBe(true)
+            jest.spyOn(Date, 'now').mockRestore()
+
+            resolveSecond!({ data: { id: 'r2', title: 'route 2' }, details: {} })
+            await parsePromise
+            // cleared once the parse has finished
+            expect(service.getDisplayProps().parseProgress?.waitingForICloud).toBe(false)
         })
     })
 

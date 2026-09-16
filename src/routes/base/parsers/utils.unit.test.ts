@@ -1,6 +1,9 @@
 import path from "path"
 import { FileInfo, getBindings } from "../../../api"
-import { buildVideoUrl, getReferencedFileInfo } from "./utils"
+import { buildVideoUrl, getReferencedFileInfo, openRouteFile } from "./utils"
+import { Inject } from "../../../base/decorators"
+import { RouteImportError, isImportCancelled, setImportCancelledCheck } from "../../../fileaccess/externalFiles"
+import { createFileAccessBindingMock, FileAccessBindingMock } from "../../../../__tests__/utils/fileAccessMock"
 
 describe('Incyclist Parser Utils',()=>{
 
@@ -265,5 +268,131 @@ describe('Incyclist Parser Utils',()=>{
             })
         })
 
+    })
+
+    describe('openRouteFile',()=>{
+
+        const file:FileInfo = {type:'file', filename:'/icloud/routes/route.xml', name:'route', base:'route.xml', ext:'xml', dir:'/icloud/routes', url:undefined, delimiter:'/'}
+
+        let binding:FileAccessBindingMock
+        let loaderOpen:jest.Mock
+
+        beforeEach(()=>{
+            binding = createFileAccessBindingMock({ classifyLocation: jest.fn().mockReturnValue('icloud') })
+            loaderOpen = jest.fn().mockResolvedValue({ data: '<xml/>' })
+
+            // openRouteFile() reads the plain, non-injected getBindings() both for ensureLocal's
+            // own binding lookup (ExternalFileService.getBindings() falls through to it whenever
+            // nothing is Inject()-ed) and for the final loader.open() call.
+            getBindings().fileAccess = binding
+            getBindings().loader = { open: loaderOpen }
+        })
+
+        afterEach(()=>{
+            delete (getBindings() as any).fileAccess
+            Inject('OnlineStatus', null)
+            setImportCancelledCheck(()=>false)
+            jest.clearAllMocks()
+        })
+
+        test('no binding at all -> calls loader.open(file) unchanged, exactly like today',async ()=>{
+            delete (getBindings() as any).fileAccess
+
+            const res = await openRouteFile(file)
+
+            expect(loaderOpen).toHaveBeenCalledWith(file)
+            expect(loaderOpen).toHaveBeenCalledTimes(1)
+            expect(res).toEqual({ data: '<xml/>' })
+        })
+
+        test('local (non-icloud) file -> calls loader.open(file) unchanged',async ()=>{
+            binding.classifyLocation.mockReturnValue('on-device')
+
+            const res = await openRouteFile(file)
+
+            expect(loaderOpen).toHaveBeenCalledWith(file)
+            expect(res).toEqual({ data: '<xml/>' })
+        })
+
+        test('file already local on iCloud -> calls loader.open(file) unchanged',async ()=>{
+            binding.getAvailability.mockResolvedValue({ isUbiquitous: true, downloadStatus:'downloaded', isDownloading:false, downloadRequested:false })
+
+            const res = await openRouteFile(file)
+
+            expect(loaderOpen).toHaveBeenCalledWith(file)
+            expect(res).toEqual({ data: '<xml/>' })
+        })
+
+        test('offline -> throws RouteImportError(ICLOUD_OFFLINE) without calling loader.open',async ()=>{
+            binding.getAvailability.mockResolvedValue({ isUbiquitous:true, downloadStatus:'not-downloaded', isDownloading:false, downloadRequested:false })
+            Inject('OnlineStatus', { onlineStatus:false })
+
+            await expect(openRouteFile(file)).rejects.toMatchObject({
+                code: 'ICLOUD_OFFLINE',
+                message: expect.stringContaining('no internet connection')
+            })
+            expect(loaderOpen).not.toHaveBeenCalled()
+        })
+
+        test('download timed out -> throws RouteImportError(ICLOUD_DOWNLOAD_FAILED)',async ()=>{
+            jest.useFakeTimers()
+            binding.getAvailability.mockResolvedValue({ isUbiquitous:true, downloadStatus:'not-downloaded', isDownloading:false, downloadRequested:false })
+
+            const promise = openRouteFile(file)
+            const assertion = expect(promise).rejects.toMatchObject({ code:'ICLOUD_DOWNLOAD_FAILED' })
+            await jest.advanceTimersByTimeAsync(10_000)
+            await assertion
+
+            jest.useRealTimers()
+        })
+
+        test('download itself fails -> throws RouteImportError(ICLOUD_DOWNLOAD_FAILED)',async ()=>{
+            binding.getAvailability.mockResolvedValue({
+                isUbiquitous:true, downloadStatus:'not-downloaded', isDownloading:false, downloadRequested:false,
+                downloadError:{ domain:'NSURLErrorDomain', code:-1009 }
+            })
+
+            await expect(openRouteFile(file)).rejects.toMatchObject({ code:'ICLOUD_DOWNLOAD_FAILED' })
+            expect(loaderOpen).not.toHaveBeenCalled()
+        })
+
+        test('access lost -> returns a FileLoaderResult error (not a throw), like a normal open failure',async ()=>{
+            binding.checkAccess.mockResolvedValue({ state:'denied' })
+
+            const res = await openRouteFile(file)
+
+            expect(res.error).toBeDefined()
+            expect(res.error.key).toBe('access-lost')
+            expect(loaderOpen).not.toHaveBeenCalled()
+        })
+
+        test('not found -> returns a FileLoaderResult error (not a throw)',async ()=>{
+            binding.checkAccess.mockResolvedValue({ state:'not-found' })
+
+            const res = await openRouteFile(file)
+
+            expect(res.error).toBeDefined()
+            expect(res.error.key).toBe('not-found')
+            expect(loaderOpen).not.toHaveBeenCalled()
+        })
+
+        test('cancelled via the library scanner flag -> returns a FileLoaderResult error',async ()=>{
+            binding.getAvailability.mockResolvedValue({ isUbiquitous:true, downloadStatus:'not-downloaded', isDownloading:false, downloadRequested:false })
+            setImportCancelledCheck(()=>true)
+
+            const res = await openRouteFile(file)
+
+            expect(res.error).toBeDefined()
+            expect(res.error.key).toBe('cancelled')
+            expect(loaderOpen).not.toHaveBeenCalled()
+        })
+
+        test('isImportCancelled() reflects the registered check',()=>{
+            setImportCancelledCheck(()=>true)
+            expect(isImportCancelled()).toBe(true)
+
+            setImportCancelledCheck(()=>false)
+            expect(isImportCancelled()).toBe(false)
+        })
     })
 })

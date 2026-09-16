@@ -1,12 +1,13 @@
 
 import {TacxParser} from './TacxParser'
-import { FileInfo } from '../../../../api'
+import { FileInfo, getBindings } from '../../../../api'
 import path from 'path'
 import fs from 'fs/promises'
 import { IFileSystem } from '../../../../api/fs'
 import { Inject } from '../../../../base/decorators'
 import { IncyclistBindings } from '../../../../api/bindings'
 import { loadFile } from '../../../../../__tests__/utils/loadFile'
+import { createFileAccessBindingMock, FileAccessBindingMock } from '../../../../../__tests__/utils/fileAccessMock'
 
 const load = async (file: any) => {
     let data: Buffer | undefined, error: any
@@ -40,6 +41,10 @@ describe('TacxParser', () => {
     beforeEach(() => {
         mockBindings = createMockBindings()
         Inject('Bindings', mockBindings)
+        // openRouteFile() (routes/base/parsers/utils.ts) reads the file via the plain,
+        // non-injected getBindings() once ensureLocal() has resolved - mirror the loader here
+        // too, not just on the Inject()-only mock the class's own @Injectable getBindings() sees.
+        getBindings().loader = { open: load }
         parser = new TacxParser()
     })
 
@@ -199,6 +204,30 @@ describe('TacxParser', () => {
         expect(details.video?.file).toBeDefined()
         expect(details.video?.format).toBeDefined()
         expect(details.video?.mappings).toBeDefined()
+    })
+
+    describe('getData via openRouteFile (iCloud)',()=>{
+
+        let binding:FileAccessBindingMock
+
+        beforeEach(()=>{
+            binding = createFileAccessBindingMock({ classifyLocation: jest.fn().mockReturnValue('icloud') })
+            Inject('Bindings', { ...mockBindings, fileAccess: binding })
+            parser = new TacxParser()
+        })
+
+        test('a cancelled companion-file wait surfaces as a normal FileLoaderResult error (not a throw)',async ()=>{
+            binding.getAvailability.mockResolvedValue({ isUbiquitous:true, downloadStatus:'not-downloaded', isDownloading:false, downloadRequested:false })
+
+            const { setImportCancelledCheck } = require('../../../../fileaccess/externalFiles')
+            setImportCancelledCheck(() => true)
+
+            const fileInfo:FileInfo = {type:'file', filename:'/icloud/routes/IS_West.rlv', name:'IS_West', base:'IS_West.rlv', ext:'rlv',dir:'/icloud/routes',url:undefined, delimiter:'/'}
+
+            await expect((parser as any).getData(fileInfo)).rejects.toThrow('Could not open file')
+
+            setImportCancelledCheck(() => false)
+        })
     })
 
 })

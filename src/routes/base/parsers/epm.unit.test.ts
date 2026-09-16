@@ -1,6 +1,8 @@
 import { loadFile } from '../../../../__tests__/utils/loadFile'
 import { FileInfo, getBindings } from '../../../api'
 import { EPMParser } from './epm'
+import { createFileAccessBindingMock, FileAccessBindingMock } from '../../../../__tests__/utils/fileAccessMock'
+import { Inject } from '../../../base/decorators'
 
 describe('IncyclistParser',()=>{
     let parser:EPMParser
@@ -98,8 +100,38 @@ describe('IncyclistParser',()=>{
     
         })
 
-        
 
+
+    })
+
+    describe('loadEpp via openRouteFile (iCloud)',()=>{
+
+        let binding:FileAccessBindingMock
+
+        beforeEach(()=>{
+            parser = new EPMParser()
+            binding = createFileAccessBindingMock({ classifyLocation: jest.fn().mockReturnValue('icloud') })
+            getBindings().fileAccess = binding
+        })
+
+        afterEach(()=>{
+            delete (getBindings() as any).fileAccess
+            Inject('OnlineStatus', null)
+        })
+
+        test('an iCloud download failure for the EPP companion surfaces the iCloud reason',async ()=>{
+            binding.getAvailability.mockResolvedValue({
+                isUbiquitous:true, downloadStatus:'not-downloaded', isDownloading:false, downloadRequested:false,
+                downloadError:{ domain:'NSURLErrorDomain', code:-1009 }
+            })
+
+            const fileInfo:FileInfo = {type:'file', filename:'/icloud/routes/San_Leo.epm', name:'San_Leo', base:'San_Leo.epm', ext:'epm',dir:'/icloud/routes',url:undefined, delimiter:'/'}
+
+            await expect((parser as any).loadEpp({fileInfo})).rejects.toMatchObject({
+                code: 'ICLOUD_DOWNLOAD_FAILED',
+                message: expect.stringContaining('from iCloud')
+            })
+        })
     })
 
 })

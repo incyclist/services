@@ -4,7 +4,8 @@ import { getFileName } from "../../../utils"
 import { RouteBase, RouteInfo, RoutePoint, VideoMapping } from "../types"
 
 import type { Parser, ParseResult } from "./types"
-import { getUtf8Data } from "./utils"
+import { getUtf8Data, openRouteFile } from "./utils"
+import { RouteImportError } from "../../../fileaccess/externalFiles"
 
 export type Geometry = {
     
@@ -99,7 +100,7 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
         }
 
         try {
-            const res = await this.getLoader().open(file)
+            const res = await openRouteFile(file)
             if (res.error) {
                 onError()
             }
@@ -107,7 +108,10 @@ export class GeometryParser implements Parser<Geometry,GeoParserData> {
 
             return JSON.parse(cleaned) as unknown as Geometry
         }
-        catch {
+        catch (err) {
+            if (err instanceof RouteImportError)
+                throw err
+
             onError()
         }
 

@@ -10,9 +10,10 @@ import { RLVFileReader } from "./rlv";
 import { TacxFileReader } from "./TacxReader";
 
 import type { Parser, ParseResult } from "../types";
-import { buildVideoUrl, fixIncorrectFileInfo } from "../utils";
+import { buildVideoUrl, fixIncorrectFileInfo, openRouteFile } from "../utils";
 import { EventLogger } from "gd-eventlog";
 import { Injectable } from "../../../../base/decorators";
+import { RouteImportError } from "../../../../fileaccess/externalFiles";
 
 /**
  * Context object used internally during Tacx file parsing.
@@ -73,7 +74,6 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
      * @throws Error if file cannot be opened or read
      */
     async getData(info: FileInfo, _data?: ArrayBuffer): Promise<ArrayBuffer> {
-        const loader = this.getBindings().loader
         info.encoding = 'binary'
 
         const onError = ()=> {
@@ -82,7 +82,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
 
 
         try {
-            const res = await loader.open(info)
+            const res = await openRouteFile(info)
             if (res.error) {
                 this.logger.logEvent({message:'[Parser] getData error', error:res.error})
                 onError()
@@ -94,6 +94,9 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
             return data
         }
         catch (err:any) {
+            if (err instanceof RouteImportError)
+                throw err
+
             this.logger.logEvent({message:'[Parser] getData error', error:err.message})
 
             onError()

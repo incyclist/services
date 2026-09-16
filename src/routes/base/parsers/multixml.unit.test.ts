@@ -6,6 +6,7 @@ import { getUtf8Data } from './utils';
 import * as api from '../../../api';
 import { ParseResult, Parser } from './types';
 import { RouteApiDetail } from '../api/types';
+import { RouteImportError } from '../../../fileaccess/externalFiles';
 
 jest.mock('./utils');
 jest.mock('../../../utils/xml');
@@ -64,6 +65,14 @@ describe('MultipleXMLParser', () => {
 
     (getUtf8Data as jest.Mock).mockReturnValue('<xml></xml>');
     (parseXml as jest.Mock).mockResolvedValue(mockXmlData);
+
+    // getData() now reads through openRouteFile() (./utils) instead of calling the loader
+    // directly - `jest.mock('./utils')` above auto-mocks it, so forward it to
+    // api.getBindings().loader.open(), same as the loader call it replaces, so the assertions
+    // in this file (on api.getBindings and on the returned data) keep working unchanged.
+    (require('./utils').openRouteFile as jest.Mock).mockImplementation(
+      (file: FileInfo) => api.getBindings().loader.open(file)
+    );
   });
 
   afterEach(() => {
@@ -279,6 +288,14 @@ describe('MultipleXMLParser', () => {
 
       expect(api.getBindings).toHaveBeenCalled();
       expect(result).toBe(mockXmlData);
+    });
+
+    test('a RouteImportError from openRouteFile (iCloud failure) propagates unchanged, not the generic message', async () => {
+      const icloudError = new RouteImportError('ICLOUD_DOWNLOAD_FAILED', "Could not download 'test.xml' from iCloud");
+      (require('./utils').openRouteFile as jest.Mock).mockRejectedValue(icloudError);
+
+      const parser = new MultipleXMLParser([]);
+      await expect(parser.getData(mockFileInfo)).rejects.toBe(icloudError);
     });
   });
 });
