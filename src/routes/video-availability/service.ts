@@ -22,6 +22,8 @@ const QUEUE_CONCURRENCY = 2
 const QUERY_TIMEOUT_MS = 4_000
 /** How often a running download is re-queried. */
 const POLL_INTERVAL_MS = 3_000
+/** How long after leaving a ride the visit's due-for-removal videos are given before eviction runs. */
+const RIDE_LEFT_SETTLE_DELAY_MS = 2_000
 /**
  * Free space asked for on top of the video itself before a download is offered. A multi-GB
  * transfer that fills the volume completely would take the rest of the app (activities, route
@@ -151,6 +153,9 @@ export class RouteVideoAvailabilityService extends IncyclistService {
     /** Paths mounted by a running ride. Never evicted. Populated by the ride integration. */
     protected activeRidePaths: Array<string> = []
 
+    /** Routes latched by the current ride visit - what `onRideLeft` decides "for this ride" against. */
+    protected rideRouteIds: Array<string> = []
+
     protected queue: Array<{ path: string, routeId: string }> = []
     protected queued = new Set<string>()
     protected inFlight = 0
@@ -217,8 +222,9 @@ export class RouteVideoAvailabilityService extends IncyclistService {
                 await this.query(file.path, { force: true, probeAccess: true })
         }
 
-        // TODO (ride integration task): reconcile journal entries against what the query found -
-        // iOS can free a downloaded file on its own, and those entries have to be dropped silently.
+        // C9: iOS can free a downloaded file on its own between visits - drop those journal
+        // entries silently now, before the state is read back out.
+        await this.reconcile(files.map(file => file.path))
 
         const status = this.aggregate(routeId, files.map(file => this.getFileState(file)))
         this.emitRouteUpdate(routeId)
@@ -486,6 +492,7 @@ export class RouteVideoAvailabilityService extends IncyclistService {
         this.sessionChoices = {}
         this.rows = {}
         this.activeRidePaths = []
+        this.rideRouteIds = []
         this.queue = []
         this.queued = new Set<string>()
         this.inFlight = 0
@@ -493,52 +500,161 @@ export class RouteVideoAvailabilityService extends IncyclistService {
         this.journalStarted = false
     }
 
-    // --- ride integration (next task) -------------------------------------------------
+    // --- ride integration ---------------------------------------------------------------
 
     /**
      * Whether a video file can be played right now, for the ride gate.
      *
-     * TODO (ride integration task): resolve the path's state and report it. Until then nothing is
-     * gated, which is the behaviour on every platform without the binding anyway.
+     * Reads the same cache `refresh()` and the list queries already fill - it does not itself pay
+     * for a platform query, so it is only as accurate as the last time this path was refreshed.
+     * `unknown` (binding unsupported, or nothing known yet) counts as playable: this gate must
+     * never block a ride start on a platform, or a file, it cannot actually reason about.
      */
-    async getPlayability(_path: string): Promise<{ playable: boolean, state: RouteVideoState }> {
-        return { playable: true, state: 'unknown' }
-    }
+    async getPlayability(path: string): Promise<{ playable: boolean, state: RouteVideoState }> {
+        if (!this.isSupported())
+            return { playable: true, state: 'unknown' }
 
-    /** TODO (ride integration task): latch the visit's routes and the paths the ride mounted. */
-    onRideStarted(_routeIds: Array<string>, _activePaths: Array<string>): void {
-        // deliberately empty until the ride integration lands
-    }
+        this.startJournal()
 
-    /** TODO (ride integration task): track which files the running ride has mounted. */
-    setActiveRidePaths(_paths: Array<string>): void {
-        // deliberately empty until the ride integration lands
+        const state = this.getFileState(this.describeFile({ path, routeId: '' })).state
+        return { playable: state === 'ready' || state === 'unknown', state }
     }
 
     /**
-     * TODO (ride integration task): move this visit's `awaiting-ride` entries to `removal-due`
-     * (persisted first) and settle them after a short delay.
+     * A ride visit started. Latches the routes it covers - what `onRideLeft` later checks its
+     * `awaiting-ride` entries against - and hands the actively mounted paths on to
+     * `setActiveRidePaths`.
      */
-    async onRideLeft(): Promise<void> {
-        // deliberately empty until the ride integration lands
+    onRideStarted(routeIds: Array<string>, activePaths: Array<string>): void {
+        if (!this.isSupported())
+            return
+
+        this.rideRouteIds = routeIds
+        this.setActiveRidePaths(activePaths)
+        this.logEvent({ message: 'ride visit started', routeIds })
     }
 
-    /** TODO (ride integration task): the ride summary's "removed when you leave" line. */
-    getRideRemovalNotice(_routeIds: Array<string>): { pending: boolean, kept: boolean } | undefined {
-        return undefined
+    /** Which files the running ride currently has mounted. Never evicted while listed here. */
+    setActiveRidePaths(paths: Array<string>): void {
+        if (!this.isSupported())
+            return
+        this.activeRidePaths = paths
+    }
+
+    /**
+     * The ride visit ended. Every `awaiting-ride` entry for one of this visit's routes is owed
+     * back to the device: its status moves to `removal-due` - persisted first, so a kill right
+     * after this call still finishes the removal at the next launch - and cleanup runs a short
+     * while later, once the ride's own teardown has had a chance to let go of the file.
+     *
+     * Does not touch `activeRidePaths` itself: clearing those is the caller's job, once it is safe
+     * to do so.
+     */
+    async onRideLeft(): Promise<void> {
+        if (!this.isSupported())
+            return
+
+        await this.journal.init()
+
+        const dueAt = Date.now()
+        const routeIds = this.rideRouteIds
+
+        for (const entry of this.journal.getAll()) {
+            if (entry.status !== 'awaiting-ride' || !routeIds.includes(entry.routeId))
+                continue
+
+            await this.journal.markRemovalDue(entry.path, dueAt)
+        }
+
+        this.logEvent({ message: 'ride visit left', routeIds })
+
+        this.scheduleRideLeftSettle()
+    }
+
+    /** The ride summary's "removed when you leave" line, for one or more routes ridden this visit. */
+    getRideRemovalNotice(routeIds: Array<string>): { pending: boolean, kept: boolean } | undefined {
+        if (!this.isSupported())
+            return undefined
+
+        let pending = false
+        let kept = false
+
+        for (const routeId of routeIds) {
+            for (const entry of this.journal.getForRoute(routeId)) {
+                if (entry.choice === 'this-ride')
+                    pending = true
+                if (entry.choice === 'keep')
+                    kept = true
+            }
+        }
+
+        return pending || kept ? { pending, kept } : undefined
     }
 
     /**
      * The app came back to the foreground. Cached answers are dropped, because anything could have
-     * happened while the app was away.
-     *
-     * TODO (ride integration task): also reconcile journal entries against files iOS has freed on
-     * its own, and settle what is due.
+     * happened while the app was away; journal entries are then reconciled against what iOS has
+     * actually freed on its own (C9), and whatever cleanup is now due is settled.
      */
     async onForeground(): Promise<void> {
         if (!this.isSupported())
             return
+
         this.invalidate()
+        await this.reconcile()
+        await this.settle()
+    }
+
+    /** Runs `settle()` after the ride-left grace period, guarded against a reset in between. */
+    protected scheduleRideLeftSettle(): void {
+        if (this.disposed)
+            return
+
+        const timer = setTimeout(() => {
+            if (this.disposed)
+                return
+            this.settle().catch(err => this.logError(err as Error, 'onRideLeftSettle'))
+        }, RIDE_LEFT_SETTLE_DELAY_MS)
+
+        // a pending grace-period timer must never be a reason for the process to stay alive
+        ;(timer as unknown as { unref?: () => void })?.unref?.()
+    }
+
+    /**
+     * C9 - iOS can evict a download this app started without telling it. Each affected journal
+     * entry is re-queried; one found not local, not downloading, and without a download error is
+     * dropped silently, whatever its status: there is nothing left to remove, restore, or wait
+     * for, and the route simply goes back to showing what the platform now reports. Never a
+     * failure or an abandon event - this is the expected shape of the platform behaviour, not a
+     * problem with the download.
+     *
+     * Runs over every journal entry when called with no argument (`onForeground` - the app has no
+     * idea what changed while it was away), or just the given paths when the caller already knows
+     * which files it cares about (`refresh(routeId)`).
+     */
+    protected async reconcile(paths?: Array<string>): Promise<void> {
+        await this.journal.init()
+
+        const entries = this.journal.getAll().filter(entry => !paths || paths.includes(entry.path))
+
+        for (const entry of entries)
+            await this.reconcileEntry(entry)
+    }
+
+    protected async reconcileEntry(entry: VideoDownloadJournalEntry): Promise<void> {
+        const availability = await this.query(entry.path, { force: true })
+        if (!availability)
+            return
+
+        if (!this.isNotDownloaded(availability) || availability.isDownloading || availability.downloadError)
+            return
+
+        await this.journal.discard(entry.path)
+        delete this.rows[entry.path]
+        delete this.sessionChoices[entry.routeId]
+
+        this.logEvent({ message: 'icloud download reconciled', routeId: entry.routeId, reason: 'no-longer-local' })
+        this.emitRouteUpdate(entry.routeId)
     }
 
     // --- per-file state ---------------------------------------------------------------

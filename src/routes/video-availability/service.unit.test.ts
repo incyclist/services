@@ -154,6 +154,14 @@ describe('RouteVideoAvailabilityService', () => {
 
             expect(await service.remove('r1')).toBe('failed')
 
+            // ride integration: latching, tracking and reconciliation are all no-ops too
+            service.onRideStarted(['r1'], ['/icloud/Videos/a.mp4'])
+            expect(service.rideRouteIds).toEqual([])
+            service.setActiveRidePaths(['/icloud/Videos/a.mp4'])
+            expect(service.activeRidePaths).toEqual([])
+            await service.onRideLeft()
+            expect(service.getRideRemovalNotice(['r1'])).toBeUndefined()
+
             // nothing probed, nothing started, nothing written
             expect(repo.write).not.toHaveBeenCalled()
             expect(folderAccess.getAccessState).not.toHaveBeenCalled()
@@ -664,6 +672,10 @@ describe('RouteVideoAvailabilityService', () => {
             memSetup()
             await service.download('r1', 'this-ride')
 
+            // the transfer is genuinely under way by the time refresh() re-queries it - a static
+            // "not downloaded" answer here would be indistinguishable from C9's "iOS evicted it"
+            availability['/icloud/Videos/a.mp4'] = notDownloaded({ isDownloading: true })
+
             expect(service.needsConfirmation('r1')).toBe(false)
             expect((await service.refresh('r1')).confirmedThisSession).toBe(true)
         })
@@ -1171,6 +1183,305 @@ describe('RouteVideoAvailabilityService', () => {
 
         test('a ready route has no reason to show', () => {
             expect(reasonFor({ accessState: 'readable', availability: downloaded() })).toBeUndefined()
+        })
+    })
+
+    // ------------------------------------------------------------------ ride integration
+
+    describe('ride integration', () => {
+
+        test('onRideStarted latches the visit\'s routes and mounts the active paths', () => {
+            setup({ routes: [route('r1', '/icloud/Videos/a.mp4')] })
+
+            service.onRideStarted(['r1', 'r2'], ['/icloud/Videos/a.mp4'])
+
+            expect(service.rideRouteIds).toEqual(['r1', 'r2'])
+            expect(service.activeRidePaths).toEqual(['/icloud/Videos/a.mp4'])
+            expect(messages()).toContain('ride visit started')
+        })
+
+        test('setActiveRidePaths can also be called on its own, as segments change mid-ride', () => {
+            setup({ routes: [route('r1', '/icloud/Videos/a.mp4')] })
+
+            service.setActiveRidePaths(['/icloud/Videos/b.mp4'])
+
+            expect(service.activeRidePaths).toEqual(['/icloud/Videos/b.mp4'])
+        })
+
+        test('getPlayability reports a ready file as playable', async () => {
+            setup({ routes: [route('r1', '/icloud/Videos/a.mp4')], covered: ['/icloud/Videos'] })
+            setCache('/icloud/Videos/a.mp4', { accessState: 'readable', availability: downloaded() })
+
+            expect(await service.getPlayability('/icloud/Videos/a.mp4')).toEqual({ playable: true, state: 'ready' })
+        })
+
+        test('getPlayability reports a not-downloaded file as not playable', async () => {
+            setup({ routes: [route('r1', '/icloud/Videos/a.mp4')], covered: ['/icloud/Videos'] })
+            setCache('/icloud/Videos/a.mp4', { accessState: 'readable', availability: notDownloaded() })
+
+            expect(await service.getPlayability('/icloud/Videos/a.mp4'))
+                .toEqual({ playable: false, state: 'not-downloaded' })
+        })
+
+        test('getPlayability treats an indeterminate query as unknown, and does not gate on it', async () => {
+            setup({ routes: [route('r1', '/icloud/Videos/a.mp4')], covered: ['/icloud/Videos'] })
+            setCache('/icloud/Videos/a.mp4', { indeterminate: true })
+
+            expect(await service.getPlayability('/icloud/Videos/a.mp4')).toEqual({ playable: true, state: 'unknown' })
+        })
+
+        test('getPlayability reads the existing cache and never queries the platform itself', async () => {
+            setup({ routes: [route('r1', '/icloud/Videos/a.mp4')], covered: ['/icloud/Videos'] })
+
+            await service.getPlayability('/icloud/Videos/a.mp4')
+
+            expect(binding.getAvailability).not.toHaveBeenCalled()
+        })
+
+        test('getRideRemovalNotice reports pending for a this-ride entry and kept for a keep entry', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4'), route('r2', '/icloud/Videos/b.mp4')],
+                journal: {
+                    '/icloud/Videos/a.mp4': {
+                        path: '/icloud/Videos/a.mp4', routeId: 'r1', choice: 'this-ride',
+                        status: 'downloading', startedAt: 1, evictAttempts: 0
+                    },
+                    '/icloud/Videos/b.mp4': {
+                        path: '/icloud/Videos/b.mp4', routeId: 'r2', choice: 'keep',
+                        status: 'downloading', startedAt: 1, evictAttempts: 0
+                    }
+                }
+            })
+            await service.journal.init()
+
+            expect(service.getRideRemovalNotice(['r1'])).toEqual({ pending: true, kept: false })
+            expect(service.getRideRemovalNotice(['r2'])).toEqual({ pending: false, kept: true })
+            expect(service.getRideRemovalNotice(['r1', 'r2'])).toEqual({ pending: true, kept: true })
+        })
+
+        test('getRideRemovalNotice is undefined when neither choice is on record', async () => {
+            setup({ routes: [route('r1', '/icloud/Videos/a.mp4')] })
+            await service.journal.init()
+
+            expect(service.getRideRemovalNotice(['r1'])).toBeUndefined()
+        })
+
+        test('leaving persists removal-due before settling, and leaves other visits\' entries alone', async () => {
+            jest.useFakeTimers()
+            try {
+                setup({
+                    routes: [route('r1', '/icloud/Videos/a.mp4'), route('r2', '/icloud/Videos/b.mp4')],
+                    covered: ['/icloud/Videos'],
+                    journal: {
+                        '/icloud/Videos/a.mp4': {
+                            path: '/icloud/Videos/a.mp4', routeId: 'r1', choice: 'this-ride',
+                            status: 'awaiting-ride', startedAt: 1, evictAttempts: 0
+                        },
+                        '/icloud/Videos/b.mp4': {
+                            path: '/icloud/Videos/b.mp4', routeId: 'r2', choice: 'this-ride',
+                            status: 'awaiting-ride', startedAt: 1, evictAttempts: 0
+                        }
+                    }
+                })
+                await service.journal.init()
+                availability['/icloud/Videos/a.mp4'] = notDownloaded()
+
+                // only r1 was visited; the active path is left empty so the settle below can evict
+                service.onRideStarted(['r1'], [])
+                repo.write.mockClear()
+
+                await service.onRideLeft()
+
+                // persisted before any eviction was attempted
+                expect(repo.write).toHaveBeenCalled()
+                expect(binding.evict).not.toHaveBeenCalled()
+                expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toMatchObject({ status: 'removal-due' })
+                // r2's entry belongs to a route this visit never touched
+                expect(service.journal.getEntry('/icloud/Videos/b.mp4')).toMatchObject({ status: 'awaiting-ride' })
+                expect(messages()).toContain('ride visit left')
+
+                jest.advanceTimersByTime(2_000)
+                await jest.runOnlyPendingTimersAsync()
+
+                expect(binding.evict).toHaveBeenCalledWith('/icloud/Videos/a.mp4')
+                expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toBeUndefined()
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+
+        test('a file the ride is still (or again) playing is never evicted, even once due', async () => {
+            jest.useFakeTimers()
+            try {
+                setup({
+                    routes: [route('r1', '/icloud/Videos/a.mp4')],
+                    covered: ['/icloud/Videos'],
+                    journal: {
+                        '/icloud/Videos/a.mp4': {
+                            path: '/icloud/Videos/a.mp4', routeId: 'r1', choice: 'this-ride',
+                            status: 'awaiting-ride', startedAt: 1, evictAttempts: 0
+                        }
+                    }
+                })
+                await service.journal.init()
+                availability['/icloud/Videos/a.mp4'] = notDownloaded()
+
+                service.onRideStarted(['r1'], ['/icloud/Videos/a.mp4'])
+
+                await service.onRideLeft()
+
+                jest.advanceTimersByTime(2_000)
+                await jest.runOnlyPendingTimersAsync()
+
+                expect(binding.evict).not.toHaveBeenCalled()
+                expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toMatchObject({ status: 'removal-due' })
+            }
+            finally {
+                jest.useRealTimers()
+            }
+        })
+    })
+
+    // ------------------------------------------------------------------ C9 reconciliation
+
+    describe('C9 reconciliation', () => {
+
+        const journalEntry = (over: Record<string, any> = {}) => ({
+            path: '/icloud/Videos/a.mp4', routeId: 'r1', choice: 'keep',
+            status: 'downloading', startedAt: 1, evictAttempts: 0, ...over
+        })
+
+        test('a downloading entry whose file is no longer local is dropped silently on refresh', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4')],
+                covered: ['/icloud/Videos'],
+                journal: { '/icloud/Videos/a.mp4': journalEntry() }
+            })
+            availability['/icloud/Videos/a.mp4'] = notDownloaded()
+
+            const status = await service.refresh('r1')
+
+            expect(status).toMatchObject({ state: 'not-downloaded' })
+            expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toBeUndefined()
+            expect(logged.find(e => e.message === 'icloud download reconciled'))
+                .toMatchObject({ routeId: 'r1', reason: 'no-longer-local' })
+            expect(logged.some(e => /fail|abandon/i.test(e.message))).toBe(false)
+        })
+
+        test('an awaiting-ride entry is reconciled the same way', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4')],
+                covered: ['/icloud/Videos'],
+                journal: { '/icloud/Videos/a.mp4': journalEntry({ status: 'awaiting-ride', choice: 'this-ride' }) }
+            })
+            availability['/icloud/Videos/a.mp4'] = notDownloaded()
+
+            await service.refresh('r1')
+
+            expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toBeUndefined()
+        })
+
+        test('a stopping entry is reconciled the same way', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4')],
+                covered: ['/icloud/Videos'],
+                journal: { '/icloud/Videos/a.mp4': journalEntry({ status: 'stopping', dueAt: 1 }) }
+            })
+            availability['/icloud/Videos/a.mp4'] = notDownloaded()
+
+            await service.refresh('r1')
+
+            expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toBeUndefined()
+        })
+
+        test('a removal-due entry is reconciled the same way', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4')],
+                covered: ['/icloud/Videos'],
+                journal: { '/icloud/Videos/a.mp4': journalEntry({ status: 'removal-due', dueAt: 1 }) }
+            })
+            availability['/icloud/Videos/a.mp4'] = notDownloaded()
+
+            await service.refresh('r1')
+
+            expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toBeUndefined()
+        })
+
+        test('a download still arriving is left for the poller, not reconciled away', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4')],
+                covered: ['/icloud/Videos'],
+                journal: { '/icloud/Videos/a.mp4': journalEntry() }
+            })
+            availability['/icloud/Videos/a.mp4'] = notDownloaded({ isDownloading: true })
+
+            await service.refresh('r1')
+
+            expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toBeDefined()
+        })
+
+        test('a download that failed with an error is left for the ordinary failure path', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4')],
+                covered: ['/icloud/Videos'],
+                journal: { '/icloud/Videos/a.mp4': journalEntry() }
+            })
+            availability['/icloud/Videos/a.mp4'] =
+                notDownloaded({ downloadError: { domain: 'NSURLErrorDomain', code: -1 } })
+
+            await service.refresh('r1')
+
+            expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toBeDefined()
+        })
+
+        test('a file that is genuinely still local is left alone', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4')],
+                covered: ['/icloud/Videos'],
+                journal: { '/icloud/Videos/a.mp4': journalEntry() }
+            })
+            availability['/icloud/Videos/a.mp4'] = downloaded()
+
+            await service.refresh('r1')
+
+            expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toBeDefined()
+        })
+
+        test('reconciliation runs across the whole journal on foreground, not just one route', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4'), route('r2', '/icloud/Videos/b.mp4')],
+                covered: ['/icloud/Videos'],
+                journal: {
+                    '/icloud/Videos/a.mp4': journalEntry(),
+                    '/icloud/Videos/b.mp4': journalEntry({ routeId: 'r2', path: '/icloud/Videos/b.mp4' })
+                }
+            })
+            availability['/icloud/Videos/a.mp4'] = notDownloaded()
+            availability['/icloud/Videos/b.mp4'] = notDownloaded()
+
+            await service.onForeground()
+
+            expect(service.journal.getEntry('/icloud/Videos/a.mp4')).toBeUndefined()
+            expect(service.journal.getEntry('/icloud/Videos/b.mp4')).toBeUndefined()
+        })
+
+        test('a route update is emitted and session memory cleared for the reconciled route', async () => {
+            setup({
+                routes: [route('r1', '/icloud/Videos/a.mp4')],
+                covered: ['/icloud/Videos'],
+                journal: { '/icloud/Videos/a.mp4': journalEntry() }
+            })
+            availability['/icloud/Videos/a.mp4'] = notDownloaded()
+            service.sessionChoices['r1'] = 'keep'
+
+            const updates: Array<string> = []
+            service.on('route-video-update', (routeId: string) => updates.push(routeId))
+
+            await service.refresh('r1')
+
+            expect(updates).toContain('r1')
+            expect(service.sessionChoices['r1']).toBeUndefined()
         })
     })
 })
