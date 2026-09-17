@@ -102,7 +102,13 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
 
             const cw = await this.getIntervalsApi().getCalendarWorkouts({oldest,days:30, ext:'zwo'}) ?? []
 
-            const cycling =cw.filter( w => w.type === 'Ride')
+            
+            const cycling =cw.filter( w => w.type === 'Ride' || w.type==='VirtualRide')
+
+            this.logger.logEvent({message:'workout sync', externalApp:'intervals', 
+                    oldest: oldest.toLocaleDateString(), cntTotal:cw.length, cntCycling:cycling.length,
+                    workouts: cw.map(cw=>`${cw.type}:${cw.name}`).join('|')
+                })
 
             await this.parseWorkouts(cycling)
 
@@ -170,9 +176,11 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
                     // if workout does not exist yet then emit add event
                     if (!isExisting) {
                         this.observer.emit('added', w,'intervals')
+                        this.logEvent({message:'workout added', externalApp:'intervals', workout:w.workout?.name})
                     }
                     else if (updated && updated.valueOf() > this.lastSyncTS) {
                         this.observer.emit('updated', w,'intervals')
+                        this.logEvent({message:'workout updated', externalApp:'intervals', workout:w.workout?.name})
                     }
                 }
 
@@ -197,6 +205,7 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
             const deletedWorkouts = this.workouts.filter(w => !events.some(e => e.id.toString() === w.workoutId))
             for (const w of deletedWorkouts) {
                 this.observer.emit('deleted', w, 'intervals')
+                this.logEvent({message:'workout deleted', externalApp:'intervals', workout:w.workout?.name})
             }
 
             // delete workouts from array

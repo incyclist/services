@@ -94,7 +94,7 @@ export type IntervalsCalendarEvent = {
     icu_training_load: number,
     start_date_local: string
     end_date_local: string
-    type: 'Ride'|'Run'|'Swim'|'Walk'|'Weight Training'
+    type: 'Ride'|'Run'|'Swim'|'Walk'|'Weight Training'|'VirtualRide'|'MountainBikeRide'|'GravelRide'
     calendar_id: number
     uid: string
     athlete_id: string    
