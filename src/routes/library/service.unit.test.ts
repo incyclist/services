@@ -212,6 +212,62 @@ describe('RouteLibraryScannerService', () => {
                 expect.objectContaining({ id: existingId, treeUri: 'content://root' })
             )
         })
+
+        test('logs diagnostic event when iCloud placeholder files are present', async () => {
+            const logEventSpy = jest.spyOn(service, 'logEvent')
+            fsMock.readdir.mockResolvedValue([
+                file('route.xml', 'content://root/route.xml'),
+                file('.route.xml.icloud', 'content://root/.route.xml.icloud'),
+                file('.video.mp4.icloud', 'content://root/.video.mp4.icloud'),
+            ])
+
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+
+            expect(logEventSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'iCloud placeholder files detected in folder',
+                    uri: 'content://root',
+                    count: 2,
+                    firstPlaceholder: '.route.xml.icloud'
+                })
+            )
+        })
+
+        test('does not log diagnostic event when no iCloud placeholder files present', async () => {
+            const logEventSpy = jest.spyOn(service, 'logEvent')
+            fsMock.readdir.mockResolvedValue([
+                file('route.xml', 'content://root/route.xml'),
+                file('ride.mp4', 'content://root/ride.mp4'),
+            ])
+
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+
+            expect(logEventSpy).not.toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: 'iCloud placeholder files detected in folder'
+                })
+            )
+        })
+
+        test('returns unchanged routes when iCloud placeholder files are present', async () => {
+            fsMock.readdir.mockResolvedValue([
+                file('route.xml', 'content://root/route.xml'),
+                file('.route.xml.icloud', 'content://root/.route.xml.icloud'),
+            ])
+
+            const discovered: ScannedRoute[] = []
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            observer.on('scan-result', r => discovered.push(r))
+
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+
+            // Should discover only the non-placeholder route
+            expect(discovered).toHaveLength(1)
+            expect(discovered[0].format).toBe('xml')
+            expect(discovered[0].controlFileUri).toBe('content://root/route.xml')
+        })
     })
 
     describe('parse', () => {
