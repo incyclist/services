@@ -51,7 +51,6 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             }
             
         }
-
     
         if (changed) {
             this.isDirty = true;

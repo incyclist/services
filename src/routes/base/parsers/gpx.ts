@@ -58,10 +58,13 @@ export class GPXParser extends XMLParser {
             return data
 
         const resData = await this.readAndDecode(file)
-
+        
         const fast = tryParseGpxRaw(resData)
-        if (fast)
-            return new XmlJSON(fast, 'gpx')
+        if (fast) {
+            const json = new XmlJSON(fast)            
+            return json
+        }
+        
 
         return await parseXml(resData)
     }
