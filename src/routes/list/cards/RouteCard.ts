@@ -25,6 +25,7 @@ import { distanceBetween } from "../../../utils/geo";
 import { getUnitConversionShortcuts, Unit } from "../../../i18n";
 import { Injectable } from "../../../base/decorators";
 import { useAppState } from "../../../appstate";
+import { usePreviewStore } from "../../previews/store";
 
 
 export const DEFAULT_TITLE = 'Import Route';
@@ -195,6 +196,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
     previewMissing() {
         try {
             const descr = this.getRouteDescription()
+            // a pending copy means the source is not readable right now: a screenshot attempt
+            // would run against a video we also cannot read
+            if (valid(descr.previewSource))
+                return false
             return descr.hasVideo && !valid(descr.previewUrl)
         }
         catch(err:any) {
@@ -1269,7 +1274,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     protected async deleteRoute():Promise<void> {
-        await this.getRepo().delete(this.route)        
+        await this.getRepo().delete(this.route)
+        await this.getPreviewStore().release(this.route.description.id)
     }
 
     protected logError( err:Error, fn:string) {
@@ -1359,6 +1365,11 @@ export class RouteCard extends BaseCard implements Card<Route> {
     @Injectable
     protected getAppState() {
         return useAppState()
+    }
+
+    @Injectable
+    protected getPreviewStore() {
+        return usePreviewStore()
     }
 
     protected getRouteDownload() {
