@@ -19,6 +19,7 @@ import { useUnitConverter } from '../../i18n'
 import { fixIncorrectFileInfo } from '../base/parsers/utils'
 import { useExternalFileService } from '../../fileaccess/externalFiles'
 import type { ExternalFileScope } from '../../fileaccess/types'
+import { usePreviewStore } from '../previews/store'
 
 /** A wait for the current route's companion files is considered "waiting for iCloud" once it
  *  has been running this long, per `ImportDisplayProps.parseProgress.waitingForICloud`. */
@@ -775,6 +776,16 @@ export class RouteLibraryScannerService extends IncyclistService {
             try {
 
                 observer.emit('ingest-progress', { current: i + 1, total, currentName: route.title})
+
+                try {
+                    await this.getPreviewStore().adoptOnImport(route)
+                }
+                catch (err) {
+                    // a preview is optional - a route is never rejected over one, and the
+                    // copy is retried later
+                    this.logError(err as Error, 'adoptPreview', { title: route?.title })
+                }
+
                 await db.save(route,true)
                 service.addRoute(route,'user')
                 importedRoutes.push(route)                
@@ -918,6 +929,11 @@ export class RouteLibraryScannerService extends IncyclistService {
     @Injectable 
     protected getRoutesDBLoader() {
         return useRoutesDbLoader() 
+    }
+
+    @Injectable
+    protected getPreviewStore() {
+        return usePreviewStore()
     }
 
     @Injectable

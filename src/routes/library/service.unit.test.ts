@@ -614,6 +614,74 @@ describe('RouteLibraryScannerService', () => {
             expect(result.errors).toBe(1)
             expect(result.failedRoutes).toHaveLength(1)
         })
+
+        describe('preview adoption', () => {
+
+            test('without the preview store nothing touches the description', async () => {
+                const parsed = makeRoute({}, { title: 'r1', previewUrl: '/icloud/Videos/A/preview.png' })
+                observer = service.ingest([parsed])
+
+                const result: any = await new Promise(resolve => observer.once('ingest-complete', resolve))
+
+                expect(result.imported).toBe(1)
+                expect(result.errors).toBe(0)
+                expect(parsed.route.description.previewUrl).toBe('/icloud/Videos/A/preview.png')
+                expect(parsed.route.description.previewSource).toBeUndefined()
+            })
+
+            test('adopts the preview before the route is saved', async () => {
+                const order: Array<string> = []
+                const adoptOnImport = jest.fn(async () => { order.push('adopt') })
+                dbMock.save = jest.fn(async () => { order.push('save') })
+                Inject('PreviewStore', { isEnabled: () => true, adoptOnImport })
+
+                const parsed = makeRoute({}, { title: 'r1' })
+                observer = service.ingest([parsed])
+                await new Promise(resolve => observer.once('ingest-complete', resolve))
+
+                expect(adoptOnImport).toHaveBeenCalledWith(parsed.route)
+                expect(order).toEqual(['adopt', 'save'])
+
+                Inject('PreviewStore', null)
+            })
+
+            test('a failed preview copy does not fail the import', async () => {
+                const adoptOnImport = jest.fn(async (route: Route) => {
+                    route.description.previewUrl = undefined
+                    route.description.previewSource = '/icloud/Videos/A/preview.png'
+                })
+                Inject('PreviewStore', { isEnabled: () => true, adoptOnImport })
+
+                const parsed = makeRoute({}, { title: 'r1', previewUrl: '/icloud/Videos/A/preview.png' })
+                observer = service.ingest([parsed])
+
+                const result: any = await new Promise(resolve => observer.once('ingest-complete', resolve))
+
+                expect(result.imported).toBe(1)
+                expect(result.errors).toBe(0)
+                expect(dbMock.save).toHaveBeenCalled()
+                expect(parsed.route.description.previewSource).toBe('/icloud/Videos/A/preview.png')
+
+                Inject('PreviewStore', null)
+            })
+
+            test('a throwing preview store does not fail the import', async () => {
+                Inject('PreviewStore', {
+                    isEnabled: () => true,
+                    adoptOnImport: jest.fn().mockRejectedValue(new Error('store unavailable'))
+                })
+
+                const parsed = makeRoute({}, { title: 'r1' })
+                observer = service.ingest([parsed])
+
+                const result: any = await new Promise(resolve => observer.once('ingest-complete', resolve))
+
+                expect(result.imported).toBe(1)
+                expect(result.errors).toBe(0)
+
+                Inject('PreviewStore', null)
+            })
+        })
     })
 
     // FIXES_BACKLOG.md item #40 - production crash: RouteImportDialog's own unmount effect

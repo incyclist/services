@@ -33,6 +33,7 @@ import { useAppState } from "../../appstate";
 import { useUnitConverter } from "../../i18n";
 import clone from "../../utils/clone";
 import { IObserver } from "../../types";
+import { usePreviewStore } from "../previews/store";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -1045,7 +1046,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
                     const route = new Route(data,details)
                     route.description.tsImported = Date.now()
-                    
+
+                    const previews = this.getPreviewStore()
+                    if (previews.isEnabled())
+                        await previews.adoptOnImport(route)
+
                     const existing = this.findCard(route)
     
                     if (existing ) {   
@@ -1763,7 +1768,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
                 if (existingPreview) {
                     this.logEvent({message:'found preview', title:descr.title, id:descr.id, video:videoUrl, existingPreview})
-                    descr.previewUrl = fileUrl ? `file:///${existingPreview}` : existingPreview
+                    const source = fileUrl ? `file:///${existingPreview}` : existingPreview
+
+                    const store = this.getPreviewStore()
+                    if (store.isEnabled()) {
+                        // where the folder may become unreadable later, only a private copy is
+                        // a usable preview - and undefined shows the existing fallback
+                        await store.adoptOnImport(descr, source)
+                        return descr.previewUrl
+                    }
+
+                    descr.previewUrl = source
                     return descr.previewUrl
                 }
 
@@ -1798,6 +1813,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (!videoUrl)
             return;
 
+        if (!await this.getPreviewStore().isScreenshotAllowed(descr))
+            return;
+
         if (videoUrl.startsWith('http') ) {
             props = {size:'384x216',outDir}             
         }
@@ -1811,6 +1829,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             try {
                 this.logEvent({message:'creating preview', title:descr.title, id:descr.id, video:videoUrl})
                 descr.previewUrl = await video.screenshot( videoUrl, props)
+                await this.getPreviewStore().adoptGenerated(descr, descr.previewUrl)
                 this.logEvent({message:'preview created' , title:descr.title, id:descr.id, video:videoUrl, preview:descr.previewUrl})
                 return descr.previewUrl
 
@@ -2005,6 +2024,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable
     protected getBindings() {
         return getBindings()
+    }
+
+    @Injectable
+    protected getPreviewStore() {
+        return usePreviewStore()
     }
 
     reset() {
