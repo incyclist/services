@@ -401,6 +401,20 @@ export class RouteLibraryScannerService extends IncyclistService {
             return
         }
 
+        // Diagnostic: detect iCloud placeholder files (e.g., ".photo.icloud", ".gpx.icloud").
+        // These indicate files that are stored in iCloud but not yet downloaded locally.
+        // The scanner processes them normally — bindings are responsible for resolving them.
+        const iCloudPlaceholders = entries.filter(e => /^\.(.+)\.icloud$/.test(e.name))
+        if (iCloudPlaceholders.length > 0) {
+            const firstName = iCloudPlaceholders[0].name
+            this.logEvent({
+                message: 'iCloud placeholder files detected in folder',
+                uri,
+                count: iCloudPlaceholders.length,
+                firstPlaceholder: firstName
+            })
+        }
+
         progress.scannedFolders++
         observer.emit('scan-progress', { scannedFolders: progress.scannedFolders })
 
