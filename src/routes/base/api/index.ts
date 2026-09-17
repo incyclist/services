@@ -1,11 +1,12 @@
 import {EventLogger} from 'gd-eventlog'
 import { RouteApiDescription, RouteApiDetail, RouteDescriptionQuery } from "./types";
-import { AxiosInstance } from "axios";
+import { AxiosInstance, AxiosRequestConfig } from "axios";
 import { DEFAULT_DOMAIN, NO_CACHE, ROUTE_API } from './consts'
 import { IncyclistRestApiClient } from '../../../api';
 import { useUserSettings } from '../../../settings';
 import { RoutePoint } from '../types';
 import { Injectable } from '../../../base/decorators';
+import { LatLng } from '../../../utils/geo';
 
 export default class IncyclistRoutesApi { 
 
@@ -106,6 +107,43 @@ export default class IncyclistRoutesApi {
             return undefined
         }
     }
+
+    async getCountry(query:LatLng|Array<LatLng>):Promise<string|undefined> {
+
+        if (!query)
+            return
+
+        let url;
+        if (Array.isArray(query)) {
+            const points = query.slice(0,100).map( (p:LatLng) => `${p.lat},${p.lng}` ).join(';')
+            url = `/country?points=${points}`
+        }
+        else {
+            const {lat,lng} = query            
+            url = `/country?lat=${lat}&lng=${lng}`
+        }
+
+        
+        try {
+
+            const conf: AxiosRequestConfig = {};
+            conf.validateStatus = (status: number) => {
+                return (status >= 200 && status < 300) || status == 404
+            }
+
+            const res = await this._get(url,conf ) 
+            if (res.status===404)
+                return;
+            
+            return res.data.country?.toUpperCase()
+        }
+        catch(err) {
+            this.logError(err,'reload')
+        }
+
+    }
+
+
 
     async reload():Promise<void> {
         try {

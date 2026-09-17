@@ -1292,7 +1292,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 route.updateCountryFromPoints()
                     .then( (updated)=> {
                         if (updated) {
-                            this.logEvent({message:'route updated (country)',route:route.title})
+                            this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
                             this.db.save(route,false)
                         }
                     })
@@ -1318,7 +1318,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const updated = await route.updateCountryFromPoints()
         
         if (updated) {             
+            this.logEvent({message:'route updated (country)',route:route.title, country: route?.description?.country})
             card.updateRoute(route)
+            this.db.save(route,false)
         }        
     }
 
@@ -1359,9 +1361,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
                 if (!route.description.country) {
                     route.updateCountryFromPoints()
-                        .then( ()=> {
-                            this.logEvent({message:'preload route updated', route:card?.getData()?.title, reason:'country added'})
-                            this.db.save(route,false)
+                        .then( (updated)=> {
+                            if (updated) {
+                                this.logEvent({message:'preload route updated', route:card?.getData()?.title, reason:'country added', country:route?.description?.country})
+                                this.db.save(route,false)
+                            }
+                            else {
+                                this.logEvent({message:'preload route undefined country', route:card?.getData()?.title})
+                            }
                         })
                 }
 
@@ -1619,6 +1626,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (route.details && route.description && !route.description.country) {
             route.updateCountryFromPoints()
                 .then(() => {
+                    this.logEvent({message:'route updated (country)',route:route.title, country: route?.description?.country})
                     this.db.save(route, false);
                 })
                 .catch(err => {

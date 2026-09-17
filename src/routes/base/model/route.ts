@@ -82,10 +82,10 @@ export class Route {
         if (!this._description.country && this._description.hasGpx) {
             
             try {
-                const iso =  await this.getCountries().getIsoFromLatLng(this._description?.points?.[0]??this._details?.points?.[0])
+                const iso =  await this.getCountries().getIsoFromLatLng(this._description?.points??this._details?.points)
                 if (iso) {
                     updated = true;
-                    this._description.country = iso
+                    this._description.country = iso                    
                 }
                 
             }

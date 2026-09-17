@@ -262,7 +262,12 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
 
 
         if (!descr.country)   {
-            await route.updateCountryFromPoints();
+            this.logEvent({message:'route update required (country)',route:route.title})
+            const updated = await route.updateCountryFromPoints();
+            if (updated) {
+                this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
+                // no need to save here. The route entry will be saved once it is completely initialized
+            }
         }
 
         descr.points = points

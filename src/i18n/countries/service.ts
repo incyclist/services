@@ -1,10 +1,9 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
-import { CountryList, CountryOverpassResult } from "./model";
+import { CountryList  } from "./model";
 import defaultList from './countries.json'
 import { LatLng } from "../../utils/geo";
-import { useOverpassApi } from "../../services";
-import { Injectable } from "../../base/decorators";
+import IncyclistRoutesApi from "../../routes/base/api";
 
 /**
  * Service for managing country information and resolving geographic coordinates to country ISO codes.
@@ -117,11 +116,10 @@ export class Countries extends IncyclistService {
     }
 
     /**
-     * Resolve geographic coordinates to a country ISO code using the Overpass API.
+     * Resolve geographic coordinates to a country ISO code using the Incyclist Routes API.
      *
-     * Queries the Overpass API to find administrative boundaries at the given latitude/longitude,
-     * then extracts the ISO 3166-1 alpha-2 country code from the results. When multiple countries
-     * are found at the given location, returns the one that matches the service's country list.
+     * Queries the Routes API to find administrative boundaries at the given latitude/longitude,
+     * then extracts the ISO 3166-1 alpha-2 country code from the results. 
      *
      * @param point - Geographic point with latitude and longitude
      * @returns Promise resolving to the ISO 3166-1 alpha-2 country code, or undefined if:
@@ -133,47 +131,12 @@ export class Countries extends IncyclistService {
      * const iso = await countries.getIsoFromLatLng({ lat: 48.8566, lng: 2.3522 }); // 'FR' (Paris)
      * const iso = await countries.getIsoFromLatLng({ lat: 51.5074, lng: -0.1278 }); // 'GB' (London)
      */
-    async getIsoFromLatLng(point: LatLng): Promise<string> {
+    async getIsoFromLatLng(point: LatLng|Array<LatLng>): Promise<string> {
+        const api = IncyclistRoutesApi.getInstance()        
+        return api.getCountry(point)
 
-        return 
-        /* --- Temporary disabled: I need to find a solution to reduce load on the overpass API ---
-
-        const { lat, lng } = point;
-        const query = `[out:json][timeout:10];is_in(${lat},${lng})->.a;rel(pivot.a)['admin_level'='2']['boundary'='administrative'];out tags;`;
-
-        try {
-            const result = await this.getOverpassApi().query(query) as unknown as CountryOverpassResult;
-            if (!result?.elements)
-                return undefined;
-
-            const isos = result.elements
-                .map(el => el.tags['ISO3166-1:alpha2'])
-                .filter((iso): iso is string => !!iso)
-                .map(iso => iso.toUpperCase());
-
-            if (isos.length < 2)
-                return isos[0];
-            return isos.find(iso => this.getList().countries[iso] !== undefined);
-        }
-        catch {
-            return undefined;
-        }
-            */
     }
 
-    /**
-     * Get the Overpass API instance for querying geographic boundaries.
-     *
-     * Uses the @Injectable decorator to allow dependency injection for testing.
-     * In production, returns the default Overpass API client.
-     *
-     * @returns The Overpass API client instance
-     * @internal Used internally for geographic coordinate resolution. Can be mocked during testing.
-     */
-    @Injectable
-    protected getOverpassApi() {
-        return useOverpassApi()
-    }
 
 }
 
