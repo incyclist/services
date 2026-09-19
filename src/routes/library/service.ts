@@ -241,21 +241,38 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     // simple single GPX file import
     private async importSingleGpxRoute  (fileInfo: FileInfo, observer:IObserver) {
-        this.logEvent({message:'import single GPX route'})
+
+        const name = fileInfo.url??fileInfo.filename??fileInfo.name
+        this.logEvent({message:'import single route file',file:name, type:fileInfo.ext})
+
         const list = this.getRouteList()
         const db = this.getRoutesDBLoader()
         
         try {
             const {data,details} = await RouteParser.parse(fileInfo)
             const route = new Route(data,details)
+
+            this.logEvent({message:'import single route file success',file:name})
+            
+            const existing = list.findCard(route)
+            if (existing ) {   
+                this.logEvent({message:'route updated (import)',route:route.title})
+            }
+
             route.description.tsImported = Date.now()
             await db.save(route,true)
-            list.addRoute(route,'user')
+            list.addRoute(route,existing? 'system': 'user')
 
+            if (existing ) {   
+                // route item was replaced in-place, force UI to refresh
+                existing.card.emitUpdate()
+            }
 
             observer.emit('success',route)
         }
         catch(err:any) {
+            this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
+
             observer.emit('error', err.message)
         }
 
