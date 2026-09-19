@@ -8,7 +8,7 @@ import { getLocalizedText } from "../utils/localization";
 
 export class Route {
 
-    private readonly _description:RouteInfo
+    private _description:RouteInfo
     private _details:RouteApiDetail
     
 
@@ -28,6 +28,10 @@ export class Route {
         return points
     }
 
+    replace(update:Route) {
+        this._description = {...update._description}
+        this._details = {...update._details}
+    }
 
     addDetails(details:RouteApiDetail) {
         this._details = details

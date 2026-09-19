@@ -42,7 +42,8 @@ describe('RouteLibraryScannerService', () => {
             addRoute: jest.fn(),
             pauseListUpdates: jest.fn(),
             resumeListUpdates: jest.fn(),
-            emitLists:jest.fn()
+            emitLists:jest.fn(),
+            findCard:jest.fn()
 
         }
 
@@ -286,8 +287,8 @@ describe('RouteLibraryScannerService', () => {
             const result: any = await new Promise(resolve =>
                 observer.once('ingest-complete', resolve)
             )
-            expect(result.skipped).toBe(2)
-            expect(result.imported).toBe(1)
+            expect(result.skipped).toBe(1)
+            expect(result.imported).toBe(2)
         })
 
         test('emits ingest-error and continues on per-route failure', async () => {

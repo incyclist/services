@@ -1031,6 +1031,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 const importCard = importId? null : importCards[idx]
                 
                 const name = file.url??file.filename??file.name
+
+                this.logEvent({message:'import single route file',file:name, type:file.ext})
             
                 try {
 
@@ -1045,14 +1047,18 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
                     const route = new Route(data,details)
                     route.description.tsImported = Date.now()
+                    this.logEvent({message:'import single route file success',file:name})
                     
                     const existing = this.findCard(route)
     
                     if (existing ) {   
                         existing.list.remove( existing.card)
+                        this.logEvent({message:'route updated (import)',route:route.title})
+
                     }
                     else  {
                         this.routes.push(route)
+                        this.logEvent({message:'route added',route:route.title})
                     }
                         
                     const card = new RouteCard(route,{list:this.myRoutes})
@@ -1078,7 +1084,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                    
                 }
                 catch(err) {
-                    this.logEvent({message:'import failed', name, reason:err.message, stack:err.stack})
+                    this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
                     if (importId&&observer)
                         observer?.emit('error',importId, err.message)
                     if (importCard)
@@ -1270,10 +1276,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * @param source Whether the addition originated from a user action or the system.
      */
 
-    public addRoute(route:Route,source:'user'|'system'='system'):void {
+    public addRoute(route:Route,source:'user'|'system'|'import'='system'):void {
 
         // route already present
-        if (this.getRoute(route.description.id)) {
+        const existing = source==='system' ? this.getRoute(route.description.id) :
+            this.routes.find( r=>r.description?.id===route.description.id)
+           
+
+        if (existing ) {
+            existing.replace(route)
+
             return;
         }
 
@@ -1292,8 +1304,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 route.updateCountryFromPoints()
                     .then( (updated)=> {
                         if (updated) {
-                            this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
+                            this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})                            
                             this.db.save(route,false)
+                            const cardInfo = this.findCard(route)
+                            cardInfo?.card?.emitUpdate()
+                                
                         }
                     })
             }
@@ -1310,7 +1325,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if ( list.getId()==='myRoutes')
             card.enableDelete(true)    
         
-        this.emitLists('updated',{source})                
+        this.emitLists('updated',{source: source==='user' ? 'user':'system'})                
 
     }
 
@@ -1856,7 +1871,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
 
-    protected findCard(target:Route|string):{ card:RouteCard, list:CardList<Route>} {
+    findCard(target:Route|string):{ card:RouteCard, list:CardList<Route>} {
         
         try {
             let id:string;

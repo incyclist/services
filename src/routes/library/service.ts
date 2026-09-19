@@ -95,6 +95,9 @@ export class RouteLibraryScannerService extends IncyclistService {
         if (!this.importProps)
             this.prepare()
 
+        
+        this.logEvent({message:'import route library',folder:folderInfo.displayName, uri:folderInfo.uri})
+
         // reset cancel flag
         this.isCancelled = false
         this.scanResult = []
@@ -113,8 +116,9 @@ export class RouteLibraryScannerService extends IncyclistService {
                 this.importProps.scanProgress = progress
             })
             .on('scan-complete',()=>{
-                this.importProps.phase= 'parsing'
-                
+                const cntScanned = this.importProps.scanProgress.scannedFolders
+                this.logEvent({message:'import route library: scan success',folder:folderInfo.displayName, cntScanned})
+                this.importProps.phase= 'parsing'        
             })
 
         return observer
@@ -132,6 +136,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         if (!this.importProps)
             this.prepare()
 
+        this.logEvent({message:'import route library: parse start',folder:scannedRoutes?.[0].folderName})
 
         this._parse(scannedRoutes, observer).catch(err => {
             this.logError(err, 'parse')
@@ -157,6 +162,13 @@ export class RouteLibraryScannerService extends IncyclistService {
         })
 
         observer.on('parse-complete',()=>{
+            const parseSumamry = {
+                cntTotal: this.importProps.routes.length,
+                cntSuccess: this.importProps.routes.filter( r=> !r.errorReason).length,
+                cntError: this.importProps.routes.filter( r=> r.errorReason!=null).length,
+                cntExisting: this.importProps.routes.filter( r=> r.alreadyImported).length,
+            }
+            this.logEvent({message:'import route library: parse completed',folder:scannedRoutes?.[0].folderName, parseSumamry})
             this.importProps.phase= 'selecting'
         })
 
@@ -241,21 +253,42 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     // simple single GPX file import
     private async importSingleGpxRoute  (fileInfo: FileInfo, observer:IObserver) {
-        this.logEvent({message:'import single GPX route'})
-        const list = this.getRouteList()
+
+        const name = fileInfo.url??fileInfo.filename??fileInfo.name
+        this.logEvent({message:'import single route file',file:name, type:fileInfo.ext})
+
+        const service = this.getRouteList()
         const db = this.getRoutesDBLoader()
         
         try {
             const {data,details} = await RouteParser.parse(fileInfo)
             const route = new Route(data,details)
+
+            this.logEvent({message:'import single route file success',file:name})
+            
+            const existing = service.findCard(route)
+            if (existing ) {   
+                this.logEvent({message:'route updated (import)',route:route.title})
+            }
+
             route.description.tsImported = Date.now()
             await db.save(route,true)
-            list.addRoute(route,'user')
+            service.addRoute(route,existing? 'import': 'user')
 
+            const cardInfo =  service.findCard(route)
+            cardInfo?.card?.verify()
+
+
+            if (existing ) {   
+                // route item was replaced in-place, force UI to refresh
+                existing.card.emitUpdate()
+            }
 
             observer.emit('success',route)
         }
         catch(err:any) {
+            this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
+
             observer.emit('error', err.message)
         }
 
@@ -264,7 +297,8 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     private async importSingleVideoRoute  (fileInfo: FileInfo, observer:IObserver) {
 
-        this.logEvent({message:'import single video route', fileInfo})
+        const name = fileInfo.url??fileInfo.filename??fileInfo.name
+        this.logEvent({message:'import single route file',file:name, type:fileInfo.ext})
         const parsers = this.getParsers()
         const {dir,delimiter} = fileInfo
         let {ext}= fileInfo
@@ -276,7 +310,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         try {
 
             if (!parsers.isPrimaryExtension(ext)) {
-
+                this.logEvent({message:'import single route file failed', file:name, reason:'not a route control file'})
                 observer.emit('error','not a route control file',ext)
                 return
             }
@@ -289,10 +323,13 @@ export class RouteLibraryScannerService extends IncyclistService {
             scanObserver.stop()
 
             if (!files.length) {
+                this.logEvent({message:'import single route file failed', file:name, reason:'no file found'})
                 observer.emit('error','no file found')
             }
 
             if (files[0].scanError) {
+                this.logEvent({message:'import single route file failed', file:name, reason:files[0].scanError})
+                
                 observer.emit('error',files[0].scanError)
                 return                    
             }
@@ -306,6 +343,7 @@ export class RouteLibraryScannerService extends IncyclistService {
 
                     parseObserver.stop()
                     if (result.parseError) {
+                        this.logEvent({message:'import single route file failed', file:name, reason:result.parseError})                        
                         observer.emit('error',result.parseError)
                         return                    
                     }
@@ -316,15 +354,21 @@ export class RouteLibraryScannerService extends IncyclistService {
                     ingest.once('ingest-error',(_:string,reason:string
                     )=>{
                         ingest.stop()
+                    this.logEvent({message:'import single route file failed', file:name, reason})
+
                         observer.emit('error',reason)
                         ingestError = reason
                     })
                     ingest.once('ingest-complete',(summary:any)=>{
                         ingest.stop()
                         if (!ingestError && summary.imported>0)  {
+                            this.logEvent({message:'import single route file success',file:name})
+
                             observer.emit('success',summary.importedRoutes?.[0]?.title)
                         }
                         else if (!ingestError && summary.imported===0)  { 
+
+                            this.logEvent({message:'import single route file failed', file:name, reason:'not imported'})                        
                             observer.emit('error','not imported')
                         }
                     })
@@ -333,6 +377,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             }
         }
         catch(err) {
+            this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
             observer.emit('error', err.message)
         }
     }
@@ -362,9 +407,6 @@ export class RouteLibraryScannerService extends IncyclistService {
         recursive:boolean = true
     ): Promise<void> {
         const fs = this.getBindings().fs
-
-        this.logEvent({message:'scanFolder', uri, folderName})
-
 
         let entries: ReadDirResult[]
         try {
@@ -483,9 +525,9 @@ export class RouteLibraryScannerService extends IncyclistService {
                 fixIncorrectFileInfo(info)
                 fileName = info.base
             } catch { /*ignore*/ }
-            this.logEvent({message:'parsing route', fileName})
             await this._parseTarget(target, service, observer )
             this.logEvent({message:'parsing route done', fileName})
+
         }
 
         observer.emit('parse-complete')
@@ -530,7 +572,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             if (service.getRoute(route.description.id)) {
                 parsed.alreadyImported = true;
             }
-           
+            
             observer.emit('parse-result', parsed)
         }
         catch(err) {
@@ -555,7 +597,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         const {file,url,format} = video??{}
 
 
-        this.logEvent( {message:'validateVideoUrl',route:{file,url,format}, folderUri, folderFiles})
+        //this.logEvent( {message:'validateVideoUrl',route:{file,url,format}, folderUri, folderFiles})
 
         let videoFormat = format 
         try {
@@ -632,7 +674,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         const service = this.getRouteList()
         const db = this.getRoutesDBLoader()
 
-        const target = routes.filter( r=>!r.alreadyImported && !r.parseError)
+        const target = routes.filter( r=> !r.parseError)
 
         const total = target.length
         let errors = 0
@@ -644,12 +686,33 @@ export class RouteLibraryScannerService extends IncyclistService {
                 continue
 
             const {route} = target[i]??{};
+            const isExisting = target[i].alreadyImported
+            const existing = isExisting ? service.findCard(route) : null
 
             try {
 
+
                 observer.emit('ingest-progress', { current: i + 1, total, currentName: route.title})
+                if (existing ) {   
+                    this.logEvent({message:'route updated (library import)',route:route.title})
+                }
+
+                route.description.tsImported = Date.now()
                 await db.save(route,true)
-                service.addRoute(route,'user')
+                service.addRoute(route,existing? 'import': 'user')
+
+                try{
+                    const cardInfo =  service.findCard(route)
+                    cardInfo?.card?.verify()
+                } catch {
+                    // ignroe
+                }
+                if (existing ) {   
+                    // route item was replaced in-place, force UI to refresh
+                    existing.card.emitUpdate()
+                }
+
+
                 importedRoutes.push(route)                
             }
             catch(err:any) {
