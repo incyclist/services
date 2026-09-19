@@ -701,8 +701,12 @@ export class RouteLibraryScannerService extends IncyclistService {
                 await db.save(route,true)
                 service.addRoute(route,existing? 'import': 'user')
 
-                const cardInfo =  service.findCard(route)
-                cardInfo?.card?.verify()
+                try{
+                    const cardInfo =  service.findCard(route)
+                    cardInfo?.card?.verify()
+                } catch {
+                    // ignroe
+                }
                 if (existing ) {   
                     // route item was replaced in-place, force UI to refresh
                     existing.card.emitUpdate()
