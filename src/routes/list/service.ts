@@ -1276,11 +1276,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * @param source Whether the addition originated from a user action or the system.
      */
 
-    public addRoute(route:Route,source:'user'|'system'='system'):void {
+    public addRoute(route:Route,source:'user'|'system'|'import'='system'):void {
 
         // route already present
-        const existing = this.getRoute(route.description.id)
-        if (existing) {
+        const existing = source==='system' ? this.getRoute(route.description.id) :
+            this.routes.find( r=>r.description?.id===route.description.id)
+           
+
+        if (existing ) {
             existing.replace(route)
 
             return;
@@ -1322,7 +1325,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if ( list.getId()==='myRoutes')
             card.enableDelete(true)    
         
-        this.emitLists('updated',{source})                
+        this.emitLists('updated',{source: source==='user' ? 'user':'system'})                
 
     }
 
