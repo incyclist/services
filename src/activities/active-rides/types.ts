@@ -66,13 +66,16 @@ export interface ActivityStartMessage extends ActiveRideListMessage {
 export interface ActivityUpdateMessage extends ActiveRideListMessage {
     position:ActiveRidePosition,
     rideDistance: number,
-    speed?:number, 
-    power?:number, 
-    cadence?:number, 
-    heartrate?:number, 
-    lap?:number, 
+    speed?:number,
+    power?:number,
+    cadence?:number,
+    heartrate?:number,
+    lap?:number,
     duration?: number
     isPaused?:boolean
+    // timestamp (Date.now()) the message was generated - lets a consumer detect messages that
+    // were queued client-side (e.g. while offline) and only reached the broker after a delay
+    ts?: number
 }
 
 export interface ActivityInfoMessage extends ActivityStartMessage { 

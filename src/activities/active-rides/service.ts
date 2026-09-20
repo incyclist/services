@@ -890,10 +890,12 @@ export class ActiveRidesService extends IncyclistService {
 
     protected publishUpdateEvent(payload) {
         if (!this.current || !this.isOnline)
-            return 
+            return
 
         const topic:string = `incyclist/activity/${this.session}/${this.getRouteHash()}/update`
-        this.getMessageQueue().sendMessage(topic,payload)
+        // 'ts' lets the consumer detect messages that were queued while offline and only
+        // reached the broker after a delay, so it can coalesce a reconnect burst
+        this.getMessageQueue().sendMessage(topic,{...payload, ts: Date.now()})
     }
 
     protected async onActivityUpdateEvent(session:string,payload:ActivityUpdateMessage):Promise<void> {
