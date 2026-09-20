@@ -490,7 +490,7 @@ describe('RoutesPageService',()=>{
                     onVideoRetry: jest.fn(),
                     onVideoKeepInstead: jest.fn(),
                     onVideoRemovePressed: jest.fn(),
-                    onVideoRemoveConfirmed: jest.fn(),
+                    onVideoRemoveConfirmed: jest.fn().mockResolvedValue(undefined),
                     onVideoRemoveDismissed: jest.fn(),
                     onConfirmAccess: jest.fn().mockResolvedValue(undefined)
                 }
@@ -544,6 +544,21 @@ describe('RoutesPageService',()=>{
                 expect(MockVideoPageActions.onConfirmAccess).toHaveBeenCalledWith('r1')
                 expect(emitSpy).toHaveBeenCalledWith('route-details-update', 'r1')
                 expect(emitSpy).toHaveBeenCalledWith('page-update')
+            })
+
+            test('onVideoRemoveConfirmed emits once immediately and again once the outcome settles', async () => {
+                const emitSpy = jest.spyOn(pageObserver, 'emit')
+
+                await service.onVideoRemoveConfirmed('r1')
+
+                expect(MockVideoPageActions.onVideoRemoveConfirmed).toHaveBeenCalledWith('r1')
+                expect(emitSpy.mock.calls.filter(c => c[0] === 'route-details-update' && c[1] === 'r1')).toHaveLength(2)
+            })
+
+            test('a rejected onVideoRemoveConfirmed is logged, not thrown', async () => {
+                MockVideoPageActions.onVideoRemoveConfirmed.mockRejectedValue(new Error('remove failed'))
+                await expect(service.onVideoRemoveConfirmed('r1')).resolves.toBeUndefined()
+                expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'onVideoRemoveConfirmed')
             })
 
             test('a rejected onConfirmAccess is logged, not thrown', async () => {

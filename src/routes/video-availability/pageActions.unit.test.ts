@@ -287,6 +287,41 @@ describe('RouteVideoPageActions', () => {
 
             expect(availability.remove).toHaveBeenCalledWith('r1')
             expect(service.getDisplayProps('r1').removeConfirmation).toBeUndefined()
+            expect(service.getDisplayProps('r1').removeFailed).toBeUndefined()
+        })
+
+        test('surfaces removeFailed when the remove resolves without removing', async () => {
+            setup({ status: statusFor('ready', { choice: 'keep' }) })
+            availability.remove.mockResolvedValue('failed')
+            service.onVideoRemovePressed('r1')
+
+            await service.onVideoRemoveConfirmed('r1')
+
+            expect(service.getDisplayProps('r1').removeFailed).toBe(true)
+        })
+
+        test('surfaces removeFailed when remove rejects', async () => {
+            setup({ status: statusFor('ready', { choice: 'keep' }) })
+            availability.remove.mockRejectedValue(new Error('boom'))
+            service.onVideoRemovePressed('r1')
+
+            await service.onVideoRemoveConfirmed('r1')
+
+            expect(service.getDisplayProps('r1').removeFailed).toBe(true)
+        })
+
+        test('a later attempt clears a previous removeFailed', async () => {
+            setup({ status: statusFor('ready', { choice: 'keep' }) })
+            availability.remove.mockResolvedValueOnce('failed')
+            service.onVideoRemovePressed('r1')
+            await service.onVideoRemoveConfirmed('r1')
+            expect(service.getDisplayProps('r1').removeFailed).toBe(true)
+
+            availability.remove.mockResolvedValueOnce('removed')
+            service.onVideoRemovePressed('r1')
+            await service.onVideoRemoveConfirmed('r1')
+
+            expect(service.getDisplayProps('r1').removeFailed).toBeUndefined()
         })
 
         test('dismissing closes the dialog without removing anything', () => {

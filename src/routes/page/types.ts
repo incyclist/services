@@ -60,7 +60,7 @@ export interface IRoutePageService extends IPageService, IPageCallBacks {
     onVideoRetry(routeId: string): void
     onVideoKeepInstead(routeId: string): void
     onVideoRemovePressed(routeId: string): void
-    onVideoRemoveConfirmed(routeId: string): void
+    onVideoRemoveConfirmed(routeId: string): Promise<void>
     onVideoRemoveDismissed(routeId: string): void
     onConfirmAccess(routeId: string): Promise<void>
 
@@ -111,6 +111,8 @@ export interface RouteVideoDisplayProps {
         offline: boolean
     }
     removeConfirmation?: { sizeBytes?: number }
+    /** The last remove attempt for this route didn't end in success, until the next attempt replaces it. */
+    removeFailed?: boolean
     // `target` is computed on demand, only while the state is 'access-lost'.
     access?: { target?: AccessTarget, lastResult?: ConfirmAccessResult }
 }

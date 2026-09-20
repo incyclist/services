@@ -38,6 +38,8 @@ export class RouteVideoPageActions extends IncyclistService {
     protected pendingConfirmations: Record<string, boolean> = {}
     /** Routes currently showing the "remove this download" confirmation. */
     protected pendingRemoveConfirmations: Record<string, boolean> = {}
+    /** Routes whose last remove attempt didn't end in `'removed'`, until the next attempt replaces it. */
+    protected lastRemoveFailed: Record<string, boolean> = {}
     /** The outcome of the last Confirm Access attempt, per route, until the next one replaces it. */
     protected lastAccessResults: Record<string, ConfirmAccessResult> = {}
 
@@ -84,6 +86,9 @@ export class RouteVideoPageActions extends IncyclistService {
 
         if (this.pendingRemoveConfirmations[routeId])
             props.removeConfirmation = { sizeBytes: status.sizeBytes }
+
+        if (this.lastRemoveFailed[routeId])
+            props.removeFailed = true
 
         const lastResult = this.lastAccessResults[routeId]
         if (status.state === 'access-lost' || lastResult) {
@@ -174,14 +179,26 @@ export class RouteVideoPageActions extends IncyclistService {
         this.emitUpdate(routeId)
     }
 
-    onVideoRemoveConfirmed(routeId: string): void {
+    async onVideoRemoveConfirmed(routeId: string): Promise<void> {
         if (!this.isSupported())
             return
 
         delete this.pendingRemoveConfirmations[routeId]
+        delete this.lastRemoveFailed[routeId]
         this.emitUpdate(routeId)
 
-        this.getAvailability().remove(routeId).catch(err => this.logError(err as Error, 'onVideoRemoveConfirmed'))
+        try {
+            const result = await this.getAvailability().remove(routeId)
+            if (result !== 'removed')
+                this.lastRemoveFailed[routeId] = true
+        }
+        catch (err) {
+            this.lastRemoveFailed[routeId] = true
+            this.logError(err as Error, 'onVideoRemoveConfirmed')
+        }
+        finally {
+            this.emitUpdate(routeId)
+        }
     }
 
     onVideoRemoveDismissed(routeId: string): void {
@@ -214,6 +231,7 @@ export class RouteVideoPageActions extends IncyclistService {
         super.reset()
         this.pendingConfirmations = {}
         this.pendingRemoveConfirmations = {}
+        this.lastRemoveFailed = {}
         this.lastAccessResults = {}
     }
 

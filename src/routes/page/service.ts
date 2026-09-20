@@ -532,9 +532,14 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         catch (err) { this.logError(err, 'onVideoRemovePressed') }
     }
 
-    onVideoRemoveConfirmed(routeId: string): void {
+    async onVideoRemoveConfirmed(routeId: string): Promise<void> {
         try {
-            this.getVideoPageActions().onVideoRemoveConfirmed(routeId)
+            // The call's synchronous prefix (clearing the confirmation) has already run by the
+            // time it returns a pending promise, so this first emit closes the dialog right away;
+            // the second one, after the promise settles, is what surfaces a failure.
+            const removed = this.getVideoPageActions().onVideoRemoveConfirmed(routeId)
+            this.emitRouteDetailsUpdate(routeId)
+            await removed
             this.emitRouteDetailsUpdate(routeId)
         }
         catch (err) { this.logError(err, 'onVideoRemoveConfirmed') }
