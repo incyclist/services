@@ -44,8 +44,9 @@ export interface FolderAccessGrant {
 }
 
 /**
- * Outcome of making sure an external file's content is present locally (§ companion files at
- * import). `downloaded` says whether a transfer actually had to happen.
+ * Outcome of making sure an external file's content is present locally, used when a companion
+ * file (control file, preview, GPX) needs to be read during import. `downloaded` says whether a
+ * transfer actually had to happen.
  */
 export type EnsureLocalResult =
     | { ok: true, downloaded: boolean, waitedMs: number }

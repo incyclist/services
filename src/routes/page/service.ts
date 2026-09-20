@@ -25,7 +25,7 @@ import { RouteVideoPageActions, useRouteVideoPageActions } from "../video-availa
 import { RouteVideoState, VideoDownloadRow, VideoKeepChoice } from "../video-availability/types";
 
 /** How long video-pill-driven page updates are coalesced before another render is requested. A
- *  route list can queue many availability queries at once (§3.4); without this, each one landing
+ *  route list can queue many availability queries at once; without this, each one landing
  *  would trigger its own 'page-update'. */
 const VIDEO_PILL_UPDATE_THROTTLE_MS = 300
 
@@ -55,13 +55,13 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }>
     protected downloadObserver: Observer = new Observer()
 
-    // video (§3.7): routeId the details dialog has already had a refresh() paid for, cleared
+    // routeId the details dialog has already had a video refresh() paid for, cleared
     // whenever the dialog closes so the next open pays for a fresh one; and the timer that
     // coalesces videoPill-driven page updates.
     protected videoRefreshedForRouteId: string|undefined
     protected videoPillUpdateTimer?: ReturnType<typeof setTimeout>
     // first-seen timestamp per server download, used only to order the merged Downloads list -
-    // never exposed on the row itself (server rows keep their existing shape, §7.2 golden test).
+    // never exposed on the row itself (server rows keep their existing shape unchanged).
     protected downloadFirstSeen: Map<string, number> = new Map()
 
     protected routeVideoUpdateHandler   = this.onRouteVideoUpdate.bind(this)
@@ -122,7 +122,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     /**
-     * iCloud activation sequence (design §3.7): grants first (so a query for coverage answers
+     * iCloud activation sequence: grants first (so a query for coverage answers
      * correctly), then legacy preview adoption (which itself listens for further `access-changed`
      * events), then the orphan sweep. Fire-and-forget - the route list is already showing, and
      * every step here is a no-op without the fileAccess binding.
@@ -283,7 +283,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
     startLibraryScan(folderInfo: FolderInfo): IObserver {
         try {
-            // fire-and-forget (§3.7): the grant is stored best-effort, the scan never waits on it
+            // fire-and-forget: the grant is stored best-effort, the scan never waits on it
             this.getFolderAccess().registerGrant(folderInfo.uri, folderInfo.grant, folderInfo.grantError, folderInfo.displayName)
                 .catch(err => this.logError(err, 'startLibraryScan'))
 
@@ -424,7 +424,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     /**
-     * The route details dialog's video state (§3.7). Absent whenever the platform has no
+     * The route details dialog's video state. Absent whenever the platform has no
      * `fileAccess` binding, in which case the dialog renders exactly as before.
      *
      * The first call for a newly opened dialog pays for a `refresh()` (the C9 reconcile); every
@@ -469,7 +469,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         }
     }
 
-    // ---- route video actions (§3.7) -------------------------------------------------
+    // ---- route video actions -------------------------------------------------
     //
     // Every handler just forwards to RouteVideoPageActions - the shared UI-state layer used by
     // every page service that shows a route's video (RoutesPageService route details,
@@ -548,7 +548,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         catch (err) { this.logError(err, 'onVideoRemoveDismissed') }
     }
 
-    /** Confirm Access (§3.7): `access-changed` (emitted once the grant is stored) then drives
+    /** Confirm Access: `access-changed` (emitted once the grant is stored) then drives
      *  preview adoption and state refresh on its own - this just relays the outcome back to the
      *  dialog that asked for it. */
     async onConfirmAccess(routeId: string): Promise<void> {
@@ -562,7 +562,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         }
     }
 
-    // ---- Downloads list rows (§3.7) -------------------------------------------------
+    // ---- Downloads list rows -------------------------------------------------
     //
     // A server row (this.downloadCache) delegates to exactly the RouteCard calls mobile makes
     // today; an iCloud row (no matching server entry) delegates to RouteVideoAvailabilityService.
@@ -638,7 +638,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         const {routes=[]} = this.serviceState??{}
 
         const getRouteProps = (routeProps:SummaryCardDisplayProps) => {
-            // videoPill (§3.4/§3.7): absent whenever there is nothing to show, which is always
+            // videoPill: absent whenever there is nothing to show, which is always
             // the case without the fileAccess binding - getListPill() is inert by itself.
             const videoPill = routeProps.id ? this.getVideoAvailability().getListPill(routeProps.id) : undefined
 
@@ -659,7 +659,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     protected startEventListener() {
-        // §3.7: video pills, the Downloads list, and access recovery all drive a re-render - none
+        // Video pills, the Downloads list, and access recovery all drive a re-render - none
         // of this depends on the route list's own search observer, so it is wired independently
         // of the early return below (and is a no-op by itself without the fileAccess binding).
         this.getVideoAvailability().on('route-video-update', this.routeVideoUpdateHandler)
@@ -781,10 +781,10 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     /**
-     * The Downloads list (§3.7): server rows exactly as before, plus the additive `source`/
+     * The Downloads list: server rows exactly as before, plus the additive `source`/
      * `actions`, merged with the iCloud rows this session's app-started downloads produced.
      *
-     * Server rows are golden-compared (§7.2 test) - only `source` and `actions` may ever be added
+     * Server rows are golden-compared against their pre-existing shape - only `source` and `actions` may ever be added
      * to one, nothing existing may change. iCloud rows come from
      * `RouteVideoAvailabilityService.getDownloadRows()`, which is itself empty without the
      * fileAccess binding, so this whole merge is a plain pass-through of the server rows then.
@@ -810,7 +810,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             this.downloadFirstSeen.set(routeId, Date.now())
     }
 
-    /** Today's rows, unchanged, plus the additive `source`/`actions` (§7.2 golden test). */
+    /** Today's rows, unchanged, plus the additive `source`/`actions`. */
     protected buildServerDownloadRows(): DownloadRowDisplayProps[] {
         return this.getDownloadDisplayProps().map(row => ({
             ...row,
@@ -846,7 +846,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
     protected toICloudRowProps(row: VideoDownloadRow): DownloadRowDisplayProps | undefined {
         const status = this.mapICloudDownloadStatus(row.state)
-        // downloading-external isn't listed (§3.7): watched only, this app never started it
+        // downloading-external isn't listed: watched only, this app never started it
         if (!status)
             return undefined
 
@@ -902,13 +902,13 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
     protected onDialogClosed() {
         this.detailRouteId = undefined
-        // the next dialog open - even for the same route - pays for a fresh refresh() (§3.7)
+        // the next dialog open - even for the same route - pays for a fresh refresh()
         this.videoRefreshedForRouteId = undefined
         this.updatePageDisplay()
     }
 
     /**
-     * `route-video-update` (§3.7): re-render for the video pill it may have changed, and - if the
+     * `route-video-update`: re-render for the video pill it may have changed, and - if the
      * update is for the route whose details dialog is currently open - let that dialog re-read its
      * props via `route-details-update` too. Page-display re-renders are throttled: a route list can
      * have many pills resolve in a burst, and each one landing must not cause its own render.

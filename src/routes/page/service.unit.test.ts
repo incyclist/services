@@ -211,12 +211,12 @@ describe('RoutesPageService',()=>{
         })
     })
 
-    // §3.7 (design/features/ios-icloud-video-access) - RoutesPageService wiring of FolderAccessService,
-    // RouteVideoAvailabilityService, RouteVideoPageActions and PreviewStore. `openPage()`/`closePage()`
-    // themselves call `useRouteList()` directly (a pre-existing quirk, not something this work
-    // touches), so the sequencing and subscription behavior they trigger is exercised through the
-    // extracted protected methods instead of the full page lifecycle.
-    describe('iCloud video integration (design §3.7)', () => {
+    // RoutesPageService wiring of FolderAccessService, RouteVideoAvailabilityService,
+    // RouteVideoPageActions and PreviewStore. `openPage()`/`closePage()` themselves call
+    // `useRouteList()` directly (a pre-existing quirk, not something this work touches), so the
+    // sequencing and subscription behavior they trigger is exercised through the extracted
+    // protected methods instead of the full page lifecycle.
+    describe('iCloud video integration', () => {
 
         const mockAppState = () => ({
             hasFeature: jest.fn().mockReturnValue(true), getState: jest.fn(), setState: jest.fn(), setPersistedState: jest.fn()
@@ -553,7 +553,7 @@ describe('RoutesPageService',()=>{
             })
         })
 
-        describe('emitDownloadUpdate - Downloads list merge (§7.2 golden test)', () => {
+        describe('emitDownloadUpdate - Downloads list merge (golden test)', () => {
             let s, service, MockVideoAvailability, downloadObserver
 
             const setup = () => {
