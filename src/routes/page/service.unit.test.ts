@@ -210,4 +210,604 @@ describe('RoutesPageService',()=>{
             expect(props.showWorkoutOption).toBe(true)
         })
     })
+
+    // §3.7 (design/features/ios-icloud-video-access) - RoutesPageService wiring of FolderAccessService,
+    // RouteVideoAvailabilityService, RouteVideoPageActions and PreviewStore. `openPage()`/`closePage()`
+    // themselves call `useRouteList()` directly (a pre-existing quirk, not something this work
+    // touches), so the sequencing and subscription behavior they trigger is exercised through the
+    // extracted protected methods instead of the full page lifecycle.
+    describe('iCloud video integration (design §3.7)', () => {
+
+        const mockAppState = () => ({
+            hasFeature: jest.fn().mockReturnValue(true), getState: jest.fn(), setState: jest.fn(), setPersistedState: jest.fn()
+        })
+
+        describe('openPage sequencing: activateAll -> adoptPending -> sweepOrphans', () => {
+            let s, service, order: string[]
+            let MockFolderAccess, MockPreviewStore
+
+            beforeEach(() => {
+                order = []
+                MockFolderAccess = {
+                    activateAll: jest.fn(() => { order.push('activateAll'); return Promise.resolve() })
+                }
+                MockPreviewStore = {
+                    adoptPending: jest.fn(() => { order.push('adoptPending'); return Promise.resolve() }),
+                    sweepOrphans: jest.fn(() => { order.push('sweepOrphans'); return Promise.resolve() })
+                }
+
+                Inject('AppState', mockAppState())
+                Inject('FolderAccess', MockFolderAccess)
+                Inject('PreviewStore', MockPreviewStore)
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+            })
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('FolderAccess', null)
+                Inject('PreviewStore', null)
+                s.reset()
+            })
+
+            test('runs grants, then legacy preview adoption, then the orphan sweep, in that order', async () => {
+                ;(service as any).onRouteListLoaded()
+                await new Promise(resolve => setTimeout(resolve, 0))
+
+                expect(order).toEqual(['activateAll', 'adoptPending', 'sweepOrphans'])
+            })
+
+            test('a failure anywhere in the chain is logged, not thrown', async () => {
+                MockFolderAccess.activateAll.mockRejectedValue(new Error('boom'))
+
+                expect(() => (service as any).onRouteListLoaded()).not.toThrow()
+                await new Promise(resolve => setTimeout(resolve, 0))
+
+                expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'onRouteListLoaded')
+            })
+        })
+
+        describe('event subscriptions', () => {
+            let s, service, MockVideoAvailability, MockFolderAccess
+
+            beforeEach(() => {
+                MockVideoAvailability = { on: jest.fn(), off: jest.fn() }
+                MockFolderAccess = { on: jest.fn(), off: jest.fn() }
+
+                Inject('AppState', mockAppState())
+                Inject('VideoAvailability', MockVideoAvailability)
+                Inject('FolderAccess', MockFolderAccess)
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+            })
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('VideoAvailability', null)
+                Inject('FolderAccess', null)
+                s.reset()
+            })
+
+            test('startEventListener subscribes to route-video-update, download-rows-update and access-changed', () => {
+                ;(service as any).startEventListener()
+
+                expect(MockVideoAvailability.on).toHaveBeenCalledWith('route-video-update', expect.any(Function))
+                expect(MockVideoAvailability.on).toHaveBeenCalledWith('download-rows-update', expect.any(Function))
+                expect(MockFolderAccess.on).toHaveBeenCalledWith('access-changed', expect.any(Function))
+            })
+
+            test('stopEventListener unsubscribes the same three, even with no active route-list observer', () => {
+                ;(service as any).stopEventListener()
+
+                expect(MockVideoAvailability.off).toHaveBeenCalledWith('route-video-update', expect.any(Function))
+                expect(MockVideoAvailability.off).toHaveBeenCalledWith('download-rows-update', expect.any(Function))
+                expect(MockFolderAccess.off).toHaveBeenCalledWith('access-changed', expect.any(Function))
+            })
+        })
+
+        describe('resumePage -> onForeground', () => {
+            let s, service, MockVideoAvailability
+
+            beforeEach(() => {
+                MockVideoAvailability = { on: jest.fn(), off: jest.fn(), onForeground: jest.fn().mockResolvedValue(undefined) }
+
+                Inject('AppState', mockAppState())
+                Inject('VideoAvailability', MockVideoAvailability)
+                Inject('FolderAccess', { on: jest.fn(), off: jest.fn() })
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+            })
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('VideoAvailability', null)
+                Inject('FolderAccess', null)
+                s.reset()
+            })
+
+            test('calls RouteVideoAvailabilityService.onForeground()', async () => {
+                await service.resumePage()
+                expect(MockVideoAvailability.onForeground).toHaveBeenCalledTimes(1)
+            })
+
+            test('a rejected onForeground() is logged, not thrown', async () => {
+                MockVideoAvailability.onForeground.mockRejectedValue(new Error('boom'))
+                await expect(service.resumePage()).resolves.toBeUndefined()
+                await new Promise(resolve => setTimeout(resolve, 0))
+                expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'resumePage')
+            })
+        })
+
+        describe('videoPill on route list items', () => {
+            let s, service, MockVideoAvailability, pageObserver
+
+            beforeEach(() => {
+                MockVideoAvailability = { getListPill: jest.fn() }
+
+                Inject('AppState', mockAppState())
+                Inject('VideoAvailability', MockVideoAvailability)
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+                pageObserver = new (require('../../base/types/observer').Observer)()
+                ;(service as any).pageObserver = pageObserver
+            })
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('VideoAvailability', null)
+                s.reset()
+            })
+
+            test('each route asks the availability service for its pill, by id', () => {
+                MockVideoAvailability.getListPill.mockImplementation((id: string) => (id === 'r1' ? 'in-icloud' : undefined))
+                ;(service as any).serviceState = { routes: [{ id: 'r1' }, { id: 'r2' }] }
+
+                const props = (service as any).getRoutesDisplayProps()
+
+                expect(props[0].videoPill).toBe('in-icloud')
+                expect(props[1].videoPill).toBeUndefined()
+                expect(MockVideoAvailability.getListPill).toHaveBeenCalledWith('r1')
+                expect(MockVideoAvailability.getListPill).toHaveBeenCalledWith('r2')
+            })
+
+            test('absent when the availability service has nothing to show (inert without the binding)', () => {
+                MockVideoAvailability.getListPill.mockReturnValue(undefined)
+                ;(service as any).serviceState = { routes: [{ id: 'r1' }] }
+
+                const props = (service as any).getRoutesDisplayProps()
+                expect(props[0].videoPill).toBeUndefined()
+            })
+
+            test('route-video-update page updates are throttled', () => {
+                jest.useFakeTimers()
+                try {
+                    const emitSpy = jest.spyOn(pageObserver, 'emit')
+
+                    ;(service as any).onRouteVideoUpdate('r1')
+                    ;(service as any).onRouteVideoUpdate('r2')
+                    ;(service as any).onRouteVideoUpdate('r3')
+
+                    expect(emitSpy).not.toHaveBeenCalledWith('page-update')
+
+                    jest.advanceTimersByTime(300)
+
+                    expect(emitSpy.mock.calls.filter(c => c[0] === 'page-update')).toHaveLength(1)
+                }
+                finally {
+                    jest.useRealTimers()
+                }
+            })
+
+            test('a route-video-update for the open details dialog also emits route-details-update', () => {
+                const emitSpy = jest.spyOn(pageObserver, 'emit')
+                ;(service as any).detailRouteId = 'r1'
+
+                ;(service as any).onRouteVideoUpdate('r1')
+
+                expect(emitSpy).toHaveBeenCalledWith('route-details-update', 'r1')
+            })
+        })
+
+        describe('getRouteDetailsProps - video', () => {
+            let s, service, MockVideoPageActions, MockVideoAvailability
+
+            beforeEach(() => {
+                MockVideoPageActions = {
+                    isSupported: jest.fn().mockReturnValue(true),
+                    getDisplayProps: jest.fn().mockReturnValue({ status: { state: 'ready' }, canStart: true, actions: {} })
+                }
+                MockVideoAvailability = { refresh: jest.fn().mockResolvedValue({}) }
+
+                Inject('AppState', mockAppState())
+                Inject('WorkoutList', { getSelected: jest.fn().mockReturnValue(undefined) })
+                Inject('VideoPageActions', MockVideoPageActions)
+                Inject('VideoAvailability', MockVideoAvailability)
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+            })
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('WorkoutList', null)
+                Inject('VideoPageActions', null)
+                Inject('VideoAvailability', null)
+                s.reset()
+            })
+
+            test('refreshes once per newly opened dialog', () => {
+                service.getRouteDetailsProps('r1')
+                service.getRouteDetailsProps('r1')
+                service.getRouteDetailsProps('r1')
+
+                expect(MockVideoAvailability.refresh).toHaveBeenCalledTimes(1)
+                expect(MockVideoAvailability.refresh).toHaveBeenCalledWith('r1')
+            })
+
+            test('reopening the dialog (onDialogClosed in between) pays for a fresh refresh', () => {
+                service.getRouteDetailsProps('r1')
+                service.onDialogClosed()
+                service.getRouteDetailsProps('r1')
+
+                expect(MockVideoAvailability.refresh).toHaveBeenCalledTimes(2)
+            })
+
+            test('a different route triggers its own refresh', () => {
+                service.getRouteDetailsProps('r1')
+                service.getRouteDetailsProps('r2')
+
+                expect(MockVideoAvailability.refresh).toHaveBeenNthCalledWith(1, 'r1')
+                expect(MockVideoAvailability.refresh).toHaveBeenNthCalledWith(2, 'r2')
+            })
+
+            test('video props come from RouteVideoPageActions.getDisplayProps', () => {
+                const props = service.getRouteDetailsProps('r1')
+                expect(props.video).toEqual({ status: { state: 'ready' }, canStart: true, actions: {} })
+            })
+
+            test('video is absent, and no refresh happens, when unsupported (inert without the binding)', () => {
+                MockVideoPageActions.isSupported.mockReturnValue(false)
+                const props = service.getRouteDetailsProps('r1')
+
+                expect(props.video).toBeUndefined()
+                expect(MockVideoAvailability.refresh).not.toHaveBeenCalled()
+            })
+        })
+
+        describe('route video actions -> route-details-update', () => {
+            let s, service, MockVideoPageActions, pageObserver
+
+            beforeEach(() => {
+                MockVideoPageActions = {
+                    onVideoDownloadPressed: jest.fn(),
+                    onVideoDownloadConfirmed: jest.fn(),
+                    onVideoDownloadDismissed: jest.fn(),
+                    onVideoStop: jest.fn(),
+                    onVideoRetry: jest.fn(),
+                    onVideoKeepInstead: jest.fn(),
+                    onVideoRemovePressed: jest.fn(),
+                    onVideoRemoveConfirmed: jest.fn(),
+                    onVideoRemoveDismissed: jest.fn(),
+                    onConfirmAccess: jest.fn().mockResolvedValue(undefined)
+                }
+
+                Inject('AppState', mockAppState())
+                Inject('VideoPageActions', MockVideoPageActions)
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+                pageObserver = new (require('../../base/types/observer').Observer)()
+                ;(service as any).pageObserver = pageObserver
+            })
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('VideoPageActions', null)
+                s.reset()
+            })
+
+            test('each action forwards to RouteVideoPageActions and emits route-details-update for that route', () => {
+                const emitSpy = jest.spyOn(pageObserver, 'emit')
+
+                service.onVideoDownloadPressed('r1')
+                service.onVideoDownloadConfirmed('r1', 'this-ride')
+                service.onVideoDownloadDismissed('r1')
+                service.onVideoStop('r1')
+                service.onVideoRetry('r1')
+                service.onVideoKeepInstead('r1')
+                service.onVideoRemovePressed('r1')
+                service.onVideoRemoveConfirmed('r1')
+                service.onVideoRemoveDismissed('r1')
+
+                expect(MockVideoPageActions.onVideoDownloadPressed).toHaveBeenCalledWith('r1')
+                expect(MockVideoPageActions.onVideoDownloadConfirmed).toHaveBeenCalledWith('r1', 'this-ride')
+                expect(MockVideoPageActions.onVideoDownloadDismissed).toHaveBeenCalledWith('r1')
+                expect(MockVideoPageActions.onVideoStop).toHaveBeenCalledWith('r1')
+                expect(MockVideoPageActions.onVideoRetry).toHaveBeenCalledWith('r1')
+                expect(MockVideoPageActions.onVideoKeepInstead).toHaveBeenCalledWith('r1')
+                expect(MockVideoPageActions.onVideoRemovePressed).toHaveBeenCalledWith('r1')
+                expect(MockVideoPageActions.onVideoRemoveConfirmed).toHaveBeenCalledWith('r1')
+                expect(MockVideoPageActions.onVideoRemoveDismissed).toHaveBeenCalledWith('r1')
+
+                expect(emitSpy.mock.calls.filter(c => c[0] === 'route-details-update' && c[1] === 'r1')).toHaveLength(9)
+            })
+
+            test('onConfirmAccess awaits the outcome, then relays route-details-update and page-update', async () => {
+                const emitSpy = jest.spyOn(pageObserver, 'emit')
+
+                await service.onConfirmAccess('r1')
+
+                expect(MockVideoPageActions.onConfirmAccess).toHaveBeenCalledWith('r1')
+                expect(emitSpy).toHaveBeenCalledWith('route-details-update', 'r1')
+                expect(emitSpy).toHaveBeenCalledWith('page-update')
+            })
+
+            test('a rejected onConfirmAccess is logged, not thrown', async () => {
+                MockVideoPageActions.onConfirmAccess.mockRejectedValue(new Error('picker failed'))
+                await expect(service.onConfirmAccess('r1')).resolves.toBeUndefined()
+                expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'onConfirmAccess')
+            })
+        })
+
+        describe('emitDownloadUpdate - Downloads list merge (§7.2 golden test)', () => {
+            let s, service, MockVideoAvailability, downloadObserver
+
+            const setup = () => {
+                MockVideoAvailability = {
+                    isSupported: jest.fn().mockReturnValue(false),
+                    getDownloadRows: jest.fn().mockReturnValue([])
+                }
+
+                Inject('AppState', mockAppState())
+                Inject('VideoAvailability', MockVideoAvailability)
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+                downloadObserver = (service as any).downloadObserver
+            }
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('VideoAvailability', null)
+                s?.reset()
+            })
+
+            test('golden: server rows keep exactly their current shape, plus additive source/actions; count unchanged', () => {
+                setup()
+
+                ;(service as any).downloadCache.set('r1', { routeId: 'r1', title: 'Alpe du Zwift', status: 'downloading', pct: 42 })
+                ;(service as any).downloadCache.set('r2', { routeId: 'r2', title: 'Stelvio', status: 'done' })
+                ;(service as any).downloadCache.set('r3', { routeId: 'r3', title: 'Ventoux', status: 'failed' })
+                ;(service as any).downloadCache.set('r4', { routeId: 'r4', title: 'Zwift Mountain', status: 'required' })
+
+                let payload: any
+                downloadObserver.on('download-update', (p: any) => { payload = p })
+
+                ;(service as any).emitDownloadUpdate()
+
+                const byId = (id: string) => payload.rows.find((r: any) => r.routeId === id)
+
+                expect(byId('r1')).toEqual({
+                    routeId: 'r1', title: 'Alpe du Zwift', status: 'downloading', pct: 42,
+                    source: 'server', actions: { stop: true, retry: false, delete: false, download: false, keepInstead: false }
+                })
+                expect(byId('r2')).toEqual({
+                    routeId: 'r2', title: 'Stelvio', status: 'done',
+                    source: 'server', actions: { stop: false, retry: false, delete: true, download: false, keepInstead: false }
+                })
+                expect(byId('r3')).toEqual({
+                    routeId: 'r3', title: 'Ventoux', status: 'failed',
+                    source: 'server', actions: { stop: false, retry: true, delete: false, download: false, keepInstead: false }
+                })
+                expect(byId('r4')).toEqual({
+                    routeId: 'r4', title: 'Zwift Mountain', status: 'required',
+                    source: 'server', actions: { stop: false, retry: false, delete: false, download: true, keepInstead: false }
+                })
+
+                // count: unchanged from today - only the 'downloading' server row counts (no iCloud activity)
+                expect(payload.count).toBe(1)
+            })
+
+            test('merges iCloud rows: order by startedAt, count adds downloading+waiting, downloading-external is never listed', () => {
+                setup()
+                MockVideoAvailability.isSupported.mockReturnValue(true)
+                MockVideoAvailability.getDownloadRows.mockReturnValue([
+                    { routeId: 'ic1', title: 'iCloud Downloading', state: 'downloading', startedAt: 300, sizeBytes: 100 },
+                    { routeId: 'ic2', title: 'iCloud Waiting', state: 'waiting-for-network', startedAt: 100 },
+                    { routeId: 'ic3', title: 'iCloud Done Kept', state: 'ready', startedAt: 200, choice: 'keep' },
+                    { routeId: 'ic4', title: 'iCloud Done ThisRide', state: 'ready', startedAt: 250, choice: 'this-ride' },
+                    { routeId: 'ic5', title: 'iCloud Failed', state: 'download-failed', startedAt: 50 },
+                    { routeId: 'ic6', title: 'iCloud Cancelled', state: 'cancelled', startedAt: 60 },
+                    { routeId: 'ic7', title: 'iCloud NotEnoughStorage', state: 'not-enough-storage', startedAt: 70 },
+                    { routeId: 'ic8', title: 'iCloud External', state: 'downloading-external', startedAt: 10 }
+                ])
+
+                ;(service as any).downloadFirstSeen.set('sX', 150)
+                ;(service as any).downloadCache.set('sX', { routeId: 'sX', title: 'Server Route', status: 'downloading', pct: 10 })
+
+                let payload: any
+                downloadObserver.on('download-update', (p: any) => { payload = p })
+                ;(service as any).emitDownloadUpdate()
+
+                expect(payload.rows.find((r: any) => r.routeId === 'ic8')).toBeUndefined()
+
+                const byId = (id: string) => payload.rows.find((r: any) => r.routeId === id)
+                expect(byId('ic1')).toMatchObject({ status: 'downloading', source: 'icloud' })
+                expect(byId('ic2')).toMatchObject({ status: 'waiting', source: 'icloud' })
+                expect(byId('ic3')).toMatchObject({ status: 'done', actions: expect.objectContaining({ keepInstead: false, delete: false }) })
+                expect(byId('ic4')).toMatchObject({ status: 'done', actions: expect.objectContaining({ keepInstead: true, delete: false }) })
+                expect(byId('ic5')).toMatchObject({ status: 'failed', actions: expect.objectContaining({ retry: true }) })
+                expect(byId('ic6')).toMatchObject({ status: 'required', actions: expect.objectContaining({ download: true }) })
+                expect(byId('ic7')).toMatchObject({ status: 'not-enough-storage' })
+
+                expect(payload.rows.map((r: any) => r.routeId))
+                    .toEqual(['ic5', 'ic6', 'ic7', 'ic2', 'sX', 'ic3', 'ic4', 'ic1'])
+
+                // count: server downloading (sX) + icloud downloading (ic1) + waiting (ic2)
+                expect(payload.count).toBe(3)
+            })
+        })
+
+        describe('onDownloadStop/Retry/Delete/KeepInstead delegation', () => {
+            let s, service, MockRouteListSvc, MockCard, MockVideoAvailability
+
+            beforeEach(() => {
+                MockCard = { stopDownload: jest.fn(), download: jest.fn(), deleteDownload: jest.fn() }
+                MockRouteListSvc = { getCard: jest.fn().mockReturnValue(MockCard) }
+                MockVideoAvailability = {
+                    stop: jest.fn().mockResolvedValue(undefined),
+                    retry: jest.fn().mockResolvedValue(undefined),
+                    setChoice: jest.fn().mockResolvedValue(undefined)
+                }
+
+                Inject('AppState', mockAppState())
+                Inject('RouteList', MockRouteListSvc)
+                Inject('VideoAvailability', MockVideoAvailability)
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+            })
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('RouteList', null)
+                Inject('VideoAvailability', null)
+                s.reset()
+            })
+
+            test('a server row calls exactly the RouteCard methods mobile calls today', () => {
+                ;(service as any).downloadCache.set('r1', { routeId: 'r1', title: 'x', status: 'downloading' })
+
+                service.onDownloadStop('r1')
+                service.onDownloadRetry('r1')
+                service.onDownloadDelete('r1')
+
+                expect(MockCard.stopDownload).toHaveBeenCalledTimes(1)
+                expect(MockCard.download).toHaveBeenCalledTimes(1)
+                expect(MockCard.deleteDownload).toHaveBeenCalledTimes(1)
+                expect(MockVideoAvailability.stop).not.toHaveBeenCalled()
+                expect(MockVideoAvailability.retry).not.toHaveBeenCalled()
+            })
+
+            test('a server row never gets keepInstead', () => {
+                ;(service as any).downloadCache.set('r1', { routeId: 'r1', title: 'x', status: 'done' })
+                service.onDownloadKeepInstead('r1')
+                expect(MockVideoAvailability.setChoice).not.toHaveBeenCalled()
+            })
+
+            test('an iCloud row (no matching server entry) delegates to RouteVideoAvailabilityService', () => {
+                service.onDownloadStop('ic1')
+                service.onDownloadRetry('ic1')
+                service.onDownloadKeepInstead('ic1')
+
+                expect(MockVideoAvailability.stop).toHaveBeenCalledWith('ic1')
+                expect(MockVideoAvailability.retry).toHaveBeenCalledWith('ic1')
+                expect(MockVideoAvailability.setChoice).toHaveBeenCalledWith('ic1', 'keep')
+                expect(MockCard.stopDownload).not.toHaveBeenCalled()
+            })
+
+            test('an iCloud row has no delete action', () => {
+                service.onDownloadDelete('ic1')
+                expect(MockCard.deleteDownload).not.toHaveBeenCalled()
+            })
+        })
+
+        describe('startLibraryScan -> registerGrant', () => {
+            let s, service, MockFolderAccess, MockScanner
+
+            beforeEach(() => {
+                MockFolderAccess = { registerGrant: jest.fn().mockResolvedValue(undefined) }
+                MockScanner = { scan: jest.fn().mockReturnValue({ id: 'observer' }) }
+
+                Inject('AppState', mockAppState())
+                Inject('FolderAccess', MockFolderAccess)
+                Inject('RouteLibraryScanner', MockScanner)
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+            })
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('FolderAccess', null)
+                Inject('RouteLibraryScanner', null)
+                s.reset()
+            })
+
+            test('registers the grant (fire-and-forget) and scans exactly as today', () => {
+                const folderInfo = { uri: '/icloud/Videos', displayName: 'Videos', grant: 'g1', grantError: undefined }
+
+                const result = service.startLibraryScan(folderInfo as any)
+
+                expect(MockFolderAccess.registerGrant).toHaveBeenCalledWith('/icloud/Videos', 'g1', undefined, 'Videos')
+                expect(MockScanner.scan).toHaveBeenCalledWith(folderInfo)
+                expect(result).toEqual({ id: 'observer' })
+            })
+
+            test('a rejected registerGrant never fails the scan', async () => {
+                MockFolderAccess.registerGrant.mockRejectedValue(new Error('boom'))
+                const folderInfo = { uri: '/icloud/Videos', displayName: 'Videos' }
+
+                expect(() => service.startLibraryScan(folderInfo as any)).not.toThrow()
+                expect(MockScanner.scan).toHaveBeenCalledWith(folderInfo)
+
+                await new Promise(resolve => setTimeout(resolve, 0))
+                expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'startLibraryScan')
+            })
+        })
+
+        describe('inert without the fileAccess binding', () => {
+            let s, service, MockVideoAvailability, MockVideoPageActions
+
+            beforeEach(() => {
+                MockVideoAvailability = {
+                    getListPill: jest.fn().mockReturnValue(undefined),
+                    isSupported: jest.fn().mockReturnValue(false),
+                    getDownloadRows: jest.fn().mockReturnValue([])
+                }
+                MockVideoPageActions = { isSupported: jest.fn().mockReturnValue(false) }
+
+                Inject('AppState', mockAppState())
+                Inject('WorkoutList', { getSelected: jest.fn().mockReturnValue(undefined) })
+                Inject('VideoAvailability', MockVideoAvailability)
+                Inject('VideoPageActions', MockVideoPageActions)
+
+                s = service = new RoutesPageService()
+                s.logError = jest.fn()
+            })
+
+            afterEach(() => {
+                Inject('AppState', null)
+                Inject('WorkoutList', null)
+                Inject('VideoAvailability', null)
+                Inject('VideoPageActions', null)
+                s.reset()
+            })
+
+            test('videoPill is absent for every route', () => {
+                ;(service as any).serviceState = { routes: [{ id: 'r1' }] }
+                const props = (service as any).getRoutesDisplayProps()
+                expect(props[0].videoPill).toBeUndefined()
+            })
+
+            test('route details has no video prop', () => {
+                const props = service.getRouteDetailsProps('r1')
+                expect(props.video).toBeUndefined()
+            })
+
+            test('the Downloads list is server-rows-only', () => {
+                ;(service as any).downloadCache.set('r1', { routeId: 'r1', title: 'x', status: 'done' })
+                let payload: any
+                ;(service as any).downloadObserver.on('download-update', (p: any) => { payload = p })
+                ;(service as any).emitDownloadUpdate()
+
+                expect(payload.rows).toHaveLength(1)
+                expect(payload.rows[0].source).toBe('server')
+            })
+        })
+    })
 })
