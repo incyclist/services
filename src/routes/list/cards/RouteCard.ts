@@ -304,6 +304,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
         try {
             const descr = this.getRouteDescription()
             const details = this.getRouteData()
+            const country = descr?.country??details?.country
+            const countryISO = country==='UK' ? 'GB' : country
 
             // bugfix: some legacy routes had localizedTitle as String
             if ( typeof(descr.localizedTitle)==='string') {
@@ -334,7 +336,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             return {...descr, initialized:this.initialized, loaded,ready:true,state:'loaded',visible:this.visible,isNew,
                     totalDistance,totalElevation,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
-                    observer:this.cardObserver, cntActive:this.cntActive}
+                    observer:this.cardObserver, cntActive:this.cntActive, country:countryISO}
         }
         catch(err:any) {
             this.logError(err,'getDisplayProperties')

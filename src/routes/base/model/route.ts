@@ -8,7 +8,7 @@ import { getLocalizedText } from "../utils/localization";
 
 export class Route {
 
-    private readonly _description:RouteInfo
+    private _description:RouteInfo
     private _details:RouteApiDetail
     
 
@@ -28,6 +28,10 @@ export class Route {
         return points
     }
 
+    replace(update:Route) {
+        this._description = {...update._description}
+        this._details = {...update._details}
+    }
 
     addDetails(details:RouteApiDetail) {
         this._details = details
@@ -82,10 +86,10 @@ export class Route {
         if (!this._description.country && this._description.hasGpx) {
             
             try {
-                const iso =  await this.getCountries().getIsoFromLatLng(this._description?.points?.[0]??this._details?.points?.[0])
+                const iso =  await this.getCountries().getIsoFromLatLng(this._description?.points??this._details?.points)
                 if (iso) {
                     updated = true;
-                    this._description.country = iso
+                    this._description.country = iso                    
                 }
                 
             }

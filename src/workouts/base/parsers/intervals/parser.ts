@@ -65,7 +65,6 @@ export class IntervalsJsonParser implements WorkoutParser<string|IntervalsWorkou
                 workout.addStep(step)
             }                
         });
-        this.logger.logEvent({message: 'parse success', file:fileName})
         return workout
         
     }
