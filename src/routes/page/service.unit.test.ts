@@ -342,13 +342,15 @@ describe('RoutesPageService',()=>{
         })
 
         describe('videoPill on route list items', () => {
-            let s, service, MockVideoAvailability, pageObserver
+            let s, service, MockVideoAvailability, MockRouteList, pageObserver
 
             beforeEach(() => {
                 MockVideoAvailability = { getListPill: jest.fn() }
+                MockRouteList = { getCard: jest.fn() }
 
                 Inject('AppState', mockAppState())
                 Inject('VideoAvailability', MockVideoAvailability)
+                Inject('RouteList', MockRouteList)
 
                 s = service = new RoutesPageService()
                 s.logError = jest.fn()
@@ -359,6 +361,7 @@ describe('RoutesPageService',()=>{
             afterEach(() => {
                 Inject('AppState', null)
                 Inject('VideoAvailability', null)
+                Inject('RouteList', null)
                 s.reset()
             })
 
@@ -382,16 +385,28 @@ describe('RoutesPageService',()=>{
                 expect(props[0].videoPill).toBeUndefined()
             })
 
-            test('route-video-update page updates are throttled', () => {
+            test('a route-video-update for a specific route pushes its pill through that route\'s own card, not a page-wide render', () => {
+                MockVideoAvailability.getListPill.mockReturnValue('in-icloud')
+                const card = { emitUpdate: jest.fn() }
+                MockRouteList.getCard.mockImplementation((id: string) => (id === 'r1' ? card : undefined))
+                const emitSpy = jest.spyOn(pageObserver, 'emit')
+
+                ;(service as any).onRouteVideoUpdate('r1')
+
+                expect(MockVideoAvailability.getListPill).toHaveBeenCalledWith('r1')
+                expect(card.emitUpdate).toHaveBeenCalledWith({ videoPill: 'in-icloud' })
+                expect(emitSpy).not.toHaveBeenCalledWith('page-update')
+            })
+
+            test('an update with no routeId (a multi-route reconcile) falls back to the throttled page update', () => {
                 jest.useFakeTimers()
                 try {
                     const emitSpy = jest.spyOn(pageObserver, 'emit')
 
-                    ;(service as any).onRouteVideoUpdate('r1')
-                    ;(service as any).onRouteVideoUpdate('r2')
-                    ;(service as any).onRouteVideoUpdate('r3')
+                    ;(service as any).onRouteVideoUpdate()
 
                     expect(emitSpy).not.toHaveBeenCalledWith('page-update')
+                    expect(MockRouteList.getCard).not.toHaveBeenCalled()
 
                     jest.advanceTimersByTime(300)
 

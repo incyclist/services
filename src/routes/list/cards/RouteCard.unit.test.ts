@@ -295,4 +295,30 @@ describe('RouteCard preview handling', () => {
             expect(deleteFile).not.toHaveBeenCalled();
         });
     });
+
+    describe('emitUpdate', () => {
+
+        test('pushes the card\'s own display properties to its observer', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo);
+            const listener = jest.fn();
+            card.getDisplayProperties().observer.on('update', listener);
+
+            card.emitUpdate();
+
+            expect(listener).toHaveBeenCalledTimes(1);
+            expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', title: 'Alpe du Zwift' });
+        });
+
+        test('merges caller-supplied overrides on top of the display properties, without persisting them', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo);
+            const listener = jest.fn();
+            card.getDisplayProperties().observer.on('update', listener);
+
+            card.emitUpdate({ videoPill: 'in-icloud' });
+
+            expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', videoPill: 'in-icloud' });
+            // a plain read of the card's own properties is unaffected by the override
+            expect((card.getDisplayProperties() as any).videoPill).toBeUndefined();
+        });
+    });
 });

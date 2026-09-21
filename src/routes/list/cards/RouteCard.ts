@@ -1192,9 +1192,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
-    emitUpdate() {
+    /**
+     * Pushes a fresh set of display properties to whoever is holding this card's own observer
+     * (the list item component) - the per-card channel a page service uses to reflect a
+     * property it computes itself, such as the video pill, without going through the page's
+     * own array of routes: a virtualized list does not reliably re-render a mounted row just
+     * because a different reference somewhere further up its own array changed.
+     */
+    emitUpdate(overrides?: Record<string, unknown>) {
         if (this.cardObserver)
-            this.cardObserver.emit('update', this.getDisplayProperties())
+            this.cardObserver.emit('update', { ...this.getDisplayProperties(), ...overrides })
 
     }
     emitRedraw() {

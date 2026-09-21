@@ -919,13 +919,25 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     /**
-     * `route-video-update`: re-render for the video pill it may have changed, and - if the
-     * update is for the route whose details dialog is currently open - let that dialog re-read its
-     * props via `route-details-update` too. Page-display re-renders are throttled: a route list can
-     * have many pills resolve in a burst, and each one landing must not cause its own render.
+     * `route-video-update`: refresh the video pill it may have changed, and - if the update is
+     * for the route whose details dialog is currently open - let that dialog re-read its props
+     * via `route-details-update` too.
+     *
+     * A single route's pill is pushed straight through that route's own card observer rather
+     * than through a page-wide re-render: a virtualized list does not reliably re-render an
+     * already-mounted row just because a different route somewhere in the same array changed, so
+     * routing this through the whole list's display props is not enough on its own. An update
+     * with no routeId (a multi-route reconcile) has no single card to target and falls back to
+     * the throttled whole-page update.
      */
     protected onRouteVideoUpdate(routeId?: string): void {
-        this.scheduleThrottledPageUpdate()
+        if (routeId) {
+            const videoPill = this.getVideoAvailability().getListPill(routeId)
+            this.getRouteList()?.getCard(routeId)?.emitUpdate({ videoPill })
+        }
+        else {
+            this.scheduleThrottledPageUpdate()
+        }
 
         if (routeId && routeId === this.detailRouteId)
             this.emitRouteDetailsUpdate(routeId)
