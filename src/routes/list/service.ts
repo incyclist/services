@@ -1739,19 +1739,34 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const path = getBindings().path
         const fs = getBindings().fs
 
+        // videoUrl can be a percent-encoded file:// URI (e.g. iCloud's "Mobile Documents" folder
+        // contains a literal space, encoded as %20) - fs.existsFile() needs the real path, so a
+        // segment straight out of path.parse() must be decoded before it is used.
+        const decodeSegment = (segment:string):string => {
+            try {
+                return decodeURIComponent(segment)
+            }
+            catch {
+                // not a valid escape sequence - a literal '%' in a file or folder name
+                return segment
+            }
+        }
+
         let existingPreview:string
         let fileUrl = false
         try {
             let {dir} = path.parse(videoUrl)??{}
             const {name} = path.parse(videoUrl)??{}
-            if (!dir.startsWith('htttp')) {
-                if (dir.startsWith('video:')) {                    
-                    dir = dir.replace('video:', 'file:')                    
+            if (!dir.startsWith('http')) {
+                if (dir.startsWith('video:')) {
+                    dir = dir.replace('video:', 'file:')
                 }
                 if (dir.startsWith('file:///')) {
                     dir = dir.replace('file:///','')
                     fileUrl = true
                 }
+                dir = decodeSegment(dir)
+                const decodedName = decodeSegment(name)
 
 
                 const check = async (name:string) => {
@@ -1763,8 +1778,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
                 await check(path.join( dir, 'preview.png'))
                 await check(path.join( dir, 'preview.jpg'))
-                await check(path.join( dir, `${name}_preview.png`))
-                await check(path.join( dir, `${name}_preview.jpg`))
+                await check(path.join( dir, `${decodedName}_preview.png`))
+                await check(path.join( dir, `${decodedName}_preview.jpg`))
 
                 if (existingPreview) {
                     this.logEvent({message:'found preview', title:descr.title, id:descr.id, video:videoUrl, existingPreview})
@@ -1782,10 +1797,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                     return descr.previewUrl
                 }
 
+                this.logEvent({message:'preview not found next to video', title:descr.title, id:descr.id, video:videoUrl, dir, name:decodedName})
             }
         }
-        catch {
-            // ignore errors
+        catch (err) {
+            this.logEvent({message:'checkExistingPreviewFiles failed', title:descr.title, id:descr.id, error:(err as Error)?.message})
         }
 
     }

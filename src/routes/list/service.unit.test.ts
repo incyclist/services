@@ -469,6 +469,22 @@ describe('RouteListService',()=>{
                 expect(result).toBe('file:///mnt/videos/preview.png')
             })
 
+            test('a preview next to a video whose folder has a percent-encoded space is found (iCloud "Mobile Documents")', async () => {
+                const d = descr({ videoUrl:'file:///private/var/mobile/Library/Mobile%20Documents/com~apple~CloudDocs/IncyclistTest/CH_Ofenpass/Ofenpass.mp4' })
+
+                // only resolvable once the %20 has been decoded back to a real space - this fails
+                // the way the original bug did if the candidate still contains a literal "%20"
+                getBindings().fs.existsFile = jest.fn(async (candidate:string) =>
+                    candidate.endsWith('Mobile Documents/com~apple~CloudDocs/IncyclistTest/CH_Ofenpass/Ofenpass_preview.png')
+                )
+
+                const result = await (service as any).checkExistingPreviewFiles(d)
+
+                expect(result).toContain('Mobile Documents/com~apple~CloudDocs/IncyclistTest/CH_Ofenpass/Ofenpass_preview.png')
+                expect(result).not.toContain('%20')
+                expect(d.previewUrl).toBe(result)
+            })
+
             test('a screenshot is created and used as-is', async () => {
                 const d = descr({ videoUrl:'/mnt/videos/b.mp4' })
                 getBindings().fs.existsFile = jest.fn().mockResolvedValue(false)
