@@ -933,7 +933,10 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     protected onRouteVideoUpdate(routeId?: string): void {
         if (routeId) {
             const videoPill = this.getVideoAvailability().getListPill(routeId)
-            this.getRouteList()?.getCard(routeId)?.emitUpdate({ videoPill })
+            const card = this.getRouteList()?.getCard(routeId)
+            // TEMPORARY - remove alongside the other [DEBUG-ICLD] logs once #1 is root-caused.
+            this.logEvent({ message: '[DEBUG-ICLD] onRouteVideoUpdate', routeId, videoPill, hasCard: !!card })
+            card?.emitUpdate({ videoPill })
         }
         else {
             this.scheduleThrottledPageUpdate()

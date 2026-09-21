@@ -1198,10 +1198,22 @@ export class RouteCard extends BaseCard implements Card<Route> {
      * Pushes a fresh set of display properties to whoever is holding this card's own observer
      * (the list item component) - the per-card channel a page service uses to reflect a
      * property it computes itself, such as the video pill, without going through the page's
-     * own array of routes: a virtualized list does not reliably re-render a mounted row just
-     * because a different reference somewhere further up its own array changed.
+     * own routes array: `RoutesTable` is memoized on the route id list alone, so a prop change
+     * that leaves every id in place (e.g. just a route's videoPill flipping) would never
+     * re-render it, or the RouteItem inside it, if it only went through that array.
      */
     emitUpdate(overrides?: Record<string, unknown>) {
+        // TEMPORARY - remove once the missing list-pill issue is root-caused. Proves whether this
+        // is actually called at all, for which route, and whether anyone is listening on the
+        // observer it emits on.
+        this.logger.logEvent({
+            message: '[DEBUG-ICLD] card emitUpdate', routeId: this.route?.description?.id,
+            hasObserver: !!this.cardObserver,
+            listenerCount: (this.cardObserver as unknown as { emitter?: { listenerCount: (e: string) => number } })
+                ?.emitter?.listenerCount('update'),
+            overrides
+        })
+
         if (this.cardObserver)
             this.cardObserver.emit('update', { ...this.getDisplayProperties(), ...overrides })
 
