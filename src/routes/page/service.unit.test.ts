@@ -351,11 +351,15 @@ describe('RoutesPageService',()=>{
 
             beforeEach(() => {
                 MockVideoAvailability = { getListPill: jest.fn() }
-                MockRouteList = { getCard: jest.fn(), getAllRoutes: jest.fn().mockReturnValue([]) }
+                MockRouteList = {
+                    getCard: jest.fn(), getAllRoutes: jest.fn().mockReturnValue([]),
+                    search: jest.fn().mockReturnValue({ routes: [] })
+                }
 
                 Inject('AppState', mockAppState())
                 Inject('VideoAvailability', MockVideoAvailability)
                 Inject('RouteList', MockRouteList)
+                Inject('RouteLibraryScanner', { done: jest.fn() })
 
                 s = service = new RoutesPageService()
                 s.logError = jest.fn()
@@ -368,6 +372,7 @@ describe('RoutesPageService',()=>{
                 Inject('AppState', null)
                 Inject('VideoAvailability', null)
                 Inject('RouteList', null)
+                Inject('RouteLibraryScanner', null)
                 s.reset()
             })
 
@@ -445,6 +450,26 @@ describe('RoutesPageService',()=>{
                 ;(service as any).onRouteVideoUpdate('r1')
 
                 expect(emitSpy).toHaveBeenCalledWith('route-details-update', 'r1')
+            })
+
+            // Regression: a route imported this session gets a brand new card whose videoPill has
+            // never been set. Before this, nothing computed it until some unrelated
+            // video-availability event happened to reconcile the whole list - so the pill for a
+            // route imported (or re-imported) in the current session could stay permanently
+            // missing, even though the exact same route showed it correctly after a restart (which
+            // does seed every card via openPage()).
+            test('onImportClosed() re-seeds every route\'s pill, including one from a card added this session', () => {
+                MockRouteList.search.mockReturnValue({ routes: [{ id: 'new-route' }] })
+                MockVideoAvailability.getListPill.mockReturnValue('in-icloud')
+                const card = mockCard()
+                MockRouteList.getCard.mockReturnValue(card)
+                MockRouteList.getAllRoutes.mockReturnValue([{ description: { id: 'new-route' } }])
+
+                service.onImportClosed()
+
+                expect(MockVideoAvailability.getListPill).toHaveBeenCalledWith('new-route')
+                expect(card.setVideoPill).toHaveBeenCalledWith('in-icloud')
+                expect(card.emitUpdate).toHaveBeenCalledWith()
             })
         })
 

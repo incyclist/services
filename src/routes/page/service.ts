@@ -348,10 +348,16 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
             this.importObserver = undefined
             this.getPageObserver()?.emit('import-closed')
-            
+
             this.serviceState = this.getRouteList().search()
+
+            // a route imported this session has a brand new card, whose videoPill has never
+            // been set - nothing else triggers a check for it until some unrelated
+            // video-availability event happens to reconcile the whole list (architecture.md §3.7.1)
+            this.refreshAllVideoPills()
+
             this.updatePageDisplay()
-            
+
         }
         catch(err:any) {
             this.logError(err,'onImportClosed')
