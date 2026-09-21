@@ -252,9 +252,12 @@ export class RouteVideoPageActions extends IncyclistService {
      * - **stop**: an app-owned transfer actually in flight - `downloading` or, blocked on the
      *   network, `waiting-for-network`. Not `downloading-external`: a transfer this app did not
      *   start is only ever watched, never owned.
-     * - **remove** / **keepInstead**: only once the file is `ready` and this app's journal has an
-     *   opinion about it (`status.choice` set) - a plain local or already-kept video with no
-     *   choice on record has nothing to remove or convert.
+     * - **keepInstead**: only once the file is `ready` and this app's journal still has an opinion
+     *   about it (`status.choice === 'this-ride'`).
+     * - **remove**: any `ready` iCloud video, kept or not - a completed "keep" download has its
+     *   journal entry cleared (architecture §3.4), so this can't gate on `status.choice`. Evicting a
+     *   ubiquitous item is non-destructive (the file stays in iCloud Drive), so gating on `isICloud`
+     *   alone is safe; in-ride protection is handled inside `remove()` itself.
      * - **confirmAccess**: `access-lost` and not `transient` - a transient loss (signed out of
      *   iCloud) is fixed in Settings, not by re-picking the folder.
      */
@@ -267,7 +270,7 @@ export class RouteVideoPageActions extends IncyclistService {
             retry: state === 'cancelled' || state === 'download-failed',
             stop: state === 'downloading' || state === 'waiting-for-network',
             keepInstead: state === 'ready' && status.choice === 'this-ride',
-            remove: state === 'ready' && !!status.choice,
+            remove: state === 'ready' && status.isICloud,
             confirmAccess: state === 'access-lost' && !status.transient
         }
     }

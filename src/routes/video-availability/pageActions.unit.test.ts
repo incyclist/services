@@ -120,17 +120,30 @@ describe('RouteVideoPageActions', () => {
         })
 
         test('ready, kept: can be removed, not converted', () => {
-            const props = actionsFor('ready', { choice: 'keep' })
+            const props = actionsFor('ready', { choice: 'keep', isICloud: true })
             expect(props.canStart).toBe(true)
             expect(props.actions.remove).toBe(true)
             expect(props.actions.keepInstead).toBe(false)
         })
 
+        test('ready, iCloud, journal entry cleared after a finished keep: still removable', () => {
+            // a completed "keep" download has its journal entry discarded (service.ts onDownloadProgress),
+            // so `choice` is gone by the time the route reaches `ready` - `remove` must not depend on it
+            const props = actionsFor('ready', { isICloud: true })
+            expect(props.actions.remove).toBe(true)
+            expect(props.actions.keepInstead).toBe(false)
+        })
+
         test('ready, for this ride: can be removed now or converted to a keep', () => {
-            const props = actionsFor('ready', { choice: 'this-ride', thisRide: true })
+            const props = actionsFor('ready', { choice: 'this-ride', thisRide: true, isICloud: true })
             expect(props.canStart).toBe(true)
             expect(props.actions.remove).toBe(true)
             expect(props.actions.keepInstead).toBe(true)
+        })
+
+        test('ready, not iCloud: a plain local video has nothing to remove', () => {
+            const props = actionsFor('ready', { isICloud: false })
+            expect(props.actions.remove).toBe(false)
         })
 
         test('unknown: never gated, nothing to do', () => {
