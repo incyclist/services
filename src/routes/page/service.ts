@@ -647,6 +647,12 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             // the case without the fileAccess binding - getListPill() is inert by itself.
             const videoPill = routeProps.id ? this.getVideoAvailability().getListPill(routeProps.id) : undefined
 
+            // TEMPORARY - remove alongside the getListPill() debug log: proves what this method
+            // actually hands to the emitted display props, decoupled from whether the mobile UI
+            // applies it.
+            if (routeProps.id)
+                this.logEvent({ message: '[DEBUG-ICLD] route display props', routeId: routeProps.id, videoPill })
+
             return {
                 ...routeProps,
                 videoPill,

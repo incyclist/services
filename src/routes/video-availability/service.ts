@@ -240,39 +240,68 @@ export class RouteVideoAvailabilityService extends IncyclistService {
      * no list label at all, so probing it would buy nothing.
      */
     getListPill(routeId: string): VideoListPill | undefined {
-        if (!this.isSupported())
+        // TEMPORARY - remove once the missing list-pill issue is root-caused. Logs the exact
+        // branch this method takes for a given route, so a device log pinpoints where the pill
+        // is lost: never computed here at all, vs. computed but not reaching the rendered list.
+        const debugLog = (reason: string, extra: Record<string, unknown> = {}) =>
+            this.logEvent({ message: '[DEBUG-ICLD] list pill', routeId, reason, ...extra })
+
+        if (!this.isSupported()) {
+            debugLog('unsupported')
             return undefined
+        }
 
         this.startJournal()
 
         const path = this.getOwnVideoPath(routeId)
-        if (!path)
+        if (!path) {
+            debugLog('no-path')
             return undefined
+        }
 
         const entry = this.journal.getEntry(path)
-        if (entry?.status === 'downloading' || entry?.status === 'stopping')
+        if (entry?.status === 'downloading' || entry?.status === 'stopping') {
+            debugLog('journal-downloading', { path, status: entry.status })
             return 'downloading'
+        }
 
-        if (entry)
+        if (entry) {
+            debugLog('journal-other', { path, status: entry.status })
             return undefined
+        }
 
-        if (!this.isExternal(path) || !this.getFolderAccess().isCovered(path))
+        const external = this.isExternal(path)
+        const covered = this.getFolderAccess().isCovered(path)
+        if (!external || !covered) {
+            debugLog('not-covered', { path, external, covered })
             return undefined
+        }
 
         const cached = this.getFresh(path)
         if (!cached) {
+            debugLog('query-enqueued', { path })
             this.enqueue(path, routeId)
             return undefined
         }
 
-        if (cached.indeterminate || !cached.availability)
+        if (cached.indeterminate || !cached.availability) {
+            debugLog('cache-indeterminate', { path, indeterminate: cached.indeterminate, hasAvailability: !!cached.availability })
             return undefined
+        }
 
         // a transfer someone else started is still a transfer as far as the list is concerned
-        if (cached.availability.isDownloading)
+        if (cached.availability.isDownloading) {
+            debugLog('cache-downloading', { path })
             return 'downloading'
+        }
 
-        return this.isNotDownloaded(cached.availability) ? 'in-icloud' : undefined
+        const notDownloaded = this.isNotDownloaded(cached.availability)
+        debugLog('cache-result', {
+            path, notDownloaded,
+            isUbiquitous: cached.availability.isUbiquitous,
+            downloadStatus: cached.availability.downloadStatus
+        })
+        return notDownloaded ? 'in-icloud' : undefined
     }
 
     /**
@@ -1080,7 +1109,15 @@ export class RouteVideoAvailabilityService extends IncyclistService {
             this.inFlight++
 
             this.query(next.path)
-                .then(() => this.emitRouteUpdate(next.routeId))
+                .then(availability => {
+                    // TEMPORARY - remove alongside the getListPill() debug log above
+                    this.logEvent({
+                        message: '[DEBUG-ICLD] list pill query resolved', routeId: next.routeId, path: next.path,
+                        found: !!availability, isUbiquitous: availability?.isUbiquitous,
+                        downloadStatus: availability?.downloadStatus
+                    })
+                    this.emitRouteUpdate(next.routeId)
+                })
                 .catch(err => this.logError(err as Error, 'queuedQuery'))
                 .finally(() => {
                     this.inFlight--
