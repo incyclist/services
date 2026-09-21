@@ -127,7 +127,10 @@ export class FolderAccessService extends IncyclistService {
             if (activation.ok)
                 this.resolvedPaths[id] = activation.resolvedPath ?? canonical
 
-            this.logGrantOutcome(activation.ok, source, location, canonical, record.lastError)
+            if (activation.ok)
+                this.logGrantActivated(source, location, canonical)
+            else
+                this.logGrantUnverified(location, canonical, record.lastError)
 
             await this.save(record)
             this.rebuildCoverage()
@@ -173,25 +176,18 @@ export class FolderAccessService extends IncyclistService {
         return hasToken ? 'failed' : 'no-grant'
     }
 
-    private logGrantOutcome(
-        ok: boolean,
-        source: FolderAccessGrant['source'],
-        location: FileLocation,
-        canonical: string,
-        lastError?: string
-    ): void {
-        if (ok) {
-            this.logEvent({
-                message: source === 'captured' ? 'folder grant captured' : 'folder grant stored',
-                location, name: this.folderName(canonical)
-            })
-        }
-        else {
-            this.logEvent({
-                message: 'folder grant unverified',
-                location, name: this.folderName(canonical), error: lastError
-            })
-        }
+    private logGrantActivated(source: FolderAccessGrant['source'], location: FileLocation, canonical: string): void {
+        this.logEvent({
+            message: source === 'captured' ? 'folder grant captured' : 'folder grant stored',
+            location, name: this.folderName(canonical)
+        })
+    }
+
+    private logGrantUnverified(location: FileLocation, canonical: string, lastError?: string): void {
+        this.logEvent({
+            message: 'folder grant unverified',
+            location, name: this.folderName(canonical), error: lastError
+        })
     }
 
     /**
