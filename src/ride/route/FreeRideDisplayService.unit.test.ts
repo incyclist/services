@@ -2,6 +2,7 @@ import sydney from '../../../__tests__/data/routes/sydney2.json'
 import { Inject } from '../../base/decorators'
 import { createFromJson } from '../../routes'
 import { RouteApiDetail } from '../../routes/base/api/types'
+import IncyclistRoutesApi from '../../routes/base/api'
 import { FreeRideDisplayService } from './FreeRideDisplayService'
 import { Observer } from '../../base/types'
 import { FreeRideStartSettings } from '../../routes/list/types'
@@ -127,6 +128,9 @@ describe('FreeRideDisplayService', () => {
         Inject('GoogleMaps', {
             // placeholder for google maps
         })
+
+        // createRoute() calls route.updateCountryFromPoints() on every start() - without a mock it hits the live Routes API
+        jest.spyOn(IncyclistRoutesApi, 'getInstance').mockReturnValue({ getCountry: jest.fn().mockResolvedValue(undefined) } as unknown as IncyclistRoutesApi)
 
         mockFreeRideService = {
             getOptions: jest.fn().mockReturnValue(options.hasOwnProperty('freeRideOptions') ? options.freeRideOptions : [mockOption1, mockOption2]),
