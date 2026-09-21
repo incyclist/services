@@ -339,7 +339,6 @@ export class PreviewStore extends IncyclistService {
                 message: '[DEBUG-ICLD] copyIntoStore failed', id: routeId, source, target, dir,
                 error: (err as Error)?.message
             })
-            this.logError(err as Error, 'copyIntoStore', { id: routeId })
             return { ok: false, reason: 'copy-failed' }
         }
 
