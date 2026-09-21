@@ -3,7 +3,7 @@ import { AccessTarget, ConfirmAccessResult } from "../../fileaccess/types";
 import { ImportDisplayProps, IObserver, RouteImportStatus } from "../../types";
 import { SummaryCardDisplayProps } from "../list/cards/types";
 import { DisplayType, SearchFilter, SearchFilterOptions } from "../list/types";
-import { RouteVideoStatus, VideoKeepChoice, VideoListPill } from "../video-availability/types";
+import { RouteVideoStatus, VideoKeepChoice } from "../video-availability/types";
 
 
 
@@ -23,11 +23,11 @@ export interface RoutePageDisplayProps  {
 }
 
 
-export type RouteItemProps = SummaryCardDisplayProps & {
-    // Badge on the card when the route's video needs attention. Absent = nothing to show,
-    // which is always the case on platforms without the fileAccess binding.
-    videoPill?: VideoListPill
-}
+// videoPill (badge on the card when the route's video needs attention - absent whenever there is
+// nothing to show, which is always the case on platforms without the fileAccess binding) lives on
+// SummaryCardDisplayProps itself (architecture.md §3.7.1: real RouteCard state, not a page-only
+// addition), so this is a plain alias.
+export type RouteItemProps = SummaryCardDisplayProps
 
 
 export interface IPageCallBacks  {

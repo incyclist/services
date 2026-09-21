@@ -308,17 +308,41 @@ describe('RouteCard preview handling', () => {
             expect(listener).toHaveBeenCalledTimes(1);
             expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', title: 'Alpe du Zwift' });
         });
+    });
 
-        test('merges caller-supplied overrides on top of the display properties, without persisting them', () => {
+    describe('RouteCard.setVideoPill', () => {
+
+        test('stores the pill as real card state, visible on the next getDisplayProperties()', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo);
+
+            card.setVideoPill('in-icloud');
+
+            expect((card.getDisplayProperties() as any).videoPill).toBe('in-icloud');
+        });
+
+        test('reports whether the value actually changed', () => {
+            const card = createCard({ id: '1' } as RouteInfo);
+
+            expect(card.setVideoPill('in-icloud')).toBe(true);
+            expect(card.setVideoPill('in-icloud')).toBe(false);
+            expect(card.setVideoPill('downloading')).toBe(true);
+            expect(card.setVideoPill(undefined)).toBe(true);
+        });
+
+        // Regression: videoPill used to ride along only inside one emitUpdate() caller's payload
+        // (RoutesPageService.onRouteVideoUpdate's now-removed `overrides` param), so any of this
+        // card's other, unrelated emitUpdate() callers (e.g. a plain refresh after a re-import)
+        // silently erased it for anyone listening on the card's observer. Now it's real card
+        // state, so an unrelated plain emitUpdate() must keep reporting it.
+        test('a pill set via setVideoPill survives an unrelated plain emitUpdate() call', () => {
             const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo);
             const listener = jest.fn();
             card.getDisplayProperties().observer.on('update', listener);
 
-            card.emitUpdate({ videoPill: 'in-icloud' });
+            card.setVideoPill('in-icloud');
+            card.emitUpdate(); // e.g. an unrelated "route updated (library import)" refresh
 
             expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', videoPill: 'in-icloud' });
-            // a plain read of the card's own properties is unaffected by the override
-            expect((card.getDisplayProperties() as any).videoPill).toBeUndefined();
         });
     });
 });

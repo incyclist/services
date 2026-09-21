@@ -344,9 +344,14 @@ describe('RoutesPageService',()=>{
         describe('videoPill on route list items', () => {
             let s, service, MockVideoAvailability, MockRouteList, pageObserver
 
+            const mockCard = (setVideoPillReturns = true) => ({
+                setVideoPill: jest.fn().mockReturnValue(setVideoPillReturns),
+                emitUpdate: jest.fn()
+            })
+
             beforeEach(() => {
                 MockVideoAvailability = { getListPill: jest.fn() }
-                MockRouteList = { getCard: jest.fn() }
+                MockRouteList = { getCard: jest.fn(), getAllRoutes: jest.fn().mockReturnValue([]) }
 
                 Inject('AppState', mockAppState())
                 Inject('VideoAvailability', MockVideoAvailability)
@@ -354,6 +359,7 @@ describe('RoutesPageService',()=>{
 
                 s = service = new RoutesPageService()
                 s.logError = jest.fn()
+                s.logEvent = jest.fn()
                 pageObserver = new (require('../../base/types/observer').Observer)()
                 ;(service as any).pageObserver = pageObserver
             })
@@ -365,59 +371,74 @@ describe('RoutesPageService',()=>{
                 s.reset()
             })
 
-            test('each route asks the availability service for its pill, by id', () => {
-                MockVideoAvailability.getListPill.mockImplementation((id: string) => (id === 'r1' ? 'in-icloud' : undefined))
-                ;(service as any).serviceState = { routes: [{ id: 'r1' }, { id: 'r2' }] }
+            // videoPill now lives on the card itself (RouteCard.setVideoPill/getDisplayProperties,
+            // architecture.md §3.7.1), so getRoutesDisplayProps() is a plain pass-through of
+            // whatever the cards already computed - it must not ask the availability service again.
+            test('passes each card\'s already-computed videoPill straight through', () => {
+                ;(service as any).serviceState = { routes: [{ id: 'r1', videoPill: 'in-icloud' }, { id: 'r2' }] }
 
                 const props = (service as any).getRoutesDisplayProps()
 
                 expect(props[0].videoPill).toBe('in-icloud')
                 expect(props[1].videoPill).toBeUndefined()
-                expect(MockVideoAvailability.getListPill).toHaveBeenCalledWith('r1')
-                expect(MockVideoAvailability.getListPill).toHaveBeenCalledWith('r2')
+                expect(MockVideoAvailability.getListPill).not.toHaveBeenCalled()
             })
 
-            test('absent when the availability service has nothing to show (inert without the binding)', () => {
-                MockVideoAvailability.getListPill.mockReturnValue(undefined)
-                ;(service as any).serviceState = { routes: [{ id: 'r1' }] }
-
-                const props = (service as any).getRoutesDisplayProps()
-                expect(props[0].videoPill).toBeUndefined()
-            })
-
-            test('a route-video-update for a specific route pushes its pill through that route\'s own card, not a page-wide render', () => {
+            test('a route-video-update for a specific route sets the pill on that route\'s own card, not a page-wide render', () => {
                 MockVideoAvailability.getListPill.mockReturnValue('in-icloud')
-                const card = { emitUpdate: jest.fn() }
+                const card = mockCard()
                 MockRouteList.getCard.mockImplementation((id: string) => (id === 'r1' ? card : undefined))
                 const emitSpy = jest.spyOn(pageObserver, 'emit')
 
                 ;(service as any).onRouteVideoUpdate('r1')
 
                 expect(MockVideoAvailability.getListPill).toHaveBeenCalledWith('r1')
-                expect(card.emitUpdate).toHaveBeenCalledWith({ videoPill: 'in-icloud' })
+                expect(card.setVideoPill).toHaveBeenCalledWith('in-icloud')
+                expect(card.emitUpdate).toHaveBeenCalledWith()
                 expect(emitSpy).not.toHaveBeenCalledWith('page-update')
             })
 
-            test('an update with no routeId (a multi-route reconcile) falls back to the throttled page update', () => {
-                jest.useFakeTimers()
-                try {
-                    const emitSpy = jest.spyOn(pageObserver, 'emit')
+            test('does not emitUpdate() when the pill did not actually change', () => {
+                MockVideoAvailability.getListPill.mockReturnValue('in-icloud')
+                const card = mockCard(false)
+                MockRouteList.getCard.mockReturnValue(card)
 
-                    ;(service as any).onRouteVideoUpdate()
+                ;(service as any).onRouteVideoUpdate('r1')
 
-                    expect(emitSpy).not.toHaveBeenCalledWith('page-update')
-                    expect(MockRouteList.getCard).not.toHaveBeenCalled()
+                expect(card.setVideoPill).toHaveBeenCalledWith('in-icloud')
+                expect(card.emitUpdate).not.toHaveBeenCalled()
+            })
 
-                    jest.advanceTimersByTime(300)
+            test('a route-video-update naming a route with no card logs it instead of throwing', () => {
+                MockVideoAvailability.getListPill.mockReturnValue('in-icloud')
+                MockRouteList.getCard.mockReturnValue(undefined)
 
-                    expect(emitSpy.mock.calls.filter(c => c[0] === 'page-update')).toHaveLength(1)
-                }
-                finally {
-                    jest.useRealTimers()
-                }
+                expect(() => (service as any).onRouteVideoUpdate('r1')).not.toThrow()
+
+                expect(s.logEvent).toHaveBeenCalledWith({ message: 'video pill card missing', routeId: 'r1' })
+            })
+
+            test('an update with no routeId (a multi-route reconcile) recomputes every route\'s pill', () => {
+                MockRouteList.getAllRoutes.mockReturnValue([
+                    { description: { id: 'r1' } }, { description: { id: 'r2' } }
+                ])
+                MockVideoAvailability.getListPill.mockImplementation((id: string) => (id === 'r1' ? 'in-icloud' : undefined))
+                const cardR1 = mockCard()
+                const cardR2 = mockCard(false)
+                MockRouteList.getCard.mockImplementation((id: string) => (id === 'r1' ? cardR1 : cardR2))
+                const emitSpy = jest.spyOn(pageObserver, 'emit')
+
+                ;(service as any).onRouteVideoUpdate()
+
+                expect(cardR1.setVideoPill).toHaveBeenCalledWith('in-icloud')
+                expect(cardR1.emitUpdate).toHaveBeenCalledWith()
+                expect(cardR2.setVideoPill).toHaveBeenCalledWith(undefined)
+                expect(cardR2.emitUpdate).not.toHaveBeenCalled()
+                expect(emitSpy).not.toHaveBeenCalledWith('page-update')
             })
 
             test('a route-video-update for the open details dialog also emits route-details-update', () => {
+                MockRouteList.getCard.mockReturnValue(mockCard())
                 const emitSpy = jest.spyOn(pageObserver, 'emit')
                 ;(service as any).detailRouteId = 'r1'
 

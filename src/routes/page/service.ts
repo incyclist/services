@@ -3,7 +3,6 @@ import { Injectable, Singleton } from "../../base/decorators";
 import { IncyclistPageService } from "../../base/pages";
 import { FileInfo, FolderInfo, ImportDisplayProps, IObserver, ParsedRoute, ScannedRoute } from "../../types";
 import { useRouteList } from "../list";
-import { SummaryCardDisplayProps } from "../list/cards/types";
 import { SearchFilter, SearchState } from "../list/types";
 import {
     AttachedWorkoutProps, DownloadRowDisplayProps, DownloadStatus, IRoutePageService, RouteDetailsProps,
@@ -23,11 +22,6 @@ import { PreviewStore, usePreviewStore } from "../previews";
 import { RouteVideoAvailabilityService, useRouteVideoAvailability } from "../video-availability/service";
 import { RouteVideoPageActions, useRouteVideoPageActions } from "../video-availability/pageActions";
 import { RouteVideoState, VideoDownloadRow, VideoKeepChoice } from "../video-availability/types";
-
-/** How long video-pill-driven page updates are coalesced before another render is requested. A
- *  route list can queue many availability queries at once; without this, each one landing
- *  would trigger its own 'page-update'. */
-const VIDEO_PILL_UPDATE_THROTTLE_MS = 300
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -56,10 +50,8 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     protected downloadObserver: Observer = new Observer()
 
     // routeId the details dialog has already had a video refresh() paid for, cleared
-    // whenever the dialog closes so the next open pays for a fresh one; and the timer that
-    // coalesces videoPill-driven page updates.
+    // whenever the dialog closes so the next open pays for a fresh one.
     protected videoRefreshedForRouteId: string|undefined
-    protected videoPillUpdateTimer?: ReturnType<typeof setTimeout>
     // first-seen timestamp per server download, used only to order the merged Downloads list -
     // never exposed on the row itself (server rows keep their existing shape unchanged).
     protected downloadFirstSeen: Map<string, number> = new Map()
@@ -91,6 +83,13 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
                     if (this.serviceState.observer) {
                         this.startEventListener()
                     }
+
+                    // seed every card's videoPill: getDisplayProperties() otherwise never carries
+                    // one until its first route-video-update (architecture.md §3.7.1)
+                    const {routeCount,inICloudCount,downloadingCount} = this.refreshAllVideoPills()
+                    if (routeCount>0)
+                        this.logEvent({message:'video list pills', routeCount, inICloudCount, downloadingCount})
+
                     sleep(5).then( ()=>{
                             this.updatePageDisplay()
                     })
@@ -144,7 +143,6 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             this.downloadCache.clear()
             this.downloadFirstSeen.clear()
             this.downloadObserver.stop()
-            this.clearVideoPillThrottle()
             super.closePage()
         }
         catch(err:any) {
@@ -642,26 +640,10 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     protected getRoutesDisplayProps():Array<RouteItemProps> {
         const {routes=[]} = this.serviceState??{}
 
-        const getRouteProps = (routeProps:SummaryCardDisplayProps) => {
-            // videoPill: absent whenever there is nothing to show, which is always
-            // the case without the fileAccess binding - getListPill() is inert by itself.
-            const videoPill = routeProps.id ? this.getVideoAvailability().getListPill(routeProps.id) : undefined
-
-            // TEMPORARY - remove alongside the getListPill() debug log: proves what this method
-            // actually hands to the emitted display props, decoupled from whether the mobile UI
-            // applies it.
-            if (routeProps.id)
-                this.logEvent({ message: '[DEBUG-ICLD] route display props', routeId: routeProps.id, videoPill })
-
-            return {
-                ...routeProps,
-                videoPill,
-                // onSelect: this.onSelect.bind(this),
-                // onDelete: this.onDelete.bind(this)
-            }
-        }
-
-        return routes.map( getRouteProps)
+        // videoPill lives on the card itself (RouteCard.setVideoPill/getDisplayProperties,
+        // architecture.md §3.7.1) - routeProps already carries it, absent whenever there is
+        // nothing to show, which is always the case without the fileAccess binding.
+        return routes
     }
 
     protected getSearchFilters():SearchFilter {
@@ -919,51 +901,58 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     }
 
     /**
-     * `route-video-update`: refresh the video pill it may have changed, and - if the update is
-     * for the route whose details dialog is currently open - let that dialog re-read its props
-     * via `route-details-update` too.
+     * `route-video-update`: recompute the affected route's video pill as real `RouteCard` state
+     * (architecture.md §3.7.1) and push it through that route's own card observer rather than a
+     * page-wide re-render - `RoutesTable` is memoized on the route id list alone, so a prop
+     * change that leaves every id in place would never reach it that way. Also lets the route
+     * details dialog re-read its props via `route-details-update`, if it's open on this route.
      *
-     * A single route's pill is pushed straight through that route's own card observer rather
-     * than through a page-wide re-render: a virtualized list does not reliably re-render an
-     * already-mounted row just because a different route somewhere in the same array changed, so
-     * routing this through the whole list's display props is not enough on its own. An update
-     * with no routeId (a multi-route reconcile) has no single card to target and falls back to
-     * the throttled whole-page update.
+     * An update with no routeId (a multi-route reconcile, e.g. access-changed or the journal
+     * finishing its initial load) has no single card to target and refreshes every route's pill.
      */
     protected onRouteVideoUpdate(routeId?: string): void {
         if (routeId) {
             const videoPill = this.getVideoAvailability().getListPill(routeId)
             const card = this.getRouteList()?.getCard(routeId)
-            // TEMPORARY - remove alongside the other [DEBUG-ICLD] logs once #1 is root-caused.
-            this.logEvent({ message: '[DEBUG-ICLD] onRouteVideoUpdate', routeId, videoPill, hasCard: !!card })
-            card?.emitUpdate({ videoPill })
+
+            if (!card)
+                this.logEvent({ message: 'video pill card missing', routeId })
+            else if (card.setVideoPill(videoPill))
+                card.emitUpdate()
         }
         else {
-            this.scheduleThrottledPageUpdate()
+            this.refreshAllVideoPills()
         }
 
         if (routeId && routeId === this.detailRouteId)
             this.emitRouteDetailsUpdate(routeId)
     }
 
-    protected scheduleThrottledPageUpdate(): void {
-        if (this.videoPillUpdateTimer)
-            return
+    /**
+     * Seeds/recomputes every route's video pill as real card state. Run once when the route list
+     * has just loaded (a card's own display properties otherwise never carry a pill until its
+     * first `route-video-update`), and again on a multi-route reconcile that has no single
+     * routeId to target.
+     */
+    protected refreshAllVideoPills(): { routeCount: number, inICloudCount: number, downloadingCount: number } {
+        const routeIds = (this.getRouteList()?.getAllRoutes() ?? [])
+            .map(route => route?.description?.id)
+            .filter((id): id is string => !!id)
 
-        this.videoPillUpdateTimer = setTimeout(() => {
-            this.videoPillUpdateTimer = undefined
-            this.updatePageDisplay()
-        }, VIDEO_PILL_UPDATE_THROTTLE_MS)
+        let inICloudCount = 0
+        let downloadingCount = 0
 
-        // a pending throttle must never be a reason for the process to stay alive
-        ;(this.videoPillUpdateTimer as unknown as { unref?: () => void })?.unref?.()
-    }
+        for (const routeId of routeIds) {
+            const videoPill = this.getVideoAvailability().getListPill(routeId)
+            if (videoPill === 'in-icloud') inICloudCount++
+            else if (videoPill === 'downloading') downloadingCount++
 
-    protected clearVideoPillThrottle(): void {
-        if (!this.videoPillUpdateTimer)
-            return
-        clearTimeout(this.videoPillUpdateTimer)
-        this.videoPillUpdateTimer = undefined
+            const card = this.getRouteList()?.getCard(routeId)
+            if (card?.setVideoPill(videoPill))
+                card.emitUpdate()
+        }
+
+        return { routeCount: routeIds.length, inICloudCount, downloadingCount }
     }
 
     @Injectable
