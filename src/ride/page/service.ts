@@ -847,7 +847,6 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             const activePaths = this.getActiveVideoPaths(props?.video, props?.videos)
 
             this.videoVisit = { started: true, routeIds, exitHandled: false }
-            this.logVideoVisitDebug('started', routeIds)
             this.getRouteVideoAvailability().onRideStarted(routeIds, activePaths)
         }
         catch (err: any) {
@@ -871,7 +870,6 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             return
 
         const routeIds = this.videoVisit.routeIds
-        this.logVideoVisitDebug('left', routeIds)
 
         this.getRouteVideoAvailability().onRideLeft()
             .catch(err => this.logError(err as Error, 'handleVideoVisitExit'))
@@ -919,16 +917,6 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.logError(err, 'getVideoChainRouteIds')
             return []
         }
-    }
-
-    /**
-     * TEMPORARY - remove once ride-visit start/exit timing has been verified on device.
-     *
-     * Deliberately a raw console line and not a logged event: throwaway instrumentation for one
-     * measurement, not part of the event stream.
-     */
-    protected logVideoVisitDebug(phase: 'started' | 'left', routeIds: Array<string>): void {
-        console.log(`[DEBUG-ICLD] ride visit ${phase} routeIds=${routeIds.join(',')}`)
     }
 
     // ---- Workout ride methods --------------------------------------------------------

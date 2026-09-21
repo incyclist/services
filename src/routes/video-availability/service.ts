@@ -1087,7 +1087,6 @@ export class RouteVideoAvailabilityService extends IncyclistService {
                 .finally(() => {
                     this.inFlight--
                     this.queued.delete(next.path)
-                    this.logQueueDebug()
                     this.pump()
                 })
         }
@@ -1097,21 +1096,6 @@ export class RouteVideoAvailabilityService extends IncyclistService {
         this.queryDurations.push(ms)
         if (this.queryDurations.length > 50)
             this.queryDurations.shift()
-    }
-
-    /**
-     * TEMPORARY - remove once the list-pill cost has been measured on device.
-     *
-     * Deliberately a raw console line and not a logged event: it is throwaway instrumentation for
-     * one measurement, and it must not end up in the event stream.
-     */
-    protected logQueueDebug(): void {
-        const durations = this.queryDurations
-        const avgMs = durations.length
-            ? Math.round(durations.reduce((sum, d) => sum + d, 0) / durations.length)
-            : 0
-
-        console.log(`[DEBUG-ICLD] availability queue queued=${this.queue.length} inFlight=${this.inFlight} avgMs=${avgMs}`)
     }
 
     // --- invalidation -----------------------------------------------------------------

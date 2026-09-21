@@ -64,8 +64,6 @@ describe('RouteVideoAvailabilityService', () => {
     let availability: Record<string, FileAvailability>
     let online: { onlineStatus: boolean }
     let logged: Array<any>
-    let debugLines: Array<string>
-    let consoleLog: jest.SpyInstance
 
     const setup = (props: {
         routes?: Array<RouteInfo>,
@@ -119,14 +117,9 @@ describe('RouteVideoAvailabilityService', () => {
     beforeEach(() => {
         availability = {}
         online = { onlineStatus: true }
-        debugLines = []
-        consoleLog = jest.spyOn(console, 'log').mockImplementation((...args: Array<any>) => {
-            debugLines.push(args.join(' '))
-        })
     })
 
     afterEach(() => {
-        consoleLog.mockRestore()
         service?.reset()
         service = undefined
     })
@@ -640,17 +633,6 @@ describe('RouteVideoAvailabilityService', () => {
             service.getListPill('r1')
 
             expect(binding.getAvailability).toHaveBeenCalledTimes(1)
-        })
-
-        test('the queue cost is mirrored to the console for the device measurement', async () => {
-            listSetup()
-            availability['/icloud/Videos/a.mp4'] = notDownloaded()
-
-            service.getListPill('r1')
-            await flush()
-
-            expect(debugLines.some(l => /\[DEBUG-ICLD] availability queue queued=\d+ inFlight=\d+ avgMs=\d+/.test(l)))
-                .toBe(true)
         })
     })
 

@@ -281,9 +281,6 @@ export class PreviewStore extends IncyclistService {
     protected async adopt(description: RouteInfo, source?: string): Promise<PreviewAdoptionOutcome> {
         const path = this.localPath(source)
 
-        // TEMPORARY - remove once the "preview copy failed" regression is root-caused.
-        this.logEvent({ message: '[DEBUG-ICLD] adopt', id: description.id, source, path })
-
         if (!path)
             // a preview served over http(s) needs no copy
             return 'skipped'
@@ -332,13 +329,7 @@ export class PreviewStore extends IncyclistService {
             // of the same route never leaves a half-written picture behind
             await this.getFileAccess().copyFile(source, target)
         }
-        catch (err) {
-            // TEMPORARY - remove once the "preview copy failed" regression is root-caused. The
-            // native error text alone doesn't say which side (source vs. target) it's about.
-            this.logEvent({
-                message: '[DEBUG-ICLD] copyIntoStore failed', id: routeId, source, target, dir,
-                error: (err as Error)?.message
-            })
+        catch {
             return { ok: false, reason: 'copy-failed' }
         }
 
