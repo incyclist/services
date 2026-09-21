@@ -2,6 +2,7 @@ import { RouteCard } from "./RouteCard";
 import { getBindings } from "../../../api";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
+import { usePreviewStore } from "../../previews/store";
 
 describe('RouteCard.videoExists', () => {
 
@@ -230,4 +231,118 @@ describe('RouteCard.openSettings', () => {
         expect(card.openSettings().detailsAvailable).toBe(true);
     });
 
+});
+
+describe('RouteCard preview handling', () => {
+
+    const createCard = (info: RouteInfo) => new RouteCard(new Route(info));
+
+    afterEach(() => {
+        usePreviewStore().reset();
+        delete getBindings().fileAccess;
+        jest.clearAllMocks();
+    });
+
+    describe('previewMissing', () => {
+
+        test('true for a video route without a preview - unchanged without the binding', () => {
+            const card = createCard({ hasVideo: true } as RouteInfo);
+            expect(card.previewMissing()).toBe(true);
+        });
+
+        test('false once the route has a preview', () => {
+            const card = createCard({ hasVideo: true, previewUrl: 'file:///previews/route-1.png' } as RouteInfo);
+            expect(card.previewMissing()).toBe(false);
+        });
+
+        test('false for a route without a video', () => {
+            const card = createCard({ hasVideo: false } as RouteInfo);
+            expect(card.previewMissing()).toBe(false);
+        });
+
+        test('false while a preview copy is still outstanding', () => {
+            const card = createCard({
+                hasVideo: true, previewSource: '/icloud/Videos/A/preview.png'
+            } as RouteInfo);
+
+            expect(card.previewMissing()).toBe(false);
+        });
+    });
+
+    describe('deleteRoute', () => {
+
+        test('releases the route preview copies', async () => {
+            const card = createCard({ id: '1', hasVideo: true } as RouteInfo) as any;
+            const release = jest.fn().mockResolvedValue(undefined);
+            card.getRepo = () => ({ delete: jest.fn().mockResolvedValue(undefined) });
+            card.injected = { PreviewStore: { release } };
+
+            await card.deleteRoute();
+
+            expect(release).toHaveBeenCalledWith('1');
+        });
+
+        test('without the binding the delete touches no file', async () => {
+            const card = createCard({ id: '1', hasVideo: true } as RouteInfo) as any;
+            const deleteFile = jest.fn();
+            const readdir = jest.fn().mockResolvedValue(['route-1.png']);
+            getBindings().fs = { deleteFile, readdir } as any;
+            card.getRepo = () => ({ delete: jest.fn().mockResolvedValue(undefined) });
+
+            await expect(card.deleteRoute()).resolves.toBeUndefined();
+
+            expect(readdir).not.toHaveBeenCalled();
+            expect(deleteFile).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('emitUpdate', () => {
+
+        test('pushes the card\'s own display properties to its observer', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo);
+            const listener = jest.fn();
+            card.getDisplayProperties().observer.on('update', listener);
+
+            card.emitUpdate();
+
+            expect(listener).toHaveBeenCalledTimes(1);
+            expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', title: 'Alpe du Zwift' });
+        });
+    });
+
+    describe('RouteCard.setVideoPill', () => {
+
+        test('stores the pill as real card state, visible on the next getDisplayProperties()', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo);
+
+            card.setVideoPill('in-icloud');
+
+            expect((card.getDisplayProperties() as any).videoPill).toBe('in-icloud');
+        });
+
+        test('reports whether the value actually changed', () => {
+            const card = createCard({ id: '1' } as RouteInfo);
+
+            expect(card.setVideoPill('in-icloud')).toBe(true);
+            expect(card.setVideoPill('in-icloud')).toBe(false);
+            expect(card.setVideoPill('downloading')).toBe(true);
+            expect(card.setVideoPill(undefined)).toBe(true);
+        });
+
+        // Regression: videoPill used to ride along only inside one emitUpdate() caller's payload
+        // (RoutesPageService.onRouteVideoUpdate's now-removed `overrides` param), so any of this
+        // card's other, unrelated emitUpdate() callers (e.g. a plain refresh after a re-import)
+        // silently erased it for anyone listening on the card's observer. Now it's real card
+        // state, so an unrelated plain emitUpdate() must keep reporting it.
+        test('a pill set via setVideoPill survives an unrelated plain emitUpdate() call', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo);
+            const listener = jest.fn();
+            card.getDisplayProperties().observer.on('update', listener);
+
+            card.setVideoPill('in-icloud');
+            card.emitUpdate(); // e.g. an unrelated "route updated (library import)" refresh
+
+            expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', videoPill: 'in-icloud' });
+        });
+    });
 });

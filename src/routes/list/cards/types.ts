@@ -5,6 +5,7 @@ import { RouteInfo, RoutePoint } from "../../base/types";
 import { SmoothingGradient } from "../../base/utils/smoothing";
 import { DownloadObserver } from "../../download/types";
 import { RouteStartSettings } from "../types";
+import type { VideoListPill } from "../../video-availability/types";
 
 
 export type RouteCardType = 'Import' | 'Route' | 'Free-Ride' | 'ActiveImport';
@@ -38,6 +39,10 @@ export interface SummaryCardDisplayProps extends RouteInfo{
     totalDistance?: {value:number, unit:Unit},
     totalElevation?: {value:number, unit:Unit}
     downloadObserver?: DownloadObserver
+    /** iOS/iCloud list badge - 'in-icloud' | 'downloading' | absent. Cached card state, set by
+     *  RoutesPageService via RouteCard.setVideoPill(); undefined (never computed) on every other
+     *  platform. See architecture.md §3.7.1. */
+    videoPill?: VideoListPill
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type

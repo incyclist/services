@@ -7,7 +7,22 @@ import { Route } from "../base/model/route"
 export interface FolderInfo {
     uri: string          // content:// tree URI (Android) or scoped URL (iOS)
     displayName: string  // shown in UI: "/Videos" or "NAS › Videos"
+    grant?: string       // opaque token keeping access alive across restarts (iOS); never logged
+    grantError?: string  // set instead of `grant` when the platform could not produce one
 }
+
+/**
+ * Stable, translatable reason why a route could not be imported. The accompanying free-text
+ * reason is kept for logs; the UI maps this key to its own copy instead of matching on text.
+ */
+export type RouteImportErrorCode =
+    | 'AVI_NOT_SUPPORTED'
+    | 'NO_VIDEO'
+    | 'READ_FAILED'
+    | 'PARSE_FAILED'
+    | 'ICLOUD_OFFLINE'
+    | 'ICLOUD_DOWNLOAD_FAILED'
+    | 'UNSUPPORTED'
 
 
 // Output of the scan phase — filesystem only, no parsing
@@ -30,6 +45,7 @@ export interface ParsedRoute {
     folderUri: string        // carried from ScannedRoute
     alreadyImported: boolean // set via RouteListService.existsBySourceUri()
     parseError?: string      // set if AVI, no video, parse failure
+    parseErrorCode?: RouteImportErrorCode  // stable key for the same failure
     format: RouteFormat      // 'xml' | 'epm' | 'rlv' | 'gpx'
     observer?:IObserver
 }
@@ -47,6 +63,7 @@ export interface RouteDisplayItem {
     parseState: ParseState
     importable: boolean             // false if scanError or parseError is set
     errorReason?: string            // human-readable, shown inline when importable=false
+    errorCode?: RouteImportErrorCode // stable key for errorReason, so the UI needn't match text
     observer:IObserver
 }
 
@@ -58,7 +75,7 @@ export interface ImportDisplayProps {
     phase: 'landing' | 'scanning' | 'parsing' | 'selecting' | 'ingesting' | 'complete' | 'result' | 'error'
     routes: RouteDisplayItem[]
     scanProgress?: { scannedFolders: number }
-    parseProgress?: { parsed: number; total: number }
+    parseProgress?: { parsed: number; total: number; waitingForICloud?: boolean }
     ingestProgress?: { current: number; total: number; currentName: string }
     completionSummary?: {
         imported: number
@@ -68,11 +85,15 @@ export interface ImportDisplayProps {
     }
     resultSuccess?: { routeName: string }
     error?: string
+    // True when at least one route in this import failed because its files could not be
+    // downloaded from the cloud - drives the "import the folder again" hint. Always populated.
+    hasICloudDownloadFailures: boolean
 }
 
 export interface FailedRoute {
     name: string
     reason: string
+    code?: RouteImportErrorCode
 }
 
 export interface ImportedLibrary {

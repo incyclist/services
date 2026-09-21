@@ -17,6 +17,7 @@ import { Observer } from "../../base/types/observer";
 import { useUserSettings } from "../../settings";
 import { Card } from "../../base/cardlist";
 import { Inject } from "../../base/decorators";
+import { usePreviewStore } from "../previews/store";
 
 import type { ParseResult } from "../types";
 
@@ -422,6 +423,150 @@ describe('RouteListService',()=>{
 
             // Should not throw
             expect(() => service.unselect()).not.toThrow()
+        })
+    })
+
+    describe('previews', () => {
+
+        // RouteListService and RouteCard are shared with desktop, where the fileAccess
+        // binding does not exist: the preview paths must behave exactly as they always have.
+
+        let service:MockeableService
+
+        beforeEach(() => {
+            new RouteListService().reset()
+            service = prepareMock(null,{mockLoad:true})
+            delete getBindings().fileAccess
+        })
+
+        afterEach(() => {
+            (service as any).reset()
+            ;(new RoutesDbLoader() as any).reset()
+            usePreviewStore().reset()
+            delete getBindings().fileAccess
+        })
+
+        const descr = (over:Partial<RouteInfo> = {}):RouteInfo =>
+            ({ id:'1', title:'test', hasVideo:true, videoUrl:'/mnt/videos/a.mp4', ...over }) as RouteInfo
+
+        describe('without the preview store (desktop)', () => {
+
+            test('an existing preview next to the video becomes the previewUrl', async () => {
+                const d = descr()
+
+                const result = await (service as any).checkExistingPreviewFiles(d)
+
+                expect(result).toBe('/mnt/videos/preview.png')
+                expect(d.previewUrl).toBe('/mnt/videos/preview.png')
+                expect(d.previewSource).toBeUndefined()
+            })
+
+            test('a file:/// video keeps the file URL spelling of the preview', async () => {
+                const d = descr({ videoUrl:'file:///mnt/videos/a.mp4' })
+
+                const result = await (service as any).checkExistingPreviewFiles(d)
+
+                expect(result).toBe('file:///mnt/videos/preview.png')
+            })
+
+            test('a preview next to a video whose folder has a percent-encoded space is found (iCloud "Mobile Documents")', async () => {
+                const d = descr({ videoUrl:'file:///private/var/mobile/Library/Mobile%20Documents/com~apple~CloudDocs/IncyclistTest/CH_Ofenpass/Ofenpass.mp4' })
+
+                // only resolvable once the %20 has been decoded back to a real space - this fails
+                // the way the original bug did if the candidate still contains a literal "%20"
+                getBindings().fs.existsFile = jest.fn(async (candidate:string) =>
+                    candidate.endsWith('Mobile Documents/com~apple~CloudDocs/IncyclistTest/CH_Ofenpass/Ofenpass_preview.png')
+                )
+
+                const result = await (service as any).checkExistingPreviewFiles(d)
+
+                expect(result).toContain('Mobile Documents/com~apple~CloudDocs/IncyclistTest/CH_Ofenpass/Ofenpass_preview.png')
+                expect(result).not.toContain('%20')
+                expect(d.previewUrl).toBe(result)
+            })
+
+            test('a screenshot is created and used as-is', async () => {
+                const d = descr({ videoUrl:'/mnt/videos/b.mp4' })
+                getBindings().fs.existsFile = jest.fn().mockResolvedValue(false)
+
+                const result = await (service as any).doCreatePreview(d)
+
+                expect(getBindings().video.screenshot).toHaveBeenCalled()
+                expect(result).toBe('screenshot')
+                expect(d.previewUrl).toBe('screenshot')
+            })
+        })
+
+        describe('with the preview store', () => {
+
+            const createStoreMock = (over:any = {}) => ({
+                isEnabled: () => true,
+                adoptOnImport: jest.fn(),
+                adoptGenerated: jest.fn(),
+                isScreenshotAllowed: jest.fn().mockResolvedValue(true),
+                ...over
+            })
+
+            test('a discovered preview is adopted instead of referenced', async () => {
+                const d = descr()
+                const store = createStoreMock({
+                    adoptOnImport: jest.fn(async (target:RouteInfo) => {
+                        target.previewUrl = 'file:///previews/route-1.png'
+                    })
+                })
+                service.inject('PreviewStore', store)
+
+                const result = await (service as any).checkExistingPreviewFiles(d)
+
+                expect(store.adoptOnImport).toHaveBeenCalledWith(d, '/mnt/videos/preview.png')
+                expect(result).toBe('file:///previews/route-1.png')
+            })
+
+            test('a preview that could not be copied leaves the fallback in place', async () => {
+                const d = descr()
+                const store = createStoreMock({
+                    adoptOnImport: jest.fn(async (target:RouteInfo) => {
+                        target.previewUrl = undefined
+                        target.previewSource = '/mnt/videos/preview.png'
+                    })
+                })
+                service.inject('PreviewStore', store)
+
+                const result = await (service as any).checkExistingPreviewFiles(d)
+
+                expect(result).toBeUndefined()
+                expect(d.previewUrl).toBeUndefined()
+                expect(d.previewSource).toBe('/mnt/videos/preview.png')
+            })
+
+            test('no screenshot is taken from a video that is not available locally', async () => {
+                const d = descr({ videoUrl:'/mnt/videos/b.mp4' })
+                getBindings().fs.existsFile = jest.fn().mockResolvedValue(false)
+                const store = createStoreMock({ isScreenshotAllowed: jest.fn().mockResolvedValue(false) })
+                service.inject('PreviewStore', store)
+
+                const result = await (service as any).doCreatePreview(d)
+
+                expect(result).toBeUndefined()
+                expect(getBindings().video.screenshot).not.toHaveBeenCalled()
+                expect(d.previewUrl).toBeUndefined()
+            })
+
+            test('a generated thumbnail is moved into the store', async () => {
+                const d = descr({ videoUrl:'/mnt/videos/b.mp4' })
+                getBindings().fs.existsFile = jest.fn().mockResolvedValue(false)
+                const store = createStoreMock({
+                    adoptGenerated: jest.fn(async (target:RouteInfo) => {
+                        target.previewUrl = 'file:///previews/route-1.png'
+                    })
+                })
+                service.inject('PreviewStore', store)
+
+                const result = await (service as any).doCreatePreview(d)
+
+                expect(store.adoptGenerated).toHaveBeenCalledWith(d, 'screenshot')
+                expect(result).toBe('file:///previews/route-1.png')
+            })
         })
     })
 

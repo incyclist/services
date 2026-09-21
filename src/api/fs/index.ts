@@ -1,3 +1,14 @@
+/**
+ * Result of a directory listing operation.
+ *
+ * @field name - The canonical item name as it appears in the directory.
+ * @field uri - The canonical path to the item.
+ * @field isDirectory - Whether this item is a directory.
+ *
+ * Note: Platform bindings resolve placeholder or dataless storage representations
+ * (e.g., iCloud "broken link" placeholders) before returning results. The name and uri
+ * fields always represent accessible, canonical identifiers for the item.
+ */
 export interface ReadDirResult {
     name: string
     uri: string

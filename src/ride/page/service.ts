@@ -35,6 +35,13 @@ import type { LoadButtonMode, PowerAdjustmentResult, StepCountdownTick, WorkoutD
 import { getFlattenedSteps, getStepDuration, getStepTargetText, getWorkoutGraphSeries } from "../../workouts/base/graph";
 import type { Workout } from "../../workouts/base/model";
 import type { StepDefinition } from "../../workouts/base/model/types";
+import { RouteVideoAvailabilityService, useRouteVideoAvailability } from "../../routes/video-availability/service";
+import { RouteVideoPageActions, useRouteVideoPageActions } from "../../routes/video-availability/pageActions";
+import { RouteListService, useRouteList } from "../../routes/list/service";
+import { getNextVideoId } from "../../routes/base/utils/route";
+import type { Route } from "../../routes/base/model/route";
+import type { VideoDisplayProps } from "../base/types";
+import type { RouteVideoState } from "../../routes/video-availability/types";
 
 const BACKGROUND_PAUSE_TIMEOUT_MS = 300000
 const UPCOMING_STEPS_COUNT = 3
@@ -49,6 +56,17 @@ const CORNER_WIDGET_SETTING_KEY = 'preferences.workouts.rideCornerWidget'
 // Fallback row count before the view has ever reported a value via setPrevRidesVisibleRows()
 // (screen geometry the service has no visibility into).
 const DEFAULT_PREV_RIDES_VISIBLE_ROWS = 1
+
+// Longest video chain walked when capturing a ride visit's route ids (selected route + next-video
+// ids) - same convention/limit as RouteVideoAvailabilityService's own chain walk, as a guard
+// against a cyclic `next`.
+const MAX_VIDEO_CHAIN_LENGTH = 20
+
+// How long after a non-transition closePage() the ride's active video paths are kept "in use"
+// before being cleared - gives the ride's own teardown a moment to let go of the file first, so
+// an eviction settled by RouteVideoAvailabilityService.onRideLeft() never races a still-mounted
+// player.
+const VIDEO_VISIT_EXIT_CLEAR_DELAY_MS = 2000
 
 /**
  * Single page service for all ride types (Video/GPX/Workout) . Previously
@@ -112,6 +130,23 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     // from re-running init()/start() against it.
     protected viewTransition = false
 
+    // Read-only ride-visit tracker for RouteVideoAvailabilityService's "for this ride"
+    // download/removal bookkeeping - never calls stop()/ensureFinalized() on the ride itself. Reset
+    // on every non-transition openPage(); `started` latches true (once) on the first Started
+    // state-update, capturing `routeIds` at that moment because a later stopRide() unselects the
+    // route. `exitHandled` guards a non-transition closePage() firing onRideLeft() more than once
+    // (End Ride, Cancel Start, and a Finished-ride menu close, or the mobile unmount, can all reach
+    // closePage() for the same visit).
+    protected videoVisit: { started: boolean, routeIds: Array<string>, exitHandled: boolean } | null = null
+
+    // Latches which not-playable RouteVideoState has already been reported to a given video entry's
+    // onLoadError(), keyed by the routeId the gate resolved for that entry - prevents
+    // getVideoRideDisplayProps() from re-firing onLoadError() (which itself triggers a 'state-update'
+    // that repaints the page and calls this method again) on every repaint while the state is
+    // unchanged. Cleared per routeId once it stops being reported as not-playable, and reset
+    // wholesale on every non-transition openPage().
+    protected videoErrorReported: Record<string, RouteVideoState> = {}
+
     constructor() {
         super('RidePage')
 
@@ -167,6 +202,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             this.gestureHintDismissed = false
             this.prevRidesShown = false
             this.nearbyRidersSubscribed = false
+            this.videoVisit = { started: false, routeIds: [], exitHandled: false }
+            this.videoErrorReported = {}
             super.openPage()
 
             try {
@@ -252,6 +289,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             EventLogger.setGlobalConfig('page', null)
             this.logEvent({ message: 'page closed', page: this.getPageLogName() })
 
+            this.handleVideoVisitExit()
+
             this.getRideDisplay().stop()
             this.unregisterHandlers(this.rideObserver, this.eventHandler)
             this.unsubscribeFromWorkoutObserver()
@@ -285,6 +324,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             if (this.backgroundTimer) {
                 clearTimeout(this.backgroundTimer)
             }
+            await this.getRouteVideoAvailability().onForeground()
             return super.resumePage()
         }
         catch (err: any) {
@@ -369,9 +409,10 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             const state = this.getRideDisplay().getState()
             const loadControl = this.getLoadControlProps()
             const showRideSettings = !this.isRideType('Workout')
+            const videoRemoval = this.buildVideoRemoval()
             this.menuProps = this.isWorkoutAttached()
-                ? { showResume: state === 'Paused', ...this.getStepFlags(), loadControl, showRideSettings }
-                : { showResume: state === 'Paused', loadControl, showRideSettings }
+                ? { showResume: state === 'Paused', ...this.getStepFlags(), loadControl, showRideSettings, videoRemoval }
+                : { showResume: state === 'Paused', loadControl, showRideSettings, videoRemoval }
             this.updatePageDisplay()
         }
         catch (err: any) {
@@ -461,14 +502,93 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         const props = this.rideDisplayProps as CurrentRideDisplayProps & RLVDisplayProps & { showWorkout?: boolean }
         const base = this.buildBaseDisplayProps()
 
+        const routeId = this.getRouteId(props.route)
+        const video = this.gateVideoEntry(props.video, routeId)
+        const videos = props.videos?.map(entry => this.gateVideoEntry(entry, this.getVideoEntryRouteId(entry) ?? routeId))
+
+        this.getRouteVideoAvailability().setActiveRidePaths(this.getActiveVideoPaths(video, videos))
+
         const displayProps: VideoRidePageDisplayProps = {
             ...base,
             ...this.buildWorkoutOverlayProps(props),
-            video: props.video,
-            videos: props.videos,
+            video,
+            videos,
             route: props.route
         }
         return displayProps
+    }
+
+    /**
+     * The ride-start playability gate for one video entry (`props.video`, or one element of
+     * `props.videos`), per the ST-xx start-overlay reasons `RouteVideoAvailabilityService` already
+     * produces. `routeId` unresolved, the platform unsupported, or the file not external all fold
+     * into the same 'ready'/'unknown' no-op path there - this method never needs to know which.
+     *
+     * - `checking` (pending): the entry is returned without `src` - nothing to report yet.
+     * - Anything else not-playable: the entry is returned without `src`, and its own `onLoadError()`
+     *   is called once with the ST reason (segment-prefixed for a multi-video route) - latched via
+     *   `videoErrorReported` so a repaint triggered by that very call (onVideoLoadError() emits its
+     *   own 'state-update') does not re-fire it every tick while the state is unchanged.
+     * - `ready`/`unknown`: the entry is returned unchanged, `src` included.
+     */
+    protected gateVideoEntry(entry: VideoDisplayProps | undefined, routeId?: string): VideoDisplayProps | undefined {
+        if (!entry || !routeId)
+            return entry
+
+        try {
+            const availability = this.getRouteVideoAvailability()
+            const status = availability.getStatus(routeId)
+
+            if (status.state === 'ready' || status.state === 'unknown') {
+                delete this.videoErrorReported[routeId]
+                return entry
+            }
+
+            if (status.state === 'checking')
+                return { ...entry, src: undefined }
+
+            if (this.videoErrorReported[routeId] !== status.state) {
+                this.videoErrorReported[routeId] = status.state
+                const message = availability.getStartOverlayReason(routeId) ?? 'Could not load video.'
+                entry.onLoadError?.({ message } as unknown as MediaError)
+            }
+
+            return { ...entry, src: undefined }
+        }
+        catch (err: any) {
+            this.logError(err, 'gateVideoEntry')
+            return entry
+        }
+    }
+
+    /** `props.route`'s own id, or undefined for the loosely-typed test fixtures that omit it. */
+    protected getRouteId(route: Route | undefined): string | undefined {
+        return route?.description?.id
+    }
+
+    /**
+     * A `videos[]` chain entry already carries the id of the route it belongs to (set by
+     * RLVDisplayService's own multi-video mapping) - it just isn't part of the public
+     * `VideoDisplayProps` shape, so it's read back loosely rather than widening that shared type.
+     */
+    protected getVideoEntryRouteId(entry: VideoDisplayProps): string | undefined {
+        return (entry as unknown as { id?: string }).id
+    }
+
+    /** The file paths a Video ride currently has mounted - never evicted while listed here. */
+    protected getActiveVideoPaths(video: VideoDisplayProps | undefined, videos: Array<VideoDisplayProps> | undefined): Array<string> {
+        try {
+            if (video?.src)
+                return [String(video.src)]
+
+            return (videos ?? [])
+                .filter(entry => !entry.hidden && entry.src)
+                .map(entry => String(entry.src))
+        }
+        catch (err: any) {
+            this.logError(err, 'getActiveVideoPaths')
+            return []
+        }
     }
 
     protected getGPXRideDisplayProps(): GPXRidePageDisplayProps {
@@ -700,6 +820,101 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     protected getSecretBinding(): ISecretBinding | undefined {
         return this.getBindings().secret
+    }
+
+    // ---- ride-visit tracking (RouteVideoAvailabilityService "for this ride" downloads) --------
+    //
+    // Read-only: this tracker only ever observes state-update/openPage/closePage and reports to
+    // RouteVideoAvailabilityService - it never calls stop()/ensureFinalized() on any ride or
+    // download itself. It exists because RideDisplayService auto-finalizes on route/workout
+    // completion, and a second stopRide() can reset state back to Idle and re-emit
+    // 'state-update' - so exit is derived from closePage() (verified to fire exactly once per real
+    // exit: onEndRide(), onCancelStart(), a Finished onMenuClose(), and the mobile inner-page
+    // unmount), not from any particular ride state.
+
+    /**
+     * First 'Started' of a visit: latches so it only ever runs once, captures the routeIds this
+     * visit covers (the selected route, plus every route its video chains to) before anything can
+     * unselect it, and reports the visit's start onward.
+     */
+    protected latchVideoVisitStarted(): void {
+        if (!this.videoVisit || this.videoVisit.started)
+            return
+
+        try {
+            const routeIds = this.getVideoChainRouteIds()
+            const props = this.rideDisplayProps as CurrentRideDisplayProps & RLVDisplayProps
+            const activePaths = this.getActiveVideoPaths(props?.video, props?.videos)
+
+            this.videoVisit = { started: true, routeIds, exitHandled: false }
+            this.getRouteVideoAvailability().onRideStarted(routeIds, activePaths)
+        }
+        catch (err: any) {
+            this.logError(err, 'latchVideoVisitStarted')
+        }
+    }
+
+    /**
+     * Runs once per non-transition closePage(), whichever of the several exit paths reaches it
+     * first. Reports the visit's end only if it ever actually started (a cancelled/never-started
+     * ride has nothing to hand back), then lets the ride's own teardown finish before the visit's
+     * active paths stop being protected from eviction.
+     */
+    protected handleVideoVisitExit(): void {
+        if (!this.videoVisit || this.videoVisit.exitHandled)
+            return
+
+        this.videoVisit.exitHandled = true
+
+        if (!this.videoVisit.started)
+            return
+
+        this.getRouteVideoAvailability().onRideLeft()
+            .catch(err => this.logError(err as Error, 'handleVideoVisitExit'))
+
+        const timer = setTimeout(() => {
+            try {
+                this.getRouteVideoAvailability().setActiveRidePaths([])
+            }
+            catch (err: any) {
+                this.logError(err, 'handleVideoVisitExit')
+            }
+        }, VIDEO_VISIT_EXIT_CLEAR_DELAY_MS)
+        // a pending cleanup timer must never be a reason for the process to stay alive
+        ;(timer as unknown as { unref?: () => void })?.unref?.()
+    }
+
+    /**
+     * The selected route's id, followed by every route id its video chains to (`next`) - the same
+     * chain RouteVideoAvailabilityService's own getVideoFiles() walks, just without needing the
+     * file paths. Captured once, at ride start, because a later stopRide() unselects the route.
+     */
+    protected getVideoChainRouteIds(): Array<string> {
+        try {
+            const routeList = this.getRouteList()
+            const selected = routeList?.getSelected()
+            if (!selected?.description?.id)
+                return []
+
+            const ids: Array<string> = []
+            const seen = new Set<string>()
+            let current: Route | undefined = selected
+
+            while (current?.description?.id && !seen.has(current.description.id) && ids.length < MAX_VIDEO_CHAIN_LENGTH) {
+                const id = current.description.id
+                seen.add(id)
+                ids.push(id)
+
+                const nextId = getNextVideoId(current)
+                current = nextId ? routeList?.getCard(nextId)?.getData() : undefined
+            }
+
+            return ids
+        }
+        catch (err: any) {
+            this.logError(err, 'getVideoChainRouteIds')
+            return []
+        }
     }
 
     // ---- Workout ride methods --------------------------------------------------------
@@ -1310,17 +1525,39 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     protected buildPausedMenuProps(): RideMenuProps | WorkoutRideMenuProps {
         const loadControl = this.getLoadControlProps()
         const showRideSettings = !this.isRideType('Workout')
+        const videoRemoval = this.buildVideoRemoval()
         return this.isWorkoutAttached()
-            ? { showResume: true, ...this.getStepFlags(), loadControl, showRideSettings }
-            : { showResume: true, loadControl, showRideSettings }
+            ? { showResume: true, ...this.getStepFlags(), loadControl, showRideSettings, videoRemoval }
+            : { showResume: true, loadControl, showRideSettings, videoRemoval }
     }
 
     protected buildFinishedMenuProps(): RideMenuProps | WorkoutRideMenuProps {
         const loadControl = this.getLoadControlProps()
         const showRideSettings = !this.isRideType('Workout')
+        const videoRemoval = this.buildVideoRemoval()
         return this.isWorkoutAttached()
-            ? { showResume: false, finished: true, canStepBack: false, canStepForward: false, loadControl, showRideSettings }
-            : { showResume: false, finished: true, loadControl, showRideSettings }
+            ? { showResume: false, finished: true, canStepBack: false, canStepForward: false, loadControl, showRideSettings, videoRemoval }
+            : { showResume: false, finished: true, loadControl, showRideSettings, videoRemoval }
+    }
+
+    /**
+     * The ride summary's "removed when you leave" line (RideMenuProps.videoRemoval) - whether this
+     * visit downloaded a video just for this ride, and whether the rider already chose to keep it.
+     * Undefined whenever there's nothing to say (no visit routes yet, platform unsupported, or
+     * nothing pending/kept for any of them).
+     */
+    protected buildVideoRemoval(): { pending: boolean, kept: boolean } | undefined {
+        try {
+            const routeIds = this.videoVisit?.routeIds ?? []
+            if (!routeIds.length)
+                return undefined
+
+            return this.getRouteVideoAvailability().getRideRemovalNotice(routeIds)
+        }
+        catch (err: any) {
+            this.logError(err, 'buildVideoRemoval')
+            return undefined
+        }
     }
 
     // gestureHint/loadIncrement/loadButtonMode live here (not in buildWorkoutOverlayProps()'s
@@ -1413,6 +1650,25 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         catch (err: any) {
             this.logError(err, 'getPrevRidesRows')
             return []
+        }
+    }
+
+    /**
+     * "Keep it" on the post-ride video removal notice (RideMenuProps.videoRemoval): the video
+     * downloaded for this ride only is kept instead of being removed again once the rider leaves.
+     *
+     * Delegates to RouteVideoPageActions' own onVideoKeepInstead(routeId) (which in turn calls
+     * RouteVideoAvailabilityService.setChoice(routeId, 'keep')) for every route this visit
+     * covers - a no-op for any route without a pending "for this ride" entry.
+     */
+    onVideoKeepInstead(): void {
+        try {
+            const routeIds = this.videoVisit?.routeIds ?? []
+            routeIds.forEach(routeId => this.getRouteVideoPageActions().onVideoKeepInstead(routeId))
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onVideoKeepInstead')
         }
     }
 
@@ -1521,6 +1777,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         this.subscribeToNearbyRiders()
 
         switch (state) {
+            case 'Started':
+                this.latchVideoVisitStarted()
+                break
             case 'Paused':
                 this.menuProps = this.buildPausedMenuProps()
                 break
@@ -1593,6 +1852,21 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     @Injectable
     protected getDeviceConfiguration() {
         return useDeviceConfiguration()
+    }
+
+    @Injectable
+    protected getRouteVideoAvailability(): RouteVideoAvailabilityService {
+        return useRouteVideoAvailability()
+    }
+
+    @Injectable
+    protected getRouteVideoPageActions(): RouteVideoPageActions {
+        return useRouteVideoPageActions()
+    }
+
+    @Injectable
+    protected getRouteList(): RouteListService {
+        return useRouteList()
     }
 
 }

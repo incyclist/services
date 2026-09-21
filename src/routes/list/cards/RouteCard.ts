@@ -25,6 +25,8 @@ import { distanceBetween } from "../../../utils/geo";
 import { getUnitConversionShortcuts, Unit } from "../../../i18n";
 import { Injectable } from "../../../base/decorators";
 import { useAppState } from "../../../appstate";
+import { usePreviewStore } from "../../previews/store";
+import type { VideoListPill } from "../../video-availability/types";
 
 
 export const DEFAULT_TITLE = 'Import Route';
@@ -69,6 +71,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected logger:EventLogger
     protected cntActive: number=0
     protected smoothingPreview?: {key:string, points:Array<RoutePoint>, elevation?:number, gradient:SmoothingGradient}
+    /** iOS/iCloud list badge, cached here so it survives every emitUpdate() snapshot regardless
+     *  of who triggers it - see architecture.md §3.7.1. Set only via setVideoPill(). */
+    protected videoPill?: VideoListPill
 
     constructor(route:Route, props?:{list?: CardList<Route>} ) {
         super()
@@ -195,6 +200,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
     previewMissing() {
         try {
             const descr = this.getRouteDescription()
+            // a pending copy means the source is not readable right now: a screenshot attempt
+            // would run against a video we also cannot read
+            if (valid(descr.previewSource))
+                return false
             return descr.hasVideo && !valid(descr.previewUrl)
         }
         catch(err:any) {
@@ -331,7 +340,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
             return {...descr, initialized:this.initialized, loaded,ready:true,state:'loaded',visible:this.visible,isNew,
                     totalDistance,totalElevation,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
-                    observer:this.cardObserver, cntActive:this.cntActive, country:countryISO}
+                    observer:this.cardObserver, cntActive:this.cntActive, country:countryISO,
+                    videoPill:this.videoPill}
         }
         catch(err:any) {
             this.logError(err,'getDisplayProperties')
@@ -1189,14 +1199,35 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
+    /**
+     * The iOS/iCloud list badge, cached as real card state (architecture.md §3.7.1) rather than
+     * an ad-hoc emitUpdate() override: emitUpdate() is a complete-snapshot channel everywhere
+     * else in this codebase, so a value that only ever rode along inside one caller's payload
+     * would get silently erased by any of this card's other emitUpdate() callers.
+     *
+     * Returns whether the value actually changed, so callers only pay for an emitUpdate() when
+     * it's worth one.
+     */
+    setVideoPill(pill?: VideoListPill): boolean {
+        if (this.videoPill === pill)
+            return false
+        this.videoPill = pill
+        return true
+    }
+
+    /**
+     * Pushes a fresh, complete set of display properties to whoever is holding this card's own
+     * observer (the list item component) - the per-card channel a page service uses to reflect
+     * a change without going through the page's own routes array: `RoutesTable` is memoized on
+     * the route id list alone, so a prop change that leaves every id in place would never
+     * re-render it, or the RouteItem inside it, if it only went through that array.
+     */
     emitUpdate() {
         if (this.cardObserver)
             this.cardObserver.emit('update', this.getDisplayProperties())
-
     }
     emitRedraw() {
         if (this.cardObserver) {
-            console.log('# emit redraw ',this.getTitle())
             this.cardObserver.emit('redraw', this.getDisplayProperties())
         }
 
@@ -1271,7 +1302,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     protected async deleteRoute():Promise<void> {
-        await this.getRepo().delete(this.route)        
+        await this.getRepo().delete(this.route)
+        await this.getPreviewStore().release(this.route.description.id)
     }
 
     protected logError( err:Error, fn:string) {
@@ -1361,6 +1393,11 @@ export class RouteCard extends BaseCard implements Card<Route> {
     @Injectable
     protected getAppState() {
         return useAppState()
+    }
+
+    @Injectable
+    protected getPreviewStore() {
+        return usePreviewStore()
     }
 
     protected getRouteDownload() {

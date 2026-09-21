@@ -11,6 +11,9 @@ let MockBindings
 let MockOnlineStatusMonitoring
 let MockUserSettings
 let MockDeviceConfiguration
+let MockRouteVideoAvailability
+let MockRouteVideoPageActions
+let MockRouteList
 
 // The row shape as returned by ActivityRideService.getPrevRidesListDisplay(), before
 // RidePageService maps it to PrevRidesRowProps.
@@ -113,6 +116,25 @@ const setupMocks = (rideType: string = 'GPX') => {
         on: jest.fn(),
         off: jest.fn()
     }
+    // Defaults mirror an unsupported platform (no fileAccess binding): 'unknown' state gates
+    // nothing, and every action is a safe no-op - individual tests override per case.
+    MockRouteVideoAvailability = {
+        isSupported: jest.fn().mockReturnValue(false),
+        getStatus: jest.fn().mockReturnValue({ state: 'unknown', isICloud: false, fileCount: 0, notDownloadedCount: 0, confirmedThisSession: false }),
+        getStartOverlayReason: jest.fn().mockReturnValue(undefined),
+        onRideStarted: jest.fn(),
+        setActiveRidePaths: jest.fn(),
+        onRideLeft: jest.fn().mockResolvedValue(undefined),
+        onForeground: jest.fn().mockResolvedValue(undefined),
+        getRideRemovalNotice: jest.fn().mockReturnValue(undefined)
+    }
+    MockRouteVideoPageActions = {
+        onVideoKeepInstead: jest.fn()
+    }
+    MockRouteList = {
+        getSelected: jest.fn().mockReturnValue(undefined),
+        getCard: jest.fn()
+    }
 
     Inject('RideDisplay', MockRideDisplay)
     Inject('WorkoutRide', MockWorkoutRide)
@@ -122,6 +144,9 @@ const setupMocks = (rideType: string = 'GPX') => {
     Inject('OnlineStatusMonitoring', MockOnlineStatusMonitoring)
     Inject('UserSettings', MockUserSettings)
     Inject('DeviceConfiguration', MockDeviceConfiguration)
+    Inject('RouteVideoAvailability', MockRouteVideoAvailability)
+    Inject('RouteVideoPageActions', MockRouteVideoPageActions)
+    Inject('RouteList', MockRouteList)
 }
 
 const resetMocks = () => {
@@ -133,6 +158,9 @@ const resetMocks = () => {
     Inject('OnlineStatusMonitoring', null)
     Inject('UserSettings', null)
     Inject('DeviceConfiguration', null)
+    Inject('RouteVideoAvailability', null)
+    Inject('RouteVideoPageActions', null)
+    Inject('RouteList', null)
 }
 
 // flush the microtask queue so that already-settled promises' .then() handlers get to run
@@ -2577,6 +2605,363 @@ describe('RidePageService', () => {
 
                 expect((s.getPageDisplayProps() as any).prevRides.mode).toBe('condensed')
             })
+        })
+    })
+
+    // ---- iOS iCloud video access: ride-visit tracking, playability gate, videoRemoval ----------
+
+    const makeRoute = (id: string, next?: string) => ({
+        description: { id },
+        details: { id, next }
+    })
+
+    const emitVideoStateUpdate = (rideObserver: Observer, state: string) => {
+        rideObserver.emit('state-update', state)
+    }
+
+    describe('ride-visit tracking (RouteVideoAvailabilityService integration)', () => {
+
+        let rideObserver: Observer
+
+        beforeEach(() => {
+            MockRideDisplay.getRideType.mockReturnValue('Video')
+            rideObserver = new Observer()
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver);
+            (s as any).isInitialized = true // skip the async init dance so handlers register synchronously
+        })
+
+        test('does not latch a visit or report a start before the first Started state-update', () => {
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Active')
+
+            expect(MockRouteVideoAvailability.onRideStarted).not.toHaveBeenCalled()
+        })
+
+        test('latches "Started" exactly once and captures the selected route + next-video chain', () => {
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1', 'r2'))
+            MockRouteList.getCard.mockImplementation((id: string) => ({
+                getData: () => id === 'r2' ? makeRoute('r2') : undefined
+            }))
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Started', video: { src: 'path1' }, route: makeRoute('r1', 'r2')
+            })
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+            emitVideoStateUpdate(rideObserver, 'Started')
+
+            expect(MockRouteVideoAvailability.onRideStarted).toHaveBeenCalledTimes(1)
+            expect(MockRouteVideoAvailability.onRideStarted).toHaveBeenCalledWith(['r1', 'r2'], ['path1'])
+        })
+
+        test('a redundant stopRide() re-emitting state-update (Finished, then Idle) does not re-latch or report a second start', () => {
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1'))
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+            emitVideoStateUpdate(rideObserver, 'Finished')
+            emitVideoStateUpdate(rideObserver, 'Idle')
+
+            expect(MockRouteVideoAvailability.onRideStarted).toHaveBeenCalledTimes(1)
+            expect(MockRouteVideoAvailability.onRideLeft).not.toHaveBeenCalled()
+        })
+
+        test('a non-transition closePage() after Started reports the visit left exactly once', () => {
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1'))
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+            s.closePage()
+
+            expect(MockRouteVideoAvailability.onRideLeft).toHaveBeenCalledTimes(1)
+        })
+
+        test('double closePage() only reports the visit left once', () => {
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1'))
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+            s.closePage()
+            s.closePage()
+
+            expect(MockRouteVideoAvailability.onRideLeft).toHaveBeenCalledTimes(1)
+        })
+
+        test('closePage() on a ride that never started does not report a visit left', () => {
+            s.openPage()
+            s.closePage()
+
+            expect(MockRouteVideoAvailability.onRideLeft).not.toHaveBeenCalled()
+        })
+
+        test('a transition close (mid-ride view swap) is swallowed and never reports the visit left', () => {
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1'))
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+
+            // route-ends-first mid-ride type flip, exactly as onViewChanged() sets it
+            rideObserver.emit('view-changed')
+            s.closePage()
+
+            expect(MockRouteVideoAvailability.onRideLeft).not.toHaveBeenCalled()
+        })
+
+        test('a fresh openPage() starts a new visit that can latch and exit independently of the previous one', () => {
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1'))
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+            s.closePage()
+            expect(MockRouteVideoAvailability.onRideLeft).toHaveBeenCalledTimes(1)
+
+            s.openPage()
+            s.closePage()
+
+            // second visit never reached Started, so it must not report a second "left"
+            expect(MockRouteVideoAvailability.onRideLeft).toHaveBeenCalledTimes(1)
+        })
+
+        test('never calls stop()/ensureFinalized() on the availability service - read-only', () => {
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1'))
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+            s.closePage()
+
+            expect((MockRouteVideoAvailability as any).stop).toBeUndefined()
+            expect((MockRouteVideoAvailability as any).ensureFinalized).toBeUndefined()
+        })
+
+        test('resumePage() calls RouteVideoAvailabilityService.onForeground()', async () => {
+            await s.resumePage()
+            expect(MockRouteVideoAvailability.onForeground).toHaveBeenCalledTimes(1)
+        })
+
+        test('resumePage() logs and swallows an onForeground() rejection', async () => {
+            MockRouteVideoAvailability.onForeground.mockRejectedValueOnce(new Error('boom'))
+            await expect(s.resumePage()).resolves.toBeUndefined()
+            expect(s.logError).toHaveBeenCalled()
+        })
+    })
+
+    describe('video playability gate (getVideoRideDisplayProps)', () => {
+
+        beforeEach(() => {
+            MockRideDisplay.getRideType.mockReturnValue('Video')
+        })
+
+        test('binding unsupported (state "unknown") leaves the video entry unchanged', () => {
+            const onLoadError = jest.fn()
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active', video: { src: 'path1', onLoadError }, route: makeRoute('r1')
+            })
+            MockRouteVideoAvailability.getStatus.mockReturnValue({ state: 'unknown' })
+
+            const props: any = s.getPageDisplayProps()
+
+            expect(props.video.src).toBe('path1')
+            expect(onLoadError).not.toHaveBeenCalled()
+        })
+
+        test('"ready" status leaves the video entry unchanged', () => {
+            const onLoadError = jest.fn()
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active', video: { src: 'path1', onLoadError }, route: makeRoute('r1')
+            })
+            MockRouteVideoAvailability.getStatus.mockReturnValue({ state: 'ready' })
+
+            const props: any = s.getPageDisplayProps()
+
+            expect(props.video.src).toBe('path1')
+            expect(onLoadError).not.toHaveBeenCalled()
+        })
+
+        test('"checking" (pending) status omits src without calling onLoadError', () => {
+            const onLoadError = jest.fn()
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active', video: { src: 'path1', onLoadError }, route: makeRoute('r1')
+            })
+            MockRouteVideoAvailability.getStatus.mockReturnValue({ state: 'checking' })
+
+            const props: any = s.getPageDisplayProps()
+
+            expect(props.video.src).toBeUndefined()
+            expect(onLoadError).not.toHaveBeenCalled()
+        })
+
+        test('a not-playable status omits src and reports the ST reason via the entry\'s own onLoadError', () => {
+            const onLoadError = jest.fn()
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active', video: { src: 'path1', onLoadError }, route: makeRoute('r1')
+            })
+            MockRouteVideoAvailability.getStatus.mockReturnValue({ state: 'not-downloaded' })
+            MockRouteVideoAvailability.getStartOverlayReason.mockReturnValue('Part 1: download it under Routes.')
+
+            const props: any = s.getPageDisplayProps()
+
+            expect(props.video.src).toBeUndefined()
+            expect(onLoadError).toHaveBeenCalledTimes(1)
+            expect(onLoadError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Part 1: download it under Routes.' }))
+        })
+
+        test('does not re-fire onLoadError on a repeated render while the not-playable state is unchanged', () => {
+            const onLoadError = jest.fn()
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active', video: { src: 'path1', onLoadError }, route: makeRoute('r1')
+            })
+            MockRouteVideoAvailability.getStatus.mockReturnValue({ state: 'not-downloaded' })
+
+            s.getPageDisplayProps()
+            s.getPageDisplayProps()
+            s.getPageDisplayProps()
+
+            expect(onLoadError).toHaveBeenCalledTimes(1)
+        })
+
+        test('re-fires onLoadError once the not-playable state actually changes', () => {
+            const onLoadError = jest.fn()
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active', video: { src: 'path1', onLoadError }, route: makeRoute('r1')
+            })
+            MockRouteVideoAvailability.getStatus.mockReturnValue({ state: 'not-downloaded' })
+
+            s.getPageDisplayProps()
+            MockRouteVideoAvailability.getStatus.mockReturnValue({ state: 'download-failed' })
+            s.getPageDisplayProps()
+
+            expect(onLoadError).toHaveBeenCalledTimes(2)
+        })
+
+        test('gates each entry of a multi-video chain independently, by its own routeId', () => {
+            const onLoadErrorReady = jest.fn()
+            const onLoadErrorBlocked = jest.fn()
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active',
+                videos: [
+                    { src: 'path1', id: 'r1', onLoadError: onLoadErrorReady, hidden: false },
+                    { src: 'path2', id: 'r2', onLoadError: onLoadErrorBlocked, hidden: true }
+                ],
+                route: makeRoute('r1')
+            })
+            MockRouteVideoAvailability.getStatus.mockImplementation((routeId: string) => (
+                routeId === 'r1' ? { state: 'ready' } : { state: 'not-downloaded' }
+            ))
+
+            const props: any = s.getPageDisplayProps()
+
+            expect(props.videos[0].src).toBe('path1')
+            expect(props.videos[1].src).toBeUndefined()
+            expect(onLoadErrorReady).not.toHaveBeenCalled()
+            expect(onLoadErrorBlocked).toHaveBeenCalledTimes(1)
+        })
+
+        test('reports the currently active (non-hidden) video paths to setActiveRidePaths on every render', () => {
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active',
+                videos: [
+                    { src: 'path1', id: 'r1', hidden: false },
+                    { src: 'path2', id: 'r2', hidden: true }
+                ],
+                route: makeRoute('r1')
+            })
+            MockRouteVideoAvailability.getStatus.mockReturnValue({ state: 'ready' })
+
+            s.getPageDisplayProps()
+
+            expect(MockRouteVideoAvailability.setActiveRidePaths).toHaveBeenCalledWith(['path1'])
+        })
+
+        test('no route id resolvable (loosely-typed fixture) leaves the entry untouched', () => {
+            const onLoadError = jest.fn()
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({
+                state: 'Active', video: { src: 'path1', onLoadError }, route: { id: 'r1' }
+            })
+            MockRouteVideoAvailability.getStatus.mockReturnValue({ state: 'not-downloaded' })
+
+            const props: any = s.getPageDisplayProps()
+
+            expect(props.video.src).toBe('path1')
+            expect(onLoadError).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('menuProps.videoRemoval', () => {
+
+        beforeEach(() => {
+            MockRideDisplay.getRideType.mockReturnValue('Video')
+        })
+
+        test('undefined when no visit route ids have been captured yet', () => {
+            s.onMenuOpen()
+            expect(MockRouteVideoAvailability.getRideRemovalNotice).not.toHaveBeenCalled()
+            expect((s.getPageDisplayProps() as any).menuProps.videoRemoval).toBeUndefined()
+        })
+
+        test('populated from getRideRemovalNotice() once a visit has captured route ids', () => {
+            const rideObserver = new Observer()
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver);
+            (s as any).isInitialized = true
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1'))
+            MockRouteVideoAvailability.getRideRemovalNotice.mockReturnValue({ pending: true, kept: false })
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+            s.onMenuOpen()
+
+            expect(MockRouteVideoAvailability.getRideRemovalNotice).toHaveBeenCalledWith(['r1'])
+            expect((s.getPageDisplayProps() as any).menuProps.videoRemoval).toEqual({ pending: true, kept: false })
+        })
+
+        test('buildFinishedMenuProps() also carries videoRemoval', () => {
+            const rideObserver = new Observer()
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver);
+            (s as any).isInitialized = true
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1'))
+            MockRouteVideoAvailability.getRideRemovalNotice.mockReturnValue({ pending: false, kept: true })
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+            emitVideoStateUpdate(rideObserver, 'Finished')
+
+            expect((s.getPageDisplayProps() as any).menuProps.videoRemoval).toEqual({ pending: false, kept: true })
+        })
+    })
+
+    describe('onVideoKeepInstead', () => {
+
+        test('delegates to RouteVideoPageActions for every route id the current visit covers', () => {
+            const rideObserver = new Observer()
+            MockRideDisplay.getRideType.mockReturnValue('Video')
+            MockRideDisplay.getObserver.mockReturnValue(rideObserver);
+            (s as any).isInitialized = true
+            MockRouteList.getSelected.mockReturnValue(makeRoute('r1', 'r2'))
+            MockRouteList.getCard.mockImplementation((id: string) => ({
+                getData: () => id === 'r2' ? makeRoute('r2') : undefined
+            }))
+
+            s.openPage()
+            emitVideoStateUpdate(rideObserver, 'Started')
+
+            s.onVideoKeepInstead()
+
+            expect(MockRouteVideoPageActions.onVideoKeepInstead).toHaveBeenCalledWith('r1')
+            expect(MockRouteVideoPageActions.onVideoKeepInstead).toHaveBeenCalledWith('r2')
+            expect(MockRouteVideoPageActions.onVideoKeepInstead).toHaveBeenCalledTimes(2)
+        })
+
+        test('is a no-op when the visit never captured any route ids', () => {
+            expect(() => s.onVideoKeepInstead()).not.toThrow()
+            expect(MockRouteVideoPageActions.onVideoKeepInstead).not.toHaveBeenCalled()
         })
     })
 })

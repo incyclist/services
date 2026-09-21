@@ -33,6 +33,7 @@ import { useAppState } from "../../appstate";
 import { useUnitConverter } from "../../i18n";
 import clone from "../../utils/clone";
 import { IObserver } from "../../types";
+import { usePreviewStore } from "../previews/store";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -1025,79 +1026,91 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             }
 
 
-            files.forEach( async (file,idx)=>{
-                if (!file)
-                    return;
+            files.forEach( (file,idx)=>{
                 const importCard = importId? null : importCards[idx]
-                
-                const name = file.url??file.filename??file.name
-
-                this.logEvent({message:'import single route file',file:name, type:file.ext})
-            
-                try {
-
-                    if (importId&&observer)
-                        observer?.emit('parsing',importId)
-
-                    const {data,details} = await RouteParser.parse(file)     
-                   
-                    if (importId&&observer)
-                        observer?.emit('success',importId)
-
-
-                    const route = new Route(data,details)
-                    route.description.tsImported = Date.now()
-                    this.logEvent({message:'import single route file success',file:name})
-                    
-                    const existing = this.findCard(route)
-    
-                    if (existing ) {   
-                        existing.list.remove( existing.card)
-                        this.logEvent({message:'route updated (import)',route:route.title})
-
-                    }
-                    else  {
-                        this.routes.push(route)
-                        this.logEvent({message:'route added',route:route.title})
-                    }
-                        
-                    const card = new RouteCard(route,{list:this.myRoutes})
-                    card.verify()
-                    card.save()
-                    card.enableDelete()
-                    
-                    this.myRoutes.add( card, true )
-                    this.cardLookup[route.description.id] = { card, list:this.myRoutes};
-
-                   
-
-                    if (importCard) {
-                        this.myRoutes.remove(importCard)
-                    }
-                    card.enableDelete(true)              
-                    this.emitLists('updated',{log:true})     
-
-
-    
-                    this.verifyPoints(card,route)
-    
-                   
-                }
-                catch(err) {
-                    this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
-                    if (importId&&observer)
-                        observer?.emit('error',importId, err.message)
-                    if (importCard)
-                        importCard.setError(err)
-                }
-        
-                
+                this.importOneFile(file, importCard, importId, observer)
             })
     
 
         }
         catch(err) {
             this.logError(err,'import',info)
+        }
+    }
+
+    /** Parses and adds one file dropped/picked for single-file import; fire-and-forget per file. */
+    private async importOneFile(
+        file: FileInfo,
+        importCard: ActiveImportCard | null,
+        importId: string | undefined,
+        observer: IObserver | undefined
+    ): Promise<void> {
+        if (!file)
+            return
+
+        const name = file.url??file.filename??file.name
+
+        this.logEvent({message:'import single route file',file:name, type:file.ext})
+
+        try {
+
+            if (importId&&observer)
+                observer?.emit('parsing',importId)
+
+            const {data,details} = await RouteParser.parse(file)
+
+            if (importId&&observer)
+                observer?.emit('success',importId)
+
+
+            const route = new Route(data,details)
+            route.description.tsImported = Date.now()
+            this.logEvent({message:'import single route file success',file:name})
+
+            const previews = this.getPreviewStore()
+            if (previews.isEnabled())
+                await previews.adoptOnImport(route)
+
+            const existing = this.findCard(route)
+
+            if (existing ) {
+                existing.list.remove( existing.card)
+                this.logEvent({message:'route updated (import)',route:route.title})
+
+            }
+            else  {
+                this.routes.push(route)
+                this.logEvent({message:'route added',route:route.title})
+            }
+
+            const card = new RouteCard(route,{list:this.myRoutes})
+            card.verify()
+            card.save()
+            card.enableDelete()
+
+            this.myRoutes.add( card, true )
+            this.cardLookup[route.description.id] = { card, list:this.myRoutes};
+
+
+
+            if (importCard) {
+                this.myRoutes.remove(importCard)
+            }
+            card.enableDelete(true)
+            this.emitLists('updated',{log:true})
+
+
+
+            this.verifyPoints(card,route)
+
+
+        }
+        catch(err) {
+            this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
+            if (importId&&observer)
+                observer?.emit('error',importId, err.message)
+            if (importCard)
+                importCard.setError(err)
         }
     }
 
@@ -1757,19 +1770,34 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const path = getBindings().path
         const fs = getBindings().fs
 
+        // videoUrl can be a percent-encoded file:// URI (e.g. iCloud's "Mobile Documents" folder
+        // contains a literal space, encoded as %20) - fs.existsFile() needs the real path, so a
+        // segment straight out of path.parse() must be decoded before it is used.
+        const decodeSegment = (segment:string):string => {
+            try {
+                return decodeURIComponent(segment)
+            }
+            catch {
+                // not a valid escape sequence - a literal '%' in a file or folder name
+                return segment
+            }
+        }
+
         let existingPreview:string
         let fileUrl = false
         try {
             let {dir} = path.parse(videoUrl)??{}
             const {name} = path.parse(videoUrl)??{}
-            if (!dir.startsWith('htttp')) {
-                if (dir.startsWith('video:')) {                    
-                    dir = dir.replace('video:', 'file:')                    
+            if (!dir.startsWith('http')) {
+                if (dir.startsWith('video:')) {
+                    dir = dir.replace('video:', 'file:')
                 }
                 if (dir.startsWith('file:///')) {
                     dir = dir.replace('file:///','')
                     fileUrl = true
                 }
+                dir = decodeSegment(dir)
+                const decodedName = decodeSegment(name)
 
 
                 const check = async (name:string) => {
@@ -1781,19 +1809,30 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
                 await check(path.join( dir, 'preview.png'))
                 await check(path.join( dir, 'preview.jpg'))
-                await check(path.join( dir, `${name}_preview.png`))
-                await check(path.join( dir, `${name}_preview.jpg`))
+                await check(path.join( dir, `${decodedName}_preview.png`))
+                await check(path.join( dir, `${decodedName}_preview.jpg`))
 
                 if (existingPreview) {
                     this.logEvent({message:'found preview', title:descr.title, id:descr.id, video:videoUrl, existingPreview})
-                    descr.previewUrl = fileUrl ? `file:///${existingPreview}` : existingPreview
+                    const source = fileUrl ? `file:///${existingPreview}` : existingPreview
+
+                    const store = this.getPreviewStore()
+                    if (store.isEnabled()) {
+                        // where the folder may become unreadable later, only a private copy is
+                        // a usable preview - and undefined shows the existing fallback
+                        await store.adoptOnImport(descr, source)
+                        return descr.previewUrl
+                    }
+
+                    descr.previewUrl = source
                     return descr.previewUrl
                 }
 
+                this.logEvent({message:'preview not found next to video', title:descr.title, id:descr.id, video:videoUrl, dir, name:decodedName})
             }
         }
-        catch {
-            // ignore errors
+        catch (err) {
+            this.logEvent({message:'checkExistingPreviewFiles failed', title:descr.title, id:descr.id, error:(err as Error)?.message})
         }
 
     }
@@ -1821,6 +1860,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (!videoUrl)
             return;
 
+        if (!await this.getPreviewStore().isScreenshotAllowed(descr))
+            return;
+
         if (videoUrl.startsWith('http') ) {
             props = {size:'384x216',outDir}             
         }
@@ -1834,6 +1876,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             try {
                 this.logEvent({message:'creating preview', title:descr.title, id:descr.id, video:videoUrl})
                 descr.previewUrl = await video.screenshot( videoUrl, props)
+                await this.getPreviewStore().adoptGenerated(descr, descr.previewUrl)
                 this.logEvent({message:'preview created' , title:descr.title, id:descr.id, video:videoUrl, preview:descr.previewUrl})
                 return descr.previewUrl
 
@@ -2028,6 +2071,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable
     protected getBindings() {
         return getBindings()
+    }
+
+    @Injectable
+    protected getPreviewStore() {
+        return usePreviewStore()
     }
 
     reset() {
