@@ -4,6 +4,7 @@ import { IncyclistService } from '../base/service'
 import { sleep } from '../utils/sleep'
 import { useOnlineStatusMonitoring } from '../monitoring'
 import { EnsureLocalFailure, EnsureLocalOptions, EnsureLocalResult, ExternalFileScope, ExternalFileScopeRecorder } from './types'
+import type { IFileAccessBinding } from '../api/fileAccess/types'
 
 /**
  * Companion files (XML/EPM/EPP/GPX/preview) are at most ~50-100kB, so once iCloud starts the
@@ -107,7 +108,52 @@ export class ExternalFileService extends IncyclistService {
         const start = Date.now()
         const binding = this.getBindings()?.fileAccess
 
-        if (!path || !binding || !binding.isSupported())
+        const skip = this.resolveSkip(path, binding)
+        if (skip)
+            return skip
+
+        const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
+        const isCancelled = opts?.isCancelled ?? (() => false)
+
+        try {
+            const probe = await binding!.checkAccess(path)
+            if (probe.state === 'denied')
+                return { ok: false, reason: 'access-lost' }
+            if (probe.state === 'not-found')
+                return { ok: false, reason: 'not-found' }
+
+            const availability = await binding!.getAvailability(path)
+
+            if (this.isLocallyAvailable(availability))
+                return { ok: true, downloaded: false, waitedMs: Date.now() - start }
+
+            if (availability.downloadError)
+                return this.downloadFailedResult(availability.downloadError)
+
+            // not-downloaded from here on
+            if (this.isOffline())
+                return { ok: false, reason: 'offline' }
+
+            if (isCancelled())
+                return { ok: false, reason: 'cancelled' }
+
+            await binding!.startDownload(path)
+
+            return await this.pollUntilAvailable(binding!, path, start, timeoutMs, isCancelled)
+        }
+        catch (err) {
+            this.logError(err, 'ensureLocal')
+            return { ok: false, reason: 'download-failed' }
+        }
+    }
+
+    /**
+     * Every reason `ensureLocal` can resolve immediately without touching the network: no path,
+     * no/unsupported binding, a scheme that was never a local path, or a path that isn't iCloud.
+     * Returns undefined when the caller must actually probe the file.
+     */
+    private resolveSkip(path: string, binding: IFileAccessBinding | undefined): EnsureLocalResult | undefined {
+        if (!path || !binding?.isSupported())
             return { ok: true, downloaded: false, waitedMs: 0 }
 
         if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('content://'))
@@ -124,64 +170,40 @@ export class ExternalFileService extends IncyclistService {
             return { ok: true, downloaded: false, waitedMs: 0 }
         }
 
-        if (location !== 'icloud')
-            return { ok: true, downloaded: false, waitedMs: 0 }
+        return location !== 'icloud' ? { ok: true, downloaded: false, waitedMs: 0 } : undefined
+    }
 
-        const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS
-        const isCancelled = opts?.isCancelled ?? (() => false)
+    /** Polls availability with backoff until the file is local, fails, times out, or is cancelled. */
+    private async pollUntilAvailable(
+        binding: IFileAccessBinding,
+        path: string,
+        start: number,
+        timeoutMs: number,
+        isCancelled: () => boolean
+    ): Promise<EnsureLocalResult> {
+        let interval = INITIAL_POLL_INTERVAL_MS
 
-        try {
-            const probe = await binding.checkAccess(path)
-            if (probe.state === 'denied')
-                return { ok: false, reason: 'access-lost' }
-            if (probe.state === 'not-found')
-                return { ok: false, reason: 'not-found' }
-
-            let availability = await binding.getAvailability(path)
-
-            if (this.isLocallyAvailable(availability))
-                return { ok: true, downloaded: false, waitedMs: Date.now() - start }
-
-            if (availability.downloadError)
-                return this.downloadFailedResult(availability.downloadError)
-
-            // not-downloaded from here on
-            if (this.isOffline())
-                return { ok: false, reason: 'offline' }
+        for (;;) {
+            const elapsed = Date.now() - start
+            if (elapsed >= timeoutMs)
+                return { ok: false, reason: 'timeout' }
 
             if (isCancelled())
                 return { ok: false, reason: 'cancelled' }
 
-            await binding.startDownload(path)
+            if (this.isOffline())
+                return { ok: false, reason: 'offline' }
 
-            let interval = INITIAL_POLL_INTERVAL_MS
+            await sleep(Math.max(0, Math.min(interval, timeoutMs - elapsed)))
+            interval = BACKOFF_POLL_INTERVAL_MS
 
-            for (;;) {
-                const elapsed = Date.now() - start
-                if (elapsed >= timeoutMs)
-                    return { ok: false, reason: 'timeout' }
+            const availability = await binding.getAvailability(path)
 
-                if (isCancelled())
-                    return { ok: false, reason: 'cancelled' }
+            if (this.isLocallyAvailable(availability))
+                return { ok: true, downloaded: true, waitedMs: Date.now() - start }
 
-                if (this.isOffline())
-                    return { ok: false, reason: 'offline' }
-
-                await sleep(Math.max(0, Math.min(interval, timeoutMs - elapsed)))
-                interval = BACKOFF_POLL_INTERVAL_MS
-
-                availability = await binding.getAvailability(path)
-
-                if (this.isLocallyAvailable(availability))
-                    return { ok: true, downloaded: true, waitedMs: Date.now() - start }
-
-                if (availability.downloadError)
-                    return this.downloadFailedResult(availability.downloadError)
-            }
-        }
-        catch (err) {
-            this.logError(err, 'ensureLocal')
-            return { ok: false, reason: 'download-failed' }
+            if (availability.downloadError)
+                return this.downloadFailedResult(availability.downloadError)
         }
     }
 

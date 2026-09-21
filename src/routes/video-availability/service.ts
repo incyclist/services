@@ -47,9 +47,9 @@ const STATE_ORDER: Array<RouteVideoState> = [
  * States that mean "the bytes are not here and no transfer is running" - the family whose counts
  * and sizes are added up for a multi-video route.
  */
-const NOT_DOWNLOADED_STATES: Array<RouteVideoState> = [
+const NOT_DOWNLOADED_STATES: Set<RouteVideoState> = new Set([
     'not-downloaded', 'not-enough-storage', 'download-failed', 'cancelled'
-]
+])
 
 /** Out-of-space errors, which get their own state rather than a generic failure. */
 const OUT_OF_SPACE = [
@@ -677,6 +677,34 @@ export class RouteVideoAvailabilityService extends IncyclistService {
         const cached = this.files[file.path]
         const entry = this.journal.getEntry(file.path)
 
+        const overridden = this.getCachedOverrideState(base, cached, entry)
+        if (overridden)
+            return overridden
+
+        const availability = cached?.availability
+        const failure = availability?.downloadError ? this.mapDownloadError(availability.downloadError) : undefined
+        const sizeBytes = this.getSize(availability)
+        const freeBytes = availability?.volumeFreeBytes
+
+        const journalDriven = this.getJournalDrivenState(base, entry, failure, sizeBytes, freeBytes)
+        if (journalDriven)
+            return journalDriven
+
+        if (!availability)
+            return { ...base, state: cached?.indeterminate ? 'unknown' : 'checking' }
+
+        return this.getAvailabilityDrivenState(base, availability, entry, failure, sizeBytes, freeBytes)
+    }
+
+    /**
+     * Cached states that override everything else, whatever the journal or availability say: a
+     * file that cannot be read at all is that, regardless of its download status.
+     */
+    protected getCachedOverrideState(
+        base: FileState,
+        cached: FileCacheEntry | undefined,
+        entry: VideoDownloadJournalEntry | undefined
+    ): FileState | undefined {
         if (cached?.accessState === 'not-found')
             return { ...base, state: 'not-found' }
 
@@ -686,11 +714,17 @@ export class RouteVideoAvailabilityService extends IncyclistService {
         if (cached?.failed)
             return { ...base, state: cached.failed, choice: entry?.choice }
 
-        const availability = cached?.availability
-        const failure = availability?.downloadError ? this.mapDownloadError(availability.downloadError) : undefined
-        const sizeBytes = this.getSize(availability)
-        const freeBytes = availability?.volumeFreeBytes
+        return undefined
+    }
 
+    /** A download this app started outranks what the platform's own metadata shows. */
+    protected getJournalDrivenState(
+        base: FileState,
+        entry: VideoDownloadJournalEntry | undefined,
+        failure: RouteVideoState | undefined,
+        sizeBytes?: number,
+        freeBytes?: number
+    ): FileState | undefined {
         if (entry?.status === 'downloading') {
             if (failure)
                 return { ...base, state: failure, choice: entry.choice, sizeBytes, freeBytes }
@@ -702,9 +736,18 @@ export class RouteVideoAvailabilityService extends IncyclistService {
         if (entry?.status === 'stopping')
             return { ...base, state: 'cancelled', choice: entry.choice, sizeBytes, freeBytes }
 
-        if (!availability)
-            return { ...base, state: cached?.indeterminate ? 'unknown' : 'checking' }
+        return undefined
+    }
 
+    /** Once availability metadata exists, this decides ready vs. which pending state applies. */
+    protected getAvailabilityDrivenState(
+        base: FileState,
+        availability: FileAvailability,
+        entry: VideoDownloadJournalEntry | undefined,
+        failure: RouteVideoState | undefined,
+        sizeBytes?: number,
+        freeBytes?: number
+    ): FileState {
         if (!this.isNotDownloaded(availability)) {
             const thisRide = entry?.choice === 'this-ride'
                 && (entry.status === 'awaiting-ride' || entry.status === 'removal-due')
@@ -730,14 +773,14 @@ export class RouteVideoAvailabilityService extends IncyclistService {
     protected aggregate(routeId: string, states: Array<FileState>): RouteVideoStatus {
         const worst = [...states].sort((a, b) => this.rank(a) - this.rank(b))[0]
 
-        const pending = states.filter(s => NOT_DOWNLOADED_STATES.includes(s.state))
+        const pending = states.filter(s => NOT_DOWNLOADED_STATES.has(s.state))
         const pendingSize = pending.reduce<number | undefined>(
             (sum, s) => (s.sizeBytes === undefined ? sum : (sum ?? 0) + s.sizeBytes), undefined
         )
 
         const sizeBytes = pending.length ? pendingSize : worst.sizeBytes
         const freeBytes = states.map(s => s.freeBytes).find(v => v !== undefined)
-        const startedAt = states.map(s => s.startedAt).filter((v): v is number => v !== undefined).sort()[0]
+        const startedAt = states.map(s => s.startedAt).filter((v): v is number => v !== undefined).sort((a, b) => a - b)[0]
 
         const status: RouteVideoStatus = {
             routeId,
@@ -1282,7 +1325,7 @@ export class RouteVideoAvailabilityService extends IncyclistService {
     protected prefixSegment(reason: string, segment?: number): string {
         if (!segment || segment < 2)
             return reason
-        return `Part ${segment} of this route: ${reason.replace(`This route's video`, 'the video')}`
+        return `Part ${segment} of this route: ${reason.replace("This route's video", 'the video')}`
     }
 
     protected isExternal(path: string): boolean {

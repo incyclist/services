@@ -1026,83 +1026,91 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             }
 
 
-            files.forEach( async (file,idx)=>{
-                if (!file)
-                    return;
+            files.forEach( (file,idx)=>{
                 const importCard = importId? null : importCards[idx]
-                
-                const name = file.url??file.filename??file.name
-
-                this.logEvent({message:'import single route file',file:name, type:file.ext})
-            
-                try {
-
-                    if (importId&&observer)
-                        observer?.emit('parsing',importId)
-
-                    const {data,details} = await RouteParser.parse(file)     
-                   
-                    if (importId&&observer)
-                        observer?.emit('success',importId)
-
-
-                    const route = new Route(data,details)
-                    route.description.tsImported = Date.now()
-                    this.logEvent({message:'import single route file success',file:name})
-
-                    const previews = this.getPreviewStore()
-                    if (previews.isEnabled())
-                        await previews.adoptOnImport(route)
-
-                    const existing = this.findCard(route)
-    
-                    if (existing ) {   
-                        existing.list.remove( existing.card)
-                        this.logEvent({message:'route updated (import)',route:route.title})
-
-                    }
-                    else  {
-                        this.routes.push(route)
-                        this.logEvent({message:'route added',route:route.title})
-                    }
-                        
-                    const card = new RouteCard(route,{list:this.myRoutes})
-                    card.verify()
-                    card.save()
-                    card.enableDelete()
-                    
-                    this.myRoutes.add( card, true )
-                    this.cardLookup[route.description.id] = { card, list:this.myRoutes};
-
-                   
-
-                    if (importCard) {
-                        this.myRoutes.remove(importCard)
-                    }
-                    card.enableDelete(true)              
-                    this.emitLists('updated',{log:true})     
-
-
-    
-                    this.verifyPoints(card,route)
-    
-                   
-                }
-                catch(err) {
-                    this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
-                    if (importId&&observer)
-                        observer?.emit('error',importId, err.message)
-                    if (importCard)
-                        importCard.setError(err)
-                }
-        
-                
+                this.importOneFile(file, importCard, importId, observer)
             })
     
 
         }
         catch(err) {
             this.logError(err,'import',info)
+        }
+    }
+
+    /** Parses and adds one file dropped/picked for single-file import; fire-and-forget per file. */
+    private async importOneFile(
+        file: FileInfo,
+        importCard: ActiveImportCard | null,
+        importId: string | undefined,
+        observer: IObserver | undefined
+    ): Promise<void> {
+        if (!file)
+            return
+
+        const name = file.url??file.filename??file.name
+
+        this.logEvent({message:'import single route file',file:name, type:file.ext})
+
+        try {
+
+            if (importId&&observer)
+                observer?.emit('parsing',importId)
+
+            const {data,details} = await RouteParser.parse(file)
+
+            if (importId&&observer)
+                observer?.emit('success',importId)
+
+
+            const route = new Route(data,details)
+            route.description.tsImported = Date.now()
+            this.logEvent({message:'import single route file success',file:name})
+
+            const previews = this.getPreviewStore()
+            if (previews.isEnabled())
+                await previews.adoptOnImport(route)
+
+            const existing = this.findCard(route)
+
+            if (existing ) {
+                existing.list.remove( existing.card)
+                this.logEvent({message:'route updated (import)',route:route.title})
+
+            }
+            else  {
+                this.routes.push(route)
+                this.logEvent({message:'route added',route:route.title})
+            }
+
+            const card = new RouteCard(route,{list:this.myRoutes})
+            card.verify()
+            card.save()
+            card.enableDelete()
+
+            this.myRoutes.add( card, true )
+            this.cardLookup[route.description.id] = { card, list:this.myRoutes};
+
+
+
+            if (importCard) {
+                this.myRoutes.remove(importCard)
+            }
+            card.enableDelete(true)
+            this.emitLists('updated',{log:true})
+
+
+
+            this.verifyPoints(card,route)
+
+
+        }
+        catch(err) {
+            this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
+            if (importId&&observer)
+                observer?.emit('error',importId, err.message)
+            if (importCard)
+                importCard.setError(err)
         }
     }
 

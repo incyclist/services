@@ -24,10 +24,10 @@ const FIRST_BACKOFF_MS = 2_000
 const MAX_BACKOFF_MS = 30 * 60_000
 
 /** Statuses that owe the device an eviction, and are therefore the only ones ever given up on. */
-const CLEANUP_STATUS: Array<VideoDownloadJournalEntry['status']> = ['stopping', 'removal-due']
+const CLEANUP_STATUS: Set<VideoDownloadJournalEntry['status']> = new Set(['stopping', 'removal-due'])
 
 export const isCleanupStatus = (entry?: VideoDownloadJournalEntry): boolean =>
-    !!entry && CLEANUP_STATUS.includes(entry.status)
+    !!entry && CLEANUP_STATUS.has(entry.status)
 
 /**
  * The record of which video files this app downloaded itself, and what it still owes the user

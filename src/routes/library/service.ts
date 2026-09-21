@@ -814,45 +814,12 @@ export class RouteLibraryScannerService extends IncyclistService {
                 continue
 
             const {route} = target[i]??{};
-            const isExisting = target[i].alreadyImported
-            const existing = isExisting ? service.findCard(route) : null
+            const existing = target[i].alreadyImported ? service.findCard(route) : null
 
             try {
-
-
                 observer.emit('ingest-progress', { current: i + 1, total, currentName: route.title})
-
-                if (existing ) {
-                    this.logEvent({message:'route updated (library import)',route:route.title})
-                }
-
-                route.description.tsImported = Date.now()
-
-                try {
-                    await this.getPreviewStore().adoptOnImport(route)
-                }
-                catch (err) {
-                    // a preview is optional - a route is never rejected over one, and the
-                    // copy is retried later
-                    this.logError(err as Error, 'adoptPreview', { title: route?.title })
-                }
-
-                await db.save(route,true)
-                service.addRoute(route,existing? 'import': 'user')
-
-                try{
-                    const cardInfo =  service.findCard(route)
-                    cardInfo?.card?.verify()
-                } catch {
-                    // ignroe
-                }
-                if (existing ) {   
-                    // route item was replaced in-place, force UI to refresh
-                    existing.card.emitUpdate()
-                }
-
-
-                importedRoutes.push(route)                
+                await this.ingestOne(route, existing, service, db)
+                importedRoutes.push(route)
             }
             catch(err:any) {
                 const reason = err?.message ?? String(err)
@@ -864,6 +831,43 @@ export class RouteLibraryScannerService extends IncyclistService {
         }
         const skipped = routes.length - target.length
         observer.emit('ingest-complete', { imported:importedRoutes.length, skipped, errors, failedRoutes,importedRoutes })
+    }
+
+    /** Saves one parsed route to the library and refreshes its card in place if it already existed. */
+    private async ingestOne(
+        route: Route,
+        existing: ReturnType<ReturnType<typeof this.getRouteList>['findCard']> | null,
+        service: ReturnType<typeof this.getRouteList>,
+        db: ReturnType<typeof this.getRoutesDBLoader>
+    ): Promise<void> {
+        if (existing) {
+            this.logEvent({message:'route updated (library import)',route:route.title})
+        }
+
+        route.description.tsImported = Date.now()
+
+        try {
+            await this.getPreviewStore().adoptOnImport(route)
+        }
+        catch (err) {
+            // a preview is optional - a route is never rejected over one, and the
+            // copy is retried later
+            this.logError(err as Error, 'adoptPreview', { title: route?.title })
+        }
+
+        await db.save(route,true)
+        service.addRoute(route,existing? 'import': 'user')
+
+        try{
+            const cardInfo =  service.findCard(route)
+            cardInfo?.card?.verify()
+        } catch {
+            // ignore
+        }
+        if (existing ) {
+            // route item was replaced in-place, force UI to refresh
+            existing.card.emitUpdate()
+        }
     }
 
 

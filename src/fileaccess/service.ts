@@ -107,22 +107,7 @@ export class FolderAccessService extends IncyclistService {
             await this.releaseScope(id)
 
             const location = this.classify(canonical)
-
-            let activation = await this.tryActivate(id, grant)
-            let source: FolderAccessGrant['source'] = 'pick'
-            let token = grant
-
-            if (!activation.ok) {
-                const captured = await this.tryCapture(canonical)
-                if (captured) {
-                    const capturedActivation = await this.tryActivate(id, captured)
-                    if (capturedActivation.ok) {
-                        activation = capturedActivation
-                        source = 'captured'
-                        token = captured
-                    }
-                }
-            }
+            const { activation, source, token } = await this.activateWithFallback(id, canonical, grant)
 
             const record: StoredGrant = {
                 id,
@@ -137,21 +122,12 @@ export class FolderAccessService extends IncyclistService {
             }
 
             this.upsert(record)
-            this.activation[id] = activation.ok ? 'active' : (token ? 'failed' : 'no-grant')
+            this.activation[id] = this.activationStatus(activation.ok, !!token)
 
-            if (activation.ok) {
+            if (activation.ok)
                 this.resolvedPaths[id] = activation.resolvedPath ?? canonical
-                this.logEvent({
-                    message: source === 'captured' ? 'folder grant captured' : 'folder grant stored',
-                    location, name: this.folderName(canonical)
-                })
-            }
-            else {
-                this.logEvent({
-                    message: 'folder grant unverified',
-                    location, name: this.folderName(canonical), error: record.lastError
-                })
-            }
+
+            this.logGrantOutcome(activation.ok, source, location, canonical, record.lastError)
 
             await this.save(record)
             this.rebuildCoverage()
@@ -160,6 +136,61 @@ export class FolderAccessService extends IncyclistService {
         catch (err) {
             // registering a grant is best effort - the pick and the scan continue either way
             this.logError(err as Error, 'registerGrant')
+        }
+    }
+
+    /**
+     * Tries the picker's own grant first; when that fails, falls back to an opportunistically
+     * captured grant for the same folder (the app can still be holding a live claim on it).
+     */
+    private async activateWithFallback(id: string, canonical: string, grant?: string): Promise<{
+        activation: Awaited<ReturnType<FolderAccessService['tryActivate']>>
+        source: FolderAccessGrant['source']
+        token?: string
+    }> {
+        let activation = await this.tryActivate(id, grant)
+        let source: FolderAccessGrant['source'] = 'pick'
+        let token = grant
+
+        if (!activation.ok) {
+            const captured = await this.tryCapture(canonical)
+            if (captured) {
+                const capturedActivation = await this.tryActivate(id, captured)
+                if (capturedActivation.ok) {
+                    activation = capturedActivation
+                    source = 'captured'
+                    token = captured
+                }
+            }
+        }
+
+        return { activation, source, token }
+    }
+
+    private activationStatus(ok: boolean, hasToken: boolean): ActivationState {
+        if (ok)
+            return 'active'
+        return hasToken ? 'failed' : 'no-grant'
+    }
+
+    private logGrantOutcome(
+        ok: boolean,
+        source: FolderAccessGrant['source'],
+        location: FileLocation,
+        canonical: string,
+        lastError?: string
+    ): void {
+        if (ok) {
+            this.logEvent({
+                message: source === 'captured' ? 'folder grant captured' : 'folder grant stored',
+                location, name: this.folderName(canonical)
+            })
+        }
+        else {
+            this.logEvent({
+                message: 'folder grant unverified',
+                location, name: this.folderName(canonical), error: lastError
+            })
         }
     }
 
@@ -568,7 +599,7 @@ export class FolderAccessService extends IncyclistService {
     protected folderName(folder?: string): string | undefined {
         if (!folder)
             return undefined
-        return folder.split('/').filter(s => s.length > 0).at(-1)
+        return folder.split('/').findLast(s => s.length > 0)
     }
 
     protected logAccessState(

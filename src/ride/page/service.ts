@@ -869,8 +869,6 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         if (!this.videoVisit.started)
             return
 
-        const routeIds = this.videoVisit.routeIds
-
         this.getRouteVideoAvailability().onRideLeft()
             .catch(err => this.logError(err as Error, 'handleVideoVisitExit'))
 

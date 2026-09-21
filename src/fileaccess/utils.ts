@@ -66,8 +66,12 @@ export const canonicalPath = (url?: string): string | undefined => {
 
     path = path.replace(/\/{2,}/g, SEPARATOR)
 
-    if (path.length > 1)
-        path = path.replace(/\/+$/, '')
+    if (path.length > 1) {
+        let end = path.length
+        while (end > 1 && path[end - 1] === SEPARATOR)
+            end--
+        path = path.slice(0, end)
+    }
 
     if (!path)
         return undefined

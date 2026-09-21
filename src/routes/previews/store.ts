@@ -24,14 +24,14 @@ const MAX_PREVIEW_BYTES = 20 * 1024 * 1024
 /** Copies run two at a time: enough to hide the per-file latency, few enough to stay unnoticed. */
 const ADOPT_CONCURRENCY = 2
 
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png']
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png'])
 const DEFAULT_EXTENSION = 'png'
 
 /** The union's discriminant does not narrow without `strictNullChecks`, so ask explicitly. */
 const failureReason = (result: PreviewCopyResult): PreviewCopyFailure|undefined =>
     (result as { reason?: PreviewCopyFailure }).reason
 
-const escapeForRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const escapeForRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
 
 /**
  * Keeps a private copy of every imported route's preview image inside app storage.
@@ -111,7 +111,7 @@ export class PreviewStore extends IncyclistService {
 
         this.armAccessListener()
 
-        if (this.pendingRun) {
+        if (this.pendingRun !== undefined) {
             // a trigger that arrives mid-run gets its own pass, so newly granted routes are not missed
             this.rerunRequested = true
             return this.pendingRun
@@ -175,7 +175,7 @@ export class PreviewStore extends IncyclistService {
             if (!dir)
                 return
 
-            const matcher = new RegExp(`^${FILE_PREFIX}${escapeForRegex(routeId)}\\.[^.]+$`)
+            const matcher = new RegExp(String.raw`^${FILE_PREFIX}${escapeForRegex(routeId)}\.[^.]+$`)
             const files = (await this.listStore(dir)).filter(name => matcher.test(name))
 
             for (const name of files)
@@ -455,7 +455,7 @@ export class PreviewStore extends IncyclistService {
             return (entries ?? [])
                 .map((entry: any) => (typeof entry === 'string' ? entry : entry?.name))
                 .filter((name: any): name is string => typeof name === 'string' && name.length > 0)
-                .map(name => name.split('/').filter(s => s.length > 0).at(-1) as string)
+                .map(name => name.split('/').findLast(s => s.length > 0) as string)
         }
         catch (err) {
             this.logError(err as Error, 'listStore')
@@ -465,7 +465,7 @@ export class PreviewStore extends IncyclistService {
 
     /** Drops an earlier copy of the same route that was stored under a different extension. */
     protected async removeOtherVariants(routeId: string, target: string, dir: string): Promise<void> {
-        const matcher = new RegExp(`^${FILE_PREFIX}${escapeForRegex(routeId)}\\.[^.]+$`)
+        const matcher = new RegExp(String.raw`^${FILE_PREFIX}${escapeForRegex(routeId)}\.[^.]+$`)
         const targetName = target.split('/').at(-1)
 
         for (const name of await this.listStore(dir)) {
@@ -536,12 +536,12 @@ export class PreviewStore extends IncyclistService {
         const base = path.split('/').at(-1) ?? ''
         const idx = base.lastIndexOf('.')
         const ext = idx > 0 ? base.substring(idx + 1).toLowerCase() : ''
-        return IMAGE_EXTENSIONS.includes(ext) ? ext : DEFAULT_EXTENSION
+        return IMAGE_EXTENSIONS.has(ext) ? ext : DEFAULT_EXTENSION
     }
 
     /** The route a store file belongs to, or undefined for anything not stored by us. */
     protected routeIdOf(name: string): string | undefined {
-        const match = new RegExp(`^${FILE_PREFIX}(.+)\\.[^.]+$`).exec(name)
+        const match = new RegExp(String.raw`^${FILE_PREFIX}(.+)\.[^.]+$`).exec(name)
         return match?.[1]
     }
 
