@@ -117,6 +117,7 @@ export class ActivityRideService extends IncyclistService {
     protected isSaveDone: boolean
     protected isDonateShown: boolean
     protected isSummaryShown: boolean
+    protected stopPromise: Promise<void>
 
     protected statsCalculator: ActivityStatsCalculator
     protected durationCalculator: ActivityDuration
@@ -257,11 +258,27 @@ export class ActivityRideService extends IncyclistService {
         }
     }
 
-    /** 
+    /**
      * Stops the current activity and finally saves it into the JSON  file
+     *
+     * Re-entrancy-safe: a concurrent caller while a stop is already in flight
+     * awaits the same in-flight promise instead of re-running the method body.
     */
     async stop() {
-        
+        if (this.stopPromise!==undefined)
+            return this.stopPromise
+
+        this.stopPromise = this.doStop()
+        try {
+            await this.stopPromise
+        }
+        finally {
+            delete this.stopPromise
+        }
+    }
+
+    protected async doStop() {
+
         this.stopWorker()
         if (!this.observer || !this.activity)
             return;
@@ -272,7 +289,7 @@ export class ActivityRideService extends IncyclistService {
             this.activity.timePause=(this.activity.timePause??0)+pauseDuration
             this.current.tsUpdate = Date.now()
 
-    
+
         }
         this.logEvent({message:'activity stopped' })
 
@@ -288,16 +305,18 @@ export class ActivityRideService extends IncyclistService {
         this.emit('completed')
         this.tsPauseStart = undefined
         delete this.tsStart
-        
+
 
         await waitNextTick()
         delete this.observer
     }
 
     async cleanup() {
-        if (this.state!=='idle' && this.state!=='completed')
+        if (this.stopPromise!==undefined)
+            await this.stopPromise
+        else if (this.state!=='idle' && this.state!=='completed')
             await this.stop()
-        delete this.activity        
+        delete this.activity
 
     }
 
@@ -1612,7 +1631,7 @@ export class ActivityRideService extends IncyclistService {
     protected getTotalDistance():number {
         try {
             const route = this.current.route
-            if (!route)
+            if (!route || !this.activity)
                 return 0;
 
             const isLoop = checkIsLoop(route)
@@ -1634,7 +1653,7 @@ export class ActivityRideService extends IncyclistService {
     protected getTotalElevation():number {
         try {
             const route = this.current.route
-            if (!route)
+            if (!route || !this.activity)
                 return 0;
 
             const isLoop = checkIsLoop(route)

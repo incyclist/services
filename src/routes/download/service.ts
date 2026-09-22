@@ -42,7 +42,10 @@ export class RouteDownloadService extends IncyclistService {
         const observer = new DownloadObserver( this._download(route) )
         this.downloads.push( {route,observer})
         this.emit('download-started', route, observer)
-        
+
+        observer.once('done', ()=>{ this.removeDownload(route) })
+        observer.once('error', ()=>{ this.removeDownload(route) })
+
         return observer
     }
 
@@ -54,7 +57,15 @@ export class RouteDownloadService extends IncyclistService {
         const info = this.downloads[idx]
         info.observer.stop()
         this.downloads.splice(idx,1)
-            
+
+    }
+
+    protected removeDownload( route:Route) {
+        const idx= this.downloads.findIndex( d=> d.route.description.id ===route.description.id)
+        if (idx===-1)
+            return;
+
+        this.downloads.splice(idx,1)
     }
 
     protected async deleteIncompleteFile(route:Route, videoDir:string) {

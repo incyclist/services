@@ -76,4 +76,57 @@ describe('RouteDownloadService', () => {
 
     })
 
+    // a completed/failed download was never pruned from `this.downloads` (only stopDownload()
+    // removed an entry) - getActiveDownloads() kept returning dead entries indefinitely,
+    // resurfacing as a "ghost" 0%-progress download on the next page open/resume.
+    describe('download() registry pruning', () => {
+
+        let service: RouteDownloadService
+
+        afterEach(() => {
+            service?.reset?.()
+            jest.restoreAllMocks()
+        })
+
+        const routeWithId = (id: string) => new Route({ id, title: `Route ${id}`, hasVideo: true, videoUrl: 'https://cdn.example.com/route.mp4' })
+
+        test('a route is removed from getActiveDownloads() once its download observer emits \'done\'', () => {
+            service = new RouteDownloadService()
+            ;(service as any)._download = jest.fn().mockResolvedValue(undefined)
+
+            const route = routeWithId('r1')
+            const observer = service.download(route)
+
+            expect(service.getActiveDownloads().map(d => d.route.description.id)).toContain('r1')
+
+            observer.emit('done', 'video:///tmp/route.mp4')
+
+            expect(service.getActiveDownloads().map(d => d.route.description.id)).not.toContain('r1')
+        })
+
+        test('a route is removed from getActiveDownloads() once its download observer emits \'error\'', () => {
+            service = new RouteDownloadService()
+            ;(service as any)._download = jest.fn().mockResolvedValue(undefined)
+
+            const route = routeWithId('r2')
+            const observer = service.download(route)
+
+            observer.emit('error', new Error('network error'))
+
+            expect(service.getActiveDownloads().map(d => d.route.description.id)).not.toContain('r2')
+        })
+
+        test('a route already removed by stopDownload() is not double-removed / does not throw when its observer later emits \'done\'', () => {
+            service = new RouteDownloadService()
+            ;(service as any)._download = jest.fn().mockResolvedValue(undefined)
+
+            const route = routeWithId('r3')
+            const observer = service.download(route)
+
+            service.stopDownload(route)
+            expect(() => observer.emit('done', 'video:///tmp/route.mp4')).not.toThrow()
+            expect(service.getActiveDownloads()).toEqual([])
+        })
+    })
+
 })
