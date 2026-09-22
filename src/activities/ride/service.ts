@@ -265,7 +265,7 @@ export class ActivityRideService extends IncyclistService {
      * awaits the same in-flight promise instead of re-running the method body.
     */
     async stop() {
-        if (this.stopPromise)
+        if (this.stopPromise!==undefined)
             return this.stopPromise
 
         this.stopPromise = this.doStop()
@@ -312,7 +312,7 @@ export class ActivityRideService extends IncyclistService {
     }
 
     async cleanup() {
-        if (this.stopPromise)
+        if (this.stopPromise!==undefined)
             await this.stopPromise
         else if (this.state!=='idle' && this.state!=='completed')
             await this.stop()
