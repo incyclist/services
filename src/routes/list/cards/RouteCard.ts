@@ -993,8 +993,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
             getRouteList().logEvent({message:'download stopped', route:this.route?.description?.title, })
 
             this.getRouteDownload().stopDownload( this.route)
-            
-            
+
+            this.downloadObserver?.reset()
+
             if (immediate) {
                 delete this.downloadObserver
             }
@@ -1054,8 +1055,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
             this.route.details.video.url = url;
 
             this.updateRoute( this.route)
-            sleep(5).then( ()=>{ 
-                this.downloadObserver.reset()
+            sleep(5).then( ()=>{
+                this.downloadObserver?.reset()
                 delete this.downloadObserver
             })
 
@@ -1089,10 +1090,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
         
         try {
             getRouteList().logEvent({message:'download failed', reason:err.message, route:this.route?.description?.title})
-            this.downloadObserver.stop()
+            this.downloadObserver?.stop()
 
-            sleep(5).then( ()=>{ 
-                this.downloadObserver.reset()
+            sleep(5).then( ()=>{
+                this.downloadObserver?.reset()
                 delete this.downloadObserver
             })
         }

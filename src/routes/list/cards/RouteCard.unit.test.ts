@@ -3,6 +3,7 @@ import { getBindings } from "../../../api";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
 import { usePreviewStore } from "../../previews/store";
+import { Observer } from "../../../base/types/observer";
 
 describe('RouteCard.videoExists', () => {
 
@@ -344,5 +345,53 @@ describe('RouteCard preview handling', () => {
 
             expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', videoPill: 'in-icloud' });
         });
+    });
+});
+
+// FIXES_BACKLOG item #89: stopDownload(true) used to delete `downloadObserver` without detaching
+// the 'done'/'error' listeners registered on it in download() - a subsequent 'error' event from
+// the underlying DownloadSession (plausible right after an abort) then fired onDownloadError()
+// against the already-cleared reference and threw.
+describe('RouteCard download/stopDownload race (item #89)', () => {
+
+    const createCard = (info: RouteInfo = {}) => new RouteCard(new Route(info));
+
+    const mockRouteDownload = (observer: Observer) => ({
+        download: jest.fn().mockReturnValue(observer),
+        stopDownload: jest.fn(),
+    });
+
+    test('stopDownload(true) detaches the done/error listeners registered in download(), so a later event from the underlying session cannot reach onDownloadError/onDownloadCompleted', () => {
+        const card = createCard({ id: '1', hasVideo: true, requiresDownload: true });
+        const downloadObserver = new Observer();
+        (card as any).getRouteDownload = () => mockRouteDownload(downloadObserver);
+        const emitter = (downloadObserver as any).emitter;
+
+        card.download();
+        expect(emitter.listenerCount('done')).toBeGreaterThan(0);
+        expect(emitter.listenerCount('error')).toBeGreaterThan(0);
+
+        card.stopDownload(true);
+
+        // the observer object itself survives (the DownloadSession may still hold a reference to
+        // it) even though the card no longer does - its listeners must be gone, so a subsequent
+        // 'error' emitted by the underlying session can't fire the now-stale onDownloadError
+        expect(emitter.listenerCount('done')).toBe(0);
+        expect(emitter.listenerCount('error')).toBe(0);
+        expect((card as any).downloadObserver).toBeUndefined();
+    });
+
+    test('onDownloadError() does not throw when downloadObserver is already cleared (defensive backstop)', async () => {
+        const card = createCard({ id: '1', hasVideo: true, requiresDownload: true });
+        expect((card as any).downloadObserver).toBeUndefined();
+
+        const logError = jest.fn();
+        (card as any).logError = logError;
+
+        await (card as any).onDownloadError(new Error('connection lost'));
+
+        // before the fix, `this.downloadObserver.stop()` threw a TypeError that landed in the
+        // method's own catch block and was logged via logError - that must no longer happen
+        expect(logError).not.toHaveBeenCalled();
     });
 });

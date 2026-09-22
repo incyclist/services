@@ -1219,4 +1219,83 @@ describe('ActivityRideService',()=>{
         })
     })
 
+    // FIXES_BACKLOG item #93: RideDisplayService.stop() calls getActivityRide().stop() without
+    // awaiting it, then immediately calls cleanup() - which itself re-invoked stop()'s whole body
+    // again while the first call was still mid-flight, so `delete this.activity` could run out
+    // from under a concurrent read of this.activity.startPos (getTotalDistance/getTotalElevation).
+    describe('stop / cleanup re-entrancy',()=>{
+        let service:ActivityRideService
+        const route  = createFromJson(sydney as unknown as RouteApiDetail)
+
+        beforeEach( ()=>{
+            service = new ActivityRideService()
+        })
+
+        afterEach( ()=>{
+            resetSingleton(service)
+            jest.resetAllMocks();
+        })
+
+        const setup = () => {
+            const activity:Partial<ActivityDetails> = {id:'activity-1',startTime:'2020-01-01T00:00:00.000Z',startPos:0}
+            mockServices(service,{route,startSettings:{startPos:0,realityFactor:100,type:'Route'},
+                init:{ state:'active',tsStart:Date.now(), activity, observer: new Observer() }
+            })
+            ;(service as any).getRepo = jest.fn(()=>({
+                getFilename: jest.fn(name=> `/tmp/${name}.json`),
+                save: jest.fn( async () => {return})
+            }))
+            return activity
+        }
+
+        test('an unawaited stop() immediately followed by cleanup() does not crash and settles on a single consistent state',async ()=>{
+            setup()
+            const logError = jest.fn()
+            ;(service as any).logError = logError
+
+            // mirrors RideDisplayService.stop(): `this.getActivityRide().stop()` (unawaited) followed
+            // synchronously by `this.getActivityRide().cleanup()`
+            const stopPromise = service.stop()
+            await service.cleanup()
+            await stopPromise
+
+            expect(logError).not.toHaveBeenCalled()
+            expect(protectedMember(service,'activity')).toBeUndefined()
+            expect(protectedMember(service,'observer')).toBeUndefined()
+        })
+
+        test('concurrent stop() calls share the same in-flight promise instead of re-running the teardown',async ()=>{
+            setup()
+            const saveOrder:Array<string> = []
+            ;(service as any).getRepo = jest.fn(()=>({
+                getFilename: jest.fn(name=> `/tmp/${name}.json`),
+                save: jest.fn( () => new Promise<void>(resolve => {
+                    saveOrder.push('save-start')
+                    setTimeout( ()=> { saveOrder.push('save-done'); resolve() }, 10)
+                }))
+            }))
+
+            await Promise.all([ service.stop(), service.stop() ])
+
+            // a re-entrant stop() would have triggered _save() (and thus this sequence) twice
+            expect(saveOrder).toEqual(['save-start','save-done'])
+            expect(protectedMember(service,'state')).toBe('completed')
+            expect(protectedMember(service,'observer')).toBeUndefined()
+        })
+
+        test('getTotalDistance()/getTotalElevation() tolerate a torn-down activity instead of throwing',()=>{
+            setup()
+            // a route must be present so the calls get past the `!route` guard and actually
+            // exercise the `!this.activity` guard added for this fix
+            ;(service as any).current.route = route
+            delete (service as any).activity
+            const logError = jest.fn()
+            ;(service as any).logError = logError
+
+            expect((service as any).getTotalDistance()).toBe(0)
+            expect((service as any).getTotalElevation()).toBe(0)
+            expect(logError).not.toHaveBeenCalled()
+        })
+    })
+
 })
