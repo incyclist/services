@@ -887,12 +887,12 @@ describe('RoutesPageService',()=>{
         })
     })
 
-    // FIXES_BACKLOG item #91: RouteDownloadService.downloads used to never prune a completed/failed
-    // entry, so subscribeAllActiveDownloads() (re-run on every page open/resume) kept finding it in
+    // RouteDownloadService.downloads used to never prune a completed/failed entry, so
+    // subscribeAllActiveDownloads() (re-run on every page open/resume) kept finding it in
     // getActiveDownloads() and re-registering it, resetting downloadCache back to 'downloading'.
     // The actual fix lives in RouteDownloadService - this pins down that RoutesPageService correctly
     // stops re-registering a download once the registry (mocked here) has pruned it.
-    describe('subscribeAllActiveDownloads - stale entry pruning (item #91)', () => {
+    describe('subscribeAllActiveDownloads - stale entry pruning', () => {
         let s, service, MockRouteDownload
 
         beforeEach(() => {
@@ -930,9 +930,9 @@ describe('RoutesPageService',()=>{
             doneHandler!()
             expect((service as any).downloadCache.get('r1')?.status).toBe('done')
 
-            // registry now correctly prunes the finished entry once its observer fires 'done'
-            // (RouteDownloadService fix, item #91) - a later page-open/resume rescan must not
-            // resurrect it as an active, 0%-progress "ghost" download
+            // registry now correctly prunes the finished entry once its observer fires 'done' -
+            // a later page-open/resume rescan must not resurrect it as an active, 0%-progress
+            // "ghost" download
             MockRouteDownload.getActiveDownloads.mockReturnValue([])
             ;(service as any).subscribeAllActiveDownloads()
 

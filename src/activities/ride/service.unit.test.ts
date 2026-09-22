@@ -1219,10 +1219,10 @@ describe('ActivityRideService',()=>{
         })
     })
 
-    // FIXES_BACKLOG item #93: RideDisplayService.stop() calls getActivityRide().stop() without
-    // awaiting it, then immediately calls cleanup() - which itself re-invoked stop()'s whole body
-    // again while the first call was still mid-flight, so `delete this.activity` could run out
-    // from under a concurrent read of this.activity.startPos (getTotalDistance/getTotalElevation).
+    // RideDisplayService.stop() calls getActivityRide().stop() without awaiting it, then
+    // immediately calls cleanup() - which itself re-invoked stop()'s whole body again while the
+    // first call was still mid-flight, so `delete this.activity` could run out from under a
+    // concurrent read of this.activity.startPos (getTotalDistance/getTotalElevation).
     describe('stop / cleanup re-entrancy',()=>{
         let service:ActivityRideService
         const route  = createFromJson(sydney as unknown as RouteApiDetail)

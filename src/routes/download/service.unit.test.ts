@@ -76,9 +76,9 @@ describe('RouteDownloadService', () => {
 
     })
 
-    // FIXES_BACKLOG item #91: a completed/failed download was never pruned from `this.downloads`
-    // (only stopDownload() removed an entry) - getActiveDownloads() kept returning dead entries
-    // indefinitely, resurfacing as a "ghost" 0%-progress download on the next page open/resume.
+    // a completed/failed download was never pruned from `this.downloads` (only stopDownload()
+    // removed an entry) - getActiveDownloads() kept returning dead entries indefinitely,
+    // resurfacing as a "ghost" 0%-progress download on the next page open/resume.
     describe('download() registry pruning', () => {
 
         let service: RouteDownloadService

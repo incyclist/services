@@ -348,11 +348,11 @@ describe('RouteCard preview handling', () => {
     });
 });
 
-// FIXES_BACKLOG item #89: stopDownload(true) used to delete `downloadObserver` without detaching
-// the 'done'/'error' listeners registered on it in download() - a subsequent 'error' event from
-// the underlying DownloadSession (plausible right after an abort) then fired onDownloadError()
-// against the already-cleared reference and threw.
-describe('RouteCard download/stopDownload race (item #89)', () => {
+// stopDownload(true) used to delete `downloadObserver` without detaching the 'done'/'error'
+// listeners registered on it in download() - a subsequent 'error' event from the underlying
+// DownloadSession (plausible right after an abort) then fired onDownloadError() against the
+// already-cleared reference and threw.
+describe('RouteCard download/stopDownload race', () => {
 
     const createCard = (info: RouteInfo = {}) => new RouteCard(new Route(info));
 
