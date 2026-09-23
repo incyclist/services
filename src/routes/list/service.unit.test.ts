@@ -195,6 +195,21 @@ describe('RouteListService',()=>{
 
         })
 
+        // regression test: filter options must narrow based on OTHER active filters,
+        // not always be derived from the full unfiltered route list
+        test('narrows to countries available under the other active filters',()=>{
+            const countries = service.getFilterCountries({contentType:'Video'})
+            expect(countries).not.toContain('Australia')
+            expect(countries).not.toContain('Canada')
+            expect(countries).toContain('France')
+        })
+
+        test('getFilterOptions passes filters through to each dimension',()=>{
+            const {countries} = service.getFilterOptions({contentType:'Video'})
+            expect(countries).not.toContain('Australia')
+            expect(countries).not.toContain('Canada')
+        })
+
     })
 
 
