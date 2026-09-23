@@ -577,7 +577,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    getFilterOptions(): SearchFilterOptions {
+    getFilterOptions(filters:SearchFilter={}): SearchFilterOptions {
 
         let countries = []
         let contentTypes = []
@@ -585,15 +585,40 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         let routeSources = []
 
         try {
-            countries = this.getFilterCountries();
-            contentTypes = this.getFilterContentTypes();
-            routeTypes = this.getFilterRouteTypes()
-            routeSources = this.getFilterRouteSources()
+            countries = this.getFilterCountries(filters);
+            contentTypes = this.getFilterContentTypes(filters);
+            routeTypes = this.getFilterRouteTypes(filters)
+            routeSources = this.getFilterRouteSources(filters)
         }
         catch (err) {
             this.logError(err,'getFilterOption')
         }
         return {countries,contentTypes,routeTypes,routeSources}
+    }
+
+    /**
+     * Builds the route set used to compute the available options for one filter dimension:
+     * every OTHER active filter is applied, but `excludeKey` itself is not, so its own
+     * selection doesn't narrow its own option list.
+     */
+    private getRoutesForFilterOptions(filters:SearchFilter, excludeKey:keyof SearchFilter):SummaryCardDisplayProps[] {
+        const activeFilters:SearchFilter = {...filters, [excludeKey]:undefined}
+
+        let routes:SummaryCardDisplayProps[] = this.getAllSearchCards().map( c=> c.getDisplayProperties())
+
+        if (!activeFilters.includeDeleted) {
+            routes = routes.filter( r =>  !r?.isDeleted)
+        }
+
+        routes = this.applyTitleFilter(activeFilters, routes);
+        routes = this.applyDistanceFilter(activeFilters, routes);
+        routes = this.applyElevationFilter(activeFilters, routes);
+        routes = this.applyCountryFilter(activeFilters, routes);
+        routes = this.applyContentTypeFilter(activeFilters, routes);
+        routes = this.applyRouteTypeFilter(activeFilters, routes);
+        routes = this.applySourceFilter(activeFilters, routes) as SummaryCardDisplayProps[]
+
+        return routes
     }
 
     onResize() {
@@ -1180,38 +1205,54 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     }
 
-    protected getFilterContentTypes():Array<string> {
-        return ['GPX','Video']
+    protected getFilterContentTypes(filters:SearchFilter={}):Array<string> {
+        const options = []
+        const routes = this.getRoutesForFilterOptions(filters,'contentType')
+
+        if (routes.some(r=>r.hasVideo))
+            options.push('Video')
+        if (routes.some(r=>!r.hasVideo))
+            options.push('GPX')
+
+        return options
     }
 
-    protected getFilterRouteTypes():Array<string> {
-        return ['Loop','Point to Point']
+    protected getFilterRouteTypes(filters:SearchFilter={}):Array<string> {
+        const options = []
+        const routes = this.getRoutesForFilterOptions(filters,'routeType')
+
+        if (routes.some(r=>r.isLoop))
+            options.push('Loop')
+        if (routes.some(r=>!r.isLoop))
+            options.push('Point to Point')
+
+        return options
     }
 
-    protected getFilterRouteSources():Array<string> { 
+    protected getFilterRouteSources(filters:SearchFilter={}):Array<string> {
         const options = ['Local','Incyclist']
-        
-        this.getVisibleRoutes().forEach(r=> {
-            const source = r.description.source  
-            if (!source) 
+
+        this.getRoutesForFilterOptions(filters,'routeSource').forEach(r=> {
+            const source = r.source
+            if (!source)
                 return;
-            
+
             const option = this.getAppsService().getName(source)
             if (option && !options.includes(option)) {
                 options.push(option)
             }
 
         })
-        
+
         return options
     }
 
-    protected getFilterCountries():Array<string> {
+    protected getFilterCountries(filters:SearchFilter={}):Array<string> {
         try {
             const countries = []
 
-            this.getVisibleRoutes().forEach(r=> {
-                const iso = r.description.country 
+            this.getRoutesForFilterOptions(filters,'country').forEach(r=> {
+                const iso = r.country
                 let country = 'Unknown'
                 if (iso)
                     country = getCountries().getCountryFromIso(iso)
