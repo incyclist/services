@@ -128,17 +128,21 @@ export default class IncyclistRoutesApi {
 
             const conf: AxiosRequestConfig = {};
             conf.validateStatus = (status: number) => {
-                return (status >= 200 && status < 300) || status == 404
+                return (status >= 200 && status < 300) || status == 404 || status==429
             }
 
             const res = await this._get(url,conf ) 
             if (res.status===404)
                 return;
+            if (res.status===429) {
+                this.logger.logEvent({message:'getCountry hit rate limit',query})
+                return;
+            }
             
             return res.data.country?.toUpperCase()
         }
         catch(err) {
-            this.logError(err,'reload')
+            this.logError(err,'getCountry')
         }
 
     }
