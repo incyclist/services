@@ -303,6 +303,59 @@ describe('RouteListService',()=>{
 
     })
 
+    describe('searchRepo caching',()=>{
+
+        let service:MockeableService
+
+        const MockUserSettings = {
+            get: jest.fn().mockReturnValue({}),
+            getValue: jest.fn().mockReturnValue({}),
+            set: jest.fn()
+        }
+
+        beforeEach(()=>{
+            // fresh singleton instance, isolated from the other describe blocks in this file
+            new RouteListService().reset()
+            Inject('UserSettings', MockUserSettings)
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        afterEach(()=>{
+            (service as any).reset()
+            Inject('UserSettings', null)
+            jest.restoreAllMocks()
+        })
+
+        test('a filter change reuses the cached display properties instead of recomputing them',()=>{
+            service.search({title:'a'})
+
+            const spy = jest.spyOn(RouteCard.prototype,'getDisplayProperties')
+            service.search({title:'ab'})
+
+            expect(spy).not.toHaveBeenCalled()
+        })
+
+        test('a card update recomputes only that card, and the next search() reflects it',async ()=>{
+            const {routes:initial} = service.search()
+            const target = initial[0]
+            const card = service.getCard(target.id)
+
+            const spy = jest.spyOn(RouteCard.prototype,'getDisplayProperties')
+
+            await card.setActiveCount(7)
+
+            const {routes:after} = service.search()
+            const updated = after.find( r=>r.id===target.id)
+
+            expect(updated.cntActive).toBe(7)
+            // the only recompute is the one RouteCard.emitUpdate() performs itself to build the
+            // event payload - searchRepo() serves the cache from that payload rather than asking
+            // the card again
+            expect(spy).toHaveBeenCalledTimes(1)
+        })
+
+    })
+
     describe('import',()=>{
         let service;
         let originalParser

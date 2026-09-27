@@ -84,6 +84,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected stats
     protected isListUpdatePaused: boolean = false
     protected cardLookup: Record<string,{ card:RouteCard, list:CardList<Route>}> = {}
+    /** getDisplayProperties() result per card id, refreshed from the card's own 'update'/'redraw'
+     *  event payload rather than recomputed on every searchRepo() call - see getSortedSearchCards() */
+    protected cardPropsCache: Map<string,SummaryCardDisplayProps> = new Map()
+    /** cards already wired to keep cardPropsCache fresh - avoids re-subscribing on every call */
+    protected cardPropsSubscribed: Set<RouteCard> = new Set()
+    /** the title-sorted card order from the last searchRepo(), reused while the underlying card
+     *  set (not the filters) is unchanged - see getSortedSearchCards() */
+    protected sortedSearchCache: { allCards:Array<RouteCard>, sortedCards:Array<RouteCard> }
 
     constructor () {
         super('RouteList')
@@ -361,10 +369,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             const filters = requestedFilters ?? this.filters
 
-            const allCards = this.getAllSearchCards()
-            let routes:Array<SummaryCardDisplayProps> = allCards.map( c=> c.getDisplayProperties())
+            const {allCards, routes: sortedRoutes} = this.getSortedSearchCards()
+            let routes:Array<SummaryCardDisplayProps> = sortedRoutes
 
-            routes.sort( (a,b) => a.title>b.title? 1 : -1)
             const units = this.getUnitConverter().getDefaultUnits()
 
             if (!filters) {                
@@ -1469,6 +1476,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             .then( details => { 
 
                 card.setRouteData(details)
+                // setRouteData() does not itself signal a card update (unlike updateRoute()/
+                // resetDownload()/etc.) - emit explicitly so a cached searchRepo() result picks
+                // up the details (e.g. 'loaded', 'points') that just arrived.
+                card.emitUpdate()
 
                 const route = card.getData()
 
@@ -1478,6 +1489,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                             if (updated) {
                                 this.logEvent({message:'preload route updated', route:card?.getData()?.title, reason:'country added', country:route?.description?.country})
                                 this.db.save(route,false)
+                                card.emitUpdate()
                             }
                             else {
                                 this.logEvent({message:'preload route undefined country', route:card?.getData()?.title})
@@ -2059,10 +2071,24 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const cards = list.getCards()??[]
             cards.forEach( (card) => {
                 card.reset(true)
-               
+
             })
         })
 
+        // card.reset() unconditionally resets the card's own observer (RouteCard.reset() ->
+        // cardObserver.reset(), regardless of the onlyObserver argument), which is exactly the
+        // channel getCachedDisplayProperties() subscribes to - drop the cache so the next
+        // getSortedSearchCards() call rebuilds it and re-subscribes, rather than serving stale,
+        // never-refreshed entries.
+        this.invalidateSearchCache()
+    }
+
+    /** Drops the cached sorted card set and per-card display properties, forcing a full rebuild
+     *  (and fresh observer subscriptions) on the next {@link getSortedSearchCards} call. */
+    protected invalidateSearchCache() {
+        this.cardPropsCache.clear()
+        this.cardPropsSubscribed.clear()
+        this.sortedSearchCache = undefined
     }
 
     protected getAllSearchCards() {
@@ -2080,6 +2106,73 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         })
         return cards;
 
+    }
+
+    /**
+     * Returns this card's display properties, computed once and cached until the card itself
+     * reports a change.
+     *
+     * `RouteCard` already pushes a complete, fresh `getDisplayProperties()` snapshot through its
+     * own observer on `'update'` (state changes: init/visibility/delete/download/...) and
+     * `'redraw'` (a forced re-render with unchanged card state, e.g. a unit-preference change) -
+     * see `RouteCard.emitUpdate()`/`emitRedraw()`. Subscribing once and caching that payload is
+     * therefore all that is needed to keep this cache correct, with no new update-signalling
+     * mechanism.
+     */
+    protected getCachedDisplayProperties(card:RouteCard):SummaryCardDisplayProps {
+        const id = card.getId()
+
+        if (!this.cardPropsCache.has(id)) {
+            const props = card.getDisplayProperties()
+            this.cardPropsCache.set(id, props)
+
+            if (!this.cardPropsSubscribed.has(card)) {
+                this.cardPropsSubscribed.add(card)
+                const refresh = (updated:SummaryCardDisplayProps) => this.cardPropsCache.set(id, updated)
+                props?.observer?.on('update', refresh)
+                props?.observer?.on('redraw', refresh)
+            }
+        }
+
+        return this.cardPropsCache.get(id)
+    }
+
+    /**
+     * Returns the full card set - `allCards` in `getAllSearchCards()`'s own order, `routes` the
+     * same cards' (cached) display properties in title-sorted order.
+     *
+     * The *order* (which is the expensive part - it needs every card's title, i.e. every card's
+     * display properties, up front) is cached and reused while the underlying card set is
+     * unchanged; `routes` is still rebuilt from that cached order on every call, but as a plain
+     * `Array.map()` over already-cached entries, so a card updated since the last call (cache
+     * refreshed via its own observer - see {@link getCachedDisplayProperties}) is reflected
+     * immediately rather than only after the card set itself next changes.
+     */
+    protected getSortedSearchCards():{allCards:Array<RouteCard>, routes:Array<SummaryCardDisplayProps>} {
+        const allCards = this.getAllSearchCards()
+
+        let sortedCards:Array<RouteCard>
+        if (this.sortedSearchCache && this.isSameCardSet(allCards, this.sortedSearchCache.allCards)) {
+            sortedCards = this.sortedSearchCache.sortedCards
+        }
+        else {
+            sortedCards = [...allCards].sort( (a,b) => {
+                const ta = this.getCachedDisplayProperties(a)?.title
+                const tb = this.getCachedDisplayProperties(b)?.title
+                return ta>tb ? 1 : -1
+            })
+            this.sortedSearchCache = {allCards, sortedCards}
+        }
+
+        const routes = sortedCards.map( c => this.getCachedDisplayProperties(c))
+        return {allCards, routes}
+    }
+
+    /** true when both card arrays hold the exact same cards, in the same order */
+    protected isSameCardSet(a:Array<RouteCard>, b:Array<RouteCard>):boolean {
+        if (a.length!==b.length)
+            return false
+        return a.every( (card,idx) => card===b[idx])
     }
 
     protected handleConfigChanges() {
