@@ -26,6 +26,7 @@ import { getUnitConversionShortcuts, Unit } from "../../../i18n";
 import { Injectable } from "../../../base/decorators";
 import { useAppState } from "../../../appstate";
 import { usePreviewStore } from "../../previews/store";
+import { useRouteShapeStore } from "../../shapes/store";
 import type { VideoListPill } from "../../video-availability/types";
 
 
@@ -341,7 +342,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                     totalDistance,totalElevation,
                     canDelete:this.canDelete(), points, loading, title:this.getTitle(),
                     observer:this.cardObserver, cntActive:this.cntActive, country:countryISO,
-                    videoPill:this.videoPill}
+                    videoPill:this.videoPill, shape:this.getRouteShapeStore().get(descr.id)}
         }
         catch(err:any) {
             this.logError(err,'getDisplayProperties')
@@ -1305,6 +1306,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     protected async deleteRoute():Promise<void> {
         await this.getRepo().delete(this.route)
         await this.getPreviewStore().release(this.route.description.id)
+        await this.getRouteShapeStore().delete(this.route.description.id)
     }
 
     protected logError( err:Error, fn:string) {
@@ -1399,6 +1401,11 @@ export class RouteCard extends BaseCard implements Card<Route> {
     @Injectable
     protected getPreviewStore() {
         return usePreviewStore()
+    }
+
+    @Injectable
+    protected getRouteShapeStore() {
+        return useRouteShapeStore()
     }
 
     protected getRouteDownload() {

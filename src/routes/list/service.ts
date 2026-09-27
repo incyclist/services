@@ -34,6 +34,8 @@ import { useUnitConverter } from "../../i18n";
 import clone from "../../utils/clone";
 import { IObserver } from "../../types";
 import { usePreviewStore } from "../previews/store";
+import { useRouteShapeStore } from "../shapes/store";
+import type { RouteShape } from "../shapes/types";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -851,6 +853,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 await this.loadRouteDetails(route, id);
             }
 
+            this.backfillRouteShape(route)
             this.verifyRouteCountry(route);
             const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
 
@@ -867,6 +870,51 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
+
+    /**
+     * Loads the decimated preview shape of a route - one small record, not the route's details.
+     *
+     * A card whose shape is resident already carries it in its summary display props
+     * (`shape`), so this is only needed for a row whose props have no shape yet. Once loaded,
+     * the shape stays resident and the card is updated, so every later render gets it
+     * synchronously through the props.
+     *
+     * @param id route id
+     * @returns the shape, or `undefined` if none is stored for this route yet - the row then
+     *          falls back to {@link getRouteDetails}, which creates it
+     */
+    async loadRouteShape(id:string):Promise<RouteShape|undefined> {
+        try {
+            const store = this.getRouteShapeStore()
+            if (store.get(id))
+                return store.get(id)
+
+            const shape = await store.load(id)
+            if (shape)
+                this.getCard(id)?.emitUpdate()
+            return shape
+        }
+        catch(err) {
+            this.logError(err,'loadRouteShape',{id})
+        }
+    }
+
+    /**
+     * Stores a shape for a route whose details are loaded but which has none yet (routes
+     * imported before shapes existed), and updates its card once it is available.
+     * Fire-and-forget: never delays the caller.
+     */
+    protected backfillRouteShape(route:Route):void {
+        if (!route?.details || this.getRouteShapeStore().get(route.description?.id))
+            return
+
+        this.getRouteShapeStore().backfill(route)
+            .then( added => {
+                if (added)
+                    this.getCard(route.description.id)?.emitUpdate()
+            })
+            .catch( err => this.logError(err,'backfillRouteShape',{id:route.description?.id}))
+    }
 
     getRouteDescription(id:string) {
         try {
@@ -1147,6 +1195,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const previews = this.getPreviewStore()
             if (previews.isEnabled())
                 await previews.adoptOnImport(route)
+
+            await this.getRouteShapeStore().saveOnImport(route)
 
             const existing = this.findCard(route)
 
@@ -2313,6 +2363,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable
     protected getPreviewStore() {
         return usePreviewStore()
+    }
+
+    @Injectable
+    protected getRouteShapeStore() {
+        return useRouteShapeStore()
     }
 
     reset() {

@@ -487,10 +487,12 @@ describe('RouteListService',()=>{
             service.cardObserver.emit = jest.fn()
 
             await service.import( {type:'file', name:'test1.xml',filename:'/test1',dir:'/',ext:'xml', delimiter:'/'})
+            await new Promise(resolve => setImmediate(resolve)) // import() is fire-and-forget per file
             let card2 = service.myRoutes.getCards()[2]
             expect(card2.getDisplayProperties()).toMatchObject({name:'test1.xml',error:expect.objectContaining({message:'Some Error'}),visible:true})
 
             await service.import( {type:'file', name:'test2.xml',filename:'/test2',dir:'/',ext:'xml', delimiter:'/'})
+            await new Promise(resolve => setImmediate(resolve)) // import() is fire-and-forget per file
             card2 = service.myRoutes.getCards()[2]
             const card3 = service.myRoutes.getCards()[3]
             expect(card2.getDisplayProperties()).toMatchObject({name:'test1.xml',error:expect.objectContaining({message:'Some Error'}),visible:true})
@@ -514,9 +516,11 @@ describe('RouteListService',()=>{
 
             // onse successfull import to populate the list
             await service.import( {type:'file', name:'test1.xml',filename:'/test1',dir:'/',ext:'xml', delimiter:'/'})
+            await new Promise(resolve => setImmediate(resolve)) // import() is fire-and-forget per file
 
             // one failed import (2nd response to RouteParser.parse is configured to fail (see above) )
             await service.import( {type:'file', name:'test1.xml',filename:'/test1',dir:'/',ext:'xml', delimiter:'/'})
+            await new Promise(resolve => setImmediate(resolve)) // import() is fire-and-forget per file
 
             const res = service.search()
             expect(res?.routes.length).toBeGreaterThan(0)
@@ -804,6 +808,119 @@ describe('RouteListService',()=>{
 
                 expect(store.adoptGenerated).toHaveBeenCalledWith(d, 'screenshot')
                 expect(result).toBe('file:///previews/route-1.png')
+            })
+        })
+    })
+
+    describe('route shape', () => {
+
+        let service:MockeableService
+        let card: { emitUpdate: jest.Mock }
+
+        beforeEach(() => {
+            new RouteListService().reset()
+            service = prepareMock(null,{mockLoad:true})
+            card = { emitUpdate: jest.fn() }
+            ;(service as any).getCard = jest.fn(() => card)
+        })
+
+        afterEach(() => {
+            (service as any).reset()
+            Inject('RouteShapeStore', null)
+        })
+
+        describe('backfillRouteShape', () => {
+
+            test('does nothing for a route whose details are not loaded', () => {
+                const store = { get: jest.fn(), backfill: jest.fn() }
+                service.inject('RouteShapeStore', store)
+
+                ;(service as any).backfillRouteShape({ description:{id:'1'} })
+
+                expect(store.backfill).not.toHaveBeenCalled()
+            })
+
+            test('does nothing when a shape is already resident', () => {
+                const store = { get: jest.fn().mockReturnValue([{routeDistance:0}]), backfill: jest.fn() }
+                service.inject('RouteShapeStore', store)
+
+                ;(service as any).backfillRouteShape({ description:{id:'1'}, details:{} })
+
+                expect(store.backfill).not.toHaveBeenCalled()
+            })
+
+            test('backfills and updates the card once a shape becomes available', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), backfill: jest.fn().mockResolvedValue(true) }
+                service.inject('RouteShapeStore', store)
+                const route = { description:{id:'1'}, details:{} }
+
+                ;(service as any).backfillRouteShape(route)
+                await new Promise(resolve => setImmediate(resolve))
+
+                expect(store.backfill).toHaveBeenCalledWith(route)
+                expect(card.emitUpdate).toHaveBeenCalled()
+            })
+
+            test('does not update the card when no shape could be produced', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), backfill: jest.fn().mockResolvedValue(false) }
+                service.inject('RouteShapeStore', store)
+
+                ;(service as any).backfillRouteShape({ description:{id:'1'}, details:{} })
+                await new Promise(resolve => setImmediate(resolve))
+
+                expect(card.emitUpdate).not.toHaveBeenCalled()
+            })
+
+            test('a rejecting store does not throw', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), backfill: jest.fn().mockRejectedValue(new Error('disk full')) }
+                service.inject('RouteShapeStore', store)
+
+                expect(() => (service as any).backfillRouteShape({ description:{id:'1'}, details:{} })).not.toThrow()
+                await new Promise(resolve => setImmediate(resolve))
+
+                expect(card.emitUpdate).not.toHaveBeenCalled()
+            })
+        })
+
+        describe('loadRouteShape', () => {
+
+            test('returns a resident shape without reading the repository', async () => {
+                const shape = [{routeDistance:0}]
+                const store = { get: jest.fn().mockReturnValue(shape), load: jest.fn() }
+                service.inject('RouteShapeStore', store)
+
+                const result = await service.loadRouteShape('1')
+
+                expect(result).toBe(shape)
+                expect(store.load).not.toHaveBeenCalled()
+            })
+
+            test('reads the repository and updates the card when the shape becomes resident', async () => {
+                const shape = [{routeDistance:0}]
+                const store = { get: jest.fn().mockReturnValue(undefined), load: jest.fn().mockResolvedValue(shape) }
+                service.inject('RouteShapeStore', store)
+
+                const result = await service.loadRouteShape('1')
+
+                expect(result).toBe(shape)
+                expect(card.emitUpdate).toHaveBeenCalled()
+            })
+
+            test('does not update the card when no shape is stored', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), load: jest.fn().mockResolvedValue(undefined) }
+                service.inject('RouteShapeStore', store)
+
+                const result = await service.loadRouteShape('1')
+
+                expect(result).toBeUndefined()
+                expect(card.emitUpdate).not.toHaveBeenCalled()
+            })
+
+            test('a rejecting store resolves to undefined rather than throwing', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), load: jest.fn().mockRejectedValue(new Error('disk full')) }
+                service.inject('RouteShapeStore', store)
+
+                await expect(service.loadRouteShape('1')).resolves.toBeUndefined()
             })
         })
     })

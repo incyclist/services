@@ -755,6 +755,30 @@ describe('RouteLibraryScannerService', () => {
                 Inject('PreviewStore', null)
             })
         })
+
+        describe('route shape', () => {
+
+            afterEach(() => {
+                Inject('RouteShapeStore', null)
+            })
+
+            // ingestOne() calls saveOnImport() unguarded (no local try/catch), relying on the
+            // store's own documented "never throws, never rejects" contract (covered directly
+            // in shapes/store.unit.test.ts) rather than duplicating that guard here.
+            test('saves a shape before the route is saved', async () => {
+                const order: Array<string> = []
+                const saveOnImport = jest.fn(async () => { order.push('shape') })
+                dbMock.save = jest.fn(async () => { order.push('save') })
+                Inject('RouteShapeStore', { saveOnImport })
+
+                const parsed = makeRoute({}, { title: 'r1' })
+                observer = service.ingest([parsed])
+                await new Promise(resolve => observer.once('ingest-complete', resolve))
+
+                expect(saveOnImport).toHaveBeenCalledWith(parsed.route)
+                expect(order).toEqual(['shape', 'save'])
+            })
+        })
     })
 
     // FIXES_BACKLOG.md item #40 - production crash: RouteImportDialog's own unmount effect

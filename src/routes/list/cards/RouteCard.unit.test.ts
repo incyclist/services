@@ -346,6 +346,35 @@ describe('RouteCard preview handling', () => {
             expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', videoPill: 'in-icloud' });
         });
     });
+
+    describe('route shape', () => {
+
+        test('a resident shape is surfaced on getDisplayProperties()', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo) as any;
+            const shape = [{ routeDistance: 0, lat: 1, lng: 2 }];
+            card.injected = { RouteShapeStore: { get: jest.fn().mockReturnValue(shape) } };
+
+            expect((card.getDisplayProperties() as any).shape).toBe(shape);
+        });
+
+        test('no shape store resident yet leaves the field undefined', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo) as any;
+            card.injected = { RouteShapeStore: { get: jest.fn().mockReturnValue(undefined) } };
+
+            expect((card.getDisplayProperties() as any).shape).toBeUndefined();
+        });
+
+        test('deleting the route releases its stored shape too', async () => {
+            const card = createCard({ id: '1', hasVideo: true } as RouteInfo) as any;
+            const deleteShape = jest.fn().mockResolvedValue(undefined);
+            card.getRepo = () => ({ delete: jest.fn().mockResolvedValue(undefined) });
+            card.injected = { RouteShapeStore: { get: jest.fn(), delete: deleteShape } };
+
+            await card.deleteRoute();
+
+            expect(deleteShape).toHaveBeenCalledWith('1');
+        });
+    });
 });
 
 // stopDownload(true) used to delete `downloadObserver` without detaching the 'done'/'error'

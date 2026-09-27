@@ -20,6 +20,7 @@ import { fixIncorrectFileInfo } from '../base/parsers/utils'
 import { useExternalFileService } from '../../fileaccess/externalFiles'
 import type { ExternalFileScope } from '../../fileaccess/types'
 import { usePreviewStore } from '../previews/store'
+import { useRouteShapeStore } from '../shapes/store'
 
 /** A wait for the current route's companion files is considered "waiting for iCloud" once it
  *  has been running this long, per `ImportDisplayProps.parseProgress.waitingForICloud`. */
@@ -300,6 +301,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             }
 
             route.description.tsImported = Date.now()
+            await this.getRouteShapeStore().saveOnImport(route)
             await db.save(route,true)
             service.addRoute(route,existing? 'import': 'user')
 
@@ -870,6 +872,9 @@ export class RouteLibraryScannerService extends IncyclistService {
             this.logError(err as Error, 'adoptPreview', { title: route?.title })
         }
 
+        // never rejects - a missing shape is backfilled on the first details load
+        await this.getRouteShapeStore().saveOnImport(route)
+
         await db.save(route,true)
         service.addRoute(route,existing? 'import': 'user')
 
@@ -1018,6 +1023,11 @@ export class RouteLibraryScannerService extends IncyclistService {
     @Injectable
     protected getPreviewStore() {
         return usePreviewStore()
+    }
+
+    @Injectable
+    protected getRouteShapeStore() {
+        return useRouteShapeStore()
     }
 
     @Injectable
