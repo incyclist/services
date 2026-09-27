@@ -546,6 +546,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                 parseState: 'waiting',
                 importable: false,
                 label: file.base,
+                folder: target.folderName,
                 id: target.controlFileUri,
                 alreadyImported:false,
                 observer:new Observer()
@@ -626,6 +627,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                 alreadyImported: false,
                 route,
                 folderUri: target.folderUri,
+                folderName: target.folderName,
                 controlFileUri: target.controlFileUri,
                 format: target.format
             }
@@ -643,6 +645,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                 alreadyImported: false,
                 route: result ? new Route(result.data, result.details) : undefined,
                 folderUri: target.folderUri,
+                folderName: target.folderName,
                 controlFileUri: target.controlFileUri,
                 format: target.format,
                 parseError: scope.lastFailure ? this.getReadFailureMessage(scope) : (err?.message ?? String(err)),
@@ -936,7 +939,7 @@ export class RouteLibraryScannerService extends IncyclistService {
 
 
     private buildRouteDisplayItem(parsed:ParsedRoute, observer?:IObserver):RouteDisplayItem {
-        const {route,alreadyImported,parseError,format,controlFileUri} = parsed
+        const {route,alreadyImported,parseError,format,controlFileUri,folderName} = parsed
         const descr = route?.description??{}
 
         const [C,U] = this.getUnitConversionShortcuts()
@@ -954,6 +957,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             id:route?.description?.id??info?.base,
             distance,
             label: route?.title??info?.base,
+            folder: folderName,
             alreadyImported,
             parseState: importProps?.parseState??'waiting',
             importable: parseError==null,

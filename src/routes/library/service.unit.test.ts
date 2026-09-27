@@ -323,6 +323,27 @@ describe('RouteLibraryScannerService', () => {
             expect(service.getDisplayProps().hasICloudDownloadFailures).toBe(false)
         })
 
+        test('carries the containing folder name onto the display item, to disambiguate same-titled routes', async () => {
+            jest.spyOn(RouteParser, 'parse').mockResolvedValue({
+                data: { id: 'r1', title: 'Stelvio' } as any,
+                details: {} as any,
+            })
+
+            await runParse(makeScanned({ folderName: 'Alps 2023' }))
+
+            const [item] = service.getDisplayProps().routes
+            expect(item.folder).toBe('Alps 2023')
+        })
+
+        test('a failed parse still carries the containing folder name', async () => {
+            jest.spyOn(RouteParser, 'parse').mockRejectedValue(new Error('cannot parse <Track>'))
+
+            await runParse(makeScanned({ folderName: 'Alps 2023' }))
+
+            const [item] = service.getDisplayProps().routes
+            expect(item.folder).toBe('Alps 2023')
+        })
+
         test('a file that could not be downloaded because there is no connection -> ICLOUD_OFFLINE', async () => {
             jest.spyOn(RouteParser, 'parse').mockImplementation(async () => {
                 recordReadFailure('offline')
@@ -533,6 +554,7 @@ describe('RouteLibraryScannerService', () => {
             return {
                 route: makeRouteObject(routeOverride),
                 folderUri: 'content://root/folder',
+                folderName: 'folder',
                 controlFileUri: 'content://root/folder/route.xml',
                 alreadyImported: false,
                 format:'xml',

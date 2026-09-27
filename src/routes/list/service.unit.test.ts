@@ -441,6 +441,85 @@ describe('RouteListService',()=>{
         })
     })
 
+    describe('persisted view preferences', () => {
+        let service: MockeableService
+        let settingsStore: Record<string, unknown>
+        // Recreated fresh in beforeEach (not a describe-scope constant) - an earlier describe's
+        // jest.resetAllMocks() would otherwise strip a once-defined mock's implementation before
+        // these tests ever run, since Jest's mock registry is shared across the whole file.
+        let MockUserSettings: { get: jest.Mock, set: jest.Mock }
+
+        beforeEach(() => {
+            new RouteListService().reset()
+            settingsStore = {}
+            MockUserSettings = {
+                get: jest.fn((key: string, defValue?: unknown) => settingsStore[key] ?? defValue),
+                set: jest.fn((key: string, value: unknown) => { settingsStore[key] = value }),
+            }
+            Inject('UserSettings', MockUserSettings)
+            service = new MockeableService()
+        })
+
+        afterEach(() => {
+            Inject('UserSettings', null)
+            jest.clearAllMocks()
+        })
+
+        describe('getListTop/setListTop', () => {
+            test('round-trips a top position per display type', () => {
+                service.setListTop('tiles', 250)
+                service.setListTop('list', 40)
+
+                expect(service.getListTop('tiles')).toBe(250)
+                expect(service.getListTop('list')).toBe(40)
+            })
+
+            test('with no argument, defaults to the persisted display type - not an unset in-memory field', () => {
+                settingsStore['preferences.routeListDisplayType'] = 'tiles'
+                service.setListTop('tiles', 250)
+
+                // setDisplayType() was never called in this session; getListTop() must still
+                // resolve 'tiles' via the persisted preference rather than an unset field -
+                // this is the mismatch that made tile view restore the list view's position.
+                expect(service.getListTop()).toBe(250)
+            })
+
+            test('the single-argument (number) overload stores under the persisted display type', () => {
+                settingsStore['preferences.routeListDisplayType'] = 'tiles'
+                service.setListTop(99)
+
+                expect(service.getListTop('tiles')).toBe(99)
+                expect(service.getListTop('list')).toBeUndefined()
+            })
+        })
+
+        describe('getSortOrder/setSortOrder', () => {
+            test('defaults to suggested', () => {
+                expect(service.getSortOrder()).toBe('suggested')
+            })
+
+            test('round-trips and persists to user settings', () => {
+                service.setSortOrder('distance')
+
+                expect(service.getSortOrder()).toBe('distance')
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.routeListSortOrder', 'distance')
+            })
+        })
+
+        describe('getFiltersExpanded/setFiltersExpanded', () => {
+            test('defaults to collapsed', () => {
+                expect(service.getFiltersExpanded()).toBe(false)
+            })
+
+            test('round-trips and persists to user settings', () => {
+                service.setFiltersExpanded(true)
+
+                expect(service.getFiltersExpanded()).toBe(true)
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.routeListFiltersExpanded', true)
+            })
+        })
+    })
+
     describe('previews', () => {
 
         // RouteListService and RouteCard are shared with desktop, where the fileAccess

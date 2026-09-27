@@ -14,7 +14,7 @@ import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard } from "./cards/RouteCard";
 import { RouteSettings, SummaryCardDisplayProps } from "./cards/types";
-import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
+import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteListSortOrder, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
@@ -77,6 +77,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected prevFilters: SearchFilter
     protected listTop: Record<DisplayType,number> = { list:undefined, tiles:undefined }
     protected displayType: DisplayType
+    protected sortOrder: RouteListSortOrder
+    protected filtersExpanded: boolean
     protected syncInfo:  {iv?: NodeJS.Timeout, observer?: Observer} 
     protected currentView: 'list'|'grid'|'routes'
     protected stats
@@ -429,9 +431,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * routeListService.setListTop(200);
      */
     setListTop(display: number|DisplayType, top?:number) {
-        const displayType = typeof display === 'number' ? this.displayType : display 
+        const displayType = typeof display === 'number' ? this.getDisplayType() : display
         const topValue = typeof display === 'number' ? display : top
-        
+
         this.listTop[displayType] = topValue
     }
 
@@ -440,10 +442,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      *
      * This value is used to restore the position when the RouteList is re-opened
      *
+     * Defaults to the persisted display type (`getDisplayType()`), not the in-memory field
+     * alone, so a caller that has not yet called `setDisplayType()` in this session still gets
+     * the top position for the view the user will actually land on.
+     *
      * @param display The display type for which the top position is requested.
      * @returns The top position of the first item in the list for the specified display type.
      */
-    getListTop(display: DisplayType = this.displayType) {
+    getListTop(display: DisplayType = this.getDisplayType()) {
         return this.listTop[display]
     }
 
@@ -461,9 +467,47 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     getDisplayType():DisplayType {
-        return this.displayType ??  this.getUserSettings().get('preferences.routeListDisplayType', 'list')        
+        return this.displayType ??  this.getUserSettings().get('preferences.routeListDisplayType', 'list')
     }
-    
+
+    /**
+     * Sets the persisted sort order for the route list.
+     *
+     * @param sortOrder The sort order to be set.
+     */
+    setSortOrder(sortOrder:RouteListSortOrder) {
+        this.sortOrder = sortOrder
+        this.getUserSettings().set('preferences.routeListSortOrder', sortOrder)
+    }
+
+    /**
+     * Retrieves the persisted sort order for the route list, defaulting to `'suggested'`.
+     *
+     * @returns The current sort order.
+     */
+    getSortOrder():RouteListSortOrder {
+        return this.sortOrder ?? this.getUserSettings().get('preferences.routeListSortOrder', 'suggested')
+    }
+
+    /**
+     * Sets whether the route list's filter panel is persisted as expanded or collapsed.
+     *
+     * @param expanded Whether the filter panel should be expanded.
+     */
+    setFiltersExpanded(expanded:boolean) {
+        this.filtersExpanded = expanded
+        this.getUserSettings().set('preferences.routeListFiltersExpanded', expanded)
+    }
+
+    /**
+     * Retrieves whether the route list's filter panel is persisted as expanded, defaulting to
+     * `false` (collapsed).
+     *
+     * @returns Whether the filter panel should be shown expanded.
+     */
+    getFiltersExpanded():boolean {
+        return this.filtersExpanded ?? this.getUserSettings().get('preferences.routeListFiltersExpanded', false)
+    }
 
     /**
      * checks if the preload is still ongoing

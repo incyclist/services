@@ -43,6 +43,7 @@ export interface ParsedRoute {
     route: Route             // the full parsed Route object
     controlFileUri: string   // carried from ScannedRoute
     folderUri: string        // carried from ScannedRoute
+    folderName: string       // carried from ScannedRoute - display name of the containing folder
     alreadyImported: boolean // set via RouteListService.existsBySourceUri()
     parseError?: string      // set if AVI, no video, parse failure
     parseErrorCode?: RouteImportErrorCode  // stable key for the same failure
@@ -57,6 +58,8 @@ export type ParseState = 'waiting'|'parsing'|'parsed'
 export interface RouteDisplayItem {
     id: string                      // stable identifier for selection tracking
     label: string                   // filename during scan, route title after parse
+    folder: string                  // display name of the containing folder - disambiguates
+                                     // same-titled routes in the selection list
     distance?: FormattedNumber      // undefined until parsed
     format: RouteFormat
     alreadyImported: boolean
