@@ -334,6 +334,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (filters!==this.prevFilters) {
             this.prevFilters = filters
             this.saveFilters(filters)
+            this.setListTop('list',0)
+            this.setListTop('tiles',0)
         }
 
         const res = this.searchRepo(filters)
@@ -398,9 +400,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const routeIdSet = new Set(routes.map(r => r.id))
             const cards = allCards.filter(c => routeIdSet.has(c.getId()))
 
-            this.setListTop('list',0)
-            this.setListTop('tiles',0)
-          
             return {routes,cards,filters,observer:this.observer,units}
     
         }
