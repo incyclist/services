@@ -77,7 +77,10 @@ export interface RouteDisplayItem {
 export interface ImportDisplayProps {
     phase: 'landing' | 'scanning' | 'parsing' | 'selecting' | 'ingesting' | 'complete' | 'result' | 'error'
     routes: RouteDisplayItem[]
-    scanProgress?: { scannedFolders: number }
+    // `failedFolders` counts folders that could not be listed (permission error, a NAS gone
+    // offline mid-scan, …) so the UI can report an incomplete scan instead of a silently short
+    // result.
+    scanProgress?: { scannedFolders: number; failedFolders: number }
     parseProgress?: { parsed: number; total: number; waitingForICloud?: boolean }
     ingestProgress?: { current: number; total: number; currentName: string }
     completionSummary?: {

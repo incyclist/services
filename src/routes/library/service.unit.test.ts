@@ -163,6 +163,56 @@ describe('RouteLibraryScannerService', () => {
             await completed // should resolve, not hang
         })
 
+        test('counts a folder readdir failure and surfaces it in scanProgress', async () => {
+            fsMock.readdir.mockRejectedValueOnce(new Error('permission denied')) // root fails
+
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+
+            expect(service.getDisplayProps().scanProgress).toEqual({ scannedFolders: 0, failedFolders: 1 })
+        })
+
+        test('counts only the sub-folders that actually fail, alongside the ones that succeed', async () => {
+            fsMock.readdir
+                .mockResolvedValueOnce([dir('sub-ok', 'content://root/sub-ok'), dir('sub-fail', 'content://root/sub-fail')]) // root
+                .mockResolvedValueOnce([]) // sub-ok
+                .mockRejectedValueOnce(new Error('NAS offline')) // sub-fail
+
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+
+            expect(service.getDisplayProps().scanProgress).toEqual({ scannedFolders: 2, failedFolders: 1 })
+        })
+
+        test('emits scan-progress with the running failed-folder count when a folder cannot be listed', async () => {
+            fsMock.readdir.mockRejectedValueOnce(new Error('permission denied'))
+
+            const progressEvents: any[] = []
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            observer.on('scan-progress', e => progressEvents.push(e))
+
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+            expect(progressEvents).toContainEqual({ scannedFolders: 0, failedFolders: 1 })
+        })
+
+        test('logs a readdir failure without the folder\'s absolute path', async () => {
+            const logEventSpy = jest.spyOn(service, 'logEvent')
+            fsMock.readdir
+                .mockResolvedValueOnce([dir('D:\\Videos\\secret-share', 'content://root/D:\\Videos\\secret-share')])
+                .mockRejectedValueOnce(new Error('permission denied'))
+
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+
+            const errorCalls = logEventSpy.mock.calls
+                .map(call => call[0])
+                .filter(event => event.message === 'Error' && event.fn === 'scanFolder')
+
+            expect(errorCalls).toHaveLength(1)
+            expect(errorCalls[0]).not.toHaveProperty('uri')
+            expect(errorCalls[0].folderName).toBe('D:\\Videos\\secret-share')
+        })
+
         test('upserts import history after scan', async () => {
             const writeSpy = jest.fn().mockResolvedValue(true)
             const listSpy = jest.fn().mockResolvedValue([])

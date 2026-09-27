@@ -124,29 +124,29 @@ export class RouteLibraryScannerService extends IncyclistService {
             this.prepare()
 
         
-        this.logEvent({message:'import route library',folder:folderInfo.displayName, uri:folderInfo.uri})
+        this.logEvent({message:'import route library',folder:folderInfo.displayName})
 
         // reset cancel flag
         this.isCancelled = false
         this.scanResult = []
 
         this.importProps.phase = 'scanning'
-        this.importProps.scanProgress = {scannedFolders:0}
-        
+        this.importProps.scanProgress = {scannedFolders:0, failedFolders:0}
+
         const observer = new Observer()
         this._scan(folderInfo, observer).catch(err => {
-            this.logError(err, 'scan', { uri: folderInfo.uri })
+            this.logError(err, 'scan', { folder: folderInfo.displayName })
             observer.emit('error', err.message)
         })
 
         observer
-            .on('scan-progress',(progress:{scannedFolders:number})=>{
+            .on('scan-progress',(progress:{scannedFolders:number, failedFolders:number})=>{
                 this.importProps.scanProgress = progress
             })
             .on('scan-complete',()=>{
-                const cntScanned = this.importProps.scanProgress.scannedFolders
-                this.logEvent({message:'import route library: scan success',folder:folderInfo.displayName, cntScanned})
-                this.importProps.phase= 'parsing'        
+                const {scannedFolders: cntScanned, failedFolders: cntFailed} = this.importProps.scanProgress
+                this.logEvent({message:'import route library: scan success',folder:folderInfo.displayName, cntScanned, cntFailed})
+                this.importProps.phase= 'parsing'
             })
 
         return observer
@@ -344,7 +344,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             }
 
             const scanObserver = new Observer()
-            await this.scanFolder( folderUri, folderUri,scanObserver,parsers,{ scannedFolders: 0}, { value: 0 },false )
+            await this.scanFolder( folderUri, folderUri,scanObserver,parsers,{ scannedFolders: 0, failedFolders: 0 }, { value: 0 },false )
             const files = this.scanResult
 
             this.scanResult = []
@@ -415,22 +415,31 @@ export class RouteLibraryScannerService extends IncyclistService {
     private async _scan(folderInfo: FolderInfo, observer: Observer): Promise<void> {
         await waitNextTick()
         const parsers = this.getParsers()
-        const progress = { scannedFolders: 0 }
+        const progress = { scannedFolders: 0, failedFolders: 0 }
         const discoveredCount = { value: 0 }
 
         await this.scanFolder(folderInfo.uri, folderInfo.displayName, observer, parsers, progress, discoveredCount)
         await this.upsertImportHistory(folderInfo, discoveredCount.value)
 
-        this.logEvent({message:'video scan result', scannedFolders: this.importProps.scanProgress.scannedFolders, files:this.scanResult.length})
+        this.logEvent({message:'video scan result', scannedFolders: progress.scannedFolders, failedFolders: progress.failedFolders, files:this.scanResult.length})
         observer.emit('scan-complete',this.scanResult)
     }
 
+    /**
+     * Reads one folder and (when `recursive`) descends into its sub-folders, streaming
+     * discovered routes via `scan-result` events.
+     *
+     * A folder that cannot be listed (permission error, a NAS gone offline mid-scan, …) is
+     * counted rather than crashing the scan - `progress.failedFolders` is surfaced through
+     * `ImportDisplayProps.scanProgress` so the UI can report an incomplete scan instead of
+     * showing a silently short result.
+     */
     private async scanFolder(
         uri: string,
         folderName: string,
         observer: Observer,
         parsers: ParserFactory,
-        progress: { scannedFolders: number },
+        progress: { scannedFolders: number, failedFolders: number },
         discoveredCount: { value: number },
         recursive:boolean = true
     ): Promise<void> {
@@ -440,7 +449,9 @@ export class RouteLibraryScannerService extends IncyclistService {
         try {
             entries = await fs.readdir(uri, { recursive:false,extended: true })
         } catch (err) {
-            this.logError(err, 'scanFolder', { uri })
+            progress.failedFolders++
+            this.logError(err, 'scanFolder', { folderName })
+            observer.emit('scan-progress', { scannedFolders: progress.scannedFolders, failedFolders: progress.failedFolders })
             return
         }
 
@@ -459,7 +470,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         }
 
         progress.scannedFolders++
-        observer.emit('scan-progress', { scannedFolders: progress.scannedFolders })
+        observer.emit('scan-progress', { scannedFolders: progress.scannedFolders, failedFolders: progress.failedFolders })
 
         const files = entries.filter(e => !e.isDirectory)
         const dirs = entries.filter(e => e.isDirectory)
@@ -727,8 +738,9 @@ export class RouteLibraryScannerService extends IncyclistService {
         const {video}= route?.details??{}
         const {file,url,format} = video??{}
 
-
-        //this.logEvent( {message:'validateVideoUrl',route:{file,url,format}, folderUri, folderFiles})
+        // Basenames and a count only - never the folder listing or an absolute path (a desktop
+        // NAS scan can carry thousands of entries with paths that embed usernames/share names).
+        this.logEvent({message:'validateVideoUrl', file:this.getFileName(file), url:this.getFileName(url), format, folderFileCount:folderFiles.length})
 
         let videoFormat = format 
         try {
@@ -914,7 +926,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                 routeCount
             })
         } catch (err) {
-            this.logError(err, 'upsertImportHistory', { uri: folderInfo.uri })
+            this.logError(err, 'upsertImportHistory', { folder: folderInfo.displayName })
         }
     }
 
