@@ -10,8 +10,10 @@ import { IObserver } from '../../base/typedefs'
 import { ParserFactory } from '../base/parsers/factory'
 import { RouteParser, useParsers } from '../base/parsers'
 import { useRouteList } from '../list/service'
+import type { RouteListService } from '../list/service'
 import { waitNextTick } from '../../utils'
-import { FailedRoute, FolderInfo, ImportDisplayProps, ImportedLibrary, ParsedRoute, RouteDisplayItem, RouteImportErrorCode, ScanContext, ScanEntry, ScannedRoute  } from './types'
+import { FailedRoute, FolderInfo, ImportDisplayProps, ImportedLibrary, ParsedRoute, RouteDisplayItem, RouteImportFailure, ScanContext, ScanEntry, ScannedRoute  } from './types'
+import { RouteImportError, mapErrorToImportCode, toRouteImportError } from './errors'
 import { useRoutesDbLoader } from '../list/loaders/db'
 import { Route } from '../base/model/route'
 import { sleep } from '../../utils/sleep'
@@ -89,11 +91,21 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
 
+    /**
+     * Imports one route file picked in the import dialog, and reports the outcome through the
+     * dialog's display props: `phase: 'result'` with either `resultSuccess`, or `error` (the
+     * reason) and `failure` (the same failure with its stable code).
+     *
+     * The file is imported by `importRouteFile()`, the one single-route import path.
+     *
+     * @param fileInfo the route file - any supported format, the format is detected from the file
+     * @returns Observer that emits `'parsing'`, `'success'` (route) and `'error'` (reason, failure)
+     */
     importSingle(fileInfo: FileInfo):IObserver {
 
         const observer = new Observer()
         this.isCancelled = false
-       
+
         this.importRoute(fileInfo, observer).catch(err => {
             this.logError(err, 'importSingle', { file: fileInfo?.filename })
             observer.emit('error', err.message)
@@ -110,16 +122,107 @@ export class RouteLibraryScannerService extends IncyclistService {
             this.importProps.resultSuccess= { routeName: route.title}
 
         })
-        observer.on('error',(error:string)=> {
+        observer.on('error',(error:string, failure?:RouteImportFailure)=> {
             if (!this.importProps)
                 return
 
             this.importProps.phase = 'result'
             this.importProps.error = error
+            this.importProps.failure = failure
 
         })
 
         return observer
+    }
+
+    /**
+     * Imports several route files picked in the import dialog at once - which is also how many
+     * GPX routes are added in one go, as a folder import only looks for video routes.
+     *
+     * Each file goes through `importRouteFile()`, one after the other, and the import reports
+     * the way a folder import's last step does: `phase: 'ingesting'` with `ingestProgress`, then
+     * `phase: 'complete'` with a `completionSummary` whose failed routes carry their codes.
+     *
+     * @param files the route files - any supported formats
+     * @returns Observer that emits `'ingest-progress'`, `'ingest-error'` and `'ingest-complete'`
+     */
+    importFiles(files: FileInfo[]): IObserver {
+        const observer = new Observer()
+        this.isCancelled = false
+
+        if (!this.importProps)
+            this.prepare()
+        this.importProps.phase = 'ingesting'
+
+        // one list update at the end instead of one per route (which would re-render the page)
+        const list = this.getRouteList()
+        list.pauseListUpdates()
+
+        this._importFiles(files ?? [], observer)
+            .catch(err => {
+                this.logError(err, 'importFiles')
+                observer.emit('error', err.message)
+            })
+            .finally( ()=> {
+                list.resumeListUpdates()
+                list.emitLists('updated',{source:'system'})
+            })
+
+        observer.on('ingest-progress',( progress:{ current:number, total:number, currentName: string})=> {
+            if (this.importProps)
+                this.importProps.ingestProgress = progress
+        })
+
+        observer.on( 'ingest-complete',(status:{ imported:number, skipped:number, errors:number, failedRoutes:FailedRoute[] })=>{
+            if (!this.importProps)
+                return
+            const {imported,skipped,errors,failedRoutes} = status
+            this.importProps.phase = 'complete'
+            this.importProps.completionSummary = {imported,skipped,errors,failedRoutes}
+        })
+
+        return observer
+    }
+
+    /**
+     * Parses one route file and adds it to the route library - the single-route import path.
+     *
+     * It serves the import dialog (`importSingle()`, `importFiles()`) and files dropped onto the
+     * route list (`RouteListService.import()`), so a file is read the same way, and a failure is
+     * reported with the same code, however it arrived.
+     *
+     * A GPX file is parsed on its own. Any other route file is handled the way a folder import
+     * handles it: its folder is listed to check that the files the route needs are present and
+     * to find its video, and the read is bracketed by an external-file scope.
+     *
+     * Unlike the rest of this service it keeps no state of its own (no display props, no scan
+     * result), so several files can be imported at the same time, and while an import dialog
+     * is open.
+     *
+     * @param fileInfo the route file - any supported format, the format is detected from the file
+     * @param props.list the route list the route is added to - the app's route list by default
+     * @param props.isCancelled lets a pending external-file wait be abandoned
+     * @returns the imported route
+     * @throws RouteImportError - the failure, with its stable `RouteImportErrorCode`
+     */
+    async importRouteFile(fileInfo: FileInfo, props?: { list?: RouteListService, isCancelled?: () => boolean }): Promise<Route> {
+        const name = fileInfo?.url??fileInfo?.filename??fileInfo?.name
+        this.logEvent({message:'import single route file',file:name, type:fileInfo?.ext})
+
+        try {
+            const route = await this.parseRouteFile(fileInfo, props?.isCancelled)
+            this.logEvent({message:'import single route file success',file:name})
+
+            const list = props?.list ?? this.getRouteList()
+            const existing = list.findCard(route) ?? null
+            await this.ingestOne(route, existing, list, this.getRoutesDBLoader())
+            return route
+        }
+        catch(err) {
+            const error = toRouteImportError(err)
+            this.logEvent({message:'import single route file failed', file:name, reason:error.message, code:error.code, stack:(err as Error)?.stack})
+            throw error
+        }
     }
 
     /**
@@ -267,7 +370,7 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
     private async importRoute  (fileInfo: FileInfo, observer:IObserver) {
-        
+
         await sleep(0)
 
         observer.emit('parsing')
@@ -280,144 +383,135 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         this.importProps.phase = 'parsing'
 
-        if (fileInfo?.ext==='gpx' ) {
-            return this.importSingleGpxRoute(fileInfo,observer)
-        }
-        else {
-            return this.importSingleVideoRoute(fileInfo,observer)
-        }
-    }
-
-
-    // simple single GPX file import
-    private async importSingleGpxRoute  (fileInfo: FileInfo, observer:IObserver) {
-
-        const name = fileInfo.url??fileInfo.filename??fileInfo.name
-        this.logEvent({message:'import single route file',file:name, type:fileInfo.ext})
-
-        const service = this.getRouteList()
-        const db = this.getRoutesDBLoader()
-        
+        const isCancelled = () => this.isCancelled
         try {
-            const {data,details} = await RouteParser.parse(fileInfo)
-            const route = new Route(data,details)
-
-            this.logEvent({message:'import single route file success',file:name})
-            
-            const existing = service.findCard(route)
-            if (existing ) {   
-                this.logEvent({message:'route updated (import)',route:route.title})
-            }
-
-            route.description.tsImported = Date.now()
-            await this.getRouteShapeStore().saveOnImport(route)
-            await db.save(route,true)
-            service.addRoute(route,existing? 'import': 'user')
-
-            const cardInfo =  service.findCard(route)
-            cardInfo?.card?.verify()
-
-
-            if (existing ) {   
-                // route item was replaced in-place, force UI to refresh
-                existing.card.emitUpdate()
-            }
-
-            observer.emit('success',route)
-        }
-        catch(err:any) {
-            this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
-
-            observer.emit('error', err.message)
-        }
-
-    }
-
-
-    private async importSingleVideoRoute  (fileInfo: FileInfo, observer:IObserver) {
-
-        const name = fileInfo.url??fileInfo.filename??fileInfo.name
-        this.logEvent({message:'import single route file',file:name, type:fileInfo.ext})
-        const parsers = this.getParsers()
-        const {dir,delimiter} = fileInfo
-        let {ext}= fileInfo
-
-        if (ext.startsWith('.')) ext = ext.slice(1)
-
-        const folderUri = dir.endsWith(delimiter??'/') ? dir.slice(0, -delimiter.length) : dir     
-        
-        try {
-
-            if (!parsers.isPrimaryExtension(ext)) {
-                this.logEvent({message:'import single route file failed', file:name, reason:'not a route control file'})
-                observer.emit('error','not a route control file',ext)
-                return
-            }
-
-            const scanObserver = new Observer()
-            await this.scanFolder( folderUri, folderUri, this.createScanContext(scanObserver, parsers, false) )
-            const files = this.scanResult
-
-            this.scanResult = []
-            scanObserver.stop()
-
-            if (!files.length) {
-                this.logEvent({message:'import single route file failed', file:name, reason:'no file found'})
-                observer.emit('error','no file found')
-            }
-
-            if (files[0].scanError) {
-                this.logEvent({message:'import single route file failed', file:name, reason:files[0].scanError})
-                
-                observer.emit('error',files[0].scanError)
-                return                    
-            }
-            else {
-                
-                // filter out the selected file                    
-                const file = files.find( file => file.controlFileUri.includes( fileInfo.base))
-                const parseObserver = this.parse([file])
-
-                parseObserver.on('parse-result',(result:ParsedRoute)=>{                    
-
-                    parseObserver.stop()
-                    if (result.parseError) {
-                        this.logEvent({message:'import single route file failed', file:name, reason:result.parseError})                        
-                        observer.emit('error',result.parseError)
-                        return                    
-                    }
-
-                    const ingest = this.ingest([result])
-
-                    let ingestError:string
-                    ingest.once('ingest-error',(_:string,reason:string
-                    )=>{
-                        ingest.stop()
-                    this.logEvent({message:'import single route file failed', file:name, reason})
-
-                        observer.emit('error',reason)
-                        ingestError = reason
-                    })
-                    ingest.once('ingest-complete',(summary:any)=>{
-                        ingest.stop()
-                        if (!ingestError && summary.imported>0)  {
-                            this.logEvent({message:'import single route file success',file:name})
-
-                            observer.emit('success',summary.importedRoutes?.[0]?.title)
-                        }
-                        else if (!ingestError && summary.imported===0)  { 
-
-                            this.logEvent({message:'import single route file failed', file:name, reason:'not imported'})                        
-                            observer.emit('error','not imported')
-                        }
-                    })
-
-                })
-            }
+            const route = await this.importRouteFile(fileInfo, { isCancelled })
+            if (!isCancelled())
+                observer.emit('success',route)
         }
         catch(err) {
-            this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
-            observer.emit('error', err.message)
+            const error = toRouteImportError(err)
+            if (!isCancelled())
+                observer.emit('error', error.message, error.toFailure())
+        }
+    }
+
+    private async _importFiles(files: FileInfo[], observer: IObserver): Promise<void> {
+        await waitNextTick()
+
+        const targets = files.filter(f => !!f)
+        const total = targets.length
+        const failedRoutes: FailedRoute[] = []
+        const importedRoutes: Route[] = []
+        const isCancelled = () => this.isCancelled
+
+        for (let i = 0; i < total; i++) {
+            if (isCancelled())
+                continue
+
+            const file = targets[i]
+            const name = file.name ?? file.base ?? file.filename ?? file.url
+            observer.emit('ingest-progress', { current: i + 1, total, currentName: name })
+
+            try {
+                importedRoutes.push(await this.importRouteFile(file, { isCancelled }))
+            }
+            catch(err) {
+                const error = toRouteImportError(err)
+                failedRoutes.push({ name, reason: error.message, code: error.code, missingExt: error.missingExt })
+                observer.emit('ingest-error', { name, reason: error.message })
+            }
+        }
+
+        observer.emit('ingest-complete', { imported: importedRoutes.length, skipped: 0, errors: failedRoutes.length, failedRoutes, importedRoutes })
+    }
+
+    /** Parses one route file - on its own for GPX, the way a folder import would otherwise. */
+    private async parseRouteFile(fileInfo: FileInfo, isCancelled?: () => boolean): Promise<Route> {
+        const ext = (fileInfo?.ext ?? '').replace(/^\./, '').toLowerCase()
+
+        // without a folder there is nothing to list - the parser reads the file on its own
+        if (ext==='gpx' || !fileInfo?.dir) {
+            const {data,details} = await RouteParser.parse(fileInfo)
+            return new Route(data,details)
+        }
+
+        const parsers = this.getParsers()
+        if (!parsers.isPrimaryExtension(ext))
+            throw new RouteImportError('not a route control file', 'UNSUPPORTED')
+
+        const target = await this.locateRouteFile(fileInfo, ext, parsers)
+        return this.parseLocatedRoute(target, isCancelled)
+    }
+
+    /**
+     * Finds a route control file in its folder's listing and checks that the files the route
+     * needs are next to it - what a folder import's scan does for every route it finds.
+     */
+    private async locateRouteFile(fileInfo: FileInfo, ext: string, parsers: ParserFactory): Promise<ScannedRoute> {
+        const {dir} = fileInfo
+        const delimiter = fileInfo.delimiter ?? '/'
+        const folderUri = dir.endsWith(delimiter) ? dir.slice(0, -delimiter.length) : dir
+
+        let listing: ScanEntry[]|null = null
+        try {
+            listing = await this.listEntries(folderUri)
+        }
+        catch(err) {
+            this.logError(err as Error, 'locateRouteFile')
+        }
+
+        // a names-only listing is not probed: only the file names are needed here
+        const files = (listing ?? [])
+            .filter(e => !e.isDirectory)
+            .map(e => e.unknownType ? { name: e.name, uri: e.uri, isDirectory: false } : e) as ReadDirResult[]
+
+        const base = fileInfo.base ?? fileInfo.name
+        const controlFile = base ? (files.find(f => f.name===base) ?? files.find(f => f.uri?.includes(base))) : undefined
+        if (!controlFile)
+            throw new RouteImportError('no file found', 'READ_FAILED')
+
+        const baseName = this.getBaseName(controlFile.name)
+        const missingExt = this.findMissingCompanion(parsers, ext, baseName, files)
+        if (missingExt)
+            throw new RouteImportError(`Missing companion file (.${missingExt})`, 'MISSING_COMPANION', { missingExt })
+
+        return {
+            folderUri,
+            folderName: folderUri,
+            files,
+            controlFileUri: controlFile.uri,
+            format: this.getExtension(controlFile.name)
+        }
+    }
+
+    /**
+     * Parses a located route control file: the same read, the same external-file scope and the
+     * same video lookup as a folder import's parse, without its selection-list bookkeeping.
+     */
+    private async parseLocatedRoute(target: ScannedRoute, isCancelled?: () => boolean): Promise<Route> {
+        const file = this.buildFileInfo(target.controlFileUri, target.format)
+        const scope = useExternalFileService().beginScope({ isCancelled })
+
+        try {
+            let result: Awaited<ReturnType<typeof RouteParser.parse>>
+            try {
+                result = await RouteParser.parse(file)
+            }
+            finally {
+                scope.end()
+            }
+
+            if (scope.lastFailure)
+                throw new Error(this.getReadFailureMessage(scope))
+
+            const route = new Route(result.data, result.details)
+            if (result.data.hasVideo)
+                this.validateVideoUrl(route, target.folderUri, target.files)
+            return route
+        }
+        catch(err) {
+            throw toRouteImportError(err, scope, scope.lastFailure ? this.getReadFailureMessage(scope) : undefined)
         }
     }
 
@@ -729,23 +823,10 @@ export class RouteLibraryScannerService extends IncyclistService {
         parsers: ParserFactory
     ): Promise<ScannedRoute> {
         const ext = this.getExtension(controlFile.name)
-        const baseName = controlFile.name.slice(0, controlFile.name.length - ext.length - 1)
+        const baseName = this.getBaseName(controlFile.name)
 
-        let skipReason: string | undefined
-
-        // Check companion files are present
-        const companionExts = this.getCompanionExts(parsers, ext)
-        for (const compExt of companionExts) {
-            const hasCompanion = folderFiles.some(
-                f =>
-                    this.getExtension(f.name).toLowerCase() === compExt.toLowerCase() &&
-                    f.name.toLowerCase().startsWith(baseName.toLowerCase())
-            )
-            if (!hasCompanion) {
-                skipReason = `Missing companion file (.${compExt})`
-                break
-            }
-        }
+        const missingExt = this.findMissingCompanion(parsers, ext, baseName, folderFiles)
+        const skipReason = missingExt ? `Missing companion file (.${missingExt})` : undefined
 
         return {
             folderUri,
@@ -874,44 +955,11 @@ export class RouteLibraryScannerService extends IncyclistService {
                 controlFileUri: target.controlFileUri,
                 format: target.format,
                 parseError: scope.lastFailure ? this.getReadFailureMessage(scope) : (err?.message ?? String(err)),
-                parseErrorCode: this.mapErrorToImportCode(err, scope)
+                parseErrorCode: mapErrorToImportCode(err, scope)
             }
             this.logEvent({message:'could not parse route file',file:file.base, reason:err.message, stack:err.stack})
             observer.emit('parse-result', parsed)
         }
-    }
-
-    /**
-     * Classifies a parse/read failure into a stable `RouteImportErrorCode`, so the import
-     * dialog can map it to copy instead of matching on message text.
-     *
-     * A file that could not be made available locally is recorded in the parse scope, which
-     * says exactly why - that takes precedence. Every other failure is classified from its
-     * message, matching today's text exactly so nothing about the existing failures changes.
-     */
-    private mapErrorToImportCode(err:any, scope?:ExternalFileScope): RouteImportErrorCode {
-        switch (scope?.lastFailure?.reason) {
-            case 'offline':
-                return 'ICLOUD_OFFLINE'
-            case 'timeout':
-            case 'download-failed':
-                return 'ICLOUD_DOWNLOAD_FAILED'
-            case 'access-lost':
-                return 'READ_FAILED'
-        }
-
-        const message = err?.message ?? String(err)
-
-        if (/AVI/i.test(message))
-            return 'AVI_NOT_SUPPORTED'
-        if (/no video/i.test(message))
-            return 'NO_VIDEO'
-        if (/^Could not (open|read)/i.test(message))
-            return 'READ_FAILED'
-        if (/pars(e|ing)/i.test(message))
-            return 'PARSE_FAILED'
-
-        return 'UNSUPPORTED'
     }
 
     /**
@@ -1053,7 +1101,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             catch(err:any) {
                 const reason = err?.message ?? String(err)
                 errors++
-                failedRoutes.push({ name: route.title, reason, code: this.mapErrorToImportCode(err) })
+                failedRoutes.push({ name: route.title, reason, code: mapErrorToImportCode(err) })
                 observer.emit('ingest-error', { name: route.title, reason })
 
             }
@@ -1109,6 +1157,11 @@ export class RouteLibraryScannerService extends IncyclistService {
             return videoRef
         }
         if (videoRef.startsWith('content://')) {
+            return videoRef
+        }
+        // a video the parser has already resolved to a URL (e.g. the `video://` URL of an RLV
+        // route) - there is nothing left to look up in the listing
+        if (!this.isMobile() && /^[a-z][a-z0-9+.-]*:\/\//i.test(videoRef)) {
             return videoRef
         }
         if (videoRef.startsWith('/') || /^[A-Za-z]:[/\\]/.test(videoRef)) {
@@ -1234,6 +1287,24 @@ export class RouteLibraryScannerService extends IncyclistService {
         } catch {
             return []
         }
+    }
+
+    /**
+     * The first file the route needs that is not next to it in its folder.
+     *
+     * @returns the missing file's extension, or `undefined` when everything is there
+     */
+    private findMissingCompanion(parsers: ParserFactory, primaryExt: string, baseName: string, folderFiles: ReadDirResult[]): string|undefined {
+        return this.getCompanionExts(parsers, primaryExt).find(compExt => !folderFiles.some(
+            f =>
+                this.getExtension(f.name).toLowerCase() === compExt.toLowerCase() &&
+                f.name.toLowerCase().startsWith(baseName.toLowerCase())
+        ))
+    }
+
+    private getBaseName(filename: string): string {
+        const ext = this.getExtension(filename)
+        return filename.slice(0, filename.length - ext.length - 1)
     }
 
     private getExtension(filename: string): string {

@@ -18,6 +18,7 @@ import { useUserSettings } from "../../settings";
 import { Card } from "../../base/cardlist";
 import { Inject } from "../../base/decorators";
 import { usePreviewStore } from "../previews/store";
+import { useRouteLibraryScanner } from "../library/service";
 
 import type { ParseResult } from "../types";
 
@@ -450,6 +451,7 @@ describe('RouteListService',()=>{
     describe('import',()=>{
         let service;
         let originalParser
+        let originalReaddir
         let userSettings
 
         beforeAll ( async ()=>{
@@ -462,19 +464,25 @@ describe('RouteListService',()=>{
             userSettings.get = jest.fn().mockReturnValue({})
             userSettings.set = jest.fn()
 
+            // a dropped route file is read the way the import dialog reads it: its folder is
+            // listed first (companion files, video lookup)
+            originalReaddir = getBindings().fs.readdir
+            getBindings().fs.readdir = jest.fn().mockResolvedValue(['test1.xml','test2.xml'])
         })
 
 
         afterEach( ()=>{
             RouteParser.parse = originalParser
+            getBindings().fs.readdir = originalReaddir
             service.reset()
             userSettings?.reset()
-            
+
 
         })
 
         test('failed import, followed by successfull import',async ()=>{
-            const data: RouteInfo = {  id:'test', title:'test'}
+            // a route read from a local file (every file parser sets isLocal)
+            const data: RouteInfo = {  id:'test', title:'test', isLocal:true}
             const details: RouteApiDetail= {  id:'test', title:'test'}
             const result: ParseResult<RouteApiDetail> = { data,details}
 
@@ -502,7 +510,7 @@ describe('RouteListService',()=>{
         })
 
         test('failed import, check that search still works',async ()=>{
-            const data: RouteInfo = {  id:'test', title:'test'}
+            const data: RouteInfo = {  id:'test', title:'test', isLocal:true}
             const details: RouteApiDetail= {  id:'test', title:'test'}
             const result: ParseResult<RouteApiDetail> = { data,details}
 
@@ -530,6 +538,106 @@ describe('RouteListService',()=>{
         })
 
 
+    })
+
+    describe('import - one single-route path for dropped and picked files',()=>{
+        let service;
+        let originalReaddir
+        let userSettings
+
+        const dropped = (name:string) => ({type:'url', url:`file:///routes/${name}`, name, dir:'/routes', ext:name.split('.').pop(), delimiter:'/'}) as any
+        const activeImports = () => service.myRoutes.getCards().filter( c=>c.getCardType()==='ActiveImport')
+        const flush = () => new Promise(resolve => setImmediate(resolve))
+
+        beforeAll ( async ()=>{
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        beforeEach( ()=>{
+            userSettings = useUserSettings()
+            userSettings.get = jest.fn().mockReturnValue({})
+            userSettings.set = jest.fn()
+            originalReaddir = getBindings().fs.readdir
+        })
+
+        afterEach( ()=>{
+            Inject('RouteLibraryScanner', null)
+            getBindings().fs.readdir = originalReaddir
+            service.myRoutes.removeActiveImports()
+            jest.restoreAllMocks()
+            service.reset()
+            userSettings?.reset()
+        })
+
+        test('a dropped file is imported by the scanner\'s single-route path, into this list',async ()=>{
+            const importRouteFile = jest.fn().mockResolvedValue({})
+            Inject('RouteLibraryScanner', { importRouteFile })
+            const file = dropped('ride.gpx')
+
+            service.import(file)
+            expect(activeImports()).toHaveLength(1)
+            await flush()
+
+            expect(importRouteFile).toHaveBeenCalledWith(file, {list:service})
+            expect(activeImports()).toHaveLength(0)
+        })
+
+        test('several dropped files: one pinned row each, all started at once, each removed when done',async ()=>{
+            const pending: Array<(v:unknown)=>void> = []
+            const importRouteFile = jest.fn( ()=> new Promise( resolve => { pending.push(resolve) }))
+            Inject('RouteLibraryScanner', { importRouteFile })
+
+            service.import([dropped('one.gpx'),dropped('two.gpx'),dropped('three.gpx')])
+
+            expect(activeImports().map(c=>c.getDisplayProperties().name)).toEqual(['one.gpx','two.gpx','three.gpx'])
+            expect(importRouteFile).toHaveBeenCalledTimes(3)
+
+            pending[1]({})
+            await flush()
+            expect(activeImports().map(c=>c.getDisplayProperties().name)).toEqual(['one.gpx','three.gpx'])
+
+            pending[0]({})
+            pending[2]({})
+            await flush()
+            expect(activeImports()).toHaveLength(0)
+        })
+
+        test('a failed drop keeps its pinned row, showing the failure with its code',async ()=>{
+            const failure = Object.assign(new Error('cannot parse <Track>'), {code:'PARSE_FAILED'})
+            Inject('RouteLibraryScanner', { importRouteFile: jest.fn().mockRejectedValue(failure) })
+
+            service.import(dropped('ride.gpx'))
+            await flush()
+
+            const [card] = activeImports()
+            expect(card.getDisplayProperties().error).toBe(failure)
+        })
+
+        test.each([
+            ['a missing companion file', ['a.epm'], 'a.epm', 'MISSING_COMPANION'],
+            ['a file that is not a route file', ['a.epp'], 'a.epp', 'UNSUPPORTED'],
+            ['a file that is not in its folder', ['b.epm','b.epp'], 'a.epm', 'READ_FAILED'],
+        ])('%s: the same failure, with the same code and text, whether dropped or picked in the dialog', async (_, listing, name, code)=>{
+            getBindings().fs.readdir = jest.fn().mockResolvedValue(listing)
+
+            service.import(dropped(name))
+            await flush()
+            const dropError = activeImports()[0].getDisplayProperties().error
+
+            const scanner = useRouteLibraryScanner()
+            scanner.prepare()
+            const observer = scanner.importSingle(dropped(name))
+            await new Promise<void>(resolve => observer.once('error', ()=>resolve()))
+            await flush()
+            const {error, failure} = scanner.getDisplayProps()
+            scanner.done()
+
+            expect(dropError.code).toBe(code)
+            expect(failure.code).toBe(code)
+            expect(failure.reason).toBe(dropError.message)
+            expect(error).toBe(dropError.message)
+            expect(failure.missingExt).toBe(dropError.missingExt)
+        })
     })
 
     describe('existsBySourceUri', () => {

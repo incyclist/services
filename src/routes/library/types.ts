@@ -23,7 +23,18 @@ export type RouteImportErrorCode =
     | 'PARSE_FAILED'
     | 'ICLOUD_OFFLINE'
     | 'ICLOUD_DOWNLOAD_FAILED'
+    | 'MISSING_COMPANION'
     | 'UNSUPPORTED'
+
+/**
+ * A failed single-route import as plain data: the stable code, the free-text reason, and -
+ * for `MISSING_COMPANION` - the extension of the file the route needs.
+ */
+export interface RouteImportFailure {
+    code: RouteImportErrorCode
+    reason: string
+    missingExt?: string
+}
 
 
 // Output of the scan phase — filesystem only, no parsing
@@ -92,6 +103,9 @@ export interface ImportDisplayProps {
     }
     resultSuccess?: { routeName: string }
     error?: string
+    // The same single-route failure as `error`, with its stable code - so the UI can show the
+    // same sentence it shows for the same failure anywhere else.
+    failure?: RouteImportFailure
     // True when at least one route in this import failed because its files could not be
     // downloaded from the cloud - drives the "import the folder again" hint. Always populated.
     hasICloudDownloadFailures: boolean
@@ -101,6 +115,7 @@ export interface FailedRoute {
     name: string
     reason: string
     code?: RouteImportErrorCode
+    missingExt?: string
 }
 
 /**

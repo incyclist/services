@@ -11,6 +11,8 @@ import { RouteInfo } from '../types'
 import { IObserver } from '../../types'
 import { useExternalFileService } from '../../fileaccess/externalFiles'
 import type { EnsureLocalFailure } from '../../fileaccess/types'
+import type { FileInfo } from '../../api'
+import { RouteImportError } from './errors'
 
 // Helpers to build mock ReadDirResult entries
 const dir = (name: string, uri: string) => ({ name, uri, isDirectory: true })
@@ -1240,6 +1242,250 @@ describe('RouteLibraryScannerService', () => {
             const props = service.getDisplayProps()
             expect(props.phase).toBe('result')
             expect(props.error).toBe('boom')
+        })
+    })
+
+    describe('importRouteFile - the single-route import path', () => {
+
+        // what the desktop file picker / drop zone hands over for a file on disk
+        const picked = (name: string, dir = '/routes'): FileInfo => {
+            const ext = name.slice(name.lastIndexOf('.') + 1)
+            return { type: 'url', url: `file:///${dir}/${name}`, name, dir, ext, delimiter: '/' } as unknown as FileInfo
+        }
+
+        const parsed = (over: Partial<RouteInfo> = {}, details: Record<string, unknown> = {}) => ({
+            data: { id: 'r1', title: 'Route 1', isLocal: true, ...over } as any,
+            details: details as any,
+        })
+
+        const useFolder = (names: string[], uri = '/routes') => {
+            fsMock.readdir.mockImplementation(async (u: string) => {
+                if (u !== uri)
+                    throw new Error(`ENOENT: no such file or directory, scandir '${u}'`)
+                return [...names]
+            })
+        }
+
+        beforeEach(() => {
+            Inject('Bindings', { fs: fsMock, appInfo: appInfoMock, path: nodePath })
+            appInfoMock.getChannel = jest.fn().mockReturnValue('desktop')
+            routeListMock.findCard = jest.fn().mockReturnValue(undefined)
+        })
+
+        afterEach(() => {
+            jest.restoreAllMocks()
+        })
+
+        test('a GPX file is parsed on its own and added to the library', async () => {
+            const parse = jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed())
+            const file = picked('ride.gpx')
+
+            const route = await service.importRouteFile(file)
+
+            expect(route.title).toBe('Route 1')
+            expect(parse).toHaveBeenCalledWith(file)
+            expect(fsMock.readdir).not.toHaveBeenCalled()
+            expect(dbMock.save).toHaveBeenCalledWith(route, true)
+            expect(routeListMock.addRoute).toHaveBeenCalledWith(route, 'user')
+            expect(route.description.tsImported).toEqual(expect.any(Number))
+        })
+
+        test('a video route is read from its folder listing, like a folder import reads it', async () => {
+            useFolder(['a.epm', 'a.epp', 'a.mp4'])
+            const parse = jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed())
+
+            const route = await service.importRouteFile(picked('a.epm'))
+
+            expect(route.title).toBe('Route 1')
+            expect(parse).toHaveBeenCalledWith(expect.objectContaining({ filename: '/routes/a.epm', ext: 'epm' }))
+            expect(routeListMock.addRoute).toHaveBeenCalledWith(route, 'user')
+        })
+
+        test('a route that already exists is replaced in place', async () => {
+            const card = { emitUpdate: jest.fn(), verify: jest.fn() }
+            routeListMock.findCard = jest.fn().mockReturnValue({ card })
+            jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed())
+
+            const route = await service.importRouteFile(picked('ride.gpx'))
+
+            expect(routeListMock.addRoute).toHaveBeenCalledWith(route, 'import')
+            expect(card.emitUpdate).toHaveBeenCalled()
+        })
+
+        test('the route is added to the list it is given', async () => {
+            const list = { ...routeListMock, addRoute: jest.fn(), findCard: jest.fn() }
+            jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed())
+
+            const route = await service.importRouteFile(picked('ride.gpx'), { list })
+
+            expect(list.addRoute).toHaveBeenCalledWith(route, 'user')
+            expect(routeListMock.addRoute).not.toHaveBeenCalled()
+        })
+
+        test('a missing companion file -> MISSING_COMPANION, naming the missing extension', async () => {
+            useFolder(['a.epm', 'a.mp4'])
+            const parse = jest.spyOn(RouteParser, 'parse')
+
+            const error = await service.importRouteFile(picked('a.epm')).catch(e => e)
+
+            expect(error).toBeInstanceOf(RouteImportError)
+            expect(error.code).toBe('MISSING_COMPANION')
+            expect(error.missingExt).toBe('epp')
+            expect(error.message).toBe('Missing companion file (.epp)')
+            expect(parse).not.toHaveBeenCalled()
+            expect(dbMock.save).not.toHaveBeenCalled()
+        })
+
+        test('the companion check is about the picked route, not about another route in the same folder', async () => {
+            useFolder(['a.epm', 'b.epm', 'b.epp'])
+            jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed())
+
+            const route = await service.importRouteFile(picked('b.epm'))
+
+            expect(route.title).toBe('Route 1')
+        })
+
+        test('a file that is not a route file -> UNSUPPORTED', async () => {
+            const error = await service.importRouteFile(picked('a.epp')).catch(e => e)
+
+            expect(error.code).toBe('UNSUPPORTED')
+            expect(error.message).toBe('not a route control file')
+        })
+
+        test('a file that is not in its folder -> READ_FAILED', async () => {
+            useFolder(['other.epm', 'other.epp'])
+
+            const error = await service.importRouteFile(picked('a.epm')).catch(e => e)
+
+            expect(error.code).toBe('READ_FAILED')
+            expect(error.message).toBe('no file found')
+        })
+
+        test('a parser failure keeps its text and gets the same code a folder import gives it', async () => {
+            jest.spyOn(RouteParser, 'parse').mockRejectedValue(new Error('cannot parse <Track>'))
+
+            const error = await service.importRouteFile(picked('ride.gpx')).catch(e => e)
+
+            expect(error).toBeInstanceOf(RouteImportError)
+            expect(error.code).toBe('PARSE_FAILED')
+            expect(error.message).toBe('cannot parse <Track>')
+        })
+
+        test('a video that is not in the folder -> NO_VIDEO', async () => {
+            useFolder(['a.xml'])
+            jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed({ hasVideo: true }, { video: { file: 'a.mp4' } }))
+
+            const error = await service.importRouteFile(picked('a.xml')).catch(e => e)
+
+            expect(error.code).toBe('NO_VIDEO')
+        })
+
+        test('on desktop, a video the parser already resolved to a URL is kept (RLV)', async () => {
+            useFolder(['a.rlv', 'a.pgmf'])
+            jest.spyOn(RouteParser, 'parse').mockResolvedValue(
+                parsed({ hasVideo: true }, { video: { file: 'video:///D:/Videos/a.avi', url: 'video:///D:/Videos/a.avi' } })
+            )
+
+            const route = await service.importRouteFile(picked('a.rlv'))
+
+            expect(route.details.video.file).toBe('video:///D:/Videos/a.avi')
+        })
+
+        test('keeps no dialog state: concurrent imports neither need nor change the display props', async () => {
+            service.prepare()
+            jest.spyOn(RouteParser, 'parse')
+                .mockResolvedValueOnce(parsed({ id: 'r1', title: 'One' }))
+                .mockResolvedValueOnce(parsed({ id: 'r2', title: 'Two' }))
+
+            const routes = await Promise.all([
+                service.importRouteFile(picked('one.gpx')),
+                service.importRouteFile(picked('two.gpx')),
+            ])
+
+            expect(routes.map(r => r.title)).toEqual(['One', 'Two'])
+            expect(service.getDisplayProps().phase).toBe('landing')
+            expect(service.getDisplayProps().routes).toEqual([])
+        })
+
+        describe('importSingle', () => {
+            const runSingle = async (file: FileInfo) => {
+                service.prepare()
+                const observer = service.importSingle(file)
+                await new Promise<void>(resolve => {
+                    observer.once('success', () => resolve())
+                    observer.once('error', () => resolve())
+                })
+                // the service's own listeners run after the ones registered here
+                await new Promise(resolve => setImmediate(resolve))
+                return service.getDisplayProps()
+            }
+
+            test('a failure is reported with the same text as before, plus its code', async () => {
+                useFolder(['a.epm'])
+
+                const props = await runSingle(picked('a.epm'))
+
+                expect(props.phase).toBe('result')
+                expect(props.error).toBe('Missing companion file (.epp)')
+                expect(props.failure).toEqual({ code: 'MISSING_COMPANION', reason: 'Missing companion file (.epp)', missingExt: 'epp' })
+            })
+
+            test('a video route reports the imported route\'s name on success', async () => {
+                useFolder(['a.epm', 'a.epp'])
+                jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed({ title: 'Stelvio' }))
+
+                const props = await runSingle(picked('a.epm'))
+
+                expect(props.phase).toBe('result')
+                expect(props.resultSuccess).toEqual({ routeName: 'Stelvio' })
+            })
+        })
+
+        describe('importFiles', () => {
+            const runFiles = async (files: FileInfo[]) => {
+                service.prepare()
+                const observer = service.importFiles(files)
+                const progress: any[] = []
+                observer.on('ingest-progress', p => progress.push(p))
+                await new Promise<void>(resolve => observer.once('ingest-complete', () => resolve()))
+                await new Promise(resolve => setImmediate(resolve))
+                return progress
+            }
+
+            test('several GPX files are imported one after the other, reporting like a folder import', async () => {
+                jest.spyOn(RouteParser, 'parse')
+                    .mockResolvedValueOnce(parsed({ id: 'r1', title: 'One' }))
+                    .mockResolvedValueOnce(parsed({ id: 'r2', title: 'Two' }))
+                    .mockResolvedValueOnce(parsed({ id: 'r3', title: 'Three' }))
+
+                const progress = await runFiles([picked('one.gpx'), picked('two.gpx'), picked('three.gpx')])
+
+                expect(progress).toEqual([
+                    { current: 1, total: 3, currentName: 'one.gpx' },
+                    { current: 2, total: 3, currentName: 'two.gpx' },
+                    { current: 3, total: 3, currentName: 'three.gpx' },
+                ])
+                expect(routeListMock.addRoute).toHaveBeenCalledTimes(3)
+                expect(routeListMock.pauseListUpdates).toHaveBeenCalled()
+                expect(routeListMock.resumeListUpdates).toHaveBeenCalled()
+
+                const props = service.getDisplayProps()
+                expect(props.phase).toBe('complete')
+                expect(props.completionSummary).toEqual({ imported: 3, skipped: 0, errors: 0, failedRoutes: [] })
+            })
+
+            test('a file that fails does not stop the others, and is listed with its code', async () => {
+                jest.spyOn(RouteParser, 'parse')
+                    .mockResolvedValueOnce(parsed({ id: 'r1', title: 'One' }))
+                    .mockRejectedValueOnce(new Error('cannot parse <Track>'))
+
+                await runFiles([picked('one.gpx'), picked('two.gpx')])
+
+                expect(service.getDisplayProps().completionSummary).toEqual({
+                    imported: 1, skipped: 0, errors: 1,
+                    failedRoutes: [{ name: 'two.gpx', reason: 'cannot parse <Track>', code: 'PARSE_FAILED', missingExt: undefined }],
+                })
+            })
         })
     })
 

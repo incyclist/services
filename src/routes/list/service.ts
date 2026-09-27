@@ -5,7 +5,6 @@ import { Observer, Singleton } from "../../base/types";
 import { PromiseObserver } from "../../base/types/observer";
 import { RouteApiDetail } from "../base/api/types";
 import { Route } from "../base/model/route";
-import { RouteParser  } from "../base/parsers";
 import { RouteInfo } from "../base/types";
 import { analyseElevationNoise, applySmoothing, isSmoothingEligible } from "../base/utils/smoothing";
 import { RoutesApiLoader } from "./loaders/api";
@@ -36,6 +35,7 @@ import { IObserver } from "../../types";
 import { usePreviewStore } from "../previews/store";
 import { useRouteShapeStore } from "../shapes/store";
 import type { RouteShape } from "../shapes/types";
+import { useRouteLibraryScanner } from "../library/service";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -1162,7 +1162,15 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    /** Parses and adds one file dropped/picked for single-file import; fire-and-forget per file. */
+    /**
+     * Imports one file dropped onto the route list; fire-and-forget per file.
+     *
+     * The file goes through the same single-route import path as a file picked in the import
+     * dialog (`RouteLibraryScannerService.importRouteFile()`), so it is read the same way and a
+     * failure carries the same code (`RouteImportError`). What stays here is what that path
+     * deliberately does not provide: the `ActiveImportCard` pinned above the list while the file
+     * is imported, which shows the failure (and offers a retry) when there is one.
+     */
     private async importOneFile(
         file: FileInfo,
         importCard: ActiveImportCard | null,
@@ -1172,69 +1180,23 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (!file)
             return
 
-        const name = file.url??file.filename??file.name
-
-        this.logEvent({message:'import single route file',file:name, type:file.ext})
-
         try {
-
             if (importId&&observer)
                 observer?.emit('parsing',importId)
 
-            const {data,details} = await RouteParser.parse(file)
+            await this.getRouteLibraryScanner().importRouteFile(file, {list:this})
 
             if (importId&&observer)
                 observer?.emit('success',importId)
 
-
-            const route = new Route(data,details)
-            route.description.tsImported = Date.now()
-            this.logEvent({message:'import single route file success',file:name})
-
-            const previews = this.getPreviewStore()
-            if (previews.isEnabled())
-                await previews.adoptOnImport(route)
-
-            await this.getRouteShapeStore().saveOnImport(route)
-
-            const existing = this.findCard(route)
-
-            if (existing ) {
-                existing.list.remove( existing.card)
-                this.logEvent({message:'route updated (import)',route:route.title})
-
-            }
-            else  {
-                this.routes.push(route)
-                this.logEvent({message:'route added',route:route.title})
-            }
-
-            const card = new RouteCard(route,{list:this.myRoutes})
-            card.verify()
-            card.save()
-            card.enableDelete()
-
-            this.myRoutes.add( card, true )
-            this.cardLookup[route.description.id] = { card, list:this.myRoutes};
-
-
-
             if (importCard) {
                 this.myRoutes.remove(importCard)
+                this.emitLists('updated',{log:true})
             }
-            card.enableDelete(true)
-            this.emitLists('updated',{log:true})
-
-
-
-            this.verifyPoints(card,route)
-
-
         }
         catch(err) {
-            this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
             if (importId&&observer)
-                observer?.emit('error',importId, err.message)
+                observer?.emit('error',importId, err.message, err.code)
             if (importCard)
                 importCard.setError(err)
         }
@@ -1482,16 +1444,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         
         this.emitLists('updated',{source: source==='user' ? 'user':'system'})                
 
-    }
-
-    protected async verifyPoints(card:RouteCard, route:Route):Promise<void> {
-        const updated = await route.updateCountryFromPoints()
-        
-        if (updated) {             
-            this.logEvent({message:'route updated (country)',route:route.title, country: route?.description?.country})
-            card.updateRoute(route)
-            this.db.save(route,false)
-        }        
     }
 
     protected async addFromApi(route:Route):Promise<void> {
@@ -2367,6 +2319,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable
     protected getRouteShapeStore() {
         return useRouteShapeStore()
+    }
+
+    @Injectable
+    protected getRouteLibraryScanner() {
+        return useRouteLibraryScanner()
     }
 
     reset() {
