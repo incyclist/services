@@ -303,6 +303,97 @@ describe('RouteListService',()=>{
 
     })
 
+    describe('sort order',()=>{
+
+        let service:MockeableService
+        let settingsStore:Record<string,unknown>
+
+        beforeEach(()=>{
+            new RouteListService().reset()
+            settingsStore = {}
+            const MockUserSettings = {
+                get: jest.fn((key:string, defValue?:unknown) => settingsStore[key] ?? defValue),
+                getValue: jest.fn().mockReturnValue({}),
+                set: jest.fn((key:string, value:unknown) => { settingsStore[key] = value }),
+            }
+            Inject('UserSettings', MockUserSettings)
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        afterEach(()=>{
+            (service as any).reset()
+            Inject('UserSettings', null)
+            jest.clearAllMocks()
+        })
+
+        test('defaults to Suggested, matching an explicit suggested sort order',()=>{
+            const withDefault = service.searchRepo().routes.map(r=>r.id)
+
+            service.setSortOrder('suggested')
+            const withExplicit = service.searchRepo().routes.map(r=>r.id)
+
+            expect(withDefault).toEqual(withExplicit)
+        })
+
+        // a private, never-shared data set - unlike the module-level db.json fixture, whose route
+        // objects other describe blocks mutate in place via checkUIUpdateWithNoRepoStats(). This
+        // isolates the case to the one thing score() should reward here: hasVideo. The scorer's
+        // other inputs (recency, novelty) are covered directly in lists/selected.unit.test.ts.
+        test('Suggested ranks a video route above an otherwise identical GPX route',()=>{
+            new RouteListService().reset()
+            const customData = [
+                { id:'g1', title:'GPX A', hasVideo:false, isLocal:false },
+                { id:'v1', title:'Video A', hasVideo:true, isLocal:false },
+            ] as unknown as Array<RouteInfoDBEntry>
+
+            const custom = new MockeableService(customData)
+            custom.setSortOrder('suggested')
+
+            const {routes} = custom.searchRepo()
+
+            expect(routes.map(r=>r.id)).toEqual(['v1','g1'])
+        })
+
+        test('Name (A-Z) sorts titles alphabetically',()=>{
+            service.setSortOrder('name')
+            const {routes} = service.searchRepo()
+
+            const titles = routes.map(r=>r.title)
+            expect(titles).toEqual([...titles].sort((a,b)=> a>b ? 1 : -1))
+        })
+
+        test('Distance sorts ascending by raw distance',()=>{
+            service.setSortOrder('distance')
+            const {routes} = service.searchRepo()
+
+            const distances = routes.map(r=>r.distance ?? 0)
+            expect(distances).toEqual([...distances].sort((a,b)=> a-b))
+        })
+
+        test('Elevation sorts ascending by raw elevation',()=>{
+            service.setSortOrder('elevation')
+            const {routes} = service.searchRepo()
+
+            const elevations = routes.map(r=>r.elevation ?? 0)
+            expect(elevations).toEqual([...elevations].sort((a,b)=> a-b))
+        })
+
+        test('typing in the search box does not change the sort order - only which routes survive',()=>{
+            service.setSortOrder('distance')
+            const all = service.searchRepo().routes.map(r=>r.id)
+
+            const filtered = service.searchRepo({title:'a'}).routes.map(r=>r.id)
+
+            // the filtered ids must keep the exact relative order they had in the unfiltered,
+            // distance-sorted list - filtering can drop entries, it must never reorder them
+            const positions = filtered.map(id => all.indexOf(id))
+            expect(positions).toEqual([...positions].sort((a,b)=> a-b))
+            expect(filtered.length).toBeGreaterThan(0)
+            expect(filtered.length).toBeLessThan(all.length)
+        })
+
+    })
+
     describe('searchRepo caching',()=>{
 
         let service:MockeableService
@@ -739,6 +830,13 @@ describe('RouteListService',()=>{
             // sibling test ordering/cleanup.
             new RouteListService().reset()
             service = prepareMock(null,{mockLoad:true})
+            // Suggested (score-based) is the default sort order since the sort-order feature
+            // landed - pin this describe back to Name (A-Z) so primeCard()'s "retitle to sort
+            // first" trick still guarantees preloadDetails()'s preload cap picks up the route
+            // this describe mutates, regardless of the default sort order in effect elsewhere.
+            // Set directly rather than via setSortOrder(), which persists through the real
+            // (here uninitialized) UserSettingsService - this describe injects no settings mock.
+            ;(service as any).sortOrder = 'name'
         })
 
         afterEach(() => {

@@ -21,7 +21,7 @@ import { getCountries  } from "../../i18n/countries";
 import { RouteListObserver } from "./RouteListObserver";
 import IncyclistRoutesApi from "../base/api";
 import { ActiveImportCard } from "./cards/ActiveImportCard";
-import { SelectedRoutes } from "./lists/selected";
+import { SelectedRoutes, score } from "./lists/selected";
 import { AlternativeRoutes } from "./lists/alternatives";
 import { getRepoUpdates, updateRepoStats } from "./utils";
 import { useUserSettings } from "../../settings";
@@ -89,9 +89,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected cardPropsCache: Map<string,SummaryCardDisplayProps> = new Map()
     /** cards already wired to keep cardPropsCache fresh - avoids re-subscribing on every call */
     protected cardPropsSubscribed: Set<RouteCard> = new Set()
-    /** the title-sorted card order from the last searchRepo(), reused while the underlying card
-     *  set (not the filters) is unchanged - see getSortedSearchCards() */
-    protected sortedSearchCache: { allCards:Array<RouteCard>, sortedCards:Array<RouteCard> }
+    /** the sorted card order from the last searchRepo(), reused while neither the underlying
+     *  card set nor the persisted sort order (not the filters) has changed - see
+     *  getSortedSearchCards() */
+    protected sortedSearchCache: { allCards:Array<RouteCard>, sortOrder:RouteListSortOrder, sortedCards:Array<RouteCard> }
 
     constructor () {
         super('RouteList')
@@ -2139,33 +2140,91 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     /**
      * Returns the full card set - `allCards` in `getAllSearchCards()`'s own order, `routes` the
-     * same cards' (cached) display properties in title-sorted order.
+     * same cards' (cached) display properties ordered by the persisted sort order
+     * ({@link getSortOrder}).
      *
-     * The *order* (which is the expensive part - it needs every card's title, i.e. every card's
-     * display properties, up front) is cached and reused while the underlying card set is
-     * unchanged; `routes` is still rebuilt from that cached order on every call, but as a plain
-     * `Array.map()` over already-cached entries, so a card updated since the last call (cache
-     * refreshed via its own observer - see {@link getCachedDisplayProperties}) is reflected
-     * immediately rather than only after the card set itself next changes.
+     * The *order* (which is the expensive part - it needs every card's display properties up
+     * front) is cached and reused while neither the underlying card set nor the sort order has
+     * changed since the last call; `routes` is still rebuilt from that cached order on every
+     * call, but as a plain `Array.map()` over already-cached entries, so a card updated since the
+     * last call (cache refreshed via its own observer - see {@link getCachedDisplayProperties})
+     * is reflected immediately rather than only after the card set itself next changes.
+     *
+     * Filtering (in `searchRepo()`) happens after this ordering and never re-sorts, so typing in
+     * the search box cannot change the sort order - only which of the ordered routes survive.
      */
     protected getSortedSearchCards():{allCards:Array<RouteCard>, routes:Array<SummaryCardDisplayProps>} {
         const allCards = this.getAllSearchCards()
+        const sortOrder = this.getSortOrder()
 
         let sortedCards:Array<RouteCard>
-        if (this.sortedSearchCache && this.isSameCardSet(allCards, this.sortedSearchCache.allCards)) {
-            sortedCards = this.sortedSearchCache.sortedCards
+        const cache = this.sortedSearchCache
+        if (cache && cache.sortOrder===sortOrder && this.isSameCardSet(allCards, cache.allCards)) {
+            sortedCards = cache.sortedCards
         }
         else {
-            sortedCards = [...allCards].sort( (a,b) => {
-                const ta = this.getCachedDisplayProperties(a)?.title
-                const tb = this.getCachedDisplayProperties(b)?.title
-                return ta>tb ? 1 : -1
-            })
-            this.sortedSearchCache = {allCards, sortedCards}
+            sortedCards = this.sortSearchCards(allCards, sortOrder)
+            this.sortedSearchCache = {allCards, sortOrder, sortedCards}
         }
 
         const routes = sortedCards.map( c => this.getCachedDisplayProperties(c))
         return {allCards, routes}
+    }
+
+    /**
+     * Orders a card set for one of the four persisted sort orders: `Suggested` (default),
+     * `Name (A-Z)`, `Distance` and `Elevation`.
+     *
+     * `Suggested` reuses the existing "Selected For Me" scorer rather than a new ranking - see
+     * {@link score}. The other three compare a single field already present on the card's
+     * (cached) display properties.
+     *
+     * @param cards the card set to order, in `getAllSearchCards()`'s own order
+     * @param sortOrder the persisted sort order to apply
+     */
+    protected sortSearchCards(cards:Array<RouteCard>, sortOrder:RouteListSortOrder):Array<RouteCard> {
+        if (sortOrder==='suggested')
+            return this.sortCardsBySuggestion(cards)
+
+        const compare = sortOrder==='distance' ? this.compareCardsByDistance.bind(this)
+            : sortOrder==='elevation' ? this.compareCardsByElevation.bind(this)
+            : this.compareCardsByName.bind(this)
+
+        return [...cards].sort(compare)
+    }
+
+    private compareCardsByName(a:RouteCard, b:RouteCard):number {
+        const ta = this.getCachedDisplayProperties(a)?.title
+        const tb = this.getCachedDisplayProperties(b)?.title
+        return ta>tb ? 1 : -1
+    }
+
+    private compareCardsByDistance(a:RouteCard, b:RouteCard):number {
+        const da = this.getCachedDisplayProperties(a)?.distance ?? 0
+        const db = this.getCachedDisplayProperties(b)?.distance ?? 0
+        return da-db
+    }
+
+    private compareCardsByElevation(a:RouteCard, b:RouteCard):number {
+        const ea = this.getCachedDisplayProperties(a)?.elevation ?? 0
+        const eb = this.getCachedDisplayProperties(b)?.elevation ?? 0
+        return ea-eb
+    }
+
+    /** `idx` mirrors the position each card had in the unsorted `cards` array, matching the
+     *  nudge `score()` already applies to the legacy "Selected For Me" list. */
+    private sortCardsBySuggestion(cards:Array<RouteCard>):Array<RouteCard> {
+        const scored = cards.map( (card,idx) => ({
+            card,
+            value: score(this.getCachedDisplayProperties(card), idx)
+        }))
+
+        scored.sort( (a,b) => {
+            const diff = b.value-a.value
+            return diff!==0 ? diff : this.compareCardsByName(a.card,b.card)
+        })
+
+        return scored.map( s => s.card)
     }
 
     /** true when both card arrays hold the exact same cards, in the same order */
