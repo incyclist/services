@@ -2,6 +2,7 @@ import { ReadDirResult } from "../../api"
 import { FormattedNumber } from "../../i18n"
 import { IObserver } from "../../types"
 import { Route } from "../base/model/route"
+import type { ParserFactory } from "../base/parsers/factory"
 
 // The result of the user selecting a root folder
 export interface FolderInfo {
@@ -100,6 +101,31 @@ export interface FailedRoute {
     name: string
     reason: string
     code?: RouteImportErrorCode
+}
+
+/**
+ * One entry of a folder listing as the library scanner handles it.
+ *
+ * Identical to `ReadDirResult` when the platform reports directory-ness (mobile). An entry of a
+ * names-only listing (desktop) is flagged `unknownType` until the scanner has resolved whether it
+ * is a directory. A directory whose contents are already known carries them in `listing`, so it
+ * is never read twice.
+ */
+export interface ScanEntry {
+    name: string
+    uri: string
+    isDirectory?: boolean
+    unknownType?: boolean
+    listing?: ScanEntry[]
+}
+
+/** State shared by every folder visited during one scan. */
+export interface ScanContext {
+    observer: IObserver
+    parsers: ParserFactory
+    progress: { scannedFolders: number, failedFolders: number }
+    discoveredCount: { value: number }
+    recursive: boolean
 }
 
 export interface ImportedLibrary {

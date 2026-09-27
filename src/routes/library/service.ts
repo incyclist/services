@@ -11,7 +11,7 @@ import { ParserFactory } from '../base/parsers/factory'
 import { RouteParser, useParsers } from '../base/parsers'
 import { useRouteList } from '../list/service'
 import { waitNextTick } from '../../utils'
-import { FailedRoute, FolderInfo, ImportDisplayProps, ImportedLibrary, ParsedRoute, RouteDisplayItem, RouteImportErrorCode, ScannedRoute  } from './types'
+import { FailedRoute, FolderInfo, ImportDisplayProps, ImportedLibrary, ParsedRoute, RouteDisplayItem, RouteImportErrorCode, ScanContext, ScanEntry, ScannedRoute  } from './types'
 import { useRoutesDbLoader } from '../list/loaders/db'
 import { Route } from '../base/model/route'
 import { sleep } from '../../utils/sleep'
@@ -25,6 +25,15 @@ import { useRouteShapeStore } from '../shapes/store'
 /** A wait for the current route's companion files is considered "waiting for iCloud" once it
  *  has been running this long, per `ImportDisplayProps.parseProgress.waitingForICloud`. */
 const WAITING_FOR_ICLOUD_THRESHOLD_MS = 2_000
+
+/** Video files sit next to route control files; recognising them spares a directory probe. */
+const VIDEO_EXTENSIONS = ['mp4', 'avi', 'mov', 'm4v', 'mkv', 'webm', 'mpg', 'mpeg', 'wmv']
+
+/** Either separator: a recursive listing uses the platform's, which is `\` on Windows. */
+const PATH_SEPARATOR = /[/\\]/
+
+/** Error codes of a listing that failed on a folder, as opposed to "not a directory" (ENOTDIR). */
+const UNREADABLE_FOLDER_ERRORS = /\b(EACCES|EPERM|EIO|EBUSY|EAGAIN|ETIMEDOUT|ESTALE|EMFILE|ENFILE|EHOSTDOWN|EHOSTUNREACH|ENETDOWN|ENETUNREACH|ECONNRESET|ECONNABORTED)\b/
 
 
 /**
@@ -346,7 +355,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             }
 
             const scanObserver = new Observer()
-            await this.scanFolder( folderUri, folderUri,scanObserver,parsers,{ scannedFolders: 0, failedFolders: 0 }, { value: 0 },false )
+            await this.scanFolder( folderUri, folderUri, this.createScanContext(scanObserver, parsers, false) )
             const files = this.scanResult
 
             this.scanResult = []
@@ -416,15 +425,24 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     private async _scan(folderInfo: FolderInfo, observer: Observer): Promise<void> {
         await waitNextTick()
-        const parsers = this.getParsers()
-        const progress = { scannedFolders: 0, failedFolders: 0 }
-        const discoveredCount = { value: 0 }
+        const ctx = this.createScanContext(observer, this.getParsers(), true)
 
-        await this.scanFolder(folderInfo.uri, folderInfo.displayName, observer, parsers, progress, discoveredCount)
-        await this.upsertImportHistory(folderInfo, discoveredCount.value)
+        await this.scanFolder(folderInfo.uri, folderInfo.displayName, ctx)
+        await this.upsertImportHistory(folderInfo, ctx.discoveredCount.value)
 
-        this.logEvent({message:'video scan result', scannedFolders: progress.scannedFolders, failedFolders: progress.failedFolders, files:this.scanResult.length})
+        const { scannedFolders, failedFolders } = ctx.progress
+        this.logEvent({message:'video scan result', scannedFolders, failedFolders, files:this.scanResult.length})
         observer.emit('scan-complete',this.scanResult)
+    }
+
+    private createScanContext(observer: IObserver, parsers: ParserFactory, recursive: boolean): ScanContext {
+        return {
+            observer,
+            parsers,
+            recursive,
+            progress: { scannedFolders: 0, failedFolders: 0 },
+            discoveredCount: { value: 0 }
+        }
     }
 
     /**
@@ -435,78 +453,272 @@ export class RouteLibraryScannerService extends IncyclistService {
      * counted rather than crashing the scan - `progress.failedFolders` is surfaced through
      * `ImportDisplayProps.scanProgress` so the UI can report an incomplete scan instead of
      * showing a silently short result.
+     *
+     * A names-only listing (desktop) is first offered to the one-call recursive listing; when
+     * that is unavailable, sub-folders are found by probing each entry (see `resolveNamesOnly`).
      */
-    private async scanFolder(
-        uri: string,
-        folderName: string,
-        observer: Observer,
-        parsers: ParserFactory,
-        progress: { scannedFolders: number, failedFolders: number },
-        discoveredCount: { value: number },
-        recursive:boolean = true
-    ): Promise<void> {
-        const fs = this.getBindings().fs
-
-        let entries: ReadDirResult[]
-        try {
-            entries = await fs.readdir(uri, { recursive:false,extended: true })
-        } catch (err) {
-            progress.failedFolders++
-            this.logError(err, 'scanFolder', { folderName })
-            observer.emit('scan-progress', { scannedFolders: progress.scannedFolders, failedFolders: progress.failedFolders })
+    private async scanFolder(uri: string, folderName: string, ctx: ScanContext): Promise<void> {
+        const listing = await this.readFolder(uri, folderName, ctx)
+        if (!listing)
             return
+
+        let entries = listing
+        if (ctx.recursive && this.isNamesOnly(listing))
+            entries = await this.listRecursively(uri) ?? listing
+
+        await this.scanListing(uri, folderName, entries, ctx)
+    }
+
+    /** Announces the routes of one already-listed folder, then descends into its sub-folders. */
+    private async scanListing(uri: string, folderName: string, entries: ScanEntry[], ctx: ScanContext): Promise<void> {
+        this.logICloudPlaceholders(uri, entries)
+
+        ctx.progress.scannedFolders++
+        this.emitScanProgress(ctx)
+
+        const { files, dirs } = await this.splitEntries(entries, ctx)
+
+        await this.announceRoutes(files, uri, folderName, ctx)
+
+        for (const dir of dirs) {
+            if (this.isCancelled || !ctx.recursive)
+                continue
+
+            if (dir.listing)
+                await this.scanListing(dir.uri, dir.name, dir.listing, ctx)
+            else
+                await this.scanFolder(dir.uri, dir.name, ctx)
         }
+    }
 
-        // Diagnostic: detect iCloud placeholder files (e.g., ".photo.icloud", ".gpx.icloud").
-        // These indicate files that are stored in iCloud but not yet downloaded locally.
-        // The scanner processes them normally — bindings are responsible for resolving them.
-        const iCloudPlaceholders = entries.filter(e => /^\.(.+)\.icloud$/.test(e.name))
-        if (iCloudPlaceholders.length > 0) {
-            const firstName = iCloudPlaceholders[0].name
-            this.logEvent({
-                message: 'iCloud placeholder files detected in folder',
-                uri,
-                count: iCloudPlaceholders.length,
-                firstPlaceholder: firstName
-            })
-        }
-
-        progress.scannedFolders++
-        observer.emit('scan-progress', { scannedFolders: progress.scannedFolders, failedFolders: progress.failedFolders })
-
-        const files = entries.filter(e => !e.isDirectory)
-        const dirs = entries.filter(e => e.isDirectory)
-
-        const primaryFiles = files.filter( (f:string|ReadDirResult) => {
-            const name = typeof(f)==='string' ? f : f.name
-            const ext = this.getExtension(name)
-            return ext && ext!=='gpx' && parsers.isPrimaryExtension(ext)
-        }).map( (f:string|ReadDirResult) => {
-            if (typeof f==='string') {
-                return {
-                    name:f,
-                    isDirectory:false,
-                    uri: this.getBindings().path.join( uri, f)
-                }
-            }
-            else return f
+    private async announceRoutes(files: ReadDirResult[], uri: string, folderName: string, ctx: ScanContext): Promise<void> {
+        const primaryFiles = files.filter(f => {
+            const ext = this.getExtension(f.name)
+            return ext && ext!=='gpx' && ctx.parsers.isPrimaryExtension(ext)
         })
 
         for (const file of primaryFiles) {
             if (!this.isCancelled) {
-                const routeAnnouncement = await this.buildDiscoveredRoute(file, files, uri, folderName, parsers)
-                discoveredCount.value++
-                observer.emit('scan-result', routeAnnouncement)
+                const routeAnnouncement = await this.buildDiscoveredRoute(file, files, uri, folderName, ctx.parsers)
+                ctx.discoveredCount.value++
+                ctx.observer.emit('scan-result', routeAnnouncement)
                 this.scanResult.push(routeAnnouncement)
             }
         }
+    }
 
-        for (const dir of dirs) {
-            if (!this.isCancelled && recursive) {
-                await this.scanFolder(dir.uri, dir.name, observer, parsers, progress, discoveredCount)
+    /**
+     * Diagnostic: detect iCloud placeholder files (e.g., ".photo.icloud", ".gpx.icloud").
+     * These indicate files that are stored in iCloud but not yet downloaded locally.
+     * The scanner processes them normally — bindings are responsible for resolving them.
+     */
+    private logICloudPlaceholders(uri: string, entries: ScanEntry[]): void {
+        const iCloudPlaceholders = entries.filter(e => /^\.(.+)\.icloud$/.test(e.name))
+        if (iCloudPlaceholders.length > 0) {
+            this.logEvent({
+                message: 'iCloud placeholder files detected in folder',
+                uri,
+                count: iCloudPlaceholders.length,
+                firstPlaceholder: iCloudPlaceholders[0].name
+            })
+        }
+    }
+
+    /**
+     * Lists one folder. A folder that cannot be listed - the listing rejects, or the platform
+     * returns no listing at all - is counted as failed and yields `undefined`.
+     */
+    private async readFolder(uri: string, folderName: string, ctx: ScanContext): Promise<ScanEntry[]|undefined> {
+        try {
+            const entries = await this.listEntries(uri)
+            if (entries)
+                return entries
+            this.countFailedFolder(ctx, new Error('folder listing not available'), folderName)
+        } catch (err) {
+            this.countFailedFolder(ctx, err, folderName)
+        }
+        return undefined
+    }
+
+    private countFailedFolder(ctx: ScanContext, err: unknown, folderName: string): void {
+        ctx.progress.failedFolders++
+        this.logError(err as Error, 'scanFolder', { folderName })
+        this.emitScanProgress(ctx)
+    }
+
+    private emitScanProgress(ctx: ScanContext): void {
+        const { scannedFolders, failedFolders } = ctx.progress
+        ctx.observer.emit('scan-progress', { scannedFolders, failedFolders })
+    }
+
+    /**
+     * Lists one folder, normalised to entry objects.
+     *
+     * The branch is on the runtime shape of the listing, not on a platform or capability:
+     * an object listing (mobile) is returned as-is; a names-only listing (desktop) is mapped to
+     * `{name, uri}` entries whose directory-ness is still unknown.
+     *
+     * @returns the entries, or `null` when the platform returned no listing at all
+     * @throws when the listing itself fails (e.g. the uri is not a directory)
+     */
+    private async listEntries(uri: string): Promise<ScanEntry[]|null> {
+        const result: unknown = await this.getBindings().fs.readdir?.(uri, { recursive:false, extended:true })
+        if (!Array.isArray(result))
+            return null
+
+        if (result.length===0 || typeof result[0]!=='string')
+            return result as ScanEntry[]
+
+        const path = this.getBindings().path
+        return (result as string[]).map(name => ({ name, uri: path.join(uri, name), unknownType: true }))
+    }
+
+    private isNamesOnly(entries: ScanEntry[]): boolean {
+        return entries.some(e => e.unknownType)
+    }
+
+    /**
+     * Splits a listing into files and sub-folders. An object listing is split on the
+     * `isDirectory` it reports, exactly as before; a names-only listing is resolved by probing.
+     */
+    private async splitEntries(entries: ScanEntry[], ctx: ScanContext): Promise<{ files: ReadDirResult[], dirs: ScanEntry[] }> {
+        if (!this.isNamesOnly(entries)) {
+            return {
+                files: entries.filter(e => !e.isDirectory) as ReadDirResult[],
+                dirs: entries.filter(e => e.isDirectory)
             }
         }
+        return this.resolveNamesOnly(entries, ctx)
+    }
 
+    /**
+     * Resolves a names-only listing by attempting to list each entry: the attempt is both the
+     * directory test and, for a directory, its listing - so nothing is read twice.
+     *
+     * Entries already recognisable as a route, companion or video file are not probed, and
+     * nothing is probed when the scan is not recursive (only the file names are needed then).
+     */
+    private async resolveNamesOnly(entries: ScanEntry[], ctx: ScanContext): Promise<{ files: ReadDirResult[], dirs: ScanEntry[] }> {
+        const files: ReadDirResult[] = []
+        const dirs: ScanEntry[] = []
+        const knownFileExts = this.getKnownFileExtensions(entries, ctx.parsers)
+
+        for (const entry of entries) {
+            const needsProbe = ctx.recursive && !this.isCancelled && !knownFileExts.has(this.getExtension(entry.name))
+            const listing = needsProbe ? await this.probeEntry(entry, ctx) : undefined
+
+            if (listing)
+                dirs.push({ name: entry.name, uri: entry.uri, isDirectory: true, listing })
+            else if (listing===undefined)
+                files.push({ name: entry.name, uri: entry.uri, isDirectory: false })
+            // null: a folder that could not be read - already counted, neither file nor folder
+        }
+
+        return { files, dirs }
+    }
+
+    /**
+     * Probes one names-only entry by listing it.
+     *
+     * @returns the entry's listing when it is a directory (an empty folder lists as `[]`);
+     *  `undefined` when it is not a directory (the listing rejected as such, or the platform
+     *  returned no listing); `null` when it is a directory that could not be read, which is
+     *  counted towards the failed folders rather than being mistaken for a file
+     */
+    private async probeEntry(entry: ScanEntry, ctx: ScanContext): Promise<ScanEntry[]|null|undefined> {
+        try {
+            return (await this.listEntries(entry.uri)) ?? undefined
+        }
+        catch (err) {
+            if (!this.isUnreadableFolderError(err))
+                return undefined
+
+            this.countFailedFolder(ctx, err, entry.name)
+            return null
+        }
+    }
+
+    /**
+     * Whether a failed listing says the entry is a folder that could not be read (permissions,
+     * a NAS gone away, ...) rather than "not a directory". The error code may not survive the
+     * IPC boundary, so the message - which Node prefixes with the code - is checked as well.
+     */
+    private isUnreadableFolderError(err: unknown): boolean {
+        const { code, message } = (err ?? {}) as { code?: unknown, message?: unknown }
+        const text = [code, message].filter(v => typeof v==='string').join(' ')
+        return UNREADABLE_FOLDER_ERRORS.test(text)
+    }
+
+    /** Extensions that identify an entry as a file without probing it: routes, their companions, videos. */
+    private getKnownFileExtensions(entries: ScanEntry[], parsers: ParserFactory): Set<string> {
+        const known = new Set<string>(VIDEO_EXTENSIONS)
+        for (const entry of entries) {
+            const ext = this.getExtension(entry.name)
+            if (!ext || !parsers.isPrimaryExtension(ext))
+                continue
+
+            known.add(ext)
+            for (const companion of this.getCompanionExts(parsers, ext))
+                known.add(companion.toLowerCase())
+        }
+        return known
+    }
+
+    /**
+     * Fast path: lists the whole tree in one call. Only trusted when the result demonstrably
+     * recursed - at least one entry is a nested path, and every nested path's parent folder is
+     * itself part of the listing. Platforms that ignore `recursive` return a flat listing, which
+     * is indistinguishable from a folder without sub-folders, so `undefined` is returned and the
+     * caller falls back to probing.
+     *
+     * @returns the folder's listing with every sub-folder's listing attached, or `undefined`
+     */
+    private async listRecursively(uri: string): Promise<ScanEntry[]|undefined> {
+        let result: unknown
+        try {
+            result = await this.getBindings().fs.readdir?.(uri, { recursive:true })
+        }
+        catch {
+            return undefined
+        }
+
+        if (!Array.isArray(result) || !result.every(p => typeof p==='string'))
+            return undefined
+
+        const paths = result as string[]
+        if (!paths.some(p => PATH_SEPARATOR.test(p)))
+            return undefined
+
+        return this.buildListingTree(uri, paths)
+    }
+
+    /** Groups the relative paths of a recursive listing by parent folder into nested listings. */
+    private buildListingTree(rootUri: string, paths: string[]): ScanEntry[]|undefined {
+        const normalised = paths.map(p => p.split(PATH_SEPARATOR).join('/'))
+        const listed = new Set(normalised)
+        const children = new Map<string, string[]>()
+
+        for (const relPath of normalised) {
+            const cut = relPath.lastIndexOf('/')
+            const parent = cut<0 ? '' : relPath.slice(0, cut)
+            if (parent && !listed.has(parent))
+                return undefined
+
+            const siblings = children.get(parent) ?? []
+            siblings.push(relPath.slice(cut+1))
+            children.set(parent, siblings)
+        }
+
+        const path = this.getBindings().path
+        const toListing = (relDir: string, dirUri: string): ScanEntry[] => (children.get(relDir) ?? []).map(name => {
+            const relPath = relDir ? `${relDir}/${name}` : name
+            const entryUri = path.join(dirUri, name)
+            return children.has(relPath)
+                ? { name, uri: entryUri, isDirectory: true, listing: toListing(relPath, entryUri) }
+                : { name, uri: entryUri, isDirectory: false }
+        })
+
+        return toListing('', rootUri)
     }
 
     private async buildDiscoveredRoute(
@@ -915,17 +1127,26 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     private async upsertImportHistory(folderInfo: FolderInfo, routeCount: number): Promise<void> {
         try {
+            const treeUri = this.normaliseTreeUri(folderInfo.uri)
             const repo = JsonRepository.create('importedLibraries')
-            const names = await repo.list()
-            const all = await Promise.all((names ?? []).map(n => repo.read(n)))
-            const existing = all
-                .map(lib => lib as unknown as ImportedLibrary | undefined)
-                .find(lib => lib?.treeUri === folderInfo.uri)
+            const names = (await repo.list()) ?? []
+            const all = await Promise.all(names.map(n => repo.read(n)))
+
+            // records written before normalisation may spell the same folder differently -
+            // the first one is kept, any further ones are removed
+            const matching = names.filter((_, i) => {
+                const lib = all[i] as unknown as ImportedLibrary | undefined
+                return typeof lib?.treeUri==='string' && this.normaliseTreeUri(lib.treeUri)===treeUri
+            })
+            const [kept, ...duplicates] = matching
+            const existing = (kept===undefined ? undefined : all[names.indexOf(kept)]) as unknown as ImportedLibrary | undefined
+            for (const duplicate of duplicates)
+                await repo.delete(duplicate)
 
             const id = existing?.id ?? uuidv4()
             await repo.write(id, {
                 id,
-                treeUri: folderInfo.uri,
+                treeUri,
                 displayName: folderInfo.displayName,
                 lastScanned: new Date().toISOString(),
                 routeCount
@@ -933,6 +1154,25 @@ export class RouteLibraryScannerService extends IncyclistService {
         } catch (err) {
             this.logError(err, 'upsertImportHistory', { folder: folderInfo.displayName })
         }
+    }
+
+    /**
+     * One spelling per folder for the import history: a plain filesystem path loses trailing
+     * separators (never reducing a root to nothing) and gets an upper-case Windows drive letter.
+     * A uri with a scheme (`content://`, `file://`, ...) is platform-issued and kept verbatim.
+     */
+    private normaliseTreeUri(uri: string): string {
+        if (/^[a-z][a-z0-9+.-]*:\/\//i.test(uri))
+            return uri
+
+        const trimmed = uri.replace(/[/\\]+$/, '')
+        const withDrive = trimmed.replace(/^([a-z]):/, (_, drive: string) => `${drive.toUpperCase()}:`)
+
+        if (withDrive==='')
+            return uri.slice(0, 1)          // the filesystem root, '/' or '\'
+        if (/^[A-Z]:$/.test(withDrive))
+            return withDrive + uri.charAt(2)  // a drive root keeps its separator: 'C:\'
+        return withDrive
     }
 
     private buildFileInfo(uri: string, ext: string): FileInfo {

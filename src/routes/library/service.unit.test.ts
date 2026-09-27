@@ -319,6 +319,419 @@ describe('RouteLibraryScannerService', () => {
             expect(discovered[0].format).toBe('xml')
             expect(discovered[0].controlFileUri).toBe('content://root/route.xml')
         })
+
+        test('an object listing is used as-is: one listing per folder, no recursive listing, no probes', async () => {
+            const root = [
+                file('route.xml', 'content://root/route.xml'),
+                file('notes', 'content://root/notes'),
+                dir('sub', 'content://root/sub'),
+            ]
+            const sub = [file('b.xml', 'content://root/sub/b.xml')]
+            fsMock.readdir.mockImplementation(async (uri: string) => (uri === 'content://root' ? root : sub))
+
+            const discovered: ScannedRoute[] = []
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            observer.on('scan-result', r => discovered.push(r))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+
+            expect(fsMock.readdir.mock.calls).toEqual([
+                ['content://root', { recursive: false, extended: true }],
+                ['content://root/sub', { recursive: false, extended: true }],
+            ])
+            expect(discovered.map(r => r.controlFileUri)).toEqual(['content://root/route.xml', 'content://root/sub/b.xml'])
+            // the platform's own entry objects are handed on, not copies
+            expect(discovered[0].files[0]).toBe(root[0])
+            expect(discovered[0].files).toEqual([root[0], root[1]])
+        })
+
+        test('an object entry without isDirectory is treated as a file, never probed', async () => {
+            fsMock.readdir.mockResolvedValueOnce([
+                file('route.xml', 'content://root/route.xml'),
+                { name: 'unreadable-metadata', uri: 'content://root/unreadable-metadata' },
+            ])
+
+            const discovered: ScannedRoute[] = []
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            observer.on('scan-result', r => discovered.push(r))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+
+            expect(fsMock.readdir).toHaveBeenCalledTimes(1)
+            expect(discovered[0].files.map(f => f.name)).toEqual(['route.xml', 'unreadable-metadata'])
+        })
+
+        test('a folder whose listing is not an array counts as failed instead of crashing the scan', async () => {
+            fsMock.readdir.mockResolvedValueOnce(null)
+
+            const observer = service.scan(makeFolder('Root', 'content://root'))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+
+            expect(service.getDisplayProps().scanProgress).toEqual({ scannedFolders: 0, failedFolders: 1 })
+        })
+    })
+
+    /**
+     * Desktop's `readdir` returns names only (`string[]`), ignoring `extended`. These tests
+     * emulate it over an in-memory tree: a key of `dirs` is a folder, anything else is a file
+     * and rejects with ENOTDIR, like Node's `readdir` does on a file.
+     */
+    describe('scan - names-only listing', () => {
+        type FakeTree = {
+            dirs: Record<string, string[]>
+            unreadable?: string[]
+            recursiveSupported?: boolean
+            probeResults?: Record<string, unknown>
+        }
+
+        const relativeDescendants = (dirs: Record<string, string[]>, root: string): string[] => {
+            const result: string[] = []
+            const walk = (dirPath: string, rel: string) => {
+                for (const name of dirs[dirPath]) {
+                    const childRel = rel ? `${rel}/${name}` : name
+                    result.push(childRel)
+                    const childPath = nodePath.join(dirPath, name)
+                    if (dirs[childPath])
+                        walk(childPath, childRel)
+                }
+            }
+            walk(root, '')
+            return result
+        }
+
+        const useFakeTree = (tree: FakeTree) => {
+            fsMock.readdir.mockImplementation(async (uri: string, options?: { recursive?: boolean }) => {
+                if (tree.unreadable?.includes(uri))
+                    throw new Error(`EACCES: permission denied, scandir '${uri}'`)
+                if (tree.probeResults && uri in tree.probeResults)
+                    return tree.probeResults[uri]
+                if (!tree.dirs[uri])
+                    throw new Error(`ENOTDIR: not a directory, scandir '${uri}'`)
+
+                if (options?.recursive && tree.recursiveSupported) {
+                    if (tree.unreadable?.some(u => u.startsWith(uri + '/')))
+                        throw new Error('EACCES: permission denied, scandir')
+                    return relativeDescendants(tree.dirs, uri)
+                }
+                return [...tree.dirs[uri]]
+            })
+        }
+
+        const libraryTree = (): FakeTree => ({
+            dirs: {
+                '/lib': ['a.rlv', 'a.pgmf', 'a.avi', 'notes.txt', 'Alps'],
+                '/lib/Alps': ['README', 'Stelvio', 'Empty'],
+                '/lib/Alps/Stelvio': ['s.xml', 's.mp4'],
+                '/lib/Alps/Empty': [],
+            }
+        })
+
+        const runScan = async (uri = '/lib') => {
+            const discovered: ScannedRoute[] = []
+            const observer = service.scan(makeFolder('Library', uri))
+            observer.on('scan-result', r => discovered.push(r))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+            return discovered
+        }
+
+        const listingCalls = (uri: string) =>
+            fsMock.readdir.mock.calls.filter(([u, o]: [string, { recursive?: boolean }]) => u === uri && !o?.recursive)
+
+        beforeEach(() => {
+            Inject('Bindings', { fs: fsMock, appInfo: appInfoMock, path: nodePath })
+        })
+
+        test('discovers routes in nested folders from a string[]-only listing', async () => {
+            useFakeTree(libraryTree())
+
+            const discovered = await runScan()
+
+            expect(discovered.map(r => [r.controlFileUri, r.folderName])).toEqual([
+                ['/lib/a.rlv', 'Library'],
+                ['/lib/Alps/Stelvio/s.xml', 'Stelvio'],
+            ])
+            expect(discovered[1].folderUri).toBe('/lib/Alps/Stelvio')
+            expect(service.getDisplayProps().scanProgress).toEqual({ scannedFolders: 4, failedFolders: 0 })
+        })
+
+        test('hands on entry objects, with sub-folders left out of the folder files', async () => {
+            useFakeTree(libraryTree())
+
+            const discovered = await runScan()
+
+            expect(discovered[0].files).toEqual([
+                { name: 'a.rlv', uri: '/lib/a.rlv', isDirectory: false },
+                { name: 'a.pgmf', uri: '/lib/a.pgmf', isDirectory: false },
+                { name: 'a.avi', uri: '/lib/a.avi', isDirectory: false },
+                { name: 'notes.txt', uri: '/lib/notes.txt', isDirectory: false },
+            ])
+        })
+
+        test('lists every folder exactly once - the probe result is reused as the listing', async () => {
+            useFakeTree(libraryTree())
+
+            await runScan()
+
+            expect(listingCalls('/lib')).toHaveLength(1)
+            expect(listingCalls('/lib/Alps')).toHaveLength(1)
+            expect(listingCalls('/lib/Alps/Stelvio')).toHaveLength(1)
+            expect(listingCalls('/lib/Alps/Empty')).toHaveLength(1)
+        })
+
+        test('does not probe entries recognised as route, companion or video files', async () => {
+            useFakeTree(libraryTree())
+
+            await runScan()
+
+            const probed = fsMock.readdir.mock.calls.map(([u]: [string]) => u)
+            expect(probed).not.toContain('/lib/a.rlv')
+            expect(probed).not.toContain('/lib/a.pgmf')
+            expect(probed).not.toContain('/lib/a.avi')
+            expect(probed).not.toContain('/lib/Alps/Stelvio/s.xml')
+            expect(probed).not.toContain('/lib/Alps/Stelvio/s.mp4')
+            // unrecognised names are probed - and are files
+            expect(probed).toContain('/lib/notes.txt')
+            expect(probed).toContain('/lib/Alps/README')
+        })
+
+        test('classifies probes: rejection -> file, [] -> empty folder, null/undefined -> not a folder', async () => {
+            useFakeTree({
+                dirs: { '/lib': ['route.xml', 'plain', 'empty', 'nothing', 'undef'] },
+                probeResults: { '/lib/empty': [], '/lib/nothing': null, '/lib/undef': undefined },
+            })
+
+            const discovered = await runScan()
+
+            expect(discovered[0].files.map(f => f.name)).toEqual(['route.xml', 'plain', 'nothing', 'undef'])
+            // root + the empty folder, nothing failed
+            expect(service.getDisplayProps().scanProgress).toEqual({ scannedFolders: 2, failedFolders: 0 })
+        })
+
+        test('a sub-folder that cannot be read counts as failed, not as a file', async () => {
+            const tree = libraryTree()
+            tree.unreadable = ['/lib/Alps/Stelvio']
+            useFakeTree(tree)
+
+            const discovered = await runScan()
+
+            expect(discovered.map(r => r.controlFileUri)).toEqual(['/lib/a.rlv'])
+            expect(service.getDisplayProps().scanProgress).toEqual({ scannedFolders: 3, failedFolders: 1 })
+        })
+
+        test('an error code carried only in the error\'s code property is recognised too', async () => {
+            fsMock.readdir.mockImplementation(async (uri: string) => {
+                if (uri === '/lib')
+                    return ['locked']
+                throw Object.assign(new Error('failed'), { code: 'EPERM' })
+            })
+
+            await runScan()
+
+            expect(service.getDisplayProps().scanProgress).toEqual({ scannedFolders: 1, failedFolders: 1 })
+        })
+
+        test('an unrecognisable probe rejection is taken as "not a directory"', async () => {
+            fsMock.readdir.mockImplementation(async (uri: string) => {
+                if (uri === '/lib')
+                    return ['route.xml', 'thing']
+                throw new Error('An object could not be cloned.')
+            })
+
+            const discovered = await runScan()
+
+            expect(discovered[0].files.map(f => f.name)).toEqual(['route.xml', 'thing'])
+            expect(service.getDisplayProps().scanProgress).toEqual({ scannedFolders: 1, failedFolders: 0 })
+        })
+
+        test('tries the one-call recursive listing, and falls back to probing when it comes back flat', async () => {
+            useFakeTree(libraryTree())
+
+            await runScan()
+
+            expect(fsMock.readdir).toHaveBeenCalledWith('/lib', { recursive: true })
+            // the probes still ran
+            expect(listingCalls('/lib/Alps')).toHaveLength(1)
+        })
+
+        test('uses the recursive listing when it recursed: same routes, no probes', async () => {
+            const tree = libraryTree()
+            tree.recursiveSupported = true
+            useFakeTree(tree)
+
+            const discovered = await runScan()
+
+            expect(discovered.map(r => [r.controlFileUri, r.folderName])).toEqual([
+                ['/lib/a.rlv', 'Library'],
+                ['/lib/Alps/Stelvio/s.xml', 'Stelvio'],
+            ])
+            expect(fsMock.readdir.mock.calls).toEqual([
+                ['/lib', { recursive: false, extended: true }],
+                ['/lib', { recursive: true }],
+            ])
+            expect(discovered[1].files).toEqual([
+                { name: 's.xml', uri: '/lib/Alps/Stelvio/s.xml', isDirectory: false },
+                { name: 's.mp4', uri: '/lib/Alps/Stelvio/s.mp4', isDirectory: false },
+            ])
+        })
+
+        test('the recursive listing accepts Windows separators', async () => {
+            fsMock.readdir.mockImplementation(async (_uri: string, options?: { recursive?: boolean }) =>
+                options?.recursive
+                    ? ['Alps', 'Alps\\Stelvio', 'Alps\\Stelvio\\s.xml']
+                    : ['Alps']
+            )
+
+            const discovered = await runScan()
+
+            expect(discovered.map(r => r.controlFileUri)).toEqual(['/lib/Alps/Stelvio/s.xml'])
+            expect(fsMock.readdir).toHaveBeenCalledTimes(2)
+        })
+
+        test('a recursive listing whose nested paths have no listed parent is not trusted', async () => {
+            // a file name containing a backslash on Linux is not a nested path
+            useFakeTree({ dirs: { '/lib': ['odd\\name.xml', 'sub'], '/lib/sub': ['b.xml'] } })
+            fsMock.readdir.mockImplementationOnce(async () => ['odd\\name.xml', 'sub'])
+                .mockImplementationOnce(async () => ['odd\\name.xml', 'sub', 'sub/b.xml', 'ghost/c.xml'])
+
+            const discovered = await runScan()
+
+            expect(discovered.map(r => r.controlFileUri)).toEqual(['/lib/odd\\name.xml', '/lib/sub/b.xml'])
+        })
+
+        test('falls back to probing when the recursive listing fails, and counts the unreadable folder', async () => {
+            const tree = libraryTree()
+            tree.recursiveSupported = true
+            tree.unreadable = ['/lib/Alps/Stelvio']
+            useFakeTree(tree)
+
+            const discovered = await runScan()
+
+            expect(discovered.map(r => r.controlFileUri)).toEqual(['/lib/a.rlv'])
+            expect(service.getDisplayProps().scanProgress).toEqual({ scannedFolders: 3, failedFolders: 1 })
+        })
+
+        test('the companion check sees the names-only listing', async () => {
+            useFakeTree({ dirs: { '/lib': ['ok.epm', 'ok.epp', 'Other'], '/lib/Other': ['missing.epm'] } })
+
+            const discovered = await runScan()
+
+            expect(discovered.map(r => [r.controlFileUri, r.scanError])).toEqual([
+                ['/lib/ok.epm', undefined],
+                ['/lib/Other/missing.epm', 'Missing companion file (.epp)'],
+            ])
+        })
+
+        describe('video lookup against the scanned listing', () => {
+            beforeEach(() => {
+                routeListMock.getRoute = jest.fn().mockReturnValue(undefined)
+                appInfoMock.getChannel = jest.fn().mockReturnValue('desktop')
+            })
+
+            afterEach(() => {
+                jest.restoreAllMocks()
+            })
+
+            const scanAndParse = async (video: Record<string, unknown>) => {
+                useFakeTree({ dirs: { '/lib': ['Alps'], '/lib/Alps': ['s.xml', 'Ride.MP4', 'r.mp4'] } })
+                const [scanned] = await runScan()
+
+                jest.spyOn(RouteParser, 'parse').mockResolvedValue({
+                    data: { id: 'r1', title: 'route 1', hasVideo: true } as any,
+                    details: { video } as any,
+                })
+                const results: ParsedRoute[] = []
+                const observer = service.parse([scanned])
+                observer.on('parse-result', r => results.push(r))
+                await new Promise<void>(resolve => observer.once('parse-complete', resolve))
+                return results[0]
+            }
+
+            test('a relative video file resolves to its uri from the names-only listing', async () => {
+                const result = await scanAndParse({ file: 'ride.mp4' })
+
+                expect(result.parseError).toBeUndefined()
+                expect(result.route.details.video.file).toBe('/lib/Alps/Ride.MP4')
+            })
+
+            test('a relative video file missing from the listing is reported', async () => {
+                const result = await scanAndParse({ file: 'other.mp4' })
+
+                expect(result.parseError).toMatch(/Video file not found in folder/)
+            })
+
+            test('on mobile, an AVI video is swapped for the MP4 found in the listing', async () => {
+                appInfoMock.getChannel = jest.fn().mockReturnValue('mobile')
+
+                const result = await scanAndParse({ file: '/lib/Alps/r.avi', format: 'avi' })
+
+                expect(result.parseError).toBeUndefined()
+                expect(result.route.details.video.file).toBe('/lib/Alps/r.mp4')
+                expect(result.route.details.video.format).toBe('mp4')
+            })
+        })
+    })
+
+    describe('scan - import history', () => {
+        let writeSpy: jest.Mock
+        let deleteSpy: jest.Mock
+
+        const useRecords = (records: Array<{ id: string, treeUri: string }>) => {
+            writeSpy = jest.fn().mockResolvedValue(true)
+            deleteSpy = jest.fn().mockResolvedValue(true)
+            jest.spyOn(JsonRepository, 'create').mockReturnValue({
+                list: jest.fn().mockResolvedValue(records.map(r => r.id)),
+                read: jest.fn(async (id: string) => records.find(r => r.id === id)),
+                write: writeSpy,
+                delete: deleteSpy,
+            } as any)
+        }
+
+        const runScan = async (uri: string) => {
+            fsMock.readdir.mockResolvedValue([])
+            const observer = service.scan(makeFolder('Library', uri))
+            await new Promise<void>(resolve => observer.once('scan-complete', resolve))
+        }
+
+        afterEach(() => {
+            jest.restoreAllMocks()
+        })
+
+        test.each([
+            ['/home/u/Routes/', '/home/u/Routes'],
+            ['C:\\Routes\\', 'C:\\Routes'],
+            ['c:\\Routes', 'C:\\Routes'],
+            ['/', '/'],
+            ['c:\\', 'C:\\'],
+            ['content://tree/primary%3AVideos/', 'content://tree/primary%3AVideos/'],
+            ['file:///Users/u/Routes/', 'file:///Users/u/Routes/'],
+        ])('stores %s as %s', async (uri, expected) => {
+            useRecords([])
+
+            await runScan(uri)
+
+            expect(writeSpy).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ treeUri: expected }))
+        })
+
+        test('a differently spelled path to the same folder updates the existing record', async () => {
+            useRecords([{ id: 'lib-1', treeUri: 'c:\\Routes\\' }])
+
+            await runScan('C:\\Routes')
+
+            expect(writeSpy).toHaveBeenCalledTimes(1)
+            expect(writeSpy).toHaveBeenCalledWith('lib-1', expect.objectContaining({ id: 'lib-1', treeUri: 'C:\\Routes' }))
+        })
+
+        test('pre-existing duplicate records for one folder collapse into the first one', async () => {
+            useRecords([
+                { id: 'lib-1', treeUri: '/home/u/Routes/' },
+                { id: 'lib-2', treeUri: '/home/u/Other' },
+                { id: 'lib-3', treeUri: '/home/u/Routes' },
+            ])
+
+            await runScan('/home/u/Routes')
+
+            expect(deleteSpy).toHaveBeenCalledTimes(1)
+            expect(deleteSpy).toHaveBeenCalledWith('lib-3')
+            expect(writeSpy).toHaveBeenCalledWith('lib-1', expect.objectContaining({ treeUri: '/home/u/Routes' }))
+        })
     })
 
     describe('parse', () => {
