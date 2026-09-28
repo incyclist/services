@@ -2,6 +2,7 @@ import { ReadDirResult } from "../../api"
 import { FormattedNumber } from "../../i18n"
 import { IObserver } from "../../types"
 import { Route } from "../base/model/route"
+import type { ParserFactory } from "../base/parsers/factory"
 
 // The result of the user selecting a root folder
 export interface FolderInfo {
@@ -22,7 +23,18 @@ export type RouteImportErrorCode =
     | 'PARSE_FAILED'
     | 'ICLOUD_OFFLINE'
     | 'ICLOUD_DOWNLOAD_FAILED'
+    | 'MISSING_COMPANION'
     | 'UNSUPPORTED'
+
+/**
+ * A failed single-route import as plain data: the stable code, the free-text reason, and -
+ * for `MISSING_COMPANION` - the extension of the file the route needs.
+ */
+export interface RouteImportFailure {
+    code: RouteImportErrorCode
+    reason: string
+    missingExt?: string
+}
 
 
 // Output of the scan phase — filesystem only, no parsing
@@ -43,6 +55,7 @@ export interface ParsedRoute {
     route: Route             // the full parsed Route object
     controlFileUri: string   // carried from ScannedRoute
     folderUri: string        // carried from ScannedRoute
+    folderName: string       // carried from ScannedRoute - display name of the containing folder
     alreadyImported: boolean // set via RouteListService.existsBySourceUri()
     parseError?: string      // set if AVI, no video, parse failure
     parseErrorCode?: RouteImportErrorCode  // stable key for the same failure
@@ -57,6 +70,8 @@ export type ParseState = 'waiting'|'parsing'|'parsed'
 export interface RouteDisplayItem {
     id: string                      // stable identifier for selection tracking
     label: string                   // filename during scan, route title after parse
+    folder: string                  // display name of the containing folder - disambiguates
+                                     // same-titled routes in the selection list
     distance?: FormattedNumber      // undefined until parsed
     format: RouteFormat
     alreadyImported: boolean
@@ -74,7 +89,10 @@ export interface RouteDisplayItem {
 export interface ImportDisplayProps {
     phase: 'landing' | 'scanning' | 'parsing' | 'selecting' | 'ingesting' | 'complete' | 'result' | 'error'
     routes: RouteDisplayItem[]
-    scanProgress?: { scannedFolders: number }
+    // `failedFolders` counts folders that could not be listed (permission error, a NAS gone
+    // offline mid-scan, …) so the UI can report an incomplete scan instead of a silently short
+    // result.
+    scanProgress?: { scannedFolders: number; failedFolders: number }
     parseProgress?: { parsed: number; total: number; waitingForICloud?: boolean }
     ingestProgress?: { current: number; total: number; currentName: string }
     completionSummary?: {
@@ -85,6 +103,9 @@ export interface ImportDisplayProps {
     }
     resultSuccess?: { routeName: string }
     error?: string
+    // The same single-route failure as `error`, with its stable code - so the UI can show the
+    // same sentence it shows for the same failure anywhere else.
+    failure?: RouteImportFailure
     // True when at least one route in this import failed because its files could not be
     // downloaded from the cloud - drives the "import the folder again" hint. Always populated.
     hasICloudDownloadFailures: boolean
@@ -94,6 +115,32 @@ export interface FailedRoute {
     name: string
     reason: string
     code?: RouteImportErrorCode
+    missingExt?: string
+}
+
+/**
+ * One entry of a folder listing as the library scanner handles it.
+ *
+ * Identical to `ReadDirResult` when the platform reports directory-ness (mobile). An entry of a
+ * names-only listing (desktop) is flagged `unknownType` until the scanner has resolved whether it
+ * is a directory. A directory whose contents are already known carries them in `listing`, so it
+ * is never read twice.
+ */
+export interface ScanEntry {
+    name: string
+    uri: string
+    isDirectory?: boolean
+    unknownType?: boolean
+    listing?: ScanEntry[]
+}
+
+/** State shared by every folder visited during one scan. */
+export interface ScanContext {
+    observer: IObserver
+    parsers: ParserFactory
+    progress: { scannedFolders: number, failedFolders: number }
+    discoveredCount: { value: number }
+    recursive: boolean
 }
 
 export interface ImportedLibrary {

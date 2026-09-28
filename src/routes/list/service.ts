@@ -5,7 +5,6 @@ import { Observer, Singleton } from "../../base/types";
 import { PromiseObserver } from "../../base/types/observer";
 import { RouteApiDetail } from "../base/api/types";
 import { Route } from "../base/model/route";
-import { RouteParser  } from "../base/parsers";
 import { RouteInfo } from "../base/types";
 import { analyseElevationNoise, applySmoothing, isSmoothingEligible } from "../base/utils/smoothing";
 import { RoutesApiLoader } from "./loaders/api";
@@ -14,26 +13,30 @@ import { FreeRideCard } from "./cards/FreeRideCard";
 import { MyRoutes } from "./lists/myroutes";
 import { RouteCard } from "./cards/RouteCard";
 import { RouteSettings, SummaryCardDisplayProps } from "./cards/types";
-import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
+import { ActiveRideCount, DisplayType, IRouteList, RouteDetailUIItem, RouteListLog, RouteListSortOrder, RouteStartSettings, SearchFilter, SearchFilterOptions, SearchState } from "./types";
 import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
 import { RouteListObserver } from "./RouteListObserver";
 import IncyclistRoutesApi from "../base/api";
 import { ActiveImportCard } from "./cards/ActiveImportCard";
-import { SelectedRoutes } from "./lists/selected";
+import { SelectedRoutes, score } from "./lists/selected";
 import { AlternativeRoutes } from "./lists/alternatives";
 import { getRepoUpdates, updateRepoStats } from "./utils";
 import { useUserSettings } from "../../settings";
 import { Injectable } from "../../base/decorators";
 import { RouteSyncFactory } from "../sync/factory";
 import { sleep } from "../../utils/sleep";
+import { RouteDetailsQueue } from "./detailsQueue";
 import { useAppsService } from "../../apps";
 import { useAppState } from "../../appstate";
 import { useUnitConverter } from "../../i18n";
 import clone from "../../utils/clone";
 import { IObserver } from "../../types";
 import { usePreviewStore } from "../previews/store";
+import { useRouteShapeStore } from "../shapes/store";
+import type { RouteShape } from "../shapes/types";
+import { useRouteLibraryScanner } from "../library/service";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -77,11 +80,23 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected prevFilters: SearchFilter
     protected listTop: Record<DisplayType,number> = { list:undefined, tiles:undefined }
     protected displayType: DisplayType
+    protected sortOrder: RouteListSortOrder
+    protected filtersExpanded: boolean
     protected syncInfo:  {iv?: NodeJS.Timeout, observer?: Observer} 
     protected currentView: 'list'|'grid'|'routes'
     protected stats
     protected isListUpdatePaused: boolean = false
     protected cardLookup: Record<string,{ card:RouteCard, list:CardList<Route>}> = {}
+    /** getDisplayProperties() result per card id, refreshed from the card's own 'update'/'redraw'
+     *  event payload rather than recomputed on every searchRepo() call - see getSortedSearchCards() */
+    protected cardPropsCache: Map<string,SummaryCardDisplayProps> = new Map()
+    /** cards already wired to keep cardPropsCache fresh - avoids re-subscribing on every call */
+    protected cardPropsSubscribed: Set<RouteCard> = new Set()
+    /** the sorted card order from the last searchRepo(), reused while neither the underlying
+     *  card set nor the persisted sort order (not the filters) has changed - see
+     *  getSortedSearchCards() */
+    protected detailsQueue: RouteDetailsQueue<RouteDetailUIItem>
+    protected sortedSearchCache: { allCards:Array<RouteCard>, sortOrder:RouteListSortOrder, sortedCards:Array<RouteCard> }
 
     constructor () {
         super('RouteList')
@@ -321,6 +336,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (filters!==this.prevFilters) {
             this.prevFilters = filters
             this.saveFilters(filters)
+            this.setListTop('list',0)
+            this.setListTop('tiles',0)
         }
 
         const res = this.searchRepo(filters)
@@ -359,10 +376,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             const filters = requestedFilters ?? this.filters
 
-            const allCards = this.getAllSearchCards()
-            let routes:Array<SummaryCardDisplayProps> = allCards.map( c=> c.getDisplayProperties())
+            const {allCards, routes: sortedRoutes} = this.getSortedSearchCards()
+            let routes:Array<SummaryCardDisplayProps> = sortedRoutes
 
-            routes.sort( (a,b) => a.title>b.title? 1 : -1)
             const units = this.getUnitConverter().getDefaultUnits()
 
             if (!filters) {                
@@ -386,9 +402,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const routeIdSet = new Set(routes.map(r => r.id))
             const cards = allCards.filter(c => routeIdSet.has(c.getId()))
 
-            this.setListTop('list',0)
-            this.setListTop('tiles',0)
-          
             return {routes,cards,filters,observer:this.observer,units}
     
         }
@@ -429,9 +442,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * routeListService.setListTop(200);
      */
     setListTop(display: number|DisplayType, top?:number) {
-        const displayType = typeof display === 'number' ? this.displayType : display 
+        const displayType = typeof display === 'number' ? this.getDisplayType() : display
         const topValue = typeof display === 'number' ? display : top
-        
+
         this.listTop[displayType] = topValue
     }
 
@@ -440,10 +453,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      *
      * This value is used to restore the position when the RouteList is re-opened
      *
+     * Defaults to the persisted display type (`getDisplayType()`), not the in-memory field
+     * alone, so a caller that has not yet called `setDisplayType()` in this session still gets
+     * the top position for the view the user will actually land on.
+     *
      * @param display The display type for which the top position is requested.
      * @returns The top position of the first item in the list for the specified display type.
      */
-    getListTop(display: DisplayType = this.displayType) {
+    getListTop(display: DisplayType = this.getDisplayType()) {
         return this.listTop[display]
     }
 
@@ -461,9 +478,47 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     getDisplayType():DisplayType {
-        return this.displayType ??  this.getUserSettings().get('preferences.routeListDisplayType', 'list')        
+        return this.displayType ??  this.getUserSettings().get('preferences.routeListDisplayType', 'list')
     }
-    
+
+    /**
+     * Sets the persisted sort order for the route list.
+     *
+     * @param sortOrder The sort order to be set.
+     */
+    setSortOrder(sortOrder:RouteListSortOrder) {
+        this.sortOrder = sortOrder
+        this.getUserSettings().set('preferences.routeListSortOrder', sortOrder)
+    }
+
+    /**
+     * Retrieves the persisted sort order for the route list, defaulting to `'suggested'`.
+     *
+     * @returns The current sort order.
+     */
+    getSortOrder():RouteListSortOrder {
+        return this.sortOrder ?? this.getUserSettings().get('preferences.routeListSortOrder', 'suggested')
+    }
+
+    /**
+     * Sets whether the route list's filter panel is persisted as expanded or collapsed.
+     *
+     * @param expanded Whether the filter panel should be expanded.
+     */
+    setFiltersExpanded(expanded:boolean) {
+        this.filtersExpanded = expanded
+        this.getUserSettings().set('preferences.routeListFiltersExpanded', expanded)
+    }
+
+    /**
+     * Retrieves whether the route list's filter panel is persisted as expanded, defaulting to
+     * `false` (collapsed).
+     *
+     * @returns Whether the filter panel should be shown expanded.
+     */
+    getFiltersExpanded():boolean {
+        return this.filtersExpanded ?? this.getUserSettings().get('preferences.routeListFiltersExpanded', false)
+    }
 
     /**
      * checks if the preload is still ongoing
@@ -799,6 +854,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 await this.loadRouteDetails(route, id);
             }
 
+            this.backfillRouteShape(route)
             this.verifyRouteCountry(route);
             const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
 
@@ -815,6 +871,76 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
+    /**
+     * Requests the details of a route for a list row or tile - a bounded, de-duplicated and
+     * cancellable front door to {@link getRouteDetails}.
+     *
+     * At most a few loads run at once, requests for a route that is already queued or loading
+     * share that one load, and a request that is cancelled before its turn never runs. Use it
+     * where many rows ask for details at the same time (scrolling a long list); a single caller
+     * that needs the details right away can keep calling {@link getRouteDetails}.
+     *
+     * @param id the route id
+     * @param onResult called with the details, or `undefined` if they could not be loaded; not
+     *                 called once the request has been cancelled
+     * @returns a function that cancels the request
+     */
+    requestRouteDetails(id:string, onResult:(details?:RouteDetailUIItem)=>void):()=>void {
+        try {
+            this.detailsQueue ??= new RouteDetailsQueue<RouteDetailUIItem>( (routeId:string) => this.getRouteDetails(routeId) )
+            return this.detailsQueue.request(id, onResult)
+        }
+        catch(err) {
+            this.logError(err,'requestRouteDetails',{id})
+            return () => {}
+        }
+    }
+
+
+    /**
+     * Loads the decimated preview shape of a route - one small record, not the route's details.
+     *
+     * A card whose shape is resident already carries it in its summary display props
+     * (`shape`), so this is only needed for a row whose props have no shape yet. Once loaded,
+     * the shape stays resident and the card is updated, so every later render gets it
+     * synchronously through the props.
+     *
+     * @param id route id
+     * @returns the shape, or `undefined` if none is stored for this route yet - the row then
+     *          falls back to {@link getRouteDetails}, which creates it
+     */
+    async loadRouteShape(id:string):Promise<RouteShape|undefined> {
+        try {
+            const store = this.getRouteShapeStore()
+            if (store.get(id))
+                return store.get(id)
+
+            const shape = await store.load(id)
+            if (shape)
+                this.getCard(id)?.emitUpdate()
+            return shape
+        }
+        catch(err) {
+            this.logError(err,'loadRouteShape',{id})
+        }
+    }
+
+    /**
+     * Stores a shape for a route whose details are loaded but which has none yet (routes
+     * imported before shapes existed), and updates its card once it is available.
+     * Fire-and-forget: never delays the caller.
+     */
+    protected backfillRouteShape(route:Route):void {
+        if (!route?.details || this.getRouteShapeStore().get(route.description?.id))
+            return
+
+        this.getRouteShapeStore().backfill(route)
+            .then( added => {
+                if (added)
+                    this.getCard(route.description.id)?.emitUpdate()
+            })
+            .catch( err => this.logError(err,'backfillRouteShape',{id:route.description?.id}))
+    }
 
     getRouteDescription(id:string) {
         try {
@@ -1063,7 +1189,15 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    /** Parses and adds one file dropped/picked for single-file import; fire-and-forget per file. */
+    /**
+     * Imports one file dropped onto the route list; fire-and-forget per file.
+     *
+     * The file goes through the same single-route import path as a file picked in the import
+     * dialog (`RouteLibraryScannerService.importRouteFile()`), so it is read the same way and a
+     * failure carries the same code (`RouteImportError`). What stays here is what that path
+     * deliberately does not provide: the `ActiveImportCard` pinned above the list while the file
+     * is imported, which shows the failure (and offers a retry) when there is one.
+     */
     private async importOneFile(
         file: FileInfo,
         importCard: ActiveImportCard | null,
@@ -1073,67 +1207,23 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (!file)
             return
 
-        const name = file.url??file.filename??file.name
-
-        this.logEvent({message:'import single route file',file:name, type:file.ext})
-
         try {
-
             if (importId&&observer)
                 observer?.emit('parsing',importId)
 
-            const {data,details} = await RouteParser.parse(file)
+            await this.getRouteLibraryScanner().importRouteFile(file, {list:this})
 
             if (importId&&observer)
                 observer?.emit('success',importId)
 
-
-            const route = new Route(data,details)
-            route.description.tsImported = Date.now()
-            this.logEvent({message:'import single route file success',file:name})
-
-            const previews = this.getPreviewStore()
-            if (previews.isEnabled())
-                await previews.adoptOnImport(route)
-
-            const existing = this.findCard(route)
-
-            if (existing ) {
-                existing.list.remove( existing.card)
-                this.logEvent({message:'route updated (import)',route:route.title})
-
-            }
-            else  {
-                this.routes.push(route)
-                this.logEvent({message:'route added',route:route.title})
-            }
-
-            const card = new RouteCard(route,{list:this.myRoutes})
-            card.verify()
-            card.save()
-            card.enableDelete()
-
-            this.myRoutes.add( card, true )
-            this.cardLookup[route.description.id] = { card, list:this.myRoutes};
-
-
-
             if (importCard) {
                 this.myRoutes.remove(importCard)
+                this.emitLists('updated',{log:true})
             }
-            card.enableDelete(true)
-            this.emitLists('updated',{log:true})
-
-
-
-            this.verifyPoints(card,route)
-
-
         }
         catch(err) {
-            this.logEvent({message:'import single route file failed', file:name, reason:err.message, stack:err.stack})
             if (importId&&observer)
-                observer?.emit('error',importId, err.message)
+                observer?.emit('error',importId, err.message, err.code)
             if (importCard)
                 importCard.setError(err)
         }
@@ -1338,12 +1428,18 @@ export class RouteListService  extends IncyclistService implements IRouteList {
            
 
         if (existing ) {
+            const wasDeleted = existing.description?.isDeleted
             existing.replace(route)
 
-            return;
+            // a system update refreshes a route in place; an explicit user import must also
+            // leave the route visible - revive a tombstoned route or one whose card is detached
+            if (source==='system' || (!wasDeleted && this.hasAttachedCard(existing)))
+                return;
+            route = existing
         }
-
-        this.routes.push(route)
+        else {
+            this.routes.push(route)
+        }
         if (route.description?.isDeleted) {
             return
         }
@@ -1383,14 +1479,28 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     }
 
-    protected async verifyPoints(card:RouteCard, route:Route):Promise<void> {
-        const updated = await route.updateCountryFromPoints()
-        
-        if (updated) {             
-            this.logEvent({message:'route updated (country)',route:route.title, country: route?.description?.country})
-            card.updateRoute(route)
-            this.db.save(route,false)
-        }        
+    /** true when the route's card is currently part of a card list */
+    protected hasAttachedCard(route:Route):boolean {
+        const id = route.description?.id
+        return [this.myRoutes,this.selectedRoutes,this.alternatives,...(this.custom??[])]
+            .some( l=> l?.getCards()?.some( c=> c.getData?.()?.description?.id===id))
+    }
+
+    /**
+     * Drops a route from the in-memory state after its last persisted copy was removed
+     * (local route hard-deleted), so a later import of the same file is treated as new.
+     */
+    forgetRoute(target:Route|string):void {
+        const id = typeof target==='string' ? target : target?.description?.id
+        if (!id)
+            return
+        const card = this.cardLookup[id]?.card
+        this.routes = this.routes.filter( r=> r.description?.id!==id)
+        delete this.cardLookup[id]
+        this.cardPropsCache.delete(id)
+        if (card)
+            this.cardPropsSubscribed.delete(card)
+        this.sortedSearchCache = undefined
     }
 
     protected async addFromApi(route:Route):Promise<void> {
@@ -1425,6 +1535,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             .then( details => { 
 
                 card.setRouteData(details)
+                // setRouteData() does not itself signal a card update (unlike updateRoute()/
+                // resetDownload()/etc.) - emit explicitly so a cached searchRepo() result picks
+                // up the details (e.g. 'loaded', 'points') that just arrived.
+                card.emitUpdate()
 
                 const route = card.getData()
 
@@ -1434,6 +1548,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                             if (updated) {
                                 this.logEvent({message:'preload route updated', route:card?.getData()?.title, reason:'country added', country:route?.description?.country})
                                 this.db.save(route,false)
+                                card.emitUpdate()
                             }
                             else {
                                 this.logEvent({message:'preload route undefined country', route:card?.getData()?.title})
@@ -2015,10 +2130,24 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const cards = list.getCards()??[]
             cards.forEach( (card) => {
                 card.reset(true)
-               
+
             })
         })
 
+        // card.reset() unconditionally resets the card's own observer (RouteCard.reset() ->
+        // cardObserver.reset(), regardless of the onlyObserver argument), which is exactly the
+        // channel getCachedDisplayProperties() subscribes to - drop the cache so the next
+        // getSortedSearchCards() call rebuilds it and re-subscribes, rather than serving stale,
+        // never-refreshed entries.
+        this.invalidateSearchCache()
+    }
+
+    /** Drops the cached sorted card set and per-card display properties, forcing a full rebuild
+     *  (and fresh observer subscriptions) on the next {@link getSortedSearchCards} call. */
+    protected invalidateSearchCache() {
+        this.cardPropsCache.clear()
+        this.cardPropsSubscribed.clear()
+        this.sortedSearchCache = undefined
     }
 
     protected getAllSearchCards() {
@@ -2036,6 +2165,141 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         })
         return cards;
 
+    }
+
+    /**
+     * Returns this card's display properties, computed once and cached until the card itself
+     * reports a change.
+     *
+     * `RouteCard` already pushes a complete, fresh `getDisplayProperties()` snapshot through its
+     * own observer on `'update'` (state changes: init/visibility/delete/download/...) and
+     * `'redraw'` (a forced re-render with unchanged card state, e.g. a unit-preference change) -
+     * see `RouteCard.emitUpdate()`/`emitRedraw()`. Subscribing once and caching that payload is
+     * therefore all that is needed to keep this cache correct, with no new update-signalling
+     * mechanism.
+     */
+    protected getCachedDisplayProperties(card:RouteCard):SummaryCardDisplayProps {
+        const id = card.getId()
+
+        if (!this.cardPropsCache.has(id)) {
+            const props = card.getDisplayProperties()
+            this.cardPropsCache.set(id, props)
+
+            if (!this.cardPropsSubscribed.has(card)) {
+                this.cardPropsSubscribed.add(card)
+                const refresh = (updated:SummaryCardDisplayProps) => this.cardPropsCache.set(id, updated)
+                props?.observer?.on('update', refresh)
+                props?.observer?.on('redraw', refresh)
+            }
+        }
+
+        return this.cardPropsCache.get(id)
+    }
+
+    /**
+     * Returns the full card set - `allCards` in `getAllSearchCards()`'s own order, `routes` the
+     * same cards' (cached) display properties ordered by the persisted sort order
+     * ({@link getSortOrder}).
+     *
+     * The *order* (which is the expensive part - it needs every card's display properties up
+     * front) is cached and reused while neither the underlying card set nor the sort order has
+     * changed since the last call; `routes` is still rebuilt from that cached order on every
+     * call, but as a plain `Array.map()` over already-cached entries, so a card updated since the
+     * last call (cache refreshed via its own observer - see {@link getCachedDisplayProperties})
+     * is reflected immediately rather than only after the card set itself next changes.
+     *
+     * Filtering (in `searchRepo()`) happens after this ordering and never re-sorts, so typing in
+     * the search box cannot change the sort order - only which of the ordered routes survive.
+     */
+    protected getSortedSearchCards():{allCards:Array<RouteCard>, routes:Array<SummaryCardDisplayProps>} {
+        const allCards = this.getAllSearchCards()
+        const sortOrder = this.getSortOrder()
+
+        let sortedCards:Array<RouteCard>
+        const cache = this.sortedSearchCache
+        if (this.isSortCacheValid(cache, allCards, sortOrder)) {
+            sortedCards = cache.sortedCards
+        }
+        else {
+            sortedCards = this.sortSearchCards(allCards, sortOrder)
+            this.sortedSearchCache = {allCards, sortOrder, sortedCards}
+        }
+
+        const routes = sortedCards.map( c => this.getCachedDisplayProperties(c))
+        return {allCards, routes}
+    }
+
+    /**
+     * Orders a card set for one of the four persisted sort orders: `Suggested` (default),
+     * `Name (A-Z)`, `Distance` and `Elevation`.
+     *
+     * `Suggested` reuses the existing "Selected For Me" scorer rather than a new ranking - see
+     * {@link score}. The other three compare a single field already present on the card's
+     * (cached) display properties.
+     *
+     * @param cards the card set to order, in `getAllSearchCards()`'s own order
+     * @param sortOrder the persisted sort order to apply
+     */
+    protected sortSearchCards(cards:Array<RouteCard>, sortOrder:RouteListSortOrder):Array<RouteCard> {
+        if (sortOrder==='suggested')
+            return this.sortCardsBySuggestion(cards)
+
+        return [...cards].sort(this.getSortComparer(sortOrder))
+    }
+
+    protected isSortCacheValid(cache:typeof this.sortedSearchCache, allCards:Array<RouteCard>, sortOrder:RouteListSortOrder):boolean {
+        if (!cache)
+            return false
+        return cache.sortOrder===sortOrder && this.isSameCardSet(allCards, cache.allCards)
+    }
+
+    protected getSortComparer(sortOrder:RouteListSortOrder):(a:RouteCard, b:RouteCard)=>number {
+        if (sortOrder==='distance')
+            return this.compareCardsByDistance.bind(this)
+        if (sortOrder==='elevation')
+            return this.compareCardsByElevation.bind(this)
+        return this.compareCardsByName.bind(this)
+    }
+
+    private compareCardsByName(a:RouteCard, b:RouteCard):number {
+        const ta = this.getCachedDisplayProperties(a)?.title
+        const tb = this.getCachedDisplayProperties(b)?.title
+        return ta>tb ? 1 : -1
+    }
+
+    private compareCardsByDistance(a:RouteCard, b:RouteCard):number {
+        const da = this.getCachedDisplayProperties(a)?.distance ?? 0
+        const db = this.getCachedDisplayProperties(b)?.distance ?? 0
+        return da-db
+    }
+
+    private compareCardsByElevation(a:RouteCard, b:RouteCard):number {
+        const ea = this.getCachedDisplayProperties(a)?.elevation ?? 0
+        const eb = this.getCachedDisplayProperties(b)?.elevation ?? 0
+        return ea-eb
+    }
+
+    /** `idx` mirrors the position each card had in the unsorted `cards` array, matching the
+     *  nudge `score()` already applies to the legacy "Selected For Me" list. */
+    private sortCardsBySuggestion(cards:Array<RouteCard>):Array<RouteCard> {
+        const scored = cards.map( (card,idx) => ({
+            card,
+            value: score(this.getCachedDisplayProperties(card), idx)
+        }))
+
+        scored.sort( (a,b) => {
+            const diff = b.value-a.value
+            return diff!==0 ? diff : this.compareCardsByName(a.card,b.card)
+        })
+
+        return scored.map( s => s.card)
+    }
+
+    /** true when both card arrays hold the exact same cards, in the same order */
+    protected isSameCardSet(a:Array<RouteCard>, b:Array<RouteCard>):boolean {
+        if (a.length!==b.length)
+            return false
+        return a.every( (card,idx) => card===b[idx])
     }
 
     protected handleConfigChanges() {
@@ -2117,6 +2381,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable
     protected getPreviewStore() {
         return usePreviewStore()
+    }
+
+    @Injectable
+    protected getRouteShapeStore() {
+        return useRouteShapeStore()
+    }
+
+    @Injectable
+    protected getRouteLibraryScanner() {
+        return useRouteLibraryScanner()
     }
 
     reset() {

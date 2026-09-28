@@ -85,6 +85,56 @@ describe('RouteCard.videoExists', () => {
         expect(await card.videoExists()).toBe(true);
         expect(existsFile).not.toHaveBeenCalled();
     });
+
+    describe('percent-encoded URLs', () => {
+
+        // the file system only knows the real path
+        const onDisk = (...paths: string[]) => existsFile.mockImplementation(async (p: string) => paths.includes(p));
+
+        test.each([
+            ['file:///mnt/nas/videos/tacx/AT_Hochb%C3%A4rneck-1.avi', '/mnt/nas/videos/tacx/AT_Hochbärneck-1.avi'],
+            ['video:///mnt/nas/videos/tacx/AT_Hochb%C3%A4rneck-1.avi', '/mnt/nas/videos/tacx/AT_Hochbärneck-1.avi'],
+            ['file:///mnt/nas/videos/My%20Routes/route.mp4', '/mnt/nas/videos/My Routes/route.mp4'],
+            ['video:///C:\\Users\\klaus\\Neuer%20Ordner\\route.mp4', 'C:\\Users\\klaus\\Neuer Ordner\\route.mp4'],
+        ])('%s is checked as the decoded path', async (videoUrl, realPath) => {
+            onDisk(realPath);
+            const card = createCard({ hasVideo: true, videoUrl });
+
+            expect(await card.videoExists()).toBe(true);
+            expect(existsFile).toHaveBeenCalledWith(realPath);
+        });
+
+        test('a URL that is already decoded is still found', async () => {
+            onDisk('/mnt/nas/videos/Hochbärneck-1.avi');
+            const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/videos/Hochbärneck-1.avi' });
+
+            expect(await card.videoExists()).toBe(true);
+        });
+
+        test('a decoded name that literally contains a percent sequence is found through the raw path', async () => {
+            onDisk('/mnt/nas/videos/50%20off.mp4');
+            const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/videos/50%20off.mp4' });
+
+            expect(await card.videoExists()).toBe(true);
+            expect(existsFile).toHaveBeenCalledWith('/mnt/nas/videos/50 off.mp4');
+            expect(existsFile).toHaveBeenCalledWith('/mnt/nas/videos/50%20off.mp4');
+        });
+
+        test('a malformed percent sequence does not throw and is checked as it is', async () => {
+            onDisk('/mnt/nas/videos/100%.mp4');
+            const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/videos/100%.mp4' });
+
+            expect(await card.videoExists()).toBe(true);
+        });
+
+        test('reports missing when neither spelling exists, after checking both', async () => {
+            onDisk();
+            const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/videos/Hochb%C3%A4rneck-1.avi' });
+
+            expect(await card.videoExists()).toBe(false);
+            expect(existsFile).toHaveBeenCalledTimes(2);
+        });
+    });
 });
 
 describe('RouteCard.updateStartPos', () => {
@@ -344,6 +394,35 @@ describe('RouteCard preview handling', () => {
             card.emitUpdate(); // e.g. an unrelated "route updated (library import)" refresh
 
             expect(listener.mock.calls[0][0]).toMatchObject({ id: '1', videoPill: 'in-icloud' });
+        });
+    });
+
+    describe('route shape', () => {
+
+        test('a resident shape is surfaced on getDisplayProperties()', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo) as any;
+            const shape = [{ routeDistance: 0, lat: 1, lng: 2 }];
+            card.injected = { RouteShapeStore: { get: jest.fn().mockReturnValue(shape) } };
+
+            expect((card.getDisplayProperties() as any).shape).toBe(shape);
+        });
+
+        test('no shape store resident yet leaves the field undefined', () => {
+            const card = createCard({ id: '1', title: 'Alpe du Zwift' } as RouteInfo) as any;
+            card.injected = { RouteShapeStore: { get: jest.fn().mockReturnValue(undefined) } };
+
+            expect((card.getDisplayProperties() as any).shape).toBeUndefined();
+        });
+
+        test('deleting the route releases its stored shape too', async () => {
+            const card = createCard({ id: '1', hasVideo: true } as RouteInfo) as any;
+            const deleteShape = jest.fn().mockResolvedValue(undefined);
+            card.getRepo = () => ({ delete: jest.fn().mockResolvedValue(undefined) });
+            card.injected = { RouteShapeStore: { get: jest.fn(), delete: deleteShape } };
+
+            await card.deleteRoute();
+
+            expect(deleteShape).toHaveBeenCalledWith('1');
         });
     });
 });

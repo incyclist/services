@@ -4,7 +4,20 @@ import { RouteInfo } from "../../base/types";
 import { RouteCard } from "../cards/RouteCard";
 import { checkIsNew } from "../utils";
 
-const score = (r:RouteInfo,idx:number):number =>{
+/**
+ * Scores a route for the `Suggested` ordering - recently started or imported routes rank
+ * highest, with small bonuses for a video route and for a route the user has not seen yet.
+ *
+ * Exported so `RouteListService.searchRepo()` (routes/list/service.ts) can reuse it as the
+ * `Suggested` sort order rather than inventing a second ranking - this is the same scoring that
+ * has driven the "Selected For Me" list.
+ *
+ * @param r the route's (cached) display properties - only `isLocal`, `tsImported`,
+ *          `tsLastStart` and `hasVideo` are read, plus what {@link checkIsNew} reads
+ * @param idx the route's position in its unsorted source list - a small tie-breaking nudge
+ *            towards routes that were already earlier in that list
+ */
+export const score = (r:RouteInfo,idx:number):number =>{
     let val = 0;
     const isNew = checkIsNew(r)
     const tsUserImport = (r.isLocal) ? r.tsImported || 0 : 0

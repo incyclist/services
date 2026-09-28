@@ -18,6 +18,7 @@ import { useUserSettings } from "../../settings";
 import { Card } from "../../base/cardlist";
 import { Inject } from "../../base/decorators";
 import { usePreviewStore } from "../previews/store";
+import { useRouteLibraryScanner } from "../library/service";
 
 import type { ParseResult } from "../types";
 
@@ -303,9 +304,154 @@ describe('RouteListService',()=>{
 
     })
 
+    describe('sort order',()=>{
+
+        let service:MockeableService
+        let settingsStore:Record<string,unknown>
+
+        beforeEach(()=>{
+            new RouteListService().reset()
+            settingsStore = {}
+            const MockUserSettings = {
+                get: jest.fn((key:string, defValue?:unknown) => settingsStore[key] ?? defValue),
+                getValue: jest.fn().mockReturnValue({}),
+                set: jest.fn((key:string, value:unknown) => { settingsStore[key] = value }),
+            }
+            Inject('UserSettings', MockUserSettings)
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        afterEach(()=>{
+            (service as any).reset()
+            Inject('UserSettings', null)
+            jest.clearAllMocks()
+        })
+
+        test('defaults to Suggested, matching an explicit suggested sort order',()=>{
+            const withDefault = service.searchRepo().routes.map(r=>r.id)
+
+            service.setSortOrder('suggested')
+            const withExplicit = service.searchRepo().routes.map(r=>r.id)
+
+            expect(withDefault).toEqual(withExplicit)
+        })
+
+        // a private, never-shared data set - unlike the module-level db.json fixture, whose route
+        // objects other describe blocks mutate in place via checkUIUpdateWithNoRepoStats(). This
+        // isolates the case to the one thing score() should reward here: hasVideo. The scorer's
+        // other inputs (recency, novelty) are covered directly in lists/selected.unit.test.ts.
+        test('Suggested ranks a video route above an otherwise identical GPX route',()=>{
+            new RouteListService().reset()
+            const customData = [
+                { id:'g1', title:'GPX A', hasVideo:false, isLocal:false },
+                { id:'v1', title:'Video A', hasVideo:true, isLocal:false },
+            ] as unknown as Array<RouteInfoDBEntry>
+
+            const custom = new MockeableService(customData)
+            custom.setSortOrder('suggested')
+
+            const {routes} = custom.searchRepo()
+
+            expect(routes.map(r=>r.id)).toEqual(['v1','g1'])
+        })
+
+        test('Name (A-Z) sorts titles alphabetically',()=>{
+            service.setSortOrder('name')
+            const {routes} = service.searchRepo()
+
+            const titles = routes.map(r=>r.title)
+            expect(titles).toEqual([...titles].sort((a,b)=> a>b ? 1 : -1))
+        })
+
+        test('Distance sorts ascending by raw distance',()=>{
+            service.setSortOrder('distance')
+            const {routes} = service.searchRepo()
+
+            const distances = routes.map(r=>r.distance ?? 0)
+            expect(distances).toEqual([...distances].sort((a,b)=> a-b))
+        })
+
+        test('Elevation sorts ascending by raw elevation',()=>{
+            service.setSortOrder('elevation')
+            const {routes} = service.searchRepo()
+
+            const elevations = routes.map(r=>r.elevation ?? 0)
+            expect(elevations).toEqual([...elevations].sort((a,b)=> a-b))
+        })
+
+        test('typing in the search box does not change the sort order - only which routes survive',()=>{
+            service.setSortOrder('distance')
+            const all = service.searchRepo().routes.map(r=>r.id)
+
+            const filtered = service.searchRepo({title:'a'}).routes.map(r=>r.id)
+
+            // the filtered ids must keep the exact relative order they had in the unfiltered,
+            // distance-sorted list - filtering can drop entries, it must never reorder them
+            const positions = filtered.map(id => all.indexOf(id))
+            expect(positions).toEqual([...positions].sort((a,b)=> a-b))
+            expect(filtered.length).toBeGreaterThan(0)
+            expect(filtered.length).toBeLessThan(all.length)
+        })
+
+    })
+
+    describe('searchRepo caching',()=>{
+
+        let service:MockeableService
+
+        const MockUserSettings = {
+            get: jest.fn().mockReturnValue({}),
+            getValue: jest.fn().mockReturnValue({}),
+            set: jest.fn()
+        }
+
+        beforeEach(()=>{
+            // fresh singleton instance, isolated from the other describe blocks in this file
+            new RouteListService().reset()
+            Inject('UserSettings', MockUserSettings)
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        afterEach(()=>{
+            (service as any).reset()
+            Inject('UserSettings', null)
+            jest.restoreAllMocks()
+        })
+
+        test('a filter change reuses the cached display properties instead of recomputing them',()=>{
+            service.search({title:'a'})
+
+            const spy = jest.spyOn(RouteCard.prototype,'getDisplayProperties')
+            service.search({title:'ab'})
+
+            expect(spy).not.toHaveBeenCalled()
+        })
+
+        test('a card update recomputes only that card, and the next search() reflects it',async ()=>{
+            const {routes:initial} = service.search()
+            const target = initial[0]
+            const card = service.getCard(target.id)
+
+            const spy = jest.spyOn(RouteCard.prototype,'getDisplayProperties')
+
+            await card.setActiveCount(7)
+
+            const {routes:after} = service.search()
+            const updated = after.find( r=>r.id===target.id)
+
+            expect(updated.cntActive).toBe(7)
+            // the only recompute is the one RouteCard.emitUpdate() performs itself to build the
+            // event payload - searchRepo() serves the cache from that payload rather than asking
+            // the card again
+            expect(spy).toHaveBeenCalledTimes(1)
+        })
+
+    })
+
     describe('import',()=>{
         let service;
         let originalParser
+        let originalReaddir
         let userSettings
 
         beforeAll ( async ()=>{
@@ -318,19 +464,25 @@ describe('RouteListService',()=>{
             userSettings.get = jest.fn().mockReturnValue({})
             userSettings.set = jest.fn()
 
+            // a dropped route file is read the way the import dialog reads it: its folder is
+            // listed first (companion files, video lookup)
+            originalReaddir = getBindings().fs.readdir
+            getBindings().fs.readdir = jest.fn().mockResolvedValue(['test1.xml','test2.xml'])
         })
 
 
         afterEach( ()=>{
             RouteParser.parse = originalParser
+            getBindings().fs.readdir = originalReaddir
             service.reset()
             userSettings?.reset()
-            
+
 
         })
 
         test('failed import, followed by successfull import',async ()=>{
-            const data: RouteInfo = {  id:'test', title:'test'}
+            // a route read from a local file (every file parser sets isLocal)
+            const data: RouteInfo = {  id:'test', title:'test', isLocal:true}
             const details: RouteApiDetail= {  id:'test', title:'test'}
             const result: ParseResult<RouteApiDetail> = { data,details}
 
@@ -343,10 +495,12 @@ describe('RouteListService',()=>{
             service.cardObserver.emit = jest.fn()
 
             await service.import( {type:'file', name:'test1.xml',filename:'/test1',dir:'/',ext:'xml', delimiter:'/'})
+            await new Promise(resolve => setImmediate(resolve)) // import() is fire-and-forget per file
             let card2 = service.myRoutes.getCards()[2]
             expect(card2.getDisplayProperties()).toMatchObject({name:'test1.xml',error:expect.objectContaining({message:'Some Error'}),visible:true})
 
             await service.import( {type:'file', name:'test2.xml',filename:'/test2',dir:'/',ext:'xml', delimiter:'/'})
+            await new Promise(resolve => setImmediate(resolve)) // import() is fire-and-forget per file
             card2 = service.myRoutes.getCards()[2]
             const card3 = service.myRoutes.getCards()[3]
             expect(card2.getDisplayProperties()).toMatchObject({name:'test1.xml',error:expect.objectContaining({message:'Some Error'}),visible:true})
@@ -356,7 +510,7 @@ describe('RouteListService',()=>{
         })
 
         test('failed import, check that search still works',async ()=>{
-            const data: RouteInfo = {  id:'test', title:'test'}
+            const data: RouteInfo = {  id:'test', title:'test', isLocal:true}
             const details: RouteApiDetail= {  id:'test', title:'test'}
             const result: ParseResult<RouteApiDetail> = { data,details}
 
@@ -370,9 +524,11 @@ describe('RouteListService',()=>{
 
             // onse successfull import to populate the list
             await service.import( {type:'file', name:'test1.xml',filename:'/test1',dir:'/',ext:'xml', delimiter:'/'})
+            await new Promise(resolve => setImmediate(resolve)) // import() is fire-and-forget per file
 
             // one failed import (2nd response to RouteParser.parse is configured to fail (see above) )
             await service.import( {type:'file', name:'test1.xml',filename:'/test1',dir:'/',ext:'xml', delimiter:'/'})
+            await new Promise(resolve => setImmediate(resolve)) // import() is fire-and-forget per file
 
             const res = service.search()
             expect(res?.routes.length).toBeGreaterThan(0)
@@ -382,6 +538,106 @@ describe('RouteListService',()=>{
         })
 
 
+    })
+
+    describe('import - one single-route path for dropped and picked files',()=>{
+        let service;
+        let originalReaddir
+        let userSettings
+
+        const dropped = (name:string) => ({type:'url', url:`file:///routes/${name}`, name, dir:'/routes', ext:name.split('.').pop(), delimiter:'/'}) as any
+        const activeImports = () => service.myRoutes.getCards().filter( c=>c.getCardType()==='ActiveImport')
+        const flush = () => new Promise(resolve => setImmediate(resolve))
+
+        beforeAll ( async ()=>{
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        beforeEach( ()=>{
+            userSettings = useUserSettings()
+            userSettings.get = jest.fn().mockReturnValue({})
+            userSettings.set = jest.fn()
+            originalReaddir = getBindings().fs.readdir
+        })
+
+        afterEach( ()=>{
+            Inject('RouteLibraryScanner', null)
+            getBindings().fs.readdir = originalReaddir
+            service.myRoutes.removeActiveImports()
+            jest.restoreAllMocks()
+            service.reset()
+            userSettings?.reset()
+        })
+
+        test('a dropped file is imported by the scanner\'s single-route path, into this list',async ()=>{
+            const importRouteFile = jest.fn().mockResolvedValue({})
+            Inject('RouteLibraryScanner', { importRouteFile })
+            const file = dropped('ride.gpx')
+
+            service.import(file)
+            expect(activeImports()).toHaveLength(1)
+            await flush()
+
+            expect(importRouteFile).toHaveBeenCalledWith(file, {list:service})
+            expect(activeImports()).toHaveLength(0)
+        })
+
+        test('several dropped files: one pinned row each, all started at once, each removed when done',async ()=>{
+            const pending: Array<(v:unknown)=>void> = []
+            const importRouteFile = jest.fn( ()=> new Promise( resolve => { pending.push(resolve) }))
+            Inject('RouteLibraryScanner', { importRouteFile })
+
+            service.import([dropped('one.gpx'),dropped('two.gpx'),dropped('three.gpx')])
+
+            expect(activeImports().map(c=>c.getDisplayProperties().name)).toEqual(['one.gpx','two.gpx','three.gpx'])
+            expect(importRouteFile).toHaveBeenCalledTimes(3)
+
+            pending[1]({})
+            await flush()
+            expect(activeImports().map(c=>c.getDisplayProperties().name)).toEqual(['one.gpx','three.gpx'])
+
+            pending[0]({})
+            pending[2]({})
+            await flush()
+            expect(activeImports()).toHaveLength(0)
+        })
+
+        test('a failed drop keeps its pinned row, showing the failure with its code',async ()=>{
+            const failure = Object.assign(new Error('cannot parse <Track>'), {code:'PARSE_FAILED'})
+            Inject('RouteLibraryScanner', { importRouteFile: jest.fn().mockRejectedValue(failure) })
+
+            service.import(dropped('ride.gpx'))
+            await flush()
+
+            const [card] = activeImports()
+            expect(card.getDisplayProperties().error).toBe(failure)
+        })
+
+        test.each([
+            ['a missing companion file', ['a.epm'], 'a.epm', 'MISSING_COMPANION'],
+            ['a file that is not a route file', ['a.epp'], 'a.epp', 'UNSUPPORTED'],
+            ['a file that is not in its folder', ['b.epm','b.epp'], 'a.epm', 'READ_FAILED'],
+        ])('%s: the same failure, with the same code and text, whether dropped or picked in the dialog', async (_, listing, name, code)=>{
+            getBindings().fs.readdir = jest.fn().mockResolvedValue(listing)
+
+            service.import(dropped(name))
+            await flush()
+            const dropError = activeImports()[0].getDisplayProperties().error
+
+            const scanner = useRouteLibraryScanner()
+            scanner.prepare()
+            const observer = scanner.importSingle(dropped(name))
+            await new Promise<void>(resolve => observer.once('error', ()=>resolve()))
+            await flush()
+            const {error, failure} = scanner.getDisplayProps()
+            scanner.done()
+
+            expect(dropError.code).toBe(code)
+            expect(failure.code).toBe(code)
+            expect(failure.reason).toBe(dropError.message)
+            expect(error).toBe(dropError.message)
+            expect(failure.missingExt).toBe(dropError.missingExt)
+        })
     })
 
     describe('existsBySourceUri', () => {
@@ -438,6 +694,85 @@ describe('RouteListService',()=>{
 
             // Should not throw
             expect(() => service.unselect()).not.toThrow()
+        })
+    })
+
+    describe('persisted view preferences', () => {
+        let service: MockeableService
+        let settingsStore: Record<string, unknown>
+        // Recreated fresh in beforeEach (not a describe-scope constant) - an earlier describe's
+        // jest.resetAllMocks() would otherwise strip a once-defined mock's implementation before
+        // these tests ever run, since Jest's mock registry is shared across the whole file.
+        let MockUserSettings: { get: jest.Mock, set: jest.Mock }
+
+        beforeEach(() => {
+            new RouteListService().reset()
+            settingsStore = {}
+            MockUserSettings = {
+                get: jest.fn((key: string, defValue?: unknown) => settingsStore[key] ?? defValue),
+                set: jest.fn((key: string, value: unknown) => { settingsStore[key] = value }),
+            }
+            Inject('UserSettings', MockUserSettings)
+            service = new MockeableService()
+        })
+
+        afterEach(() => {
+            Inject('UserSettings', null)
+            jest.clearAllMocks()
+        })
+
+        describe('getListTop/setListTop', () => {
+            test('round-trips a top position per display type', () => {
+                service.setListTop('tiles', 250)
+                service.setListTop('list', 40)
+
+                expect(service.getListTop('tiles')).toBe(250)
+                expect(service.getListTop('list')).toBe(40)
+            })
+
+            test('with no argument, defaults to the persisted display type - not an unset in-memory field', () => {
+                settingsStore['preferences.routeListDisplayType'] = 'tiles'
+                service.setListTop('tiles', 250)
+
+                // setDisplayType() was never called in this session; getListTop() must still
+                // resolve 'tiles' via the persisted preference rather than an unset field -
+                // this is the mismatch that made tile view restore the list view's position.
+                expect(service.getListTop()).toBe(250)
+            })
+
+            test('the single-argument (number) overload stores under the persisted display type', () => {
+                settingsStore['preferences.routeListDisplayType'] = 'tiles'
+                service.setListTop(99)
+
+                expect(service.getListTop('tiles')).toBe(99)
+                expect(service.getListTop('list')).toBeUndefined()
+            })
+        })
+
+        describe('getSortOrder/setSortOrder', () => {
+            test('defaults to suggested', () => {
+                expect(service.getSortOrder()).toBe('suggested')
+            })
+
+            test('round-trips and persists to user settings', () => {
+                service.setSortOrder('distance')
+
+                expect(service.getSortOrder()).toBe('distance')
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.routeListSortOrder', 'distance')
+            })
+        })
+
+        describe('getFiltersExpanded/setFiltersExpanded', () => {
+            test('defaults to collapsed', () => {
+                expect(service.getFiltersExpanded()).toBe(false)
+            })
+
+            test('round-trips and persists to user settings', () => {
+                service.setFiltersExpanded(true)
+
+                expect(service.getFiltersExpanded()).toBe(true)
+                expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.routeListFiltersExpanded', true)
+            })
         })
     })
 
@@ -585,6 +920,119 @@ describe('RouteListService',()=>{
         })
     })
 
+    describe('route shape', () => {
+
+        let service:MockeableService
+        let card: { emitUpdate: jest.Mock }
+
+        beforeEach(() => {
+            new RouteListService().reset()
+            service = prepareMock(null,{mockLoad:true})
+            card = { emitUpdate: jest.fn() }
+            ;(service as any).getCard = jest.fn(() => card)
+        })
+
+        afterEach(() => {
+            (service as any).reset()
+            Inject('RouteShapeStore', null)
+        })
+
+        describe('backfillRouteShape', () => {
+
+            test('does nothing for a route whose details are not loaded', () => {
+                const store = { get: jest.fn(), backfill: jest.fn() }
+                service.inject('RouteShapeStore', store)
+
+                ;(service as any).backfillRouteShape({ description:{id:'1'} })
+
+                expect(store.backfill).not.toHaveBeenCalled()
+            })
+
+            test('does nothing when a shape is already resident', () => {
+                const store = { get: jest.fn().mockReturnValue([{routeDistance:0}]), backfill: jest.fn() }
+                service.inject('RouteShapeStore', store)
+
+                ;(service as any).backfillRouteShape({ description:{id:'1'}, details:{} })
+
+                expect(store.backfill).not.toHaveBeenCalled()
+            })
+
+            test('backfills and updates the card once a shape becomes available', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), backfill: jest.fn().mockResolvedValue(true) }
+                service.inject('RouteShapeStore', store)
+                const route = { description:{id:'1'}, details:{} }
+
+                ;(service as any).backfillRouteShape(route)
+                await new Promise(resolve => setImmediate(resolve))
+
+                expect(store.backfill).toHaveBeenCalledWith(route)
+                expect(card.emitUpdate).toHaveBeenCalled()
+            })
+
+            test('does not update the card when no shape could be produced', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), backfill: jest.fn().mockResolvedValue(false) }
+                service.inject('RouteShapeStore', store)
+
+                ;(service as any).backfillRouteShape({ description:{id:'1'}, details:{} })
+                await new Promise(resolve => setImmediate(resolve))
+
+                expect(card.emitUpdate).not.toHaveBeenCalled()
+            })
+
+            test('a rejecting store does not throw', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), backfill: jest.fn().mockRejectedValue(new Error('disk full')) }
+                service.inject('RouteShapeStore', store)
+
+                expect(() => (service as any).backfillRouteShape({ description:{id:'1'}, details:{} })).not.toThrow()
+                await new Promise(resolve => setImmediate(resolve))
+
+                expect(card.emitUpdate).not.toHaveBeenCalled()
+            })
+        })
+
+        describe('loadRouteShape', () => {
+
+            test('returns a resident shape without reading the repository', async () => {
+                const shape = [{routeDistance:0}]
+                const store = { get: jest.fn().mockReturnValue(shape), load: jest.fn() }
+                service.inject('RouteShapeStore', store)
+
+                const result = await service.loadRouteShape('1')
+
+                expect(result).toBe(shape)
+                expect(store.load).not.toHaveBeenCalled()
+            })
+
+            test('reads the repository and updates the card when the shape becomes resident', async () => {
+                const shape = [{routeDistance:0}]
+                const store = { get: jest.fn().mockReturnValue(undefined), load: jest.fn().mockResolvedValue(shape) }
+                service.inject('RouteShapeStore', store)
+
+                const result = await service.loadRouteShape('1')
+
+                expect(result).toBe(shape)
+                expect(card.emitUpdate).toHaveBeenCalled()
+            })
+
+            test('does not update the card when no shape is stored', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), load: jest.fn().mockResolvedValue(undefined) }
+                service.inject('RouteShapeStore', store)
+
+                const result = await service.loadRouteShape('1')
+
+                expect(result).toBeUndefined()
+                expect(card.emitUpdate).not.toHaveBeenCalled()
+            })
+
+            test('a rejecting store resolves to undefined rather than throwing', async () => {
+                const store = { get: jest.fn().mockReturnValue(undefined), load: jest.fn().mockRejectedValue(new Error('disk full')) }
+                service.inject('RouteShapeStore', store)
+
+                await expect(service.loadRouteShape('1')).resolves.toBeUndefined()
+            })
+        })
+    })
+
     describe('preloadDetails - auto-undo missing download', () => {
         // A route marked as downloaded whose local video file no longer exists
         // (deleted outside the app, or - historically - deleted moments after
@@ -607,6 +1055,13 @@ describe('RouteListService',()=>{
             // sibling test ordering/cleanup.
             new RouteListService().reset()
             service = prepareMock(null,{mockLoad:true})
+            // Suggested (score-based) is the default sort order since the sort-order feature
+            // landed - pin this describe back to Name (A-Z) so primeCard()'s "retitle to sort
+            // first" trick still guarantees preloadDetails()'s preload cap picks up the route
+            // this describe mutates, regardless of the default sort order in effect elsewhere.
+            // Set directly rather than via setSortOrder(), which persists through the real
+            // (here uninitialized) UserSettingsService - this describe injects no settings mock.
+            ;(service as any).sortOrder = 'name'
         })
 
         afterEach(() => {
@@ -659,6 +1114,84 @@ describe('RouteListService',()=>{
 
             expect(card.videoExists).not.toHaveBeenCalled()
             expect(card.resetDownload).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('requestRouteDetails',()=>{
+
+        let service:MockeableService
+        const settle = async () => { for (let i=0;i<4;i++) await Promise.resolve() }
+
+        beforeEach(()=>{
+            // fresh singleton instance, isolated from the other describe blocks in this file
+            new RouteListService().reset()
+            Inject('UserSettings', { get: jest.fn().mockReturnValue({}), getValue: jest.fn().mockReturnValue({}), set: jest.fn() })
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        afterEach(()=>{
+            (service as any).reset()
+            Inject('UserSettings', null)
+            jest.restoreAllMocks()
+        })
+
+        test('is routed through getRouteDetails() and hands the details to the callback',async ()=>{
+            const details = { points: [] } as any
+            const spy = jest.spyOn(service,'getRouteDetails').mockResolvedValue(details)
+            const onResult = jest.fn()
+
+            service.requestRouteDetails('r1', onResult)
+            await settle()
+
+            expect(spy).toHaveBeenCalledWith('r1')
+            expect(onResult).toHaveBeenCalledWith(details)
+        })
+
+        test('two requests for the same route make one getRouteDetails() call',async ()=>{
+            const spy = jest.spyOn(service,'getRouteDetails').mockResolvedValue({} as any)
+            const first = jest.fn()
+            const second = jest.fn()
+
+            service.requestRouteDetails('r1', first)
+            service.requestRouteDetails('r1', second)
+            await settle()
+
+            expect(spy).toHaveBeenCalledTimes(1)
+            expect(first).toHaveBeenCalled()
+            expect(second).toHaveBeenCalled()
+        })
+
+        test('a request that is cancelled before its turn never loads',async ()=>{
+            let release: (v:any)=>void = ()=>{}
+            const spy = jest.spyOn(service,'getRouteDetails').mockImplementation(() => new Promise(r => { release = r }))
+
+            // four loads fill the concurrency cap, the fifth waits
+            ;['a','b','c','d'].forEach( id => service.requestRouteDetails(id, jest.fn()))
+            const onResult = jest.fn()
+            const cancel = service.requestRouteDetails('e', onResult)
+            cancel()
+
+            release({})
+            await settle()
+
+            expect(spy).not.toHaveBeenCalledWith('e')
+            expect(onResult).not.toHaveBeenCalled()
+        })
+
+        test('an invalid request returns a no-op cancel',()=>{
+            const spy = jest.spyOn(service,'getRouteDetails')
+
+            const cancel = service.requestRouteDetails(undefined, jest.fn())
+
+            expect(()=>cancel()).not.toThrow()
+            expect(spy).not.toHaveBeenCalled()
+        })
+
+        test('getRouteDetails() itself is not limited by the queue',async ()=>{
+            const spy = jest.spyOn(service,'getRouteDetails').mockResolvedValue({} as any)
+            ;['a','b','c','d','e','f'].forEach( id => service.getRouteDetails(id))
+
+            expect(spy).toHaveBeenCalledTimes(6)
         })
     })
 

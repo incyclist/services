@@ -6,6 +6,7 @@ import { SmoothingGradient } from "../../base/utils/smoothing";
 import { DownloadObserver } from "../../download/types";
 import { RouteStartSettings } from "../types";
 import type { VideoListPill } from "../../video-availability/types";
+import type { RouteShape } from "../../shapes/types";
 
 
 export type RouteCardType = 'Import' | 'Route' | 'Free-Ride' | 'ActiveImport';
@@ -43,6 +44,10 @@ export interface SummaryCardDisplayProps extends RouteInfo{
      *  RoutesPageService via RouteCard.setVideoPill(); undefined (never computed) on every other
      *  platform. See architecture.md §3.7.1. */
     videoPill?: VideoListPill
+    /** Decimated (~100 point) preview shape - lat/lng for the map, routeDistance/elevation for
+     *  the elevation strip. Present only while the shape is resident in the route shape store;
+     *  absent means "not loaded yet" (see RouteListService.loadRouteShape()) or "no geometry". */
+    shape?: RouteShape
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
