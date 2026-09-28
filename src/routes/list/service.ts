@@ -1401,12 +1401,18 @@ export class RouteListService  extends IncyclistService implements IRouteList {
            
 
         if (existing ) {
+            const wasDeleted = existing.description?.isDeleted
             existing.replace(route)
 
-            return;
+            // a system update refreshes a route in place; an explicit user import must also
+            // leave the route visible - revive a tombstoned route or one whose card is detached
+            if (source==='system' || (!wasDeleted && this.hasAttachedCard(existing)))
+                return;
+            route = existing
         }
-
-        this.routes.push(route)
+        else {
+            this.routes.push(route)
+        }
         if (route.description?.isDeleted) {
             return
         }
@@ -1444,6 +1450,30 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         
         this.emitLists('updated',{source: source==='user' ? 'user':'system'})                
 
+    }
+
+    /** true when the route's card is currently part of a card list */
+    protected hasAttachedCard(route:Route):boolean {
+        const id = route.description?.id
+        return [this.myRoutes,this.selectedRoutes,this.alternatives,...(this.custom??[])]
+            .some( l=> l?.getCards()?.some( c=> c.getData?.()?.description?.id===id))
+    }
+
+    /**
+     * Drops a route from the in-memory state after its last persisted copy was removed
+     * (local route hard-deleted), so a later import of the same file is treated as new.
+     */
+    forgetRoute(target:Route|string):void {
+        const id = typeof target==='string' ? target : target?.description?.id
+        if (!id)
+            return
+        const card = this.cardLookup[id]?.card
+        this.routes = this.routes.filter( r=> r.description?.id!==id)
+        delete this.cardLookup[id]
+        this.cardPropsCache.delete(id)
+        if (card)
+            this.cardPropsSubscribed.delete(card)
+        this.sortedSearchCache = undefined
     }
 
     protected async addFromApi(route:Route):Promise<void> {

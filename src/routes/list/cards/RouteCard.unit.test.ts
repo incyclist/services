@@ -85,6 +85,56 @@ describe('RouteCard.videoExists', () => {
         expect(await card.videoExists()).toBe(true);
         expect(existsFile).not.toHaveBeenCalled();
     });
+
+    describe('percent-encoded URLs', () => {
+
+        // the file system only knows the real path
+        const onDisk = (...paths: string[]) => existsFile.mockImplementation(async (p: string) => paths.includes(p));
+
+        test.each([
+            ['file:///mnt/nas/videos/tacx/AT_Hochb%C3%A4rneck-1.avi', '/mnt/nas/videos/tacx/AT_Hochbärneck-1.avi'],
+            ['video:///mnt/nas/videos/tacx/AT_Hochb%C3%A4rneck-1.avi', '/mnt/nas/videos/tacx/AT_Hochbärneck-1.avi'],
+            ['file:///mnt/nas/videos/My%20Routes/route.mp4', '/mnt/nas/videos/My Routes/route.mp4'],
+            ['video:///C:\\Users\\klaus\\Neuer%20Ordner\\route.mp4', 'C:\\Users\\klaus\\Neuer Ordner\\route.mp4'],
+        ])('%s is checked as the decoded path', async (videoUrl, realPath) => {
+            onDisk(realPath);
+            const card = createCard({ hasVideo: true, videoUrl });
+
+            expect(await card.videoExists()).toBe(true);
+            expect(existsFile).toHaveBeenCalledWith(realPath);
+        });
+
+        test('a URL that is already decoded is still found', async () => {
+            onDisk('/mnt/nas/videos/Hochbärneck-1.avi');
+            const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/videos/Hochbärneck-1.avi' });
+
+            expect(await card.videoExists()).toBe(true);
+        });
+
+        test('a decoded name that literally contains a percent sequence is found through the raw path', async () => {
+            onDisk('/mnt/nas/videos/50%20off.mp4');
+            const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/videos/50%20off.mp4' });
+
+            expect(await card.videoExists()).toBe(true);
+            expect(existsFile).toHaveBeenCalledWith('/mnt/nas/videos/50 off.mp4');
+            expect(existsFile).toHaveBeenCalledWith('/mnt/nas/videos/50%20off.mp4');
+        });
+
+        test('a malformed percent sequence does not throw and is checked as it is', async () => {
+            onDisk('/mnt/nas/videos/100%.mp4');
+            const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/videos/100%.mp4' });
+
+            expect(await card.videoExists()).toBe(true);
+        });
+
+        test('reports missing when neither spelling exists, after checking both', async () => {
+            onDisk();
+            const card = createCard({ hasVideo: true, videoUrl: 'file:///mnt/nas/videos/Hochb%C3%A4rneck-1.avi' });
+
+            expect(await card.videoExists()).toBe(false);
+            expect(existsFile).toHaveBeenCalledTimes(2);
+        });
+    });
 });
 
 describe('RouteCard.updateStartPos', () => {

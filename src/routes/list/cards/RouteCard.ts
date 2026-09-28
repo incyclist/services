@@ -176,7 +176,14 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         // local file
         if (path) {
-            return await this.fileExists(path)
+            // The stored URL is normally percent-encoded (encodeURI in the URL builders), but URLs
+            // that came from a platform file listing may already be decoded. fs.existsFile() needs
+            // the real path, so check the decoded spelling first and fall back to the raw one - a
+            // decoded name that literally contains e.g. "%20" must still be found.
+            const decoded = this.cleanupEncoding(path)
+            if (await this.fileExists(decoded))
+                return true
+            return decoded!==path ? await this.fileExists(path) : false
 
         }
         return true;
@@ -778,6 +785,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
             if (enforced) {
                 await this.deleteRoute()
+                getRouteList().forgetRoute(this.route)
             }
 
             else if ( this.list.getId()==='myRoutes') {
@@ -798,6 +806,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 }
                 else {
                     await this.deleteRoute()
+                    getRouteList().forgetRoute(this.route)
                 } 
                     
 
