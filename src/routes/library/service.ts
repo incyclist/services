@@ -106,7 +106,18 @@ export class RouteLibraryScannerService extends IncyclistService {
         const observer = new Observer()
         this.isCancelled = false
 
-        this.importRoute(fileInfo, observer).catch(err => {
+        if (!this.importProps)
+            this.prepare()
+
+        // identity of this dialog session: done() (dialog closed) and cancel() (dialog reset)
+        // both replace this.importProps, so a result arriving for an older session is dropped
+        // instead of being written into the current one
+        const session = this.importProps
+        delete session.error
+        delete session.failure
+        delete session.resultSuccess
+
+        this.importRoute(fileInfo, observer, session).catch(err => {
             this.logError(err, 'importSingle', { file: fileInfo?.filename })
             observer.emit('error', err.message)
         })
@@ -115,20 +126,20 @@ export class RouteLibraryScannerService extends IncyclistService {
             // The scanner may already have been torn down (done()) if the dialog/page
             // unmounted before this async result arrived - nothing left to update in
             // that case (FIXES_BACKLOG.md item #40).
-            if (!this.importProps)
+            if (this.importProps !== session)
                 return
 
-            this.importProps.phase = 'result'
-            this.importProps.resultSuccess= { routeName: route.title}
+            session.phase = 'result'
+            session.resultSuccess= { routeName: route.title}
 
         })
         observer.on('error',(error:string, failure?:RouteImportFailure)=> {
-            if (!this.importProps)
+            if (this.importProps !== session)
                 return
 
-            this.importProps.phase = 'result'
-            this.importProps.error = error
-            this.importProps.failure = failure
+            session.phase = 'result'
+            session.error = error
+            session.failure = failure
 
         })
 
@@ -369,21 +380,22 @@ export class RouteLibraryScannerService extends IncyclistService {
         this.prepare()
     }
 
-    private async importRoute  (fileInfo: FileInfo, observer:IObserver) {
+    private async importRoute  (fileInfo: FileInfo, observer:IObserver, session:ImportDisplayProps) {
 
         await sleep(0)
 
-        observer.emit('parsing')
-
-        // The scanner may already have been torn down (done()) if the dialog/page
-        // unmounted while this promise chain was suspended - bail out, there's nothing
-        // left to update (FIXES_BACKLOG.md item #40).
-        if (!this.importProps)
+        // The scanner may already have been torn down (done()) or reset (cancel()) if the
+        // dialog/page unmounted while this promise chain was suspended - bail out, there's
+        // nothing left to update (FIXES_BACKLOG.md item #40).
+        const isStale = () => this.importProps !== session
+        if (isStale())
             return
 
-        this.importProps.phase = 'parsing'
+        // the phase must be set before the event goes out: listeners read the display props
+        session.phase = 'parsing'
+        observer.emit('parsing')
 
-        const isCancelled = () => this.isCancelled
+        const isCancelled = () => this.isCancelled || isStale()
         try {
             const route = await this.importRouteFile(fileInfo, { isCancelled })
             if (!isCancelled())

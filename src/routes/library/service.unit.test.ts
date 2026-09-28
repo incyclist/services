@@ -1204,27 +1204,21 @@ describe('RouteLibraryScannerService', () => {
     // itself, used to write to this.importProps.phase unconditionally and crashed with
     // "Cannot set property 'phase' of undefined" once importProps was already undefined.
     describe('importSingle - teardown race (FIXES_BACKLOG item #40)', () => {
-        test('emitting success after prepare()->done() does not throw (scanner already torn down)', () => {
-            service.prepare()
-            service.done()
-
+        test('emitting success after importSingle()->done() does not throw (scanner already torn down)', () => {
             const observer = service.importSingle({ filename: 'route.gpx', ext: 'gpx' } as any)
+            service.done()
 
             expect(() => observer.emit('success', { title: 'Test Route' } as any)).not.toThrow()
         })
 
-        test('emitting error after prepare()->done() does not throw (scanner already torn down)', () => {
-            service.prepare()
-            service.done()
-
+        test('emitting error after importSingle()->done() does not throw (scanner already torn down)', () => {
             const observer = service.importSingle({ filename: 'route.gpx', ext: 'gpx' } as any)
+            service.done()
 
             expect(() => observer.emit('error', 'some error')).not.toThrow()
         })
 
-        test('a still-open import (prepare() but no done()) still updates importProps normally on success', () => {
-            service.prepare()
-
+        test('a still-open import (no done()) still updates importProps normally on success', () => {
             const observer = service.importSingle({ filename: 'route.gpx', ext: 'gpx' } as any)
             observer.emit('success', { title: 'Test Route' } as any)
 
@@ -1233,9 +1227,7 @@ describe('RouteLibraryScannerService', () => {
             expect(props.resultSuccess).toEqual({ routeName: 'Test Route' })
         })
 
-        test('a still-open import (prepare() but no done()) still updates importProps normally on error', () => {
-            service.prepare()
-
+        test('a still-open import (no done()) still updates importProps normally on error', () => {
             const observer = service.importSingle({ filename: 'route.gpx', ext: 'gpx' } as any)
             observer.emit('error', 'boom')
 
@@ -1408,8 +1400,9 @@ describe('RouteLibraryScannerService', () => {
         })
 
         describe('importSingle', () => {
+            // no prepare(): the import dialog opens on a torn-down scanner (done() on close)
             const runSingle = async (file: FileInfo) => {
-                service.prepare()
+                service.done()
                 const observer = service.importSingle(file)
                 await new Promise<void>(resolve => {
                     observer.once('success', () => resolve())
@@ -1428,6 +1421,61 @@ describe('RouteLibraryScannerService', () => {
                 expect(props.phase).toBe('result')
                 expect(props.error).toBe('Missing companion file (.epp)')
                 expect(props.failure).toEqual({ code: 'MISSING_COMPANION', reason: 'Missing companion file (.epp)', missingExt: 'epp' })
+            })
+
+            test('a GPX file dropped on a torn-down scanner is imported and reported', async () => {
+                const parse = jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed({ title: 'Morning Ride' }))
+
+                const props = await runSingle(picked('ride.gpx'))
+
+                expect(parse).toHaveBeenCalled()
+                expect(props.phase).toBe('result')
+                expect(props.resultSuccess).toEqual({ routeName: 'Morning Ride' })
+            })
+
+            test('the parsing phase is already set when the parsing event is emitted', async () => {
+                jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed({ title: 'Morning Ride' }))
+                service.done()
+
+                const observer = service.importSingle(picked('ride.gpx'))
+                const phases: string[] = []
+                observer.on('parsing', () => phases.push(service.getDisplayProps().phase))
+                await new Promise<void>(resolve => observer.once('success', () => resolve()))
+
+                expect(phases).toEqual(['parsing'])
+            })
+
+            test('closing the dialog while the import is in flight does not bring the state back', async () => {
+                const parse = jest.spyOn(RouteParser, 'parse').mockResolvedValue(parsed({ title: 'Morning Ride' }))
+
+                service.importSingle(picked('ride.gpx'))
+                service.done()
+                await new Promise(resolve => setTimeout(resolve, 20))
+
+                expect(parse).not.toHaveBeenCalled()
+                expect(service.getDisplayProps().phase).toBe('landing')
+            })
+
+            test('a result of a cancelled import is not written into the next session', async () => {
+                let resolveA: (v: any) => void = () => {}
+                jest.spyOn(RouteParser, 'parse')
+                    .mockImplementationOnce(() => new Promise(resolve => { resolveA = resolve }))
+                    .mockResolvedValue(parsed({ title: 'B' }))
+
+                service.done()
+                service.importSingle(picked('a.gpx'))
+                await new Promise(resolve => setTimeout(resolve, 20))   // A is now parsing
+
+                service.cancel()
+                // B resets the shared cancel flag, A is still in flight
+                const observerB = service.importSingle(picked('b.gpx'))
+                await new Promise<void>(resolve => observerB.once('success', () => resolve()))
+                await new Promise(resolve => setImmediate(resolve))
+
+                resolveA(parsed({ title: 'A' }))
+                await new Promise(resolve => setTimeout(resolve, 20))
+
+                expect(service.getDisplayProps().resultSuccess).toEqual({ routeName: 'B' })
             })
 
             test('a video route reports the imported route\'s name on success', async () => {
