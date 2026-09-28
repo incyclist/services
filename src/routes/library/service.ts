@@ -125,7 +125,7 @@ export class RouteLibraryScannerService extends IncyclistService {
         observer.on('success',(route:Route)=> {
             // The scanner may already have been torn down (done()) if the dialog/page
             // unmounted before this async result arrived - nothing left to update in
-            // that case (FIXES_BACKLOG.md item #40).
+            // that case.
             if (this.importProps !== session)
                 return
 
@@ -386,7 +386,7 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         // The scanner may already have been torn down (done()) or reset (cancel()) if the
         // dialog/page unmounted while this promise chain was suspended - bail out, there's
-        // nothing left to update (FIXES_BACKLOG.md item #40).
+        // nothing left to update.
         const isStale = () => this.importProps !== session
         if (isStale())
             return
