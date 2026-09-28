@@ -1230,7 +1230,10 @@ export class RouteLibraryScannerService extends IncyclistService {
         if (/^[a-z][a-z0-9+.-]*:\/\//i.test(uri))
             return uri
 
-        const trimmed = uri.replace(/[/\\]+$/, '')
+        let end = uri.length
+        while (end > 0 && (uri[end-1]==='/' || uri[end-1]==='\\'))
+            end--
+        const trimmed = uri.slice(0, end)
         const withDrive = trimmed.replace(/^([a-z]):/, (_, drive: string) => `${drive.toUpperCase()}:`)
 
         if (withDrive==='')

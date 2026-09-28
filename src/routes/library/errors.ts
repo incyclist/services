@@ -56,7 +56,7 @@ export const mapErrorToImportCode = (err: unknown, scope?: ExternalFileScope): R
             return 'READ_FAILED'
     }
 
-    const message = (err as Error)?.message ?? String(err)
+    const message = errorText(err)
 
     if (/AVI/i.test(message))
         return 'AVI_NOT_SUPPORTED'
@@ -79,10 +79,13 @@ export const mapErrorToImportCode = (err: unknown, scope?: ExternalFileScope): R
  *  that the scope explains better than the parser did)
  * @returns the error itself when it already is one, otherwise a new, classified one
  */
+// what an error says - its message, or the error itself when it is a plain string
+const errorText = (err: unknown): string => (err as Error)?.message ?? (typeof err === 'string' ? err : '')
+
 export const toRouteImportError = (err: unknown, scope?: ExternalFileScope, message?: string): RouteImportError => {
     if (err instanceof RouteImportError)
         return err
 
-    const text = message ?? (err as Error)?.message ?? String(err)
+    const text = message ?? errorText(err)
     return new RouteImportError(text, mapErrorToImportCode(err, scope))
 }

@@ -2190,7 +2190,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         let sortedCards:Array<RouteCard>
         const cache = this.sortedSearchCache
-        if (cache && cache.sortOrder===sortOrder && this.isSameCardSet(allCards, cache.allCards)) {
+        if (this.isSortCacheValid(cache, allCards, sortOrder)) {
             sortedCards = cache.sortedCards
         }
         else {
@@ -2217,11 +2217,21 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (sortOrder==='suggested')
             return this.sortCardsBySuggestion(cards)
 
-        const compare = sortOrder==='distance' ? this.compareCardsByDistance.bind(this)
-            : sortOrder==='elevation' ? this.compareCardsByElevation.bind(this)
-            : this.compareCardsByName.bind(this)
+        return [...cards].sort(this.getSortComparer(sortOrder))
+    }
 
-        return [...cards].sort(compare)
+    protected isSortCacheValid(cache:typeof this.sortedSearchCache, allCards:Array<RouteCard>, sortOrder:RouteListSortOrder):boolean {
+        if (!cache)
+            return false
+        return cache.sortOrder===sortOrder && this.isSameCardSet(allCards, cache.allCards)
+    }
+
+    protected getSortComparer(sortOrder:RouteListSortOrder):(a:RouteCard, b:RouteCard)=>number {
+        if (sortOrder==='distance')
+            return this.compareCardsByDistance.bind(this)
+        if (sortOrder==='elevation')
+            return this.compareCardsByElevation.bind(this)
+        return this.compareCardsByName.bind(this)
     }
 
     private compareCardsByName(a:RouteCard, b:RouteCard):number {
