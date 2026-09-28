@@ -27,6 +27,7 @@ import { useUserSettings } from "../../settings";
 import { Injectable } from "../../base/decorators";
 import { RouteSyncFactory } from "../sync/factory";
 import { sleep } from "../../utils/sleep";
+import { RouteDetailsQueue } from "./detailsQueue";
 import { useAppsService } from "../../apps";
 import { useAppState } from "../../appstate";
 import { useUnitConverter } from "../../i18n";
@@ -94,6 +95,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     /** the sorted card order from the last searchRepo(), reused while neither the underlying
      *  card set nor the persisted sort order (not the filters) has changed - see
      *  getSortedSearchCards() */
+    protected detailsQueue: RouteDetailsQueue<RouteDetailUIItem>
     protected sortedSearchCache: { allCards:Array<RouteCard>, sortOrder:RouteListSortOrder, sortedCards:Array<RouteCard> }
 
     constructor () {
@@ -866,6 +868,31 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
         catch(err) {
             this.logError(err,'getRouteDetails',{id})
+        }
+    }
+
+    /**
+     * Requests the details of a route for a list row or tile - a bounded, de-duplicated and
+     * cancellable front door to {@link getRouteDetails}.
+     *
+     * At most a few loads run at once, requests for a route that is already queued or loading
+     * share that one load, and a request that is cancelled before its turn never runs. Use it
+     * where many rows ask for details at the same time (scrolling a long list); a single caller
+     * that needs the details right away can keep calling {@link getRouteDetails}.
+     *
+     * @param id the route id
+     * @param onResult called with the details, or `undefined` if they could not be loaded; not
+     *                 called once the request has been cancelled
+     * @returns a function that cancels the request
+     */
+    requestRouteDetails(id:string, onResult:(details?:RouteDetailUIItem)=>void):()=>void {
+        try {
+            this.detailsQueue ??= new RouteDetailsQueue<RouteDetailUIItem>( (routeId:string) => this.getRouteDetails(routeId) )
+            return this.detailsQueue.request(id, onResult)
+        }
+        catch(err) {
+            this.logError(err,'requestRouteDetails',{id})
+            return () => {}
         }
     }
 

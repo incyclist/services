@@ -1117,4 +1117,82 @@ describe('RouteListService',()=>{
         })
     })
 
+    describe('requestRouteDetails',()=>{
+
+        let service:MockeableService
+        const settle = async () => { for (let i=0;i<4;i++) await Promise.resolve() }
+
+        beforeEach(()=>{
+            // fresh singleton instance, isolated from the other describe blocks in this file
+            new RouteListService().reset()
+            Inject('UserSettings', { get: jest.fn().mockReturnValue({}), getValue: jest.fn().mockReturnValue({}), set: jest.fn() })
+            service = prepareMock(null,{mockLoad:true})
+        })
+
+        afterEach(()=>{
+            (service as any).reset()
+            Inject('UserSettings', null)
+            jest.restoreAllMocks()
+        })
+
+        test('is routed through getRouteDetails() and hands the details to the callback',async ()=>{
+            const details = { points: [] } as any
+            const spy = jest.spyOn(service,'getRouteDetails').mockResolvedValue(details)
+            const onResult = jest.fn()
+
+            service.requestRouteDetails('r1', onResult)
+            await settle()
+
+            expect(spy).toHaveBeenCalledWith('r1')
+            expect(onResult).toHaveBeenCalledWith(details)
+        })
+
+        test('two requests for the same route make one getRouteDetails() call',async ()=>{
+            const spy = jest.spyOn(service,'getRouteDetails').mockResolvedValue({} as any)
+            const first = jest.fn()
+            const second = jest.fn()
+
+            service.requestRouteDetails('r1', first)
+            service.requestRouteDetails('r1', second)
+            await settle()
+
+            expect(spy).toHaveBeenCalledTimes(1)
+            expect(first).toHaveBeenCalled()
+            expect(second).toHaveBeenCalled()
+        })
+
+        test('a request that is cancelled before its turn never loads',async ()=>{
+            let release: (v:any)=>void = ()=>{}
+            const spy = jest.spyOn(service,'getRouteDetails').mockImplementation(() => new Promise(r => { release = r }))
+
+            // four loads fill the concurrency cap, the fifth waits
+            ;['a','b','c','d'].forEach( id => service.requestRouteDetails(id, jest.fn()))
+            const onResult = jest.fn()
+            const cancel = service.requestRouteDetails('e', onResult)
+            cancel()
+
+            release({})
+            await settle()
+
+            expect(spy).not.toHaveBeenCalledWith('e')
+            expect(onResult).not.toHaveBeenCalled()
+        })
+
+        test('an invalid request returns a no-op cancel',()=>{
+            const spy = jest.spyOn(service,'getRouteDetails')
+
+            const cancel = service.requestRouteDetails(undefined, jest.fn())
+
+            expect(()=>cancel()).not.toThrow()
+            expect(spy).not.toHaveBeenCalled()
+        })
+
+        test('getRouteDetails() itself is not limited by the queue',async ()=>{
+            const spy = jest.spyOn(service,'getRouteDetails').mockResolvedValue({} as any)
+            ;['a','b','c','d','e','f'].forEach( id => service.getRouteDetails(id))
+
+            expect(spy).toHaveBeenCalledTimes(6)
+        })
+    })
+
 })
