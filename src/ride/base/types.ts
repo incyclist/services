@@ -8,7 +8,7 @@ import { EventEmitter } from "node:events"
 import { ActiveRideListAvatar, ActivityDetails, PrevRidesListDisplayProps, ScreenShotInfo } from "../../activities"
 import { Workout } from "../../workouts"
 import { FreeRideOption } from "../../routes/list/types"
-import { MapViewPort, StreetViewEvent } from "../route/types"
+import { MapViewPort, StreetViewEvent, SvFallbackCause } from "../route/types"
 import { LatLng } from "../../utils/geo"
 import { Unit } from "../../i18n"
 import { IObserver } from "../../types"
@@ -121,6 +121,14 @@ export interface GpxDisplayProps extends RouteDisplayProps {
     displayPosition?: CurrentPosition
     /** lets the view report its load state back to the service (Street View) */
     onDisplayEvent?: (event:StreetViewEvent, data?:any) => void
+    /** true once web-ui may create Street View panoramas (main and side views). See INC-42. */
+    svInitAllowed?: boolean
+    /** set once, right after an automatic Street View start fallback. Cleared after being read. */
+    rideViewNotice?: {cause: SvFallbackCause}
+    /** set every time Street View answers with no imagery at the current position (start or
+     *  mid-ride) - never a fallback, just a transient "no coverage here" notice. Cleared after
+     *  being read. */
+    svCoverageNotice?: {ts: number}
 }
 
 export interface RouteOptionDisplayProps { 
@@ -185,9 +193,13 @@ export interface IRideModeService<T extends IRideModeServiceDisplayProps = IRide
     getDisplayProperties(props:CurrentRideDisplayProps):T
 
     onActivityUpdate(activityPos:ActivityUpdate, data):void
-    onDeviceData(data:DeviceData,udid:string) 
+    onDeviceData(data:DeviceData,udid:string)
     onStarted(): void
     onStopped(): void
+    /** Called the first time the control device(s) become ready to start. No-op by default. */
+    onStartDevicesReady(): void
+    /** Street View only (INC-42): switch this ride to Map after the rider presses "Start with Map". */
+    startWithMapFallback?(): void
 
     getScreenshotInfo(fileName:string, time:number):ScreenShotInfo
     sendUpdate(request?:UpdateRequest)
@@ -198,6 +210,7 @@ export interface IRideModeService<T extends IRideModeServiceDisplayProps = IRide
 export interface ICurrentRideService {
     start(): void;
     startWithMissingSensors(): void;
+    startWithMapFallback(): void;
     retryStart(): void;
     pause(requester: 'user' | 'device'): void;
     resume(): void;

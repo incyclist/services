@@ -241,9 +241,12 @@ describe('FreeRideDisplayService', () => {
         })
 
         test('returns true when options available', () => {
+            // rideView='map' isolates this test to the free-ride-options concern - the Street
+            // View wait (INC-42) is covered separately in GpxDisplayService's own tests
             setupMocks(service, {
                 mockRideService: true,
-                freeRideOptions: [mockOption1, mockOption2]
+                freeRideOptions: [mockOption1, mockOption2],
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'map' : d)
             })
             expect(service.isStartRideCompleted()).toBe(true)
         })
@@ -251,8 +254,21 @@ describe('FreeRideDisplayService', () => {
         test('returns true even when options array is empty', () => {
             setupMocks(service, {
                 mockRideService: true,
-                freeRideOptions: []
+                freeRideOptions: [],
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'map' : d)
             })
+            expect(service.isStartRideCompleted()).toBe(true)
+        })
+
+        test('waits for the Street View start to resolve (INC-42), even once options are loaded', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                freeRideOptions: [mockOption1, mockOption2],
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'sv' : d)
+            })
+            expect(service.isStartRideCompleted()).toBe(false)
+
+            service['onStreetViewEvent']('Loaded', undefined)
             expect(service.isStartRideCompleted()).toBe(true)
         })
     })
@@ -868,7 +884,12 @@ describe('FreeRideDisplayService', () => {
         })
 
         test('isStartRideCompleted returns true when start is complete', async () => {
-            setupMocks(service, { mockRideService: true })
+            // rideView='map' isolates this test to the free-ride-options concern - see the
+            // dedicated Street View wait test above (INC-42)
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'map' : d)
+            })
             service.start()
             await new Promise(resolve => setTimeout(resolve, 50))
             expect(service.isStartRideCompleted()).toBe(true)
@@ -1699,7 +1720,10 @@ describe('FreeRideDisplayService', () => {
         })
 
         test('service can be reset and restarted without errors', async () => {
-            setupMocks(service, { mockRideService: true })
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'map' : d)
+            })
             service.start()
             await new Promise(resolve => setTimeout(resolve, 50))
             expect(service.isStartRideCompleted()).toBe(true)

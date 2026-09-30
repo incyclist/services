@@ -70,6 +70,7 @@ const setupMocks = (rideType: string = 'GPX') => {
         stopWorkout: jest.fn(),
         retryStart: jest.fn(),
         startWithMissingSensors: jest.fn(),
+        startWithMapFallback: jest.fn(),
         cancelStart: jest.fn().mockResolvedValue(undefined),
         getObserver: jest.fn(),
         getRideType: jest.fn().mockReturnValue(rideType),
@@ -1396,6 +1397,11 @@ describe('RidePageService', () => {
             expect(MockRideDisplay.startWithMissingSensors).toHaveBeenCalled()
         })
 
+        test('onStartWithMap delegates to RideDisplay (INC-42)', () => {
+            s.onStartWithMap()
+            expect(MockRideDisplay.startWithMapFallback).toHaveBeenCalled()
+        })
+
         test('onCancelStart stops the ride observer, cancels the start, and navigates back', async () => {
             const rideObserver = new Observer()
             const stopSpy = jest.spyOn(rideObserver, 'stop')
@@ -1460,6 +1466,11 @@ describe('RidePageService', () => {
             s.onIgnoreStart()
             expect(MockRideDisplay.retryStart).toHaveBeenCalled()
             expect(MockRideDisplay.startWithMissingSensors).toHaveBeenCalled()
+        })
+
+        test('onStartWithMap delegates to RideDisplay (INC-42)', () => {
+            s.onStartWithMap()
+            expect(MockRideDisplay.startWithMapFallback).toHaveBeenCalled()
         })
 
         test('onCancelStart stops the ride observer, cancels the start, and navigates back', async () => {
