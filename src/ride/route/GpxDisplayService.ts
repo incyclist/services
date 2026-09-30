@@ -146,7 +146,9 @@ export class GpxDisplayService extends RouteDisplayService {
                 const bestFreq = this.getBestCaseUpdateFrequency()
                 this.logEvent({message:'init streetview', updateFreq, minimalPause, bestFreq})
 
-                if (this.isMobile() || this.hasEagerInitKillSwitch())
+                // INC-42 Phase 2: mobile now waits for control-ready just like desktop. Only
+                // the kill switch still forces the old at-init (eager) timing, on either platform.
+                if (this.hasEagerInitKillSwitch())
                     this.release('eager')
             }
             else if ( rideView==='sat') {
