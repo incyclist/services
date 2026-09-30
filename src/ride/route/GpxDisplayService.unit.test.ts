@@ -403,7 +403,7 @@ describe('GpxDisplayService', () => {
         })
 
         afterEach(() => {
-            service['clearStreetViewStartTimeout']()
+            service['clearStreetViewPhaseTimers']()
             cleanupMocks(service)
         })
 
@@ -446,15 +446,22 @@ describe('GpxDisplayService', () => {
             expect(service.isStartRideCompleted()).toBe(false)
         })
 
-        test('start is no longer blocked once the start timeout expires', () => {
+        test('start is no longer blocked once the start timeout expires (INC-42 fallback to Map)', () => {
             jest.useFakeTimers()
             try {
                 setupSVMocks(service, svMobile())
-                service['armStreetViewStartTimeout']()
+                service['release']('eager')
 
                 expect(service.isStartRideCompleted()).toBe(false)
 
+                // 15s to the timeout fallback, then the SV_FALLBACK_HOLD (1.5s) before the
+                // amber row is allowed to close (ux.md §7.2)
                 jest.advanceTimersByTime(15000)
+                expect(service['svViewState']).toBe('unavailable')
+                expect(service['svFallbackCause']).toBe('timeout')
+                expect(service.isStartRideCompleted()).toBe(false)
+
+                jest.advanceTimersByTime(1500)
 
                 expect(service.isStartRideCompleted()).toBe(true)
             }
@@ -467,12 +474,12 @@ describe('GpxDisplayService', () => {
             jest.useFakeTimers()
             try {
                 setupSVMocks(service, svMobile())
-                service['armStreetViewStartTimeout']()
+                service['release']('eager')
                 service['onStreetViewEvent']('Loaded', undefined)
 
                 jest.advanceTimersByTime(15000)
 
-                expect(service['svStartTimedOut']).toBe(false)
+                expect(service['svViewState']).toBe('loaded')
             }
             finally {
                 jest.useRealTimers()
@@ -489,14 +496,15 @@ describe('GpxDisplayService', () => {
                 setupSVMocks(service, svMobile({channel: 'desktop'}))
 
                 expect(service['waitsForStreetView']()).toBe(true)
-                service['armStreetViewStartTimeout']()
+                service['release']('control-ready')
 
                 expect(service.isStartRideCompleted()).toBe(false)
 
-                jest.advanceTimersByTime(15000)
+                jest.advanceTimersByTime(15000+1500)
 
                 expect(service.isStartRideCompleted()).toBe(true)
-                expect(service['svStartTimedOut']).toBe(true)
+                expect(service['svViewState']).toBe('unavailable')
+                expect(service['svFallbackCause']).toBe('timeout')
             }
             finally {
                 jest.useRealTimers()

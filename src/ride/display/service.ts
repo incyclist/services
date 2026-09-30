@@ -43,6 +43,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected isResuming: boolean
     //protected prevRides: PrevRidesListDisplayProps
     protected stateUpdateHandler = this.onStateUpdate.bind(this)
+    /** guards the one-time RideModeService.onStartDevicesReady() call (INC-42) */
+    protected controlDevicesReadyNotified: boolean = false
 
     constructor() {
         super('RideDisplay')
@@ -55,7 +57,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         await this.closePrevRide();
             
         this.observer = new Observer()
-        
+        this.controlDevicesReadyNotified = false
+
         try {
             this.displayService = this.getRideModeService(true)
                
@@ -113,11 +116,27 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         try {
             const props = this.getStartOverlayProps()
             this.logEvent({message:'button clicked',overlay:'start overlay',button:'Ignore',state:props,eventSource:'user', })
-            this.logEvent({message:'overlay closed',overlay:'start overlay' })        
+            this.logEvent({message:'overlay closed',overlay:'start overlay' })
             this.onStartCompleted()
         }
         catch(err) {
             this.logError(err,'startWithMissingSensors')
+        }
+    }
+
+    /**
+     * Lets the rider skip a slow/failing Street View start and ride on the Map instead
+     * (INC-42, `ux.md` step 2b "Start with Map"). Unlike an automatic fallback, this is not
+     * held for `SV_FALLBACK_HOLD` and doesn't raise the in-ride notice - the rider chose it.
+     */
+    startWithMapFallback() {
+        try {
+            const props = this.getStartOverlayProps()
+            this.logEvent({message:'button clicked',overlay:'start overlay',button:'Start with Map',state:props,eventSource:'user', })
+            this.getRideModeService()?.startWithMapFallback?.()
+        }
+        catch(err) {
+            this.logError(err,'startWithMapFallback')
         }
     }
 
@@ -610,6 +629,12 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected checkStartStatus() {
         const devices = this.isStartDeviceReadyToStart()
         const sensors = this.isSensorsReadyToStart()
+
+        if (devices && !this.controlDevicesReadyNotified) {
+            this.controlDevicesReadyNotified = true
+            this.getRideModeService().onStartDevicesReady()
+        }
+
         const ride = this.getRideModeService().isStartRideCompleted()
         const props = this.getStartOverlayProps()
 

@@ -184,7 +184,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
      * initialization when the ride begins.
      */
     onStarted(): void { }
-        
+
     /**
      * Called when the ride has stopped.
      *
@@ -192,6 +192,15 @@ export class RideModeService extends IncyclistService implements IRideModeServic
      * cleanup when the ride ends.
      */
     onStopped(): void { }
+
+    /**
+     * Called the first time the control device(s) become ready to start.
+     *
+     * This base implementation is a no-op. `GpxDisplayService` overrides it to release Street
+     * View panorama creation (INC-42), so that a license is never spent before the trainer is
+     * actually up.
+     */
+    onStartDevicesReady(): void { }
 
     /**
      * Returns logging properties for the current ride mode.
