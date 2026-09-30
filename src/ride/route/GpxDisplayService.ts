@@ -114,11 +114,14 @@ export class GpxDisplayService extends RouteDisplayService {
      * @returns Street View configuration with position, observer, and event handlers
      */
     getStreetViewProps(rideProps: CurrentRideDisplayProps) {
+
+        const sideViewsSupported = this.isSideViewsSupported()
+
         const sideViews = {
             enabled: true,
             hide: rideProps.hideAll,
-            left: this.getUserSettings().get('preferences.sideViews.sv-left',true),
-            right: this.getUserSettings().get('preferences.sideViews.sv-right',true),
+            left: sideViewsSupported && this.getUserSettings().get('preferences.sideViews.sv-left',false),
+            right: sideViewsSupported && this.getUserSettings().get('preferences.sideViews.sv-right',false),
         }
 
         const props:any =  {
@@ -138,6 +141,12 @@ export class GpxDisplayService extends RouteDisplayService {
         }
 
         return props
+    }
+
+    isSideViewsSupported():boolean {
+        return this.getGoogleMaps().hasPersonalApiKey() 
+            || this.getGoogleMaps().hasDevelopmentApiKey()
+
     }
 
     /**
@@ -601,6 +610,7 @@ export class GpxDisplayService extends RouteDisplayService {
     protected getRideSettingsDisplay() {
         return useRideSettingsDisplay()
     }
+
 
     
 }

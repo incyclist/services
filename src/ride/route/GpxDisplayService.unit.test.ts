@@ -29,6 +29,7 @@ describe('GpxDisplayService', () => {
     let mockRideService:any
     let mockActiveRides:any
     let mockRouteList:any
+    let mockGoogleMaps = {hasPersonalApiKey:true,hasDevelopmentApiKey:false}
 
 
     const setupMocks = (s:any, options:any) => {
@@ -75,7 +76,9 @@ describe('GpxDisplayService', () => {
         })
 
         Inject('GoogleMaps', {
-            // placeholder for google maps
+            hasPersonalApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasPersonalApiKey),
+            hasDevelopmentApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasDevelopmentApiKey)
+
         })
 
         mockRideService = {
@@ -170,7 +173,7 @@ describe('GpxDisplayService', () => {
             expect(props.sideViews?.hide).toBe(true)
         })
 
-        test('respects user preferences for side views', () => {
+        test('respects user preferences for side views if user has personal api key', () => {
             setupMocks(service, {
                 mockRideService: true,
                 userSettingsGet: jest.fn((key, def) => {
@@ -179,9 +182,37 @@ describe('GpxDisplayService', () => {
                     return def
                 })
             })
+
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(true),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+
+            })
+
             const props = service.getStreetViewProps({hideAll: false} as any)
             expect(props.sideViews?.left).toBe(false)
             expect(props.sideViews?.right).toBe(true)
+        })
+
+        test('ignors user preferences for side views if user has no api key', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => {
+                    if (key === 'preferences.sideViews.sv-left') return false
+                    if (key === 'preferences.sideViews.sv-right') return true
+                    return def
+                })
+            })
+
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+
+            })
+
+            const props = service.getStreetViewProps({hideAll: false} as any)
+            expect(props.sideViews?.left).toBe(false)
+            expect(props.sideViews?.right).toBe(false)
         })
 
         test('includes event handler for street view events', () => {

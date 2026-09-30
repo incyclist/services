@@ -74,6 +74,8 @@ describe('FreeRideDisplayService', () => {
     let mockRouteList: any
     let mockFreeRideService: any
     let mockActivityRideService: any
+    let mockGoogleMaps = {hasPersonalApiKey:true,hasDevelopmentApiKey:false}
+
 
     const setupMocks = (s: any, options: any = {}) => {
         const userSettingsGet = options.userSettingsGet || jest.fn((k, d) => d)
@@ -126,7 +128,9 @@ describe('FreeRideDisplayService', () => {
         })
 
         Inject('GoogleMaps', {
-            // placeholder for google maps
+            hasPersonalApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasPersonalApiKey),
+            hasDevelopmentApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasDevelopmentApiKey)
+
         })
 
         // createRoute() calls route.updateCountryFromPoints() on every start() - without a mock it hits the live Routes API
