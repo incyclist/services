@@ -296,7 +296,7 @@ describe('RideDisplayService', () => {
                 expect(emit).toHaveBeenCalledWith('overlay-update', OC( {
                     hideAll: true,
                     map:OC({show: false}),
-                    sideViews: OC({enabled:true, hide:true, left:false, right:false}),
+                    sideViews: OC({enabled:false, hide:true, left:false, right:false}),
                     upcomingElevation: OC({show:false}),
                     totalElevation: OC({show:false}),
                 }))
@@ -309,7 +309,7 @@ describe('RideDisplayService', () => {
                 expect(emit).toHaveBeenCalledWith('overlay-update', OC( {
                     hideAll: false,
                     map: {show:true, minimized:false},
-                    sideViews: OC({enabled:true, hide:false, left:false, right:false}),
+                    sideViews: OC({enabled:false, hide:false, left:false, right:false}),
                     upcomingElevation: {show:true, minimized:false},
                     totalElevation: {show:true, minimized:false},
                 }))

@@ -118,10 +118,11 @@ export class GpxDisplayService extends RouteDisplayService {
         const sideViewsSupported = this.isSideViewsSupported()
 
         const sideViews = {
-            enabled: true,
+            enabled: sideViewsSupported,
             hide: rideProps.hideAll,
             left: sideViewsSupported && this.getUserSettings().get('preferences.sideViews.sv-left',false),
             right: sideViewsSupported && this.getUserSettings().get('preferences.sideViews.sv-right',false),
+            
         }
 
         const props:any =  {
