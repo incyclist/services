@@ -615,7 +615,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             // INC-42 Phase 2 (mobile adoption): gates native Street View panorama creation the
             // same way `allowInit` does on web - see GpxDisplayService.getDisplayProperties().
             svInitAllowed: props.svInitAllowed,
-            rideViewNotice: props.rideViewNotice
+            rideViewNotice: props.rideViewNotice,
+            svCoverageNotice: props.svCoverageNotice
         }
         return displayProps
     }

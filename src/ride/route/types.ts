@@ -19,7 +19,7 @@ export type RideMapState = 'Loading' | 'Loaded' | 'Error'
  */
 export type SvViewState = 'waiting' | 'loading' | 'slow' | 'loaded' | 'unavailable'
 
-export type SvFallbackCause = 'timeout' | 'failed' | 'maps-api' | 'user'
+export type SvFallbackCause = 'timeout' | 'maps-api' | 'user'
 
 export interface GPXStartOverlayProps extends StartOverlayProps {
     mapType: RideMapType,

@@ -118,6 +118,8 @@ export class GpxDisplayService extends RouteDisplayService {
     protected rideViewOverride: 'map'
     /** set once, right after an automatic fallback; read (and cleared) by getDisplayProperties() */
     protected rideViewNotice: {cause: SvFallbackCause}
+    /** set on every no-coverage answer (start or mid-ride); read (and cleared) by getDisplayProperties() */
+    protected svCoverageNotice: {ts: number}
     /** true once RideModeService.onStarted() fired - gates when displayPosition stops being sent */
     protected svRideStarted: boolean = false
 
@@ -400,11 +402,14 @@ export class GpxDisplayService extends RouteDisplayService {
         // read-once: the page renders it and the next call reports nothing new
         const rideViewNotice = this.rideViewNotice
         delete this.rideViewNotice
+        const svCoverageNotice = this.svCoverageNotice
+        delete this.svCoverageNotice
 
         return {
            rideView ,
            svInitAllowed: rideView==='sv' && this.svReleased,
            rideViewNotice,
+           svCoverageNotice,
            ...routeProps
         }
     }
@@ -483,15 +488,17 @@ export class GpxDisplayService extends RouteDisplayService {
             this.tsLastSVEvent = Date.now()
         }
         else if (event==='NoPanorama') {
-            // D4: ZERO_RESULTS at the start point counts as resolved and stays in Street View -
-            // there is simply no imagery here yet. Any other status falls back to Map.
-            if (data==='ZERO_RESULTS') {
+            // D4 (revised): no coverage at a position is a legitimate answer, not a failure -
+            // the first point on a route is routinely outside Street View's coverage. It never
+            // blocks the start and never falls back to Map, at start or mid-ride - the rider
+            // just gets a transient "no imagery here" notice (reportNoCoverage()). Genuine
+            // failures (Maps API errors, a start that never gets any status) still go through
+            // the 'Error' event and the SV_START_TIMEOUT fallback respectively.
+            if (this.svViewState!=='loaded' && this.svViewState!=='unavailable') {
                 this.mapLoaded = true
                 this.resolveStreetViewStart('no-imagery')
             }
-            else {
-                this.fallbackToMap('failed')
-            }
+            this.reportNoCoverage(data)
         }
         else if (event==='Error') {
             this.mapError = data as string
@@ -637,6 +644,17 @@ export class GpxDisplayService extends RouteDisplayService {
         this.svViewState = 'loaded'
 
         this.logEvent({message:'streetview start resolved', svStartResult, elapsed:this.getSvElapsed(), svPhaseVisible:this.svPhaseWasVisible})
+        this.emit('state-update')
+    }
+
+    /**
+     * A coverage gap ('NoPanorama') is not a failure - the rider just gets a transient notice,
+     * at start or mid-ride, and Street View keeps running. Fires every time, unlike
+     * `rideViewNotice` (once per ride): the rider can ride through several gaps on one route.
+     */
+    protected reportNoCoverage(status?: string) {
+        this.svCoverageNotice = {ts: Date.now()}
+        this.logEvent({message:'streetview no coverage', status})
         this.emit('state-update')
     }
 

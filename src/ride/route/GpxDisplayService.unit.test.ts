@@ -916,6 +916,44 @@ describe('GpxDisplayService', () => {
             expect(service.emit).toHaveBeenCalledWith('state-update')
         })
 
+        test('NoPanorama resolves the start (like Loaded) and never falls back to Map', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+
+            expect(service['mapLoaded']).toBe(true)
+            expect(service['svViewState']).toBe('loaded')
+            expect(service['rideViewOverride']).toBeUndefined()
+            expect(service.isStartRideCompleted()).toBe(true)
+        })
+
+        test('NoPanorama sets a one-shot coverage notice, read (and cleared) by getDisplayProperties', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+
+            const displayProps = service.getDisplayProperties({} as any) as any
+            expect(displayProps.svCoverageNotice).toBeDefined()
+
+            const nextDisplayProps = service.getDisplayProperties({} as any) as any
+            expect(nextDisplayProps.svCoverageNotice).toBeUndefined()
+        })
+
+        test('a later NoPanorama mid-ride (after the start already resolved) still raises the notice, without touching the resolved view', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+
+            props.onDisplayEvent('Loaded')
+            expect(service['svViewState']).toBe('loaded')
+
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+            expect(service['svViewState']).toBe('loaded')
+            expect(service['rideViewOverride']).toBeUndefined()
+
+            const displayProps = service.getDisplayProperties({} as any) as any
+            expect(displayProps.svCoverageNotice).toBeDefined()
+        })
+
         test('updates panorama change timestamp on pano_changed event', () => {
             setupMocks(service, {mockRideService: true})
             const props = service.getStreetViewProps({hideAll: false} as any) as any

@@ -125,6 +125,10 @@ export interface GpxDisplayProps extends RouteDisplayProps {
     svInitAllowed?: boolean
     /** set once, right after an automatic Street View start fallback. Cleared after being read. */
     rideViewNotice?: {cause: SvFallbackCause}
+    /** set every time Street View answers with no imagery at the current position (start or
+     *  mid-ride) - never a fallback, just a transient "no coverage here" notice. Cleared after
+     *  being read. */
+    svCoverageNotice?: {ts: number}
 }
 
 export interface RouteOptionDisplayProps { 

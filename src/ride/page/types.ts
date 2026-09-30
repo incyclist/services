@@ -177,6 +177,9 @@ export interface GPXRidePageDisplayProps extends RidePageDisplayProps {
     svInitAllowed?: boolean
     /** set once, right after an automatic Street View start fallback. Cleared after being read. */
     rideViewNotice?: {cause: SvFallbackCause}
+    /** set every time Street View answers with no imagery at the current position (start or
+     *  mid-ride). Cleared after being read. */
+    svCoverageNotice?: {ts: number}
 }
 
 // Union for consumers that need to handle all ride types. RidePageDisplayProps itself already
