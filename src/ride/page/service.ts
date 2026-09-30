@@ -382,6 +382,15 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
+    onStartWithMap(): void {
+        try {
+            this.getRideDisplay().startWithMapFallback()
+        }
+        catch (err: any) {
+            this.logError(err, 'onStartWithMap')
+        }
+    }
+
     onCancelStart(): void {
         try {
             this.rideObserver?.stop()
@@ -602,7 +611,11 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             route: props.route,
             displayObserver: props.displayObserver,
             displayPosition: props.displayPosition,
-            onDisplayEvent: props.onDisplayEvent
+            onDisplayEvent: props.onDisplayEvent,
+            // INC-42 Phase 2 (mobile adoption): gates native Street View panorama creation the
+            // same way `allowInit` does on web - see GpxDisplayService.getDisplayProperties().
+            svInitAllowed: props.svInitAllowed,
+            rideViewNotice: props.rideViewNotice
         }
         return displayProps
     }
