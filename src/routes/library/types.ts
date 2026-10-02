@@ -55,7 +55,7 @@ export interface ParsedRoute {
     route: Route             // the full parsed Route object
     controlFileUri: string   // carried from ScannedRoute
     folderUri: string        // carried from ScannedRoute
-    folderName: string       // carried from ScannedRoute - display name of the containing folder
+    folderName?: string       // carried from ScannedRoute - display name of the containing folder
     alreadyImported: boolean // set via RouteListService.existsBySourceUri()
     parseError?: string      // set if AVI, no video, parse failure
     parseErrorCode?: RouteImportErrorCode  // stable key for the same failure
@@ -70,7 +70,7 @@ export type ParseState = 'waiting'|'parsing'|'parsed'
 export interface RouteDisplayItem {
     id: string                      // stable identifier for selection tracking
     label: string                   // filename during scan, route title after parse
-    folder: string                  // display name of the containing folder - disambiguates
+    folder?: string                  // display name of the containing folder - disambiguates
                                      // same-titled routes in the selection list
     distance?: FormattedNumber      // undefined until parsed
     format: RouteFormat
@@ -92,7 +92,7 @@ export interface ImportDisplayProps {
     // `failedFolders` counts folders that could not be listed (permission error, a NAS gone
     // offline mid-scan, …) so the UI can report an incomplete scan instead of a silently short
     // result.
-    scanProgress?: { scannedFolders: number; failedFolders: number }
+    scanProgress?: { scannedFolders: number; failedFolders?: number }
     parseProgress?: { parsed: number; total: number; waitingForICloud?: boolean }
     ingestProgress?: { current: number; total: number; currentName: string }
     completionSummary?: {
