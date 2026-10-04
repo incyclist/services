@@ -354,6 +354,9 @@ export class WorkoutRide extends IncyclistService{
      */
     forward():void {
         try {
+            if (!this.workout)
+                return;
+
             const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts);
@@ -388,6 +391,9 @@ export class WorkoutRide extends IncyclistService{
     backward():void {
 
         try {
+            if (!this.workout)
+                return;
+
             const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts,true);
