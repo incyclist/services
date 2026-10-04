@@ -328,12 +328,21 @@ describe('RouteListService',()=>{
         })
 
         test('defaults to Suggested, matching an explicit suggested sort order',()=>{
-            const withDefault = service.searchRepo().routes.map(r=>r.id)
+            // Suggested scores routes against the wall clock; freeze it so the two reads can't
+            // straddle a recency boundary and reorder
+            const now = Date.now()
+            const nowSpy = jest.spyOn(Date,'now').mockReturnValue(now)
+            try {
+                const withDefault = service.searchRepo().routes.map(r=>r.id)
 
-            service.setSortOrder('suggested')
-            const withExplicit = service.searchRepo().routes.map(r=>r.id)
+                service.setSortOrder('suggested')
+                const withExplicit = service.searchRepo().routes.map(r=>r.id)
 
-            expect(withDefault).toEqual(withExplicit)
+                expect(withDefault).toEqual(withExplicit)
+            }
+            finally {
+                nowSpy.mockRestore()
+            }
         })
 
         // a private, never-shared data set - unlike the module-level db.json fixture, whose route
