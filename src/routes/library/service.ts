@@ -899,13 +899,15 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         observer.emit('parse-start')
 
-        for (let i = 0; i < targets.length; i++) {
+        // one route after the other: the duplicate check of a route depends on the routes parsed before it
+        await targets.reduce( async (previous, target, i) => {
+            await previous
+
             // a replaced session (done()/cancel()) has nothing left to fill in
             if (this.isCancelled || this.importProps !== session)
-                break;
+                return
 
-            const parsed = i+1;
-            const target = targets[i]
+            const parsed = i+1
             observer.emit('parse-progress', { current: parsed, parsed, total, currentFolder: target.folderName})
             let fileName = target.controlFileUri
             try {
@@ -915,8 +917,7 @@ export class RouteLibraryScannerService extends IncyclistService {
             } catch { /*ignore*/ }
             await this._parseTarget(target, service, observer, session )
             this.logEvent({message:'parsing route done', fileName})
-
-        }
+        }, Promise.resolve())
 
         observer.emit('parse-complete')
     }
@@ -986,23 +987,33 @@ export class RouteLibraryScannerService extends IncyclistService {
         catch(err) {
             importProps.parseState = 'parsed'
 
-            const parsed:ParsedRoute = {
-                alreadyImported: false,
-                route: result ? new Route(result.data, result.details) : undefined,
-                folderUri: target.folderUri,
-                folderName: target.folderName,
-                controlFileUri: target.controlFileUri,
-                format: target.format,
-                parseError: scope.lastFailure ? this.getReadFailureMessage(scope) : (err?.message ?? String(err)),
-                parseErrorCode: err instanceof DuplicateRouteError ? undefined : mapErrorToImportCode(err, scope),
-                duplicateOf: err instanceof DuplicateRouteError ? err.duplicateOf : undefined
-            }
-            if (err instanceof DuplicateRouteError)
-                this.logEvent({message:'route is a duplicate in this import', file:file.base, duplicateOf:err.duplicateOf})
-            else
-                this.logEvent({message:'could not parse route file',file:file.base, reason:err.message, stack:err.stack})
+            const parsed = this.buildParseFailure(target, err, scope, result)
+            this.logParseFailure(file.base, err)
             observer.emit('parse-result', parsed)
         }
+    }
+
+    /** The row for a route that could not be parsed - a duplicate of another route is not a failure of its file */
+    private buildParseFailure(target: ScannedRoute, err: any, scope: ExternalFileScope, result?: Awaited<ReturnType<typeof RouteParser.parse>>): ParsedRoute {
+        const duplicateOf = err instanceof DuplicateRouteError ? err.duplicateOf : undefined
+        return {
+            alreadyImported: false,
+            route: result ? new Route(result.data, result.details) : undefined,
+            folderUri: target.folderUri,
+            folderName: target.folderName,
+            controlFileUri: target.controlFileUri,
+            format: target.format,
+            parseError: scope.lastFailure ? this.getReadFailureMessage(scope) : (err?.message ?? String(err)),
+            parseErrorCode: duplicateOf ? undefined : mapErrorToImportCode(err, scope),
+            duplicateOf
+        }
+    }
+
+    private logParseFailure(fileName: string, err: any): void {
+        if (err instanceof DuplicateRouteError)
+            this.logEvent({message:'route is a duplicate in this import', file:fileName, duplicateOf:err.duplicateOf})
+        else
+            this.logEvent({message:'could not parse route file', file:fileName, reason:err?.message, stack:err?.stack})
     }
 
     /**
