@@ -184,7 +184,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             if (this.initialized && !hasLists)
                 emitLoadedEvent()
 
-            this.observer.on('stats-update', this.onRouteStatsUpdate.bind(this))
+            this.subscribeStats()
             this.emit('opened', this.observer, this.stats===undefined )
 
             // enforce redraw of cards if units have changed by user (metric<->imperial)
@@ -342,7 +342,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         const res = this.searchRepo(filters)
 
-        this.observer.on('stats-update', this.onRouteStatsUpdate.bind(this))
+        this.subscribeStats()
         this.emit('opened', this.observer, this.stats===undefined )
 
 
@@ -1627,8 +1627,12 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         return new Promise<void>( done =>{
             const observer = this.getRouteSyncFactory().sync(service)
-            if (!observer)
+            // nothing to sync: no sync-start without a matching sync-done, otherwise the page's
+            // busy counter never returns to zero and it stops applying list updates
+            if (!observer) {
                 done()
+                return
+            }
 
             this.observer.emit('sync-start')
             this.syncInfo.observer = observer
@@ -2319,6 +2323,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         
 
 
+    }
+
+    // a single handler reference, so off() removes exactly the listener subscribeStats() added
+    protected onStatsUpdateHandler = (stats: ActiveRideCount[]) => this.onRouteStatsUpdate(stats)
+
+    // search() runs on every filter change; subscribing without removing first would add one more
+    // listener per search, and every stats update would run all of them
+    protected subscribeStats() {
+        this.observer.off('stats-update', this.onStatsUpdateHandler)
+        this.observer.on('stats-update', this.onStatsUpdateHandler)
     }
 
     protected onRouteStatsUpdate(stats: ActiveRideCount[]) {

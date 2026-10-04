@@ -59,6 +59,7 @@ export interface ParsedRoute {
     alreadyImported: boolean // set via RouteListService.existsBySourceUri()
     parseError?: string      // set if AVI, no video, parse failure
     parseErrorCode?: RouteImportErrorCode  // stable key for the same failure
+    duplicateOf?: string     // set if the route repeats one already in this import (parseError says so too)
     format: RouteFormat      // 'xml' | 'epm' | 'rlv' | 'gpx'
     observer?:IObserver
 }
@@ -69,6 +70,10 @@ export type ParseState = 'waiting'|'parsing'|'parsed'
 // The service produces this — the view renders it directly.
 export interface RouteDisplayItem {
     id: string                      // stable identifier for selection tracking
+    // URI of the control file the row was scanned from. Set from the scan on, so it stays the same
+    // while the row changes from placeholder to parsed route - UIs can key rows on it. Optional,
+    // as not every consumer needs it.
+    fileUri?: string
     label: string                   // filename during scan, route title after parse
     folder?: string                  // display name of the containing folder - disambiguates
                                      // same-titled routes in the selection list
@@ -79,6 +84,10 @@ export interface RouteDisplayItem {
     importable: boolean             // false if scanError or parseError is set
     errorReason?: string            // human-readable, shown inline when importable=false
     errorCode?: RouteImportErrorCode // stable key for errorReason, so the UI needn't match text
+    // set for a route that repeats one already in this import - not a problem with the file, so
+    // UIs show it as a duplicate instead of an error. Optional: consumers that don't know it still
+    // see errorReason.
+    duplicateOf?: string
     observer:IObserver
 }
 
@@ -140,6 +149,9 @@ export interface ScanContext {
     parsers: ParserFactory
     progress: { scannedFolders: number, failedFolders: number }
     discoveredCount: { value: number }
+    // routes found by this scan only - a scan that outlives its dialog session must not
+    // add to the results of the next one
+    results: ScannedRoute[]
     recursive: boolean
 }
 
