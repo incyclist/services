@@ -1,7 +1,7 @@
 import { IPageService } from "../../base/pages"
 import { Route } from "../../routes/base/model/route"
 import { IObserver, RideType } from "../../types"
-import { CurrentPosition, CurrentRideState, GPXStartOverlayProps, RideViewType, StartOverlayProps, StreetViewEvent, VideoDisplayProps, VideoStartOverlayProps } from "../types"
+import { CurrentPosition, CurrentRideState, GPXStartOverlayProps, RideViewType, StartOverlayProps, StreetViewEvent, SvFallbackCause, VideoDisplayProps, VideoStartOverlayProps } from "../types"
 import type { LoadButtonMode, PowerAdjustmentResult } from "../../workouts/ride/types"
 import type { WorkoutGraphPlanBar } from "../../workouts/base/graph/types"
 import type { Avatar } from "../../avatars"
@@ -173,6 +173,15 @@ export interface GPXRidePageDisplayProps extends RidePageDisplayProps {
     displayPosition?: CurrentPosition
     /** lets the view report its load state back to the service (Street View) */
     onDisplayEvent?: (event:StreetViewEvent, data?:any) => void
+    /** true once the native Street View component may create a panorama. */
+    svInitAllowed?: boolean
+    /** set once, right after an automatic Street View start fallback. Cleared after being read. */
+    rideViewNotice?: {cause: SvFallbackCause}
+    /** set every time Street View answers with no imagery at the current position (start or
+     *  mid-ride). Cleared after being read. */
+    svCoverageNotice?: {ts: number}
+    /** false while there is no imagery at the current position, true once imagery is back */
+    svHasCoverage?: boolean
 }
 
 // Union for consumers that need to handle all ride types. RidePageDisplayProps itself already
@@ -193,6 +202,8 @@ interface RidePageCallbacks {
     onRetryStart  ():void
     onIgnoreStart ():void
     onCancelStart ():void
+    /** Street View only: the rider skips a slow/failing Street View start. */
+    onStartWithMap():void
 
     // Video/GPX ride callbacks
     onEndRide     ():void

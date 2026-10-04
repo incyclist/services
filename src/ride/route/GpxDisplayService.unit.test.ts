@@ -434,7 +434,7 @@ describe('GpxDisplayService', () => {
         })
 
         afterEach(() => {
-            service['clearStreetViewStartTimeout']()
+            service['clearStreetViewPhaseTimers']()
             cleanupMocks(service)
         })
 
@@ -477,15 +477,22 @@ describe('GpxDisplayService', () => {
             expect(service.isStartRideCompleted()).toBe(false)
         })
 
-        test('start is no longer blocked once the start timeout expires', () => {
+        test('start is no longer blocked once the start timeout expires (falls back to Map)', () => {
             jest.useFakeTimers()
             try {
                 setupSVMocks(service, svMobile())
-                service['armStreetViewStartTimeout']()
+                service['release']('eager')
 
                 expect(service.isStartRideCompleted()).toBe(false)
 
+                // 15s to the timeout fallback, then the SV_FALLBACK_HOLD (1.5s) before the
+                // amber row is allowed to close
                 jest.advanceTimersByTime(15000)
+                expect(service['svViewState']).toBe('unavailable')
+                expect(service['svFallbackCause']).toBe('timeout')
+                expect(service.isStartRideCompleted()).toBe(false)
+
+                jest.advanceTimersByTime(1500)
 
                 expect(service.isStartRideCompleted()).toBe(true)
             }
@@ -498,12 +505,12 @@ describe('GpxDisplayService', () => {
             jest.useFakeTimers()
             try {
                 setupSVMocks(service, svMobile())
-                service['armStreetViewStartTimeout']()
+                service['release']('eager')
                 service['onStreetViewEvent']('Loaded', undefined)
 
                 jest.advanceTimersByTime(15000)
 
-                expect(service['svStartTimedOut']).toBe(false)
+                expect(service['svViewState']).toBe('loaded')
             }
             finally {
                 jest.useRealTimers()
@@ -520,14 +527,15 @@ describe('GpxDisplayService', () => {
                 setupSVMocks(service, svMobile({channel: 'desktop'}))
 
                 expect(service['waitsForStreetView']()).toBe(true)
-                service['armStreetViewStartTimeout']()
+                service['release']('control-ready')
 
                 expect(service.isStartRideCompleted()).toBe(false)
 
-                jest.advanceTimersByTime(15000)
+                jest.advanceTimersByTime(15000+1500)
 
                 expect(service.isStartRideCompleted()).toBe(true)
-                expect(service['svStartTimedOut']).toBe(true)
+                expect(service['svViewState']).toBe('unavailable')
+                expect(service['svFallbackCause']).toBe('timeout')
             }
             finally {
                 jest.useRealTimers()
@@ -939,6 +947,55 @@ describe('GpxDisplayService', () => {
             expect(service.emit).toHaveBeenCalledWith('state-update')
         })
 
+        test('NoPanorama resolves the start (like Loaded) and never falls back to Map', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+
+            expect(service['mapLoaded']).toBe(true)
+            expect(service['svViewState']).toBe('loaded')
+            expect(service['rideViewOverride']).toBeUndefined()
+            expect(service.isStartRideCompleted()).toBe(true)
+        })
+
+        test('NoPanorama sets a one-shot coverage notice, read (and cleared) by getDisplayProperties', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+
+            const displayProps = service.getDisplayProperties({} as any) as any
+            expect(displayProps.svCoverageNotice).toBeDefined()
+
+            const nextDisplayProps = service.getDisplayProperties({} as any) as any
+            expect(nextDisplayProps.svCoverageNotice).toBeUndefined()
+        })
+
+        test('a later NoPanorama mid-ride (after the start already resolved) still raises the notice, without touching the resolved view', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+
+            props.onDisplayEvent('Loaded')
+            expect(service['svViewState']).toBe('loaded')
+
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+            expect(service['svViewState']).toBe('loaded')
+            expect(service['rideViewOverride']).toBeUndefined()
+
+            const displayProps = service.getDisplayProperties({} as any) as any
+            expect(displayProps.svCoverageNotice).toBeDefined()
+        })
+
+        test('coverage flag goes false on NoPanorama and back to true once imagery is shown again', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+            expect(service.getDisplayProperties({} as any).svHasCoverage).toBe(false)
+
+            props.onDisplayEvent('pano_changed', 'panorama_id')
+            expect(service.getDisplayProperties({} as any).svHasCoverage).toBe(true)
+        })
+
         test('updates panorama change timestamp on pano_changed event', () => {
             setupMocks(service, {mockRideService: true})
             const props = service.getStreetViewProps({hideAll: false} as any) as any
@@ -973,6 +1030,59 @@ describe('GpxDisplayService', () => {
             const beforeTime = Date.now()
             props.onDisplayEvent('position_changed')
             expect(service['tsLastSVEvent']).toBeGreaterThanOrEqual(beforeTime)
+        })
+    })
+
+    describe('switching to Street View mid-ride', () => {
+        let service: GpxDisplayService
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            service['clearStreetViewPhaseTimers']()
+            cleanupMocks(service)
+        })
+
+        test('releases Street View the first time the rider switches to it, even though the ride started on Map', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'map' : def)
+            })
+
+            expect(service['svReleased']).toBe(false)
+
+            service.onRideSettingsChanged({rideView: 'sv'})
+
+            expect(service['svReleased']).toBe(true)
+        })
+
+        test('always provides a real position for Street View, even after the ride has started', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'map' : def)
+            })
+
+            service.onActivityUpdate({time:1, speed:36, routeDistance:500, distance:10},{distance:10})
+            service.onRideSettingsChanged({rideView: 'sv'})
+            service['onStarted']()
+
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+            expect(props.displayPosition).toBeDefined()
+        })
+
+        test('does not release again if the rider switches away and back to Street View', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'sv' : def)
+            })
+
+            service['release']('eager')
+            service.onRideSettingsChanged({rideView: 'map'})
+            service.onRideSettingsChanged({rideView: 'sv'})
+
+            expect(service['svInitTrigger']).toBe('eager')
         })
     })
 
