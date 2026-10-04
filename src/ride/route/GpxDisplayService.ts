@@ -468,14 +468,6 @@ export class GpxDisplayService extends RouteDisplayService {
 
     protected onStreetViewEvent(event:StreetViewEvent,data:any) {
 
-        const resetTimeout = ()=> {
-            if (this.povTimeout) {
-                clearTimeout(this.povTimeout)
-                this.povTimeout = undefined
-            }
-
-        }
-
         if (event==='Loaded') {
             // 'Loaded' means Google confirmed the status is OK - not just that the panorama
             // object was constructed.
@@ -484,61 +476,81 @@ export class GpxDisplayService extends RouteDisplayService {
             this.tsLastSVEvent = Date.now()
         }
         else if (event==='NoPanorama') {
-            // No coverage at a position is a legitimate answer, not a failure - the first
-            // point on a route is routinely outside Street View's coverage. It never blocks
-            // the start and never falls back to Map, at start or mid-ride - the rider just
-            // gets a transient "no imagery here" notice. Genuine failures (Maps API errors, a
-            // start that never gets any status) still go through the 'Error' event and the
-            // start timeout fallback respectively.
-            if (this.svViewState!=='loaded' && this.svViewState!=='unavailable') {
-                this.mapLoaded = true
-                this.resolveStreetViewStart('no-imagery')
-            }
-            this.reportNoCoverage(data)
+            this.onNoPanorama(data)
         }
         else if (event==='Error') {
-            this.mapError = data as string
-            this.emit('state-update')
-            this.logEvent({message:'street view position update error', error:this.mapError})
-            resetTimeout()
-
-            if (this.svViewState!=='loaded' && this.svViewState!=='unavailable')
-                this.fallbackToMap('maps-api')
+            this.onStreetViewError(data)
         }
         else if ( event==='pano_changed') {
-            this.logEvent({message:'street view panorama changed', panorama:data})
-            this.tsLastSVEvent = Date.now()
-
-            // Mobile has no 'pov_changed' equivalent, so the round-trip measurement that
-            // feeds the adaptive update delay is taken from the panorama change instead.
-            // Without this, updateDurations never fills on mobile and
-            // getStreetViewUpdateDelay() stays pinned at the default frequency no matter
-            // how slow the device actually is.
-            if (this.isMobile())
-                this.recordUpdateDuration()
+            this.onPanoChanged(data)
         }
         else if ( event==='pov_changed') {
-
-            if (this.tsLastPovChanged) {
-                this.tsLastPovChanged = Date.now()
-                this.tsLastSVEvent = Date.now()
-
-                resetTimeout()
-                this.povTimeout = setTimeout(() => {
-                    this.povTimeout = undefined
-                    this.recordUpdateDuration()
-                }, 100)
-            }
-            else {
-                this.tsLastPovChanged = Date.now()
-            }
-
-
+            this.onPovChanged()
         }
         else if ( event==='status_changed' || event==='position_changed') {
             this.tsLastSVEvent = Date.now()
         }
 
+    }
+
+    /**
+     * No coverage at a position is a legitimate answer, not a failure - the first point on a
+     * route is routinely outside Street View's coverage. It never blocks the start and never
+     * falls back to Map, at start or mid-ride - the rider just gets a transient "no imagery
+     * here" notice. Genuine failures (Maps API errors, a start that never gets any status) still
+     * go through the 'Error' event and the start timeout fallback respectively.
+     */
+    protected onNoPanorama(status:string) {
+        if (this.svViewState!=='loaded' && this.svViewState!=='unavailable') {
+            this.mapLoaded = true
+            this.resolveStreetViewStart('no-imagery')
+        }
+        this.reportNoCoverage(status)
+    }
+
+    protected onStreetViewError(error:string) {
+        this.mapError = error
+        this.emit('state-update')
+        this.logEvent({message:'street view position update error', error:this.mapError})
+        this.clearPovTimeout()
+
+        if (this.svViewState!=='loaded' && this.svViewState!=='unavailable')
+            this.fallbackToMap('maps-api')
+    }
+
+    protected onPanoChanged(panorama:string) {
+        this.logEvent({message:'street view panorama changed', panorama})
+        this.tsLastSVEvent = Date.now()
+
+        // Mobile has no 'pov_changed' equivalent, so the round-trip measurement that feeds the
+        // adaptive update delay is taken from the panorama change instead. Without this,
+        // updateDurations never fills on mobile and getStreetViewUpdateDelay() stays pinned at
+        // the default frequency no matter how slow the device actually is.
+        if (this.isMobile())
+            this.recordUpdateDuration()
+    }
+
+    protected onPovChanged() {
+        if (!this.tsLastPovChanged) {
+            this.tsLastPovChanged = Date.now()
+            return
+        }
+
+        this.tsLastPovChanged = Date.now()
+        this.tsLastSVEvent = Date.now()
+
+        this.clearPovTimeout()
+        this.povTimeout = setTimeout(() => {
+            this.povTimeout = undefined
+            this.recordUpdateDuration()
+        }, 100)
+    }
+
+    protected clearPovTimeout() {
+        if (this.povTimeout) {
+            clearTimeout(this.povTimeout)
+            this.povTimeout = undefined
+        }
     }
 
     /**
