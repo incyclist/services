@@ -173,7 +173,7 @@ export interface GPXRidePageDisplayProps extends RidePageDisplayProps {
     displayPosition?: CurrentPosition
     /** lets the view report its load state back to the service (Street View) */
     onDisplayEvent?: (event:StreetViewEvent, data?:any) => void
-    /** true once the native Street View component may create a panorama (INC-42). */
+    /** true once the native Street View component may create a panorama. */
     svInitAllowed?: boolean
     /** set once, right after an automatic Street View start fallback. Cleared after being read. */
     rideViewNotice?: {cause: SvFallbackCause}
@@ -200,7 +200,7 @@ interface RidePageCallbacks {
     onRetryStart  ():void
     onIgnoreStart ():void
     onCancelStart ():void
-    /** Street View only (INC-42): the rider skips a slow/failing Street View start. */
+    /** Street View only: the rider skips a slow/failing Street View start. */
     onStartWithMap():void
 
     // Video/GPX ride callbacks

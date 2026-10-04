@@ -96,7 +96,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
      * Returns true only once the first set of continuation options have been loaded AND the
      * selected ride view has resolved (`GpxDisplayService.isStartRideCompleted()`). Without the
      * latter, Free Ride never waited for Street View at all (P5) - the overlay would close onto
-     * a blank ride view, then Street View would still be loading behind it (INC-42).
+     * a blank ride view, then Street View would still be loading behind it.
      *
      * @returns True if options are available and the ride view has resolved, false otherwise
      */

@@ -612,7 +612,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             displayObserver: props.displayObserver,
             displayPosition: props.displayPosition,
             onDisplayEvent: props.onDisplayEvent,
-            // INC-42 Phase 2 (mobile adoption): gates native Street View panorama creation the
+            // Gates native Street View panorama creation the
             // same way `allowInit` does on web - see GpxDisplayService.getDisplayProperties().
             svInitAllowed: props.svInitAllowed,
             rideViewNotice: props.rideViewNotice,

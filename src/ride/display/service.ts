@@ -43,7 +43,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected isResuming: boolean
     //protected prevRides: PrevRidesListDisplayProps
     protected stateUpdateHandler = this.onStateUpdate.bind(this)
-    /** guards the one-time RideModeService.onStartDevicesReady() call (INC-42) */
+    /** guards the one-time RideModeService.onStartDevicesReady() call */
     protected controlDevicesReadyNotified: boolean = false
 
     constructor() {
@@ -126,7 +126,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     /**
      * Lets the rider skip a slow/failing Street View start and ride on the Map instead
-     * (INC-42, `ux.md` step 2b "Start with Map"). Unlike an automatic fallback, this is not
+     * (the rider pressing "Start with Map"). Unlike an automatic fallback, this is not
      * held for `SV_FALLBACK_HOLD` and doesn't raise the in-ride notice - the rider chose it.
      */
     startWithMapFallback() {

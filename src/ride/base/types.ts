@@ -121,7 +121,7 @@ export interface GpxDisplayProps extends RouteDisplayProps {
     displayPosition?: CurrentPosition
     /** lets the view report its load state back to the service (Street View) */
     onDisplayEvent?: (event:StreetViewEvent, data?:any) => void
-    /** true once web-ui may create Street View panoramas (main and side views). See INC-42. */
+    /** true once the view may create Street View panoramas (main and side views). */
     svInitAllowed?: boolean
     /** set once, right after an automatic Street View start fallback. Cleared after being read. */
     rideViewNotice?: {cause: SvFallbackCause}
@@ -198,7 +198,7 @@ export interface IRideModeService<T extends IRideModeServiceDisplayProps = IRide
     onStopped(): void
     /** Called the first time the control device(s) become ready to start. No-op by default. */
     onStartDevicesReady(): void
-    /** Street View only (INC-42): switch this ride to Map after the rider presses "Start with Map". */
+    /** Street View only: switch this ride to Map after the rider presses "Start with Map". */
     startWithMapFallback?(): void
 
     getScreenshotInfo(fileName:string, time:number):ScreenShotInfo

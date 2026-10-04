@@ -197,8 +197,8 @@ export class RideModeService extends IncyclistService implements IRideModeServic
      * Called the first time the control device(s) become ready to start.
      *
      * This base implementation is a no-op. `GpxDisplayService` overrides it to release Street
-     * View panorama creation (INC-42), so that a license is never spent before the trainer is
-     * actually up.
+     * View panorama creation, so that a license is never spent before the trainer is actually
+     * up.
      */
     onStartDevicesReady(): void { }
 

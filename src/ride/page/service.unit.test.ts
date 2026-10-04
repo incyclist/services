@@ -1397,7 +1397,7 @@ describe('RidePageService', () => {
             expect(MockRideDisplay.startWithMissingSensors).toHaveBeenCalled()
         })
 
-        test('onStartWithMap delegates to RideDisplay (INC-42)', () => {
+        test('onStartWithMap delegates to RideDisplay', () => {
             s.onStartWithMap()
             expect(MockRideDisplay.startWithMapFallback).toHaveBeenCalled()
         })
@@ -1468,7 +1468,7 @@ describe('RidePageService', () => {
             expect(MockRideDisplay.startWithMissingSensors).toHaveBeenCalled()
         })
 
-        test('onStartWithMap delegates to RideDisplay (INC-42)', () => {
+        test('onStartWithMap delegates to RideDisplay', () => {
             s.onStartWithMap()
             expect(MockRideDisplay.startWithMapFallback).toHaveBeenCalled()
         })

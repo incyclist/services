@@ -13,7 +13,7 @@ export type RideMapType = 'StreetView' | 'SatelliteView' | 'MapView'
 export type RideMapState = 'Loading' | 'Loaded' | 'Error'
 
 /**
- * Street View start-sub-state, see `GpxDisplayService`'s release/phase model (INC-42).
+ * Street View start-sub-state, see `GpxDisplayService`'s release/phase model.
  * `released` is intentionally not part of this union - it is reported to the UI as `waiting`
  * for the duration of the anti-flicker window, so a fast load never flips the header.
  */
@@ -25,7 +25,7 @@ export interface GPXStartOverlayProps extends StartOverlayProps {
     mapType: RideMapType,
     mapState: RideMapState,
     mapStateError?: string,
-    /** Only populated when this start began with rideView==='sv' (INC-42). */
+    /** Only populated when this start began with rideView==='sv'. */
     viewState?: SvViewState,
     /** Only set when viewState==='unavailable'. */
     viewFallbackCause?: SvFallbackCause

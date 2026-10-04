@@ -446,7 +446,7 @@ describe('GpxDisplayService', () => {
             expect(service.isStartRideCompleted()).toBe(false)
         })
 
-        test('start is no longer blocked once the start timeout expires (INC-42 fallback to Map)', () => {
+        test('start is no longer blocked once the start timeout expires (falls back to Map)', () => {
             jest.useFakeTimers()
             try {
                 setupSVMocks(service, svMobile())
@@ -455,7 +455,7 @@ describe('GpxDisplayService', () => {
                 expect(service.isStartRideCompleted()).toBe(false)
 
                 // 15s to the timeout fallback, then the SV_FALLBACK_HOLD (1.5s) before the
-                // amber row is allowed to close (ux.md §7.2)
+                // amber row is allowed to close
                 jest.advanceTimersByTime(15000)
                 expect(service['svViewState']).toBe('unavailable')
                 expect(service['svFallbackCause']).toBe('timeout')
@@ -988,6 +988,59 @@ describe('GpxDisplayService', () => {
             const beforeTime = Date.now()
             props.onDisplayEvent('position_changed')
             expect(service['tsLastSVEvent']).toBeGreaterThanOrEqual(beforeTime)
+        })
+    })
+
+    describe('switching to Street View mid-ride', () => {
+        let service: GpxDisplayService
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            service['clearStreetViewPhaseTimers']()
+            cleanupMocks(service)
+        })
+
+        test('releases Street View the first time the rider switches to it, even though the ride started on Map', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'map' : def)
+            })
+
+            expect(service['svReleased']).toBe(false)
+
+            service.onRideSettingsChanged({rideView: 'sv'})
+
+            expect(service['svReleased']).toBe(true)
+        })
+
+        test('always provides a real position for Street View, even after the ride has started', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'map' : def)
+            })
+
+            service.onActivityUpdate({time:1, speed:36, routeDistance:500, distance:10},{distance:10})
+            service.onRideSettingsChanged({rideView: 'sv'})
+            service['onStarted']()
+
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+            expect(props.displayPosition).toBeDefined()
+        })
+
+        test('does not release again if the rider switches away and back to Street View', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'sv' : def)
+            })
+
+            service['release']('eager')
+            service.onRideSettingsChanged({rideView: 'map'})
+            service.onRideSettingsChanged({rideView: 'sv'})
+
+            expect(service['svInitTrigger']).toBe('eager')
         })
     })
 
