@@ -129,6 +129,8 @@ export interface GpxDisplayProps extends RouteDisplayProps {
      *  mid-ride) - never a fallback, just a transient "no coverage here" notice. Cleared after
      *  being read. */
     svCoverageNotice?: {ts: number}
+    /** false while there is no imagery at the current position, true once imagery is back */
+    svHasCoverage?: boolean
 }
 
 export interface RouteOptionDisplayProps { 

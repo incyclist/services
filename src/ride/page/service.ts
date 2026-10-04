@@ -616,7 +616,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             // same way `allowInit` does on web - see GpxDisplayService.getDisplayProperties().
             svInitAllowed: props.svInitAllowed,
             rideViewNotice: props.rideViewNotice,
-            svCoverageNotice: props.svCoverageNotice
+            svCoverageNotice: props.svCoverageNotice,
+            svHasCoverage: props.svHasCoverage
         }
         return displayProps
     }

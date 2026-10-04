@@ -111,6 +111,8 @@ export class GpxDisplayService extends RouteDisplayService {
     protected rideViewNotice: {cause: SvFallbackCause}
     /** set on every no-coverage answer (start or mid-ride); read (and cleared) by getDisplayProperties() */
     protected svCoverageNotice: {ts: number}
+    /** false while the current position has no imagery, true once imagery is shown again */
+    protected svHasCoverage: boolean
 
     protected svPhaseDelayTimeout: NodeJS.Timeout
     protected svSlowTimeout: NodeJS.Timeout
@@ -393,12 +395,14 @@ export class GpxDisplayService extends RouteDisplayService {
         delete this.rideViewNotice
         const svCoverageNotice = this.svCoverageNotice
         delete this.svCoverageNotice
+        const svHasCoverage = this.svHasCoverage
 
         return {
            rideView ,
            svInitAllowed: rideView==='sv' && this.svReleased,
            rideViewNotice,
            svCoverageNotice,
+           svHasCoverage,
            ...routeProps
         }
     }
@@ -471,6 +475,7 @@ export class GpxDisplayService extends RouteDisplayService {
         if (event==='Loaded') {
             // 'Loaded' means Google confirmed the status is OK - not just that the panorama
             // object was constructed.
+            this.setSvHasCoverage(true)
             this.mapLoaded = true
             this.resolveStreetViewStart('loaded')
             this.tsLastSVEvent = Date.now()
@@ -522,6 +527,7 @@ export class GpxDisplayService extends RouteDisplayService {
     protected onPanoChanged(panorama:string) {
         this.logEvent({message:'street view panorama changed', panorama})
         this.tsLastSVEvent = Date.now()
+        this.setSvHasCoverage(true)
 
         // Mobile has no 'pov_changed' equivalent, so the round-trip measurement that feeds the
         // adaptive update delay is taken from the panorama change instead. Without this,
@@ -656,12 +662,20 @@ export class GpxDisplayService extends RouteDisplayService {
         this.emit('state-update')
     }
 
+    protected setSvHasCoverage(value: boolean) {
+        if (this.svHasCoverage===value)
+            return
+        this.svHasCoverage = value
+        this.emit('state-update')
+    }
+
     /**
      * A coverage gap ('NoPanorama') is not a failure - the rider just gets a transient notice,
      * at start or mid-ride, and Street View keeps running. Fires every time, unlike
      * `rideViewNotice` (once per ride): the rider can ride through several gaps on one route.
      */
     protected reportNoCoverage(status?: string) {
+        this.setSvHasCoverage(false)
         this.svCoverageNotice = {ts: Date.now()}
         this.logEvent({message:'streetview no coverage', status})
         this.emit('state-update')

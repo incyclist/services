@@ -954,6 +954,17 @@ describe('GpxDisplayService', () => {
             expect(displayProps.svCoverageNotice).toBeDefined()
         })
 
+        test('coverage flag goes false on NoPanorama and back to true once imagery is shown again', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+            expect(service.getDisplayProperties({} as any).svHasCoverage).toBe(false)
+
+            props.onDisplayEvent('pano_changed', 'panorama_id')
+            expect(service.getDisplayProperties({} as any).svHasCoverage).toBe(true)
+        })
+
         test('updates panorama change timestamp on pano_changed event', () => {
             setupMocks(service, {mockRideService: true})
             const props = service.getStreetViewProps({hideAll: false} as any) as any

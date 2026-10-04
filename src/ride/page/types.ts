@@ -180,6 +180,8 @@ export interface GPXRidePageDisplayProps extends RidePageDisplayProps {
     /** set every time Street View answers with no imagery at the current position (start or
      *  mid-ride). Cleared after being read. */
     svCoverageNotice?: {ts: number}
+    /** false while there is no imagery at the current position, true once imagery is back */
+    svHasCoverage?: boolean
 }
 
 // Union for consumers that need to handle all ride types. RidePageDisplayProps itself already
