@@ -32,6 +32,21 @@ export class RouteImportError extends Error {
 }
 
 /**
+ * A route that is already part of the same import batch (e.g. the same route in XML and EPM, or
+ * the same file in two folders). Not a failure of the file itself - the UI shows it as a
+ * duplicate of the route it repeats, not as a problem.
+ */
+export class DuplicateRouteError extends Error {
+    readonly duplicateOf: string
+
+    constructor(duplicateOf: string) {
+        super(`Duplicate of ${duplicateOf}`)
+        this.name = 'DuplicateRouteError'
+        this.duplicateOf = duplicateOf
+    }
+}
+
+/**
  * Classifies a parse/read failure into a stable `RouteImportErrorCode`.
  *
  * A file that could not be made available locally is recorded in the parse scope, which

@@ -936,6 +936,68 @@ describe('RouteLibraryScannerService', () => {
          * `waitingForICloud` reflects an actual download wait, reported by the loader
          * decorator through the scope - which is what these tests stand in for.
          */
+        test('an empty list completes the parse session, so the dialog can leave the parsing phase', async () => {
+            const observer = service.parse([])
+            const errors: any[] = []
+            observer.on('error', e => errors.push(e))
+
+            // completes synchronously - nothing to await on the observer
+            await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+            expect(errors).toEqual([])
+            expect(service.getDisplayProps().phase).toBe('selecting')
+            expect(service.getDisplayProps().routes).toEqual([])
+        })
+
+        test('a parsed row keeps the URI of the file it was scanned from', async () => {
+            jest.spyOn(RouteParser, 'parse').mockResolvedValue({
+                data: { id: 'r1', title: 'route 1' } as any,
+                details: {} as any,
+            })
+
+            await runParse(makeScanned({ controlFileUri: 'content://root/folder/route.xml' }))
+
+            const [item] = service.getDisplayProps().routes
+            expect(item.fileUri).toBe('content://root/folder/route.xml')
+            expect(item.id).toBe('r1')
+        })
+
+        test('a route that repeats one earlier in the batch is flagged as a duplicate, not as a parse failure', async () => {
+            jest.spyOn(RouteParser, 'parse')
+                .mockResolvedValueOnce({ data: { id: 'r1', title: 'route 1' } as any, details: {} as any })
+                .mockResolvedValueOnce({ data: { id: 'r1', title: 'route 1 copy' } as any, details: {} as any })
+
+            await runParse([
+                makeScanned({ controlFileUri: 'content://root/a/route.xml', folderName: 'a' }),
+                makeScanned({ controlFileUri: 'content://root/b/route.xml', folderName: 'b' }),
+            ])
+
+            const [first, second] = service.getDisplayProps().routes
+            expect(first.importable).toBe(true)
+            expect(second.duplicateOf).toBe('route 1')
+            expect(second.errorReason).toBe('Duplicate of route 1')
+            expect(second.importable).toBe(false)
+            expect(second.errorCode).toBeUndefined()
+            expect(second.fileUri).toBe('content://root/b/route.xml')
+        })
+
+        test('a parse that finishes after done() does not fail or add rows to the scanner state', async () => {
+            let resolveParse: (value: any) => void = () => {}
+            jest.spyOn(RouteParser, 'parse').mockImplementation(() => new Promise(resolve => { resolveParse = resolve }))
+
+            const observer = service.parse([makeScanned()])
+            const errors: any[] = []
+            observer.on('error', e => errors.push(e))
+            await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+            service.done()
+            resolveParse({ data: { id: 'r1', title: 'stale' } as any, details: {} as any })
+            await new Promise<void>(resolve => setTimeout(resolve, 0))
+
+            expect(errors).toEqual([])
+            expect(service.getDisplayProps().routes).toEqual([])
+        })
+
         describe('parseProgress.waitingForICloud', () => {
 
             /**
@@ -1534,6 +1596,60 @@ describe('RouteLibraryScannerService', () => {
                     failedRoutes: [{ name: 'two.gpx', reason: 'cannot parse <Track>', code: 'PARSE_FAILED', missingExt: undefined }],
                 })
             })
+        })
+    })
+
+    // A scan keeps running after the dialog closed (done()) or the session was replaced. Its results
+    // and events belong to the session it started in and must not leak into the next one.
+    describe('scan - session identity', () => {
+        const deferred = <T,>() => {
+            let resolve!: (value: T) => void
+            const promise = new Promise<T>(r => { resolve = r })
+            return { promise, resolve }
+        }
+        const flush = () => new Promise<void>(resolve => setTimeout(resolve, 0))
+
+        test('routes found by a stale scan are not added to the next scan result', async () => {
+            const stale = deferred<any[]>()
+            const current = deferred<any[]>()
+            fsMock.readdir
+                .mockReturnValueOnce(stale.promise)
+                .mockReturnValueOnce(current.promise)
+
+            service.scan(makeFolder('Old', 'content://old'))
+            await flush()
+            service.done()
+
+            const next = service.scan(makeFolder('New', 'content://new'))
+            await flush()
+            const completed = new Promise<ScannedRoute[]>(resolve => next.once('scan-complete', resolve))
+
+            stale.resolve([file('old.xml', 'content://old/old.xml')])
+            await flush()
+            current.resolve([])
+
+            expect(await completed).toEqual([])
+        })
+
+        test('a stale scan that finishes after a new session started does not fail or touch that session', async () => {
+            const stale = deferred<any[]>()
+            fsMock.readdir.mockReturnValueOnce(stale.promise)
+
+            const observer = service.scan(makeFolder('Old', 'content://old'))
+            const errors: any[] = []
+            observer.on('error', e => errors.push(e))
+            await flush()
+            service.done()
+
+            // a parse without a scan creates a session whose importProps carry no scanProgress
+            service.parse([])
+            await flush()
+
+            stale.resolve([])
+            await flush()
+
+            expect(errors).toEqual([])
+            expect(service.getDisplayProps().phase).toBe('selecting')
         })
     })
 

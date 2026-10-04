@@ -13,7 +13,7 @@ import { useRouteList } from '../list/service'
 import type { RouteListService } from '../list/service'
 import { waitNextTick } from '../../utils'
 import { FailedRoute, FolderInfo, ImportDisplayProps, ImportedLibrary, ParsedRoute, RouteDisplayItem, RouteImportFailure, ScanContext, ScanEntry, ScannedRoute  } from './types'
-import { RouteImportError, mapErrorToImportCode, toRouteImportError } from './errors'
+import { DuplicateRouteError, RouteImportError, mapErrorToImportCode, toRouteImportError } from './errors'
 import { useRoutesDbLoader } from '../list/loaders/db'
 import { Route } from '../base/model/route'
 import { sleep } from '../../utils/sleep'
@@ -46,7 +46,6 @@ const UNREADABLE_FOLDER_ERRORS = /\b(EACCES|EPERM|EIO|EBUSY|EAGAIN|ETIMEDOUT|EST
 export class RouteLibraryScannerService extends IncyclistService {
 
     private isCancelled: boolean = false
-    private scanResult: ScannedRoute[] = []
     private importProps: ImportDisplayProps|undefined
     /** The external-file scope of the route currently being parsed - the basis for
      *  `parseProgress.waitingForICloud` and for classifying a failed read. */
@@ -66,7 +65,6 @@ export class RouteLibraryScannerService extends IncyclistService {
 
     done() {
         this.importProps = undefined
-        this.scanResult = []
     }
 
     getDisplayProps():ImportDisplayProps {
@@ -163,7 +161,9 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         if (!this.importProps)
             this.prepare()
-        this.importProps.phase = 'ingesting'
+        // identity of this import session (see scan()); events for a replaced session are dropped
+        const session = this.importProps
+        session.phase = 'ingesting'
 
         // one list update at the end instead of one per route (which would re-render the page)
         const list = this.getRouteList()
@@ -180,16 +180,17 @@ export class RouteLibraryScannerService extends IncyclistService {
             })
 
         observer.on('ingest-progress',( progress:{ current:number, total:number, currentName: string})=> {
-            if (this.importProps)
-                this.importProps.ingestProgress = progress
+            if (this.importProps !== session)
+                return
+            session.ingestProgress = progress
         })
 
         observer.on( 'ingest-complete',(status:{ imported:number, skipped:number, errors:number, failedRoutes:FailedRoute[] })=>{
-            if (!this.importProps)
+            if (this.importProps !== session)
                 return
             const {imported,skipped,errors,failedRoutes} = status
-            this.importProps.phase = 'complete'
-            this.importProps.completionSummary = {imported,skipped,errors,failedRoutes}
+            session.phase = 'complete'
+            session.completionSummary = {imported,skipped,errors,failedRoutes}
         })
 
         return observer
@@ -252,10 +253,12 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         // reset cancel flag
         this.isCancelled = false
-        this.scanResult = []
 
-        this.importProps.phase = 'scanning'
-        this.importProps.scanProgress = {scannedFolders:0, failedFolders:0}
+        // identity of this dialog session (see importSingle): done() and cancel() replace
+        // this.importProps, so events of a scan that finishes after that are dropped
+        const session = this.importProps
+        session.phase = 'scanning'
+        session.scanProgress = {scannedFolders:0, failedFolders:0}
 
         const observer = new Observer()
         this._scan(folderInfo, observer).catch(err => {
@@ -265,12 +268,16 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         observer
             .on('scan-progress',(progress:{scannedFolders:number, failedFolders:number})=>{
-                this.importProps.scanProgress = progress
+                if (this.importProps !== session)
+                    return
+                session.scanProgress = progress
             })
             .on('scan-complete',()=>{
-                const {scannedFolders: cntScanned, failedFolders: cntFailed} = this.importProps.scanProgress
+                if (this.importProps !== session)
+                    return
+                const {scannedFolders: cntScanned, failedFolders: cntFailed} = session.scanProgress
                 this.logEvent({message:'import route library: scan success',folder:folderInfo.displayName, cntScanned, cntFailed})
-                this.importProps.phase= 'parsing'
+                session.phase= 'parsing'
             })
 
         return observer
@@ -288,40 +295,51 @@ export class RouteLibraryScannerService extends IncyclistService {
         if (!this.importProps)
             this.prepare()
 
-        this.logEvent({message:'import route library: parse start',folder:scannedRoutes?.[0].folderName})
+        // identity of this parse session (see scan()): a parse that outlives done()/cancel() must
+        // not write into the session that replaced it
+        const session = this.importProps
 
-        this._parse(scannedRoutes, observer).catch(err => {
-            this.logError(err, 'parse')
-            observer.emit('error', err.message)
-        })
+        this.logEvent({message:'import route library: parse start',folder:scannedRoutes?.[0]?.folderName})
 
         observer.on('parse-progress',(progress:{ parsed: number, total:number})=>{
+            if (this.importProps !== session)
+                return
             const {parsed, total} = progress
-            this.importProps.parseProgress = {parsed, total}
+            session.parseProgress = {parsed, total}
         })
 
         observer.on('parse-result',(route:ParsedRoute)=>{
-            const idx = this.importProps.routes.findIndex( r=> r.id===route.controlFileUri)
+            if (this.importProps !== session)
+                return
+            const idx = session.routes.findIndex( r=> r.fileUri===route.controlFileUri)
             if (idx!==-1) {
-                const observer = this.importProps.routes[idx].observer
-                const displayProps = this.buildRouteDisplayItem(route,observer)                 
-                this.importProps.routes[idx]= displayProps
+                const observer = session.routes[idx].observer
+                const displayProps = this.buildRouteDisplayItem(route,session,observer)
+                session.routes[idx]= displayProps
                 if (observer) {
                     observer.emit('updated',displayProps)
                 }
             }
-            
+
         })
 
         observer.on('parse-complete',()=>{
+            if (this.importProps !== session)
+                return
             const parseSumamry = {
-                cntTotal: this.importProps.routes.length,
-                cntSuccess: this.importProps.routes.filter( r=> !r.errorReason).length,
-                cntError: this.importProps.routes.filter( r=> r.errorReason!=null).length,
-                cntExisting: this.importProps.routes.filter( r=> r.alreadyImported).length,
+                cntTotal: session.routes.length,
+                cntSuccess: session.routes.filter( r=> !r.errorReason).length,
+                cntError: session.routes.filter( r=> r.errorReason!=null).length,
+                cntExisting: session.routes.filter( r=> r.alreadyImported).length,
             }
-            this.logEvent({message:'import route library: parse completed',folder:scannedRoutes?.[0].folderName, parseSumamry})
-            this.importProps.phase= 'selecting'
+            this.logEvent({message:'import route library: parse completed',folder:scannedRoutes?.[0]?.folderName, parseSumamry})
+            session.phase= 'selecting'
+        })
+
+        // started last: an empty list completes synchronously, and its parse-complete must reach the listeners above
+        this._parse(scannedRoutes, observer, session).catch(err => {
+            this.logError(err, 'parse')
+            observer.emit('error', err.message)
         })
 
         return observer
@@ -340,12 +358,14 @@ export class RouteLibraryScannerService extends IncyclistService {
         if (!this.importProps)
             this.prepare()
 
+        // identity of this import session (see scan()); events for a replaced session are dropped
+        const session = this.importProps
 
         // don't emit route list update after every individual route import (which would trigger page re-render)
         const list = this.getRouteList()
         list.pauseListUpdates()
 
-        this.importProps.phase = 'ingesting'
+        session.phase = 'ingesting'
         
         this._ingest(routes,  observer)
             .catch(err => {
@@ -359,14 +379,18 @@ export class RouteLibraryScannerService extends IncyclistService {
             })
 
             observer.on('ingest-progress',( progress:{ current:number, total:number, currentName: string})=> {
+                if (this.importProps !== session)
+                    return
                 const {current,total,currentName} = progress
-                this.importProps.ingestProgress = {current,total,currentName}
+                session.ingestProgress = {current,total,currentName}
             })
 
             observer.on( 'ingest-complete',(status:{ imported:number, skipped:number, errors:number, failedRoutes:FailedRoute[],importedRoutes:Route[] })=>{
-                this.importProps.phase = 'complete'
+                if (this.importProps !== session)
+                    return
+                session.phase = 'complete'
                 const {imported,skipped,errors,failedRoutes} = status
-                this.importProps.completionSummary = {imported,skipped,errors,failedRoutes}
+                session.completionSummary = {imported,skipped,errors,failedRoutes}
             })
 
         return observer
@@ -537,8 +561,8 @@ export class RouteLibraryScannerService extends IncyclistService {
         await this.upsertImportHistory(folderInfo, ctx.discoveredCount.value)
 
         const { scannedFolders, failedFolders } = ctx.progress
-        this.logEvent({message:'video scan result', scannedFolders, failedFolders, files:this.scanResult.length})
-        observer.emit('scan-complete',this.scanResult)
+        this.logEvent({message:'video scan result', scannedFolders, failedFolders, files:ctx.results.length})
+        observer.emit('scan-complete',ctx.results)
     }
 
     private createScanContext(observer: IObserver, parsers: ParserFactory, recursive: boolean): ScanContext {
@@ -547,7 +571,8 @@ export class RouteLibraryScannerService extends IncyclistService {
             parsers,
             recursive,
             progress: { scannedFolders: 0, failedFolders: 0 },
-            discoveredCount: { value: 0 }
+            discoveredCount: { value: 0 },
+            results: []
         }
     }
 
@@ -608,7 +633,7 @@ export class RouteLibraryScannerService extends IncyclistService {
                 const routeAnnouncement = await this.buildDiscoveredRoute(file, files, uri, folderName, ctx.parsers)
                 ctx.discoveredCount.value++
                 ctx.observer.emit('scan-result', routeAnnouncement)
-                this.scanResult.push(routeAnnouncement)
+                ctx.results.push(routeAnnouncement)
             }
         }
     }
@@ -851,7 +876,7 @@ export class RouteLibraryScannerService extends IncyclistService {
     }
 
 
-    private async _parse(scannedRoutes: ScannedRoute[], observer: IObserver):Promise<void> {
+    private async _parse(scannedRoutes: ScannedRoute[], observer: IObserver, session: ImportDisplayProps):Promise<void> {
         const service = this.getRouteList()
         const targets = scannedRoutes.filter( r=>!r.scanError )
         const total = targets.length
@@ -859,13 +884,14 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         targets.forEach( target=> {
             const file = this.buildFileInfo(target.controlFileUri, target.format)            
-            this.importProps.routes.push( {
+            session.routes.push( {
                 format: target.format,
                 parseState: 'waiting',
                 importable: false,
                 label: file.base,
                 folder: target.folderName,
                 id: target.controlFileUri,
+                fileUri: target.controlFileUri,
                 alreadyImported:false,
                 observer:new Observer()
             })
@@ -873,12 +899,15 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         observer.emit('parse-start')
 
-        for (let i = 0; i < targets.length; i++) {
-            if (this.isCancelled)
-                continue;
+        // one route after the other: the duplicate check of a route depends on the routes parsed before it
+        await targets.reduce( async (previous, target, i) => {
+            await previous
 
-            const parsed = i+1;
-            const target = targets[i]
+            // a replaced session (done()/cancel()) has nothing left to fill in
+            if (this.isCancelled || this.importProps !== session)
+                return
+
+            const parsed = i+1
             observer.emit('parse-progress', { current: parsed, parsed, total, currentFolder: target.folderName})
             let fileName = target.controlFileUri
             try {
@@ -886,20 +915,19 @@ export class RouteLibraryScannerService extends IncyclistService {
                 fixIncorrectFileInfo(info)
                 fileName = info.base
             } catch { /*ignore*/ }
-            await this._parseTarget(target, service, observer )
+            await this._parseTarget(target, service, observer, session )
             this.logEvent({message:'parsing route done', fileName})
-
-        }
+        }, Promise.resolve())
 
         observer.emit('parse-complete')
     }
 
 
-    private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver):Promise<void> {
+    private async _parseTarget(target: ScannedRoute, service: ReturnType<typeof this.getRouteList>, observer: IObserver, session: ImportDisplayProps):Promise<void> {
 
         let result: Awaited<ReturnType<typeof RouteParser.parse>> | undefined
         const file = this.buildFileInfo(target.controlFileUri, target.format)
-        const importProps = this.importProps.routes.find( r => r.id===target.controlFileUri)??({} as RouteDisplayItem)
+        const importProps = session.routes.find( r => r.fileUri===target.controlFileUri)??({} as RouteDisplayItem)
 
         // Brackets everything this route's parse reads, so a file that could not be made
         // available locally can be reported even though the parsers report read failures the
@@ -931,10 +959,10 @@ export class RouteLibraryScannerService extends IncyclistService {
             const route= new Route(result.data, result.details)
             
             // is the same route already in the list (duplicate file in different folder, or two files pointing to the same route)
-            const existing = this.importProps.routes.find( ri=> ri.id===route.description.id)
-            if (existing) {                
+            const existing = session.routes.find( ri=> ri.id===route.description.id)
+            if (existing) {
                 result  = undefined
-                throw new Error(`Duplicate of ${existing.label}`)
+                throw new DuplicateRouteError(existing.label)
             }
 
             if (result.data.hasVideo) {
@@ -959,19 +987,33 @@ export class RouteLibraryScannerService extends IncyclistService {
         catch(err) {
             importProps.parseState = 'parsed'
 
-            const parsed:ParsedRoute = {
-                alreadyImported: false,
-                route: result ? new Route(result.data, result.details) : undefined,
-                folderUri: target.folderUri,
-                folderName: target.folderName,
-                controlFileUri: target.controlFileUri,
-                format: target.format,
-                parseError: scope.lastFailure ? this.getReadFailureMessage(scope) : (err?.message ?? String(err)),
-                parseErrorCode: mapErrorToImportCode(err, scope)
-            }
-            this.logEvent({message:'could not parse route file',file:file.base, reason:err.message, stack:err.stack})
+            const parsed = this.buildParseFailure(target, err, scope, result)
+            this.logParseFailure(file.base, err)
             observer.emit('parse-result', parsed)
         }
+    }
+
+    /** The row for a route that could not be parsed - a duplicate of another route is not a failure of its file */
+    private buildParseFailure(target: ScannedRoute, err: any, scope: ExternalFileScope, result?: Awaited<ReturnType<typeof RouteParser.parse>>): ParsedRoute {
+        const duplicateOf = err instanceof DuplicateRouteError ? err.duplicateOf : undefined
+        return {
+            alreadyImported: false,
+            route: result ? new Route(result.data, result.details) : undefined,
+            folderUri: target.folderUri,
+            folderName: target.folderName,
+            controlFileUri: target.controlFileUri,
+            format: target.format,
+            parseError: scope.lastFailure ? this.getReadFailureMessage(scope) : (err?.message ?? String(err)),
+            parseErrorCode: duplicateOf ? undefined : mapErrorToImportCode(err, scope),
+            duplicateOf
+        }
+    }
+
+    private logParseFailure(fileName: string, err: any): void {
+        if (err instanceof DuplicateRouteError)
+            this.logEvent({message:'route is a duplicate in this import', file:fileName, duplicateOf:err.duplicateOf})
+        else
+            this.logEvent({message:'could not parse route file', file:fileName, reason:err?.message, stack:err?.stack})
     }
 
     /**
@@ -1258,12 +1300,12 @@ export class RouteLibraryScannerService extends IncyclistService {
         }
     }
 
-    private getImportProps(parsed:ParsedRoute) {        
-        return this.importProps.routes.find( r=> r.id === parsed.controlFileUri)
+    private getImportProps(parsed:ParsedRoute, session:ImportDisplayProps) {
+        return session.routes.find( r=> r.fileUri === parsed.controlFileUri)
     }
 
 
-    private buildRouteDisplayItem(parsed:ParsedRoute, observer?:IObserver):RouteDisplayItem {
+    private buildRouteDisplayItem(parsed:ParsedRoute, session:ImportDisplayProps, observer?:IObserver):RouteDisplayItem {
         const {route,alreadyImported,parseError,format,controlFileUri,folderName} = parsed
         const descr = route?.description??{}
 
@@ -1276,10 +1318,12 @@ export class RouteLibraryScannerService extends IncyclistService {
 
         const path = this.getBindings().path
         const info = path.parse(controlFileUri)
-        const importProps = this.getImportProps(parsed)
+        const importProps = this.getImportProps(parsed, session)
 
         return {
             id:route?.description?.id??info?.base,
+            fileUri: controlFileUri,
+            duplicateOf: parsed.duplicateOf,
             distance,
             label: route?.title??info?.base,
             folder: folderName,
