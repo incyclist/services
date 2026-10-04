@@ -132,7 +132,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     startWithMapFallback() {
         try {
             const props = this.getStartOverlayProps()
-            this.logEvent({message:'button clicked',overlay:'start overlay',button:'Start with Map',state:props,eventSource:'user', })
+            const rideProps =  this.getRideModeService().getLogProps()
+            this.logEvent({message:'start ride maps fallback',...rideProps, state:props})
             this.getRideModeService()?.startWithMapFallback?.()
         }
         catch(err) {
@@ -143,13 +144,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     retryStart() {
         try {
             const props = this.getStartOverlayProps()
-
-            this.logEvent({message:'button clicked',overlay:'start overlay',button:'Retry',state:props,eventSource:'user', })
-            this.logEvent({message:'overlay closed',overlay:'start overlay' })        
-    
-
             const rideProps =  this.getRideModeService().getLogProps()
-            this.logger.logEvent({ message: 'Start ride retry', ...rideProps, 
+            this.logger.logEvent({ message: 'Start ride retry', ...rideProps, state:props,
                 bike: this.getBike(),
                 interface: this.getBikeInterface()            
             });
@@ -166,7 +162,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     async cancelStart() {
         try {
             const props = this.getStartOverlayProps()
-            this.logEvent({message:'button clicked',overlay:'start overlay',button:'Cancel',reason: 'user cancel', state:props, eventSource:'user'})
+            const rideProps =  this.getRideModeService().getLogProps()
+            this.logEvent({message:'start ride cancel',reason: 'user cancel',...rideProps, state:props})
             await this.stopRide({noStateUpdates:true})
 
         }

@@ -501,6 +501,7 @@ export class GpxDisplayService extends RouteDisplayService {
      * go through the 'Error' event and the start timeout fallback respectively.
      */
     protected onNoPanorama(status:string) {
+        this.logEvent({message:'street view position update error', error:'NoPanorama'})
         if (this.svViewState!=='loaded' && this.svViewState!=='unavailable') {
             this.mapLoaded = true
             this.resolveStreetViewStart('no-imagery')
