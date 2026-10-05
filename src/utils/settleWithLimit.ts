@@ -14,16 +14,19 @@ export const settleWithLimit = async <T, R>(
     const results: Array<PromiseSettledResult<R>> = new Array(items.length)
     let next = 0
 
-    const worker = async (): Promise<void> => {
-        while (next < items.length) {
-            const idx = next++
-            try {
-                results[idx] = { status: 'fulfilled', value: await fn(items[idx]) }
-            }
-            catch (reason) {
-                results[idx] = { status: 'rejected', reason }
-            }
-        }
+    // each worker takes the next unclaimed item, then chains onto itself until none are left
+    const worker = (): Promise<void> => {
+        if (next >= items.length)
+            return Promise.resolve()
+
+        const idx = next++
+        return Promise.resolve()
+            .then(() => fn(items[idx]))
+            .then(
+                (value) => { results[idx] = { status: 'fulfilled', value } },
+                (reason) => { results[idx] = { status: 'rejected', reason } }
+            )
+            .then(worker)
     }
 
     const workers = Math.min(Math.max(1, limit), items.length)
