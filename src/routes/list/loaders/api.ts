@@ -8,6 +8,9 @@ import { addDetails } from "../../base/utils/route";
 import { RoutesDbLoader } from "./db";
 import { Loader,LoadDetailsTargets } from "./types";
 import { sleep } from "../../../utils/sleep";
+import { settleWithLimit } from "../../../utils/settleWithLimit";
+
+const ROUTE_DETAILS_CONCURRENCY = 4
 
 const valid = (v) => (v!==undefined && v!==null)
 
@@ -230,10 +233,9 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         const failed = enforced ? items : await this.loadDetailsFromRepo(items)
 
 
-        // all missing should be loaded from server
-        const promises = failed.map ( i => this.getDetails(i.route) )
-
-        const res = await Promise.allSettled(promises) 
+        // all missing should be loaded from server - bounded, so a fresh catalog does not start
+        // every transfer at once
+        const res = await settleWithLimit(failed, ROUTE_DETAILS_CONCURRENCY, i => this.getDetails(i.route))
 
         await this.processLoadDetailsResult(res, items, true);
 
