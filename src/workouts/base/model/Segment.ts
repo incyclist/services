@@ -115,6 +115,9 @@ export class Segment extends Step implements SegmentDefinition {
         
         
         const res = step.getLimits(part,includeStepInfo);
+        if ( res===undefined)
+            return undefined;
+
         const stepStart = res.start
         res.start = Math.floor(segTime/stepDuration)*stepDuration+stepStart;
 

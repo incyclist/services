@@ -439,7 +439,16 @@ describe ( 'Segment' ,() => {
             check(s,59.99999,true,30,0,50,50);
             check(s,60,false);
             check(s,61,false);
-        });    
+        });
+
+        test ( 'nested step returns no limits -> segment returns undefined' ,() => {
+            const steps = [ { duration:10,text:'a'}, {duration:10, text:'b'} ]
+            const s = new Segment( {start:0,steps} )
+            jest.spyOn(s as any,'getStep').mockReturnValue( { getLimits: () => undefined } as any )
+
+            expect(()=> s.getLimits(5)).not.toThrow()
+            expect(s.getLimits(5)).toBeUndefined()
+        });
 
 
 
