@@ -6,7 +6,7 @@
   },
   "dependencies": {
     "@garmin/fitsdk": "^21.213.0",
-    "axios": "^1.19.0",
+    "axios": "^1.20.0",
     "incyclist-devices": "^3.0.38",
     "promise.any": "^2.0.6",
     "semver": "^7.7.4",
