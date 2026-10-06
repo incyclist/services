@@ -58,7 +58,8 @@ export type CapabilityDisplayProps = {
     helpText?: { full: string, short: string }
     emptyFooter?: string
     onClick: (item:CapabilityDisplayProps)=>void
-    onUnselect?
+    /** Unselects the device for this capability, as the tile's cross does. Only set on tiles with a selected device. */
+    onUnselect?: ()=>void
 }
 
 export type PairingRowLabelProps = { text: string, subtext?: string }

@@ -278,6 +278,7 @@ export class DevicesPageService extends IncyclistPageService {
 
         const title = this.getDisplayCapability(cap)
         const onClick = ()=> { this.openDeviceSelection(cap)}
+        const onUnselect = data.selected ? ()=> { this.onCapabilityUnselect(cap) } : undefined
 
         
         const role = PAIRING_CAPABILITY_ROLES.find( r=>r.capability===cap)?.role
@@ -294,7 +295,7 @@ export class DevicesPageService extends IncyclistPageService {
         return {
             title, capability,deviceName:!disabled?deviceName:undefined, disabled, connectState,value:value?.toString(),unit,interface:ifName,
             role, helpText, emptyFooter,
-            onClick
+            onClick, onUnselect
         }
 
     }
@@ -394,6 +395,14 @@ export class DevicesPageService extends IncyclistPageService {
 
         this.closeDeviceSelection(true)
         this.getDevicePairing().selectDevice( capability, d.udid,addAll)
+
+        this.updatePage()
+    }
+
+    protected onCapabilityUnselect(cap:IncyclistCapability) {
+        this.logEvent( {message:'capability unselect clicked', capability:cap, eventSource:'user'})
+
+        this.getDevicePairing().unselectDevices(cap)
 
         this.updatePage()
     }
