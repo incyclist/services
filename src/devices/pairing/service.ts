@@ -69,7 +69,12 @@ export class DevicePairingService  extends IncyclistService{
     protected settings: PairingSettings={}
     protected state:InternalPairingState = { initialized:false, deleted:[]}
     protected deviceSelectState:DeviceSelectState|null = null
-    
+
+    // a selected capability that stays 'waiting' with nothing pairing or scanning is logged once per start
+    protected static readonly STALLED_AFTER_MS = 30*1000
+    protected stalledTimer?: ReturnType<typeof setTimeout>
+    protected stalledLogged = false
+
 
     protected onPairingStartedHandler = this.onPairingStarted.bind(this)
     protected onPairingSuccessHandler = this.onPairingSuccess.bind(this)
@@ -132,6 +137,7 @@ export class DevicePairingService  extends IncyclistService{
     async start( onStateChanged: (newState:PairingState)=>void) {
 
         this.pairingConfirmed = false
+        this.stalledLogged = false
         
         if (this.state.stopped) {
             // cleanup on 2nd launch
@@ -233,6 +239,7 @@ export class DevicePairingService  extends IncyclistService{
 
    async stop(adapters:Array<string>=[],forExit:boolean=false ):Promise<void> {
 
+        this.clearStalledTimer()
         const adapterFilter = adapters??[]
 
         if (!forExit) {
@@ -762,6 +769,7 @@ export class DevicePairingService  extends IncyclistService{
 
         
         this.checkCanStart()
+        this.checkPairingStalled()
 
         // don't send any updates if we are stopping
         if (this.state.stopRequested)
@@ -781,6 +789,52 @@ export class DevicePairingService  extends IncyclistService{
 
         if (onDeviceSelectStateChanged && typeof onDeviceSelectStateChanged==='function')
             onDeviceSelectStateChanged( this.getDeviceSelectionState() )
+    }
+
+    protected checkPairingStalled() {
+        if (this.stalledLogged)
+            return
+
+        if (!this.isStalled()) {
+            this.clearStalledTimer()
+            return
+        }
+
+        if (!this.stalledTimer)
+            this.stalledTimer = setTimeout( ()=>{ this.onPairingStalled() }, DevicePairingService.STALLED_AFTER_MS)
+    }
+
+    protected isStalled():boolean {
+        if (this.isPairing() || this.isScanning())
+            return false
+
+        const selected = (this.state.capabilities??[]).filter( c=>c.selected )
+        return selected.length>0 && selected.every( c=>c.connectState==='waiting')
+    }
+
+    protected onPairingStalled() {
+        delete this.stalledTimer
+        if (this.stalledLogged || !this.isStalled())
+            return
+
+        this.stalledLogged = true
+        // only enums, booleans and names of interfaces and capabilities: no device names or ids
+        this.logEvent({
+            message: 'pairing stalled',
+            usage: this.usage,
+            isPairing: this.isPairing(),
+            isScanning: this.isScanning(),
+            waiting: Boolean(this.state.waiting),
+            sentinel: this.state.tsPrevStart===-1,
+            interfaces: (this.state.interfaces??[]).map( i=>({name:i.name, state:i.state})),
+            capabilities: (this.state.capabilities??[]).filter( c=>c.selected).map( c=>({capability:c.capability, connectState:c.connectState})),
+        })
+    }
+
+    protected clearStalledTimer() {
+        if (this.stalledTimer)
+            clearTimeout(this.stalledTimer)
+        delete this.stalledTimer
     }
 
     protected emitStartStatus() {
