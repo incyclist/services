@@ -6,6 +6,7 @@ export type TInterface   = 'ble'|'wifi'
 
 export type PairingDisplayProps = {
     title: string|undefined
+    readyToStart?: boolean
     capabilities?: {
         top: Array<CapabilityDisplayProps>
         bottom: Array<CapabilityDisplayProps>

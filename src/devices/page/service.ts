@@ -192,6 +192,7 @@ export class DevicesPageService extends IncyclistPageService {
             return {
 
                 title,
+                readyToStart: this.canStartRide(),
                 capabilities: { top, bottom, rowLabels },
                 interfaces,
                 deviceSelection: this.getDeviceListDisplayProps(),
