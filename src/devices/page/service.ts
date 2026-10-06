@@ -1,7 +1,7 @@
 import { EventLogger } from 'gd-eventlog'
 import { Injectable, Singleton } from '../../base/decorators'
 import { IncyclistPageService } from '../../base/pages'
-import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText, getPairingRowLabelId } from '../pairing'
+import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../pairing'
 
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability, TInterface } from '../../types'
 import type { CapabilityData, DevicePairingData, InternalPairingState } from '../pairing'
@@ -164,9 +164,17 @@ export class DevicesPageService extends IncyclistPageService {
             useDeviceAccess().enrichWithAccessState(ifs)
 
             const interfaces = ifs.map( i=>{ return this.getInterfaceDisplayProps(i) })
-            const capProps = caps.map( c=>this.getCapabilityDisplayProps( c ))
 
             const loading = this.promiseOpen!=undefined
+            const status = getPairingStatusDisplay({
+                platform: 'mobile',
+                interfaces: toPairingInterfaceStates(ifs),
+                capabilities: caps,
+                canStartRide: this.canStartRide(),
+                loading,
+                rideMode: this.isPairingForRide,
+            })
+            const capProps = caps.map( c=>this.getCapabilityDisplayProps( c, status.id==='S1' ))
 
             const CP = (cap:TIncyclistCapability) => capProps.find( c => c.capability===cap)
 
@@ -193,6 +201,7 @@ export class DevicesPageService extends IncyclistPageService {
 
                 title,
                 readyToStart: this.canStartRide(),
+                status,
                 capabilities: { top, bottom, rowLabels },
                 interfaces,
                 deviceSelection: this.getDeviceListDisplayProps(),
@@ -256,7 +265,7 @@ export class DevicesPageService extends IncyclistPageService {
 
 
 
-    protected getCapabilityDisplayProps(data:CapabilityData):CapabilityDisplayProps {
+    protected getCapabilityDisplayProps(data:CapabilityData, noSearch:boolean=false):CapabilityDisplayProps {
         const {capability:cap,deviceName, connectState,value,unit,disabled} = data
 
         const capability = this.getTCapability(cap)
@@ -276,7 +285,7 @@ export class DevicesPageService extends IncyclistPageService {
             full: getCapabilityHelpText(capability, 'full') ?? '',
             short: getCapabilityHelpText(capability, 'short') ?? '',
         }
-        const emptyFooter = role ? getEmptyTileFooterText(role) : undefined
+        const emptyFooter = noSearch ? 'Not searching' : role ? getEmptyTileFooterText(role) : undefined
 
         return {
             title, capability,deviceName:!disabled?deviceName:undefined, disabled, connectState,value:value?.toString(),unit,interface:ifName,

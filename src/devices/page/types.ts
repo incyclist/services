@@ -1,4 +1,5 @@
 import type { DevicePairingStatus } from "../pairing/model"
+import type { PairingStatusDisplayProps } from "../pairing/status"
 
 export type PageState    =  'Idle' | 'Scanning' | 'Pairing' | 'Done' | 'Closed' 
 export type SelectState  =  'Closed' | 'Waiting' | 'Active' 
@@ -7,6 +8,7 @@ export type TInterface   = 'ble'|'wifi'
 export type PairingDisplayProps = {
     title: string|undefined
     readyToStart?: boolean
+    status?: PairingStatusDisplayProps
     capabilities?: {
         top: Array<CapabilityDisplayProps>
         bottom: Array<CapabilityDisplayProps>
