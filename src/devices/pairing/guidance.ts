@@ -35,11 +35,11 @@ const INTERFACE_LABELS: Record<PairingInterfaceId, string> = {
     wifi: 'Wi-Fi',
 }
 
-const DESKTOP_SEARCH_INTERFACES: ReadonlyArray<PairingInterfaceId> = ['ble', 'ant']
+const DESKTOP_SEARCH_INTERFACES = new Set<PairingInterfaceId>(['ble', 'ant'])
 
 const searchInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform) =>
     platform === 'desktop'
-        ? interfaces.filter(i => DESKTOP_SEARCH_INTERFACES.includes(i.id))
+        ? interfaces.filter(i => DESKTOP_SEARCH_INTERFACES.has(i.id))
         : interfaces
 
 export const canScanWithInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform): boolean =>
@@ -123,7 +123,7 @@ export interface PairingGuidanceText {
 
 const formatList = (names: string[]): string => {
     if (names.length <= 1) return names.join('')
-    return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+    return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
 }
 
 const getNoSearchText = (params: PairingGuidanceParams, isShort: boolean): PairingGuidanceText => {

@@ -39,6 +39,10 @@ export const toPairingInterfaceStates = (
         available: i.state !== 'disconnected' && i.state !== 'unavailable',
     }))
 
+const DOT_BY_STATUS: Partial<Record<PairingStatusId, PairingStatusDot>> = { S1: 'red', S2: 'green' }
+
+const statusDot = (id: PairingStatusId): PairingStatusDot => DOT_BY_STATUS[id] ?? 'amber'
+
 export const getPairingStatusDisplay = (src: PairingStatusSource): PairingStatusDisplayProps => {
     const find = (name: string) => src.capabilities.find(c => c.capability === name)
     const readyCapability = REQUIRED_CAPABILITIES
@@ -59,7 +63,8 @@ export const getPairingStatusDisplay = (src: PairingStatusSource): PairingStatus
         connectingIsTrainer: connectingCapability?.capability === 'control',
     })
 
-    const id = src.loading ? 'S4' : derived === 'S1b' ? 'S5' : derived
+    const hintNotShownYet = derived === 'S1b'
+    const id = src.loading ? 'S4' : hintNotShownYet ? 'S5' : derived
 
     const deviceName = id === 'S3' ? connectingCapability?.deviceName : readyCapability?.deviceName
     const params = {
@@ -78,6 +83,6 @@ export const getPairingStatusDisplay = (src: PairingStatusSource): PairingStatus
         shortText: short.text,
         link: full.link,
         shortLink: short.link,
-        dot: id === 'S1' ? 'red' : id === 'S2' ? 'green' : 'amber',
+        dot: statusDot(id),
     }
 }

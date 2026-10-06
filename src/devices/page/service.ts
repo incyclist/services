@@ -285,7 +285,11 @@ export class DevicesPageService extends IncyclistPageService {
             full: getCapabilityHelpText(capability, 'full') ?? '',
             short: getCapabilityHelpText(capability, 'short') ?? '',
         }
-        const emptyFooter = noSearch ? 'Not searching' : role ? getEmptyTileFooterText(role) : undefined
+        let emptyFooter: string | undefined = undefined
+        if (noSearch)
+            emptyFooter = 'Not searching'
+        else if (role)
+            emptyFooter = getEmptyTileFooterText(role)
 
         return {
             title, capability,deviceName:!disabled?deviceName:undefined, disabled, connectState,value:value?.toString(),unit,interface:ifName,

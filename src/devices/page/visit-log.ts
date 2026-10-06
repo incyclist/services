@@ -5,6 +5,8 @@ import type {
     PreviousVisitOutcome
 } from "./types"
 
+let visitSequence = 0
+
 export const PAGE_LEFT_EVENT = 'pairing page left'
 export const VISIT_UNCLOSED_EVENT = 'pairing visit unclosed'
 
@@ -68,7 +70,7 @@ export class PairingVisitTracker {
 
         const record = this.deps.store.get() ?? { date: today, countToday: 0, firstEverPending: false }
         const countToday = record.date === today ? record.countToday + 1 : 1
-        const visitId = `${now}-${Math.random().toString(36).slice(2, 10)}`
+        const visitId = `${now}-${++visitSequence}`
 
         const prevLast = record.last
         this.deps.store.set({
