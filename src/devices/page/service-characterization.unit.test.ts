@@ -3,16 +3,6 @@ import { DevicesPageService } from "./service"
 import { IncyclistCapability } from "incyclist-devices"
 import { Observer } from "../../base/types"
 
-// onExit reads useIncyclist() directly rather than the injectable getter, so the exit tests
-// replace the hook at module level.
-const mockIncyclist = {
-    onAppExit: jest.fn().mockResolvedValue(undefined),
-}
-jest.mock('../../ui', () => ({
-    ...jest.requireActual('../../ui'),
-    useIncyclist: () => mockIncyclist,
-}))
-
 describe('DevicesPageService - characterization of current pairing page behaviour', ()=> {
 
     let service: DevicesPageService
@@ -46,6 +36,10 @@ describe('DevicesPageService - characterization of current pairing page behaviou
     const ui = {
         openPage: jest.fn(),
         quit: jest.fn(),
+    }
+
+    const mockIncyclist = {
+        onAppExit: jest.fn().mockResolvedValue(undefined),
     }
 
     const tracker = {
@@ -95,6 +89,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
         Inject('DeviceRide', deviceRide)
         Inject('DeviceConfiguration', deviceConfig)
         Inject('Bindings', { ui })
+        Inject('Incyclist', mockIncyclist)
         Inject('PairingVisitTracker', tracker)
 
         setPairingState({})
@@ -114,6 +109,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
         Inject('DeviceRide', null)
         Inject('DeviceConfiguration', null)
         Inject('Bindings', null)
+        Inject('Incyclist', null)
         Inject('PairingVisitTracker', null)
         jest.clearAllMocks()
     })
@@ -441,7 +437,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
 
             ;(service as any).onOK()
 
-            expect((service as any).moveTo).toHaveBeenCalledWith('routes')
+            expect((service as any).moveTo).toHaveBeenCalledWith('/routes')
         })
 
         test('OK after a previous page in ride mode goes to /rideDeviceOK', ()=> {
@@ -460,7 +456,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
 
             ;(service as any).onOK()
 
-            expect((service as any).moveTo).toHaveBeenCalledWith('workouts')
+            expect((service as any).moveTo).toHaveBeenCalledWith('/workouts')
         })
 
         test('OK prepares the start and marks the user as paired', ()=> {
@@ -504,7 +500,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
 
             ;(service as any).onSimulate()
 
-            expect((service as any).moveTo).toHaveBeenCalledWith('routes')
+            expect((service as any).moveTo).toHaveBeenCalledWith('/routes')
         })
     })
 

@@ -147,7 +147,7 @@ export class DevicesPageService extends IncyclistPageService {
         const onExit = ()=> {
             try {
                 const ui = this.getBindings().ui
-                useIncyclist().onAppExit()
+                this.getIncyclist().onAppExit()
                     .then( ()=>{
                         ui.quit()                        
                     })
@@ -408,7 +408,7 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
 
-    protected async closeDeviceSelection( enabled: boolean) {
+    protected closeDeviceSelection( enabled: boolean) {
         // diagnostic: production logs have shown this firing multiple times while the
         // Pairing screen was reportedly not the active page - the caller could not be
         // confirmed from static analysis alone, so capture the call stack to identify it
@@ -515,13 +515,13 @@ export class DevicesPageService extends IncyclistPageService {
         const prevContentPage = this.getPrevContentPage()
         const prevPage = this.getAppState().getState('prevPage')
         if (!prevPage) { // we just launched, go to content selection page
-            this.moveTo(prevContentPage)
+            this.moveTo(`/${prevContentPage}`)
         }
         else { // we were called from somewhere
             if (this.isPairingForRide)
                 this.moveTo('/rideDeviceOK')
-            else 
-                this.moveTo(prevContentPage)
+            else
+                this.moveTo(`/${prevContentPage}`)
 
         }
 
@@ -536,8 +536,8 @@ export class DevicesPageService extends IncyclistPageService {
 
         if (this.isPairingForRide)
             this.moveTo('/rideSimulate')
-        else 
-            this.moveTo(prevContentPage)
+        else
+            this.moveTo(`/${prevContentPage}`)
     }
 
     protected onCancel():void {
