@@ -63,8 +63,9 @@ export const getPairingStatusDisplay = (src: PairingStatusSource): PairingStatus
         connectingIsTrainer: connectingCapability?.capability === 'control',
     })
 
-    const hintNotShownYet = derived === 'S1b'
-    const id = src.loading ? 'S4' : hintNotShownYet ? 'S5' : derived
+    let id: PairingStatusId = derived === 'S1b' ? 'S5' : derived
+    if (src.loading)
+        id = 'S4'
 
     const deviceName = id === 'S3' ? connectingCapability?.deviceName : readyCapability?.deviceName
     const params = {
