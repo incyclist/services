@@ -33,15 +33,25 @@ const INTERFACE_LABELS: Record<PairingInterfaceId, string> = {
     wifi: 'Wi-Fi',
 }
 
-export const canScanWithInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>): boolean =>
-    interfaces.some(i => i.enabled && i.available)
+export type PairingPlatform = 'desktop' | 'mobile'
 
-export const getUnavailableInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>): PairingInterfaceId[] =>
-    interfaces.filter(i => i.enabled && !i.available).map(i => i.id)
+const DESKTOP_SEARCH_INTERFACES: ReadonlyArray<PairingInterfaceId> = ['ble', 'ant']
+
+const searchInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform) =>
+    platform === 'desktop'
+        ? interfaces.filter(i => DESKTOP_SEARCH_INTERFACES.includes(i.id))
+        : interfaces
+
+export const canScanWithInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform): boolean =>
+    searchInterfaces(interfaces, platform).some(i => i.enabled && i.available)
+
+export const getUnavailableInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform): PairingInterfaceId[] =>
+    searchInterfaces(interfaces, platform).filter(i => i.enabled && !i.available).map(i => i.id)
 
 export type PairingStatusId = 'S1' | 'S2' | 'S3' | 'S4' | 'S5'
 
 export interface PairingStatusInput {
+    platform: PairingPlatform
     interfaces: ReadonlyArray<PairingInterfaceState>
     initialising: boolean
     searching: boolean
@@ -55,7 +65,7 @@ export interface PairingStatusInput {
  * Priority order: S1 > S2 > S3 > S4 > S5. S5 is the default while the page is idle or searching.
  */
 export const derivePairingStatus = (input: PairingStatusInput): PairingStatusId => {
-    if (!canScanWithInterfaces(input.interfaces)) return 'S1'
+    if (!canScanWithInterfaces(input.interfaces, input.platform)) return 'S1'
     if (input.canStartRide) return 'S2'
     if (input.connectingDeviceName) return 'S3'
     if (input.initialising) return 'S4'
@@ -65,7 +75,7 @@ export const derivePairingStatus = (input: PairingStatusInput): PairingStatusId 
 export type PairingTextVariant = 'full' | 'short'
 
 export interface PairingGuidanceParams {
-    platform?: 'desktop' | 'mobile'
+    platform?: PairingPlatform
     unavailable?: ReadonlyArray<PairingInterfaceId>
     rideMode?: boolean
     deviceName?: string

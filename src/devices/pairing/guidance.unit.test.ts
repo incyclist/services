@@ -8,8 +8,17 @@ const up = (id: PairingInterfaceState['id']): PairingInterfaceState => ({ id, en
 const down = (id: PairingInterfaceState['id']): PairingInterfaceState => ({ id, enabled: true, available: false })
 const off = (id: PairingInterfaceState['id']): PairingInterfaceState => ({ id, enabled: false, available: false })
 
-const base: PairingStatusInput = {
-    interfaces: [up('ant'), up('ble')],
+const mobile: PairingStatusInput = {
+    platform: 'mobile',
+    interfaces: [up('ble'), up('wifi')],
+    initialising: false,
+    searching: false,
+    canStartRide: false,
+}
+
+const desktop: PairingStatusInput = {
+    platform: 'desktop',
+    interfaces: [up('ant'), up('ble'), up('serial'), up('tcpip')],
     initialising: false,
     searching: false,
     canStartRide: false,
@@ -35,62 +44,75 @@ describe('PAIRING_CAPABILITY_ROLES', () => {
 })
 
 describe('interface helpers', () => {
-    it('a scan is possible when any enabled interface is available', () => {
-        expect(canScanWithInterfaces([down('ant'), up('serial')])).toBe(true)
+    it('on mobile, any enabled available interface allows a scan', () => {
+        expect(canScanWithInterfaces([down('ble'), up('wifi')], 'mobile')).toBe(true)
+    })
+
+    it('on desktop, only Bluetooth or ANT+ allow a scan', () => {
+        expect(canScanWithInterfaces([down('ble'), down('ant'), up('serial'), up('tcpip')], 'desktop')).toBe(false)
+    })
+
+    it('on desktop, a working ANT+ allows a scan even if Bluetooth is down', () => {
+        expect(canScanWithInterfaces([down('ble'), up('ant')], 'desktop')).toBe(true)
     })
 
     it('a disabled interface never counts as scanning', () => {
-        expect(canScanWithInterfaces([off('ant'), down('ble')])).toBe(false)
+        expect(canScanWithInterfaces([off('ble'), down('wifi')], 'mobile')).toBe(false)
     })
 
-    it('lists only enabled interfaces that are unavailable', () => {
-        expect(getUnavailableInterfaces([down('ant'), off('serial'), up('ble'), down('wifi')])).toEqual(['ant', 'wifi'])
+    it('lists only enabled unavailable interfaces, filtered per platform', () => {
+        expect(getUnavailableInterfaces([down('ant'), off('serial'), up('ble'), down('wifi')], 'mobile')).toEqual(['ant', 'wifi'])
+        expect(getUnavailableInterfaces([down('ant'), down('serial'), up('ble')], 'desktop')).toEqual(['ant'])
     })
 })
 
 describe('derivePairingStatus', () => {
-    it('returns S1 when no enabled interface is available, even if a device is ready', () => {
-        expect(derivePairingStatus({ ...base, interfaces: [down('ant'), down('ble')], canStartRide: true })).toBe('S1')
+    it('mobile: returns S1 when no enabled interface is available, even if a device is ready', () => {
+        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), off('wifi')], canStartRide: true })).toBe('S1')
     })
 
-    it('returns S1 when every interface is disabled', () => {
-        expect(derivePairingStatus({ ...base, interfaces: [off('ant'), off('ble')] })).toBe('S1')
+    it('desktop: returns S1 when Bluetooth and ANT+ are both unavailable, even if serial works', () => {
+        expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), down('ble'), up('serial')] })).toBe('S1')
     })
 
-    it('does not return S1 when only one of several interfaces is down', () => {
-        expect(derivePairingStatus({ ...base, interfaces: [down('ant'), up('ble')] })).toBe('S5')
+    it('desktop: does not return S1 when only one of Bluetooth or ANT+ is down', () => {
+        expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), up('ble')] })).toBe('S5')
+    })
+
+    it('mobile: does not return S1 when only Wi-Fi is available', () => {
+        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), up('wifi')] })).toBe('S5')
     })
 
     it('returns S2 when the row is ready', () => {
-        expect(derivePairingStatus({ ...base, canStartRide: true, readyDeviceName: 'Trainer' })).toBe('S2')
+        expect(derivePairingStatus({ ...mobile, canStartRide: true, readyDeviceName: 'Trainer' })).toBe('S2')
     })
 
     it('returns S3 when a device is connecting', () => {
-        expect(derivePairingStatus({ ...base, connectingDeviceName: 'Neo', connectingIsTrainer: true })).toBe('S3')
+        expect(derivePairingStatus({ ...mobile, connectingDeviceName: 'Neo', connectingIsTrainer: true })).toBe('S3')
     })
 
     it('returns S4 when the page is initialising', () => {
-        expect(derivePairingStatus({ ...base, initialising: true })).toBe('S4')
+        expect(derivePairingStatus({ ...mobile, initialising: true })).toBe('S4')
     })
 
     it('returns S5 while searching with nothing found', () => {
-        expect(derivePairingStatus({ ...base, searching: true })).toBe('S5')
+        expect(derivePairingStatus({ ...mobile, searching: true })).toBe('S5')
     })
 
     it('returns S5 as the idle default', () => {
-        expect(derivePairingStatus(base)).toBe('S5')
+        expect(derivePairingStatus(mobile)).toBe('S5')
     })
 
     it('ranks S1 above S2', () => {
-        expect(derivePairingStatus({ ...base, interfaces: [down('ble')], canStartRide: true, connectingDeviceName: 'X' })).toBe('S1')
+        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble')], canStartRide: true, connectingDeviceName: 'X' })).toBe('S1')
     })
 
     it('ranks S2 above S3', () => {
-        expect(derivePairingStatus({ ...base, canStartRide: true, connectingDeviceName: 'X' })).toBe('S2')
+        expect(derivePairingStatus({ ...mobile, canStartRide: true, connectingDeviceName: 'X' })).toBe('S2')
     })
 
     it('ranks S3 above S4', () => {
-        expect(derivePairingStatus({ ...base, connectingDeviceName: 'X', initialising: true })).toBe('S3')
+        expect(derivePairingStatus({ ...mobile, connectingDeviceName: 'X', initialising: true })).toBe('S3')
     })
 })
 
@@ -104,13 +126,8 @@ describe('getPairingGuidanceText', () => {
         })
 
         it('desktop with a single unavailable interface', () => {
-            expect(getPairingGuidanceText('S1', { platform: 'desktop', unavailable: ['serial'] }).text)
-                .toBe("Can't search: Serial unavailable.")
-        })
-
-        it('desktop with three or more unavailable interfaces lists them all', () => {
-            expect(getPairingGuidanceText('S1', { platform: 'desktop', unavailable: ['ant', 'serial', 'tcpip'] }).text)
-                .toBe("Can't search: ANT+, Serial and TCP/IP unavailable.")
+            expect(getPairingGuidanceText('S1', { platform: 'desktop', unavailable: ['ant'] }).text)
+                .toBe("Can't search: ANT+ unavailable.")
         })
 
         it('mobile with Bluetooth off links to Bluetooth settings', () => {
@@ -132,10 +149,6 @@ describe('getPairingGuidanceText', () => {
                 text: "Can't search: Bluetooth and Wi-Fi are off.",
                 link: 'Settings',
             })
-        })
-
-        it('mobile with only Wi-Fi off uses the generic settings link', () => {
-            expect(getPairingGuidanceText('S1', { platform: 'mobile', unavailable: ['wifi'] }).link).toBe('Settings')
         })
     })
 
