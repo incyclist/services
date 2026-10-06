@@ -1410,7 +1410,7 @@ export class DevicePairingService  extends IncyclistService{
         const speed =  this.getCapability(IncyclistCapability.Speed)
 
         const controlOK = (control?.selected && control?.connectState==='connected')
-        const powerOK = (!control?.selected && power?.selected && power?.connectState==='connected') 
+        const powerOK = (!control?.selected && power?.selected && power?.connectState==='connected')
         const speedOK = (!control?.selected && !power?.selected && speed?.selected && speed?.connectState==='connected')
         
         const success = controlOK || powerOK || speedOK

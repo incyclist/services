@@ -1,4 +1,5 @@
 import type { DevicePairingStatus } from "../pairing/model"
+import type { PairingStatusDisplayProps } from "../pairing/status"
 
 export type PageState    =  'Idle' | 'Scanning' | 'Pairing' | 'Done' | 'Closed' 
 export type SelectState  =  'Closed' | 'Waiting' | 'Active' 
@@ -6,9 +7,12 @@ export type TInterface   = 'ble'|'wifi'
 
 export type PairingDisplayProps = {
     title: string|undefined
+    readyToStart?: boolean
+    status?: PairingStatusDisplayProps
     capabilities?: {
         top: Array<CapabilityDisplayProps>
         bottom: Array<CapabilityDisplayProps>
+        rowLabels?: { top: PairingRowLabelProps, bottom: PairingRowLabelProps }
     }
     interfaces?: Array<InterfaceDisplayProps>
     buttons?: PairingButtonProps
@@ -46,13 +50,18 @@ export type CapabilityDisplayProps = {
     capability: TIncyclistCapability
     deviceName: string|undefined
     interface?: string,
-    connectState?: DevicePairingStatus,   
+    connectState?: DevicePairingStatus,
     value?: string
     unit?: string
     disabled?: boolean
+    role?: 'required' | 'optional'
+    helpText?: { full: string, short: string }
+    emptyFooter?: string
     onClick: (item:CapabilityDisplayProps)=>void
-    onUnselect? 
+    onUnselect?
 }
+
+export type PairingRowLabelProps = { text: string, subtext?: string }
 
 export type InterfaceDisplayState ='disabled'|'scanning'|'idle'|'error'
 export type InterfaceDisplayProps = {
@@ -85,3 +94,53 @@ export type DeviceListDisplayProps = {}
 
 export type TIncyclistCapability = 'power' | 'speed' | 'cadence' | 'heartrate' | 'control' | 'app_control'
 export type TDisplayCapability ='resistance'|'power'|'heartrate'|'cadence'|'speed'|'controller'
+
+export type PairingExitVia = 'ok' | 'skip' | 'simulate' | 'cancel' | 'app_exit'
+export type PreviousVisitOutcome =
+    | 'none'
+    | 'ready'
+    | 'skip-then-ride'
+    | 'skip-no-ride'
+    | 'simulate'
+    | 'app-exit-ready'
+    | 'app-exit-not-ready'
+
+export interface PairingVisitLast {
+    visitId: string
+    sessionId: string
+    openedAt: number
+    backgroundMs: number
+    backgroundedAt?: number
+    forRide: boolean
+    canStartRide: boolean
+    visitIndexToday: number
+    firstEverVisit: boolean
+    previousVisitOutcome: PreviousVisitOutcome
+    previousVisitAgeMs?: number
+    closed: boolean
+    via?: PairingExitVia
+    inferred?: boolean
+    closedAt?: number
+    rideAfter?: 'device' | 'simulate'
+}
+
+export interface PairingVisitRecord {
+    date: string
+    countToday: number
+    firstEverPending: boolean
+    last?: PairingVisitLast
+}
+
+export interface PairingVisitStore {
+    get(): PairingVisitRecord | undefined
+    set(record: PairingVisitRecord): void
+}
+
+export interface PairingVisitTrackerDeps {
+    store: PairingVisitStore
+    sessionId: string
+    platform: 'desktop' | 'mobile'
+    now: () => number
+    today: () => string
+    log: (message: string, fields: Record<string, unknown>) => void
+}

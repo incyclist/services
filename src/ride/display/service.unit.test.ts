@@ -560,4 +560,44 @@ describe('RideDisplayService', () => {
         })
     })
 
+    describe('start - pairing visit', () => {
+        let service
+        const tracker = { onRideStarted: jest.fn() }
+
+        beforeEach(() => {
+            Inject('PairingVisitTracker', tracker)
+            service = new RideDisplayService()
+            service.enforceSimulator = jest.fn()
+            service.getRideModeService = jest.fn().mockReturnValue({ getLogProps: jest.fn().mockReturnValue({}) })
+            service.getBike = jest.fn()
+            service.getBikeInterface = jest.fn()
+            service.getRideType = jest.fn().mockReturnValue('Free-Ride')
+            service.startDevices = jest.fn()
+            service.startRide = jest.fn()
+            service.getCoaches = jest.fn().mockReturnValue({ startRide: jest.fn() })
+            service.setState = jest.fn()
+            service.logEvent = jest.fn()
+        })
+
+        afterEach(() => {
+            Inject('PairingVisitTracker', null)
+            jest.clearAllMocks()
+        })
+
+        test.each([
+            [true, true],
+            [false, false],
+            [undefined, false],
+        ])('start(%s) reports a ride with simulate:%s', (simulate, expected) => {
+            service.start(simulate)
+            expect(tracker.onRideStarted).toHaveBeenCalledWith({ simulate: expected })
+        })
+
+        test('a tracker failure does not stop the ride from starting', () => {
+            tracker.onRideStarted.mockImplementationOnce(() => { throw new Error('X') })
+            service.start(false)
+            expect(service.startRide).toHaveBeenCalled()
+        })
+    })
+
 })

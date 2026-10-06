@@ -6,7 +6,7 @@ import { Segment, Step, useWorkoutList, useWorkoutRide, Workout } from "../../wo
 import { useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { CurrentRideDeviceInfo, CurrentRideState, IRideModeService, RideType } from "../base";
-import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceConfiguration, useDeviceRide } from "../../devices";
+import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceConfiguration, useDeviceRide, usePairingVisitTracker } from "../../devices";
 import { useUserSettings } from "../../settings";
 import { CyclingMode, DeviceData, IncyclistCapability, UpdateRequest } from "incyclist-devices";
 import { formatDateTime, getLegacyInterface, waitNextTick } from "../../utils";
@@ -82,7 +82,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
             if(simulate)
                 this.enforceSimulator()
-
+            this.notifyPairingVisitRideStarted(simulate)
 
             const rideProps =  this.getRideModeService().getLogProps()
             this.logEvent({ message: 'Start ride', ...rideProps, 
@@ -110,6 +110,15 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.logError(err,'start')
         }
 
+    }
+
+    protected notifyPairingVisitRideStarted(simulate?:boolean) {
+        try {
+            this.getPairingVisitTracker().onRideStarted({simulate:simulate===true})
+        }
+        catch(err) {
+            this.logError(err,'notifyPairingVisitRideStarted')
+        }
     }
 
     startWithMissingSensors() {
@@ -1501,6 +1510,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     @Injectable
     protected getCoaches() {
         return getCoachesService()
+    }
+
+    @Injectable
+    protected getPairingVisitTracker() {
+        return usePairingVisitTracker()
     }
 
 }
