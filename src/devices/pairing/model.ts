@@ -103,5 +103,3 @@ export interface PairingSettings {
 
 
 export type DevicePairingStatus = 'connecting'|'connected'|'failed'|'waiting'|'paused'
-
-export const isControlSelected = (control?: Pick<CapabilityData,'selected'>): boolean => Boolean(control?.selected)

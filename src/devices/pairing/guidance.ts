@@ -9,18 +9,40 @@ export interface PairingCapabilityRole {
 }
 
 export const PAIRING_CAPABILITY_ROLES: ReadonlyArray<PairingCapabilityRole> = [
-    { capability: IncyclistCapability.Control,   role: 'required', descriptor: 'control' },
-    { capability: IncyclistCapability.Power,     role: 'required', descriptor: 'power' },
-    { capability: IncyclistCapability.Speed,     role: 'required', descriptor: 'speed' },
-    { capability: IncyclistCapability.HeartRate, role: 'optional', descriptor: 'heartrate' },
-    { capability: IncyclistCapability.Cadence,   role: 'optional', descriptor: 'cadence' },
+    { capability: IncyclistCapability.Control,    role: 'required', descriptor: 'control' },
+    { capability: IncyclistCapability.Power,      role: 'required', descriptor: 'power' },
+    { capability: IncyclistCapability.Speed,      role: 'required', descriptor: 'speed' },
+    { capability: IncyclistCapability.HeartRate,  role: 'optional', descriptor: 'heartrate' },
+    { capability: IncyclistCapability.Cadence,    role: 'optional', descriptor: 'cadence' },
     { capability: IncyclistCapability.AppControl, role: 'optional', descriptor: 'app_control' },
 ]
+
+export type PairingInterfaceId = 'ant' | 'ble' | 'serial' | 'tcpip' | 'wifi'
+
+export interface PairingInterfaceState {
+    id: PairingInterfaceId
+    enabled: boolean
+    available: boolean
+}
+
+const INTERFACE_LABELS: Record<PairingInterfaceId, string> = {
+    ant: 'ANT+',
+    ble: 'Bluetooth',
+    serial: 'Serial',
+    tcpip: 'TCP/IP',
+    wifi: 'Wi-Fi',
+}
+
+export const canScanWithInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>): boolean =>
+    interfaces.some(i => i.enabled && i.available)
+
+export const getUnavailableInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>): PairingInterfaceId[] =>
+    interfaces.filter(i => i.enabled && !i.available).map(i => i.id)
 
 export type PairingStatusId = 'S1' | 'S2' | 'S3' | 'S4' | 'S5'
 
 export interface PairingStatusInput {
-    canScan: boolean
+    interfaces: ReadonlyArray<PairingInterfaceState>
     initialising: boolean
     searching: boolean
     canStartRide: boolean
@@ -33,7 +55,7 @@ export interface PairingStatusInput {
  * Priority order: S1 > S2 > S3 > S4 > S5. S5 is the default while the page is idle or searching.
  */
 export const derivePairingStatus = (input: PairingStatusInput): PairingStatusId => {
-    if (!input.canScan) return 'S1'
+    if (!canScanWithInterfaces(input.interfaces)) return 'S1'
     if (input.canStartRide) return 'S2'
     if (input.connectingDeviceName) return 'S3'
     if (input.initialising) return 'S4'
@@ -44,6 +66,7 @@ export type PairingTextVariant = 'full' | 'short'
 
 export interface PairingGuidanceParams {
     platform?: 'desktop' | 'mobile'
+    unavailable?: ReadonlyArray<PairingInterfaceId>
     rideMode?: boolean
     deviceName?: string
     isTrainer?: boolean
@@ -57,6 +80,27 @@ export interface PairingGuidanceText {
     subtext?: string
 }
 
+const formatList = (names: string[]): string => {
+    if (names.length <= 1) return names.join('')
+    return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+const getNoSearchText = (params: PairingGuidanceParams, isShort: boolean): PairingGuidanceText => {
+    const names = (params.unavailable ?? []).map(id => INTERFACE_LABELS[id])
+
+    if (params.platform === 'mobile') {
+        const list = formatList(names)
+        const verb = names.length > 1 ? 'are' : 'is'
+        const link = names.length === 1 && names[0] === INTERFACE_LABELS.ble ? 'Bluetooth settings' : 'Settings'
+        if (isShort) return { text: `${list} ${verb} off.`, link: 'Settings' }
+        return { text: `Can't search: ${list} ${verb} off.`, link }
+    }
+
+    const list = formatList(names)
+    if (names.length === 2) return { text: `Can't search: ${list} are both unavailable.`, link: 'Check connections' }
+    return { text: `Can't search: ${list} unavailable.`, link: 'Check connections' }
+}
+
 export const getPairingGuidanceText = (
     id: PairingGuidanceId,
     params: PairingGuidanceParams = {},
@@ -67,11 +111,7 @@ export const getPairingGuidanceText = (
 
     switch (id) {
         case 'S1':
-            if (params.platform === 'mobile')
-                return isShort
-                    ? { text: 'Bluetooth is off.', link: 'Settings' }
-                    : { text: "Can't search: Bluetooth is off.", link: 'Bluetooth settings' }
-            return { text: "Can't search: Bluetooth and ANT+ are both unavailable.", link: 'Check connections' }
+            return getNoSearchText(params, isShort)
 
         case 'S2': {
             if (isShort) return { text: `Ready to ride with ${device}.` }
