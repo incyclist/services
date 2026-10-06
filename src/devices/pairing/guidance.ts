@@ -213,3 +213,19 @@ export const getPairingGuidanceText = (
 
 export const getPairingRowLabelId = (trainerSelected: boolean): PairingGuidanceId =>
     trainerSelected ? 'row-required-trainer' : 'row-required'
+
+export const getCapabilityHelpText = (capability: string, variant: PairingTextVariant = 'full'): string | undefined => {
+    const isShort = variant === 'short'
+    switch (capability) {
+        case 'control': return 'Smart trainer'
+        case 'power': return 'Power meter'
+        case 'speed': return 'Speed sensor'
+        case 'heartrate': return 'Heart-rate monitor'
+        case 'cadence': return 'Cadence sensor'
+        case 'app_control': return isShort ? 'Remote buttons' : 'Remote buttons, e.g. Zwift Play'
+        default: return undefined
+    }
+}
+
+export const getEmptyTileFooterText = (role: PairingRole): string =>
+    role === 'required' ? 'Searching…' : 'Optional'

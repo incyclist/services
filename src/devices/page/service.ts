@@ -1,7 +1,7 @@
 import { EventLogger } from 'gd-eventlog'
 import { Injectable, Singleton } from '../../base/decorators'
 import { IncyclistPageService } from '../../base/pages'
-import { useDevicePairing } from '../pairing'
+import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText, getPairingRowLabelId } from '../pairing'
 
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability, TInterface } from '../../types'
 import type { CapabilityData, DevicePairingData, InternalPairingState } from '../pairing'
@@ -173,21 +173,26 @@ export class DevicesPageService extends IncyclistPageService {
             const top = [
                 CP('control'),
                 CP('power'),
-                CP('heartrate')
+                CP('speed')
             ].filter( c=>c!==null && c!==undefined)
             const bottom = [
+                CP('heartrate'),
                 CP('cadence'),
-                CP('speed'),
                 CP('app_control')
             ].filter( c=>c!==null && c!==undefined)
 
+            const trainerSelected = Boolean(caps.find( c=>c.capability===IncyclistCapability.Control)?.selected)
+            const rowLabels = {
+                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected)),
+                bottom: getPairingGuidanceText('row-optional'),
+            }
 
             const buttons = this.getButtonsDisplayProps()
 
             return {
 
                 title,
-                capabilities: { top, bottom},
+                capabilities: { top, bottom, rowLabels },
                 interfaces,
                 deviceSelection: this.getDeviceListDisplayProps(),
                 showInterfaceSettings: this.openedInterfaceSettings,                
@@ -265,8 +270,16 @@ export class DevicesPageService extends IncyclistPageService {
         const onClick = ()=> { this.openDeviceSelection(cap)}
 
         
+        const role = PAIRING_CAPABILITY_ROLES.find( r=>r.capability===cap)?.role
+        const helpText = {
+            full: getCapabilityHelpText(capability, 'full') ?? '',
+            short: getCapabilityHelpText(capability, 'short') ?? '',
+        }
+        const emptyFooter = role ? getEmptyTileFooterText(role) : undefined
+
         return {
             title, capability,deviceName:!disabled?deviceName:undefined, disabled, connectState,value:value?.toString(),unit,interface:ifName,
+            role, helpText, emptyFooter,
             onClick
         }
 

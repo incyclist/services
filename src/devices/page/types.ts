@@ -9,6 +9,7 @@ export type PairingDisplayProps = {
     capabilities?: {
         top: Array<CapabilityDisplayProps>
         bottom: Array<CapabilityDisplayProps>
+        rowLabels?: { top: PairingRowLabelProps, bottom: PairingRowLabelProps }
     }
     interfaces?: Array<InterfaceDisplayProps>
     buttons?: PairingButtonProps
@@ -46,13 +47,18 @@ export type CapabilityDisplayProps = {
     capability: TIncyclistCapability
     deviceName: string|undefined
     interface?: string,
-    connectState?: DevicePairingStatus,   
+    connectState?: DevicePairingStatus,
     value?: string
     unit?: string
     disabled?: boolean
+    role?: 'required' | 'optional'
+    helpText?: { full: string, short: string }
+    emptyFooter?: string
     onClick: (item:CapabilityDisplayProps)=>void
-    onUnselect? 
+    onUnselect?
 }
+
+export type PairingRowLabelProps = { text: string, subtext?: string }
 
 export type InterfaceDisplayState ='disabled'|'scanning'|'idle'|'error'
 export type InterfaceDisplayProps = {

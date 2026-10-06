@@ -1,7 +1,7 @@
 import { IncyclistCapability } from "incyclist-devices"
 import {
     PAIRING_CAPABILITY_ROLES, PairingInterfaceState, PairingStatusInput,
-    canScanWithInterfaces, derivePairingStatus, getPairingGuidanceText, getPairingHint, getPairingRowLabelId, getUnavailableInterfaces
+    canScanWithInterfaces, derivePairingStatus, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText, getPairingHint, getPairingRowLabelId, getUnavailableInterfaces
 } from "./guidance"
 
 const up = (id: PairingInterfaceState['id']): PairingInterfaceState => ({ id, enabled: true, available: true })
@@ -259,6 +259,35 @@ describe('getPairingHint (S1b)', () => {
             text: "Can't search: Bluetooth is not allowed.",
             link: 'Open settings',
         })
+    })
+})
+
+describe('getCapabilityHelpText', () => {
+    it('gives the what-it-is line for each tile', () => {
+        expect(getCapabilityHelpText('control')).toBe('Smart trainer')
+        expect(getCapabilityHelpText('power')).toBe('Power meter')
+        expect(getCapabilityHelpText('speed')).toBe('Speed sensor')
+        expect(getCapabilityHelpText('heartrate')).toBe('Heart-rate monitor')
+        expect(getCapabilityHelpText('cadence')).toBe('Cadence sensor')
+    })
+
+    it('controller has a longer full line and a short phone line', () => {
+        expect(getCapabilityHelpText('app_control', 'full')).toBe('Remote buttons, e.g. Zwift Play')
+        expect(getCapabilityHelpText('app_control', 'short')).toBe('Remote buttons')
+    })
+
+    it('returns undefined for an unknown capability', () => {
+        expect(getCapabilityHelpText('unknown')).toBeUndefined()
+    })
+})
+
+describe('getEmptyTileFooterText', () => {
+    it('required empty tiles say searching', () => {
+        expect(getEmptyTileFooterText('required')).toBe('Searching…')
+    })
+
+    it('optional empty tiles say optional', () => {
+        expect(getEmptyTileFooterText('optional')).toBe('Optional')
     })
 })
 
