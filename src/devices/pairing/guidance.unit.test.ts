@@ -1,7 +1,7 @@
 import { IncyclistCapability } from "incyclist-devices"
 import {
     PAIRING_CAPABILITY_ROLES, PairingInterfaceState, PairingStatusInput,
-    canScanWithInterfaces, derivePairingStatus, getPairingGuidanceText, getPairingRowLabelId, getUnavailableInterfaces
+    canScanWithInterfaces, derivePairingStatus, getPairingGuidanceText, getPairingHint, getPairingRowLabelId, getUnavailableInterfaces
 } from "./guidance"
 
 const up = (id: PairingInterfaceState['id']): PairingInterfaceState => ({ id, enabled: true, available: true })
@@ -11,6 +11,7 @@ const off = (id: PairingInterfaceState['id']): PairingInterfaceState => ({ id, e
 const mobile: PairingStatusInput = {
     platform: 'mobile',
     interfaces: [up('ble'), up('wifi')],
+    anyDeviceSelected: false,
     initialising: false,
     searching: false,
     canStartRide: false,
@@ -19,6 +20,7 @@ const mobile: PairingStatusInput = {
 const desktop: PairingStatusInput = {
     platform: 'desktop',
     interfaces: [up('ant'), up('ble'), up('serial'), up('tcpip')],
+    anyDeviceSelected: false,
     initialising: false,
     searching: false,
     canStartRide: false,
@@ -75,12 +77,12 @@ describe('derivePairingStatus', () => {
         expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), down('ble'), up('serial')] })).toBe('S1')
     })
 
-    it('desktop: does not return S1 when only one of Bluetooth or ANT+ is down', () => {
-        expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), up('ble')] })).toBe('S5')
+    it('desktop: does not return S1 when only ANT+ is down, but shows the ANT+ hint on first use', () => {
+        expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), up('ble')] })).toBe('S1b')
     })
 
-    it('mobile: does not return S1 when only Wi-Fi is available', () => {
-        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), up('wifi')] })).toBe('S5')
+    it('mobile: does not return S1 when only Wi-Fi is available, and shows the Bluetooth hint', () => {
+        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), up('wifi')] })).toBe('S1b')
     })
 
     it('returns S2 when the row is ready', () => {
@@ -192,6 +194,71 @@ describe('getPairingGuidanceText', () => {
     it('never emits a link for S2 to S5 or row labels', () => {
         for (const id of ['S2', 'S3', 'S4', 'S5', 'row-required', 'row-ready', 'row-optional'] as const)
             expect(getPairingGuidanceText(id).link).toBeUndefined()
+    })
+})
+
+describe('getPairingHint (S1b)', () => {
+    it('mobile: Bluetooth permission denied', () => {
+        const interfaces = [{ id: 'ble' as const, enabled: true, available: false, permissionDenied: true }, up('wifi')]
+        expect(getPairingHint({ platform: 'mobile', interfaces, anyDeviceSelected: false })).toBe('bluetooth-permission')
+    })
+
+    it('mobile: Bluetooth off while Wi-Fi works', () => {
+        expect(getPairingHint({ platform: 'mobile', interfaces: [down('ble'), up('wifi')], anyDeviceSelected: false })).toBe('bluetooth-off')
+    })
+
+    it('mobile: Wi-Fi off while Bluetooth works', () => {
+        expect(getPairingHint({ platform: 'mobile', interfaces: [up('ble'), down('wifi')], anyDeviceSelected: false })).toBe('wifi-off')
+    })
+
+    it('mobile: a disabled Wi-Fi never triggers a hint', () => {
+        expect(getPairingHint({ platform: 'mobile', interfaces: [up('ble'), off('wifi')], anyDeviceSelected: false })).toBeUndefined()
+    })
+
+    it('desktop: ANT+ not working', () => {
+        expect(getPairingHint({ platform: 'desktop', interfaces: [down('ant'), up('ble')], anyDeviceSelected: false })).toBe('ant')
+    })
+
+    it('desktop: Bluetooth, serial and TCP failures stay silent', () => {
+        expect(getPairingHint({ platform: 'desktop', interfaces: [down('ble'), down('serial'), down('tcpip'), up('ant')], anyDeviceSelected: false })).toBeUndefined()
+    })
+
+    it('no hint once a device is selected', () => {
+        expect(getPairingHint({ platform: 'desktop', interfaces: [down('ant')], anyDeviceSelected: true })).toBeUndefined()
+    })
+
+    it('derivePairingStatus returns S1b for a hint on first use', () => {
+        expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), up('ble')] })).toBe('S1b')
+    })
+
+    it('S4 takes precedence over S1b while initialising', () => {
+        expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), up('ble')], initialising: true })).toBe('S4')
+    })
+
+    it('S2 and S3 take precedence over S1b', () => {
+        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), up('wifi')], canStartRide: true })).toBe('S2')
+        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), up('wifi')], connectingDeviceName: 'X' })).toBe('S3')
+    })
+
+    it('S1 still wins when nothing can scan', () => {
+        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), down('wifi')] })).toBe('S1')
+    })
+
+    it('copy for each hint, full and short', () => {
+        expect(getPairingGuidanceText('S1b', { hint: 'bluetooth-permission' }).link).toBe('Open settings')
+        expect(getPairingGuidanceText('S1b', { hint: 'bluetooth-permission' }, 'short').text).toBe('Bluetooth not allowed.')
+        expect(getPairingGuidanceText('S1b', { hint: 'wifi-off' }).text)
+            .toBe('Wi-Fi is off. If your trainer connects over Wi-Fi, turn Wi-Fi on.')
+        expect(getPairingGuidanceText('S1b', { hint: 'ant' }).text)
+            .toBe('ANT+ stick not found. If you use one, plug it in, try another USB port, or close other apps that use it.')
+        expect(getPairingGuidanceText('S1b', { hint: 'ant' }).link).toBeUndefined()
+    })
+
+    it('S1 mobile with Bluetooth denied does not say off', () => {
+        expect(getPairingGuidanceText('S1', { platform: 'mobile', bluetoothDenied: true })).toEqual({
+            text: "Can't search: Bluetooth is not allowed.",
+            link: 'Open settings',
+        })
     })
 })
 
