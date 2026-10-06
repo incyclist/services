@@ -396,36 +396,15 @@ describe('DevicesPageService - characterization of current pairing page behaviou
             expect((service as any).openedCapability).toBe(IncyclistCapability.Power)
         })
 
-        test('closing the list with enabled=false unselects all devices of that capability', async ()=> {
+        test('closing the list keeps the selection and closes the device-selection state', async ()=> {
             setPairingState({ capabilities: [ { capability: IncyclistCapability.Power, devices: [device()], selected: undefined } ] })
             ;(service as any).openedCapability = IncyclistCapability.Power
 
-            await (service as any).closeDeviceSelection(false)
-
-            expect(pairing.unselectDevices).toHaveBeenCalledWith(IncyclistCapability.Power)
-            expect((service as any).openedCapability).toBeUndefined()
-            expect(stateMachine.onDeviceSelectionClosed).toHaveBeenCalled()
-        })
-
-        test('closing the list with enabled=true keeps the selection', async ()=> {
-            setPairingState({ capabilities: [ { capability: IncyclistCapability.Power, devices: [device()], selected: undefined } ] })
-            ;(service as any).openedCapability = IncyclistCapability.Power
-
-            await (service as any).closeDeviceSelection(true)
+            await (service as any).closeDeviceSelection()
 
             expect(pairing.unselectDevices).not.toHaveBeenCalled()
             expect((service as any).openedCapability).toBeUndefined()
-        })
-
-        test('unselecting a tile (✕) unselects that capability and refreshes the page', ()=> {
-            setPairingState({ capabilities: [ { capability: IncyclistCapability.Power, devices: [device()], selected: undefined } ] })
-            const emit = jest.spyOn((service as any).getPageObserver(), 'emit')
-
-            ;(service as any).openedCapability = IncyclistCapability.Power
-            ;(service as any).closeDeviceSelection(false)
-
-            expect(pairing.unselectDevices).toHaveBeenCalledWith(IncyclistCapability.Power)
-            expect(emit).toHaveBeenCalledWith('page-update')
+            expect(stateMachine.onDeviceSelectionClosed).toHaveBeenCalled()
         })
     })
 

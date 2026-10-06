@@ -354,7 +354,7 @@ export class DevicesPageService extends IncyclistPageService {
             canSelectAll: this.openedCapability==='control',
             disabled,
             
-            onClose: (enabled)=>{ this.closeDeviceSelection(enabled)},
+            onClose: ()=>{ this.closeDeviceSelection()},
             
 
         }
@@ -393,7 +393,7 @@ export class DevicesPageService extends IncyclistPageService {
         const capability = this.openedCapability
         this.logEvent( {message:'device selected', capability, device:d.name})
 
-        this.closeDeviceSelection(true)
+        this.closeDeviceSelection()
         this.getDevicePairing().selectDevice( capability, d.udid,addAll)
 
         this.updatePage()
@@ -417,20 +417,15 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
 
-    protected closeDeviceSelection( enabled: boolean) {
+    // closing the list never unselects: unselecting is done from the tile
+    protected closeDeviceSelection() {
         // diagnostic: production logs have shown this firing multiple times while the
         // Pairing screen was reportedly not the active page - the caller could not be
         // confirmed from static analysis alone, so capture the call stack to identify it
         // the next time this is captured in production.
-        this.logEvent( {message:'capability closed', capability:this.openedCapability, enabled, caller:new Error().stack})
+        this.logEvent( {message:'capability closed', capability:this.openedCapability, caller:new Error().stack})
 
-        if (!enabled) {
-            const all = this.state.capabilities??[]
-            const requested = all.find( c=>c.capability === this.openedCapability)
-            this.getDevicePairing().unselectDevices(requested.capability)
-        }
-
-        this.openedCapability = undefined       
+        this.openedCapability = undefined
         this.stateMachine.onDeviceSelectionClosed()
         this.updatePage()
     }

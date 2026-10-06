@@ -31,7 +31,7 @@ export type DeviceSelectionProps = {
     isScanning: boolean
     changeForAll: boolean
     canSelectAll: boolean
-    onClose: (enabled:boolean)=>void    
+    onClose: ()=>void
 }
 
 export type TConnectState = 'failed' | 'connected' | 'connecting'
