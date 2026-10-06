@@ -13,8 +13,8 @@ import { useDeviceConfiguration } from '../configuration'
 import { useIncyclist } from '../../ui'
 import { Observer } from '../../base/types'
 import { useDeviceRide } from '../ride'
-import { usePairingVisitTracker } from './visit-tracker-factory'
-import type { PairingVisitTracker } from './visit-tracker'
+import { usePairingVisitTracker } from './visit-log-factory'
+import type { PairingVisitTracker } from './visit-log'
 import type { PairingExitVia } from './types'
 
 

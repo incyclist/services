@@ -4,8 +4,8 @@ import { useAppState } from '../../appstate'
 import {
     createPairingVisitStore, formatLocalDate, initPairingVisitTracker, PAIRING_VISITS_STATE_KEY,
     toVisitPlatform, usePairingVisitTracker
-} from './visit-tracker-factory'
-import { PAGE_LEFT_EVENT } from './visit-tracker'
+} from './visit-log-factory'
+import { PAGE_LEFT_EVENT } from './visit-log'
 
 jest.mock('../../api', () => ({ getBindings: jest.fn() }))
 jest.mock('../../appstate', () => ({ useAppState: jest.fn() }))
@@ -95,7 +95,7 @@ describe('usePairingVisitTracker before launch', () => {
             const appState = createAppState()
             ;(require('../../appstate').useAppState as jest.Mock).mockReturnValue(appState)
             ;(require('../../api').getBindings as jest.Mock).mockReturnValue({ appInfo: { session: 's', getChannel: () => 'mobile' } })
-            const { usePairingVisitTracker: use } = require('./visit-tracker-factory')
+            const { usePairingVisitTracker: use } = require('./visit-log-factory')
             const tracker = use()
             expect((tracker as any).deps.platform).toBe('mobile')
             expect(use()).toBe(tracker)

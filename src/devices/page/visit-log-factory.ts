@@ -1,7 +1,7 @@
 import { EventLogger } from 'gd-eventlog'
 import { getBindings } from '../../api'
 import { useAppState } from '../../appstate'
-import { PairingVisitTracker } from './visit-tracker'
+import { PairingVisitTracker } from './visit-log'
 import type { PairingVisitRecord, PairingVisitStore, PairingVisitTrackerDeps } from './types'
 
 export const PAIRING_VISITS_STATE_KEY = 'pairingVisits'

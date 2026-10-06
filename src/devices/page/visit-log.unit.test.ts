@@ -1,5 +1,5 @@
 import type { PairingVisitRecord, PairingVisitStore } from "./types"
-import { PairingVisitTracker, PAGE_LEFT_EVENT, VISIT_UNCLOSED_EVENT } from "./visit-tracker"
+import { PairingVisitTracker, PAGE_LEFT_EVENT, VISIT_UNCLOSED_EVENT } from "./visit-log"
 
 const DAY = 24 * 60 * 60 * 1000
 
