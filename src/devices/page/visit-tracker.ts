@@ -92,11 +92,12 @@ export class PairingVisitTracker {
         return { visitId }
     }
 
-    onBackground(): void {
+    onBackground({ canStartRide }: { canStartRide?: boolean } = {}): void {
         const record = this.deps.store.get()
         const last = record?.last
         if (!record || !last || last.closed || last.backgroundedAt !== undefined) return
-        this.deps.store.set({ ...record, last: { ...last, backgroundedAt: this.deps.now() } })
+        const refreshed = canStartRide ?? last.canStartRide
+        this.deps.store.set({ ...record, last: { ...last, canStartRide: refreshed, backgroundedAt: this.deps.now() } })
     }
 
     onForeground(): void {

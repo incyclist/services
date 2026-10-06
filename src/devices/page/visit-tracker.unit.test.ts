@@ -135,6 +135,21 @@ describe('PairingVisitTracker', () => {
             expect(h.record?.last?.via).toBe('app_exit')
         })
 
+        it('an unclosed visit carries the canStartRide last refreshed when backgrounded', () => {
+            const h = new Harness()
+            const first = h.tracker('session-a')
+            first.onAppLaunch(false)
+            first.openVisit({ forRide: false })
+            first.onBackground({ canStartRide: true })
+
+            const relaunch = h.tracker('session-b')
+            relaunch.onAppLaunch(false)
+            expect(h.eventsNamed(VISIT_UNCLOSED_EVENT)[0].fields.canStartRide).toBe(true)
+
+            relaunch.openVisit({ forRide: false })
+            expect(h.record?.last?.previousVisitOutcome).toBe('app-exit-ready')
+        })
+
         it('an unclosed visit that was never backgrounded has null dwellMs', () => {
             const h = new Harness()
             h.tracker('session-a').onAppLaunch(false)

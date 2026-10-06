@@ -13,6 +13,9 @@ import { useDeviceConfiguration } from '../configuration'
 import { useIncyclist } from '../../ui'
 import { Observer } from '../../base/types'
 import { useDeviceRide } from '../ride'
+import { usePairingVisitTracker } from './visit-tracker-factory'
+import type { PairingVisitTracker } from './visit-tracker'
+import type { PairingExitVia } from './types'
 
 
 
@@ -26,6 +29,7 @@ export class DevicesPageService extends IncyclistPageService {
     protected openedInterfaceSettings!: TInterface
     protected interfaceSettingsObserver: Observer|undefined
     protected isPairingForRide: boolean = false
+    protected isVisitOpen: boolean = false
 
     constructor() {
         super('pairing')
@@ -37,6 +41,7 @@ export class DevicesPageService extends IncyclistPageService {
         try {
             this.logEvent({message:'page shown', page:'Pairing', forRide})
             this.isPairingForRide = forRide??false
+            this.openVisit()
 
             EventLogger.setGlobalConfig('page','Pairing')
             super.openPage()
@@ -82,7 +87,8 @@ export class DevicesPageService extends IncyclistPageService {
 
     closePage() {
         try {
-            this.logEvent({message:'page closed', page:'Pairing'})        
+            this.logEvent({message:'page closed', page:'Pairing'})
+            this.isVisitOpen = false
             EventLogger.setGlobalConfig('page',null)
             this.isPairingForRide =false
             super.closePage()
@@ -97,6 +103,7 @@ export class DevicesPageService extends IncyclistPageService {
 
     async pausePage() {
         try {
+            this.trackVisit( t=>t.onBackground({canStartRide:this.canStartRide()}), 'onBackground')
             await this.stateMachine.pause()
             this.logEvent({message:'page paused', page:'Pairing'})            
         }
@@ -107,6 +114,7 @@ export class DevicesPageService extends IncyclistPageService {
 
     async resumePage() {
         try {
+            this.trackVisit( t=>t.onForeground(), 'onForeground')
             this.stateMachine.resume()
 
             if (this.promiseOpen!==undefined)
@@ -439,13 +447,40 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
 
+    protected trackVisit( fn:(tracker:PairingVisitTracker)=>void, name:string):void {
+        try {
+            fn(this.getPairingVisitTracker())
+        }
+        catch(err) {
+            this.logError(err,name)
+        }
+    }
+
+    protected openVisit():void {
+        if (this.isVisitOpen)
+            return
+        this.trackVisit( t=>t.openVisit({forRide:this.isPairingForRide}), 'openVisit')
+        this.isVisitOpen = true
+    }
+
+    protected closeVisit(via:PairingExitVia):void {
+        this.trackVisit( t=>t.closeVisit(via,{canStartRide:this.canStartRide()}), 'closeVisit')
+        this.isVisitOpen = false
+    }
+
+    protected canStartRide():boolean {
+        return this.state?.canStartRide ?? false
+    }
+
     protected onSkip():void {
+        this.closeVisit('skip')
         const nextPage = this.getAppState().getPersistedState('page')??'routes'        
         this.moveTo(`/${nextPage}`)
 
     }
 
     protected onOK():void {
+        this.closeVisit('ok')
         this.getDevicePairing().prepareStart()
         this.getDevicePairing().setReadyToStart()
         this.getAppState().setState('paired',true)
@@ -466,7 +501,7 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
     protected onSimulate():void {
-
+        this.closeVisit('simulate')
         const simulator = this.getDeviceConfiguration().getSimulatorAdapterId()
         this.getDevicePairing().prepareStart([simulator])
 
@@ -479,7 +514,7 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
     protected onCancel():void {
-        
+        this.closeVisit('cancel')
         const nextPage = this.getAppState().getState('prevPage')
         this.moveTo(`/${nextPage}`)
     }
@@ -521,6 +556,11 @@ export class DevicesPageService extends IncyclistPageService {
     @Injectable
     protected getIncyclist() {
         return useIncyclist()
+    }
+
+    @Injectable
+    protected getPairingVisitTracker():PairingVisitTracker {
+        return usePairingVisitTracker()
     }
 }
 
