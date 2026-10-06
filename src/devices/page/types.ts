@@ -110,6 +110,7 @@ export interface PairingVisitLast {
     previousVisitAgeMs?: number
     closed: boolean
     via?: PairingExitVia
+    inferred?: boolean
     closedAt?: number
     rideAfter?: 'device' | 'simulate'
 }

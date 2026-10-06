@@ -133,6 +133,8 @@ describe('PairingVisitTracker', () => {
                 platform: 'desktop',
             })
             expect(h.record?.last?.via).toBe('app_exit')
+            expect(h.record?.last?.inferred).toBe(true)
+            expect(h.record?.last?.closedAt).toBe(h.record!.last!.openedAt + 30_000)
         })
 
         it('an unclosed visit carries the canStartRide last refreshed when backgrounded', () => {

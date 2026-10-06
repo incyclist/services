@@ -54,7 +54,7 @@ export class PairingVisitTracker {
         })
         this.deps.store.set({
             ...record,
-            last: { ...last, closed: true, via: 'app_exit', closedAt: now, backgroundedAt: undefined },
+            last: { ...last, closed: true, via: 'app_exit', inferred: true, closedAt: last.backgroundedAt ?? last.openedAt, backgroundedAt: undefined },
         })
     }
 
