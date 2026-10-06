@@ -85,3 +85,52 @@ export type DeviceListDisplayProps = {}
 
 export type TIncyclistCapability = 'power' | 'speed' | 'cadence' | 'heartrate' | 'control' | 'app_control'
 export type TDisplayCapability ='resistance'|'power'|'heartrate'|'cadence'|'speed'|'controller'
+
+export type PairingExitVia = 'ok' | 'skip' | 'simulate' | 'cancel' | 'app_exit'
+export type PreviousVisitOutcome =
+    | 'none'
+    | 'ready'
+    | 'skip-then-ride'
+    | 'skip-no-ride'
+    | 'simulate'
+    | 'app-exit-ready'
+    | 'app-exit-not-ready'
+
+export interface PairingVisitLast {
+    visitId: string
+    sessionId: string
+    openedAt: number
+    backgroundMs: number
+    backgroundedAt?: number
+    forRide: boolean
+    canStartRide: boolean
+    visitIndexToday: number
+    firstEverVisit: boolean
+    previousVisitOutcome: PreviousVisitOutcome
+    previousVisitAgeMs?: number
+    closed: boolean
+    via?: PairingExitVia
+    closedAt?: number
+    rideAfter?: 'device' | 'simulate'
+}
+
+export interface PairingVisitRecord {
+    date: string
+    countToday: number
+    firstEverPending: boolean
+    last?: PairingVisitLast
+}
+
+export interface PairingVisitStore {
+    get(): PairingVisitRecord | undefined
+    set(record: PairingVisitRecord): void
+}
+
+export interface PairingVisitTrackerDeps {
+    store: PairingVisitStore
+    sessionId: string
+    platform: 'desktop' | 'mobile'
+    now: () => number
+    today: () => string
+    log: (message: string, fields: Record<string, unknown>) => void
+}

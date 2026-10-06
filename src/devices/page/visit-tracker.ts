@@ -1,51 +1,9 @@
-export type PairingExitVia = 'ok' | 'skip' | 'simulate' | 'cancel' | 'app_exit'
-export type PreviousVisitOutcome =
-    | 'none'
-    | 'ready'
-    | 'skip-then-ride'
-    | 'skip-no-ride'
-    | 'simulate'
-    | 'app-exit-ready'
-    | 'app-exit-not-ready'
-
-export interface PairingVisitLast {
-    visitId: string
-    sessionId: string
-    openedAt: number
-    backgroundMs: number
-    backgroundedAt?: number
-    forRide: boolean
-    canStartRide: boolean
-    visitIndexToday: number
-    firstEverVisit: boolean
-    previousVisitOutcome: PreviousVisitOutcome
-    previousVisitAgeMs?: number
-    closed: boolean
-    via?: PairingExitVia
-    closedAt?: number
-    rideAfter?: 'device' | 'simulate'
-}
-
-export interface PairingVisitRecord {
-    date: string
-    countToday: number
-    firstEverPending: boolean
-    last?: PairingVisitLast
-}
-
-export interface PairingVisitStore {
-    get(): PairingVisitRecord | undefined
-    set(record: PairingVisitRecord): void
-}
-
-export interface PairingVisitTrackerDeps {
-    store: PairingVisitStore
-    sessionId: string
-    platform: 'desktop' | 'mobile'
-    now: () => number
-    today: () => string
-    log: (message: string, fields: Record<string, unknown>) => void
-}
+import type {
+    PairingExitVia,
+    PairingVisitLast,
+    PairingVisitTrackerDeps,
+    PreviousVisitOutcome
+} from "./types"
 
 export const PAGE_LEFT_EVENT = 'pairing page left'
 export const VISIT_UNCLOSED_EVENT = 'pairing visit unclosed'
