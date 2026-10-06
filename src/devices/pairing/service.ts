@@ -1,6 +1,6 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
-import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState  } from "./model";
+import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  isControlSelected,  PairingProps, PairingSettings, PairingState  } from "./model";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
@@ -1409,9 +1409,10 @@ export class DevicePairingService  extends IncyclistService{
         const power = this.getCapability(IncyclistCapability.Power)
         const speed =  this.getCapability(IncyclistCapability.Speed)
 
-        const controlOK = (control?.selected && control?.connectState==='connected')
-        const powerOK = (!control?.selected && power?.selected && power?.connectState==='connected') 
-        const speedOK = (!control?.selected && !power?.selected && speed?.selected && speed?.connectState==='connected')
+        const controlSelected = isControlSelected(control)
+        const controlOK = (controlSelected && control?.connectState==='connected')
+        const powerOK = (!controlSelected && power?.selected && power?.connectState==='connected')
+        const speedOK = (!controlSelected && !power?.selected && speed?.selected && speed?.connectState==='connected')
         
         const success = controlOK || powerOK || speedOK
             
