@@ -22,7 +22,7 @@ export const DESKTOP_MATRIX: Array<DesktopMatrixRow> = [
 
     // OK navigation (page.jsx onOKClicked): the destination depends on what is selected, not on the mode
     { area:'ok-navigation', name:'OK with a route selected', given:'selectedRoute set', expected:'navigate "/rideOK" with state {source}' },
-    { area:'ok-navigation', name:'OK with a workout selected', given:'selectedWorkout set', expected:'navigate "/rideDeviceOK" with state {source}', flag:'Routes now go to /rideOK. Workouts still go to /rideDeviceOK; decide whether they should follow the route case.' },
+    { area:'ok-navigation', name:'OK with a workout selected', given:'selectedWorkout set', expected:'navigate "/rideOK" with state {source}' },
     { area:'ok-navigation', name:'OK with free ride', given:'startSettings.type==="Free-Ride"', expected:'navigate "/rideDeviceOK" with state {source}' },
     { area:'ok-navigation', name:'OK with nothing selected', given:'no route, workout or free ride', expected:'navigate "/<persisted page ?? routes>" with state {source}' },
     { area:'ok-navigation', name:'OK closes the visit as ok', given:'any', expected:'closeVisit("ok") then devicePairing.prepareStart() and setReadyToStart()' },
