@@ -210,7 +210,7 @@ export class DesktopPairingPageService extends PairingPageService {
 
     protected onOK():void {
         this.closeVisit('ok')
-        this.getDevicePairing().prepareStart()
+        this.prepareForRide()
         this.getDevicePairing().setReadyToStart()
         this.getAppState().setState('paired',true)
 
@@ -221,7 +221,7 @@ export class DesktopPairingPageService extends PairingPageService {
     protected onSimulate():void {
         this.closeVisit('simulate')
         const simulator = this.getDeviceConfiguration().getSimulatorAdapterId()
-        this.getDevicePairing().prepareStart([simulator])
+        this.prepareForRide([simulator])
 
         const pathname = this.isPairingForRide ? '/rideSimulate' : `/${this.getPrevContentPage()}`
         this.moveTo(pathname, true, {source:this.source})

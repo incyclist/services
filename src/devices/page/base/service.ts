@@ -30,6 +30,13 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected isPairingForRide: boolean = false
     protected isVisitOpen: boolean = false
 
+    // set by onOK/onSimulate (via prepareForRide()) right before moveTo() navigates away - closePage()
+    // reads it to skip the full stop() that would otherwise re-pause the adapter(s) just handed to
+    // the ride. Deliberately separate from DevicePairingService.isReadyToStart(): that flag has its
+    // own, broader meaning elsewhere (skip re-pairing on the *next* ride start) and Simulate must
+    // never set it - only a confirmed real device should.
+    protected handingOffToRide: boolean = false
+
     constructor() {
         super('pairing')
         this.stateMachine = this.createOrchestrator()
@@ -54,6 +61,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         try {
             this.logEvent({message:'page shown', page:'Pairing', forRide})
             this.isPairingForRide = forRide??false
+            this.handingOffToRide = false
             this.openVisit()
 
             EventLogger.setGlobalConfig('page','Pairing')
@@ -106,12 +114,13 @@ export abstract class PairingPageService extends IncyclistPageService {
             this.isPairingForRide =false
             super.closePage()
 
-            // OK/Simulate already called prepareStart(), which pauses every adapter except the
-            // ones handed off to the ride and marks the pairing as confirmed ready - a plain
-            // stop() here (no adapter filter) would re-pause those too, right as the ride page
-            // needs them. Skip/Cancel never confirm, so isReadyToStart() is still false there.
-            if (!this.getDevicePairing().isReadyToStart())
+            // OK/Simulate already called prepareForRide(), which pauses every adapter except the
+            // one(s) handed off to the ride - a plain stop() here (no adapter filter) would
+            // re-pause those too, right as the ride page needs them. Skip/Cancel never prepare
+            // for a ride, so handingOffToRide is still false there.
+            if (!this.handingOffToRide)
                 this.stop()
+            this.handingOffToRide = false
 
             this.stateMachine.stop()
 
@@ -405,9 +414,17 @@ export abstract class PairingPageService extends IncyclistPageService {
 
     }
 
+    // prepares DevicePairingService for hand-off to the ride (pausing every adapter except
+    // `adapterFilter`) and flags closePage() to skip its own, unfiltered stop() - shared by
+    // onOK/onSimulate on both platforms.
+    protected prepareForRide(adapterFilter:Array<string>=[]):void {
+        this.getDevicePairing().prepareStart(adapterFilter)
+        this.handingOffToRide = true
+    }
+
     protected onOK():void {
         this.closeVisit('ok')
-        this.getDevicePairing().prepareStart()
+        this.prepareForRide()
         this.getDevicePairing().setReadyToStart()
         this.getAppState().setState('paired',true)
 
@@ -429,7 +446,7 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected onSimulate():void {
         this.closeVisit('simulate')
         const simulator = this.getDeviceConfiguration().getSimulatorAdapterId()
-        this.getDevicePairing().prepareStart([simulator])
+        this.prepareForRide([simulator])
 
         const prevContentPage = this.getPrevContentPage()
 

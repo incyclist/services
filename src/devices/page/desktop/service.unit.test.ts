@@ -394,15 +394,23 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
     describe('closePage', ()=> {
 
         test('stops the pairing when leaving without starting a ride (Skip/Cancel)', ()=> {
-            pairing.isReadyToStart.mockReturnValue(false)
-
             service.closePage()
 
             expect(pairing.stop).toHaveBeenCalled()
         })
 
-        test('does not re-stop the pairing when OK/Simulate already prepared it for the ride - that would re-pause the adapter just handed to the ride page', ()=> {
-            pairing.isReadyToStart.mockReturnValue(true)
+        test('does not re-stop the pairing after OK already prepared it for the ride - that would re-pause the adapter just handed to the ride page', ()=> {
+            ;(service as any).onOK()
+            pairing.stop.mockClear()
+
+            service.closePage()
+
+            expect(pairing.stop).not.toHaveBeenCalled()
+        })
+
+        test('does not re-stop the pairing after Simulate already prepared it for the ride', ()=> {
+            ;(service as any).onSimulate()
+            pairing.stop.mockClear()
 
             service.closePage()
 
