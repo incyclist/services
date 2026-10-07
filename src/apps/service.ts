@@ -1,4 +1,4 @@
-import { ActivityUploadFactory } from "../activities";
+import { ActivityUploadFactory } from "../activities/upload";
 import { Injectable } from "../base/decorators";
 import { IncyclistService } from "../base/service";
 import { Singleton } from "../base/types";

@@ -42,6 +42,50 @@ src/<module>/
 └── base/             # base classes scoped to this module
 ```
 
+### Variant Hierarchies (platform subclasses)
+
+When a module needs more than one concrete implementation of the same contract — most commonly a
+platform split (desktop vs. mobile) — **give each variant its own folder; never put an abstract
+base class and all its subclasses flat in one folder.** A folder holding more than one concrete
+`service.ts` for the same contract is the signal to split.
+
+Reference layout (`src/devices/page/`, a base class with a desktop and a mobile subclass):
+
+```
+src/<module>/
+├── index.ts              # barrel; picks the right variant by platform/channel
+├── types.ts              # pure re-export barrel: `export type * from './base/types'` etc. —
+│                          # never new types of its own
+├── base/
+│   ├── service.ts         # the abstract class — shared logic and abstract/overridable hooks only
+│   └── types.ts           # types shared by every variant
+├── desktop/
+│   ├── service.ts         # extends the base class; only this platform's differences
+│   └── types.ts           # types that extend/specialise the base ones for this variant only —
+│                           # omit this file entirely if the variant adds no types of its own
+└── mobile/
+    ├── service.ts
+    └── types.ts            # likewise, omitted here if mobile needs no types beyond the base ones
+```
+
+Rules:
+- One concrete class per variant folder, named after the variant's `service.ts` export (not the
+  folder) — e.g. `DesktopPairingPageService` in `desktop/service.ts`.
+- A variant folder's own `types.ts` only ever *extends or narrows* the base types
+  (`Omit<BaseProps,...> & {...}`), never redefines a field the base already owns under a new shape.
+- The module's top-level `types.ts` stays a barrel. If you catch yourself adding an actual `type`
+  or `interface` body there instead of to the right variant's own file, that's the module outgrowing
+  the barrel — split it, don't accumulate in the root.
+- This mirrors `base/` already called out above — the difference is purely folder-per-variant once
+  there's more than one concrete subclass, so the base/desktop/mobile split doesn't collapse back
+  into one folder as a module grows.
+
+**Why this matters beyond readability:** `types.ts` files that are already isolated per
+variant/module and never hold implementation are what would let a future `incyclist-services-types`
+package be extracted by moving files, not by rewriting them. Keep every exported type/interface in
+the owning folder's `types.ts` — never inline in `service.ts`, never in a sibling file — even for a
+single-variant module that doesn't (yet) need this split.
+
 ### Service Pattern
 
 All services follow the same skeleton:

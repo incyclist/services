@@ -86,7 +86,9 @@ describe('GpxDisplayService', () => {
             displayService: s,
             isVirtualShiftingEnabled: jest.fn().mockReturnValue(options.virtualShifting ?? false),
             getDisplayProperties: jest.fn(() => ({ dbColumns: [], position: {} })),
-            reset: jest.fn()
+            reset: jest.fn(),
+            isSimulated: jest.fn().mockReturnValue(false)
+
         }
 
         if (options.mockRideService) {
@@ -297,6 +299,90 @@ describe('GpxDisplayService', () => {
             setupMocks(service, {mockRideService: true})
             const props = service.getMapViewProps()
             expect(typeof props.onDisplayEvent).toBe('function')
+        })
+    })
+
+    // Simulating a GPX route uses the same Google Maps API key as a real ride, so a rider
+    // without their own key falls back to Map for the whole ride, rather than letting Simulate
+    // quietly run up usage against the shared key. Falling back is permanent for the ride
+    // (rideViewOverride), not re-evaluated per read - see getRideView()'s own comment.
+    describe('getRideView (simulate + personal API key fallback)', () => {
+        let service: GpxDisplayService
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            cleanupMocks(service)
+        })
+
+        test('not simulated: uses the configured ride view regardless of the API key', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(false)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+            })
+
+            expect((service as any).getRideView()).toBe('sv')
+        })
+
+        test('simulated with a personal API key: uses the configured ride view, no fallback', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(true)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(true),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+            })
+
+            expect((service as any).getRideView()).toBe('sv')
+        })
+
+        test('simulated with no personal API key: falls back to map', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(true)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+            })
+
+            expect((service as any).getRideView()).toBe('map')
+        })
+
+        test('simulated with only a development API key: still falls back to map - a dev key does not count as personal', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(true)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(true)
+            })
+
+            expect((service as any).getRideView()).toBe('map')
+        })
+
+        test('the fallback sticks for the rest of the ride, even once isSimulated later reports false', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(true)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+            })
+            expect((service as any).getRideView()).toBe('map')
+
+            mockRideService.isSimulated.mockReturnValue(false)
+
+            expect((service as any).getRideView()).toBe('map')
+        })
+
+        // regression test for the bug this logic exposed: getRideView() used to dereference
+        // this.service unguarded, which threw (and was silently swallowed elsewhere) whenever
+        // it ran before RideModeService.init() had wired this.service - see RideDisplayService
+        test('no ride service wired yet: does not throw, uses the configured ride view', () => {
+            setupMocks(service, {})
+
+            expect(() => (service as any).getRideView()).not.toThrow()
+            expect((service as any).getRideView()).toBe('sv')
         })
     })
 

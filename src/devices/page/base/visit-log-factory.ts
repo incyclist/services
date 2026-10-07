@@ -1,6 +1,6 @@
 import { EventLogger } from 'gd-eventlog'
-import { getBindings } from '../../api'
-import { useAppState } from '../../appstate'
+import { getBindings } from '../../../api'
+import { useAppState } from '../../../appstate'
 import { PairingVisitTracker } from './visit-log'
 import type { PairingVisitRecord, PairingVisitStore, PairingVisitTrackerDeps } from './types'
 

@@ -1,46 +1,67 @@
 import { EventLogger } from 'gd-eventlog'
-import { Injectable, Singleton } from '../../base/decorators'
-import { IncyclistPageService } from '../../base/pages'
-import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../pairing'
+import { Injectable } from '../../../base/decorators'
+import { IncyclistPageService } from '../../../base/pages'
+import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText } from '../../pairing'
 
-import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability, TInterface } from '../../types'
-import type { CapabilityData, DevicePairingData, InternalPairingState } from '../pairing'
-import { PairingPageStateMachine } from './statemachine'
+import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
+import type { CapabilityData, DevicePairingData, InternalPairingState } from '../../pairing'
 import { PageLogObserver } from './logobserver'
-import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../access'
 import { IncyclistCapability } from 'incyclist-devices'
-import { useDeviceConfiguration } from '../configuration'
-import { useIncyclist } from '../../ui'
-import { Observer } from '../../base/types'
-import { useDeviceRide } from '../ride'
+import { useDeviceConfiguration } from '../../configuration'
 import { usePairingVisitTracker } from './visit-log-factory'
 import type { PairingVisitTracker } from './visit-log'
 import type { PairingExitVia } from './types'
+import type { DesktopPairingDisplayProps } from '../desktop/types'
+import type { PairingOrchestrator } from './orchestrator'
 
-
-
-@Singleton
-export class DevicesPageService extends IncyclistPageService { 
+/**
+ * Pairing page logic shared by all platforms: page lifecycle, device list, tile and button props,
+ * navigation handlers and visit tracking.
+ *
+ * Platform differences live in the abstract hooks: the orchestrator, the page display props and
+ * any platform-only handlers in the subclass.
+ */
+export abstract class PairingPageService extends IncyclistPageService {
 
     protected promiseOpen:Promise<void>|undefined
-    protected stateMachine: PairingPageStateMachine
+    protected stateMachine: PairingOrchestrator
     protected logObserver:PageLogObserver
     protected openedCapability: IncyclistCapability|undefined
-    protected openedInterfaceSettings!: TInterface
-    protected interfaceSettingsObserver: Observer|undefined
     protected isPairingForRide: boolean = false
     protected isVisitOpen: boolean = false
 
+    // set by onOK/onSimulate (via prepareForRide()) right before moveTo() navigates away - closePage()
+    // reads it to skip the full stop() that would otherwise re-pause the adapter(s) just handed to
+    // the ride. Deliberately separate from DevicePairingService.isReadyToStart(): that flag has its
+    // own, broader meaning elsewhere (skip re-pairing on the *next* ride start) and Simulate must
+    // never set it - only a confirmed real device should.
+    protected handingOffToRide: boolean = false
+
     constructor() {
         super('pairing')
-        this.stateMachine = new PairingPageStateMachine()
+        this.stateMachine = this.createOrchestrator()
         this.logObserver = new PageLogObserver('Pairing')
     }
+
+    /** The orchestrator that drives the pairing lifecycle for this platform. */
+    protected abstract createOrchestrator(): PairingOrchestrator
+
+    /** The display props for this platform's pairing screen. Desktop's interface shape differs
+     * from mobile's (raw state vs. the 4-value display mapping, see page/types.ts), hence the union. */
+    abstract getPageDisplayProperties(): PairingDisplayProps | DesktopPairingDisplayProps
+
+    /**
+     * The `DevicePairingService.usage` mode for this platform: 'page' drives pairing through the
+     * state machine orchestrator (mobile); 'direct' makes `DevicePairingService` run its own
+     * scan/pair loop (desktop). See `start()`.
+     */
+    protected abstract getUsageMode(): 'page' | 'direct'
 
     openPage(forRide?:boolean):IObserver {
         try {
             this.logEvent({message:'page shown', page:'Pairing', forRide})
             this.isPairingForRide = forRide??false
+            this.handingOffToRide = false
             this.openVisit()
 
             EventLogger.setGlobalConfig('page','Pairing')
@@ -64,7 +85,9 @@ export class DevicesPageService extends IncyclistPageService {
             // stateChangeCallback, leaving the Pairing screen stuck with no further updates.
             if (this.stateMachine.state!=='Idle') {
                 this.logEvent({message:'state machine was not in expected state on open, resetting', page:'Pairing', state:this.stateMachine.state})
-                this.stateMachine.stop()
+                // orchestrator.stop() is `Promise<void> | void` depending on implementation - fine
+                // to not await here, start() right below re-arms regardless of when stop() settles
+                void this.stateMachine.stop()
                 this.stateMachine.start( onStateMachineUpdate)
             }
 
@@ -92,8 +115,17 @@ export class DevicesPageService extends IncyclistPageService {
             EventLogger.setGlobalConfig('page',null)
             this.isPairingForRide =false
             super.closePage()
-            this.stop()
-            this.stateMachine.stop()
+
+            // OK/Simulate already called prepareForRide(), which pauses every adapter except the
+            // one(s) handed off to the ride - a plain stop() here (no adapter filter) would
+            // re-pause those too, right as the ride page needs them. Skip/Cancel never prepare
+            // for a ride, so handingOffToRide is still false there.
+            if (!this.handingOffToRide)
+                this.stop().catch( err=>{ this.logError(err,'closePage') })
+            this.handingOffToRide = false
+
+            // see openPage(): orchestrator.stop() may or may not return a promise
+            void this.stateMachine.stop()
 
         }
         catch(err) {
@@ -105,7 +137,7 @@ export class DevicesPageService extends IncyclistPageService {
         try {
             this.trackVisit( t=>t.onBackground({canStartRide:this.canStartRide()}), 'onBackground')
             await this.stateMachine.pause()
-            this.logEvent({message:'page paused', page:'Pairing'})            
+            this.logEvent({message:'page paused', page:'Pairing'})
         }
         catch(err) {
             this.logError(err,'pausePage')
@@ -128,9 +160,9 @@ export class DevicesPageService extends IncyclistPageService {
 
 
             await this.promiseOpen
-            
+
             delete this.promiseOpen
-            this.logEvent({message:'page resumed', page:'Pairing'})                
+            this.logEvent({message:'page resumed', page:'Pairing'})
 
         }
         catch(err) {
@@ -139,152 +171,43 @@ export class DevicesPageService extends IncyclistPageService {
 
     }
 
-
-    getPageDisplayProperties():PairingDisplayProps {
-
-        const title = 'Devices'
-
-        const onExit = ()=> {
-            try {
-                const ui = this.getBindings().ui
-                useIncyclist().onAppExit()
-                    .then( ()=>{
-                        ui.quit()                        
-                    })
-                    .catch( ()=>{})                
-            }
-            catch(err) {
-                this.logError(err,'onExit')
-            }
-        }
-
-        try {
-            const caps = this.state.capabilities??[]
-            const ifs = this.state.interfaces??[]
-            useDeviceAccess().enrichWithAccessState(ifs)
-
-            const interfaces = ifs.map( i=>{ return this.getInterfaceDisplayProps(i) })
-
-            const loading = this.promiseOpen!=undefined
-            const status = getPairingStatusDisplay({
-                platform: 'mobile',
-                interfaces: toPairingInterfaceStates(ifs),
-                capabilities: caps,
-                canStartRide: this.canStartRide(),
-                loading,
-                rideMode: this.isPairingForRide,
-            })
-            const capProps = caps.map( c=>this.getCapabilityDisplayProps( c, status.id==='S1' ))
-
-            const CP = (cap:TIncyclistCapability) => capProps.find( c => c.capability===cap)
-
-            const top = [
-                CP('control'),
-                CP('power'),
-                CP('speed')
-            ].filter( c=>c!==null && c!==undefined)
-            const bottom = [
-                CP('heartrate'),
-                CP('cadence'),
-                CP('app_control')
-            ].filter( c=>c!==null && c!==undefined)
-
-            const trainerSelected = Boolean(caps.find( c=>c.capability===IncyclistCapability.Control)?.selected)
-            const rowLabels = {
-                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected)),
-                bottom: getPairingGuidanceText('row-optional'),
-            }
-
-            const buttons = this.getButtonsDisplayProps()
-
-            return {
-
-                title,
-                readyToStart: this.canStartRide(),
-                status,
-                capabilities: { top, bottom, rowLabels },
-                interfaces,
-                deviceSelection: this.getDeviceListDisplayProps(),
-                showInterfaceSettings: this.openedInterfaceSettings,                
-                buttons,
-                onExit
-            }
-
-
-
-        }
-        catch(err) {
-            return {
-                title,
-                capabilities: { top:[], bottom:[]},
-                interfaces:[],
-                buttons: [{ label:'Skip', primary:true, onClick:this.onSkip.bind(this) }],
-                showInterfaceSettings: this.openedInterfaceSettings,                
-                onExit
-            }
-
-        }
-
-    }
-
-
-    public getInterfaceSettingsObserver():Observer {
-        this.interfaceSettingsObserver = this.interfaceSettingsObserver??new Observer()        
-        return this.interfaceSettingsObserver
-
-    }
-
-    public getInterfaceSettingsDisplayProps():InterfaceSettingsDisplayProps {
-        if (!this.openedInterfaceSettings)
-            return 
-
-        const ifs = this.state.interfaces??[]
-        const info = ifs.find( isd => isd.name == this.openedInterfaceSettings)
-
-        return {
-            state: this.mapInterfaceState(info.state),   
-            enabled: info.enabled,            
-        }
-
-    }
-
-    enableInterface( i?:TInterface) {}
-    disableInterface( i?:TInterface) {}
-    reconnectInterface( i?:TInterface) {}
-
-    refreshInterface( i?:TInterface) {
-        
-    }
-
-
-    closeInterfaceSettings() {
-        this.openedInterfaceSettings = undefined
-        this.interfaceSettingsObserver?.stop()
-        this.updatePage()
-    }
-
-
-
     protected getCapabilityDisplayProps(data:CapabilityData, noSearch:boolean=false):CapabilityDisplayProps {
         const {capability:cap,deviceName, connectState,value,unit,disabled} = data
 
         const capability = this.getTCapability(cap)
-
-        const adapaters = this.state.adapters??[]
-
-        const adapter = adapaters.find( ai=>data.selected && ai.udid===data.selected) 
-        const ifName = adapter?.adapter?.getInterface()
-
-
         const title = this.getDisplayCapability(cap)
         const onClick = ()=> { this.openDeviceSelection(cap)}
 
-        
         const role = PAIRING_CAPABILITY_ROLES.find( r=>r.capability===cap)?.role
         const helpText = {
             full: getCapabilityHelpText(capability, 'full') ?? '',
             short: getCapabilityHelpText(capability, 'short') ?? '',
         }
+
+        // the rider turned this capability off (disabled, not merely unselected). This takes
+        // priority over the "not searching" (S1) and case B framing. T16: a device is still
+        // remembered (unselectDevices() keeps it, only disables the capability), shown dimmed
+        // with a toggle that turns it straight back on, no new scan needed. T16b: nothing is
+        // remembered (e.g. its device was deleted), shown as a plain tile inviting a fresh search.
+        if (disabled) {
+            const hasRememberedDevice = Boolean(deviceName)
+            return {
+                title, capability,
+                deviceName: hasRememberedDevice ? deviceName : undefined,
+                disabled: true,
+                role, helpText,
+                emptyFooter: hasRememberedDevice ? 'Not used' : 'Not used · tap to search',
+                onClick,
+                onUse: hasRememberedDevice ? ()=> { this.onCapabilityUse(cap) } : undefined,
+            }
+        }
+
+        const adapaters = this.state.adapters??[]
+        const adapter = adapaters.find( ai=>data.selected && ai.udid===data.selected)
+        const ifName = adapter?.adapter?.getInterface()
+
+        const onUnselect = data.selected ? ()=> { this.onCapabilityUnselect(cap) } : undefined
+
         let emptyFooter: string | undefined = undefined
         if (noSearch)
             emptyFooter = 'Not searching'
@@ -292,33 +215,9 @@ export class DevicesPageService extends IncyclistPageService {
             emptyFooter = getEmptyTileFooterText(role)
 
         return {
-            title, capability,deviceName:!disabled?deviceName:undefined, disabled, connectState,value:value?.toString(),unit,interface:ifName,
+            title, capability,deviceName, disabled:false, connectState,value:value?.toString(),unit,interface:ifName,
             role, helpText, emptyFooter,
-            onClick
-        }
-
-    }
-
-    protected mapInterfaceState( state:InterfaceState ):InterfaceDisplayState {
-        const mapping:Record<InterfaceState,InterfaceDisplayState> = {
-            connected: 'scanning',
-            connecting: "idle",
-            disconnected: "error",
-            disconnecting: 'idle',
-            unavailable: 'error',
-            unknown:'idle'
-        }
-
-        return mapping[state]
-    }
-
-    protected getInterfaceDisplayProps( info:EnrichedInterfaceSetting):InterfaceDisplayProps {
-
-        const {name,state} = info
-        return {
-            name, 
-            state: this.mapInterfaceState(state),         
-            onClick: ()=>{ this.openInterfaceSettings(name as TInterface)}    
+            onClick, onUnselect
         }
 
     }
@@ -326,7 +225,7 @@ export class DevicesPageService extends IncyclistPageService {
     protected getDeviceListDisplayProps():DeviceSelectionProps|undefined {
 
         if (!this.openedCapability)
-            return 
+            return
 
         const all = this.state.capabilities??[]
         const requested = all.find( c=>c.capability === this.openedCapability)
@@ -346,15 +245,14 @@ export class DevicesPageService extends IncyclistPageService {
         const disabled = devices.length>0 && !devices.some( d=> d.isSelected)
 
         return {
-            capability: this.openedCapability,            
+            capability: this.openedCapability,
             devices,
             isScanning: this.stateMachine.selectState==='Active',
             changeForAll: false,
             canSelectAll: this.openedCapability==='control',
             disabled,
-            
-            onClose: (enabled)=>{ this.closeDeviceSelection(enabled)},
-            
+
+            onClose: ()=>{ this.closeDeviceSelection()},
 
         }
 
@@ -362,14 +260,7 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
     protected updatePage() {
-        this.getPageObserver().emit('page-update')        
-    }
-
-    protected openInterfaceSettings( i:TInterface) {
-
-        const info = this.state.interfaces.find( id=>id.name === i)        
-        this.openedInterfaceSettings = i
-        this.updatePage()
+        this.getPageObserver().emit('page-update')
     }
 
     protected onEnableCapability(enabled:boolean) {
@@ -377,14 +268,16 @@ export class DevicesPageService extends IncyclistPageService {
         const requested = all.find( c=>c.capability === this.openedCapability)
         requested.disabled = !enabled
         this.updatePage()
-        
+
     }
-    
+
     protected openDeviceSelection(cap:IncyclistCapability) {
         this.logEvent( {message:'capability clicked', capability:cap, eventSource:'user'})
 
+        // opening the list to browse does not switch the capability back on by itself: only
+        // picking a device (selectSingleDevice) or the tile's own toggle (onCapabilityUse) does
         this.openedCapability = cap;
-        this.stateMachine.onDeviceSelectionOpened( ()=>{ this.updatePage() })       
+        this.stateMachine.onDeviceSelectionOpened( ()=>{ this.updatePage() })
         this.updatePage()
     }
 
@@ -392,8 +285,26 @@ export class DevicesPageService extends IncyclistPageService {
         const capability = this.openedCapability
         this.logEvent( {message:'device selected', capability, device:d.name})
 
-        this.closeDeviceSelection(true)
+        this.closeDeviceSelection()
         this.getDevicePairing().selectDevice( capability, d.udid,addAll)
+
+        this.updatePage()
+    }
+
+    protected onCapabilityUnselect(cap:IncyclistCapability) {
+        this.logEvent( {message:'capability unselect clicked', capability:cap, eventSource:'user'})
+
+        this.getDevicePairing().unselectDevices(cap)
+            .catch( err=>{ this.logError(err,'onCapabilityUnselect') })
+
+        this.updatePage()
+    }
+
+    // turns a switched-off capability (T16) back on, restoring its remembered device with no scan
+    protected onCapabilityUse(cap:IncyclistCapability) {
+        this.logEvent( {message:'capability use clicked', capability:cap, eventSource:'user'})
+
+        this.getDevicePairing().useCapability(cap)
 
         this.updatePage()
     }
@@ -408,46 +319,47 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
 
-    protected async closeDeviceSelection( enabled: boolean) {
+    // closing the list never unselects: unselecting is done from the tile
+    protected closeDeviceSelection() {
         // diagnostic: production logs have shown this firing multiple times while the
         // Pairing screen was reportedly not the active page - the caller could not be
         // confirmed from static analysis alone, so capture the call stack to identify it
         // the next time this is captured in production.
-        this.logEvent( {message:'capability closed', capability:this.openedCapability, enabled, caller:new Error().stack})
+        this.logEvent( {message:'capability closed', capability:this.openedCapability, caller:new Error().stack})
 
-        if (!enabled) {
-            const all = this.state.capabilities??[]
-            const requested = all.find( c=>c.capability === this.openedCapability)
-            this.getDevicePairing().unselectDevices(requested.capability)
-        }
-
-        this.openedCapability = undefined       
+        this.openedCapability = undefined
         this.stateMachine.onDeviceSelectionClosed()
         this.updatePage()
     }
 
+    // Simulate only makes sense when pairing for a ride - there's nothing to simulate when the
+    // page was opened outside a ride (e.g. "Devices" in the desktop nav bar, or mobile's device
+    // settings), so only Skip is offered there. Simulate itself used to also be gated on
+    // DeviceRideService.canEnforceSimulator(), which protected the maps API key from being used
+    // to simulate a GPX route without the rider's own key; that protection now belongs on the
+    // ride page itself (falling back when there is no personal key), not here.
     protected getButtonsDisplayProps() : PairingButtonProps{
-        if (this.state?.canStartRide) 
+        const labelOK = this.isPairingForRide ? 'Start' : 'OK'
+        const labelSkip = this.isPairingForRide ? 'Cancel' : 'Skip'
+
+        if (this.state?.canStartRide)
             return [
-                { label:'OK', primary:true, onClick:this.onOK.bind(this) }
+                { label:labelOK, primary:true, onClick:this.onOK.bind(this) }
             ]
 
-        if (this.getDeviceRide().canEnforceSimulator()) {
+        if (!this.isPairingForRide)
             return [
-                { label:'Simulate', primary:true, onClick:this.onSimulate.bind(this) },
-                { label:'Skip', primary:false, onClick:this.onSkip.bind(this) }
+                { label:labelSkip, primary:true, onClick:this.onSkip.bind(this) }
             ]
-        }
 
-        return  [
-            { label:'Skip', primary:true, onClick:this.onSkip.bind(this) }
+        return [
+            { label:'Simulate', primary:true, onClick:this.onSimulate.bind(this) },
+            { label:labelSkip, primary:false, onClick:this.onSkip.bind(this) }
         ]
-        
-
     }
 
     protected getTCapability(capabability:IncyclistCapability):TIncyclistCapability {
-        
+
         const mapping: Record<IncyclistCapability,TIncyclistCapability> = {
             'app_control': 'app_control',
             'cadence': 'cadence',
@@ -501,27 +413,36 @@ export class DevicesPageService extends IncyclistPageService {
 
     protected onSkip():void {
         this.closeVisit('skip')
-        const nextPage = this.getAppState().getPersistedState('page')??'routes'        
+        const nextPage = this.getAppState().getPersistedState('page')??'routes'
         this.moveTo(`/${nextPage}`)
 
     }
 
+    // prepares DevicePairingService for hand-off to the ride (pausing every adapter except
+    // `adapterFilter`) and flags closePage() to skip its own, unfiltered stop() - shared by
+    // onOK/onSimulate on both platforms.
+    protected prepareForRide(adapterFilter:Array<string>=[]):void {
+        this.getDevicePairing().prepareStart(adapterFilter)
+            .catch( err=>{ this.logError(err,'prepareForRide') })
+        this.handingOffToRide = true
+    }
+
     protected onOK():void {
         this.closeVisit('ok')
-        this.getDevicePairing().prepareStart()
+        this.prepareForRide()
         this.getDevicePairing().setReadyToStart()
         this.getAppState().setState('paired',true)
-        
+
         const prevContentPage = this.getPrevContentPage()
         const prevPage = this.getAppState().getState('prevPage')
         if (!prevPage) { // we just launched, go to content selection page
-            this.moveTo(prevContentPage)
+            this.moveTo(`/${prevContentPage}`)
         }
         else { // we were called from somewhere
             if (this.isPairingForRide)
                 this.moveTo('/rideDeviceOK')
-            else 
-                this.moveTo(prevContentPage)
+            else
+                this.moveTo(`/${prevContentPage}`)
 
         }
 
@@ -530,14 +451,14 @@ export class DevicesPageService extends IncyclistPageService {
     protected onSimulate():void {
         this.closeVisit('simulate')
         const simulator = this.getDeviceConfiguration().getSimulatorAdapterId()
-        this.getDevicePairing().prepareStart([simulator])
+        this.prepareForRide([simulator])
 
         const prevContentPage = this.getPrevContentPage()
 
         if (this.isPairingForRide)
             this.moveTo('/rideSimulate')
-        else 
-            this.moveTo(prevContentPage)
+        else
+            this.moveTo(`/${prevContentPage}`)
     }
 
     protected onCancel():void {
@@ -548,8 +469,8 @@ export class DevicesPageService extends IncyclistPageService {
 
 
 
-    protected async start( ) { 
-        this.getDevicePairing().usage = 'page'
+    protected async start( ) {
+        this.getDevicePairing().usage = this.getUsageMode()
         this.getDevicePairing().start( ()=>{
             this.updatePage()
         })
@@ -569,10 +490,6 @@ export class DevicesPageService extends IncyclistPageService {
     protected getDevicePairing() {
         return useDevicePairing()
     }
-    @Injectable
-    protected getDeviceRide() {
-        return useDeviceRide()
-    }
 
     @Injectable
     protected getDeviceConfiguration() {
@@ -580,15 +497,9 @@ export class DevicesPageService extends IncyclistPageService {
     }
 
 
-    @Injectable
-    protected getIncyclist() {
-        return useIncyclist()
-    }
 
     @Injectable
     protected getPairingVisitTracker():PairingVisitTracker {
         return usePairingVisitTracker()
     }
 }
-
-export const getDevicesPageService = ()=> new DevicesPageService()

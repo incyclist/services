@@ -39,6 +39,35 @@ describe('getPairingStatusDisplay', () => {
         expect(getPairingStatusDisplay(desktop).id).toBe('S1')
     })
 
+    it('desktop: not S1 when Wi-Fi (implicitly on outside Windows) can still scan, even with ANT+ and Bluetooth both off', () => {
+        const desktop: PairingStatusSource = {
+            ...base,
+            platform: 'desktop',
+            interfaces: [
+                { id: 'ble', enabled: false, available: false },
+                { id: 'ant', enabled: false, available: false },
+                { id: 'wifi', enabled: true, available: true },
+            ],
+        }
+        const status = getPairingStatusDisplay(desktop)
+        expect(status.id).not.toBe('S1')
+    })
+
+    it('desktop: a ride made ready purely via Wi-Fi (e.g. the simulator) reports S2, not S1', () => {
+        const desktop: PairingStatusSource = {
+            ...base,
+            platform: 'desktop',
+            canStartRide: true,
+            capabilities: [{ capability: 'control', selected: 'udid-1', deviceName: 'DCSIM FTMS', connectState: 'connected' }],
+            interfaces: [
+                { id: 'ble', enabled: false, available: false },
+                { id: 'ant', enabled: false, available: false },
+                { id: 'wifi', enabled: true, available: true },
+            ],
+        }
+        expect(getPairingStatusDisplay(desktop).id).toBe('S2')
+    })
+
     it('S2 names the ready device and offers OK outside ride mode', () => {
         const status = getPairingStatusDisplay({
             ...base,

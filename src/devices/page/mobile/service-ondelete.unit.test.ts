@@ -1,8 +1,8 @@
-import { Inject } from "../../base/decorators/Injection"
+import { Inject } from "../../../base/decorators/Injection"
 import { DevicesPageService } from "./service"
 import { IncyclistCapability } from "incyclist-devices"
-import { DevicePairingData } from "../pairing"
-import { Observer } from "../../base/types"
+import { DevicePairingData } from "../../pairing"
+import { Observer } from "../../../base/types"
 
 describe('DevicesPageService - device delete', ()=> {
 
