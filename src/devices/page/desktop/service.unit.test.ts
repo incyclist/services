@@ -133,6 +133,43 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
         })
     })
 
+    describe('rows and status', ()=> {
+
+        test('the top row label flips to the connected-trainer wording when a control device is selected', ()=> {
+            setPairingState({
+                capabilities: [ { capability: IncyclistCapability.Control, devices: [device()], selected: 'udid-1', deviceName: 'Trainer' } ],
+            })
+
+            const props = service.getPageDisplayProperties()
+
+            expect(props.capabilities.rowLabels.top).toEqual(getGuidanceFor('row-required-trainer'))
+        })
+
+        test('the top row label uses the plain wording when no control device is selected', ()=> {
+            setPairingState({ capabilities: [ { capability: IncyclistCapability.Control, devices: [], selected: undefined } ] })
+
+            const props = service.getPageDisplayProperties()
+
+            expect(props.capabilities.rowLabels.top).toEqual(getGuidanceFor('row-required'))
+        })
+
+        test('the bottom row label is always the optional wording', ()=> {
+            setPairingState({})
+
+            const props = service.getPageDisplayProperties()
+
+            expect(props.capabilities.rowLabels.bottom).toEqual(getGuidanceFor('row-optional'))
+        })
+
+        test('status is computed for the desktop platform', ()=> {
+            setPairingState({ canStartRide: true })
+
+            const props = service.getPageDisplayProperties()
+
+            expect(props.status).toBeDefined()
+        })
+    })
+
     describe('ok-navigation', ()=> {
 
         test('OK in ride mode starts the ride', ()=> {
@@ -331,3 +368,7 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
         })
     })
 })
+
+function getGuidanceFor(id: string) {
+    return jest.requireActual('../../pairing').getPairingGuidanceText(id)
+}

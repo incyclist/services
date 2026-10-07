@@ -11,6 +11,7 @@ import type { DeviceSelectionItemProps, DeviceSelectionProps, PairingExitVia, TC
 import type { DesktopInterfaceDisplayProps, DesktopPairingDisplayProps } from './types'
 
 import { EnrichedInterfaceSetting, useDeviceAccess } from '../../access'
+import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../../pairing'
 import type { IncyclistDeviceSettings, InterfaceSetting } from '../../configuration/model'
 import type { DevicePairingData, DeviceSelectState } from '../../pairing/model'
 
@@ -54,7 +55,16 @@ export class DesktopPairingPageService extends PairingPageService {
             this.getDeviceAccess().enrichWithAccessState(ifs)
 
             const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i))
-            const capProps = caps.map( c=>this.getCapabilityDisplayProps(c,false))
+
+            const status = getPairingStatusDisplay({
+                platform: 'desktop',
+                interfaces: toPairingInterfaceStates(ifs),
+                capabilities: caps,
+                canStartRide: this.canStartRide(),
+                loading: this.promiseOpen!==undefined,
+                rideMode: this.isPairingForRide,
+            })
+            const capProps = caps.map( c=>this.getCapabilityDisplayProps(c, status.id==='S1'))
 
             const CP = (cap:IncyclistCapability) => capProps.find( c=>c.capability===cap)
 
@@ -69,12 +79,19 @@ export class DesktopPairingPageService extends PairingPageService {
                 CP(IncyclistCapability.AppControl)
             ].filter( c=>c!==null && c!==undefined)
 
+            const trainerSelected = Boolean(caps.find( c=>c.capability===IncyclistCapability.Control)?.selected)
+            const rowLabels = {
+                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected)),
+                bottom: getPairingGuidanceText('row-optional'),
+            }
+
             const buttons = this.getButtonsDisplayProps()
 
             return {
                 title, labelOK, labelSkip,
                 readyToStart: this.canStartRide(),
-                capabilities: { top, bottom },
+                status,
+                capabilities: { top, bottom, rowLabels },
                 interfaces,
                 deviceSelection: this.getDeviceListDisplayProps(),
                 buttons,
