@@ -9,7 +9,7 @@ describe('DevicesPageService - tile unselect', ()=> {
 
     const pairing = {
         getState: jest.fn(),
-        unselectDevices: jest.fn(),
+        unselectDevices: jest.fn().mockResolvedValue(undefined),
     }
 
     const setCapability = (props: Record<string, unknown>) => {

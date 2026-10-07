@@ -85,7 +85,9 @@ export abstract class PairingPageService extends IncyclistPageService {
             // stateChangeCallback, leaving the Pairing screen stuck with no further updates.
             if (this.stateMachine.state!=='Idle') {
                 this.logEvent({message:'state machine was not in expected state on open, resetting', page:'Pairing', state:this.stateMachine.state})
-                this.stateMachine.stop()
+                // orchestrator.stop() is `Promise<void> | void` depending on implementation - fine
+                // to not await here, start() right below re-arms regardless of when stop() settles
+                void this.stateMachine.stop()
                 this.stateMachine.start( onStateMachineUpdate)
             }
 
@@ -119,10 +121,11 @@ export abstract class PairingPageService extends IncyclistPageService {
             // re-pause those too, right as the ride page needs them. Skip/Cancel never prepare
             // for a ride, so handingOffToRide is still false there.
             if (!this.handingOffToRide)
-                this.stop()
+                this.stop().catch( err=>{ this.logError(err,'closePage') })
             this.handingOffToRide = false
 
-            this.stateMachine.stop()
+            // see openPage(): orchestrator.stop() may or may not return a promise
+            void this.stateMachine.stop()
 
         }
         catch(err) {
@@ -292,6 +295,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.logEvent( {message:'capability unselect clicked', capability:cap, eventSource:'user'})
 
         this.getDevicePairing().unselectDevices(cap)
+            .catch( err=>{ this.logError(err,'onCapabilityUnselect') })
 
         this.updatePage()
     }

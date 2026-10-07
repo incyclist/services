@@ -103,6 +103,7 @@ export class MobilePairingPageService extends PairingPageService {
 
         }
         catch(err) {
+            this.logError(err,'getPageDisplayProperties')
             return {
                 title,
                 capabilities: { top:[], bottom:[]},
@@ -137,13 +138,12 @@ export class MobilePairingPageService extends PairingPageService {
 
     }
 
-    enableInterface( i?:TInterface) {}
-    disableInterface( i?:TInterface) {}
-    reconnectInterface( i?:TInterface) {}
-
-    refreshInterface( i?:TInterface) {
-
-    }
+    // not yet implemented: BleInterfaceSettings already calls these, but mobile has no backing
+    // action for enable/disable/reconnect/refresh yet - pre-existing no-ops, unchanged by this move
+    enableInterface( i?:TInterface) { /* not yet implemented */ }
+    disableInterface( i?:TInterface) { /* not yet implemented */ }
+    reconnectInterface( i?:TInterface) { /* not yet implemented */ }
+    refreshInterface( i?:TInterface) { /* not yet implemented */ }
 
 
     closeInterfaceSettings() {
@@ -177,8 +177,6 @@ export class MobilePairingPageService extends PairingPageService {
     }
 
     protected openInterfaceSettings( i:TInterface) {
-
-        const info = this.state.interfaces.find( id=>id.name === i)
         this.openedInterfaceSettings = i
         this.updatePage()
     }

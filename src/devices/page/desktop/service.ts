@@ -140,6 +140,7 @@ export class DesktopPairingPageService extends PairingPageService {
 
         this.closeDeviceSelection()
         this.getDevicePairing().selectDevice( capability, d.udid, changeForAll)
+            .catch( err=>{ this.logError(err,'onDeviceSelected') })
 
         this.updatePage()
     }
@@ -149,6 +150,7 @@ export class DesktopPairingPageService extends PairingPageService {
         this.logEvent( {message:'capability closed', capability:this.openedCapability})
 
         this.getDevicePairing().stopDeviceSelection()
+            .catch( err=>{ this.logError(err,'closeDeviceSelection') })
         this.openedCapability = undefined
         this.deviceSelectState = undefined
         this.updatePage()
@@ -225,6 +227,7 @@ export class DesktopPairingPageService extends PairingPageService {
     public onInterfaceSettingsChanged( name:string, settings:InterfaceSetting):void {
         this.logEvent( {message:'interface settings changed', interface:name})
         this.getDevicePairing().changeInterfaceSettings(name,settings)
+            .catch( err=>{ this.logError(err,'onInterfaceSettingsChanged') })
         this.closeInterfaceSettings()
     }
 
@@ -265,6 +268,7 @@ export class DesktopPairingPageService extends PairingPageService {
         const via:PairingExitVia = this.isPairingForRide ? 'cancel' : 'skip'
         this.closeVisit(via)
         this.getDevicePairing().stop()
+            .catch( err=>{ this.logError(err,'onSkip') })
 
         const pathname = this.source ?? `/${this.getPrevContentPage()}`
         this.moveTo(pathname)

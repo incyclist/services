@@ -564,7 +564,7 @@ export class DevicePairingService  extends IncyclistService{
     useCapability(capability:IncyclistCapability):void {
         try {
             this.getDeviceConfiguration().disableCapability(capability,false)
-            this.restart()
+            this.restart().catch( err=>{ this.logError(err,'useCapability') })
         }
         catch(err) { // istanbul ignore next
             this.logError(err, 'useCapability')
