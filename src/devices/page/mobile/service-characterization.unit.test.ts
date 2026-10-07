@@ -249,12 +249,22 @@ describe('DevicesPageService - characterization of current pairing page behaviou
             expect(labels).toEqual(['OK'])
         })
 
-        test('Simulate and Skip when no ride is possible', ()=> {
+        test('Simulate and Cancel when no ride is possible, opened for a ride', ()=> {
             setPairingState({ canStartRide: false })
+            ;(service as any).isPairingForRide = true
 
             const labels = service.getPageDisplayProperties().buttons.map(b => b.label)
 
-            expect(labels).toEqual(['Simulate', 'Skip'])
+            expect(labels).toEqual(['Simulate', 'Cancel'])
+        })
+
+        test('Skip only when no ride is possible, not opened for a ride - nothing to simulate', ()=> {
+            setPairingState({ canStartRide: false })
+            ;(service as any).isPairingForRide = false
+
+            const labels = service.getPageDisplayProperties().buttons.map(b => b.label)
+
+            expect(labels).toEqual(['Skip'])
         })
     })
 

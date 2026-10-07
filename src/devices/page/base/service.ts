@@ -312,10 +312,12 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.updatePage()
     }
 
-    // Simulate is always offered when the ride can't start yet - it used to be gated on
-    // DeviceRideService.canEnforceSimulator(), which also protected the maps API key from being
-    // used to simulate a GPX route without the rider's own key. That protection now belongs on
-    // the ride page itself (falling back when there is no personal key), not here.
+    // Simulate only makes sense when pairing for a ride - there's nothing to simulate when the
+    // page was opened outside a ride (e.g. "Devices" in the desktop nav bar, or mobile's device
+    // settings), so only Skip is offered there. Simulate itself used to also be gated on
+    // DeviceRideService.canEnforceSimulator(), which protected the maps API key from being used
+    // to simulate a GPX route without the rider's own key; that protection now belongs on the
+    // ride page itself (falling back when there is no personal key), not here.
     protected getButtonsDisplayProps() : PairingButtonProps{
         const labelOK = this.isPairingForRide ? 'Start' : 'OK'
         const labelSkip = this.isPairingForRide ? 'Cancel' : 'Skip'
@@ -323,6 +325,11 @@ export abstract class PairingPageService extends IncyclistPageService {
         if (this.state?.canStartRide)
             return [
                 { label:labelOK, primary:true, onClick:this.onOK.bind(this) }
+            ]
+
+        if (!this.isPairingForRide)
+            return [
+                { label:labelSkip, primary:true, onClick:this.onSkip.bind(this) }
             ]
 
         return [

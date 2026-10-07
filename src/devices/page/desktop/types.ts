@@ -18,6 +18,4 @@ export type DesktopInterfaceDisplayProps = {
 
 export type DesktopPairingDisplayProps = Omit<PairingDisplayProps,'interfaces'> & {
     interfaces?: Array<DesktopInterfaceDisplayProps>
-    labelOK?: string
-    labelSkip?: string
 }

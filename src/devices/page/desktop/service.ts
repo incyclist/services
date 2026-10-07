@@ -19,8 +19,6 @@ import type { DevicePairingData, DeviceSelectState } from '../../pairing/model'
  * Pairing page for desktop (web-ui/Electron). Desktop uses the direct orchestrator (today's
  * `DevicePairingService` `usage:'direct'` loop, unchanged), shows every interface (ANT+, BLE,
  * serial, TCP/IP, WiFi) and drives the device list directly rather than through the orchestrator.
- *
- * Not wired to web-ui yet: this class is built and tested standalone first.
  */
 @Singleton
 export class DesktopPairingPageService extends PairingPageService {
@@ -45,9 +43,7 @@ export class DesktopPairingPageService extends PairingPageService {
 
     getPageDisplayProperties():DesktopPairingDisplayProps {
 
-        const title = this.isPairingForRide ? 'Paired Devices for Ride' : 'Paired Devices'
-        const labelOK = this.isPairingForRide ? 'Start' : 'OK'
-        const labelSkip = this.isPairingForRide ? 'Cancel' : 'Skip'
+        const title = 'Devices'
 
         try {
             const caps = this.state.capabilities??[]
@@ -91,7 +87,7 @@ export class DesktopPairingPageService extends PairingPageService {
             const buttons = this.getButtonsDisplayProps()
 
             return {
-                title, labelOK, labelSkip,
+                title,
                 readyToStart: this.canStartRide(),
                 status,
                 capabilities: { top, bottom, rowLabels },
@@ -104,10 +100,10 @@ export class DesktopPairingPageService extends PairingPageService {
         catch(err) {
             this.logError(err,'getPageDisplayProperties')
             return {
-                title, labelOK, labelSkip,
+                title,
                 capabilities: { top:[], bottom:[] },
                 interfaces: [],
-                buttons: [{ label:labelSkip, primary:true, onClick:this.onSkip.bind(this) }],
+                buttons: [{ label:'Skip', primary:true, onClick:this.onSkip.bind(this) }],
                 showInterfaceSettings: undefined,
             }
         }

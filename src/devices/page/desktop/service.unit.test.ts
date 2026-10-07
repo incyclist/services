@@ -123,13 +123,13 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
             expect(buttons.map(b=>b.label)).toEqual(['Simulate', 'Cancel'])
         })
 
-        test('not ready, normal mode: primary "Simulate", secondary "Skip"', ()=> {
+        test('not ready, normal mode: "Skip" only - there is no ride to simulate', ()=> {
             setPairingState({ canStartRide: false })
             ;(service as any).isPairingForRide = false
 
             const buttons = service.getPageDisplayProperties().buttons
 
-            expect(buttons.map(b=>b.label)).toEqual(['Simulate', 'Skip'])
+            expect(buttons.map(b=>b.label)).toEqual(['Skip'])
         })
     })
 
