@@ -2,7 +2,9 @@ import { EventLogger } from 'gd-eventlog'
 import { UserInterfaceServcie } from './service'
 import { IncyclistPlatform } from './types'
 import { IncyclistPageService } from '../base/pages'
-import * as devices from '../devices'
+import * as deviceAccess from '../devices/access'
+import * as devicePairing from '../devices/pairing'
+import * as pairingVisit from '../devices/page/base/visit-log-factory'
 
 describe('UserInterfaceServcie - onSessionStart', () => {
 
@@ -105,10 +107,16 @@ describe('UserInterfaceServcie - initLogging', () => {
     })
 })
 
-jest.mock('../devices', () => ({
-    ...jest.requireActual('../devices'),
-    useDevicePairing: jest.fn(),
+jest.mock('../devices/access', () => ({
+    ...jest.requireActual('../devices/access'),
     useDeviceAccess: jest.fn(),
+}))
+jest.mock('../devices/pairing', () => ({
+    ...jest.requireActual('../devices/pairing'),
+    useDevicePairing: jest.fn(),
+}))
+jest.mock('../devices/page/base/visit-log-factory', () => ({
+    ...jest.requireActual('../devices/page/base/visit-log-factory'),
     usePairingVisitTracker: jest.fn(),
     initPairingVisitTracker: jest.fn(),
 }))
@@ -124,10 +132,10 @@ describe('UserInterfaceServcie - onAppExit', () => {
         ;(service as any).sendAppExitMessage = jest.fn()
 
         jest.spyOn(IncyclistPageService, 'closePage').mockImplementation(() => undefined)
-        ;(devices.useDevicePairing as jest.Mock).mockReturnValue({
+        ;(devicePairing.useDevicePairing as jest.Mock).mockReturnValue({
             exit: props.pairingExit ?? jest.fn().mockResolvedValue(true)
         })
-        ;(devices.useDeviceAccess as jest.Mock).mockReturnValue({
+        ;(deviceAccess.useDeviceAccess as jest.Mock).mockReturnValue({
             terminate: jest.fn().mockResolvedValue(undefined)
         })
     }
@@ -177,7 +185,7 @@ describe('UserInterfaceServcie - pause', () => {
         disconnect = jest.fn().mockResolvedValue(true)
         mqDisconnect = jest.fn()
         jest.spyOn(IncyclistPageService, 'pausePage').mockResolvedValue(undefined as never)
-        jest.spyOn(devices, 'useDeviceAccess').mockReturnValue({ disconnect } as never)
+        jest.spyOn(deviceAccess, 'useDeviceAccess').mockReturnValue({ disconnect } as never)
         ;(service as any).getMessageQueue = jest.fn().mockReturnValue({ disconnect: mqDisconnect })
         ;(service as any).logEvent = jest.fn()
         ;(service as any).logError = jest.fn()
@@ -230,7 +238,7 @@ describe('UserInterfaceServcie - onAppPause / onAppResume background activity', 
         service = new UserInterfaceServcie()
         pauseBackgroundActivity = jest.fn().mockResolvedValue(undefined)
         resumeBackgroundActivity = jest.fn().mockResolvedValue(undefined)
-        jest.spyOn(devices, 'useDeviceAccess').mockReturnValue({
+        jest.spyOn(deviceAccess, 'useDeviceAccess').mockReturnValue({
             pauseBackgroundActivity, resumeBackgroundActivity
         } as never)
         ;(service as any).stopHeartbeatWorker = jest.fn()
@@ -303,13 +311,13 @@ describe('UserInterfaceServcie - pairing visit hooks', () => {
             onBackground: jest.fn(),
             onForeground: jest.fn(),
         }
-        ;(devices.initPairingVisitTracker as jest.Mock).mockReturnValue(tracker)
-        ;(devices.usePairingVisitTracker as jest.Mock).mockReturnValue(tracker)
-        ;(devices.useDevicePairing as jest.Mock).mockReturnValue({
+        ;(pairingVisit.initPairingVisitTracker as jest.Mock).mockReturnValue(tracker)
+        ;(pairingVisit.usePairingVisitTracker as jest.Mock).mockReturnValue(tracker)
+        ;(devicePairing.useDevicePairing as jest.Mock).mockReturnValue({
             getState: jest.fn().mockReturnValue({ canStartRide: true }),
             exit: jest.fn().mockResolvedValue(true),
         })
-        jest.spyOn(devices, 'useDeviceAccess').mockReturnValue({
+        jest.spyOn(deviceAccess, 'useDeviceAccess').mockReturnValue({
             terminate: jest.fn().mockResolvedValue(undefined),
             pauseBackgroundActivity: jest.fn().mockResolvedValue(undefined),
             resumeBackgroundActivity: jest.fn().mockResolvedValue(undefined),
@@ -336,7 +344,7 @@ describe('UserInterfaceServcie - pairing visit hooks', () => {
 
         service['initPairingVisits']()
 
-        expect(devices.initPairingVisitTracker).toHaveBeenCalledWith('mobile')
+        expect(pairingVisit.initPairingVisitTracker).toHaveBeenCalledWith('mobile')
         expect(tracker.onAppLaunch).toHaveBeenCalledWith(isNewUser)
     })
 

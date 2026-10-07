@@ -1,7 +1,7 @@
 import { getBindings } from '../../api'
 import { MobilePairingPageService } from './mobile/service'
+import { DesktopPairingPageService } from './desktop/service'
 
-export * from './mobile/service'
 export { PairingVisitTracker } from './base/visit-log'
 export { usePairingVisitTracker, initPairingVisitTracker } from './base/visit-log-factory'
 
@@ -13,15 +13,7 @@ export { usePairingVisitTracker, initPairingVisitTracker } from './base/visit-lo
  */
 export const getDevicesPageService = ()=> {
     const channel = getBindings().appInfo.getChannel()
-    if (channel==='desktop' || channel==='web') {
-        // required lazily: DesktopPairingPageService's module graph (via the base class's
-        // devices/ride import) transitively loops back into devices/page through a wider tangle
-        // of whole-barrel imports across routes/workouts/activities/coaches - a pre-existing,
-        // cross-domain issue, out of scope to untangle here. A plain top-level import confirmed
-        // broken (resolves to a second, divergent copy of the class rather than throwing).
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { DesktopPairingPageService } = require('./desktop/service')
+    if (channel==='desktop' || channel==='web')
         return new DesktopPairingPageService()
-    }
     return new MobilePairingPageService()
 }

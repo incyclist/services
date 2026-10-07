@@ -1,4 +1,5 @@
-import { ActivityDetails, ActivityUser, useActivityRide } from "../../activities";
+import { ActivityDetails, ActivityUser } from "../../activities/base/model";
+import { useActivityRide } from "../../activities/ride/service";
 import { IncyclistService } from "../../base/service";
 import { Observer, Singleton } from "../../base/types";
 import { Injectable } from "../../base/decorators";
@@ -6,7 +7,9 @@ import { Segment, Step, useWorkoutList, useWorkoutRide, Workout } from "../../wo
 import { useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { CurrentRideDeviceInfo, CurrentRideState, IRideModeService, RideType } from "../base";
-import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceConfiguration, useDeviceRide, usePairingVisitTracker } from "../../devices";
+import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceRide } from "../../devices/ride";
+import { useDeviceConfiguration } from "../../devices/configuration";
+import { usePairingVisitTracker } from "../../devices/page/base/visit-log-factory";
 import { useUserSettings } from "../../settings";
 import { CyclingMode, DeviceData, IncyclistCapability, UpdateRequest } from "incyclist-devices";
 import { formatDateTime, getLegacyInterface, waitNextTick } from "../../utils";
@@ -37,6 +40,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected deviceData: DeviceData
     protected actualWorkout: Workout
     protected hideAll: boolean = false
+    protected simulated: boolean = false
 
     protected readonly onChangeState = this.setState.bind(this)
     protected startDeviceHandlers
@@ -45,6 +49,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected stateUpdateHandler = this.onStateUpdate.bind(this)
     /** guards the one-time RideModeService.onStartDevicesReady() call */
     protected controlDevicesReadyNotified: boolean = false
+
 
     constructor() {
         super('RideDisplay')
@@ -55,7 +60,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     async init() :Promise<Observer>{
 
         await this.closePrevRide();
-            
+        this.simulated = false            
         this.observer = new Observer()
         this.controlDevicesReadyNotified = false
 
@@ -80,8 +85,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     start(simulate?:boolean):void { 
         try {
 
-            if(simulate)
+            if(simulate) {
                 this.enforceSimulator()
+            }
             this.notifyPairingVisitRideStarted(simulate)
 
             const rideProps =  this.getRideModeService().getLogProps()
@@ -110,6 +116,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.logError(err,'start')
         }
 
+    }
+
+    isSimulated(): boolean {
+        return this.simulated
     }
 
     protected notifyPairingVisitRideStarted(simulate?:boolean) {
@@ -558,6 +568,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             if (prevState!=='Starting')
                 this.enableScreensaver()
 
+            this.simulated = false
             //this.state = 'Idle'
         }
         catch(err) {
@@ -1244,6 +1255,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     protected enforceSimulator() {
+        this.simulated = true
         this.getDeviceRide().enforceSimulator()
         
     }
