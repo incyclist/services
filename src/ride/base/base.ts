@@ -5,8 +5,7 @@ import { CurrentRideDisplayProps, ICurrentRideService, IRideModeService, IRideMo
 import { IncyclistService } from "../../base/service";
 import { useDeviceRide } from "../../devices";
 import { Injectable } from "../../base/decorators";
-import { ActivityUpdate } from "../../activities/ride/types";
-import { ScreenShotInfo } from "../../activities";
+import type { ScreenShotInfo,ActivityUpdate } from "../../activities/types";
 import { Route } from "../../routes/base/model/route";
 import { sleep } from "../../utils/sleep";
 

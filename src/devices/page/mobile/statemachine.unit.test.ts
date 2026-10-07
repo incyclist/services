@@ -1,8 +1,8 @@
 import { EventEmitter } from "node:stream"
-import { Inject } from "../../base/decorators"
-import { DevicePairingService } from "../pairing"
+import { Inject } from "../../../base/decorators"
+import { DevicePairingService } from "../../pairing"
 import { PairingPageStateMachine } from "./statemachine"
-import { DeviceConfigurationService } from "../configuration"
+import { DeviceConfigurationService } from "../../configuration"
 
 describe('PairingPage state machine',()=> {
 

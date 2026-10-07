@@ -3,7 +3,7 @@ import { getBindings } from "../../api";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer } from "../../base/types/observer";
-import { DeviceRideService, getLoadButtonMode, useDeviceRide } from "../../devices";
+import { DeviceRideService, getLoadButtonMode, useDeviceRide } from "../../devices/ride";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";

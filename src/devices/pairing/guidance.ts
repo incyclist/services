@@ -35,18 +35,32 @@ const INTERFACE_LABELS: Record<PairingInterfaceId, string> = {
     wifi: 'Wi-Fi',
 }
 
-const DESKTOP_SEARCH_INTERFACES = new Set<PairingInterfaceId>(['ble', 'ant'])
+// Desktop's S1 ("can't search") has two different questions to answer, and they don't share one
+// interface set:
+// - can anything actually scan? Wi-Fi (DirectConnect) genuinely does, and on non-Windows it's
+//   always on (invisible to the rider, see DeviceConfigurationService) - so it must count here, or
+//   S1 falsely claims nothing can search while Wi-Fi devices are still being found.
+// - what do we *name* in the message? Wi-Fi stays out of that: the rider has no control the app
+//   can point them to, so a broken/off Wi-Fi is silent, exactly like desktop Bluetooth, serial and
+//   TCP failures (ux.md 6, "Silent").
+const DESKTOP_SCAN_INTERFACES = new Set<PairingInterfaceId>(['ble', 'ant', 'wifi'])
+const DESKTOP_NAMED_INTERFACES = new Set<PairingInterfaceId>(['ble', 'ant'])
 
-const searchInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform) =>
+const scanInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform) =>
     platform === 'desktop'
-        ? interfaces.filter(i => DESKTOP_SEARCH_INTERFACES.has(i.id))
+        ? interfaces.filter(i => DESKTOP_SCAN_INTERFACES.has(i.id))
+        : interfaces
+
+const namedInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform) =>
+    platform === 'desktop'
+        ? interfaces.filter(i => DESKTOP_NAMED_INTERFACES.has(i.id))
         : interfaces
 
 export const canScanWithInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform): boolean =>
-    searchInterfaces(interfaces, platform).some(i => i.enabled && i.available)
+    scanInterfaces(interfaces, platform).some(i => i.enabled && i.available)
 
 export const getUnavailableInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform): PairingInterfaceId[] =>
-    searchInterfaces(interfaces, platform).filter(i => i.enabled && !i.available).map(i => i.id)
+    namedInterfaces(interfaces, platform).filter(i => i.enabled && !i.available).map(i => i.id)
 
 export type PairingHint = 'bluetooth-permission' | 'bluetooth-off' | 'wifi-off' | 'ant'
 

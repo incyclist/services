@@ -1,14 +1,14 @@
 import { EventLogger } from 'gd-eventlog'
-import { getBindings } from '../../api'
-import { useAppState } from '../../appstate'
+import { getBindings } from '../../../api'
+import { useAppState } from '../../../appstate'
 import {
     createPairingVisitStore, formatLocalDate, initPairingVisitTracker, PAIRING_VISITS_STATE_KEY,
     toVisitPlatform, usePairingVisitTracker
 } from './visit-log-factory'
 import { PAGE_LEFT_EVENT } from './visit-log'
 
-jest.mock('../../api', () => ({ getBindings: jest.fn() }))
-jest.mock('../../appstate', () => ({ useAppState: jest.fn() }))
+jest.mock('../../../api', () => ({ getBindings: jest.fn() }))
+jest.mock('../../../appstate', () => ({ useAppState: jest.fn() }))
 
 const createAppState = () => {
     const values: Record<string, any> = {}
@@ -93,8 +93,8 @@ describe('usePairingVisitTracker before launch', () => {
     it('falls back to the app channel for the platform', () => {
         jest.isolateModules(() => {
             const appState = createAppState()
-            ;(require('../../appstate').useAppState as jest.Mock).mockReturnValue(appState)
-            ;(require('../../api').getBindings as jest.Mock).mockReturnValue({ appInfo: { session: 's', getChannel: () => 'mobile' } })
+            ;(require('../../../appstate').useAppState as jest.Mock).mockReturnValue(appState)
+            ;(require('../../../api').getBindings as jest.Mock).mockReturnValue({ appInfo: { session: 's', getChannel: () => 'mobile' } })
             const { usePairingVisitTracker: use } = require('./visit-log-factory')
             const tracker = use()
             expect((tracker as any).deps.platform).toBe('mobile')

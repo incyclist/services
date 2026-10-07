@@ -170,7 +170,13 @@ export class DeviceConfigurationService  extends IncyclistService{
     }
 
     disableCapability(cability:ExtendedIncyclistCapability, disabled=true):void {
+        if (!this.settings?.capabilities)
+            return;
+
         const cabilitySettings = this.settings.capabilities.find( c=>c.capability===cability)
+        if (!cabilitySettings)
+            return;
+
         cabilitySettings.disabled = disabled
 
         this.updateUserSettings();
