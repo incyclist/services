@@ -45,15 +45,6 @@ describe('DesktopPairingPageService - desktop behaviour matrix (CP8)', ()=> {
         enrichWithAccessState: jest.fn( (ifs:Array<unknown>)=>ifs),
     }
 
-    const routeList = {
-        getSelected: jest.fn().mockReturnValue(undefined),
-        getStartSettings: jest.fn().mockReturnValue(undefined),
-    }
-
-    const workoutList = {
-        getSelected: jest.fn().mockReturnValue(undefined),
-    }
-
     const tracker = {
         openVisit: jest.fn(),
         closeVisit: jest.fn(),
@@ -86,15 +77,10 @@ describe('DesktopPairingPageService - desktop behaviour matrix (CP8)', ()=> {
         Inject('DeviceRide', deviceRide)
         Inject('DeviceConfiguration', deviceConfig)
         Inject('DeviceAccess', deviceAccess)
-        Inject('RouteListService', routeList)
-        Inject('WorkoutListService', workoutList)
         Inject('PairingVisitTracker', tracker)
 
         setPairingState({})
         setPersistedPage('routes')
-        routeList.getSelected.mockReturnValue(undefined)
-        routeList.getStartSettings.mockReturnValue(undefined)
-        workoutList.getSelected.mockReturnValue(undefined)
 
         service = new DesktopPairingPageService()
         ;(service as any).pageObserver = new Observer()
@@ -108,8 +94,6 @@ describe('DesktopPairingPageService - desktop behaviour matrix (CP8)', ()=> {
         Inject('DeviceRide', null)
         Inject('DeviceConfiguration', null)
         Inject('DeviceAccess', null)
-        Inject('RouteListService', null)
-        Inject('WorkoutListService', null)
         Inject('PairingVisitTracker', null)
         jest.clearAllMocks()
     })
@@ -173,31 +157,16 @@ describe('DesktopPairingPageService - desktop behaviour matrix (CP8)', ()=> {
 
     describe('ok-navigation', ()=> {
 
-        test('OK with a route selected navigates to /rideOK', ()=> {
-            routeList.getSelected.mockReturnValue({ title:'My Route' })
+        test('OK in ride mode starts the ride', ()=> {
+            ;(service as any).isPairingForRide = true
 
             ;(service as any).onOK()
 
             expect((service as any).moveTo).toHaveBeenCalledWith('/rideOK')
         })
 
-        test('OK with a workout selected navigates to /rideOK', ()=> {
-            workoutList.getSelected.mockReturnValue({ name:'My Workout' })
-
-            ;(service as any).onOK()
-
-            expect((service as any).moveTo).toHaveBeenCalledWith('/rideOK')
-        })
-
-        test('OK with free ride navigates to /rideDeviceOK', ()=> {
-            routeList.getStartSettings.mockReturnValue({ type:'Free-Ride' })
-
-            ;(service as any).onOK()
-
-            expect((service as any).moveTo).toHaveBeenCalledWith('/rideDeviceOK')
-        })
-
-        test('OK with nothing selected navigates to the persisted content page', ()=> {
+        test('OK outside ride mode returns to the persisted content page', ()=> {
+            ;(service as any).isPairingForRide = false
             setPersistedPage('workouts')
 
             ;(service as any).onOK()
@@ -251,8 +220,7 @@ describe('DesktopPairingPageService - desktop behaviour matrix (CP8)', ()=> {
 
     describe('simulate', ()=> {
 
-        test('Simulate with a route selected starts /rideSimulate', ()=> {
-            routeList.getSelected.mockReturnValue({ title:'My Route' })
+        test('Simulate in ride mode starts /rideSimulate', ()=> {
             ;(service as any).isPairingForRide = true
 
             ;(service as any).onSimulate()
@@ -364,6 +332,26 @@ describe('DesktopPairingPageService - desktop behaviour matrix (CP8)', ()=> {
                 expect.objectContaining({ name:'ant', state:'connected', isScanning:true, enabled:true, port:3 }),
                 expect.objectContaining({ name:'serial', state:'unavailable', isScanning:false, enabled:true, protocol:'Daum Classic', port:'COM3' }),
             ])
+        })
+    })
+
+    describe('openPage inputs', ()=> {
+
+        test('openPage stores source and caches canEnforceSimulator() once, only in ride mode', ()=> {
+            deviceRide.canEnforceSimulator.mockReturnValueOnce(true)
+
+            service.openPage(true, '/routes')
+
+            expect((service as any).source).toBe('/routes')
+            expect((service as any).showSimulateCache).toBe(true)
+        })
+
+        test('openPage does not cache canEnforceSimulator() outside ride mode', ()=> {
+            deviceRide.canEnforceSimulator.mockReturnValueOnce(true)
+
+            service.openPage(false, '/routes')
+
+            expect((service as any).showSimulateCache).toBe(false)
         })
     })
 

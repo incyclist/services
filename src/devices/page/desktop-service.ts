@@ -1,8 +1,7 @@
-// side-effect only: devices/pairing (needed below) reaches back into this whole module via
-// several deep, pre-existing require cycles (e.g. pairing -> ride -> workouts -> ... -> coaches
-// -> devices -> page, or devices/ride -> routes -> ... -> workouts/ride -> devices -> page).
-// Loading ./service (mobile) first makes devices/page/service.ts the original entry point for
-// those cycles, so any reentry into it further down is a harmless self-reference instead of a
+// side-effect only: devices/pairing (needed below) reaches back into this whole module via a
+// deep, pre-existing require cycle (pairing -> ride -> workouts -> ... -> coaches -> devices ->
+// page). Loading ./service (mobile) first makes devices/page/service.ts the original entry point
+// for that cycle, so any reentry into it further down is a harmless self-reference instead of a
 // collateral half-loaded module - see MobilePairingPageService's own safe case.
 import './service'
 
@@ -17,8 +16,6 @@ import { PairingPageService } from './pairing-page-service'
 import { createDirectOrchestrator } from './orchestrator'
 import type { PairingOrchestrator } from './orchestrator'
 import type { DevicePairingData, DeviceSelectState } from '../pairing'
-import type { RouteListService } from '../../routes/list'
-import type { WorkoutListService } from '../../workouts/list'
 
 /**
  * Pairing page for desktop (web-ui/Electron). Desktop uses the direct orchestrator (today's
@@ -219,11 +216,11 @@ export class DesktopPairingPageService extends PairingPageService {
         this.updatePage()
     }
 
-    // navigation: desktop's decision logic (what "ride ready" means, which route to go to, and
-    // returning to `source` instead of `prevPage`) differs structurally from mobile's, not just in
-    // route strings, so these are fully overridden rather than routed through a shared hook
-    // (architecture 2.6's `resolveRoute(target)`). `moveTo()` does not yet accept a navigation
-    // `state` - that's CP9 - so `source` is stored but not yet passed through.
+    // navigation: whether to head for the ride or back to the content page is decided purely from
+    // `isPairingForRide` - the same single flag mobile's onSimulate/onSkip already use - not from
+    // any route/workout lookup. `onOK` still needs its own override (desktop returns to `source`,
+    // not `prevPage`, and targets `/rideOK` instead of mobile's `/rideDeviceOK`); `onSimulate` is
+    // inherited unchanged from the base class since it's now identical on both platforms.
 
     protected onOK():void {
         this.closeVisit('ok')
@@ -231,10 +228,7 @@ export class DesktopPairingPageService extends PairingPageService {
         this.getDevicePairing().setReadyToStart()
         this.getAppState().setState('paired',true)
 
-        const pathname = this.isRideReady()
-            ? (this.hasRouteOrWorkout() ? '/rideOK' : '/rideDeviceOK')
-            : `/${this.getPrevContentPage()}`
-
+        const pathname = this.isPairingForRide ? '/rideOK' : `/${this.getPrevContentPage()}`
         this.moveTo(pathname)
     }
 
@@ -247,44 +241,8 @@ export class DesktopPairingPageService extends PairingPageService {
         this.moveTo(pathname)
     }
 
-    protected onSimulate():void {
-        this.closeVisit('simulate')
-        const simulator = this.getDeviceConfiguration().getSimulatorAdapterId()
-        this.getDevicePairing().prepareStart([simulator])
-
-        const pathname = this.isRideReady() ? '/rideSimulate' : `/${this.getPrevContentPage()}`
-        this.moveTo(pathname)
-    }
-
-    protected isRideReady():boolean {
-        const startSettings = this.getRouteListService().getStartSettings()
-        return Boolean(this.hasRouteOrWorkout() || startSettings?.type==='Free-Ride')
-    }
-
-    protected hasRouteOrWorkout():boolean {
-        return Boolean(this.getRouteListService().getSelected() || this.getWorkoutListService().getSelected())
-    }
-
     @Injectable
     protected getDeviceAccess() {
         return useDeviceAccess()
-    }
-
-    @Injectable
-    protected getRouteListService():RouteListService {
-        // required lazily: routes/list transitively imports back into devices/page (via
-        // workouts/calendar -> apps -> activities -> coaches -> devices), so importing it at
-        // module load time here would create a require cycle
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { getRouteList } = require('../../routes/list')
-        return getRouteList()
-    }
-
-    @Injectable
-    protected getWorkoutListService():WorkoutListService {
-        // required lazily, see getRouteListService() above
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { useWorkoutList } = require('../../workouts/list')
-        return useWorkoutList()
     }
 }
