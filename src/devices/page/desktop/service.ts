@@ -202,9 +202,11 @@ export class DesktopPairingPageService extends PairingPageService {
 
     // navigation: whether to head for the ride or back to the content page is decided purely from
     // `isPairingForRide` - the same single flag mobile's onSimulate/onSkip already use - not from
-    // any route/workout lookup. `onOK` still needs its own override (desktop returns to `source`,
-    // not `prevPage`, and targets `/rideOK` instead of mobile's `/rideDeviceOK`); `onSimulate` is
-    // inherited unchanged from the base class since it's now identical on both platforms.
+    // any route/workout lookup. `onOK`/`onSimulate` still need their own override: desktop returns
+    // to `source` (not `prevPage`), targets `/rideOK`/`/rideSimulate` instead of mobile's
+    // `/rideDeviceOK`, and - unlike mobile - passes `source` on as router state, which RidePage
+    // reads for its own Back/Delete/New-ride navigation (without it, those fall back to browser
+    // history, landing back on this Pairing page instead of where "Start" was pressed from).
 
     protected onOK():void {
         this.closeVisit('ok')
@@ -213,7 +215,16 @@ export class DesktopPairingPageService extends PairingPageService {
         this.getAppState().setState('paired',true)
 
         const pathname = this.isPairingForRide ? '/rideOK' : `/${this.getPrevContentPage()}`
-        this.moveTo(pathname)
+        this.moveTo(pathname, true, {source:this.source})
+    }
+
+    protected onSimulate():void {
+        this.closeVisit('simulate')
+        const simulator = this.getDeviceConfiguration().getSimulatorAdapterId()
+        this.getDevicePairing().prepareStart([simulator])
+
+        const pathname = this.isPairingForRide ? '/rideSimulate' : `/${this.getPrevContentPage()}`
+        this.moveTo(pathname, true, {source:this.source})
     }
 
     protected onSkip():void {

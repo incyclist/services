@@ -173,12 +173,13 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
 
     describe('ok-navigation', ()=> {
 
-        test('OK in ride mode starts the ride', ()=> {
+        test('OK in ride mode starts the ride, carrying the source for RidePage\'s own Back/Delete/New-ride navigation', ()=> {
             ;(service as any).isPairingForRide = true
+            ;(service as any).source = '/routes'
 
             ;(service as any).onOK()
 
-            expect((service as any).moveTo).toHaveBeenCalledWith('/rideOK')
+            expect((service as any).moveTo).toHaveBeenCalledWith('/rideOK', true, { source:'/routes' })
         })
 
         test('OK outside ride mode returns to the persisted content page', ()=> {
@@ -187,7 +188,7 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
 
             ;(service as any).onOK()
 
-            expect((service as any).moveTo).toHaveBeenCalledWith('/workouts')
+            expect((service as any).moveTo).toHaveBeenCalledWith('/workouts', true, { source:undefined })
         })
 
         test('OK closes the visit as ok and prepares the start', ()=> {
@@ -236,15 +237,25 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
 
     describe('simulate', ()=> {
 
-        test('Simulate in ride mode starts /rideSimulate', ()=> {
+        test('Simulate in ride mode starts /rideSimulate, carrying the source for RidePage\'s own Back/Delete/New-ride navigation', ()=> {
             ;(service as any).isPairingForRide = true
+            ;(service as any).source = '/routes'
 
             ;(service as any).onSimulate()
 
             expect(deviceConfig.getSimulatorAdapterId).toHaveBeenCalled()
             expect(pairing.prepareStart).toHaveBeenCalledWith(['simulator-id'])
-            expect((service as any).moveTo).toHaveBeenCalledWith('/rideSimulate')
+            expect((service as any).moveTo).toHaveBeenCalledWith('/rideSimulate', true, { source:'/routes' })
             expect(tracker.closeVisit).toHaveBeenCalledWith('simulate', expect.anything())
+        })
+
+        test('Simulate outside ride mode returns to the persisted content page', ()=> {
+            ;(service as any).isPairingForRide = false
+            setPersistedPage('workouts')
+
+            ;(service as any).onSimulate()
+
+            expect((service as any).moveTo).toHaveBeenCalledWith('/workouts', true, { source:undefined })
         })
     })
 
