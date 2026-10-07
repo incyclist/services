@@ -62,9 +62,17 @@ describe('interface helpers', () => {
         expect(canScanWithInterfaces([off('ble'), down('wifi')], 'mobile')).toBe(false)
     })
 
+    it('on desktop, a working Wi-Fi allows a scan even with ANT+ and Bluetooth both off - Wi-Fi (DirectConnect) genuinely scans and is always on outside Windows', () => {
+        expect(canScanWithInterfaces([off('ant'), off('ble'), up('wifi')], 'desktop')).toBe(true)
+    })
+
     it('lists only enabled unavailable interfaces, filtered per platform', () => {
         expect(getUnavailableInterfaces([down('ant'), off('serial'), up('ble'), down('wifi')], 'mobile')).toEqual(['ant', 'wifi'])
         expect(getUnavailableInterfaces([down('ant'), down('serial'), up('ble')], 'desktop')).toEqual(['ant'])
+    })
+
+    it('desktop never names Wi-Fi in the unavailable list, even when it is the one that is down - the rider has no control to point them to', () => {
+        expect(getUnavailableInterfaces([down('ant'), down('ble'), down('wifi')], 'desktop')).toEqual(['ant', 'ble'])
     })
 })
 
@@ -79,6 +87,18 @@ describe('derivePairingStatus', () => {
 
     it('desktop: does not return S1 when only ANT+ is down, but shows the ANT+ hint on first use', () => {
         expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), up('ble')] })).toBe('S1b')
+    })
+
+    it('desktop: does not return S1 when ANT+ and Bluetooth are off but Wi-Fi (always on outside Windows) can still scan', () => {
+        expect(derivePairingStatus({ ...desktop, interfaces: [off('ant'), off('ble'), up('wifi')] })).toBe('S5')
+    })
+
+    it('desktop: a ride made ready via Wi-Fi only (e.g. the simulator) correctly reports S2, not S1', () => {
+        expect(derivePairingStatus({ ...desktop, interfaces: [off('ant'), off('ble'), up('wifi')], canStartRide: true })).toBe('S2')
+    })
+
+    it('desktop: S1 still fires when Wi-Fi is down too - nothing at all can scan', () => {
+        expect(derivePairingStatus({ ...desktop, interfaces: [off('ant'), off('ble'), down('wifi')] })).toBe('S1')
     })
 
     it('mobile: does not return S1 when only Wi-Fi is available, and shows the Bluetooth hint', () => {
