@@ -50,17 +50,20 @@ export class DesktopPairingPageService extends PairingPageService {
 
         try {
             const caps = this.state.capabilities??[]
+            const allIfs = this.state.interfaces??[]
             // `invisible` (set by DeviceConfigurationService for wifi on non-Windows, where it's
-            // implicitly always on) is stripped by DevicePairingService's own onStateChanged
-            // callback, but getState() - what the page service reads - returns it unfiltered
-            const ifs = (this.state.interfaces??[]).filter( i=>!i.invisible)
+            // implicitly always on) is stripped before the tiles are built - the rider never sees a
+            // Wi-Fi icon there - but the status line still needs Wi-Fi's real state (allIfs, below):
+            // it's one of the interfaces S1 asks "can anything scan?" about, just never named in
+            // the text (ux rev. 6).
+            const ifs = allIfs.filter( i=>!i.invisible)
             this.getDeviceAccess().enrichWithAccessState(ifs)
 
             const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i))
 
             const status = getPairingStatusDisplay({
                 platform: 'desktop',
-                interfaces: toPairingInterfaceStates(ifs),
+                interfaces: toPairingInterfaceStates(allIfs),
                 capabilities: caps,
                 canStartRide: this.canStartRide(),
                 loading: this.promiseOpen!==undefined,

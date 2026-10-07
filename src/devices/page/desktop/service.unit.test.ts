@@ -170,6 +170,41 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
 
             expect(props.status).toBeDefined()
         })
+
+        // the wifi interface is stripped from the tile list (it has no icon), but its state must
+        // still reach status computation - otherwise S1 ("can't search") fires even when wifi,
+        // invisible but implicitly on outside Windows, is the thing actually finding devices (e.g.
+        // the simulator, whose own "interface" is 'simulator', not 'wifi' - it's wifi being
+        // scannable, not the simulator itself, that keeps S1 from firing here)
+        test('status reflects wifi\'s real state even though wifi is hidden from the interface tiles', ()=> {
+            setPairingState({
+                canStartRide: true,
+                interfaces: [
+                    { name:'ant', state:'unavailable', enabled:false },
+                    { name:'ble', state:'unavailable', enabled:false },
+                    { name:'wifi', state:'idle', enabled:true, invisible:true },
+                ],
+            })
+
+            const props = service.getPageDisplayProperties()
+
+            expect(props.status.id).toBe('S2')
+        })
+
+        test('status still reports S1 when wifi is unavailable too, not just hidden', ()=> {
+            setPairingState({
+                canStartRide: false,
+                interfaces: [
+                    { name:'ant', state:'unavailable', enabled:false },
+                    { name:'ble', state:'unavailable', enabled:false },
+                    { name:'wifi', state:'unavailable', enabled:true, invisible:true },
+                ],
+            })
+
+            const props = service.getPageDisplayProperties()
+
+            expect(props.status.id).toBe('S1')
+        })
     })
 
     describe('ok-navigation', ()=> {
