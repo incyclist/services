@@ -8,8 +8,6 @@ import type { CapabilityData, DevicePairingData, InternalPairingState } from '..
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../../configuration'
-import { useIncyclist } from '../../../ui'
-import { useDeviceRide } from '../../ride'
 import { usePairingVisitTracker } from './visit-log-factory'
 import type { PairingVisitTracker } from './visit-log'
 import type { PairingExitVia } from './types'
@@ -314,6 +312,10 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.updatePage()
     }
 
+    // Simulate is always offered when the ride can't start yet - it used to be gated on
+    // DeviceRideService.canEnforceSimulator(), which also protected the maps API key from being
+    // used to simulate a GPX route without the rider's own key. That protection now belongs on
+    // the ride page itself (falling back when there is no personal key), not here.
     protected getButtonsDisplayProps() : PairingButtonProps{
         const labelOK = this.isPairingForRide ? 'Start' : 'OK'
         const labelSkip = this.isPairingForRide ? 'Cancel' : 'Skip'
@@ -323,17 +325,10 @@ export abstract class PairingPageService extends IncyclistPageService {
                 { label:labelOK, primary:true, onClick:this.onOK.bind(this) }
             ]
 
-        if (this.getDeviceRide().canEnforceSimulator()) {
-            return [
-                { label:'Simulate', primary:true, onClick:this.onSimulate.bind(this) },
-                { label:labelSkip, primary:false, onClick:this.onSkip.bind(this) }
-            ]
-        }
-
-        return  [
-            { label:labelSkip, primary:true, onClick:this.onSkip.bind(this) }
+        return [
+            { label:'Simulate', primary:true, onClick:this.onSimulate.bind(this) },
+            { label:labelSkip, primary:false, onClick:this.onSkip.bind(this) }
         ]
-
     }
 
     protected getTCapability(capabability:IncyclistCapability):TIncyclistCapability {
@@ -459,10 +454,6 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected getDevicePairing() {
         return useDevicePairing()
     }
-    @Injectable
-    protected getDeviceRide() {
-        return useDeviceRide()
-    }
 
     @Injectable
     protected getDeviceConfiguration() {
@@ -470,10 +461,6 @@ export abstract class PairingPageService extends IncyclistPageService {
     }
 
 
-    @Injectable
-    protected getIncyclist() {
-        return useIncyclist()
-    }
 
     @Injectable
     protected getPairingVisitTracker():PairingVisitTracker {

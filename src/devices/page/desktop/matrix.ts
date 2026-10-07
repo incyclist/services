@@ -13,12 +13,14 @@ export type DesktopMatrixRow = {
 }
 
 export const DESKTOP_MATRIX: Array<DesktopMatrixRow> = [
-    // button matrix: canStartRide x ride mode x simulate (simulate evaluated once at open, ride mode only)
-    { area:'buttons', name:'ready, ride mode', given:'canStartRide, mode=start', expected:'primary "Start" (labelOK), secondary "Cancel" (labelSkip)' },
-    { area:'buttons', name:'ready, normal mode', given:'canStartRide, mode=normal', expected:'primary "OK", secondary "Skip"' },
-    { area:'buttons', name:'not ready, ride mode, simulator enforceable', given:'!canStartRide, mode=start, canEnforceSimulator at open', expected:'primary "Simulate", secondary "Cancel"' },
-    { area:'buttons', name:'not ready, ride mode, no simulator', given:'!canStartRide, mode=start, canEnforceSimulator false', expected:'primary "Cancel"' },
-    { area:'buttons', name:'not ready, normal mode', given:'!canStartRide, mode=normal', expected:'primary "Skip", no Simulate (simulate is ride-mode only)' },
+    // button matrix: canStartRide x ride mode. Simulate is always offered when not ready - it used
+    // to be gated on DeviceRideService.canEnforceSimulator() (a maps-API-key abuse guard for GPX
+    // routes); that guard now belongs on the ride page's own fallback, not here (user decision,
+    // 2026-10-07) - shared with mobile, so getButtonsDisplayProps() lives only in the base class.
+    { area:'buttons', name:'ready, ride mode', given:'canStartRide, mode=start', expected:'primary "Start" (labelOK)' },
+    { area:'buttons', name:'ready, normal mode', given:'canStartRide, mode=normal', expected:'primary "OK"' },
+    { area:'buttons', name:'not ready, ride mode', given:'!canStartRide, mode=start', expected:'primary "Simulate", secondary "Cancel" (labelSkip)' },
+    { area:'buttons', name:'not ready, normal mode', given:'!canStartRide, mode=normal', expected:'primary "Simulate", secondary "Skip" (labelSkip)' },
 
     // OK navigation: simplified to use the same single `isPairingForRide` flag mobile already
     // uses (ux/user decision, 2026-10-07) - the pairing page does not query RouteListService/

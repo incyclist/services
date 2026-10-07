@@ -31,10 +31,6 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
         getPersistedState: jest.fn(),
     }
 
-    const deviceRide = {
-        canEnforceSimulator: jest.fn().mockReturnValue(false),
-    }
-
     const deviceConfig = {
         getSimulatorAdapterId: jest.fn().mockReturnValue('simulator-id'),
         disableCapability: jest.fn(),
@@ -74,7 +70,6 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
     beforeEach( ()=> {
         Inject('DevicePairing', pairing)
         Inject('AppState', appState)
-        Inject('DeviceRide', deviceRide)
         Inject('DeviceConfiguration', deviceConfig)
         Inject('DeviceAccess', deviceAccess)
         Inject('PairingVisitTracker', tracker)
@@ -91,7 +86,6 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
         (service as any).reset()
         Inject('DevicePairing', null)
         Inject('AppState', null)
-        Inject('DeviceRide', null)
         Inject('DeviceConfiguration', null)
         Inject('DeviceAccess', null)
         Inject('PairingVisitTracker', null)
@@ -120,33 +114,22 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
             expect(buttons.map(b=>b.label)).toEqual(['OK'])
         })
 
-        test('not ready, ride mode, simulator enforceable: primary "Simulate", secondary "Cancel"', ()=> {
+        test('not ready, ride mode: primary "Simulate", secondary "Cancel"', ()=> {
             setPairingState({ canStartRide: false })
             ;(service as any).isPairingForRide = true
-            deviceRide.canEnforceSimulator.mockReturnValueOnce(true)
 
             const buttons = service.getPageDisplayProperties().buttons
 
             expect(buttons.map(b=>b.label)).toEqual(['Simulate', 'Cancel'])
         })
 
-        test('not ready, ride mode, no simulator: primary "Cancel" only', ()=> {
-            setPairingState({ canStartRide: false })
-            ;(service as any).isPairingForRide = true
-            deviceRide.canEnforceSimulator.mockReturnValueOnce(false)
-
-            const buttons = service.getPageDisplayProperties().buttons
-
-            expect(buttons.map(b=>b.label)).toEqual(['Cancel'])
-        })
-
-        test('not ready, normal mode: "Skip", no Simulate', ()=> {
+        test('not ready, normal mode: primary "Simulate", secondary "Skip"', ()=> {
             setPairingState({ canStartRide: false })
             ;(service as any).isPairingForRide = false
 
             const buttons = service.getPageDisplayProperties().buttons
 
-            expect(buttons.map(b=>b.label)).toEqual(['Skip'])
+            expect(buttons.map(b=>b.label)).toEqual(['Simulate', 'Skip'])
         })
     })
 
@@ -332,21 +315,10 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
 
     describe('openPage inputs', ()=> {
 
-        test('openPage stores source and caches canEnforceSimulator() once, only in ride mode', ()=> {
-            deviceRide.canEnforceSimulator.mockReturnValueOnce(true)
-
+        test('openPage stores the source Skip/Cancel should return to', ()=> {
             service.openPage(true, '/routes')
 
             expect((service as any).source).toBe('/routes')
-            expect((service as any).showSimulateCache).toBe(true)
-        })
-
-        test('openPage does not cache canEnforceSimulator() outside ride mode', ()=> {
-            deviceRide.canEnforceSimulator.mockReturnValueOnce(true)
-
-            service.openPage(false, '/routes')
-
-            expect((service as any).showSimulateCache).toBe(false)
         })
     })
 

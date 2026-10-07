@@ -1,23 +1,18 @@
-// side-effect only: devices/pairing (needed below) reaches back into this whole module via a
-// deep, pre-existing require cycle spanning devices/ride, routes, workouts, activities and
-// coaches (several of them import each other's whole barrel instead of a specific submodule).
-// Loading mobile/service.ts first makes it the original entry point for that cycle, so any
-// reentry into devices/page further down the chain is a harmless self-reference instead of a
-// collateral half-loaded module - see MobilePairingPageService's own safe case.
-import '../mobile/service'
+import { IncyclistCapability } from 'incyclist-devices'
 
 import { Injectable, Singleton } from '../../../base/decorators'
 
-import type { DeviceSelectionItemProps, DeviceSelectionProps, PairingExitVia, TConnectState } from '../base/types'
-import type { DesktopInterfaceDisplayProps, DesktopPairingDisplayProps } from './types'
-import { EnrichedInterfaceSetting, useDeviceAccess } from '../../access'
-import { IncyclistCapability } from 'incyclist-devices'
-import type { IncyclistDeviceSettings, InterfaceSetting } from '../../configuration'
-import type { IObserver } from '../../../types'
 import { PairingPageService } from '../base/service'
 import { createDirectOrchestrator } from './orchestrator'
 import type { PairingOrchestrator } from '../base/orchestrator'
-import type { DevicePairingData, DeviceSelectState } from '../../pairing'
+
+import type { IObserver } from '../../../types'
+import type { DeviceSelectionItemProps, DeviceSelectionProps, PairingExitVia, TConnectState } from '../base/types'
+import type { DesktopInterfaceDisplayProps, DesktopPairingDisplayProps } from './types'
+
+import { EnrichedInterfaceSetting, useDeviceAccess } from '../../access'
+import type { IncyclistDeviceSettings, InterfaceSetting } from '../../configuration/model'
+import type { DevicePairingData, DeviceSelectState } from '../../pairing/model'
 
 /**
  * Pairing page for desktop (web-ui/Electron). Desktop uses the direct orchestrator (today's
@@ -32,10 +27,6 @@ export class DesktopPairingPageService extends PairingPageService {
     /** where Skip/Cancel return to - passed into openPage, not persisted anywhere else */
     protected source: string|undefined
 
-    /** canEnforceSimulator() is only evaluated once, at open, and only matters in ride mode -
-     * matches today's `page.jsx` (`simRef`), which never re-checks it on every render */
-    protected showSimulateCache: boolean = false
-
     protected deviceSelectState: DeviceSelectState|undefined
 
     protected createOrchestrator(): PairingOrchestrator {
@@ -48,7 +39,6 @@ export class DesktopPairingPageService extends PairingPageService {
 
     openPage(forRide?:boolean, source?:string):IObserver {
         this.source = source
-        this.showSimulateCache = forRide ? this.getDeviceRide().canEnforceSimulator() : false
         return super.openPage(forRide)
     }
 
@@ -84,7 +74,6 @@ export class DesktopPairingPageService extends PairingPageService {
             return {
                 title, labelOK, labelSkip,
                 readyToStart: this.canStartRide(),
-                showSimulate: this.isPairingForRide && this.showSimulateCache,
                 capabilities: { top, bottom },
                 interfaces,
                 deviceSelection: this.getDeviceListDisplayProps(),

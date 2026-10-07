@@ -1,13 +1,17 @@
-import { Singleton } from '../../../base/decorators'
-import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../../pairing'
-
-import type { InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, PairingDisplayProps, TIncyclistCapability, TInterface } from '../../../types'
-import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../../access'
 import { IncyclistCapability } from 'incyclist-devices'
-import { Observer } from '../../../base/types'
+
+import { Injectable, Singleton } from '../../../base/decorators'
+
 import { PairingPageService } from '../base/service'
 import { createStateMachineOrchestrator } from './orchestrator'
 import type { PairingOrchestrator } from '../base/orchestrator'
+
+import { Observer } from '../../../base/types'
+import type { InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, PairingDisplayProps, TIncyclistCapability, TInterface } from '../../../types'
+
+import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../../access'
+import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../../pairing'
+import { useIncyclist } from '../../../ui'
 
 /**
  * Pairing page for mobile. Mobile uses the state machine orchestrator and shows the Android exit
@@ -177,6 +181,11 @@ export class MobilePairingPageService extends PairingPageService {
         const info = this.state.interfaces.find( id=>id.name === i)
         this.openedInterfaceSettings = i
         this.updatePage()
+    }
+
+    @Injectable
+    protected getIncyclist() {
+        return useIncyclist()
     }
 }
 

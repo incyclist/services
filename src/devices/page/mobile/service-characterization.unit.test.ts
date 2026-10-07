@@ -1,7 +1,8 @@
-import { Inject } from "../../../base/decorators/Injection"
-import { DevicesPageService } from "./service"
 import { IncyclistCapability } from "incyclist-devices"
+
+import { Inject } from "../../../base/decorators/Injection"
 import { Observer } from "../../../base/types"
+import { DevicesPageService } from "./service"
 
 describe('DevicesPageService - characterization of current pairing page behaviour', ()=> {
 
@@ -23,10 +24,6 @@ describe('DevicesPageService - characterization of current pairing page behaviou
         setState: jest.fn(),
         getState: jest.fn(),
         getPersistedState: jest.fn(),
-    }
-
-    const deviceRide = {
-        canEnforceSimulator: jest.fn().mockReturnValue(false),
     }
 
     const deviceConfig = {
@@ -87,7 +84,6 @@ describe('DevicesPageService - characterization of current pairing page behaviou
     beforeEach( ()=> {
         Inject('DevicePairing', pairing)
         Inject('AppState', appState)
-        Inject('DeviceRide', deviceRide)
         Inject('DeviceConfiguration', deviceConfig)
         Inject('Bindings', { ui })
         Inject('Incyclist', mockIncyclist)
@@ -107,7 +103,6 @@ describe('DevicesPageService - characterization of current pairing page behaviou
         (service as any).reset()
         Inject('DevicePairing', null)
         Inject('AppState', null)
-        Inject('DeviceRide', null)
         Inject('DeviceConfiguration', null)
         Inject('Bindings', null)
         Inject('Incyclist', null)
@@ -254,21 +249,12 @@ describe('DevicesPageService - characterization of current pairing page behaviou
             expect(labels).toEqual(['OK'])
         })
 
-        test('Simulate and Skip when a simulator can be enforced and no ride is possible', ()=> {
+        test('Simulate and Skip when no ride is possible', ()=> {
             setPairingState({ canStartRide: false })
-            deviceRide.canEnforceSimulator.mockReturnValueOnce(true)
 
             const labels = service.getPageDisplayProperties().buttons.map(b => b.label)
 
             expect(labels).toEqual(['Simulate', 'Skip'])
-        })
-
-        test('Skip only when neither OK nor Simulate is available', ()=> {
-            setPairingState({ canStartRide: false })
-
-            const labels = service.getPageDisplayProperties().buttons.map(b => b.label)
-
-            expect(labels).toEqual(['Skip'])
         })
     })
 
