@@ -225,5 +225,6 @@ export interface ICurrentRideService {
     getRideType(): RideType;
     getState(): CurrentRideState;
     onRouteUpdated(route:Route): void
+    isSimulated():boolean
 }
 

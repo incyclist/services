@@ -78,7 +78,9 @@ describe( 'RouteDisplayService', () => {
             displayService: s,
             isVirtualShiftingEnabled: jest.fn().mockReturnValue(options.virtualShifting ?? false),
             getDisplayProperties: jest.fn(() => ({ dbColumns: [], position: {} })),
-            reset: jest.fn()
+            reset: jest.fn(),
+            isSimulated: jest.fn().mockReturnValue(false)
+
         }
 
         if (options.mockRideService) {

@@ -424,6 +424,12 @@ export class GpxDisplayService extends RouteDisplayService {
      * rewriting the user's `preferences.rideView`.
      */
     protected getRideView() {
+
+        if (this.service?.isSimulated() && !this.getGoogleMaps().hasPersonalApiKey()) {
+            this.rideViewOverride = 'map'
+        }
+            
+
         return this.rideViewOverride ?? this.getRideSettingsDisplay().getRideView()
     }
 

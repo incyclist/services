@@ -164,7 +164,8 @@ describe('FreeRideDisplayService', () => {
             isVirtualShiftingEnabled: jest.fn().mockReturnValue(options.virtualShifting ?? false),
             getDisplayProperties: jest.fn(() => ({ dbColumns: [], position: {} })),
             reset: jest.fn(),
-            onRouteUpdated: jest.fn()
+            onRouteUpdated: jest.fn(),
+            isSimulated: jest.fn().mockReturnValue(false)
         }
 
         if (options.mockRideService) {
