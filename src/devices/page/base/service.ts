@@ -423,6 +423,7 @@ export abstract class PairingPageService extends IncyclistPageService {
     // onOK/onSimulate on both platforms.
     protected prepareForRide(adapterFilter:Array<string>=[]):void {
         this.getDevicePairing().prepareStart(adapterFilter)
+            .catch( err=>{ this.logError(err,'prepareForRide') })
         this.handingOffToRide = true
     }
 

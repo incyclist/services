@@ -13,7 +13,7 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
         getState: jest.fn(),
         start: jest.fn().mockResolvedValue(undefined),
         stop: jest.fn().mockResolvedValue(undefined),
-        prepareStart: jest.fn(),
+        prepareStart: jest.fn().mockResolvedValue(undefined),
         setReadyToStart: jest.fn(),
         isReadyToStart: jest.fn().mockReturnValue(false),
         selectDevice: jest.fn().mockResolvedValue(undefined),
