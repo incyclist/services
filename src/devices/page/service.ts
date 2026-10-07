@@ -5,6 +5,7 @@ import type { InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDis
 import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../access'
 import { IncyclistCapability } from 'incyclist-devices'
 import { Observer } from '../../base/types'
+import { getBindings } from '../../api'
 import { PairingPageService } from './pairing-page-service'
 import { createStateMachineOrchestrator } from './orchestrator'
 import type { PairingOrchestrator } from './orchestrator'
@@ -21,6 +22,10 @@ export class MobilePairingPageService extends PairingPageService {
 
     protected createOrchestrator(): PairingOrchestrator {
         return createStateMachineOrchestrator()
+    }
+
+    protected getUsageMode(): 'page' | 'direct' {
+        return 'page'
     }
 
     getPageDisplayProperties():PairingDisplayProps {
@@ -182,7 +187,19 @@ export { MobilePairingPageService as DevicesPageService }
 export const getDevicesPageService = ()=> new MobilePairingPageService()
 
 /**
- * The pairing page service for the current platform. Only mobile exists so far; the desktop
- * service is added in a later step and selected here by channel.
+ * The pairing page service for the current platform, picked by channel. Not yet called by any
+ * UI (web-ui wires up DesktopPairingPageService directly in CP10); mobile keeps using
+ * `getDevicesPageService()`.
  */
-export const getPairingPageService = ()=> getDevicesPageService()
+export const getPairingPageService = ()=> {
+    const channel = getBindings().appInfo.getChannel()
+    if (channel==='desktop' || channel==='web') {
+        // required lazily: DesktopPairingPageService pulls in the routes/workouts modules, which
+        // transitively import back into devices/page - importing it at module load time here
+        // would create a require cycle (this module's own exports wouldn't be ready yet)
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { DesktopPairingPageService } = require('./desktop-service')
+        return new DesktopPairingPageService()
+    }
+    return getDevicesPageService()
+}

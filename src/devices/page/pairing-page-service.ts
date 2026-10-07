@@ -12,7 +12,7 @@ import { useIncyclist } from '../../ui'
 import { useDeviceRide } from '../ride'
 import { usePairingVisitTracker } from './visit-log-factory'
 import type { PairingVisitTracker } from './visit-log'
-import type { PairingExitVia } from './types'
+import type { DesktopPairingDisplayProps, PairingExitVia } from './types'
 import type { PairingOrchestrator } from './orchestrator'
 
 /**
@@ -40,8 +40,16 @@ export abstract class PairingPageService extends IncyclistPageService {
     /** The orchestrator that drives the pairing lifecycle for this platform. */
     protected abstract createOrchestrator(): PairingOrchestrator
 
-    /** The display props for this platform's pairing screen. */
-    abstract getPageDisplayProperties(): PairingDisplayProps
+    /** The display props for this platform's pairing screen. Desktop's interface shape differs
+     * from mobile's (raw state vs. the 4-value display mapping, see page/types.ts), hence the union. */
+    abstract getPageDisplayProperties(): PairingDisplayProps | DesktopPairingDisplayProps
+
+    /**
+     * The `DevicePairingService.usage` mode for this platform: 'page' drives pairing through the
+     * state machine orchestrator (mobile); 'direct' makes `DevicePairingService` run its own
+     * scan/pair loop (desktop). See `start()`.
+     */
+    protected abstract getUsageMode(): 'page' | 'direct'
 
     openPage(forRide?:boolean):IObserver {
         try {
@@ -427,7 +435,7 @@ export abstract class PairingPageService extends IncyclistPageService {
 
 
     protected async start( ) {
-        this.getDevicePairing().usage = 'page'
+        this.getDevicePairing().usage = this.getUsageMode()
         this.getDevicePairing().start( ()=>{
             this.updatePage()
         })
