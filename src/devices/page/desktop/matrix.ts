@@ -1,6 +1,6 @@
 // Desktop Pairing behaviour matrix. Derived from web-ui pairing/page.jsx and
-// PairingInfo/DeviceSelector/wrapper.jsx. Rows are bound to DesktopPairingPageService in a
-// later checkpoint; until then each row is a todo.
+// PairingInfo/DeviceSelector/wrapper.jsx. Rows are bound to real, executable tests in
+// ./service.unit.test.ts; ./matrix.unit.test.ts only guards area coverage.
 //
 // `flag` marks a row that still needs a decision before it's bound.
 

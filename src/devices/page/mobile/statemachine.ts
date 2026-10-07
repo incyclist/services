@@ -1,10 +1,10 @@
 import { EventLogger } from 'gd-eventlog'
-import { Injectable } from '../../base/decorators'
-import { useDevicePairing } from '../pairing'
-import type {PageState, SelectState} from './types'
-import { useDeviceConfiguration } from '../configuration'
+import { Injectable } from '../../../base/decorators'
+import { useDevicePairing } from '../../pairing'
+import type {PageState, SelectState} from '../base/types'
+import { useDeviceConfiguration } from '../../configuration'
 import { EventEmitter } from 'node:stream'
-import { getBindings } from '../../api'
+import { getBindings } from '../../../api'
 
 const PAIRING_RETRY_DELAY = 2000
 const SCANNING_RETRY_DELAY = 2000

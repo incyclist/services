@@ -1,7 +1,7 @@
-import { DESKTOP_MATRIX } from './__tests__/desktop-matrix'
+import { DESKTOP_MATRIX } from './matrix'
 
-// The matrix rows themselves are bound to real, executable tests in service-desktop.unit.test.ts
-// (CP8). This file only guards that the matrix's area coverage doesn't silently shrink.
+// The matrix rows themselves are bound to real, executable tests in service.unit.test.ts.
+// This file only guards that the matrix's area coverage doesn't silently shrink.
 describe('DesktopPairingPageService behaviour matrix', ()=> {
 
     test('the matrix covers every area listed in the plan', ()=> {

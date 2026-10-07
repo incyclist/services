@@ -1,7 +1,7 @@
-import { Inject } from "../../base/decorators/Injection"
+import { Inject } from "../../../base/decorators/Injection"
 import { DevicesPageService } from "./service"
 import { IncyclistCapability } from "incyclist-devices"
-import { Observer } from "../../base/types"
+import { Observer } from "../../../base/types"
 
 describe('DevicesPageService - characterization of current pairing page behaviour', ()=> {
 
@@ -562,11 +562,11 @@ describe('DevicesPageService - characterization of current pairing page behaviou
 // The copy itself is asserted by the guidance unit tests. These helpers only say which copy id
 // the page is expected to pick, so the assertions stay readable.
 function getFooterFor(role: 'required' | 'optional'): string | undefined {
-    return jest.requireActual('../pairing').getEmptyTileFooterText(role)
+    return jest.requireActual('../../pairing').getEmptyTileFooterText(role)
 }
 
 function getGuidanceFor(id: string) {
-    return jest.requireActual('../pairing').getPairingGuidanceText(id)
+    return jest.requireActual('../../pairing').getPairingGuidanceText(id)
 }
 
 const flushPromises = () => new Promise<void>( resolve => setImmediate(resolve) )

@@ -1,28 +1,30 @@
 // side-effect only: devices/pairing (needed below) reaches back into this whole module via a
-// deep, pre-existing require cycle (pairing -> ride -> workouts -> ... -> coaches -> devices ->
-// page). Loading ./service (mobile) first makes devices/page/service.ts the original entry point
-// for that cycle, so any reentry into it further down is a harmless self-reference instead of a
+// deep, pre-existing require cycle spanning devices/ride, routes, workouts, activities and
+// coaches (several of them import each other's whole barrel instead of a specific submodule).
+// Loading mobile/service.ts first makes it the original entry point for that cycle, so any
+// reentry into devices/page further down the chain is a harmless self-reference instead of a
 // collateral half-loaded module - see MobilePairingPageService's own safe case.
-import './service'
+import '../mobile/service'
 
-import { Injectable, Singleton } from '../../base/decorators'
+import { Injectable, Singleton } from '../../../base/decorators'
 
-import type { DesktopInterfaceDisplayProps, DesktopPairingDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, PairingExitVia, TConnectState } from './types'
-import { EnrichedInterfaceSetting, useDeviceAccess } from '../access'
+import type { DeviceSelectionItemProps, DeviceSelectionProps, PairingExitVia, TConnectState } from '../base/types'
+import type { DesktopInterfaceDisplayProps, DesktopPairingDisplayProps } from './types'
+import { EnrichedInterfaceSetting, useDeviceAccess } from '../../access'
 import { IncyclistCapability } from 'incyclist-devices'
-import type { IncyclistDeviceSettings, InterfaceSetting } from '../configuration'
-import type { IObserver, PairingButtonProps } from '../../types'
-import { PairingPageService } from './pairing-page-service'
+import type { IncyclistDeviceSettings, InterfaceSetting } from '../../configuration'
+import type { IObserver } from '../../../types'
+import { PairingPageService } from '../base/service'
 import { createDirectOrchestrator } from './orchestrator'
-import type { PairingOrchestrator } from './orchestrator'
-import type { DevicePairingData, DeviceSelectState } from '../pairing'
+import type { PairingOrchestrator } from '../base/orchestrator'
+import type { DevicePairingData, DeviceSelectState } from '../../pairing'
 
 /**
  * Pairing page for desktop (web-ui/Electron). Desktop uses the direct orchestrator (today's
  * `DevicePairingService` `usage:'direct'` loop, unchanged), shows every interface (ANT+, BLE,
  * serial, TCP/IP, WiFi) and drives the device list directly rather than through the orchestrator.
  *
- * Not wired to web-ui yet (that's CP10): this class is built and tested standalone first.
+ * Not wired to web-ui yet: this class is built and tested standalone first.
  */
 @Singleton
 export class DesktopPairingPageService extends PairingPageService {
@@ -100,29 +102,6 @@ export class DesktopPairingPageService extends PairingPageService {
                 showInterfaceSettings: undefined,
             }
         }
-    }
-
-    protected getButtonsDisplayProps(): PairingButtonProps {
-        const labelOK = this.isPairingForRide ? 'Start' : 'OK'
-        const labelSkip = this.isPairingForRide ? 'Cancel' : 'Skip'
-
-        if (this.canStartRide()) {
-            return [
-                { label:labelOK, primary:true, onClick:this.onOK.bind(this) },
-                { label:labelSkip, primary:false, onClick:this.onSkip.bind(this) },
-            ]
-        }
-
-        if (this.isPairingForRide && this.showSimulateCache) {
-            return [
-                { label:'Simulate', primary:true, onClick:this.onSimulate.bind(this) },
-                { label:labelSkip, primary:false, onClick:this.onSkip.bind(this) },
-            ]
-        }
-
-        return [
-            { label:labelSkip, primary:true, onClick:this.onSkip.bind(this) },
-        ]
     }
 
     // device list: unlike mobile (which goes through the orchestrator's

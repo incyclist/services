@@ -1,18 +1,19 @@
 import { EventLogger } from 'gd-eventlog'
-import { Injectable } from '../../base/decorators'
-import { IncyclistPageService } from '../../base/pages'
-import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText } from '../pairing'
+import { Injectable } from '../../../base/decorators'
+import { IncyclistPageService } from '../../../base/pages'
+import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText } from '../../pairing'
 
-import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../types'
-import type { CapabilityData, DevicePairingData, InternalPairingState } from '../pairing'
+import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
+import type { CapabilityData, DevicePairingData, InternalPairingState } from '../../pairing'
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
-import { useDeviceConfiguration } from '../configuration'
-import { useIncyclist } from '../../ui'
-import { useDeviceRide } from '../ride'
+import { useDeviceConfiguration } from '../../configuration'
+import { useIncyclist } from '../../../ui'
+import { useDeviceRide } from '../../ride'
 import { usePairingVisitTracker } from './visit-log-factory'
 import type { PairingVisitTracker } from './visit-log'
-import type { DesktopPairingDisplayProps, PairingExitVia } from './types'
+import type { PairingExitVia } from './types'
+import type { DesktopPairingDisplayProps } from '../desktop/types'
 import type { PairingOrchestrator } from './orchestrator'
 
 /**
@@ -314,20 +315,23 @@ export abstract class PairingPageService extends IncyclistPageService {
     }
 
     protected getButtonsDisplayProps() : PairingButtonProps{
+        const labelOK = this.isPairingForRide ? 'Start' : 'OK'
+        const labelSkip = this.isPairingForRide ? 'Cancel' : 'Skip'
+
         if (this.state?.canStartRide)
             return [
-                { label:'OK', primary:true, onClick:this.onOK.bind(this) }
+                { label:labelOK, primary:true, onClick:this.onOK.bind(this) }
             ]
 
         if (this.getDeviceRide().canEnforceSimulator()) {
             return [
                 { label:'Simulate', primary:true, onClick:this.onSimulate.bind(this) },
-                { label:'Skip', primary:false, onClick:this.onSkip.bind(this) }
+                { label:labelSkip, primary:false, onClick:this.onSkip.bind(this) }
             ]
         }
 
         return  [
-            { label:'Skip', primary:true, onClick:this.onSkip.bind(this) }
+            { label:labelSkip, primary:true, onClick:this.onSkip.bind(this) }
         ]
 
     }

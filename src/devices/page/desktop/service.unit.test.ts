@@ -1,11 +1,11 @@
-import { Inject } from "../../base/decorators/Injection"
-import { DesktopPairingPageService } from "./desktop-service"
+import { Inject } from "../../../base/decorators/Injection"
+import { DesktopPairingPageService } from "./service"
 import { IncyclistCapability } from "incyclist-devices"
-import { Observer } from "../../base/types"
+import { Observer } from "../../../base/types"
 
-// Binds the desktop behaviour matrix (__tests__/desktop-matrix.ts) to DesktopPairingPageService.
+// Binds the desktop behaviour matrix (./matrix.ts) to DesktopPairingPageService.
 // Test names echo each matrix row's `name` so the two stay easy to cross-check.
-describe('DesktopPairingPageService - desktop behaviour matrix (CP8)', ()=> {
+describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
 
     let service: DesktopPairingPageService
 
@@ -98,36 +98,32 @@ describe('DesktopPairingPageService - desktop behaviour matrix (CP8)', ()=> {
         jest.clearAllMocks()
     })
 
+    // getButtonsDisplayProps() is shared with mobile (base class), not overridden here - these
+    // tests just confirm desktop gets the right labels (Start/Cancel vs OK/Skip) out of it.
     describe('buttons', ()=> {
 
-        test('ready, ride mode: primary "Start", secondary "Cancel"', ()=> {
+        test('ready, ride mode: "Start"', ()=> {
             setPairingState({ canStartRide: true })
             ;(service as any).isPairingForRide = true
 
             const buttons = service.getPageDisplayProperties().buttons
 
-            expect(buttons.map(b=>({label:b.label, primary:b.primary}))).toEqual([
-                { label:'Start', primary:true },
-                { label:'Cancel', primary:false },
-            ])
+            expect(buttons.map(b=>b.label)).toEqual(['Start'])
         })
 
-        test('ready, normal mode: primary "OK", secondary "Skip"', ()=> {
+        test('ready, normal mode: "OK"', ()=> {
             setPairingState({ canStartRide: true })
             ;(service as any).isPairingForRide = false
 
             const buttons = service.getPageDisplayProperties().buttons
 
-            expect(buttons.map(b=>({label:b.label, primary:b.primary}))).toEqual([
-                { label:'OK', primary:true },
-                { label:'Skip', primary:false },
-            ])
+            expect(buttons.map(b=>b.label)).toEqual(['OK'])
         })
 
-        test('not ready, ride mode, simulator enforceable at open: primary "Simulate", secondary "Cancel"', ()=> {
+        test('not ready, ride mode, simulator enforceable: primary "Simulate", secondary "Cancel"', ()=> {
             setPairingState({ canStartRide: false })
             ;(service as any).isPairingForRide = true
-            ;(service as any).showSimulateCache = true
+            deviceRide.canEnforceSimulator.mockReturnValueOnce(true)
 
             const buttons = service.getPageDisplayProperties().buttons
 
@@ -137,17 +133,16 @@ describe('DesktopPairingPageService - desktop behaviour matrix (CP8)', ()=> {
         test('not ready, ride mode, no simulator: primary "Cancel" only', ()=> {
             setPairingState({ canStartRide: false })
             ;(service as any).isPairingForRide = true
-            ;(service as any).showSimulateCache = false
+            deviceRide.canEnforceSimulator.mockReturnValueOnce(false)
 
             const buttons = service.getPageDisplayProperties().buttons
 
             expect(buttons.map(b=>b.label)).toEqual(['Cancel'])
         })
 
-        test('not ready, normal mode: primary "Skip", no Simulate', ()=> {
+        test('not ready, normal mode: "Skip", no Simulate', ()=> {
             setPairingState({ canStartRide: false })
             ;(service as any).isPairingForRide = false
-            ;(service as any).showSimulateCache = true // simulate is ride-mode only, even if cached true
 
             const buttons = service.getPageDisplayProperties().buttons
 

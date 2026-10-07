@@ -1,4 +1,4 @@
-import { Inject } from "../../base/decorators/Injection"
+import { Inject } from "../../../base/decorators/Injection"
 import { DevicesPageService } from "./service"
 
 describe('DevicesPageService - pairing visit tracking', ()=> {

@@ -1,7 +1,7 @@
-import { Inject } from "../../base/decorators/Injection"
+import { Inject } from "../../../base/decorators/Injection"
 import { DevicesPageService } from "./service"
 import { IncyclistCapability } from "incyclist-devices"
-import { Observer } from "../../base/types"
+import { Observer } from "../../../base/types"
 
 describe('DevicesPageService - tile unselect', ()=> {
 

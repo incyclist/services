@@ -1,14 +1,13 @@
-import { Singleton } from '../../base/decorators'
-import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../pairing'
+import { Singleton } from '../../../base/decorators'
+import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../../pairing'
 
-import type { InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, PairingDisplayProps, TIncyclistCapability, TInterface } from '../../types'
-import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../access'
+import type { InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, PairingDisplayProps, TIncyclistCapability, TInterface } from '../../../types'
+import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../../access'
 import { IncyclistCapability } from 'incyclist-devices'
-import { Observer } from '../../base/types'
-import { getBindings } from '../../api'
-import { PairingPageService } from './pairing-page-service'
+import { Observer } from '../../../base/types'
+import { PairingPageService } from '../base/service'
 import { createStateMachineOrchestrator } from './orchestrator'
-import type { PairingOrchestrator } from './orchestrator'
+import type { PairingOrchestrator } from '../base/orchestrator'
 
 /**
  * Pairing page for mobile. Mobile uses the state machine orchestrator and shows the Android exit
@@ -183,23 +182,3 @@ export class MobilePairingPageService extends PairingPageService {
 
 /** The pairing page service for mobile. Kept under its original name for existing callers. */
 export { MobilePairingPageService as DevicesPageService }
-
-export const getDevicesPageService = ()=> new MobilePairingPageService()
-
-/**
- * The pairing page service for the current platform, picked by channel. Not yet called by any
- * UI (web-ui wires up DesktopPairingPageService directly in CP10); mobile keeps using
- * `getDevicesPageService()`.
- */
-export const getPairingPageService = ()=> {
-    const channel = getBindings().appInfo.getChannel()
-    if (channel==='desktop' || channel==='web') {
-        // required lazily: DesktopPairingPageService pulls in the routes/workouts modules, which
-        // transitively import back into devices/page - importing it at module load time here
-        // would create a require cycle (this module's own exports wouldn't be ready yet)
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { DesktopPairingPageService } = require('./desktop-service')
-        return new DesktopPairingPageService()
-    }
-    return getDevicesPageService()
-}
