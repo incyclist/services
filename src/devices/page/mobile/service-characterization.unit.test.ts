@@ -14,6 +14,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
         stop: jest.fn().mockResolvedValue(undefined),
         prepareStart: jest.fn(),
         setReadyToStart: jest.fn(),
+        isReadyToStart: jest.fn().mockReturnValue(false),
         selectDevice: jest.fn(),
         deleteDevice: jest.fn(),
         unselectDevices: jest.fn(),
@@ -551,6 +552,25 @@ describe('DevicesPageService - characterization of current pairing page behaviou
             await flushPromises()
 
             expect(ui.quit).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('closePage', ()=> {
+
+        test('stops the pairing when leaving without starting a ride (Skip)', ()=> {
+            pairing.isReadyToStart.mockReturnValue(false)
+
+            service.closePage()
+
+            expect(pairing.stop).toHaveBeenCalled()
+        })
+
+        test('does not re-stop the pairing when OK/Simulate already prepared it for the ride - that would re-pause the adapter just handed to the ride page', ()=> {
+            pairing.isReadyToStart.mockReturnValue(true)
+
+            service.closePage()
+
+            expect(pairing.stop).not.toHaveBeenCalled()
         })
     })
 })

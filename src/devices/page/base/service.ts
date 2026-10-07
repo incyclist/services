@@ -105,7 +105,14 @@ export abstract class PairingPageService extends IncyclistPageService {
             EventLogger.setGlobalConfig('page',null)
             this.isPairingForRide =false
             super.closePage()
-            this.stop()
+
+            // OK/Simulate already called prepareStart(), which pauses every adapter except the
+            // ones handed off to the ride and marks the pairing as confirmed ready - a plain
+            // stop() here (no adapter filter) would re-pause those too, right as the ride page
+            // needs them. Skip/Cancel never confirm, so isReadyToStart() is still false there.
+            if (!this.getDevicePairing().isReadyToStart())
+                this.stop()
+
             this.stateMachine.stop()
 
         }
