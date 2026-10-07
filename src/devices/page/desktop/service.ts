@@ -51,7 +51,10 @@ export class DesktopPairingPageService extends PairingPageService {
 
         try {
             const caps = this.state.capabilities??[]
-            const ifs = this.state.interfaces??[]
+            // `invisible` (set by DeviceConfigurationService for wifi on non-Windows, where it's
+            // implicitly always on) is stripped by DevicePairingService's own onStateChanged
+            // callback, but getState() - what the page service reads - returns it unfiltered
+            const ifs = (this.state.interfaces??[]).filter( i=>!i.invisible)
             this.getDeviceAccess().enrichWithAccessState(ifs)
 
             const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i))

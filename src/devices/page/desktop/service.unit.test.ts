@@ -348,6 +348,17 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
                 expect.objectContaining({ name:'serial', state:'unavailable', isScanning:false, enabled:true, protocol:'Daum Classic', port:'COM3' }),
             ])
         })
+
+        test('an invisible interface (wifi, implicitly on outside Windows) is not shown', ()=> {
+            setPairingState({ interfaces: [
+                { name:'ant', state:'connected', isScanning:true, enabled:true },
+                { name:'wifi', state:'connected', isScanning:false, enabled:true, invisible:true },
+            ] })
+
+            const interfaces = service.getPageDisplayProperties().interfaces
+
+            expect(interfaces.map(i=>i.name)).toEqual(['ant'])
+        })
     })
 
     describe('openPage inputs', ()=> {
