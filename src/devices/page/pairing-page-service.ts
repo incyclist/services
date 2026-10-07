@@ -277,7 +277,7 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected onCapabilityUse(cap:IncyclistCapability) {
         this.logEvent( {message:'capability use clicked', capability:cap, eventSource:'user'})
 
-        this.getDeviceConfiguration().disableCapability(cap, false)
+        this.getDevicePairing().useCapability(cap)
 
         this.updatePage()
     }

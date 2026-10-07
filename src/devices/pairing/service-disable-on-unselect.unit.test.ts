@@ -63,3 +63,27 @@ describe('DevicePairingService - disabling a capability on unselect', ()=> {
         expect(configuration.disableCapability).not.toHaveBeenCalled()
     })
 })
+
+describe('DevicePairingService - turning a switched-off capability back on', ()=> {
+
+    afterEach( ()=> {
+        jest.clearAllMocks()
+    })
+
+    test('useCapability re-enables the capability and restarts to reconnect its remembered device', ()=> {
+        const { svc, configuration } = createService()
+        const restart = jest.spyOn(svc as any, 'restart').mockResolvedValue(undefined)
+
+        svc.useCapability('power' as any)
+
+        expect(configuration.disableCapability).toHaveBeenCalledWith('power', false)
+        expect(restart).toHaveBeenCalled()
+    })
+
+    test('a failure in useCapability does not throw', ()=> {
+        const { svc, configuration } = createService()
+        configuration.disableCapability.mockImplementationOnce( ()=>{ throw new Error('boom') })
+
+        expect( ()=> svc.useCapability('power' as any)).not.toThrow()
+    })
+})

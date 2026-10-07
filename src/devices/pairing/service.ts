@@ -556,6 +556,21 @@ export class DevicePairingService  extends IncyclistService{
 
     }
 
+    /**
+     * Turns a capability the rider had switched off back on. The device is still remembered
+     * (unselectDevices() only disables, it never unselects), so this restores the exact same
+     * device with no new scan - restart() picks it straight back up.
+     */
+    useCapability(capability:IncyclistCapability):void {
+        try {
+            this.getDeviceConfiguration().disableCapability(capability,false)
+            this.restart()
+        }
+        catch(err) { // istanbul ignore next
+            this.logError(err, 'useCapability')
+        }
+    }
+
 
    /**
      * Should be called when the user has changed the iterface settings ( enabled/disabled and interface)

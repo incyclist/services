@@ -67,10 +67,7 @@ describe('DevicesPageService - tile use (turning a switched-off capability back 
 
     const pairing = {
         getState: jest.fn(),
-    }
-
-    const configuration = {
-        disableCapability: jest.fn(),
+        useCapability: jest.fn(),
     }
 
     const setCapability = (props: Record<string, unknown>) => {
@@ -81,7 +78,6 @@ describe('DevicesPageService - tile use (turning a switched-off capability back 
 
     beforeEach( ()=> {
         Inject('DevicePairing', pairing)
-        Inject('DeviceConfiguration', configuration)
         service = new DevicesPageService()
         ;(service as any).pageObserver = new Observer()
     })
@@ -89,7 +85,6 @@ describe('DevicesPageService - tile use (turning a switched-off capability back 
     afterEach( ()=> {
         (service as any).reset()
         Inject('DevicePairing', null)
-        Inject('DeviceConfiguration', null)
         jest.clearAllMocks()
     })
 
@@ -111,7 +106,7 @@ describe('DevicesPageService - tile use (turning a switched-off capability back 
         expect(tile.onUse).toBeUndefined()
     })
 
-    test('use re-enables the capability of that tile, with no scan, and refreshes the page', ()=> {
+    test('use re-enables the capability of that tile and refreshes the page', ()=> {
         setCapability({ selected: 'udid-1', deviceName: 'Tacx Neo' })
         const data = (service as any).state.capabilities[0]
         const emit = jest.spyOn((service as any).getPageObserver(), 'emit')
@@ -119,7 +114,7 @@ describe('DevicesPageService - tile use (turning a switched-off capability back 
 
         tile.onUse()
 
-        expect(configuration.disableCapability).toHaveBeenCalledWith(IncyclistCapability.Power, false)
+        expect(pairing.useCapability).toHaveBeenCalledWith(IncyclistCapability.Power)
         expect(emit).toHaveBeenCalledWith('page-update')
     })
 })
