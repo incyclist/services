@@ -70,15 +70,15 @@ export class IncyclistPageService extends IncyclistService implements IPageServi
         return contentPage ?? 'routes'
     }
 
-    protected moveTo( route:string, close:boolean=true) {
+    protected moveTo( route:string, close:boolean=true, state?:unknown) {
 
-        if (route==='$contentPage') {
-            const prevContentPage = this.getPrevContentPage()
-            this.getUIBinding().openPage(prevContentPage)
-        }
-        else {
-            this.getUIBinding().openPage(route)
-        }
+        // omit the argument entirely when there's no state, rather than passing an explicit
+        // `undefined` - keeps every existing openPage(route) call/assertion unchanged
+        const target = route==='$contentPage' ? this.getPrevContentPage() : route
+        if (state!==undefined)
+            this.getUIBinding().openPage(target, state)
+        else
+            this.getUIBinding().openPage(target)
 
         if (close) {
             this.closePage()

@@ -34,6 +34,8 @@ export interface INativeUI  {
     showItemInFolder(fileName:string): void
     getPathForFile(file:string): string
     detectLanguage():Array<string>|string
-    openPage(route:string)
-    
+    // `state` is additive - today only web-ui's NavigationBridge consumes it (e.g. to carry the
+    // page a page service should return to); the mobile binding ignores it.
+    openPage(route:string, state?:unknown)
+
 }
