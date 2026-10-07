@@ -1,8 +1,9 @@
-// side-effect only: devices/pairing (needed below) reaches back into this whole module via a
-// deep, pre-existing require cycle (pairing -> ride -> workouts -> ... -> coaches/ride-display ->
-// devices -> page). Loading ./service (mobile) first makes devices/page/service.ts the original
-// entry point for that cycle, so any reentry into it further down is a harmless self-reference
-// instead of a collateral half-loaded module - see MobilePairingPageService's own safe case.
+// side-effect only: devices/pairing (needed below) reaches back into this whole module via
+// several deep, pre-existing require cycles (e.g. pairing -> ride -> workouts -> ... -> coaches
+// -> devices -> page, or devices/ride -> routes -> ... -> workouts/ride -> devices -> page).
+// Loading ./service (mobile) first makes devices/page/service.ts the original entry point for
+// those cycles, so any reentry into it further down is a harmless self-reference instead of a
+// collateral half-loaded module - see MobilePairingPageService's own safe case.
 import './service'
 
 import { Injectable, Singleton } from '../../base/decorators'
