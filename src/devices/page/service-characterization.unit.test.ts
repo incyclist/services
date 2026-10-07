@@ -31,6 +31,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
 
     const deviceConfig = {
         getSimulatorAdapterId: jest.fn().mockReturnValue('simulator-id'),
+        disableCapability: jest.fn(),
     }
 
     const ui = {
@@ -335,6 +336,16 @@ describe('DevicesPageService - characterization of current pairing page behaviou
             expect(stateMachine.onDeviceSelectionOpened).toHaveBeenCalled()
             expect(list.capability).toBe(IncyclistCapability.Power)
             expect(list.devices).toHaveLength(1)
+        })
+
+        test('opening a capability re-enables it, in case the rider had turned it off', ()=> {
+            setPairingState({
+                capabilities: [ { capability: IncyclistCapability.Power, devices: [device()], selected: undefined } ],
+            })
+
+            ;(service as any).openDeviceSelection(IncyclistCapability.Power)
+
+            expect(deviceConfig.disableCapability).toHaveBeenCalledWith(IncyclistCapability.Power, false)
         })
 
         test('"select all" is offered only for Resistance', ()=> {

@@ -343,9 +343,12 @@ export class DevicePairingService  extends IncyclistService{
    startDeviceSelection(capability:IncyclistCapability,onDeviceSelectStateChanged:(newState:DeviceSelectState)=>void):DeviceSelectState {
 
         try {
-            
+            // the rider is searching this capability again, so it may pick up a device even if
+            // the rider had turned the capability off before; other disabled capabilities stay off
+            this.getDeviceConfiguration().disableCapability(capability,false)
+
             const capabilityData = this.getCapability(capability)
-            
+
             this.settings = Object.assign( this.settings||{}, {onDeviceSelectStateChanged,capabilityForScan:capability})
             const devices = capabilityData?.devices||[]
             const available = devices.filter( d=> this.isInterfaceEnabled(d.interface)).filter( d=> !this.isOnDeletedList(capability,d.udid))
@@ -539,6 +542,9 @@ export class DevicePairingService  extends IncyclistService{
         try  {
             const adapater = this.getDeviceConfiguration().getSelected(capability)
             this.getDeviceConfiguration().unselect(capability,true)
+            // the rider turned this capability off: disabling it (not just unselecting) keeps a
+            // scan running for a different capability from silently reselecting the same device
+            this.getDeviceConfiguration().disableCapability(capability,true)
 
             if (adapater?.isStarted()) {
                 this.restart()

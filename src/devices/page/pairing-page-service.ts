@@ -232,6 +232,10 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected openDeviceSelection(cap:IncyclistCapability) {
         this.logEvent( {message:'capability clicked', capability:cap, eventSource:'user'})
 
+        // the rider is searching this capability again, so it may pick up a device even if the
+        // rider had turned the capability off before; other disabled capabilities stay off
+        this.getDeviceConfiguration().disableCapability(cap,false)
+
         this.openedCapability = cap;
         this.stateMachine.onDeviceSelectionOpened( ()=>{ this.updatePage() })
         this.updatePage()
