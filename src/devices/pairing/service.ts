@@ -658,6 +658,17 @@ export class DevicePairingService  extends IncyclistService{
             if (timeSincePrev<3000) {
                 this.state.tsPrevStart=-1
                 await sleep( 3000-timeSincePrev)
+
+                // D-1: -1 is only meant to block a *concurrent* restart() for the remainder of this
+                // sleep - it used to rely on the run() call below (via startPairing()/
+                // startScanning()) to replace it with a fresh timestamp, but both of those have
+                // early-return paths (pairing already complete, already pairing, a scan path that
+                // skips them) that never reach that line. When one of those paths was taken, -1
+                // stuck around forever, and every later restart() hit the check above and bailed
+                // out immediately - no pairing or scan ever ran again, leaving every tile 'waiting'.
+                // The debounce window is over once this sleep ends, so release the sentinel here
+                // regardless of what run() ends up doing.
+                delete this.state.tsPrevStart
             }
         }
         

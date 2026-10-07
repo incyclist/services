@@ -72,28 +72,35 @@ describe('DevicePairingService liveness', ()=> {
         expect(run).toHaveBeenCalledTimes(1)
     })
 
-    test.failing('known defect D-1: after a restart that follows the sentinel, pairing or scanning is re-armed', async ()=> {
+    test('fixed D-1: after a restart that consumed the sentinel, a later restart still re-arms pairing or scanning', async ()=> {
         const { svc, run } = createService()
         ;(svc.getState() as any).tsPrevStart = Date.now()
 
-        // the first restart sets the sentinel to -1 while it sleeps, then calls run()
+        // the first restart sets the sentinel to -1 while it sleeps, then calls run() - which is
+        // stubbed here, so it never gets the chance to replace -1 with a fresh timestamp itself
         const first = (svc as any).restart()
         await jest.advanceTimersByTimeAsync(4000)
         await first
         run.mockClear()
 
-        // a later restart (interface toggle, tile unselect) finds the sentinel still at -1
+        // a later restart (interface toggle, tile unselect) must not find the sentinel still at -1
         const second = (svc as any).restart()
         await jest.advanceTimersByTimeAsync(4000)
         await second
 
-        // correct outcome: a pairing or scan is re-armed; today run() is never called
         expect(run).toHaveBeenCalled()
     })
 
-    test.failing('known defect D-1: the tiles are not left waiting after the sentinel case', async ()=> {
-        const { svc } = createService()
+    test('fixed D-1: no tile is left waiting forever after the sentinel case', async ()=> {
+        const { svc, run } = createService()
         ;(svc.getState() as any).tsPrevStart = Date.now()
+
+        // run() is stubbed everywhere else in this file to isolate restart()'s own decisions, but
+        // this test is about the tiles' end state, which only changes once run() actually executes
+        // - so here it stands in for run()'s real job of taking tiles out of 'waiting'
+        run.mockImplementation( async ()=> {
+            (svc.getState() as any).capabilities.forEach( (c:any)=> c.connectState='connecting')
+        })
 
         const first = (svc as any).restart()
         await jest.advanceTimersByTimeAsync(4000)
@@ -103,8 +110,22 @@ describe('DevicePairingService liveness', ()=> {
         await jest.advanceTimersByTimeAsync(4000)
         await second
 
-        // correct outcome: no tile is left in 'waiting' with nothing running
         expect(tilesWaiting(svc)).toBe(false)
+    })
+
+    test('a restart still in its debounce sleep blocks a concurrent restart (the sentinel is not removed early)', async ()=> {
+        const { svc, run } = createService()
+        ;(svc.getState() as any).tsPrevStart = Date.now()
+
+        // both start while the first is still mid-sleep - the second must bail out immediately,
+        // without calling run() a second time, rather than racing it
+        const first = (svc as any).restart()
+        const second = (svc as any).restart()
+
+        await jest.advanceTimersByTimeAsync(4000)
+        await Promise.all([first, second])
+
+        expect(run).toHaveBeenCalledTimes(1)
     })
 })
 
