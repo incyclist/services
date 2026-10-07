@@ -53,5 +53,6 @@ export const DESKTOP_MATRIX: Array<DesktopMatrixRow> = [
     { area:'device-list', name:'Cancel the device list keeps the selection', given:'Cancel in the list', expected:'stopDeviceSelection(); onCancel closes the dialog; no unselect', flag:'Mobile has a "Don\'t use" tick that unselects. Desktop has no tick and uses the tile ✕. The product owner wants an alternative on mobile; a UX suggestion is pending.' },
 
     // interfaces
-    { area:'interfaces', name:'Interface settings change', given:'OK in interface settings', expected:'devicePairing.changeInterfaceSettings(ifName, settings); the dialog closes' },
+    { area:'interfaces', name:'Interface clicked opens its settings', given:'an interface tile clicked', expected:'showInterfaceSettings is populated for that interface (name, protocols, enabled, protocol, port)' },
+    { area:'interfaces', name:'Interface settings change', given:'OK in interface settings', expected:'devicePairing.changeInterfaceSettings(ifName, settings); showInterfaceSettings clears' },
 ]

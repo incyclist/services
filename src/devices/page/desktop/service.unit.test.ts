@@ -40,6 +40,7 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
 
     const deviceAccess = {
         enrichWithAccessState: jest.fn( (ifs:Array<unknown>)=>ifs),
+        getProtocols: jest.fn().mockReturnValue([]),
     }
 
     const tracker = {
@@ -370,6 +371,47 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
             const interfaces = service.getPageDisplayProperties().interfaces
 
             expect(interfaces.map(i=>i.name)).toEqual(['ant'])
+        })
+
+        test('nothing is shown by default', ()=> {
+            expect(service.getPageDisplayProperties().showInterfaceSettings).toBeUndefined()
+        })
+
+        test('clicking an interface opens its settings dialog with its current state', ()=> {
+            setPairingState({ interfaces: [
+                { name:'serial', state:'idle', isScanning:false, enabled:true, protocol:'Daum Classic', port:'COM3' },
+            ] })
+            deviceAccess.getProtocols.mockReturnValue(['Daum Classic', 'Daum Premium'])
+
+            service.getPageDisplayProperties().interfaces[0].onClick()
+
+            const dialog = service.getPageDisplayProperties().showInterfaceSettings
+            expect(dialog).toEqual(expect.objectContaining({
+                name:'serial', protocols:['Daum Classic', 'Daum Premium'], enabled:true, protocol:'Daum Classic', port:'COM3',
+            }))
+        })
+
+        test('OK in the settings dialog persists the change and closes the dialog', ()=> {
+            setPairingState({ interfaces: [
+                { name:'ant', state:'idle', isScanning:false, enabled:false },
+            ] })
+
+            service.getPageDisplayProperties().interfaces[0].onClick()
+            service.getPageDisplayProperties().showInterfaceSettings.onOK({ enabled:true } as any)
+
+            expect(pairing.changeInterfaceSettings).toHaveBeenCalledWith('ant', { enabled:true })
+            expect(service.getPageDisplayProperties().showInterfaceSettings).toBeUndefined()
+        })
+
+        test('closing the dialog without a change clears it too', ()=> {
+            setPairingState({ interfaces: [
+                { name:'ant', state:'idle', isScanning:false, enabled:false },
+            ] })
+
+            service.getPageDisplayProperties().interfaces[0].onClick()
+            service.getPageDisplayProperties().showInterfaceSettings.onClose()
+
+            expect(service.getPageDisplayProperties().showInterfaceSettings).toBeUndefined()
         })
     })
 

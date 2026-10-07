@@ -8,7 +8,7 @@ import type { PairingOrchestrator } from '../base/orchestrator'
 
 import type { IObserver } from '../../../types'
 import type { DeviceSelectionItemProps, DeviceSelectionProps, PairingExitVia, TConnectState } from '../base/types'
-import type { DesktopInterfaceDisplayProps, DesktopPairingDisplayProps } from './types'
+import type { DesktopInterfaceDisplayProps, DesktopInterfaceSettingsDisplayProps, DesktopPairingDisplayProps } from './types'
 
 import { EnrichedInterfaceSetting, useDeviceAccess } from '../../access'
 import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../../pairing'
@@ -27,6 +27,9 @@ export class DesktopPairingPageService extends PairingPageService {
     protected source: string|undefined
 
     protected deviceSelectState: DeviceSelectState|undefined
+
+    /** the interface whose settings dialog is currently shown (ant/ble/serial/tcpip/wifi), or none */
+    protected interfaceSettingsFor: string|undefined
 
     protected createOrchestrator(): PairingOrchestrator {
         return createDirectOrchestrator()
@@ -94,7 +97,7 @@ export class DesktopPairingPageService extends PairingPageService {
                 interfaces,
                 deviceSelection: this.getDeviceListDisplayProps(),
                 buttons,
-                showInterfaceSettings: undefined,
+                showInterfaceSettings: this.getInterfaceSettingsDisplayProps(),
             }
         }
         catch(err) {
@@ -184,14 +187,42 @@ export class DesktopPairingPageService extends PairingPageService {
         const {name,state,isScanning,enabled,protocol,port} = info
         return {
             name, state, isScanning, enabled, protocol, port,
-            onClick: ()=>{ this.logEvent({message:'interface clicked', interface:name, eventSource:'user'}) }
+            onClick: ()=>{ this.openInterfaceSettings(name) }
+        }
+    }
+
+    protected openInterfaceSettings(name:string):void {
+        this.logEvent( {message:'interface clicked', interface:name, eventSource:'user'})
+        this.interfaceSettingsFor = name
+        this.updatePage()
+    }
+
+    protected closeInterfaceSettings():void {
+        this.interfaceSettingsFor = undefined
+        this.updatePage()
+    }
+
+    protected getInterfaceSettingsDisplayProps():DesktopInterfaceSettingsDisplayProps|undefined {
+        const name = this.interfaceSettingsFor
+        if (!name)
+            return undefined
+
+        const current = (this.state.interfaces??[]).find( i=>i.name===name)
+        return {
+            name,
+            protocols: this.getDeviceAccess().getProtocols(name),
+            enabled: current?.enabled??false,
+            protocol: current?.protocol,
+            port: current?.port,
+            onOK: (settings:InterfaceSetting)=>{ this.onInterfaceSettingsChanged(name,settings) },
+            onClose: ()=>{ this.closeInterfaceSettings() },
         }
     }
 
     public onInterfaceSettingsChanged( name:string, settings:InterfaceSetting):void {
         this.logEvent( {message:'interface settings changed', interface:name})
         this.getDevicePairing().changeInterfaceSettings(name,settings)
-        this.updatePage()
+        this.closeInterfaceSettings()
     }
 
     /** Shift+S on desktop: adds a Simulator device, same as today's page.jsx onAddSimulator */
