@@ -60,3 +60,66 @@ describe('DevicesPageService - tile unselect', ()=> {
         expect(emit).toHaveBeenCalledWith('page-update')
     })
 })
+
+describe('DevicesPageService - tile use (turning a switched-off capability back on)', ()=> {
+
+    let service: DevicesPageService
+
+    const pairing = {
+        getState: jest.fn(),
+    }
+
+    const configuration = {
+        disableCapability: jest.fn(),
+    }
+
+    const setCapability = (props: Record<string, unknown>) => {
+        pairing.getState.mockReturnValue({
+            capabilities: [ { capability: IncyclistCapability.Power, devices: [], disabled: true, ...props } ],
+        })
+    }
+
+    beforeEach( ()=> {
+        Inject('DevicePairing', pairing)
+        Inject('DeviceConfiguration', configuration)
+        service = new DevicesPageService()
+        ;(service as any).pageObserver = new Observer()
+    })
+
+    afterEach( ()=> {
+        (service as any).reset()
+        Inject('DevicePairing', null)
+        Inject('DeviceConfiguration', null)
+        jest.clearAllMocks()
+    })
+
+    test('a switched-off tile with a remembered device (T16) offers use', ()=> {
+        setCapability({ selected: 'udid-1', deviceName: 'Tacx Neo' })
+        const data = (service as any).state.capabilities[0]
+
+        const tile = (service as any).getCapabilityDisplayProps(data)
+
+        expect(typeof tile.onUse).toBe('function')
+    })
+
+    test('a switched-off tile with nothing remembered (T16b) does not offer use', ()=> {
+        setCapability({ selected: undefined, deviceName: undefined })
+        const data = (service as any).state.capabilities[0]
+
+        const tile = (service as any).getCapabilityDisplayProps(data)
+
+        expect(tile.onUse).toBeUndefined()
+    })
+
+    test('use re-enables the capability of that tile, with no scan, and refreshes the page', ()=> {
+        setCapability({ selected: 'udid-1', deviceName: 'Tacx Neo' })
+        const data = (service as any).state.capabilities[0]
+        const emit = jest.spyOn((service as any).getPageObserver(), 'emit')
+        const tile = (service as any).getCapabilityDisplayProps(data)
+
+        tile.onUse()
+
+        expect(configuration.disableCapability).toHaveBeenCalledWith(IncyclistCapability.Power, false)
+        expect(emit).toHaveBeenCalledWith('page-update')
+    })
+})

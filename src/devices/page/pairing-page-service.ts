@@ -149,23 +149,39 @@ export abstract class PairingPageService extends IncyclistPageService {
         const {capability:cap,deviceName, connectState,value,unit,disabled} = data
 
         const capability = this.getTCapability(cap)
-
-        const adapaters = this.state.adapters??[]
-
-        const adapter = adapaters.find( ai=>data.selected && ai.udid===data.selected)
-        const ifName = adapter?.adapter?.getInterface()
-
-
         const title = this.getDisplayCapability(cap)
         const onClick = ()=> { this.openDeviceSelection(cap)}
-        const onUnselect = data.selected ? ()=> { this.onCapabilityUnselect(cap) } : undefined
-
 
         const role = PAIRING_CAPABILITY_ROLES.find( r=>r.capability===cap)?.role
         const helpText = {
             full: getCapabilityHelpText(capability, 'full') ?? '',
             short: getCapabilityHelpText(capability, 'short') ?? '',
         }
+
+        // the rider turned this capability off (disabled, not merely unselected). This takes
+        // priority over the "not searching" (S1) and case B framing. T16: a device is still
+        // remembered (unselectDevices() keeps it, only disables the capability), shown dimmed
+        // with a toggle that turns it straight back on, no new scan needed. T16b: nothing is
+        // remembered (e.g. its device was deleted), shown as a plain tile inviting a fresh search.
+        if (disabled) {
+            const hasRememberedDevice = Boolean(deviceName)
+            return {
+                title, capability,
+                deviceName: hasRememberedDevice ? deviceName : undefined,
+                disabled: true,
+                role, helpText,
+                emptyFooter: hasRememberedDevice ? 'Not used' : 'Not used · tap to search',
+                onClick,
+                onUse: hasRememberedDevice ? ()=> { this.onCapabilityUse(cap) } : undefined,
+            }
+        }
+
+        const adapaters = this.state.adapters??[]
+        const adapter = adapaters.find( ai=>data.selected && ai.udid===data.selected)
+        const ifName = adapter?.adapter?.getInterface()
+
+        const onUnselect = data.selected ? ()=> { this.onCapabilityUnselect(cap) } : undefined
+
         let emptyFooter: string | undefined = undefined
         if (noSearch)
             emptyFooter = 'Not searching'
@@ -173,7 +189,7 @@ export abstract class PairingPageService extends IncyclistPageService {
             emptyFooter = getEmptyTileFooterText(role)
 
         return {
-            title, capability,deviceName:!disabled?deviceName:undefined, disabled, connectState,value:value?.toString(),unit,interface:ifName,
+            title, capability,deviceName, disabled:false, connectState,value:value?.toString(),unit,interface:ifName,
             role, helpText, emptyFooter,
             onClick, onUnselect
         }
@@ -232,10 +248,8 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected openDeviceSelection(cap:IncyclistCapability) {
         this.logEvent( {message:'capability clicked', capability:cap, eventSource:'user'})
 
-        // the rider is searching this capability again, so it may pick up a device even if the
-        // rider had turned the capability off before; other disabled capabilities stay off
-        this.getDeviceConfiguration().disableCapability(cap,false)
-
+        // opening the list to browse does not switch the capability back on by itself: only
+        // picking a device (selectSingleDevice) or the tile's own toggle (onCapabilityUse) does
         this.openedCapability = cap;
         this.stateMachine.onDeviceSelectionOpened( ()=>{ this.updatePage() })
         this.updatePage()
@@ -255,6 +269,15 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.logEvent( {message:'capability unselect clicked', capability:cap, eventSource:'user'})
 
         this.getDevicePairing().unselectDevices(cap)
+
+        this.updatePage()
+    }
+
+    // turns a switched-off capability (T16) back on, restoring its remembered device with no scan
+    protected onCapabilityUse(cap:IncyclistCapability) {
+        this.logEvent( {message:'capability use clicked', capability:cap, eventSource:'user'})
+
+        this.getDeviceConfiguration().disableCapability(cap, false)
 
         this.updatePage()
     }

@@ -343,10 +343,8 @@ export class DevicePairingService  extends IncyclistService{
    startDeviceSelection(capability:IncyclistCapability,onDeviceSelectStateChanged:(newState:DeviceSelectState)=>void):DeviceSelectState {
 
         try {
-            // the rider is searching this capability again, so it may pick up a device even if
-            // the rider had turned the capability off before; other disabled capabilities stay off
-            this.getDeviceConfiguration().disableCapability(capability,false)
-
+            // opening the list to browse does not switch the capability back on by itself: only
+            // picking a device (select()) or the tile's own toggle (disableCapability(,false)) does
             const capabilityData = this.getCapability(capability)
 
             this.settings = Object.assign( this.settings||{}, {onDeviceSelectStateChanged,capabilityForScan:capability})
@@ -541,9 +539,10 @@ export class DevicePairingService  extends IncyclistService{
     async unselectDevices(capability:IncyclistCapability):Promise<void> { 
         try  {
             const adapater = this.getDeviceConfiguration().getSelected(capability)
-            this.getDeviceConfiguration().unselect(capability,true)
-            // the rider turned this capability off: disabling it (not just unselecting) keeps a
-            // scan running for a different capability from silently reselecting the same device
+            // disable, don't unselect: the device stays remembered (getSelected()/getAdapters()
+            // already ignore a disabled capability's selection), so switching the capability back
+            // on restores the exact same device with no new scan. It also keeps a scan running
+            // for a different capability from silently reselecting the same device meanwhile.
             this.getDeviceConfiguration().disableCapability(capability,true)
 
             if (adapater?.isStarted()) {

@@ -198,7 +198,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
             expect(tile.unit).toBe('W')
         })
 
-        test('a disabled capability does not expose its device name', ()=> {
+        test('a switched-off capability with a remembered device (T16) shows it dimmed, with a toggle to turn it back on', ()=> {
             setPairingState({
                 capabilities: [
                     { capability: IncyclistCapability.Power, devices: [device()], selected: 'udid-1', deviceName: 'Tacx Neo', disabled: true },
@@ -207,8 +207,26 @@ describe('DevicesPageService - characterization of current pairing page behaviou
 
             const tile = service.getPageDisplayProperties().capabilities.top[0]
 
+            expect(tile.deviceName).toBe('Tacx Neo')
+            expect(tile.disabled).toBe(true)
+            expect(tile.emptyFooter).toBe('Not used')
+            expect(typeof tile.onUse).toBe('function')
+            expect(tile.onUnselect).toBeUndefined()
+        })
+
+        test('a switched-off capability with nothing remembered (T16b) is a plain tile with no toggle', ()=> {
+            setPairingState({
+                capabilities: [
+                    { capability: IncyclistCapability.Power, devices: [], selected: undefined, deviceName: undefined, disabled: true },
+                ],
+            })
+
+            const tile = service.getPageDisplayProperties().capabilities.top[0]
+
             expect(tile.deviceName).toBeUndefined()
             expect(tile.disabled).toBe(true)
+            expect(tile.emptyFooter).toBe('Not used · tap to search')
+            expect(tile.onUse).toBeUndefined()
         })
 
         test('the Resistance tile is titled "Resistance" and the Controller tile is titled "Controller"', ()=> {
@@ -338,14 +356,14 @@ describe('DevicesPageService - characterization of current pairing page behaviou
             expect(list.devices).toHaveLength(1)
         })
 
-        test('opening a capability re-enables it, in case the rider had turned it off', ()=> {
+        test('opening a capability to browse does not switch it back on by itself', ()=> {
             setPairingState({
                 capabilities: [ { capability: IncyclistCapability.Power, devices: [device()], selected: undefined } ],
             })
 
             ;(service as any).openDeviceSelection(IncyclistCapability.Power)
 
-            expect(deviceConfig.disableCapability).toHaveBeenCalledWith(IncyclistCapability.Power, false)
+            expect(deviceConfig.disableCapability).not.toHaveBeenCalled()
         })
 
         test('"select all" is offered only for Resistance', ()=> {

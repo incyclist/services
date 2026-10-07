@@ -58,8 +58,11 @@ export type CapabilityDisplayProps = {
     helpText?: { full: string, short: string }
     emptyFooter?: string
     onClick: (item:CapabilityDisplayProps)=>void
-    /** Unselects the device for this capability, as the tile's cross does. Only set on tiles with a selected device. */
+    /** Turns the capability off. Only set on a tile with a selected, enabled device. */
     onUnselect?: ()=>void
+    /** Turns a switched-off capability back on, restoring its remembered device with no new scan.
+     * Only set on a switched-off tile that still has a remembered device (T16, not T16b). */
+    onUse?: ()=>void
 }
 
 export type PairingRowLabelProps = { text: string, subtext?: string }

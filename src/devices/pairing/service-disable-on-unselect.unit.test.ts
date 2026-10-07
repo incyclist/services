@@ -1,9 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { DevicePairingService } from './service'
 
-// Unselecting a capability from a tile must disable it (not just unselect it), so that a device
-// redetected by an ambient scan running for another capability can't silently reselect it.
-// Searching a capability again (starting or reopening its device list) re-enables it.
+// Unselecting a capability from a tile disables it, without clearing which device was selected:
+// getSelected()/getAdapters() already ignore a disabled capability's selection, so the device
+// stays remembered and switching the capability back on restores it deterministically, with no
+// new scan. Disabling (rather than only unselecting) also keeps a scan running for a different
+// capability from silently reselecting the same device meanwhile. Opening the device list to
+// browse does not switch the capability back on by itself - only picking a device, or the tile's
+// own toggle, does.
 
 const createService = () => {
     const services = {
@@ -27,8 +31,8 @@ const createService = () => {
         },
     }
     const svc = new DevicePairingService(services as any)
-    // startDeviceSelection() kicks off a fire-and-forget scan; these tests only care about the
-    // synchronous disableCapability() call it makes before that, so run() is stubbed out
+    // startDeviceSelection() kicks off a fire-and-forget scan; these tests don't need it to
+    // complete, so run() is stubbed out
     jest.spyOn(svc as any, 'run').mockResolvedValue(undefined)
     const state = svc.getState() as any
     state.interfaces = []
@@ -42,20 +46,20 @@ describe('DevicePairingService - disabling a capability on unselect', ()=> {
         jest.clearAllMocks()
     })
 
-    test('unselectDevices disables the capability, after unselecting it', async ()=> {
+    test('unselectDevices disables the capability without unselecting it, so the device stays remembered', async ()=> {
         const { svc, configuration } = createService()
 
         await svc.unselectDevices('power' as any)
 
-        expect(configuration.unselect).toHaveBeenCalledWith('power', true)
         expect(configuration.disableCapability).toHaveBeenCalledWith('power', true)
+        expect(configuration.unselect).not.toHaveBeenCalled()
     })
 
-    test('startDeviceSelection re-enables the capability before searching it', ()=> {
+    test('startDeviceSelection does not switch the capability back on by itself', ()=> {
         const { svc, configuration } = createService()
 
         svc.startDeviceSelection('power' as any, jest.fn())
 
-        expect(configuration.disableCapability).toHaveBeenCalledWith('power', false)
+        expect(configuration.disableCapability).not.toHaveBeenCalled()
     })
 })
