@@ -74,6 +74,8 @@ describe('FreeRideDisplayService', () => {
     let mockRouteList: any
     let mockFreeRideService: any
     let mockActivityRideService: any
+    let mockGoogleMaps = {hasPersonalApiKey:true,hasDevelopmentApiKey:false}
+
 
     const setupMocks = (s: any, options: any = {}) => {
         const userSettingsGet = options.userSettingsGet || jest.fn((k, d) => d)
@@ -126,7 +128,9 @@ describe('FreeRideDisplayService', () => {
         })
 
         Inject('GoogleMaps', {
-            // placeholder for google maps
+            hasPersonalApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasPersonalApiKey),
+            hasDevelopmentApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasDevelopmentApiKey)
+
         })
 
         // createRoute() calls route.updateCountryFromPoints() on every start() - without a mock it hits the live Routes API
@@ -160,7 +164,8 @@ describe('FreeRideDisplayService', () => {
             isVirtualShiftingEnabled: jest.fn().mockReturnValue(options.virtualShifting ?? false),
             getDisplayProperties: jest.fn(() => ({ dbColumns: [], position: {} })),
             reset: jest.fn(),
-            onRouteUpdated: jest.fn()
+            onRouteUpdated: jest.fn(),
+            isSimulated: jest.fn().mockReturnValue(false)
         }
 
         if (options.mockRideService) {
@@ -241,9 +246,12 @@ describe('FreeRideDisplayService', () => {
         })
 
         test('returns true when options available', () => {
+            // rideView='map' isolates this test to the free-ride-options concern - the Street
+            // View wait is covered separately in GpxDisplayService's own tests
             setupMocks(service, {
                 mockRideService: true,
-                freeRideOptions: [mockOption1, mockOption2]
+                freeRideOptions: [mockOption1, mockOption2],
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'map' : d)
             })
             expect(service.isStartRideCompleted()).toBe(true)
         })
@@ -251,8 +259,21 @@ describe('FreeRideDisplayService', () => {
         test('returns true even when options array is empty', () => {
             setupMocks(service, {
                 mockRideService: true,
-                freeRideOptions: []
+                freeRideOptions: [],
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'map' : d)
             })
+            expect(service.isStartRideCompleted()).toBe(true)
+        })
+
+        test('waits for the Street View start to resolve, even once options are loaded', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                freeRideOptions: [mockOption1, mockOption2],
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'sv' : d)
+            })
+            expect(service.isStartRideCompleted()).toBe(false)
+
+            service['onStreetViewEvent']('Loaded', undefined)
             expect(service.isStartRideCompleted()).toBe(true)
         })
     })
@@ -868,7 +889,12 @@ describe('FreeRideDisplayService', () => {
         })
 
         test('isStartRideCompleted returns true when start is complete', async () => {
-            setupMocks(service, { mockRideService: true })
+            // rideView='map' isolates this test to the free-ride-options concern - see the
+            // dedicated Street View wait test above
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'map' : d)
+            })
             service.start()
             await new Promise(resolve => setTimeout(resolve, 50))
             expect(service.isStartRideCompleted()).toBe(true)
@@ -1699,7 +1725,10 @@ describe('FreeRideDisplayService', () => {
         })
 
         test('service can be reset and restarted without errors', async () => {
-            setupMocks(service, { mockRideService: true })
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((k, d) => k === 'preferences.rideView' ? 'map' : d)
+            })
             service.start()
             await new Promise(resolve => setTimeout(resolve, 50))
             expect(service.isStartRideCompleted()).toBe(true)

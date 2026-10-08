@@ -69,7 +69,12 @@ export class DevicePairingService  extends IncyclistService{
     protected settings: PairingSettings={}
     protected state:InternalPairingState = { initialized:false, deleted:[]}
     protected deviceSelectState:DeviceSelectState|null = null
-    
+
+    // a selected capability that stays 'waiting' with nothing pairing or scanning is logged once per start
+    protected static readonly STALLED_AFTER_MS = 30*1000
+    protected stalledTimer?: ReturnType<typeof setTimeout>
+    protected stalledLogged = false
+
 
     protected onPairingStartedHandler = this.onPairingStarted.bind(this)
     protected onPairingSuccessHandler = this.onPairingSuccess.bind(this)
@@ -132,6 +137,7 @@ export class DevicePairingService  extends IncyclistService{
     async start( onStateChanged: (newState:PairingState)=>void) {
 
         this.pairingConfirmed = false
+        this.stalledLogged = false
         
         if (this.state.stopped) {
             // cleanup on 2nd launch
@@ -233,6 +239,7 @@ export class DevicePairingService  extends IncyclistService{
 
    async stop(adapters:Array<string>=[],forExit:boolean=false ):Promise<void> {
 
+        this.clearStalledTimer()
         const adapterFilter = adapters??[]
 
         if (!forExit) {
@@ -336,9 +343,10 @@ export class DevicePairingService  extends IncyclistService{
    startDeviceSelection(capability:IncyclistCapability,onDeviceSelectStateChanged:(newState:DeviceSelectState)=>void):DeviceSelectState {
 
         try {
-            
+            // opening the list to browse does not switch the capability back on by itself: only
+            // picking a device (select()) or the tile's own toggle (disableCapability(,false)) does
             const capabilityData = this.getCapability(capability)
-            
+
             this.settings = Object.assign( this.settings||{}, {onDeviceSelectStateChanged,capabilityForScan:capability})
             const devices = capabilityData?.devices||[]
             const available = devices.filter( d=> this.isInterfaceEnabled(d.interface)).filter( d=> !this.isOnDeletedList(capability,d.udid))
@@ -531,7 +539,11 @@ export class DevicePairingService  extends IncyclistService{
     async unselectDevices(capability:IncyclistCapability):Promise<void> { 
         try  {
             const adapater = this.getDeviceConfiguration().getSelected(capability)
-            this.getDeviceConfiguration().unselect(capability,true)
+            // disable, don't unselect: the device stays remembered (getSelected()/getAdapters()
+            // already ignore a disabled capability's selection), so switching the capability back
+            // on restores the exact same device with no new scan. It also keeps a scan running
+            // for a different capability from silently reselecting the same device meanwhile.
+            this.getDeviceConfiguration().disableCapability(capability,true)
 
             if (adapater?.isStarted()) {
                 this.restart()
@@ -542,6 +554,21 @@ export class DevicePairingService  extends IncyclistService{
             this.logError(err, 'deleteDevice')
         }
 
+    }
+
+    /**
+     * Turns a capability the rider had switched off back on. The device is still remembered
+     * (unselectDevices() only disables, it never unselects), so this restores the exact same
+     * device with no new scan - restart() picks it straight back up.
+     */
+    useCapability(capability:IncyclistCapability):void {
+        try {
+            this.getDeviceConfiguration().disableCapability(capability,false)
+            this.restart().catch( err=>{ this.logError(err,'useCapability') })
+        }
+        catch(err) { // istanbul ignore next
+            this.logError(err, 'useCapability')
+        }
     }
 
 
@@ -631,6 +658,17 @@ export class DevicePairingService  extends IncyclistService{
             if (timeSincePrev<3000) {
                 this.state.tsPrevStart=-1
                 await sleep( 3000-timeSincePrev)
+
+                // D-1: -1 is only meant to block a *concurrent* restart() for the remainder of this
+                // sleep - it used to rely on the run() call below (via startPairing()/
+                // startScanning()) to replace it with a fresh timestamp, but both of those have
+                // early-return paths (pairing already complete, already pairing, a scan path that
+                // skips them) that never reach that line. When one of those paths was taken, -1
+                // stuck around forever, and every later restart() hit the check above and bailed
+                // out immediately - no pairing or scan ever ran again, leaving every tile 'waiting'.
+                // The debounce window is over once this sleep ends, so release the sentinel here
+                // regardless of what run() ends up doing.
+                delete this.state.tsPrevStart
             }
         }
         
@@ -762,6 +800,7 @@ export class DevicePairingService  extends IncyclistService{
 
         
         this.checkCanStart()
+        this.checkPairingStalled()
 
         // don't send any updates if we are stopping
         if (this.state.stopRequested)
@@ -781,6 +820,52 @@ export class DevicePairingService  extends IncyclistService{
 
         if (onDeviceSelectStateChanged && typeof onDeviceSelectStateChanged==='function')
             onDeviceSelectStateChanged( this.getDeviceSelectionState() )
+    }
+
+    protected checkPairingStalled() {
+        if (this.stalledLogged)
+            return
+
+        if (!this.isStalled()) {
+            this.clearStalledTimer()
+            return
+        }
+
+        if (!this.stalledTimer)
+            this.stalledTimer = setTimeout( ()=>{ this.onPairingStalled() }, DevicePairingService.STALLED_AFTER_MS)
+    }
+
+    protected isStalled():boolean {
+        if (this.isPairing() || this.isScanning())
+            return false
+
+        const selected = (this.state.capabilities??[]).filter( c=>c.selected )
+        return selected.length>0 && selected.every( c=>c.connectState==='waiting')
+    }
+
+    protected onPairingStalled() {
+        delete this.stalledTimer
+        if (this.stalledLogged || !this.isStalled())
+            return
+
+        this.stalledLogged = true
+        // only enums, booleans and names of interfaces and capabilities: no device names or ids
+        this.logEvent({
+            message: 'pairing stalled',
+            usage: this.usage,
+            isPairing: this.isPairing(),
+            isScanning: this.isScanning(),
+            waiting: Boolean(this.state.waiting),
+            sentinel: this.state.tsPrevStart===-1,
+            interfaces: (this.state.interfaces??[]).map( i=>({name:i.name, state:i.state})),
+            capabilities: (this.state.capabilities??[]).filter( c=>c.selected).map( c=>({capability:c.capability, connectState:c.connectState})),
+        })
+    }
+
+    protected clearStalledTimer() {
+        if (this.stalledTimer)
+            clearTimeout(this.stalledTimer)
+        delete this.stalledTimer
     }
 
     protected emitStartStatus() {
@@ -1410,7 +1495,7 @@ export class DevicePairingService  extends IncyclistService{
         const speed =  this.getCapability(IncyclistCapability.Speed)
 
         const controlOK = (control?.selected && control?.connectState==='connected')
-        const powerOK = (!control?.selected && power?.selected && power?.connectState==='connected') 
+        const powerOK = (!control?.selected && power?.selected && power?.connectState==='connected')
         const speedOK = (!control?.selected && !power?.selected && speed?.selected && speed?.connectState==='connected')
         
         const success = controlOK || powerOK || speedOK

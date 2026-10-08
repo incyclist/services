@@ -6,7 +6,10 @@ import { useUserSettings } from "../settings";
 import { IncyclistPlatform } from "./types";
 import { v4 as generateUUID } from 'uuid';
 import { SerialPortProvider } from 'incyclist-devices';
-import { useDeviceAccess, useDeviceConfiguration, useDevicePairing } from "../devices";
+import { useDeviceAccess } from "../devices/access";
+import { useDeviceConfiguration } from "../devices/configuration";
+import { useDevicePairing } from "../devices/pairing";
+import { initPairingVisitTracker, usePairingVisitTracker } from "../devices/page/base/visit-log-factory";
 import { useFreeRideService, useRouteList } from "../routes";
 import { useWorkoutList } from "../workouts";
 import { useActiveRides, useActivityList } from "../activities";
@@ -83,6 +86,8 @@ export class UserInterfaceServcie extends IncyclistService {
             this.logEvent( {message:'App mounted', channel:platform });
 
             this.createUserStats()
+            // after createUserStats(): that is where a fresh install is marked as new
+            this.initPairingVisits()
             await this.initDeviceServices()
 
 
@@ -112,6 +117,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
                 this.stopHeartbeatWorker()
                 this.sendAppExitMessage()
+                this.closePairingVisitOnExit()
                 IncyclistPageService.closePage()
 
                 // Device/interface teardown (BLE disconnect etc.) can take an unbounded amount
@@ -153,6 +159,7 @@ export class UserInterfaceServcie extends IncyclistService {
             this.logEvent({message:'onAppPause called'})
 
             this.stopHeartbeatWorker()
+            this.onPairingVisitBackground()
 
             // Suspended immediately rather than with the teardown below: the interfaces' own
             // background discovery is of no use while the app is not in the foreground, and
@@ -189,6 +196,7 @@ export class UserInterfaceServcie extends IncyclistService {
                 resumeRequired = false
             }
             this.logEvent({message:'onAppResume called'})
+            this.onPairingVisitForeground()
 
             this.startHeartbeatWorker()
             this.backgroundPausedByService = false
@@ -648,6 +656,45 @@ export class UserInterfaceServcie extends IncyclistService {
 
     protected onNewUser() {
         // nothing to do right now
+    }
+
+    protected initPairingVisits() {
+        try {
+            const isNewUser = this.getUserSettings().isNewUser() ?? false
+            initPairingVisitTracker(this.platform).onAppLaunch(isNewUser)
+        }
+        catch(err) {
+            this.logError(err,'initPairingVisits')
+        }
+    }
+
+    protected closePairingVisitOnExit() {
+        try {
+            const canStartRide = useDevicePairing().getState()?.canStartRide ?? false
+            usePairingVisitTracker().onAppExit(canStartRide)
+        }
+        catch(err) {
+            this.logError(err,'closePairingVisitOnExit')
+        }
+    }
+
+    protected onPairingVisitBackground() {
+        try {
+            const canStartRide = useDevicePairing().getState()?.canStartRide
+            usePairingVisitTracker().onBackground({canStartRide})
+        }
+        catch(err) {
+            this.logError(err,'onPairingVisitBackground')
+        }
+    }
+
+    protected onPairingVisitForeground() {
+        try {
+            usePairingVisitTracker().onForeground()
+        }
+        catch(err) {
+            this.logError(err,'onPairingVisitForeground')
+        }
     }
 
 

@@ -502,6 +502,20 @@ describe('WorkoutRide',()=>{
             expect(s.state).toBe('completed')
             
         })
+        test('after teardown',async ()=>{
+            // set Time to 1s
+            s.tsCurrent = Date.now()
+            s.trainingTime = 9*180+130;
+            s.tsStart = Date.now()-(s.trainingTime*1000)
+            s.settings.ftp = 100
+            s.logError= jest.fn()
+
+            service.stop()
+            await waitNextTick()
+            service.forward()
+
+            expect(s.logError).not.toHaveBeenCalled()            
+        })
 
         test('error',()=>{ 
             s.workout.getLimits = jest.fn( ()=>{ throw new Error()})
@@ -776,6 +790,22 @@ describe('WorkoutRide',()=>{
             expect( emit).toHaveBeenCalledWith('update', expect.objectContaining(
                 {title:'Test Workout: FatMax(1/9)',current:expect.objectContaining({time:expect.closeTo(300,0)})}))
         })
+
+        test('after teardown',async ()=>{
+            // set Time to 1s
+            s.tsCurrent = Date.now()
+            s.trainingTime = 9*180+130;
+            s.tsStart = Date.now()-(s.trainingTime*1000)
+            s.settings.ftp = 100
+            s.logError= jest.fn()
+
+            service.stop()
+            await waitNextTick()
+            service.backward()
+
+            expect(s.logError).not.toHaveBeenCalled()            
+        })
+
 
 
     })

@@ -50,6 +50,12 @@ describe('RideDisplayService', () => {
                 enableScreensaver: jest.fn(),
                 disableScreensaver: jest.fn(),
             })
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(true),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+
+            })
+
 
             s.startDevices = jest.fn(() => {
                 s.onStartCompleted()
@@ -67,6 +73,7 @@ describe('RideDisplayService', () => {
             Inject('RouteList',null)
             Inject('DeviceRide',null)
             Inject('UIBinding',null)
+            Inject('GoogleMaps', null)
         }
 
         beforeEach(() => {
@@ -289,7 +296,7 @@ describe('RideDisplayService', () => {
                 expect(emit).toHaveBeenCalledWith('overlay-update', OC( {
                     hideAll: true,
                     map:OC({show: false}),
-                    sideViews: OC({enabled:true, hide:true, left:true, right:true}),
+                    sideViews: OC({enabled:false, hide:true, left:false, right:false}),
                     upcomingElevation: OC({show:false}),
                     totalElevation: OC({show:false}),
                 }))
@@ -302,7 +309,7 @@ describe('RideDisplayService', () => {
                 expect(emit).toHaveBeenCalledWith('overlay-update', OC( {
                     hideAll: false,
                     map: {show:true, minimized:false},
-                    sideViews: OC({enabled:true, hide:false, left:true, right:true}),
+                    sideViews: OC({enabled:false, hide:false, left:false, right:false}),
                     upcomingElevation: {show:true, minimized:false},
                     totalElevation: {show:true, minimized:false},
                 }))
@@ -550,6 +557,46 @@ describe('RideDisplayService', () => {
             await service.stopRide({ noStateUpdates: true })
 
             expect(logEvent).not.toHaveBeenCalledWith(OC({ message: 'activity stopped' }))
+        })
+    })
+
+    describe('start - pairing visit', () => {
+        let service
+        const tracker = { onRideStarted: jest.fn() }
+
+        beforeEach(() => {
+            Inject('PairingVisitTracker', tracker)
+            service = new RideDisplayService()
+            service.enforceSimulator = jest.fn()
+            service.getRideModeService = jest.fn().mockReturnValue({ getLogProps: jest.fn().mockReturnValue({}) })
+            service.getBike = jest.fn()
+            service.getBikeInterface = jest.fn()
+            service.getRideType = jest.fn().mockReturnValue('Free-Ride')
+            service.startDevices = jest.fn()
+            service.startRide = jest.fn()
+            service.getCoaches = jest.fn().mockReturnValue({ startRide: jest.fn() })
+            service.setState = jest.fn()
+            service.logEvent = jest.fn()
+        })
+
+        afterEach(() => {
+            Inject('PairingVisitTracker', null)
+            jest.clearAllMocks()
+        })
+
+        test.each([
+            [true, true],
+            [false, false],
+            [undefined, false],
+        ])('start(%s) reports a ride with simulate:%s', (simulate, expected) => {
+            service.start(simulate)
+            expect(tracker.onRideStarted).toHaveBeenCalledWith({ simulate: expected })
+        })
+
+        test('a tracker failure does not stop the ride from starting', () => {
+            tracker.onRideStarted.mockImplementationOnce(() => { throw new Error('X') })
+            service.start(false)
+            expect(service.startRide).toHaveBeenCalled()
         })
     })
 

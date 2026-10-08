@@ -1,5 +1,5 @@
 import { EventLogger } from "gd-eventlog"
-import { Observer } from "../../base/types/observer"
+import { Observer } from "../../../base/types/observer"
 
 export class PageLogObserver extends Observer {
     protected logger:EventLogger

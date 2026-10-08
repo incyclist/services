@@ -3,7 +3,7 @@ import { getBindings } from "../../api";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Observer } from "../../base/types/observer";
-import { DeviceRideService, getLoadButtonMode, useDeviceRide } from "../../devices";
+import { DeviceRideService, getLoadButtonMode, useDeviceRide } from "../../devices/ride";
 import { useUserSettings } from "../../settings";
 import { waitNextTick } from "../../utils";
 import { valid } from "../../utils/valid";
@@ -354,6 +354,9 @@ export class WorkoutRide extends IncyclistService{
      */
     forward():void {
         try {
+            if (!this.workout)
+                return;
+
             const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts);
@@ -388,6 +391,9 @@ export class WorkoutRide extends IncyclistService{
     backward():void {
 
         try {
+            if (!this.workout)
+                return;
+
             const ts = this.trainingTime
             const wo = this.workout;
             const limits = wo.getLimits(ts,true);

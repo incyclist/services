@@ -19,6 +19,7 @@ import { Card } from "../../base/cardlist";
 import { Inject } from "../../base/decorators";
 import { usePreviewStore } from "../previews/store";
 import { useRouteLibraryScanner } from "../library/service";
+import { RouteListObserver } from "./RouteListObserver";
 
 import type { ParseResult } from "../types";
 
@@ -328,12 +329,21 @@ describe('RouteListService',()=>{
         })
 
         test('defaults to Suggested, matching an explicit suggested sort order',()=>{
-            const withDefault = service.searchRepo().routes.map(r=>r.id)
+            // Suggested scores routes against the wall clock; freeze it so the two reads can't
+            // straddle a recency boundary and reorder
+            const now = Date.now()
+            const nowSpy = jest.spyOn(Date,'now').mockReturnValue(now)
+            try {
+                const withDefault = service.searchRepo().routes.map(r=>r.id)
 
-            service.setSortOrder('suggested')
-            const withExplicit = service.searchRepo().routes.map(r=>r.id)
+                service.setSortOrder('suggested')
+                const withExplicit = service.searchRepo().routes.map(r=>r.id)
 
-            expect(withDefault).toEqual(withExplicit)
+                expect(withDefault).toEqual(withExplicit)
+            }
+            finally {
+                nowSpy.mockRestore()
+            }
         })
 
         // a private, never-shared data set - unlike the module-level db.json fixture, whose route
@@ -672,6 +682,36 @@ describe('RouteListService',()=>{
             expect(result).toBe(true)
         })
 
+    })
+
+    describe('sync and stats subscriptions', () => {
+        // RouteListService is a singleton: don't leave the observer set for the tests that expect none
+        afterEach(() => {
+            new MockeableService()['observer'] = undefined
+        })
+
+        test('a sync with no connected provider emits no sync-start that would never be closed', async () => {
+            const service = new MockeableService()
+            service['observer'] = new RouteListObserver(service)
+            jest.spyOn(service as any, 'getRouteSyncFactory').mockReturnValue({ sync: () => null })
+
+            const events: string[] = []
+            service['observer'].on('sync-start', () => events.push('sync-start'))
+            service['observer'].on('sync-done', () => events.push('sync-done'))
+
+            await service['performSync']()
+            expect(events).toEqual([])
+        })
+
+        test('subscribing to stats updates again does not add a second listener', () => {
+            const service = new MockeableService()
+            service['observer'] = new RouteListObserver(service)
+
+            service['subscribeStats']()
+            service['subscribeStats']()
+
+            expect((service['observer'] as any).emitter.listenerCount('stats-update')).toBe(1)
+        })
     })
 
     describe('select/unselect without observer', () => {

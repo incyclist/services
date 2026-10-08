@@ -6,13 +6,11 @@ import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { getLegacyInterface } from "../../utils/logging";
 import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, ITrainer, SerialIncyclistDevice, Sport, UpdateRequest } from "incyclist-devices";
-import { getRouteList } from "../../routes";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Injectable } from "../../base/decorators/Injection";
 import { Route } from "../../routes/base/model/route";
 import { useGoogleMaps } from "../../apps";
-import { useWorkoutList } from "../../workouts";
 import { RouteApiDetail } from "../../routes/base/api/types";
 import { DaumEppProgramEntry, RoutePoint } from "../../routes/base/types";
 
@@ -1806,26 +1804,8 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     canEnforceSimulator():boolean {
-        const selected = getRouteList().getSelected()
-
-        if (this.getWorkoutList().getSelected() && !selected)
-            return true
-
-        const personalApiKey = this.getGoogleMaps().hasPersonalApiKey()
-
-        if (!selected?.description)
-            return false
-
-        if (selected?.description?.hasVideo || personalApiKey)
-            return true
-
-        if ( !selected.description.hasVideo) {
-            const rideView = useUserSettings().getValue('preferences.rideView',null)
-            if (rideView==='map')
-                return true
-        }
-
-        return useUserSettings().isNewUser()
+        return true; 
+        // we cannot remove this function right now, as this would break the web-UI
         
     }
 
@@ -1886,13 +1866,6 @@ export class DeviceRideService  extends IncyclistService{
     protected getGoogleMaps() {
         return useGoogleMaps()
     }
-
-    @Injectable
-    protected getWorkoutList() {
-        return useWorkoutList()
-    }
-
-
  
 }
 

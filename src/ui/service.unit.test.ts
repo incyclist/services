@@ -2,7 +2,9 @@ import { EventLogger } from 'gd-eventlog'
 import { UserInterfaceServcie } from './service'
 import { IncyclistPlatform } from './types'
 import { IncyclistPageService } from '../base/pages'
-import * as devices from '../devices'
+import * as deviceAccess from '../devices/access'
+import * as devicePairing from '../devices/pairing'
+import * as pairingVisit from '../devices/page/base/visit-log-factory'
 
 describe('UserInterfaceServcie - onSessionStart', () => {
 
@@ -105,10 +107,18 @@ describe('UserInterfaceServcie - initLogging', () => {
     })
 })
 
-jest.mock('../devices', () => ({
-    ...jest.requireActual('../devices'),
-    useDevicePairing: jest.fn(),
+jest.mock('../devices/access', () => ({
+    ...jest.requireActual('../devices/access'),
     useDeviceAccess: jest.fn(),
+}))
+jest.mock('../devices/pairing', () => ({
+    ...jest.requireActual('../devices/pairing'),
+    useDevicePairing: jest.fn(),
+}))
+jest.mock('../devices/page/base/visit-log-factory', () => ({
+    ...jest.requireActual('../devices/page/base/visit-log-factory'),
+    usePairingVisitTracker: jest.fn(),
+    initPairingVisitTracker: jest.fn(),
 }))
 
 describe('UserInterfaceServcie - onAppExit', () => {
@@ -122,10 +132,10 @@ describe('UserInterfaceServcie - onAppExit', () => {
         ;(service as any).sendAppExitMessage = jest.fn()
 
         jest.spyOn(IncyclistPageService, 'closePage').mockImplementation(() => undefined)
-        ;(devices.useDevicePairing as jest.Mock).mockReturnValue({
+        ;(devicePairing.useDevicePairing as jest.Mock).mockReturnValue({
             exit: props.pairingExit ?? jest.fn().mockResolvedValue(true)
         })
-        ;(devices.useDeviceAccess as jest.Mock).mockReturnValue({
+        ;(deviceAccess.useDeviceAccess as jest.Mock).mockReturnValue({
             terminate: jest.fn().mockResolvedValue(undefined)
         })
     }
@@ -175,7 +185,7 @@ describe('UserInterfaceServcie - pause', () => {
         disconnect = jest.fn().mockResolvedValue(true)
         mqDisconnect = jest.fn()
         jest.spyOn(IncyclistPageService, 'pausePage').mockResolvedValue(undefined as never)
-        jest.spyOn(devices, 'useDeviceAccess').mockReturnValue({ disconnect } as never)
+        jest.spyOn(deviceAccess, 'useDeviceAccess').mockReturnValue({ disconnect } as never)
         ;(service as any).getMessageQueue = jest.fn().mockReturnValue({ disconnect: mqDisconnect })
         ;(service as any).logEvent = jest.fn()
         ;(service as any).logError = jest.fn()
@@ -228,7 +238,7 @@ describe('UserInterfaceServcie - onAppPause / onAppResume background activity', 
         service = new UserInterfaceServcie()
         pauseBackgroundActivity = jest.fn().mockResolvedValue(undefined)
         resumeBackgroundActivity = jest.fn().mockResolvedValue(undefined)
-        jest.spyOn(devices, 'useDeviceAccess').mockReturnValue({
+        jest.spyOn(deviceAccess, 'useDeviceAccess').mockReturnValue({
             pauseBackgroundActivity, resumeBackgroundActivity
         } as never)
         ;(service as any).stopHeartbeatWorker = jest.fn()
@@ -284,3 +294,83 @@ describe('UserInterfaceServcie - onAppPause / onAppResume background activity', 
     })
 
 })
+
+describe('UserInterfaceServcie - pairing visit hooks', () => {
+
+    let service: UserInterfaceServcie
+    let tracker: { onAppLaunch: jest.Mock, onAppExit: jest.Mock, onBackground: jest.Mock, onForeground: jest.Mock }
+    let calls: string[]
+
+    beforeEach(() => {
+        jest.useFakeTimers({ doNotFake: ['nextTick'] })
+        service = new UserInterfaceServcie()
+        calls = []
+        tracker = {
+            onAppLaunch: jest.fn(),
+            onAppExit: jest.fn(() => { calls.push('onAppExit') }),
+            onBackground: jest.fn(),
+            onForeground: jest.fn(),
+        }
+        ;(pairingVisit.initPairingVisitTracker as jest.Mock).mockReturnValue(tracker)
+        ;(pairingVisit.usePairingVisitTracker as jest.Mock).mockReturnValue(tracker)
+        ;(devicePairing.useDevicePairing as jest.Mock).mockReturnValue({
+            getState: jest.fn().mockReturnValue({ canStartRide: true }),
+            exit: jest.fn().mockResolvedValue(true),
+        })
+        jest.spyOn(deviceAccess, 'useDeviceAccess').mockReturnValue({
+            terminate: jest.fn().mockResolvedValue(undefined),
+            pauseBackgroundActivity: jest.fn().mockResolvedValue(undefined),
+            resumeBackgroundActivity: jest.fn().mockResolvedValue(undefined),
+        } as never)
+        ;(service as any).stopHeartbeatWorker = jest.fn()
+        ;(service as any).startHeartbeatWorker = jest.fn()
+        ;(service as any).sendAppExitMessage = jest.fn()
+        ;(service as any).logEvent = jest.fn()
+        ;(service as any).logError = jest.fn()
+        ;(service as any).isTerminated = false
+        ;(service as any).isTerminating = false
+        ;(service as any).backgroundTimer = undefined
+    })
+
+    afterEach(() => {
+        clearTimeout((service as any).backgroundTimer)
+        jest.useRealTimers()
+        jest.restoreAllMocks()
+    })
+
+    test.each([true, false])('launch builds the tracker for the platform and passes isNewUser=%s', (isNewUser) => {
+        service['platform'] = 'mobile'
+        ;(service as any).getUserSettings = jest.fn().mockReturnValue({ isNewUser: () => isNewUser })
+
+        service['initPairingVisits']()
+
+        expect(pairingVisit.initPairingVisitTracker).toHaveBeenCalledWith('mobile')
+        expect(tracker.onAppLaunch).toHaveBeenCalledWith(isNewUser)
+    })
+
+    test('app exit closes the visit with the pairing canStartRide before the page is closed', async () => {
+        jest.spyOn(IncyclistPageService, 'closePage').mockImplementation(() => { calls.push('closePage') })
+
+        await service.onAppExit()
+
+        expect(tracker.onAppExit).toHaveBeenCalledWith(true)
+        expect(calls).toEqual(['onAppExit', 'closePage'])
+    })
+
+    test('a tracker failure on app exit does not stop the exit', async () => {
+        jest.spyOn(IncyclistPageService, 'closePage').mockImplementation(() => undefined)
+        tracker.onAppExit.mockImplementation(() => { throw new Error('X') })
+
+        await expect(service.onAppExit()).resolves.toBe(true)
+        expect((service as any).logError).toHaveBeenCalledWith(expect.any(Error), 'closePairingVisitOnExit')
+    })
+
+    test('app pause backgrounds the visit immediately, app resume foregrounds it', async () => {
+        await service.onAppPause()
+        expect(tracker.onBackground).toHaveBeenCalledWith({ canStartRide: true })
+
+        await service.onAppResume()
+        expect(tracker.onForeground).toHaveBeenCalled()
+    })
+})
+

@@ -1,4 +1,5 @@
-import { ActivityDetails, ActivityUser, useActivityRide } from "../../activities";
+import { ActivityDetails, ActivityUser } from "../../activities/base/model";
+import { useActivityRide } from "../../activities/ride/service";
 import { IncyclistService } from "../../base/service";
 import { Observer, Singleton } from "../../base/types";
 import { Injectable } from "../../base/decorators";
@@ -6,7 +7,9 @@ import { Segment, Step, useWorkoutList, useWorkoutRide, Workout } from "../../wo
 import { useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { CurrentRideDeviceInfo, CurrentRideState, IRideModeService, RideType } from "../base";
-import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceConfiguration, useDeviceRide } from "../../devices";
+import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceRide } from "../../devices/ride";
+import { useDeviceConfiguration } from "../../devices/configuration";
+import { usePairingVisitTracker } from "../../devices/page/base/visit-log-factory";
 import { useUserSettings } from "../../settings";
 import { CyclingMode, DeviceData, IncyclistCapability, UpdateRequest } from "incyclist-devices";
 import { formatDateTime, getLegacyInterface, waitNextTick } from "../../utils";
@@ -37,12 +40,16 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected deviceData: DeviceData
     protected actualWorkout: Workout
     protected hideAll: boolean = false
+    protected simulated: boolean = false
 
     protected readonly onChangeState = this.setState.bind(this)
     protected startDeviceHandlers
     protected isResuming: boolean
     //protected prevRides: PrevRidesListDisplayProps
     protected stateUpdateHandler = this.onStateUpdate.bind(this)
+    /** guards the one-time RideModeService.onStartDevicesReady() call */
+    protected controlDevicesReadyNotified: boolean = false
+
 
     constructor() {
         super('RideDisplay')
@@ -53,9 +60,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     async init() :Promise<Observer>{
 
         await this.closePrevRide();
-            
+        this.simulated = false            
         this.observer = new Observer()
-        
+        this.controlDevicesReadyNotified = false
+
         try {
             this.displayService = this.getRideModeService(true)
                
@@ -77,9 +85,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     start(simulate?:boolean):void { 
         try {
 
-            if(simulate)
+            if(simulate) {
                 this.enforceSimulator()
-
+            }
+            this.notifyPairingVisitRideStarted(simulate)
 
             const rideProps =  this.getRideModeService().getLogProps()
             this.logEvent({ message: 'Start ride', ...rideProps, 
@@ -109,11 +118,24 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     }
 
+    isSimulated(): boolean {
+        return this.simulated
+    }
+
+    protected notifyPairingVisitRideStarted(simulate?:boolean) {
+        try {
+            this.getPairingVisitTracker().onRideStarted({simulate:simulate===true})
+        }
+        catch(err) {
+            this.logError(err,'notifyPairingVisitRideStarted')
+        }
+    }
+
     startWithMissingSensors() {
         try {
             const props = this.getStartOverlayProps()
             this.logEvent({message:'button clicked',overlay:'start overlay',button:'Ignore',state:props,eventSource:'user', })
-            this.logEvent({message:'overlay closed',overlay:'start overlay' })        
+            this.logEvent({message:'overlay closed',overlay:'start overlay' })
             this.onStartCompleted()
         }
         catch(err) {
@@ -121,16 +143,28 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
     }
 
+    /**
+     * Lets the rider skip a slow/failing Street View start and ride on the Map instead
+     * (the rider pressing "Start with Map"). Unlike an automatic fallback, this is not
+     * held for `SV_FALLBACK_HOLD` and doesn't raise the in-ride notice - the rider chose it.
+     */
+    startWithMapFallback() {
+        try {
+            const props = this.getStartOverlayProps()
+            const rideProps =  this.getRideModeService().getLogProps()
+            this.logEvent({message:'start ride maps fallback',...rideProps, state:props})
+            this.getRideModeService()?.startWithMapFallback?.()
+        }
+        catch(err) {
+            this.logError(err,'startWithMapFallback')
+        }
+    }
+
     retryStart() {
         try {
             const props = this.getStartOverlayProps()
-
-            this.logEvent({message:'button clicked',overlay:'start overlay',button:'Retry',state:props,eventSource:'user', })
-            this.logEvent({message:'overlay closed',overlay:'start overlay' })        
-    
-
             const rideProps =  this.getRideModeService().getLogProps()
-            this.logger.logEvent({ message: 'Start ride retry', ...rideProps, 
+            this.logger.logEvent({ message: 'Start ride retry', ...rideProps, state:props,
                 bike: this.getBike(),
                 interface: this.getBikeInterface()            
             });
@@ -147,7 +181,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     async cancelStart() {
         try {
             const props = this.getStartOverlayProps()
-            this.logEvent({message:'button clicked',overlay:'start overlay',button:'Cancel',reason: 'user cancel', state:props, eventSource:'user'})
+            const rideProps =  this.getRideModeService().getLogProps()
+            this.logEvent({message:'start ride cancel',reason: 'user cancel',...rideProps, state:props})
             await this.stopRide({noStateUpdates:true})
 
         }
@@ -533,6 +568,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             if (prevState!=='Starting')
                 this.enableScreensaver()
 
+            this.simulated = false
             //this.state = 'Idle'
         }
         catch(err) {
@@ -610,6 +646,12 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected checkStartStatus() {
         const devices = this.isStartDeviceReadyToStart()
         const sensors = this.isSensorsReadyToStart()
+
+        if (devices && !this.controlDevicesReadyNotified) {
+            this.controlDevicesReadyNotified = true
+            this.getRideModeService().onStartDevicesReady()
+        }
+
         const ride = this.getRideModeService().isStartRideCompleted()
         const props = this.getStartOverlayProps()
 
@@ -1213,6 +1255,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     protected enforceSimulator() {
+        this.simulated = true
         this.getDeviceRide().enforceSimulator()
         
     }
@@ -1479,6 +1522,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     @Injectable
     protected getCoaches() {
         return getCoachesService()
+    }
+
+    @Injectable
+    protected getPairingVisitTracker() {
+        return usePairingVisitTracker()
     }
 
 }

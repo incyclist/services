@@ -5,8 +5,7 @@ import { CurrentRideDisplayProps, ICurrentRideService, IRideModeService, IRideMo
 import { IncyclistService } from "../../base/service";
 import { useDeviceRide } from "../../devices";
 import { Injectable } from "../../base/decorators";
-import { ActivityUpdate } from "../../activities/ride/types";
-import { ScreenShotInfo } from "../../activities";
+import type { ScreenShotInfo,ActivityUpdate } from "../../activities/types";
 import { Route } from "../../routes/base/model/route";
 import { sleep } from "../../utils/sleep";
 
@@ -184,7 +183,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
      * initialization when the ride begins.
      */
     onStarted(): void { }
-        
+
     /**
      * Called when the ride has stopped.
      *
@@ -192,6 +191,15 @@ export class RideModeService extends IncyclistService implements IRideModeServic
      * cleanup when the ride ends.
      */
     onStopped(): void { }
+
+    /**
+     * Called the first time the control device(s) become ready to start.
+     *
+     * This base implementation is a no-op. `GpxDisplayService` overrides it to release Street
+     * View panorama creation, so that a license is never spent before the trainer is actually
+     * up.
+     */
+    onStartDevicesReady(): void { }
 
     /**
      * Returns logging properties for the current ride mode.

@@ -29,6 +29,7 @@ describe('GpxDisplayService', () => {
     let mockRideService:any
     let mockActiveRides:any
     let mockRouteList:any
+    let mockGoogleMaps = {hasPersonalApiKey:true,hasDevelopmentApiKey:false}
 
 
     const setupMocks = (s:any, options:any) => {
@@ -75,7 +76,9 @@ describe('GpxDisplayService', () => {
         })
 
         Inject('GoogleMaps', {
-            // placeholder for google maps
+            hasPersonalApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasPersonalApiKey),
+            hasDevelopmentApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasDevelopmentApiKey)
+
         })
 
         mockRideService = {
@@ -83,7 +86,9 @@ describe('GpxDisplayService', () => {
             displayService: s,
             isVirtualShiftingEnabled: jest.fn().mockReturnValue(options.virtualShifting ?? false),
             getDisplayProperties: jest.fn(() => ({ dbColumns: [], position: {} })),
-            reset: jest.fn()
+            reset: jest.fn(),
+            isSimulated: jest.fn().mockReturnValue(false)
+
         }
 
         if (options.mockRideService) {
@@ -170,7 +175,7 @@ describe('GpxDisplayService', () => {
             expect(props.sideViews?.hide).toBe(true)
         })
 
-        test('respects user preferences for side views', () => {
+        test('respects user preferences for side views if user has personal api key', () => {
             setupMocks(service, {
                 mockRideService: true,
                 userSettingsGet: jest.fn((key, def) => {
@@ -179,9 +184,37 @@ describe('GpxDisplayService', () => {
                     return def
                 })
             })
+
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(true),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+
+            })
+
             const props = service.getStreetViewProps({hideAll: false} as any)
             expect(props.sideViews?.left).toBe(false)
             expect(props.sideViews?.right).toBe(true)
+        })
+
+        test('ignors user preferences for side views if user has no api key', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => {
+                    if (key === 'preferences.sideViews.sv-left') return false
+                    if (key === 'preferences.sideViews.sv-right') return true
+                    return def
+                })
+            })
+
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+
+            })
+
+            const props = service.getStreetViewProps({hideAll: false} as any)
+            expect(props.sideViews?.left).toBe(false)
+            expect(props.sideViews?.right).toBe(false)
         })
 
         test('includes event handler for street view events', () => {
@@ -266,6 +299,90 @@ describe('GpxDisplayService', () => {
             setupMocks(service, {mockRideService: true})
             const props = service.getMapViewProps()
             expect(typeof props.onDisplayEvent).toBe('function')
+        })
+    })
+
+    // Simulating a GPX route uses the same Google Maps API key as a real ride, so a rider
+    // without their own key falls back to Map for the whole ride, rather than letting Simulate
+    // quietly run up usage against the shared key. Falling back is permanent for the ride
+    // (rideViewOverride), not re-evaluated per read - see getRideView()'s own comment.
+    describe('getRideView (simulate + personal API key fallback)', () => {
+        let service: GpxDisplayService
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            cleanupMocks(service)
+        })
+
+        test('not simulated: uses the configured ride view regardless of the API key', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(false)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+            })
+
+            expect((service as any).getRideView()).toBe('sv')
+        })
+
+        test('simulated with a personal API key: uses the configured ride view, no fallback', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(true)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(true),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+            })
+
+            expect((service as any).getRideView()).toBe('sv')
+        })
+
+        test('simulated with no personal API key: falls back to map', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(true)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+            })
+
+            expect((service as any).getRideView()).toBe('map')
+        })
+
+        test('simulated with only a development API key: still falls back to map - a dev key does not count as personal', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(true)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(true)
+            })
+
+            expect((service as any).getRideView()).toBe('map')
+        })
+
+        test('the fallback sticks for the rest of the ride, even once isSimulated later reports false', () => {
+            setupMocks(service, { mockRideService: true })
+            mockRideService.isSimulated.mockReturnValue(true)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+            })
+            expect((service as any).getRideView()).toBe('map')
+
+            mockRideService.isSimulated.mockReturnValue(false)
+
+            expect((service as any).getRideView()).toBe('map')
+        })
+
+        // regression test for the bug this logic exposed: getRideView() used to dereference
+        // this.service unguarded, which threw (and was silently swallowed elsewhere) whenever
+        // it ran before RideModeService.init() had wired this.service - see RideDisplayService
+        test('no ride service wired yet: does not throw, uses the configured ride view', () => {
+            setupMocks(service, {})
+
+            expect(() => (service as any).getRideView()).not.toThrow()
+            expect((service as any).getRideView()).toBe('sv')
         })
     })
 
@@ -403,7 +520,7 @@ describe('GpxDisplayService', () => {
         })
 
         afterEach(() => {
-            service['clearStreetViewStartTimeout']()
+            service['clearStreetViewPhaseTimers']()
             cleanupMocks(service)
         })
 
@@ -446,15 +563,22 @@ describe('GpxDisplayService', () => {
             expect(service.isStartRideCompleted()).toBe(false)
         })
 
-        test('start is no longer blocked once the start timeout expires', () => {
+        test('start is no longer blocked once the start timeout expires (falls back to Map)', () => {
             jest.useFakeTimers()
             try {
                 setupSVMocks(service, svMobile())
-                service['armStreetViewStartTimeout']()
+                service['release']('eager')
 
                 expect(service.isStartRideCompleted()).toBe(false)
 
+                // 15s to the timeout fallback, then the SV_FALLBACK_HOLD (1.5s) before the
+                // amber row is allowed to close
                 jest.advanceTimersByTime(15000)
+                expect(service['svViewState']).toBe('unavailable')
+                expect(service['svFallbackCause']).toBe('timeout')
+                expect(service.isStartRideCompleted()).toBe(false)
+
+                jest.advanceTimersByTime(1500)
 
                 expect(service.isStartRideCompleted()).toBe(true)
             }
@@ -467,12 +591,12 @@ describe('GpxDisplayService', () => {
             jest.useFakeTimers()
             try {
                 setupSVMocks(service, svMobile())
-                service['armStreetViewStartTimeout']()
+                service['release']('eager')
                 service['onStreetViewEvent']('Loaded', undefined)
 
                 jest.advanceTimersByTime(15000)
 
-                expect(service['svStartTimedOut']).toBe(false)
+                expect(service['svViewState']).toBe('loaded')
             }
             finally {
                 jest.useRealTimers()
@@ -489,14 +613,15 @@ describe('GpxDisplayService', () => {
                 setupSVMocks(service, svMobile({channel: 'desktop'}))
 
                 expect(service['waitsForStreetView']()).toBe(true)
-                service['armStreetViewStartTimeout']()
+                service['release']('control-ready')
 
                 expect(service.isStartRideCompleted()).toBe(false)
 
-                jest.advanceTimersByTime(15000)
+                jest.advanceTimersByTime(15000+1500)
 
                 expect(service.isStartRideCompleted()).toBe(true)
-                expect(service['svStartTimedOut']).toBe(true)
+                expect(service['svViewState']).toBe('unavailable')
+                expect(service['svFallbackCause']).toBe('timeout')
             }
             finally {
                 jest.useRealTimers()
@@ -908,6 +1033,55 @@ describe('GpxDisplayService', () => {
             expect(service.emit).toHaveBeenCalledWith('state-update')
         })
 
+        test('NoPanorama resolves the start (like Loaded) and never falls back to Map', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+
+            expect(service['mapLoaded']).toBe(true)
+            expect(service['svViewState']).toBe('loaded')
+            expect(service['rideViewOverride']).toBeUndefined()
+            expect(service.isStartRideCompleted()).toBe(true)
+        })
+
+        test('NoPanorama sets a one-shot coverage notice, read (and cleared) by getDisplayProperties', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+
+            const displayProps = service.getDisplayProperties({} as any) as any
+            expect(displayProps.svCoverageNotice).toBeDefined()
+
+            const nextDisplayProps = service.getDisplayProperties({} as any) as any
+            expect(nextDisplayProps.svCoverageNotice).toBeUndefined()
+        })
+
+        test('a later NoPanorama mid-ride (after the start already resolved) still raises the notice, without touching the resolved view', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+
+            props.onDisplayEvent('Loaded')
+            expect(service['svViewState']).toBe('loaded')
+
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+            expect(service['svViewState']).toBe('loaded')
+            expect(service['rideViewOverride']).toBeUndefined()
+
+            const displayProps = service.getDisplayProperties({} as any) as any
+            expect(displayProps.svCoverageNotice).toBeDefined()
+        })
+
+        test('coverage flag goes false on NoPanorama and back to true once imagery is shown again', () => {
+            setupMocks(service, {mockRideService: true})
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+
+            props.onDisplayEvent('NoPanorama', 'ZERO_RESULTS')
+            expect(service.getDisplayProperties({} as any).svHasCoverage).toBe(false)
+
+            props.onDisplayEvent('pano_changed', 'panorama_id')
+            expect(service.getDisplayProperties({} as any).svHasCoverage).toBe(true)
+        })
+
         test('updates panorama change timestamp on pano_changed event', () => {
             setupMocks(service, {mockRideService: true})
             const props = service.getStreetViewProps({hideAll: false} as any) as any
@@ -942,6 +1116,59 @@ describe('GpxDisplayService', () => {
             const beforeTime = Date.now()
             props.onDisplayEvent('position_changed')
             expect(service['tsLastSVEvent']).toBeGreaterThanOrEqual(beforeTime)
+        })
+    })
+
+    describe('switching to Street View mid-ride', () => {
+        let service: GpxDisplayService
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            service['clearStreetViewPhaseTimers']()
+            cleanupMocks(service)
+        })
+
+        test('releases Street View the first time the rider switches to it, even though the ride started on Map', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'map' : def)
+            })
+
+            expect(service['svReleased']).toBe(false)
+
+            service.onRideSettingsChanged({rideView: 'sv'})
+
+            expect(service['svReleased']).toBe(true)
+        })
+
+        test('always provides a real position for Street View, even after the ride has started', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'map' : def)
+            })
+
+            service.onActivityUpdate({time:1, speed:36, routeDistance:500, distance:10},{distance:10})
+            service.onRideSettingsChanged({rideView: 'sv'})
+            service['onStarted']()
+
+            const props = service.getStreetViewProps({hideAll: false} as any) as any
+            expect(props.displayPosition).toBeDefined()
+        })
+
+        test('does not release again if the rider switches away and back to Street View', () => {
+            setupMocks(service, {
+                mockRideService: true,
+                userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'sv' : def)
+            })
+
+            service['release']('eager')
+            service.onRideSettingsChanged({rideView: 'map'})
+            service.onRideSettingsChanged({rideView: 'sv'})
+
+            expect(service['svInitTrigger']).toBe('eager')
         })
     })
 
