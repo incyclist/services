@@ -116,10 +116,10 @@ describe('FeatureToggleSyncService', () => {
         }
 
         test('applies a valid toggle-change message to user settings', () => {
-            emit(`incyclist/features/${UUID}/NEW_SEARCH_UI`, JSON.stringify({ value: true }))
+            emit(`incyclist/features/${UUID}/SAMPLE_TOGGLE`, JSON.stringify({ value: true }))
 
-            expect(settings.set).toHaveBeenCalledWith('NEW_SEARCH_UI', true)
-            expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({ message: 'feature-toggle sync: applied toggle', toggle: 'NEW_SEARCH_UI', value: true }))
+            expect(settings.set).toHaveBeenCalledWith('SAMPLE_TOGGLE', true)
+            expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({ message: 'feature-toggle sync: applied toggle', toggle: 'SAMPLE_TOGGLE', value: true }))
         })
 
         test('applies a valid toggle-change message with value:false', () => {
@@ -143,7 +143,7 @@ describe('FeatureToggleSyncService', () => {
         })
 
         test('ignores a message for a different uuid, without logging', () => {
-            emit(`incyclist/features/some-other-uuid/NEW_SEARCH_UI`, JSON.stringify({ value: true }))
+            emit(`incyclist/features/some-other-uuid/SAMPLE_TOGGLE`, JSON.stringify({ value: true }))
 
             expect(settings.set).not.toHaveBeenCalled()
             expect(logEvent).not.toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('ignoring') }))
@@ -156,7 +156,7 @@ describe('FeatureToggleSyncService', () => {
         })
 
         test('ignores and logs a message with an extra topic segment (malformed topic)', () => {
-            emit(`incyclist/features/${UUID}/NEW_SEARCH_UI/extra`, JSON.stringify({ value: true }))
+            emit(`incyclist/features/${UUID}/SAMPLE_TOGGLE/extra`, JSON.stringify({ value: true }))
 
             expect(settings.set).not.toHaveBeenCalled()
             expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({ message: 'feature-toggle sync: ignoring malformed topic' }))
@@ -170,23 +170,23 @@ describe('FeatureToggleSyncService', () => {
         })
 
         test('ignores and logs a message with malformed (non-JSON) payload, without throwing', () => {
-            expect(() => emit(`incyclist/features/${UUID}/NEW_SEARCH_UI`, 'not-json')).not.toThrow()
+            expect(() => emit(`incyclist/features/${UUID}/SAMPLE_TOGGLE`, 'not-json')).not.toThrow()
             expect(settings.set).not.toHaveBeenCalled()
             expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({ message: 'feature-toggle sync: ignoring malformed payload' }))
         })
 
         test('ignores and logs a message whose payload has no boolean value field, without throwing', () => {
-            expect(() => emit(`incyclist/features/${UUID}/NEW_SEARCH_UI`, JSON.stringify({ value: 'yes' }))).not.toThrow()
+            expect(() => emit(`incyclist/features/${UUID}/SAMPLE_TOGGLE`, JSON.stringify({ value: 'yes' }))).not.toThrow()
             expect(settings.set).not.toHaveBeenCalled()
 
-            expect(() => emit(`incyclist/features/${UUID}/NEW_SEARCH_UI`, JSON.stringify({}))).not.toThrow()
+            expect(() => emit(`incyclist/features/${UUID}/SAMPLE_TOGGLE`, JSON.stringify({}))).not.toThrow()
             expect(settings.set).not.toHaveBeenCalled()
         })
 
         test('does not throw if settings.set itself throws', () => {
             settings.set.mockImplementation(() => { throw new Error('settings unavailable') })
 
-            expect(() => emit(`incyclist/features/${UUID}/NEW_SEARCH_UI`, JSON.stringify({ value: true }))).not.toThrow()
+            expect(() => emit(`incyclist/features/${UUID}/SAMPLE_TOGGLE`, JSON.stringify({ value: true }))).not.toThrow()
         })
 
     })
