@@ -30,7 +30,16 @@ export class Route {
 
     replace(update:Route) {
         this._description = {...update._description}
-        this._details = {...update._details}
+
+        // update._details is normally undefined here - a list sync (addRoute()) rebuilds routes
+        // from description data only, details are loaded separately and lazily. Spreading
+        // undefined into an object literal silently yields {} rather than leaving the field
+        // unset, so an unconditional overwrite would wipe out details already loaded earlier in
+        // this route's lifetime, making it look (to valid()/detailsAvailable checks) as if they
+        // had loaded successfully but came back empty.
+        if (update._details) {
+            this._details = {...update._details}
+        }
     }
 
     addDetails(details:RouteApiDetail) {
