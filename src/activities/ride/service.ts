@@ -1520,10 +1520,11 @@ export class ActivityRideService extends IncyclistService {
         }
 
         const sport = this.getDeviceRide().getSport()??'cycling'
-        const title = DEFAULT_SPORT_ACTIVITY_TITLE[sport];
+        const prefix = `${DEFAULT_SPORT_ACTIVITY_TITLE[sport]??'Incyclist'}`;
+        const title = `${prefix}: ${routeName}`
         const id = requestedId ?? generateUUID()
         const date = formatDateTime (new Date (), "%Y%m%d%H%M%S", false)
-        const name = `${title}-${date}`
+        const name = `${prefix}-${date}`
         const fileName = this.getRepo().getFilename(name)
         const route:ActivityRoute = {name:routeName, hash:routeHash, title:routeTitle}
 

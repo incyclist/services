@@ -544,9 +544,29 @@ export class ActivityListService extends IncyclistService {
 
     protected getPastActivities(): Array<ActivityInfo> {       
 
+
         try {
+
+            const prefixes = ['Incyclist Ride:', 'Incyclist Run:', 'Incyclist Row:', 'Incyclist:']
+
+            const fixTitle = (ai:ActivityInfo) => {
+                const prefix = prefixes.find( p => ai.summary.title.startsWith(p) )
+                if (prefix) {
+                    const updated = {...ai.summary}
+                    updated.title = ai.summary.title.slice(prefix.length).trim()
+                    ai.summary = updated
+                }
+            }
+
             const activities  = this.getRepo().search(this.filter) ?? []
-            return activities.sort( (a,b) => b.summary?.startTime - a.summary?.startTime )
+            const sorted = activities.sort( (a,b) => b.summary?.startTime - a.summary?.startTime )
+            if (!sorted?.length)
+                return sorted
+
+
+            sorted.forEach( fixTitle )
+            return sorted
+            
         }
         catch(err) {
             this.logError(err,'getPastActivities')

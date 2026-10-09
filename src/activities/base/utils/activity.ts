@@ -73,7 +73,7 @@ export class Activity implements ActivityInfo{
     
 
     getTitle():string {
-        let title = this.info.summary.title
+        let title = this.info.details?.title??this.info.summary.title
         const sport = this.details?.sport??'cycling'
         if (title===DEFAULT_ACTIVITY_TITLE || title===DEFAULT_SPORT_ACTIVITY_TITLE[sport]) {
             if (this.details?.route?.title) {
