@@ -559,7 +559,7 @@ export class ActivityListService extends IncyclistService {
             }
 
             const activities  = this.getRepo().search(this.filter) ?? []
-            const sorted = activities.sort( (a,b) => b.summary?.startTime - a.summary?.startTime )
+            const sorted = activities.toSorted( (a,b) => b.summary?.startTime - a.summary?.startTime )
             if (!sorted?.length)
                 return sorted
 
