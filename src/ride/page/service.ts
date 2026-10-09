@@ -306,10 +306,21 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     async pausePage(): Promise<void> {
         try {
-            this.backgroundTimer = setTimeout(() => {
-                this.getRideDisplay().pause(this.getBackgroundPauseRequester())
-                this.backgroundPausedByService = true
-            }, BACKGROUND_PAUSE_TIMEOUT_MS)
+            // Idempotent: iOS fires both 'inactive' and 'background' for one app-switch, and
+            // useRidePageBackgroundPause() calls pausePage() for each. Scheduling unconditionally
+            // would overwrite the first timer's handle with the second, orphaning the first -
+            // resumePage() would then only clear the second, leaving the first to fire on its own
+            // and auto-pause the ride minutes after the rider already came back.
+            if (!this.backgroundTimer) {
+                this.backgroundTimer = setTimeout(() => {
+                    // Cleared here too, not just in resumePage(): once fired, the handle is stale
+                    // but stays truthy, which would make a later resumePage() wrongly think a
+                    // pending pause was cancelled before it ran.
+                    this.backgroundTimer = undefined
+                    this.getRideDisplay().pause(this.getBackgroundPauseRequester())
+                    this.backgroundPausedByService = true
+                }, BACKGROUND_PAUSE_TIMEOUT_MS)
+            }
 
             this.isInitialized = false
             return super.pausePage()
@@ -323,6 +334,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         try {
             if (this.backgroundTimer) {
                 clearTimeout(this.backgroundTimer)
+                this.backgroundTimer = undefined
             }
             await this.getRouteVideoAvailability().onForeground()
             return super.resumePage()

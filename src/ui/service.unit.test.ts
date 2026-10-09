@@ -293,6 +293,106 @@ describe('UserInterfaceServcie - onAppPause / onAppResume background activity', 
         expect((service as any).logError).toHaveBeenCalledWith(expect.any(Error), 'onAppResume:resumeBackgroundActivity')
     })
 
+    test('a resume within the timeout clears backgroundTimer, not just the pending setTimeout, so a later cycle is unaffected', async () => {
+        await service.onAppPause()
+        expect((service as any).backgroundTimer).toBeDefined()
+
+        await service.onAppResume()
+
+        expect((service as any).backgroundTimer).toBeUndefined()
+    })
+
+    test('once the background timeout fires, backgroundTimer is reset so a later resume still calls resume()', async () => {
+        jest.useFakeTimers()
+        try {
+            ;(service as any).pause = jest.fn().mockResolvedValue(undefined)
+            ;(service as any).resume = jest.fn().mockResolvedValue(undefined)
+
+            await service.onAppPause()
+            jest.runAllTimers()
+            await Promise.resolve()
+
+            expect((service as any).pause).toHaveBeenCalled()
+            expect((service as any).backgroundTimer).toBeUndefined()
+
+            await service.onAppResume()
+
+            expect((service as any).resume).toHaveBeenCalled()
+        }
+        finally {
+            jest.useRealTimers()
+        }
+    })
+
+})
+
+describe('UserInterfaceServcie - onAppLaunch idempotency', () => {
+
+    let service: UserInterfaceServcie
+
+    beforeEach(() => {
+        service = new UserInterfaceServcie()
+        ;(service as any).isLaunched = false
+        ;(service as any).isTerminated = false
+        ;(service as any).isTerminating = false
+        ;(service as any).initUserSettings = jest.fn().mockResolvedValue(undefined)
+        ;(service as any).bindings = { secret: { init: jest.fn().mockResolvedValue(undefined) } }
+        ;(service as any).initUser = jest.fn()
+        ;(service as any).initLogging = jest.fn()
+        ;(service as any).createUserStats = jest.fn()
+        ;(service as any).initPairingVisits = jest.fn()
+        ;(service as any).initDeviceServices = jest.fn().mockResolvedValue(undefined)
+        ;(service as any).preloadData = jest.fn()
+        ;(service as any).onSessionStart = jest.fn()
+        ;(service as any).getAppState = jest.fn().mockReturnValue({ setAppFeatures: jest.fn() })
+        ;(service as any).logEvent = jest.fn()
+        ;(service as any).logError = jest.fn()
+    })
+
+    afterEach(() => {
+        // UserInterfaceServcie is @Singleton (shared instance across every describe block in
+        // this file) - plain property assignment isn't undone by restoreAllMocks(), so leaving
+        // these in place would make later blocks call these stubs instead of the real
+        // implementation they depend on (e.g. 'pairing visit hooks' calling initPairingVisits()
+        // for real). Delete the own-properties so prototype methods take over again.
+        for (const key of ['initUserSettings', 'initUser', 'initLogging', 'createUserStats',
+            'initPairingVisits', 'initDeviceServices', 'preloadData', 'onSessionStart',
+            'getAppState', 'logEvent', 'logError', 'sendAppExitMessage', 'closePairingVisitOnExit']) {
+            delete (service as any)[key]
+        }
+        ;(service as any).isLaunched = false
+        jest.restoreAllMocks()
+    })
+
+    test('a remount calling onAppLaunch again on a live runtime is skipped, not re-run', async () => {
+        await service.onAppLaunch('mobile', '1.0.0')
+        expect((service as any).initDeviceServices).toHaveBeenCalledTimes(1)
+        expect((service as any).onSessionStart).toHaveBeenCalledTimes(1)
+
+        await service.onAppLaunch('mobile', '1.0.0')
+
+        expect((service as any).initDeviceServices).toHaveBeenCalledTimes(1)
+        expect((service as any).onSessionStart).toHaveBeenCalledTimes(1)
+        expect((service as any).logEvent).toHaveBeenCalledWith({ message: 'onAppLaunch skipped', reason: 'already-launched' })
+    })
+
+    test('onAppExit resets isLaunched, so a genuine relaunch after exit runs again', async () => {
+        await service.onAppLaunch('mobile', '1.0.0')
+        expect((service as any).isLaunched).toBe(true)
+
+        ;(service as any).sendAppExitMessage = jest.fn()
+        ;(service as any).closePairingVisitOnExit = jest.fn()
+        jest.spyOn(IncyclistPageService, 'closePage').mockImplementation(() => {})
+        ;(devicePairing.useDevicePairing as jest.Mock).mockReturnValue({ exit: jest.fn().mockResolvedValue(true) })
+        jest.spyOn(deviceAccess, 'useDeviceAccess').mockReturnValue({ terminate: jest.fn().mockResolvedValue(undefined) } as never)
+        await service.onAppExit()
+        expect((service as any).isLaunched).toBe(false)
+
+        await service.onAppLaunch('mobile', '1.0.0')
+
+        expect((service as any).initDeviceServices).toHaveBeenCalledTimes(2)
+        expect((service as any).isLaunched).toBe(true)
+    })
 })
 
 describe('UserInterfaceServcie - pairing visit hooks', () => {
