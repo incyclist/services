@@ -12,6 +12,22 @@ import laptestData from '../../../../../__tests__/data/activities/laptest.json'
 import { UserSettingsService } from '../../../../settings'
 import { Inject } from '../../../../base/decorators'
 
+/**
+ * @garmin/fitsdk's encoder bakes its own Profile.version into every FIT file it writes, at
+ * header bytes 2-3 (`Profile.version.major*1000+minor` - see node_modules/@garmin/fitsdk/src/
+ * encoder.js's #updateFileHeader()), and bytes 12-13 are the header CRC, which necessarily
+ * changes whenever that field does. A routine fitsdk version bump (no change to this repo's
+ * own conversion logic) changes only these 4 header bytes - mask them before snapshotting so
+ * the snapshot still catches any real change to the generated FIT content without breaking on
+ * every dependency bump.
+ */
+const maskFitHeaderVersion = (base64: string): string => {
+    const bytes = Buffer.from(base64, 'base64')
+    bytes.writeUInt16LE(0, 2)
+    bytes.writeUInt16LE(0, 12)
+    return bytes.toString('base64')
+}
+
 const fixtures: Array<{ name: string; data: unknown }> = [
     { name: 'fittest',      data: fittestData },
     { name: 'vancouver',    data: vancouverData },
@@ -68,7 +84,7 @@ describe('LocalFitConverter', () => {
                 const result = await converter.convert(activity)
 
                 const base64 = Buffer.from(result as ArrayBuffer).toString('base64')
-                expect(base64).toMatchSnapshot()
+                expect(maskFitHeaderVersion(base64)).toMatchSnapshot()
             })
 
             test(`${name} — session summary fields match input`, async () => {
