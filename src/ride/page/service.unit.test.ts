@@ -554,6 +554,24 @@ describe('RidePageService', () => {
 
             expect((s as any).isInitialized).toBe(false)
         })
+
+        test('a second pausePage() call does not orphan the first timer (iOS fires both inactive and background)', () => {
+            s.pausePage()
+            s.pausePage()
+            s.resumePage()
+            jest.advanceTimersByTime(300000)
+
+            expect(MockRideDisplay.pause).not.toHaveBeenCalled()
+        })
+
+        test('once the grace timer fires, a later resumePage() does not throw and leaves no pending timer', () => {
+            s.pausePage()
+            jest.advanceTimersByTime(300000)
+            expect(MockRideDisplay.pause).toHaveBeenCalled()
+
+            expect(() => s.resumePage()).not.toThrow()
+            expect((s as any).backgroundTimer).toBeUndefined()
+        })
     })
 
     describe('getRideObserver', () => {

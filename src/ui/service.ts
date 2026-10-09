@@ -43,6 +43,12 @@ export class UserInterfaceServcie extends IncyclistService {
     protected appState: 'Inactive'|'Active'|'Background'|'Stopped' = 'Inactive'
     protected backgroundTimer: NodeJS.Timeout | undefined
     protected backgroundPausedByService: boolean = false
+    // Guards onAppLaunch() against re-running on a JS runtime that is already launched - e.g. a
+    // mobile root remount (Activity destroyed/recreated without a process restart) calls it
+    // again from App.tsx's mount effect. Without this, a remount double-connects MQ, sends a
+    // second session/start message, and re-increments launch stats. Reset by onAppExit(),
+    // alongside isTerminated/isTerminating, so a real relaunch after exit still works.
+    protected isLaunched: boolean = false
 
 
     constructor() {
@@ -67,6 +73,11 @@ export class UserInterfaceServcie extends IncyclistService {
     }
 
     async onAppLaunch(platform:IncyclistPlatform, version:string, appFeatures?:AppFeatures) {
+        if (this.isLaunched) {
+            this.logEvent({message:'onAppLaunch skipped', reason:'already-launched'})
+            return
+        }
+
         this.isTerminated = false;
         this.isTerminating = false;
 
@@ -98,6 +109,7 @@ export class UserInterfaceServcie extends IncyclistService {
             // after MQ has been initialized
             this.onSessionStart()
             this.appState = 'Active'
+            this.isLaunched = true
 
         }
         catch(err) {
@@ -136,6 +148,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
                 this.logEvent({message:'onAppExit finished'})
                 this.isTerminated = true
+                this.isLaunched = false
 
                 return true
 
@@ -168,6 +181,11 @@ export class UserInterfaceServcie extends IncyclistService {
                 .catch( (err)=> { this.logError(err,'onAppPause:pauseBackgroundActivity') })
 
             this.backgroundTimer = setTimeout(()=> {
+                // Cleared here too, not just in onAppResume(): once this fires, the handle is
+                // stale (already fired), but stays truthy - left set, the next onAppResume()
+                // would see it as "still pending, cleared before firing" and wrongly skip
+                // resume(), leaving devices/MQ disconnected after pause() just ran.
+                this.backgroundTimer = undefined
                 this.backgroundPausedByService = true
                 this.pause().catch( (err)=> { this.logError(err,'onAppPause:pause') })
             },BACKGROUND_PAUSE_TIMEOUT_MS)
@@ -193,6 +211,7 @@ export class UserInterfaceServcie extends IncyclistService {
             // resume within timeout
             if (this.backgroundTimer) {
                 clearTimeout(this.backgroundTimer)
+                this.backgroundTimer = undefined
                 resumeRequired = false
             }
             this.logEvent({message:'onAppResume called'})
