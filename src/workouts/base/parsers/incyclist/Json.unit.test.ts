@@ -50,6 +50,32 @@ describe('JsonParser', () => {
             expect(workout.lockedPowerTargets).toBeUndefined()
         })
 
+        test('correctly handles segments', async ()=> {
+            const wo = {
+                type: "workout",
+                id: "default-30-anaerobic-sprints",
+                hash: "default-30-anaerobic-sprints",
+                name: "30' Anaerobic Sprints",
+                description: "Ten short, maximal efforts with generous recovery build raw sprint power and neuromuscular sharpness - this is about peak wattage, not endurance. Go genuinely all-out on each sprint; if you're not fully recovered by the next one, the quality (not the quantity) is what suffers.",
+                category: { name: "30 min" },
+                steps: [
+                    { type: "step", duration: 600, power: { type: "pct of FTP", min: 50, max: 70 }, text: "Warmup", work: false, steady: false, cooldown: false },
+                    { type: "segment", repeat: 10, steps: [
+                        { type: "step", duration: 25, power: { type: "pct of FTP", min: 135, max: 135 }, text: "Sprint", work: true, steady: true, "cooldown": false },
+                        { type: "step", duration: 35, power: { type: "pct of FTP", min: 50, max: 50 }, text: "Recovery", work: true, steady: true, "cooldown": false }
+                    ]},
+                    { type: "step", duration: 600,start:600,power: { type: "pct of FTP", min: 40, max: 60 }, text: "Cooldown", work: false, steady: false, cooldown: true }
+                ]
+            }
+
+            const parser = new JsonParser()
+            const data = JSON.stringify(wo)
+            const workout = await parser.import({filename:'test.json'} as any, data)
+
+            expect(workout.steps[2].start===1100)
+
+        })
+
     })
 
     describe('supportsContent', () => {

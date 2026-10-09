@@ -94,6 +94,11 @@ export class Workout extends Segment implements WorkoutDefinition {
     }
 
     addStep( step:StepDefinition) {
+        if (step.duration) {
+            delete step.start
+            delete step.end
+        }
+
         if ( valid(step)) {
 
             if ( step.duration===undefined && step.start===undefined && step.end===undefined )
@@ -111,6 +116,12 @@ export class Workout extends Segment implements WorkoutDefinition {
     }
 
     addSegment( segment:SegmentDefinition) {
+
+        if (segment.duration) {
+            delete segment.start
+            delete segment.end
+        }
+        
         if ( valid(segment)) {
             this.prepareNext(segment);
 
