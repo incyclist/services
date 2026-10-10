@@ -101,126 +101,136 @@ export class LocalFitConverter {
      * @returns {ArrayBuffer} Encoded FIT file contents.
      */
     protected encode(activity: FitExportActivity): ArrayBuffer {
-        const encoder = new Encoder()
-        const startTime = new Date(activity.startTime)
+            const encoder = new Encoder()
+            const startTime = new Date(activity.startTime)
 
-        const manufacturer = this.getUserSettings().get('fitexport.manufacturer', 'garmin')
-        const productIdentifier = this.getUserSettings().get('fitexport.device', 'edge1040')
+            const manufacturer = this.getUserSettings().get('fitexport.manufacturer', 'garmin')
+            const productIdentifier = this.getUserSettings().get('fitexport.device', 'edge1040')
 
-        const storedSerial = this.getUserSettings().get('fitexport.serialNo', undefined)
-        const serialNumber = storedSerial ?? this.buildSerialNo()
+            const storedSerial = this.getUserSettings().get('fitexport.serialNo', undefined)
+            const serialNumber = storedSerial ?? this.buildSerialNo()
 
-        if (!storedSerial) {
-            this.getUserSettings().set('fitexport.serialNo',serialNumber)
-        }
-
-        let product
-        if (Number.isNaN(Number(productIdentifier))) {
-            product = this.findProduct(productIdentifier)
-        }
-        else {
-            product = productIdentifier
-        }
-
-        encoder.onMesg(Profile.MesgNum.FILE_ID, {
-            type: 'activity',
-            manufacturer,
-            product,
-            serialNumber,
-            timeCreated: startTime,
-        })
-
-        encoder.onMesg(Profile.MesgNum.EVENT, {
-            timestamp: startTime,
-            event: 'timer',
-            eventType: 'start',
-            data: 0,
-        })
-
-        let lastTimestampMs = startTime.getTime()
-
-        activity.logs.forEach((log: FitLogEntry) => {
-            if (log.time != null) {
-                lastTimestampMs = startTime.getTime() + log.time * 1000
+            if (!storedSerial) {
+                this.getUserSettings().set('fitexport.serialNo',serialNumber)
             }
 
-            const record: Record<string, unknown> = {
-                timestamp: new Date(lastTimestampMs),
+            let product
+            if (Number.isNaN(Number(productIdentifier))) {
+                product = this.findProduct(productIdentifier)
+            }
+            else {
+                product = productIdentifier
             }
 
-            if (log.lat != null && log.lon != null) {
-                record.positionLat = Math.round(log.lat * DEG_TO_SEMICIRCLES)
-                record.positionLong = Math.round(log.lon * DEG_TO_SEMICIRCLES)
+            const encodeMesg = (mesgNum: number, mesg: Record<string, unknown>): void => {
+                try {
+                    encoder.onMesg(mesgNum,mesg)
+                }
+                catch(err) {
+                    this.logger.logEvent({message:'FIT encoder error', error:err.message, fitEncodingRequest:{mesgNum, mesg}})
+                    throw err;
+                }
             }
-            if (log.elevation != null) record.altitude = log.elevation
-            if (log.heartrate != null) record.heartRate = log.heartrate
-            if (log.cadence != null) record.cadence = log.cadence
-            if (log.distance != null) record.distance = log.distance
-            if (log.speed != null) record.speed = log.speed / 3.6
-            if (log.power != null) record.power = log.power
-            if (log.slope != null) record.grade = log.slope
 
-            encoder.onMesg(Profile.MesgNum.RECORD, record)
-        })
+            encodeMesg(Profile.MesgNum.FILE_ID, {
+                type: 'activity',
+                manufacturer,
+                product,
+                serialNumber,
+                timeCreated: startTime,
+            })
 
-        const endTime = new Date(lastTimestampMs)
+            encodeMesg(Profile.MesgNum.EVENT, {
+                timestamp: startTime,
+                event: 'timer',
+                eventType: 'start',
+                data: 0,
+            })
 
-        encoder.onMesg(Profile.MesgNum.EVENT, {
-            timestamp: endTime,
-            event: 'timer',
-            eventType: 'stopAll',
-            data: 0,
-        })
+            let lastTimestampMs = startTime.getTime()
 
-        if (activity.laps.length > 0) {
-            activity.laps.forEach(lap => {
-                const lapStart = new Date(lap.startTime)
-                const lapEnd = new Date(lap.stopTime)
-                encoder.onMesg(Profile.MesgNum.LAP, {
-                    timestamp: lapEnd,
-                    startTime: lapStart,
-                    totalElapsedTime: lap.lapTime,
-                    totalTimerTime: lap.lapTime,
-                    totalDistance: lap.lapDistance,
+            activity.logs.forEach((log: FitLogEntry) => {
+                if (log.time != null) {
+                    lastTimestampMs = startTime.getTime() + log.time * 1000
+                }
+
+                const record: Record<string, unknown> = {
+                    timestamp: new Date(lastTimestampMs),
+                }
+
+                if (log.lat != null && log.lon != null) {
+                    record.positionLat = Math.round(log.lat * DEG_TO_SEMICIRCLES)
+                    record.positionLong = Math.round(log.lon * DEG_TO_SEMICIRCLES)
+                }
+                if (log.elevation != null) record.altitude = log.elevation
+                if (log.heartrate != null) record.heartRate = log.heartrate
+                if (log.cadence != null) record.cadence = log.cadence
+                if (log.distance != null) record.distance = log.distance
+                if (log.speed != null) record.speed = log.speed / 3.6
+                if (log.power != null) record.power = log.power
+                if (log.slope != null) record.grade = log.slope
+
+                encoder.onMesg(Profile.MesgNum.RECORD, record)
+            })
+
+            const endTime = new Date(lastTimestampMs)
+
+            encodeMesg(Profile.MesgNum.EVENT, {
+                timestamp: endTime,
+                event: 'timer',
+                eventType: 'stopAll',
+                data: 0,
+            })
+
+            if (activity.laps.length > 0) {
+                activity.laps.forEach(lap => {
+                    const lapStart = new Date(lap.startTime)
+                    const lapEnd = new Date(lap.stopTime)
+                    encodeMesg(Profile.MesgNum.LAP, {
+                        timestamp: lapEnd,
+                        startTime: lapStart,
+                        totalElapsedTime: lap.lapTime,
+                        totalTimerTime: lap.lapTime,
+                        totalDistance: lap.lapDistance,
+                        event: 'lap',
+                        eventType: 'stop',
+                    })
+                })
+            } else {
+                encodeMesg(Profile.MesgNum.LAP, {
+                    timestamp: endTime,
+                    startTime,
+                    totalElapsedTime: activity.timeTotal,
+                    totalTimerTime: activity.time,
+                    totalDistance: activity.distance,
                     event: 'lap',
                     eventType: 'stop',
                 })
-            })
-        } else {
-            encoder.onMesg(Profile.MesgNum.LAP, {
+            }
+
+            encodeMesg(Profile.MesgNum.SESSION, {
                 timestamp: endTime,
                 startTime,
                 totalElapsedTime: activity.timeTotal,
                 totalTimerTime: activity.time,
                 totalDistance: activity.distance,
-                event: 'lap',
+                sport: this.mapSport(activity.sport),
+                subSport: 'virtualActivity',
+                event: 'session',
+                eventType: 'stopDisableAll',
+            })
+
+            encodeMesg(Profile.MesgNum.ACTIVITY, {
+                timestamp: endTime,
+                totalTimerTime: activity.time,
+                numSessions: 1,
+                type: 'manual',
+                event: 'activity',
                 eventType: 'stop',
             })
-        }
 
-        encoder.onMesg(Profile.MesgNum.SESSION, {
-            timestamp: endTime,
-            startTime,
-            totalElapsedTime: activity.timeTotal,
-            totalTimerTime: activity.time,
-            totalDistance: activity.distance,
-            sport: this.mapSport(activity.sport),
-            subSport: 'virtualActivity',
-            event: 'session',
-            eventType: 'stopDisableAll',
-        })
-
-        encoder.onMesg(Profile.MesgNum.ACTIVITY, {
-            timestamp: endTime,
-            totalTimerTime: activity.time,
-            numSessions: 1,
-            type: 'manual',
-            event: 'activity',
-            eventType: 'stop',
-        })
-
-        const uint8Array = encoder.close()
-        return uint8Array.buffer as ArrayBuffer
+            const uint8Array = encoder.close()
+            return uint8Array.buffer as ArrayBuffer
     }
 
     protected mapSport(incyclistSport?:Sport):string  {
