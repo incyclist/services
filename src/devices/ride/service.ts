@@ -1223,8 +1223,12 @@ export class DeviceRideService  extends IncyclistService{
             const adapter = info?.adapter as ITrainer
             const sports = adapter?.getSupportedSports?.()??['cycling']
 
-            this.logEvent( {message:'[DeviceRide] getSports', adapter:info.adapter.getName(), sports:sports.join(',')})
-            return sports[0];
+            if (sports.length===0) {
+                sports.push('cycling')
+            }
+
+            this.logEvent( {message:'[DeviceRide] getSports', adapter:info?.adapter.getName(), sports:sports.join(',')})
+            return sports?.[0];
         }
         catch(err) {
             this.logError(err,'getSports')
