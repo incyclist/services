@@ -1231,7 +1231,41 @@ describe( 'DeviceConfigurationService',()=>{
             expect(options).toEqual(['PowerMeter','Smart Trainer','ERG'])
         })
 
-        
+        test('default udid chain skips a disabled Control capability and falls through to Power',async ()=>{
+            const settings = clone(SampleSettings)
+            service.inject('UserSettings', new UserSettingsMock(settings))
+            await service.init()
+
+            service.disableCapability(IncyclistCapability.Control,true)
+
+            const res = service.getModeSettings()
+            expect(res?.udid).toBe('2')
+        })
+
+        test('default udid chain returns nothing once every capability in the chain is disabled',async ()=>{
+            const settings = clone(SampleSettings)
+            service.inject('UserSettings', new UserSettingsMock(settings))
+            await service.init()
+
+            service.disableCapability(IncyclistCapability.Control,true)
+            service.disableCapability(IncyclistCapability.Power,true)
+
+            const res = service.getModeSettings()
+            expect(res).toBeUndefined()
+        })
+
+        test('an explicit udid bypasses the default chain regardless of disabled',async ()=>{
+            const settings = clone(SampleSettings)
+            service.inject('UserSettings', new UserSettingsMock(settings))
+            await service.init()
+
+            service.disableCapability(IncyclistCapability.Control,true)
+
+            const res = service.getModeSettings('1')
+            expect(res?.udid).toBe('1')
+        })
+
+
     })
 
     describe('getAdapters',()=>{
