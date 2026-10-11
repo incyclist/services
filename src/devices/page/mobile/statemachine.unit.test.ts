@@ -233,4 +233,26 @@ describe('PairingPage state machine',()=> {
         expect(startScanningCalls).toBe(1)
     })
 
+    // Pins which adapter set performCheck() pairs with today.
+    describe('performCheck() adapter set',()=>{
+
+        test('pairs with configuration.getAdapters(false), the full/unfiltered adapter set, not only the selected ones',async ()=>{
+            setupMocks()
+            const callback = jest.fn()
+
+            configMock.canStartRide = jest.fn().mockReturnValue(true)
+            const allAdapters = [{udid:'1',adapter:{} as any,capabilities:[]},{udid:'2',adapter:{} as any,capabilities:[]}]
+            configMock.getAdapters = jest.fn().mockReturnValue(allAdapters)
+            pairingMock.pairingSuccess = false
+            pairingMock.pairingComplete = false
+            pairingMock.startPairing = jest.fn().mockResolvedValue(undefined)
+
+            sm.start(callback)
+            sm.onPageReady()
+
+            expect(configMock.getAdapters).toHaveBeenCalledWith(false)
+            expect(pairingMock.startPairing).toHaveBeenCalledWith(allAdapters, {})
+        })
+    })
+
 })
