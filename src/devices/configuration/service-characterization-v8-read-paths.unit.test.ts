@@ -1,14 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Pins today's behaviour of DeviceConfigurationService's selection-reading methods
- * (getSelected, getSelectedDevices, getAdapters(true), canStartRide, getModeSettings) with
- * and without a disabled capability, before any change to how they treat `disabled`.
+ * (getSelected, getSelectedDevices, getAdapters(true), canStartRide) with and without a
+ * disabled capability, before any change to how they treat `disabled`.
  *
- * `getModeSettings()`'s default-udid chain is a gap found while writing this baseline: its
- * no-argument form reads raw `.selected` with no `disabled` check at all, and it's reachable
- * from production (web-ui's and mobile's Gear Settings screens call it with no udid). The
- * test below pins that as today's actual behaviour rather than silently fixing it, since this
- * file makes no production change.
+ * getModeSettings()'s own disabled handling is covered next to its implementation in
+ * service.unit.test.ts, not here.
  */
 import { AdapterFactory, IncyclistCapability, SerialPortProvider } from "incyclist-devices"
 import { DeviceConfigurationService } from "./service"
@@ -114,27 +111,6 @@ describe('DeviceConfigurationService - baseline: selection-reading methods vs. d
             service.disableCapability(IncyclistCapability.Speed, true)
 
             expect(service.canStartRide()).toBe(false)
-        })
-    })
-
-    describe('getModeSettings() default-udid chain - documented gap, not yet fixed', () => {
-
-        test('today, it returns settings for a disabled Control device (ignores disabled; see file header)', () => {
-            const udid = service.add(Trainer('1'))
-            service.disableCapability(IncyclistCapability.Control, true)
-
-            const info = service.getModeSettings()
-
-            expect(info?.udid).toBe(udid)
-        })
-
-        test('an explicit udid bypasses the default chain either way', () => {
-            const udid = service.add(Trainer('1'))
-            service.disableCapability(IncyclistCapability.Control, true)
-
-            const info = service.getModeSettings(udid)
-
-            expect(info?.udid).toBe(udid)
         })
     })
 })
