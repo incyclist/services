@@ -7,6 +7,7 @@ import {
     PairingPlatform,
     PairingStatusId
 } from './guidance'
+import { isCapabilityActive } from './capability'
 
 export type PairingStatusDot = 'red' | 'green' | 'amber'
 
@@ -22,7 +23,7 @@ export interface PairingStatusDisplayProps {
 export interface PairingStatusSource {
     platform: PairingPlatform
     interfaces: ReadonlyArray<PairingInterfaceState>
-    capabilities: ReadonlyArray<{ capability: string, selected?: string, deviceName?: string, connectState?: string }>
+    capabilities: ReadonlyArray<{ capability: string, selected?: string, disabled?: boolean, excluded?: unknown, deviceName?: string, connectState?: string }>
     canStartRide: boolean
     loading: boolean
     rideMode: boolean
@@ -47,9 +48,9 @@ export const getPairingStatusDisplay = (src: PairingStatusSource): PairingStatus
     const find = (name: string) => src.capabilities.find(c => c.capability === name)
     const readyCapability = REQUIRED_CAPABILITIES
         .map(find)
-        .find(c => c?.selected && c.connectState === 'connected')
-    const connectingCapability = src.capabilities.find(c => c.selected && c.connectState === 'connecting')
-    const anyDeviceSelected = src.capabilities.some(c => Boolean(c.selected))
+        .find(c => isCapabilityActive(c) && c.connectState === 'connected')
+    const connectingCapability = src.capabilities.find(c => isCapabilityActive(c) && c.connectState === 'connecting')
+    const anyDeviceSelected = src.capabilities.some(c => isCapabilityActive(c))
 
     const derived = derivePairingStatus({
         platform: src.platform,
