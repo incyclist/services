@@ -1,7 +1,7 @@
 import { DeviceData, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices"
 import { EnrichedInterfaceSetting } from "../access"
 import { RideServiceCheckFilter } from "../ride"
-import { AdapterInfo, IncyclistDeviceSettings } from "../configuration"
+import { AdapterInfo, ExclusionReason, ExclusionScope, IncyclistDeviceSettings } from "../configuration"
 
 
 export interface DevicePairingData {
@@ -20,11 +20,13 @@ export interface CapabilityData {
     capability: IncyclistCapability,
     value?: number,
     unit?: string,
-    connectState?: DevicePairingStatus,   
+    connectState?: DevicePairingStatus,
     deviceName:string
     deviceNames: string
     selected?:string
     disabled:boolean
+    /** set while this capability's configured device is excluded from the effective selection (e.g. a case B fallback); `selected` stays raw */
+    excluded?: { reason: ExclusionReason, scope: ExclusionScope }
     interface:string
     devices:Array<DevicePairingData>
 }

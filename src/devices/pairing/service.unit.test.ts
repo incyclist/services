@@ -712,6 +712,72 @@ describe('PairingService',()=>{
             })
         })
 
+        // A switched-off (disabled) or excluded capability must never count as "still occupying
+        // the slot" in these readiness checks - otherwise a rider who turns off the Resistance
+        // tile keeps being blocked from riding on a connected power meter.
+        describe('effective selection (disabled/excluded) in readiness checks',()=>{
+
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            test('checkPairingSuccess: a disabled Control does not block a connected Power meter',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.setupMockData(IncyclistCapability.Power, [ {udid:'2', selected:true} ])
+                svc.getCapabilityData('control').disabled = true
+                svc.getCapabilityData('control').connectState = 'waiting'
+                svc.getCapabilityData('power').connectState = 'connected'
+                svc.setCanStartRide(true)
+
+                expect(svc.checkPairingSuccess()).toBe(true)
+            })
+
+            test('checkPairingSuccess: an excluded Control does not block a connected Power meter',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.setupMockData(IncyclistCapability.Power, [ {udid:'2', selected:true} ])
+                svc.getCapabilityData('control').excluded = {reason:'not-available', scope:'until-next-pairing'}
+                svc.getCapabilityData('control').connectState = 'connecting'
+                svc.getCapabilityData('power').connectState = 'connected'
+                svc.setCanStartRide(true)
+
+                expect(svc.checkPairingSuccess()).toBe(true)
+            })
+
+            test('checkPairingSuccess: a disabled Control that is still (somehow) connected does not win over a connected Power meter',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.setupMockData(IncyclistCapability.Power, [ {udid:'2', selected:true} ])
+                svc.getCapabilityData('control').disabled = true
+                svc.getCapabilityData('control').connectState = 'connected'
+                svc.getCapabilityData('power').connectState = 'connected'
+                svc.setCanStartRide(true)
+
+                expect(svc.checkPairingSuccess()).toBe(true)
+            })
+
+            test('checkPairingComplete: a disabled capability that is not connected is ignored',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.getCapabilityData('control').disabled = true
+                svc.getCapabilityData('control').connectState = 'waiting'
+
+                expect(svc.checkPairingComplete()).toBe(true)
+            })
+
+            test('isStalled: a disabled capability stuck on waiting does not count as stalled',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.getCapabilityData('control').disabled = true
+                svc.getCapabilityData('control').connectState = 'waiting'
+
+                expect((svc as any).isStalled()).toBe(false)
+            })
+        })
+
         describe('startPairing',()=>{
 
             beforeEach( ()=>{
