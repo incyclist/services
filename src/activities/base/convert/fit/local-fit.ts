@@ -78,9 +78,9 @@ export class LocalFitConverter {
     protected mapLogToFit(log: ActivityLogRecord): FitLogEntry {
         const { time, speed, slope, cadence: cadenceOrg, heartrate: heartrateOrg, distance, power: powerOrg, lat, lng, elevation } = log
 
-        const cadence = Math.round(cadenceOrg)
-        const heartrate = Math.round(heartrateOrg)
-        const power = Math.round(powerOrg)
+        const cadence = cadenceOrg != null ? Math.round(cadenceOrg) : undefined
+        const heartrate = heartrateOrg != null ? Math.round(heartrateOrg) : undefined
+        const power = powerOrg != null ? Math.round(powerOrg) : undefined
 
         return { time, speed, slope, cadence, heartrate, distance, power, lat, lon: lng, elevation }
     }
@@ -170,7 +170,7 @@ export class LocalFitConverter {
                 if (log.power != null) record.power = log.power
                 if (log.slope != null) record.grade = log.slope
 
-                encoder.onMesg(Profile.MesgNum.RECORD, record)
+                encodeMesg(Profile.MesgNum.RECORD, record)
             })
 
             const endTime = new Date(lastTimestampMs)

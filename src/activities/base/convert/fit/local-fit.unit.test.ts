@@ -261,4 +261,24 @@ describe('LocalFitConverter', () => {
             expect(records[0].power).toBe(123)
         })
     })
+
+    describe('encode — missing sensor values', () => {
+        test('unpaired cadence, heartrate, and power do not write NaN and export succeeds', async () => {
+            const activity = vancouverData as unknown as ActivityDetails
+            const src = activity as unknown as Record<string, unknown>
+            const logsCopy = [...(src.logs as Array<Record<string, unknown>>)]
+            logsCopy[0] = { ...logsCopy[0], cadence: undefined, power: undefined, heartrate: undefined }
+            const modified = { ...src, logs: logsCopy } as unknown as ActivityDetails
+
+            const result = await converter.convert(modified)
+            const bytes = Array.from(new Uint8Array(result as ArrayBuffer))
+            const { messages, errors } = new Decoder(Stream.fromByteArray(bytes)).read()
+            const records = messages.recordMesgs as Array<Record<string, unknown>>
+
+            expect(errors).toHaveLength(0)
+            expect(records[0].cadence).toBeUndefined()
+            expect(records[0].heartRate).toBeUndefined()
+            expect(records[0].power).toBeUndefined()
+        })
+    })
 })
