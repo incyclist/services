@@ -1,6 +1,7 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
 import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState  } from "./model";
+import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
@@ -840,7 +841,7 @@ export class DevicePairingService  extends IncyclistService{
         if (this.isPairing() || this.isScanning())
             return false
 
-        const selected = (this.state.capabilities??[]).filter( c=>c.selected )
+        const selected = (this.state.capabilities??[]).filter( c=>isCapabilityActive(c) )
         return selected.length>0 && selected.every( c=>c.connectState==='waiting')
     }
 
@@ -1515,10 +1516,17 @@ export class DevicePairingService  extends IncyclistService{
         const power = this.getCapability(IncyclistCapability.Power)
         const speed =  this.getCapability(IncyclistCapability.Speed)
 
-        const controlOK = (control?.selected && control?.connectState==='connected')
-        const powerOK = (!control?.selected && power?.selected && power?.connectState==='connected')
-        const speedOK = (!control?.selected && !power?.selected && speed?.selected && speed?.connectState==='connected')
-        
+        const controlActive = isCapabilityActive(control)
+        const powerActive = isCapabilityActive(power)
+        const speedActive = isCapabilityActive(speed)
+
+        // a switched-off or excluded tier is skipped entirely, not treated as "still occupying
+        // the slot" - a disabled Resistance tile with a connected power meter must not block
+        // the ride on the power meter's tier
+        const controlOK = (controlActive && control?.connectState==='connected')
+        const powerOK = (!controlActive && powerActive && power?.connectState==='connected')
+        const speedOK = (!controlActive && !powerActive && speedActive && speed?.connectState==='connected')
+
         const success = controlOK || powerOK || speedOK
             
 
@@ -1531,7 +1539,7 @@ export class DevicePairingService  extends IncyclistService{
     checkPairingComplete():boolean {
 
         const incomplete = this.state.capabilities.find(c => {
-            return (c.selected && c.connectState !== 'connected')
+            return (isCapabilityActive(c) && c.connectState !== 'connected')
         });
 
         return !incomplete

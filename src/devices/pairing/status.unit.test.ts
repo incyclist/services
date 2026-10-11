@@ -115,6 +115,32 @@ describe('getPairingStatusDisplay', () => {
         })
         expect(status.id).toBe('S5')
     })
+
+    it('a disabled Control capability does not count as ready, even with a connected device', () => {
+        const status = getPairingStatusDisplay({
+            ...base,
+            canStartRide: false,
+            capabilities: [{ capability: 'control', selected: 'udid-1', disabled: true, deviceName: 'Neo', connectState: 'connected' }],
+        })
+        expect(status.id).not.toBe('S2')
+    })
+
+    it('a disabled Control capability does not count as connecting', () => {
+        const status = getPairingStatusDisplay({
+            ...base,
+            capabilities: [{ capability: 'control', selected: 'udid-1', disabled: true, deviceName: 'Neo', connectState: 'connecting' }],
+        })
+        expect(status.id).not.toBe('S3')
+    })
+
+    it('an excluded capability does not count as ready, even with a connected device', () => {
+        const status = getPairingStatusDisplay({
+            ...base,
+            canStartRide: false,
+            capabilities: [{ capability: 'control', selected: 'udid-1', excluded: { reason: 'not-available', scope: 'until-next-pairing' }, deviceName: 'Neo', connectState: 'connected' }],
+        })
+        expect(status.id).not.toBe('S2')
+    })
 })
 
 describe('toPairingInterfaceStates', () => {
