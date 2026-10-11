@@ -677,6 +677,39 @@ describe('PairingService',()=>{
 
                 expect(svc.isPairing()).toBe(false)
             })
+
+            // Pins today's prepareStart() adapterFilter behaviour: which adapters stay
+            // running vs. get paused when the rider presses OK.
+            describe('adapterFilter',()=>{
+
+                beforeEach( ()=>{
+                    svc.setupMockData( IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                    svc.setupMockData( IncyclistCapability.Power, [ {udid:'2', selected:true} ])
+                })
+
+                const pauseOf = (udid:string) => svc.getState().adapters.find(ai=>ai.udid===udid).adapter.pause
+
+                test('no filter: every selected adapter is paused',async ()=>{
+                    await svc.prepareStart()
+
+                    expect(pauseOf('1')).toHaveBeenCalled()
+                    expect(pauseOf('2')).toHaveBeenCalled()
+                })
+
+                test('filter keeps the listed udid running and still pauses the rest',async ()=>{
+                    await svc.prepareStart(['1'])
+
+                    expect(pauseOf('1')).not.toHaveBeenCalled()
+                    expect(pauseOf('2')).toHaveBeenCalled()
+                })
+
+                test('filter listing every selected udid pauses nothing',async ()=>{
+                    await svc.prepareStart(['1','2'])
+
+                    expect(pauseOf('1')).not.toHaveBeenCalled()
+                    expect(pauseOf('2')).not.toHaveBeenCalled()
+                })
+            })
         })
 
         describe('startPairing',()=>{
