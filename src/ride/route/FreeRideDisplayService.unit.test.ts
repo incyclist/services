@@ -460,6 +460,16 @@ describe('FreeRideDisplayService', () => {
             const props = service.getOverlayProps('street-view', { hideAll: false } as any)
             expect(props).toBeDefined()
         })
+
+        test('does not throw when options are visible but currentOptions is an empty array', () => {
+            setupMocks(service, { mockRideService: true, freeRideOptions: [] })
+            service['optionsVisible'] = true
+
+            const props = service.getOverlayProps('map', { hideAll: false } as any)
+
+            expect(props.center).toBeUndefined()
+            expect(props).toHaveProperty('bounds')
+        })
     })
 
     describe('onActivityUpdate', () => {

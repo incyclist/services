@@ -697,8 +697,8 @@ export class FreeRideDisplayService extends GpxDisplayService {
         
     }
 
-    protected getMapCenter(): LatLng { 
-        if ( !this.optionsVisible || !this.currentOptions ) return;
+    protected getMapCenter(): LatLng {
+        if ( !this.optionsVisible || !this.currentOptions?.length ) return;
 
         const {lat,lng} = this.currentOptions[0].path[0]
         return { lat, lng }
