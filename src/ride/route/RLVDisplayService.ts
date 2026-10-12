@@ -229,7 +229,7 @@ export class RLVDisplayService extends RouteDisplayService {
                 startTime,
                 autoConvert,
                 info:this.getInfotextDisplayProps(),
-                muted: true,
+                muted: !this.isVideoSoundEnabled(),
                 loop: this.isLoopEnabled() ? true : undefined,
                 playback: this.currentVideo?.playback,
                 observer: this.currentVideo?.observer,
@@ -261,7 +261,8 @@ export class RLVDisplayService extends RouteDisplayService {
                     autoConvert,
                     hidden: !video.isCurrent,
                     info:video.isCurrent ? this.getInfotextDisplayProps() : undefined,
-                    muted: true,
+                    // hidden (preloaded) videos stay muted, otherwise their sound would overlap
+                    muted: !(video.isCurrent && this.isVideoSoundEnabled()),
                     playback: video.playback,
                     observer: video.observer,
                     onLoaded: (bufferedTime: number) => { this.onVideoLoaded(bufferedTime, video) },
@@ -742,6 +743,10 @@ export class RLVDisplayService extends RouteDisplayService {
 
     protected cleanupUrl(url:string) {
         return resolvePlaybackUrl(url)
+    }
+
+    protected isVideoSoundEnabled(): boolean {
+        return this.getUserSettings().get('preferences.video.sound', false) === true
     }
 
     protected isLoopEnabled(): boolean {

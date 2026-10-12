@@ -392,6 +392,70 @@ describe('RLVDisplayService', () => {
     });
   });
 
+  describe('getDisplayProperties - video sound', () => {
+    const enableSound = (enabled: boolean | undefined) => {
+      mockUserSettings.get.mockImplementation((key: string, defValue: unknown) =>
+        key === 'preferences.video.sound' ? enabled : defValue)
+    }
+
+    const getVideoProps = async () => {
+      service.initView();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return service.getDisplayProperties({ state: 'active' } as any);
+    }
+
+    beforeEach(() => {
+      setupMocks(mockRoute);
+      service.init(mockRideService as any);
+    });
+
+    afterEach(() => {
+      mockUserSettings.get.mockReset();
+    });
+
+    test('video is muted when the setting is not set', async () => {
+      enableSound(undefined)
+
+      const props = await getVideoProps()
+
+      expect(props.video).toBeDefined()
+      expect(props.video?.muted).toBe(true)
+      expect(mockUserSettings.get).toHaveBeenCalledWith('preferences.video.sound', false)
+    });
+
+    test('video is muted when sound is disabled', async () => {
+      enableSound(false)
+
+      const props = await getVideoProps()
+
+      expect(props.video?.muted).toBe(true)
+    });
+
+    test('video is not muted when sound is enabled', async () => {
+      enableSound(true)
+
+      const props = await getVideoProps()
+
+      expect(props.video).toBeDefined()
+      expect(props.video?.muted).toBe(false)
+    });
+
+    test('only the current video is unmuted when multiple videos are loaded', async () => {
+      enableSound(true)
+      await getVideoProps()
+
+      const [current] = (service as any).videos
+      const next = { ...current, isCurrent: false, isInitial: false, route: { details: { id: 'next' } } }
+      ;(service as any).videos = [current, next]
+
+      const props = service.getDisplayProperties({ state: 'active' } as any)
+
+      expect(props.videos).toHaveLength(2)
+      expect(props.videos?.[0].muted).toBe(false)
+      expect(props.videos?.[1].muted).toBe(true)
+    });
+  });
+
   describe('getStartOverlayProps', () => {
     test('returns object with videoState, videoStateError, and videoProgress', () => {
       const props = service.getStartOverlayProps();
