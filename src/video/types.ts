@@ -50,6 +50,15 @@ export type ConversionCpuInfo = {
     ts?:number
 }
 
+/**
+ * Information about a streaming conversion, reported by the platform when the stream has started
+ */
+export type ConversionStartInfo = {
+    /** MIME type incl. codecs of the stream, e.g. `video/mp4; codecs="avc1.64001F, mp4a.40.2"` -
+     *  only provided by platforms supporting audio in conversions (capability `video.convert.audio`) */
+    mime?: string
+}
+
 export type ConversionInfo = {
     target: number,
     current: number,

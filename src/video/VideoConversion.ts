@@ -3,7 +3,7 @@ import { Injectable } from "../base/decorators";
 import { IncyclistService } from "../base/service";
 import { Observer } from "../base/types";
 import { Route } from "../routes/base/model/route";
-import { ConversionInfo } from "./types";
+import { ConversionInfo, ConversionStartInfo } from "./types";
 
 export class VideoConversion extends IncyclistService {
     protected observer: Observer
@@ -77,8 +77,10 @@ export class VideoConversion extends IncyclistService {
         this.isStarted = false
     }
 
-    protected onConvertStart() {
-        this.observer.emit('convert-start')
+    // the start info (e.g. the stream's MIME type) is passed on, so the player can set up its
+    // MediaSource for the tracks the stream actually contains
+    protected onConvertStart(info?:ConversionStartInfo) {
+        this.observer.emit('convert-start', info)
         this.isStarted = true
     }
 
