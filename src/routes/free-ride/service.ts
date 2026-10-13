@@ -91,7 +91,7 @@ export class FreeRideService extends IncyclistService {
                 prepared = true
                         
                 // pre-calculate one level deeper
-                this.getNextLevelOptions(from.options);                    
+                this.getNextLevelOptions(from.options).catch( err=>{ this.logError(err,'getNextLevelOptions') });
             }
             else {
                 loadAsync = true
@@ -153,7 +153,7 @@ export class FreeRideService extends IncyclistService {
             await this.getNextLevelOptions(opts);
         else {
             from.options = from.options ?? opts
-            this.getNextLevelOptions(from.options);
+            this.getNextLevelOptions(from.options).catch( err=>{ this.logError(err,'loadNextOptions') });
         }
 
         return opts
