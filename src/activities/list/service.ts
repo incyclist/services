@@ -90,24 +90,24 @@ export class ActivityListService extends IncyclistService {
                     this.getListObserver().emit('loading')
     
                 preloadObserver.start()
-                    .then( ()=> { 
+                    .then( ()=> {
                         // load the required detail records and inform the UI
-                        this.preloadDetails(props?.cntDetails).then( ()=>{
+                        return this.preloadDetails(props?.cntDetails).then( ()=>{
 
                             this.logEvent( {message:'preload activity list completed', cnt:this.activities?.length })
-                            
+
                             this.initialized = true
                             this.emitLists('loaded')
-                                                        
-                            sleep(5).then( ()=>{delete this.observers.preload})
-    
+
+                            return sleep(5).then( ()=>{delete this.observers.preload})
+
                         })
                     })
                     .catch( (err)=> {
                         this.logError(err,'preload')
 
                         this.initialized = false
-                        sleep(5).then( ()=>{delete this.observers.preload})
+                        return sleep(5).then( ()=>{delete this.observers.preload})
                     })
             }
             else {
@@ -231,6 +231,7 @@ export class ActivityListService extends IncyclistService {
             const activity = this.getActivity(id)
             if (activity.details) {
                 sleep(5).then( () => observer.emit('loaded', activity.details) )
+                    .catch( err=>{ this.logError(err,'getActivityDetails') })
                 return observer;
             }
                 
@@ -344,10 +345,10 @@ export class ActivityListService extends IncyclistService {
         }
 
         this.opened = 'selected'
-        this.selected.getExports().then( exports => { 
-            this.exports = exports 
+        this.selected.getExports().then( exports => {
+            this.exports = exports
             this.emitSelected('updated')
-        })
+        }).catch( err=>{ this.logError(err,'openSelected') })
 
         // needs to be called to initialize the observer
         this.getObserver()
@@ -430,7 +431,7 @@ export class ActivityListService extends IncyclistService {
             const observer = new Observer()
             observer.on('export', emitUpdate)
 
-            activity.export(format,observer)
+            activity.export(format,observer).catch( err=>{ this.logError(err,'export') })
 
         })
 
@@ -463,7 +464,7 @@ export class ActivityListService extends IncyclistService {
             observer.on('upload', emitUploadUpdate)
             observer.on('export', emitExportUpdate)
 
-            activity.upload(connectedApp,observer)
+            activity.upload(connectedApp,observer).catch( err=>{ this.logError(err,'upload') })
 
 
         })
