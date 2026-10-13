@@ -55,13 +55,13 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         if (changed) {
             this.isDirty = true;
             this.write()
-            this.writeDetails(route)
+            await this.writeDetails(route)
         }
         else {
             const details = await this.loadDetailRecord(route,false)
 
             if (!details || enforcedWriteDetails)
-                this.writeDetails(route)
+                await this.writeDetails(route)
         }
 
     }
@@ -183,8 +183,8 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
         if (this.isDirty && (this.tsLastWrite===undefined || Date.now()-this.tsLastWrite>=1000)) {
             this.isDirty = false;
-            this.tsLastWrite = Date.now()            
-            this.writeRepo()
+            this.tsLastWrite = Date.now()
+            this.writeRepo().catch( err=>{ this.logger.logEvent({message:'could not write repo', error:err.message}) })
         }
 
         if (this.isDirty && Date.now()-this.tsLastWrite<1000) {
@@ -215,8 +215,9 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             const observer = this.getLegacyLoader().load();
             const descriptions: Array<RouteInfoDBEntry> = []
             observer.on('route.added',(r)=>{
-                
+
                 this.loadDetails(r,false).then( ()=>descriptions.push(r.description))
+                    .catch( err=>{ this.logger.logEvent({message:'could not load route details', id:r?.description?.id, error:err.message}) })
             })
             observer.on('done',()=>done(descriptions))
         })
@@ -365,10 +366,10 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             this.emitRouteUpdate(route)
         this.emitRouteAdded(route)
 
-        this.verifyCountry(route)
+        await this.verifyCountry(route)
 
         if (updated)
-            this.save(route)
+            await this.save(route)
 
 
     } 
@@ -433,12 +434,14 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
     
             try {
                 await repo.delete(id)
-                waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
+                await waitNextTick()
+                delete this.routesSaveObserver[id]
             }
             catch(err) {
-                waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
+                await waitNextTick()
+                delete this.routesSaveObserver[id]
                 throw err
-            }    
+            }
         }
     
 
