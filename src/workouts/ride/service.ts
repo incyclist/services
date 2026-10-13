@@ -169,7 +169,7 @@ export class WorkoutRide extends IncyclistService{
             this.logEvent( {message:'workout initialized',workout:this.workout.name,settings:this.settings})
             waitNextTick().then(()=>{
                 this.emit('initialized')
-            })
+            }).catch( err=>{ this.logError(err,'init') })
             return this.observer
             
         }
@@ -332,6 +332,7 @@ export class WorkoutRide extends IncyclistService{
     
             waitNextTick()
                 .then( ()=>{this.resetWorkout()})
+                .catch( err=>{ this.logError(err,'stop') })
 
             if (clearFromList) {
                 useWorkoutList().unselect()
@@ -808,7 +809,7 @@ export class WorkoutRide extends IncyclistService{
      * @param gearDelta positive to shift up, negative to shift down
      */
     private gearChange(gearDelta:number):void {
-        this.getDeviceRide().sendUpdate({gearDelta})
+        this.getDeviceRide().sendUpdate({gearDelta}).catch( err=>{ this.logError(err,'gearChange') })
     }
 
     /**
@@ -820,7 +821,7 @@ export class WorkoutRide extends IncyclistService{
      */
     toggleCyclingMode():void {
         const  deviceRide = useDeviceRide()
-        deviceRide.toggleCyclingMode()
+        deviceRide.toggleCyclingMode().catch( err=>{ this.logError(err,'toggleCyclingMode') })
 
         this.emit('update', this.getDashboardDisplayProperties())    }
 
@@ -1000,10 +1001,10 @@ export class WorkoutRide extends IncyclistService{
 
     private onStepChange(prevStep: StepDefinition) {
         if (!this.currentStep.power && prevStep.power) {
-            this.startFreeRide();
+            this.startFreeRide().catch( err=>{ this.logError(err,'onStepChange') });
         }
         else if (this.currentStep.power && !prevStep.power) {
-            this.stopFreeRide();
+            this.stopFreeRide().catch( err=>{ this.logError(err,'onStepChange') });
         }
 
         // Race guard: the transition itself is detected here by the 500ms poll loop, independent
@@ -1098,16 +1099,16 @@ export class WorkoutRide extends IncyclistService{
     protected async startFreeRide() {
         // we might have enforced ERG Mode
         if (this.settings.useErgMode) {
-            useDeviceRide().resetCyclingMode(false)            
+            await useDeviceRide().resetCyclingMode(false)
         }
-        this.resetLimits()
+        await this.resetLimits()
     }
 
     protected async stopFreeRide() {
         if (this.settings.useErgMode) {
-            useDeviceRide().enforceERG()           
+            useDeviceRide().enforceERG()
         }
-        this.resetLimits()        
+        await this.resetLimits()
     }
 
     protected async resetLimits() {
@@ -1126,14 +1127,14 @@ export class WorkoutRide extends IncyclistService{
         const data = rideService.getData()
         
         if (isERG ) {
-            rideService.sendUpdate({targetPower:data.power})            
+            await rideService.sendUpdate({targetPower:data.power})
         }
         else if (data.slope!==undefined) {
-            rideService.sendUpdate({slope:data.slope})            
+            await rideService.sendUpdate({slope:data.slope})
         }
         else {
             const initRequests = mode.getBikeInitRequest()
-            rideService.sendUpdate(initRequests)
+            await rideService.sendUpdate(initRequests)
         }
 
         
@@ -1316,7 +1317,7 @@ export class WorkoutRide extends IncyclistService{
         this.state = 'idle'
         this.resetTimes()
         this.manualPowerOffset = 0
-        this.resetLimits()
+        this.resetLimits().catch( err=>{ this.logError(err,'resetWorkout') })
     }
 
     emit(eventName: string , ...args): boolean {

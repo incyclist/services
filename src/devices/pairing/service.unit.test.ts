@@ -57,8 +57,8 @@ class TestWrapper extends DevicePairingService {
         ride.lazyInit = jest.fn().mockResolvedValue(true)
 
         access.scan = jest.fn()
-        access.enableInterface = jest.fn()
-        access.disableInterface = jest.fn()
+        access.enableInterface = jest.fn().mockResolvedValue(undefined)
+        access.disableInterface = jest.fn().mockResolvedValue(undefined)
         access.stopScan = jest.fn()
         access.enrichWithAccessState = jest.fn( (interfaces)=>{ return interfaces.map(i => ({...i, state:'connected', isScanning:false}))})
 

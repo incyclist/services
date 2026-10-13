@@ -199,16 +199,16 @@ export class ActivityRideService extends IncyclistService {
         
                 waitNextTick().then( ()=>{
                     this.emit('initialized')
-                })
+                }).catch( err=>{ this.logError(err,'init') })
             }
             catch(err) {
                 this.logError(err,'init')
             }
-  
+
         }
 
         if (this.observer) {
-            this.cleanup().then(doInit )
+            this.cleanup().then(doInit ).catch( err=>{ this.logError(err,'init') })
 
         }
         else {
@@ -238,7 +238,7 @@ export class ActivityRideService extends IncyclistService {
             this.activity.startTime = new Date(this.tsStart).toISOString()
             this.current.tsUpdate = this.tsStart        
             this.statsCalculator = new ActivityStatsCalculator(this.activity,this.logger)
-            this._save()
+            this._save().catch( err=>{ this.logError(err,'start') })
             this.state = 'active'
             this.tsStart = Date.now()
             this.tsPauseStart = undefined
@@ -333,7 +333,7 @@ export class ActivityRideService extends IncyclistService {
         this.logEvent({message:'activity paused', autoResume })
 
         this.updateActivityTime();
-        this._save()
+        this._save().catch( err=>{ this.logError(err,'pause') })
     }
 
     resume(requester:'user'|'system'='user') {
@@ -359,7 +359,7 @@ export class ActivityRideService extends IncyclistService {
         this.logEvent({message:'activity resumed', requester })
 
         this.updateActivityTime();
-        this._save()
+        this._save().catch( err=>{ this.logError(err,'resume') })
 
         this.isSaveDone = false;
         this.isSummaryShown = false
@@ -757,7 +757,7 @@ export class ActivityRideService extends IncyclistService {
 
     setTitle(title:string) {
         this.activity.title = title;
-        this._save()
+        this._save().catch( err=>{ this.logError(err,'setTitle') })
     }
 
     async delete() {
@@ -794,12 +794,12 @@ export class ActivityRideService extends IncyclistService {
             try {
                 emit('start',success)
 
-                this._save()            
+                this._save().catch( err=>{ this.logError(err,'save') })
                 success = await this._convertAndUpload()
 
-                sleep(0).then( ()=> { 
+                sleep(0).then( ()=> {
                     delete this.saveObserver
-                })
+                }).catch( err=>{ this.logError(err,'save') })
                 this.isSaveDone = true;
 
             }
@@ -1211,7 +1211,8 @@ export class ActivityRideService extends IncyclistService {
                     this.current.prevRides = prevRides
                     this.observer.emit('list.init',prevRides)
                 })
-            
+                .catch( err=>{ this.logError(err,'initPrevActivities') })
+
         }
         catch(err) {
             this.logError(err,'initPrevActivities')
@@ -1371,7 +1372,7 @@ export class ActivityRideService extends IncyclistService {
                 await fs.writeFile(fileName, Buffer.from(data as string))
                 this.activity.tcxFileName = fileName
             }
-            this._save()            
+            await this._save()
             emit('save.done',format,true)
 
             return true
@@ -1733,8 +1734,8 @@ export class ActivityRideService extends IncyclistService {
                 this.prevEmit = data;
                 
                 this.logActivityUpdateMessage()
-                this.updateRepo()
-        
+                this.updateRepo().catch( err=>{ this.logError(err,'update') })
+
             }
     
         }
