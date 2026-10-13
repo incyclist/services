@@ -64,8 +64,8 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         // When both queries have completed ( either successfully or failed) then process the result
         // but ths method should return immediatly (not waiting for the result of the query)
         Promise.allSettled( api).then (async res => {
-            this.onLoadDone(api,res)
-        });
+            await this.onLoadDone(api,res)
+        }).catch( err=>{ this.logger.logEvent({message:'could not process route list load', error:err.message}) });
 
         return this.loadObserver
         
@@ -153,14 +153,14 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         if (!existing) {
             this.emitRouteAdded(route)
             items.push({route,added:true})
-            if (isComplete) { 
-                this.save(route,false)
-            }    
-             
-                
+            if (isComplete) {
+                this.save(route,false).catch( err=>{ this.logger.logEvent({message:'could not save route', id:route.description.id, error:err.message}) })
+            }
+
+
         }
         else {
-            this.save(route,true)
+            this.save(route,true).catch( err=>{ this.logger.logEvent({message:'could not save route', id:route.description.id, error:err.message}) })
             if (!isComplete)
                 items.push({route,added:false})
         }
@@ -260,7 +260,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             this.verifyRouteHash(item.route)
 
             if (save)
-                this.save(item.route, true);
+                await this.save(item.route, true);
 
         //});
         }
