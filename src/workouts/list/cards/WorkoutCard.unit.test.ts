@@ -245,7 +245,7 @@ describe('WorkoutCard',()=>{
             card = new WorkoutCard(workout)
 
             card.cardObserver.emit = jest.fn()
-            card.save = jest.fn()
+            card.save = jest.fn().mockResolvedValue(undefined)
             card.list = new CardList<WP>('0','before')
 
         })
@@ -478,7 +478,7 @@ describe('WorkoutCard',()=>{
         beforeEach( ()=>{
             const workout = new Workout({type:'workout',name:'Test',duration:3540})
             c =card = new WorkoutCard(workout)
-            c.save = jest.fn()
+            c.save = jest.fn().mockResolvedValue(undefined)
             c.emitUpdate = jest.fn()
             c.logError = jest.fn()
         })

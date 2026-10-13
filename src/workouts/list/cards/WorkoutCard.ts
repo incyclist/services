@@ -138,7 +138,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         
 
         this.workout.category = {name:targetListName,index:newList?.length}
-        this.save(true)
+        this.save(true).catch( err=>{ this.logError(err,'move') })
     }
 
     /**
@@ -220,7 +220,7 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
 
         try {
             this.workout = workout
-            this.save()
+            this.save().catch( err=>{ this.logError(err,'update') })
             this.emitUpdate()
         }
         catch(err) {
@@ -343,9 +343,9 @@ export class WorkoutCard extends BaseCard implements Card<Workout> {
         }
         finally {
             this.deleteObserver.emit('done',deleted)
-            waitNextTick().then( ()=> { 
+            waitNextTick().then( ()=> {
                 delete this.deleteObserver
-            })
+            }).catch( err=>{ this.logError(err,'_delete') })
 
         }
 
