@@ -410,7 +410,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                     }
 
                 })
-                this.getWorkoutCalendar().init()
+                this.getWorkoutCalendar().init().catch( err=>{ this.logError(err,'preload') })
 
                 this.preloadObserver.start()
                     .then( ()=> { 
@@ -986,7 +986,7 @@ export class WorkoutListService extends IncyclistService  implements IListServic
         this.items.push(workout)
 
         const card = new WorkoutCard(workout,{list:this.myWorkouts as CardList<Workout>})
-        card.save()
+        card.save().catch( err=>{ this.logError(err,'_import') })
         card.enableDelete(true)
 
         this.myWorkouts.add( card )
