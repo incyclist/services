@@ -168,21 +168,21 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             // selection already ongoing, return existing observer
             if (!this.observer) {
                 this.observer = new RouteListObserver(this)
-                emitStartEvent()
-            }        
-    
+                emitStartEvent().catch( err=>{ this.logError(err,'open') })
+            }
+
             // if preload has not been started yet, load data
             if (this.isStillLoading()) {
                 const preload = this.preload()
-                preload.start().then( emitLoadedEvent )
+                preload.start().then( emitLoadedEvent ).catch( err=>{ this.logError(err,'open') })
             }
             // if we are re-opening the page, ensure that no route is selected
             else if (this.initialized ) {
                 this.unselect()
             }
-            
+
             if (this.initialized && !hasLists)
-                emitLoadedEvent()
+                emitLoadedEvent().catch( err=>{ this.logError(err,'open') })
 
             this.subscribeStats()
             this.emit('opened', this.observer, this.stats===undefined )
@@ -761,7 +761,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                             delete this.preloadObserver
                             this.emit('load-done')
                             this.emitLists('loaded',{log:true})
-                        })
+                        }).catch( err=>{ this.logError(err,'preload') })
                     })
                     .catch( (err)=> {
                         this.logError(err,'preload')
@@ -769,16 +769,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                         sleep(0).then( ()=>{
                             delete this.preloadObserver
                             this.emit('load-done')
-                        })
+                        }).catch( err=>{ this.logError(err,'preload') })
                     })
             }
-    
-    
+
+
         }
         catch(err) {
             this.logError(err,'preload')
             this.preloadObserver?.stop()
-            sleep(0).then( ()=>{delete this.preloadObserver})
+            sleep(0).then( ()=>{delete this.preloadObserver}).catch( err=>{ this.logError(err,'preload') })
         }
         return this.preloadObserver
     }
@@ -1179,7 +1179,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             files.forEach( (file,idx)=>{
                 const importCard = importId? null : importCards[idx]
-                this.importOneFile(file, importCard, importId, observer)
+                this.importOneFile(file, importCard, importId, observer).catch( err=>{ this.logError(err,'import') })
             })
     
 
@@ -1454,13 +1454,14 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 route.updateCountryFromPoints()
                     .then( (updated)=> {
                         if (updated) {
-                            this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})                            
-                            this.db.save(route,false)
+                            this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
+                            this.db.save(route,false).catch( err=>{ this.logError(err,'addRoute') })
                             const cardInfo = this.findCard(route)
                             cardInfo?.card?.emitUpdate()
-                                
+
                         }
                     })
+                    .catch( err=>{ this.logError(err,'addRoute') })
             }
         }
 
@@ -1521,7 +1522,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         
         this.preloadDetails().then( ()=>{
             this.emitLists('loaded')
-        })
+        }).catch( err=>{ this.logError(err,'loadRoutes') })
         this.startSync()
     }
 
@@ -1547,7 +1548,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                         .then( (updated)=> {
                             if (updated) {
                                 this.logEvent({message:'preload route updated', route:card?.getData()?.title, reason:'country added', country:route?.description?.country})
-                                this.db.save(route,false)
+                                this.db.save(route,false).catch( err=>{ this.logError(err,'preloadDetails') })
                                 card.emitUpdate()
                             }
                             else {
@@ -1598,8 +1599,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         try {
             if (!this.syncInfo.iv) {
                 // run sync every 5 minutes
-                this.syncInfo.iv = setInterval( () => this.performSync(), this.getSyncFrequency())
-                this.performSync()
+                this.syncInfo.iv = setInterval( () => { this.performSync().catch( err=>{ this.logError(err,'startSync') }) }, this.getSyncFrequency())
+                this.performSync().catch( err=>{ this.logError(err,'startSync') })
             }
         }
         catch(err) {
@@ -1659,7 +1660,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         
         try {
             const updated = await syncProdider?.loadDetails(route)
-            this.db.save(updated,true)
+            await this.db.save(updated,true)
             return updated
         }
         catch( err) {
@@ -1672,7 +1673,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected onSyncRouteAdded( source:string, descriptions: Array<RouteInfo>) {
         descriptions.forEach( descr => {
             const route = new Route(descr)
-            this.db.save(route) 
+            this.db.save(route).catch( err=>{ this.logError(err,'onSyncRouteAdded') })
             this.addRoute(route,'system')
             this.logEvent({message:'route added', route:route.description.title, source})
         })
@@ -1683,8 +1684,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         descriptions.forEach( descr => {
             const route = new Route(descr)
-            this.loadSyncedRouteDetails(route)
-            this.update(route,'system')
+            this.loadSyncedRouteDetails(route).catch( err=>{ this.logError(err,'onSyncRouteUpdated') })
+            this.update(route,'system').catch( err=>{ this.logError(err,'onSyncRouteUpdated') })
             this.logEvent({message:'route updated', route:route.description.title, source})
         })
 
@@ -1716,7 +1717,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const ts = Date.now() - 60000;
             this.routes.forEach(r => {
                 r.description.tsImported = ts;
-                this.update(r);
+                this.update(r).catch( err=>{ this.logError(err,'checkUIUpdateWithNoRepoStats') });
             });
             this.updateRepoStats(ts);
             await sleep(5); // just to make sure that any following route import will have a different tsImported
@@ -1815,10 +1816,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             route.updateCountryFromPoints()
                 .then(() => {
                     this.logEvent({message:'route updated (country)',route:route.title, country: route?.description?.country})
-                    this.db.save(route, false);
+                    this.db.save(route, false).catch( err=>{ this.logError(err,'verifyRouteCountry') });
                 })
                 .catch(err => {
-                    this.logError(err,'verifyRouteCountry',{id:route.description.id, title:route.description.title})                    
+                    this.logError(err,'verifyRouteCountry',{id:route.description.id, title:route.description.title})
                 });
         }
     }
@@ -2311,9 +2312,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         this.getAppsService().on('operation-enabled', (app,operation)=>{
 
             if (operation==='RouteDownload')
-                this.performSync(app).then( ()=>{ 
+                this.performSync(app).then( ()=>{
                     this.emitLists('updated')
-            })
+            }).catch( err=>{ this.logError(err,'handleConfigChanges') })
         })
         this.getAppsService().on('operation-disabled', (app,operation)=>{
             if (operation==='RouteDownload')
@@ -2343,7 +2344,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             const id = stat.routeId
             const card = this.getCard(id)
             if (card) {
-                card.setActiveCount(stat.count)
+                card.setActiveCount(stat.count).catch( err=>{ this.logError(err,'onRouteStatsUpdate') })
             }
         }
      
