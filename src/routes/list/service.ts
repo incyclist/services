@@ -1556,8 +1556,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                             else {
                                 this.logEvent({message:'preload route undefined country', route:card?.getData()?.title})
                             }
-                        })
-                        .catch( err=>{ this.logError(err,'preloadDetails') })
+                        }, err=>{ this.logError(err,'preloadDetails') })
                 }
 
                 // Self-heal a route that's marked as downloaded but whose local
