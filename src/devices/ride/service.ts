@@ -66,7 +66,7 @@ export class DeviceRideService  extends IncyclistService{
             if (config.isInitialized())
                 return done();
             config.once('initialized' ,done)
-            config.init()
+            config.init().catch( err=>{ this.logError(err,'waitForInit') })
         })
     }
 
@@ -263,7 +263,7 @@ export class DeviceRideService  extends IncyclistService{
             if (eppPreferences.programId > 32767)
                 eppPreferences.programId = 1;
         }
-        userSettings.update({ eppPreferences });
+        userSettings.update({ eppPreferences }).catch( err=>{ this.logError(err,'incrementEppProgramId') });
         return eppPreferences;
     }
 
@@ -893,7 +893,7 @@ export class DeviceRideService  extends IncyclistService{
             if (ai.isHealthy && (isAmber || isRed)) {                
                 ai.isHealthy = false;
                 this.logEvent({message:'device unhealthy', device:ai.adapter.getUniqueName(), udid:ai.udid, noDataSince: (tsNow-tsLastData), tsLastData:new Date(tsLastData).toISOString()  })
-                this.prepareReconnect(ai)
+                this.prepareReconnect(ai).catch( err=>{ this.logError(err,'startHealthCheck') })
             }
             else if (!ai.isHealthy && !isAmber && !isRed) {               
                 ai.isHealthy = true;
@@ -1643,7 +1643,7 @@ export class DeviceRideService  extends IncyclistService{
         if (currentMode.isERG())  {
             const slope = adapter.getData().slope
             adapter.setCyclingMode(targetMode)
-            this.resetCyclingMode(false) 
+            this.resetCyclingMode(false).catch( err=>{ this.logError(err,'toggleCyclingMode') })
             const newMode = adapter.getCyclingMode() as CyclingMode
             if (newMode.isSIM()) {
                 request = {slope}
