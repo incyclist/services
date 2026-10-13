@@ -152,7 +152,7 @@ export class UserSettingsService {
             object[key] = value;
 
         if (save)
-            this.save();
+            this.save().catch( err=>{ this.logger.logEvent({message:'error', fn:'setKeyValue()', error:err.message}) });
         return value;
     }
 
@@ -267,7 +267,7 @@ export class UserSettingsService {
 
     
     async onAppClose(): Promise<void> {
-        this.binding.save(this.settings, true)
+        await this.binding.save(this.settings, true)
     }
 
     protected reset():void {
@@ -302,6 +302,6 @@ export const useUserSettings = ()=>UserSettingsService.getInstance()
 export const initUserSettings = (binding: IUserSettingsBinding)=> {
     const us = UserSettingsService.getInstance()
     us.setBinding(binding)
-    us.init()
+    us.init().catch( err=>{ us.logger.logEvent({message:'error', fn:'init()', error:err.message}) })
     return us
 }
