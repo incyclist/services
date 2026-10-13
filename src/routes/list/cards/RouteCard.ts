@@ -130,7 +130,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     verify() {
         try {
             if (this.previewMissing())
-                this.createPreview()
+                this.createPreview().catch( err=>{ this.logError(err,'verify') })
         }
         catch(err:any) {
             this.logError(err,'verify')
@@ -322,7 +322,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             // bugfix: some legacy routes had localizedTitle as String
             if ( typeof(descr.localizedTitle)==='string') {
                 descr.localizedTitle = { en:descr.localizedTitle}
-                this.save()
+                this.save().catch( err=>{ this.logError(err,'getDisplayProperties') })
             }
 
             let points = details?.points ?? descr.points
@@ -831,10 +831,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
         }
         finally {
             this.deleteObserver?.emit('done',deleted)
-            waitNextTick().then( ()=> { 
+            waitNextTick().then( ()=> {
                 delete this.deleteObserver
                 this.emitUpdate()
-            })
+            }).catch( err=>{ this.logError(err,'_delete') })
 
         }
 
@@ -957,10 +957,10 @@ export class RouteCard extends BaseCard implements Card<Route> {
         details.video.file = undefined
         details.video.url = dropped.url
         details.video.format = ext
-        
-        this.save()
 
-        
+        await this.save()
+
+
         return null
 
     }
@@ -1010,7 +1010,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
                 delete this.downloadObserver
             }
             else {
-                sleep(5).then( ()=>{ delete this.downloadObserver})
+                sleep(5).then( ()=>{ delete this.downloadObserver}).catch( err=>{ this.logError(err,'stopDownload') })
             }
         }
         catch(err:any) {
@@ -1068,7 +1068,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             sleep(5).then( ()=>{
                 this.downloadObserver?.reset()
                 delete this.downloadObserver
-            })
+            }).catch( err=>{ this.logError(err,'onDownloadCompleted') })
 
             if (this.list.getId()!=='myRoutes') {
                 this.list.remove(this)
@@ -1088,7 +1088,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         if (!descr.downloadUrl && descr.videoUrl.startsWith('http')) {
             descr.downloadUrl = descr.videoUrl;
         }
-        this.save()
+        this.save().catch( err=>{ this.logError(err,'saveOriginalVideoUrl') })
     }
     private restoreVideoUrl() {
         const descr = this.getRouteDescription()
@@ -1105,7 +1105,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             sleep(5).then( ()=>{
                 this.downloadObserver?.reset()
                 delete this.downloadObserver
-            })
+            }).catch( err=>{ this.logError(err,'onDownloadError') })
         }
         catch(err:any) {
             this.logError(err,'onDownloadError')
@@ -1165,13 +1165,13 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         observer.on('conversion.done', (url: string) => {
             getRouteList().logEvent({ message: 'video conversion completed', url });
-            this.finishConversion({ url });
+            this.finishConversion({ url }).catch( err=>{ this.logError(err,'monitorConversion') });
             this.convertObserver.emit('done');
         });
         observer.on('conversion.error', (error: Error) => {
             getRouteList().logEvent({ message: 'video conversion error', error: error.message });
             this.convertObserver.emit('error', error);
-            this.finishConversion({ error });
+            this.finishConversion({ error }).catch( err=>{ this.logError(err,'monitorConversion') });
         });
     }
 
@@ -1179,7 +1179,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         
         process.nextTick( ()=> {
             this.convertObserver.emit('error', err);
-            this.finishConversion({ error:err });
+            this.finishConversion({ error:err }).catch( fErr=>{ this.logError(fErr,'handleConversionError') });
         })
 
         
@@ -1247,7 +1247,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
     updateRoute(route:Route) {
         try {
             this.route = route
-            this.save()
+            this.save().catch( err=>{ this.logError(err,'updateRoute') })
             this.emitUpdate()
         }
         catch(err:any) {
