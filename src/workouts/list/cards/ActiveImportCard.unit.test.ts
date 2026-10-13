@@ -59,7 +59,7 @@ describe('ActiveImportCard',()=>{
         myWorkouts.remove = jest.fn()
 
         c.getWorkoutList = jest.fn().mockReturnValue( {
-            import:jest.fn()
+            import:jest.fn().mockResolvedValue(undefined)
         })
         c.cardObserver.emit = jest.fn()
 

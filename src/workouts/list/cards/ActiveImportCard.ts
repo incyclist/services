@@ -140,8 +140,8 @@ export class ActiveImportCard extends BaseCard implements Card<WP> {
 
         this.error = null;
         this.emitUpdate()
-        
-        this.getWorkoutList().import( this.file, {card:this})
+
+        this.getWorkoutList().import( this.file, {card:this}).catch( err=>{ this.setError(err) })
     }
 
     protected emitUpdate() {
