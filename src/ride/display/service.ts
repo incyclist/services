@@ -105,7 +105,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             // start devices and prepare ride ( load video/map/....)
             this.startDevices()
             this.startRide()
-            this.getCoaches().startRide(this.route)
+            this.getCoaches().startRide(this.route).catch( err=>{ this.logError(err,'start') })
             
 
             this.setState('Starting')
@@ -280,9 +280,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
 
         await this.stopRide({exit,noStateUpdates:true})
-        this.getActivityRide().cleanup()
-        this.getCoaches().stopRide()
-       
+        await this.getActivityRide().cleanup()
+        await this.getCoaches().stopRide()
+
     }
 
     toggleCyclingMode() {
@@ -291,9 +291,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 this.getWorkoutRide().toggleCyclingMode()
             }
             else {
-                this.getDeviceRide().toggleCyclingMode()
+                this.getDeviceRide().toggleCyclingMode().catch( err=>{ this.logError(err,'toggleCyclingMode') })
 
-            }       
+            }
         }
         catch(err) {
             this.logError(err,'toggleCyclingMode')
@@ -545,6 +545,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             else {
                 const observerToClear = this.observer
                 waitNextTick().then( () => { if (this.observer === observerToClear) delete this.observer })
+                    .catch( err=>{ this.logError(err,'stopRide') })
             }
 
             if (isRedundantCall) {
@@ -553,9 +554,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             }
 
             this.stopDevices(props.exit)
-            this.displayService.stop()
+            await this.displayService.stop()
 
-            this.getActivityRide().stop()
+            await this.getActivityRide().stop()
             this.observer?.emit('state-update',this.state)         // emit fnished state to UI
 
             const workoutService = this.getWorkoutRide()
@@ -764,7 +765,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             return
 
         if (this.getRideType()==='Workout') {
-            this.stopRide()
+            this.stopRide().catch( err=>{ this.logError(err,'onWorkoutCompleted') })
         }
         this.checkCyclingModeToggle()
        
@@ -777,8 +778,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 if (res?.changed) {
                     this.getRideModeService().sendUpdate()
                 }
-                    
-            })
+
+            }).catch( err=>{ this.logError(err,'checkCyclingModeToggle') })
         }
     }
 
@@ -814,7 +815,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 
 
-        this.stopRide()
+        this.stopRide().catch( err=>{ this.logError(err,'onRouteCompleted') })
     }
 
     protected onForward(workoutTime:number, remaining: number) {
@@ -1101,8 +1102,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.resetDeviceHandlers()
 
         if (exit)
-            this.getDeviceRide().stop()
-        else 
+            this.getDeviceRide().stop().catch( err=>{ this.logError(err,'stopDevices') })
+        else
             this.getDeviceRide().pause()
     }
 
