@@ -193,7 +193,7 @@ export class DeviceAccessService  extends IncyclistService{
                 info.isScanning = !stopped
                 this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
                 if (stopped)
-                    this.disableInterface(ifaceName)
+                    await this.disableInterface(ifaceName)
                 
             
             }
@@ -335,7 +335,7 @@ export class DeviceAccessService  extends IncyclistService{
         try {
             if (!ifaceName) {
                 const interfaces = Object.keys(this.interfaces)
-                interfaces.forEach( name=> { if (name) this.connect(name)})
+                interfaces.forEach( name=> { if (name) this.connect(name).catch( err=>{ this.logEvent({message:'Error', fn:'connect', error:err.message, stack:err.stack}) }) })
                 return;
             }
 
