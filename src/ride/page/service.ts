@@ -236,7 +236,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
                     if (this.isRideType('Video', 'GPX')) {
                         sleep(5).then(() => {
                             this.updatePageDisplay()
-                        })
+                        }).catch( err=>{ this.logError(err,'openPage') })
                     }
                 }
 
@@ -291,7 +291,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
             this.handleVideoVisitExit()
 
-            this.getRideDisplay().stop()
+            this.getRideDisplay().stop().catch( err=>{ this.logError(err,'closePage') })
             this.unregisterHandlers(this.rideObserver, this.eventHandler)
             this.unsubscribeFromWorkoutObserver()
             this.getDeviceConfiguration().off('mode-changed', this.onDeviceModeChangedBound)
@@ -510,7 +510,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
 
     onEndRide(): void {
         try {
-            this.getRideDisplay().stop()
+            this.getRideDisplay().stop().catch( err=>{ this.logError(err,'onEndRide') })
             this.moveToPreviousPage()
             this.closePage()
         }
@@ -1218,7 +1218,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
      * speaks for the workout (above) and would no longer do it for a combo ride.
      */
     protected finishRide(): void {
-        this.getRideDisplay().stop(true)
+        this.getRideDisplay().stop(true).catch( err=>{ this.logError(err,'finishRide') })
         this.menuProps = this.buildFinishedMenuProps()
         this.updatePageDisplay()
     }
