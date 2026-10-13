@@ -259,7 +259,7 @@ export class GPXParser extends XMLParser {
 
         if (useAverageSpeed) {
 
-            this.adjustTimes(context)
+            await this.adjustTimes(context)
         }
 
 
@@ -345,7 +345,7 @@ export class GPXParser extends XMLParser {
             previewUrl: undefined
         }
 
-        this.addHeadings(route.points,isLoop)
+        await this.addHeadings(route.points,isLoop)
         return info
     }
 
