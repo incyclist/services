@@ -56,8 +56,8 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
             // give the client time to consume the observer, then emit initial state
             sleep(5).then( ()=>{
                 this.updatePageDisplay()
-            })
-          
+            }).catch( err=>{ this.logError(err,'openPage') })
+
 
             return this.getPageObserver()
         }   
@@ -309,7 +309,7 @@ export class ActivitiesPageService extends IncyclistPageService implements IActi
 
     onVideoRemoveConfirmed(routeId: string): void {
         try {
-            this.getVideoActions().onVideoRemoveConfirmed(routeId)
+            this.getVideoActions().onVideoRemoveConfirmed(routeId).catch( err=>{ this.logError(err,'onVideoRemoveConfirmed') })
         }
         catch (err) {
             this.logError(err, 'onVideoRemoveConfirmed')
