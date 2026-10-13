@@ -134,7 +134,7 @@ export class StravaActivityLoader extends Loader< Activity >  {
         }
 
         this.loadObserver = new Observer()
-        load()
+        load().catch( err=>{ this.logger.logEvent({message:'could not load strava activities', error:err.message}) })
         return  this.loadObserver
 
         

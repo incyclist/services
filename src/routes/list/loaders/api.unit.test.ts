@@ -22,7 +22,7 @@ describe('RoutesApiLoader',()=>{
             service = new RoutesApiLoader()
             //capi = Route.prototype.updateCountryFromPoints
             service.verifyCountry = jest.fn()
-            service.save = jest.fn()
+            service.save = jest.fn().mockResolvedValue(undefined)
 
             mockRouteList()
 

@@ -47,7 +47,7 @@ export class WorkoutsDbLoader extends Loader{
             return this.loadObserver;
 
         this.loadObserver = new Observer();
-        this._load();
+        this._load().catch( err=>{ this.logger.logEvent({message:'could not load workouts', error:err.message}) });
         return this.loadObserver;
 
     }
@@ -67,7 +67,7 @@ export class WorkoutsDbLoader extends Loader{
             this.loadObserver.emit('done')
             waitNextTick().then( ()=>{
                 delete this.loadObserver
-            })            
+            }).catch( err=>{ this.logger.logEvent({message:'could not clear load observer', error:err.message}) })
         }
     }
 
@@ -174,8 +174,8 @@ export class WorkoutsDbLoader extends Loader{
     protected write(enforced:boolean=false) {
         if (enforced || (this.isDirty && (this.tsLastWrite===undefined || Date.now()-this.tsLastWrite>=1000))) {
             this.isDirty = false;
-            this.tsLastWrite = Date.now()            
-            this.writeRepo()
+            this.tsLastWrite = Date.now()
+            this.writeRepo().catch( err=>{ this.logger.logEvent({message:'could not write repo', error:err.message}) })
         }
 
         if (this.isDirty && Date.now()-this.tsLastWrite<1000) {
@@ -204,7 +204,7 @@ export class WorkoutsDbLoader extends Loader{
         waitNextTick().then(()=>{
             this.loadObserver.reset()
             delete this.loadObserver
-        })
+        }).catch( err=>{ this.logger.logEvent({message:'could not clear load observer', error:err.message}) })
     }
 
 

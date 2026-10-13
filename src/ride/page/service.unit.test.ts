@@ -62,7 +62,7 @@ const setupMocks = (rideType: string = 'GPX') => {
     MockRideDisplay = {
         init: jest.fn(),
         start: jest.fn(),
-        stop: jest.fn(),
+        stop: jest.fn().mockResolvedValue(undefined),
         pause: jest.fn(),
         resume: jest.fn(),
         backward: jest.fn(),

@@ -21,8 +21,8 @@ describe('DevicesPageService - device delete', ()=> {
 
     const pairingMock = {
         getState: jest.fn(),
-        deleteDevice: jest.fn(),
-        selectDevice: jest.fn(),
+        deleteDevice: jest.fn().mockResolvedValue(undefined),
+        selectDevice: jest.fn().mockResolvedValue(undefined),
         unselectDevices: jest.fn(),
     }
 

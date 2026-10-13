@@ -263,7 +263,7 @@ describe('DeviceRideService',()=>{
             const {programId,routeInfo} = props??{}
             settings = {
                 get: jest.fn( (key,def)=> key === 'eppPreferences' ? {programId} : def ),
-                update: jest.fn()
+                update: jest.fn().mockResolvedValue(true)
             }
     
             Inject('UserSettings',settings)

@@ -233,7 +233,7 @@ export abstract class Loader<T extends MinimalDescription> {
         waitNextTick().then(()=>{
             this.loadObserver.reset()
             delete this.loadObserver
-        })
+        }).catch(()=>{ /* best-effort cleanup */ })
     }
 
     protected emitRouteEvents(isUpdated: boolean, route: Route) {

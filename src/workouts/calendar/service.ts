@@ -203,11 +203,11 @@ export class WorkoutCalendarService extends IncyclistService{
                 // run sync every 5 minutes
                 const frequency =  this.getSyncFrequency()                
                 this.syncInfo.iv = setInterval( () => {
-                    this.performSync()
+                    this.performSync().catch( err=>{ this.logError(err,'startSync') })
                 }, frequency)
 
                 if (initial) {
-                    this.performSync()
+                    this.performSync().catch( err=>{ this.logError(err,'startSync') })
                 }
             }
         }
@@ -272,8 +272,8 @@ export class WorkoutCalendarService extends IncyclistService{
                 }
                 delete this.syncInfo.listChanged
                 if (this.syncInfo.contentChanged) {
-                    this.saveToRepo()
-                }   
+                    this.saveToRepo().catch( err=>{ this.logError(err,'performSync') })
+                }
 
                 done()                
 

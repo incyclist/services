@@ -280,8 +280,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
 
         await this.stopRide({exit,noStateUpdates:true})
-        await this.getActivityRide().cleanup()
-        await this.getCoaches().stopRide()
+        this.getActivityRide().cleanup().catch( err=>{ this.logError(err,'stop') })
+        this.getCoaches().stopRide().catch( err=>{ this.logError(err,'stop') })
 
     }
 
@@ -554,9 +554,9 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             }
 
             this.stopDevices(props.exit)
-            await this.displayService.stop()
+            this.displayService.stop().catch( err=>{ this.logError(err,'stopRide') })
 
-            await this.getActivityRide().stop()
+            this.getActivityRide().stop().catch( err=>{ this.logError(err,'stopRide') })
             this.observer?.emit('state-update',this.state)         // emit fnished state to UI
 
             const workoutService = this.getWorkoutRide()

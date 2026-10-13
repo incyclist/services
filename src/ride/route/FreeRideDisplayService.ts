@@ -82,7 +82,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
             this.tsLastOptionChange = Date.now()
             delete this.viewportPreview // force UI to
 
-            this.getNextOptions(true)
+            this.getNextOptions(true).catch( err=>{ this.logError(err,'start') })
         }
         /* istanbul ignore catch */
         catch(err) {
@@ -148,7 +148,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
 
             // no option available
             if (!selectedOption?.path?.length) {
-                this.onTurn()
+                this.onTurn().catch( err=>{ this.logError(err,'continueWithSelectedOption') })
                 return;
             }
 
@@ -171,7 +171,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
                         setTimeout( () =>{this.isTurnEnabled = turnEnabled} , DEFAULT_OPTIONS_DELAY)
                     }
 
-                })
+                }).catch( err=>{ this.logError(err,'continueWithSelectedOption') })
             }
             return finished
 
@@ -576,7 +576,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
             validateRoute(route)
 
             route.description.distance = route.details.distance = getTotalDistance(details)
-            route.updateCountryFromPoints()
+            route.updateCountryFromPoints().catch( err=>{ this.logError(err,'createRoute') })
 
             return route
         }
@@ -643,19 +643,20 @@ export class FreeRideDisplayService extends GpxDisplayService {
         return new Promise (done => {
 
             getOptions()
-            .then( () => { 
+            .then( () => {
                     done()
-        
+
                     if (this.isStarting) {
-                        this.isStarting = false    
+                        this.isStarting = false
                         this.emit('state-update')
                     }
                     else {
                         this.emitRouteUpdate()
                     }
-                
-            }) 
-    
+
+            })
+            .catch( err=>{ this.logError(err,'getNextOptions') })
+
         })
 
 

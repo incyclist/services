@@ -1099,16 +1099,16 @@ export class WorkoutRide extends IncyclistService{
     protected async startFreeRide() {
         // we might have enforced ERG Mode
         if (this.settings.useErgMode) {
-            await useDeviceRide().resetCyclingMode(false)
+            useDeviceRide().resetCyclingMode(false).catch( err=>{ this.logError(err,'startFreeRide') })
         }
-        await this.resetLimits()
+        this.resetLimits().catch( err=>{ this.logError(err,'startFreeRide') })
     }
 
     protected async stopFreeRide() {
         if (this.settings.useErgMode) {
             useDeviceRide().enforceERG()
         }
-        await this.resetLimits()
+        this.resetLimits().catch( err=>{ this.logError(err,'stopFreeRide') })
     }
 
     protected async resetLimits() {
@@ -1127,14 +1127,14 @@ export class WorkoutRide extends IncyclistService{
         const data = rideService.getData()
         
         if (isERG ) {
-            await rideService.sendUpdate({targetPower:data.power})
+            rideService.sendUpdate({targetPower:data.power}).catch( err=>{ this.logError(err,'resetLimits') })
         }
         else if (data.slope!==undefined) {
-            await rideService.sendUpdate({slope:data.slope})
+            rideService.sendUpdate({slope:data.slope}).catch( err=>{ this.logError(err,'resetLimits') })
         }
         else {
             const initRequests = mode.getBikeInitRequest()
-            await rideService.sendUpdate(initRequests)
+            rideService.sendUpdate(initRequests).catch( err=>{ this.logError(err,'resetLimits') })
         }
 
         

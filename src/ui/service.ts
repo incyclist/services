@@ -103,7 +103,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
 
 //                // trigger data preload, so that UI pages will start faster
-                this.preloadData()
+                this.preloadData().catch( err=>{ this.logError(err,'onAppLaunch') })
             //}
 
             // after MQ has been initialized
@@ -312,7 +312,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
         try {
             if (this.getMessageQueue().connect)
-                this.getMessageQueue().connect()
+                this.getMessageQueue().connect().catch( err=>{ this.logError(err,'resume:mqConnect') })
         }
         catch(err) {
             this.logError(err,'resume:mqConnect')
@@ -562,8 +562,8 @@ export class UserInterfaceServcie extends IncyclistService {
             configureInterface('ble',ble)
             configureInterface('wifi',wifi)
 
-            deviceAccess.connect();
-      
+            deviceAccess.connect().catch( err=>{ this.logError(err, 'initDeviceServices') });
+
         }
         catch(err) {
           this.logError(err, 'initDeviceServices')
@@ -612,7 +612,7 @@ export class UserInterfaceServcie extends IncyclistService {
         const deviceConfiguration = useDeviceConfiguration()
     
         if(!binding) {
-            deviceAccess.disableInterface(ifName)
+            deviceAccess.disableInterface(ifName).catch( err=>{ this.logError(err,'configureInterface') })
             return;
         }
 
@@ -629,11 +629,11 @@ export class UserInterfaceServcie extends IncyclistService {
         if (settings.enabled) {
             const portNo = ifName==='tcpip' ? Number(port) : undefined
             
-            deviceAccess.enableInterface(ifName,binding,{protocol,port:portNo,enabled})
+            deviceAccess.enableInterface(ifName,binding,{protocol,port:portNo,enabled}).catch( err=>{ this.logError(err,'configureInterface') })
         }
-        else 
-            deviceAccess.disableInterface(ifName)
-    }    
+        else
+            deviceAccess.disableInterface(ifName).catch( err=>{ this.logError(err,'configureInterface') })
+    }
 
     protected createUserStats() {
 

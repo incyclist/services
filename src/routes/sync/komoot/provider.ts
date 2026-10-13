@@ -56,13 +56,13 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
             waitNextTick().then( ()=>{
                 this.stopRequested = false
                 delete this.observer
-            })
-    
+            }).catch( err=>{ this.logError(err,'sync') })
+
         })
 
         this.observer.once('stop',()=>{this.stopSync() })
-       
-        this.loadTours()
+
+        this.loadTours().catch( err=>{ this.logError(err,'sync') })
         return this.observer
 
     }
@@ -84,7 +84,7 @@ export class KomootSyncProvider extends IncyclistService  implements IRouteSyncP
             if (!id) return
 
             const coordinates = await this.getKomootApi().getTourCoordinates(id)
-            this.adddRouteDetails(route,coordinates)
+            await this.adddRouteDetails(route,coordinates)
 
             return route
         }

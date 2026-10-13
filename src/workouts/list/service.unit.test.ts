@@ -40,7 +40,7 @@ describe('WorkoutListService',()=>{
             on: jest.fn(),
             off: jest.fn(),
             once: jest.fn(),
-            init: jest.fn(),
+            init: jest.fn().mockResolvedValue(undefined),
             setActive: jest.fn(),
             getScheduledWorkouts: jest.fn().mockReturnValue([]),
             reset: jest.fn()
@@ -1243,7 +1243,7 @@ describe('WorkoutListService',()=>{
             expect(scheduledWorkout.id).toEqual(regularWorkout.id)
 
             Inject('WorkoutCalendar', {
-                on: jest.fn(), off: jest.fn(), once: jest.fn(), init: jest.fn(), setActive: jest.fn(), reset: jest.fn(),
+                on: jest.fn(), off: jest.fn(), once: jest.fn(), init: jest.fn().mockResolvedValue(undefined), setActive: jest.fn(), reset: jest.fn(),
                 getScheduledWorkouts: jest.fn().mockReturnValue([
                     { type:'scheduled', id:'source:1', name:'Sweet Spot', day:new Date(), updated:new Date(),
                       workoutId:scheduledWorkout.id, workout:scheduledWorkout }
@@ -1307,7 +1307,7 @@ describe('WorkoutListService',()=>{
             scheduledWorkout = new Workout({type:'workout', name:'Sweet Spot', description:'', steps:[]} as any)
 
             Inject('WorkoutCalendar', {
-                on: jest.fn(), off: jest.fn(), once: jest.fn(), init: jest.fn(), setActive: jest.fn(), reset: jest.fn(),
+                on: jest.fn(), off: jest.fn(), once: jest.fn(), init: jest.fn().mockResolvedValue(undefined), setActive: jest.fn(), reset: jest.fn(),
                 getScheduledWorkouts: jest.fn().mockReturnValue([
                     { type:'scheduled', id:'source:1', name:'Sweet Spot', day:new Date(), updated:new Date(),
                       workoutId:scheduledWorkout.id, workout:scheduledWorkout }
@@ -1407,7 +1407,7 @@ describe('WorkoutListService',()=>{
                 on: jest.fn(),
                 off: jest.fn(),
                 once: jest.fn( (event,cb)=> { if (event==='scheduled') scheduledHandler = cb }),
-                init: jest.fn(),
+                init: jest.fn().mockResolvedValue(undefined),
                 setActive: jest.fn(),
                 getScheduledWorkouts: jest.fn().mockReturnValue([]),
                 reset: jest.fn()

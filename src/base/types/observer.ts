@@ -57,7 +57,7 @@ export class PromiseObserver<T> extends Observer {
     static alwaysReturning<T> ( res?:T) {
         const fn = async (): Promise<T> => { return res}
         const promise = new PromiseObserver<T>( fn() )
-        promise.start()
+        promise.start().catch(()=>{ /* fn() above never rejects */ })
         return promise
     }
 

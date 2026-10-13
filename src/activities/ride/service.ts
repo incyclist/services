@@ -1372,7 +1372,7 @@ export class ActivityRideService extends IncyclistService {
                 await fs.writeFile(fileName, Buffer.from(data as string))
                 this.activity.tcxFileName = fileName
             }
-            await this._save()
+            this._save().catch( err=>{ this.logError(err,'convert') })
             emit('save.done',format,true)
 
             return true

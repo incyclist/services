@@ -213,12 +213,12 @@ export class ActiveRidesService extends IncyclistService {
     protected start(session:string) {
 
         if ( this.onlineStatusHandler || this.isOnline) {
-            this.initList()
+            this.initList().catch( err=>{ this.logError(err,'start') })
         }
 
         waitNextTick().then( ()=> {
             this.publishStartEvent()
-        })
+        }).catch( err=>{ this.logError(err,'start') })
 
         const observer = this.getActivityRide().getObserver()
         observer.once('completed',this.stop.bind(this))
@@ -226,7 +226,7 @@ export class ActiveRidesService extends IncyclistService {
         observer.on('paused',this.onActivityPaused.bind(this))
         observer.on('resumed',this.onActivityResumed.bind(this))
 
-        this.subscribeActivityEvents()
+        this.subscribeActivityEvents().catch( err=>{ this.logError(err,'start') })
 
     }
 
@@ -697,7 +697,7 @@ export class ActiveRidesService extends IncyclistService {
             this.onlineStatusHandler = this.onOnlineStatusChange.bind(this)
             this.isOnline = this.getOnlineStatusMonitoring().onlineStatus
             if (this.isOnline)
-                this.onConnect({initial:true})
+                this.onConnect({initial:true}).catch( err=>{ this.logError(err,'startOnlineCheck') })
 
             this.getOnlineStatusMonitoring().start('activeRides',this.onlineStatusHandler)
         }
@@ -714,8 +714,8 @@ export class ActiveRidesService extends IncyclistService {
                 this.onDisconnect()
             }
             else if (prev===false && online===true) {
-                this.onConnect()
-            }    
+                this.onConnect().catch( err=>{ this.logError(err,'onOnlineStatusChange') })
+            }
         }
         catch(err) {
             this.logError(err,'onOnlineStatusChange')
@@ -736,8 +736,8 @@ export class ActiveRidesService extends IncyclistService {
 
         // reconnect after connection loss - subscribe again to activity events
         if (!initial && this.current && !this.isSubscribed)
-            this.subscribeActivityEvents()
-        
+            this.subscribeActivityEvents().catch( err=>{ this.logError(err,'onConnect') })
+
     }
 
     protected async subscribeActivityEvents() {       
@@ -849,7 +849,7 @@ export class ActiveRidesService extends IncyclistService {
             }
 
             if (!payload.user) {
-                this.getRemoteActivityDetails(session)
+                this.getRemoteActivityDetails(session).catch( err=>{ this.logError(err,'onActivityStartEvent') })
             }
 
             this.observer.emit('update', this.getDisplayProps())

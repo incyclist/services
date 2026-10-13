@@ -355,7 +355,7 @@ export class DevicePairingService  extends IncyclistService{
                 if( devices.length>0)
                     await this.stopAdaptersWithCapability(capability)
 
-                await this.stopPairing()
+                this.stopPairing().catch( err=>{ this.logError(err, 'startDeviceSelection') })
                 this.emitStateChange({capabilities:this.state.capabilities})
 
                 if( devices.length>0)

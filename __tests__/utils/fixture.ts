@@ -32,4 +32,8 @@ export const expectToMatchFixture = (actual: unknown, fixture: string) => {
     expect(normalized).toEqual(expected)
 }
 
-expect.addEqualityTesters([numbersCloseTo])
+// @types/jest 30.0.0's `Expect` interface omits `addEqualityTesters`, even though it exists on
+// the `expect` package's own `BaseExpect` type and at runtime - cast locally rather than widen the
+// global `Expect` type for the whole project.
+;(expect as unknown as { addEqualityTesters(testers: Array<typeof numbersCloseTo>): void })
+    .addEqualityTesters([numbersCloseTo])

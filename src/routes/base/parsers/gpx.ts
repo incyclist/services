@@ -259,7 +259,7 @@ export class GPXParser extends XMLParser {
 
         if (useAverageSpeed) {
 
-            this.adjustTimes(context)
+            this.adjustTimes(context).catch(()=>{ /* adjustTimes is synchronous, cannot reject */ })
         }
 
 
@@ -345,7 +345,7 @@ export class GPXParser extends XMLParser {
             previewUrl: undefined
         }
 
-        this.addHeadings(route.points,isLoop)
+        this.addHeadings(route.points,isLoop).catch(()=>{ /* addHeadings is synchronous, cannot reject */ })
         return info
     }
 

@@ -63,7 +63,7 @@ export class ActivitiesRepository {
             return this.loadObserver;
 
         this.loadObserver = new Observer();
-        this._load();
+        this._load().catch( err=>{ this.logError(err,'load') });
         return this.loadObserver;
     }
 
@@ -150,9 +150,9 @@ export class ActivitiesRepository {
     
             details.version = DB_VERSION
 
-            this.writeDetails(activity)
+            this.writeDetails(activity).catch( err=>{ this.logError(err,'migrate',{activity}) })
             if (summaryChanged && writeSummary) {
-                this.writeRepo()            
+                this.writeRepo().catch( err=>{ this.logError(err,'migrate',{activity}) })
             }
             return details
     
@@ -488,8 +488,8 @@ export class ActivitiesRepository {
 
         if (this.isDirty && (this.tsLastWrite===undefined || Date.now()-this.tsLastWrite>=1000)) {
             this.isDirty = false;
-            this.tsLastWrite = Date.now()            
-            this.writeRepo()
+            this.tsLastWrite = Date.now()
+            this.writeRepo().catch( err=>{ this.logError(err,'write') })
         }
 
         if (this.isDirty && Date.now()-this.tsLastWrite<1000) {
@@ -505,7 +505,7 @@ export class ActivitiesRepository {
         waitNextTick().then(()=>{
             this.loadObserver.reset()
             delete this.loadObserver
-        })
+        }).catch( err=>{ this.logError(err,'emitDone') })
     }
 
     protected emitUpdated(activity:ActivityInfo|Array<ActivityInfo>) {

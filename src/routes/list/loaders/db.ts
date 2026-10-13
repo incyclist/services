@@ -55,13 +55,13 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         if (changed) {
             this.isDirty = true;
             this.write()
-            this.writeDetails(route)
+            this.writeDetails(route).catch( err=>{ this.logger.logEvent({message:'error',fn:'writeDetails', error:err.message,stack:err.stack}) })
         }
         else {
             const details = await this.loadDetailRecord(route,false)
 
             if (!details || enforcedWriteDetails)
-                this.writeDetails(route)
+                this.writeDetails(route).catch( err=>{ this.logger.logEvent({message:'error',fn:'writeDetails', error:err.message,stack:err.stack}) })
         }
 
     }
@@ -183,8 +183,8 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
 
         if (this.isDirty && (this.tsLastWrite===undefined || Date.now()-this.tsLastWrite>=1000)) {
             this.isDirty = false;
-            this.tsLastWrite = Date.now()            
-            this.writeRepo()
+            this.tsLastWrite = Date.now()
+            this.writeRepo().catch( err=>{ this.logger.logEvent({message:'could not write repo', error:err.message}) })
         }
 
         if (this.isDirty && Date.now()-this.tsLastWrite<1000) {
@@ -215,8 +215,9 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             const observer = this.getLegacyLoader().load();
             const descriptions: Array<RouteInfoDBEntry> = []
             observer.on('route.added',(r)=>{
-                
+
                 this.loadDetails(r,false).then( ()=>descriptions.push(r.description))
+                    .catch( err=>{ this.logger.logEvent({message:'could not load route details', id:r?.description?.id, error:err.message}) })
             })
             observer.on('done',()=>done(descriptions))
         })
@@ -365,10 +366,10 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             this.emitRouteUpdate(route)
         this.emitRouteAdded(route)
 
-        this.verifyCountry(route)
+        this.verifyCountry(route).catch( err=>{ this.logger.logEvent({message:'error',fn:'loadDetails', error:err.message,stack:err.stack}) })
 
         if (updated)
-            this.save(route)
+            this.save(route).catch( err=>{ this.logger.logEvent({message:'error',fn:'loadDetails', error:err.message,stack:err.stack}) })
 
 
     } 
@@ -434,11 +435,13 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             try {
                 await repo.delete(id)
                 waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
+                    .catch( err=>{ this.logger.logEvent({message:'error',fn:'deleteRouteDetails', error:err.message,stack:err.stack}) })
             }
             catch(err) {
                 waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
+                    .catch( cleanupErr=>{ this.logger.logEvent({message:'error',fn:'deleteRouteDetails', error:cleanupErr.message,stack:cleanupErr.stack}) })
                 throw err
-            }    
+            }
         }
     
 

@@ -137,7 +137,7 @@ export class VideoConversion extends IncyclistService {
     }
 
     protected onConvertError (err:Error) {
-        this.stop()
+        this.stop().catch( stopErr=>{ this.logError(stopErr,'onConvertError') })
         this.logEvent ( {message: 'video conversion error', url:this.url, error:err.message, stack:err.stack})
         this.observer.emit('convert-error',err.message)
     }
