@@ -29,7 +29,7 @@ export abstract class DBLoader<T> extends Loader<T> {
             return this.loadObserver;
 
         this.loadObserver = new Observer();
-        this._load();
+        this._load().catch( err=>{ this.logger.logEvent({message:'could not load routes', error:err.message}) });
         return this.loadObserver;
 
     }
