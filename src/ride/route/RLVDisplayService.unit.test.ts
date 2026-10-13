@@ -440,6 +440,40 @@ describe('RLVDisplayService', () => {
       expect(props.video?.muted).toBe(false)
     });
 
+    test('video is muted at extreme playback rates and unmuted again in the normal range', async () => {
+      enableSound(true)
+      const props = await getVideoProps()
+      const onUpdate = jest.fn()
+      service.on('state-update', onUpdate)
+      ;(service as any).currentVideo.syncHelper = { onVideoPlaybackUpdate: jest.fn() }
+
+      props.video?.onPlaybackUpdate?.(10, 2.5, undefined)
+      expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(true)
+      expect(onUpdate).toHaveBeenCalledTimes(1)
+
+      props.video?.onPlaybackUpdate?.(11, 2.4, undefined)
+      expect(onUpdate).toHaveBeenCalledTimes(1)          // no update while the state does not change
+
+      props.video?.onPlaybackUpdate?.(12, 1.0, undefined)
+      expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(false)
+      expect(onUpdate).toHaveBeenCalledTimes(2)
+      service.off('state-update', onUpdate)
+    });
+
+    test('no UI update for rate changes when sound is disabled', async () => {
+      enableSound(false)
+      const props = await getVideoProps()
+      const onUpdate = jest.fn()
+      service.on('state-update', onUpdate)
+      ;(service as any).currentVideo.syncHelper = { onVideoPlaybackUpdate: jest.fn() }
+
+      props.video?.onPlaybackUpdate?.(10, 2.5, undefined)
+
+      expect(onUpdate).not.toHaveBeenCalled()
+      expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(true)
+      service.off('state-update', onUpdate)
+    });
+
     test('only the current video is unmuted when multiple videos are loaded', async () => {
       enableSound(true)
       await getVideoProps()
