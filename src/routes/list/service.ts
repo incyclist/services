@@ -752,25 +752,26 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 this.preloadObserver = new PromiseObserver<void>( promise )
     
                 this.preloadObserver.start()
-                    .then( ()=> { 
+                    .then( ()=> {
                         this.initialized = true
-                        
+
                         this.logEvent( {message:'preload route list completed'})
                         this.updateRepoStats()
-                        sleep(0).then ( ()=>{
+                        return sleep(0).then ( ()=>{
                             delete this.preloadObserver
                             this.emit('load-done')
                             this.emitLists('loaded',{log:true})
-                        }).catch( err=>{ this.logError(err,'preload') })
+                        })
                     })
                     .catch( (err)=> {
                         this.logError(err,'preload')
                         this.preloadObserver?.stop()
-                        sleep(0).then( ()=>{
+                        return sleep(0).then( ()=>{
                             delete this.preloadObserver
                             this.emit('load-done')
-                        }).catch( err=>{ this.logError(err,'preload') })
+                        })
                     })
+                    .catch( err=>{ this.logError(err,'preload') })
             }
 
 
@@ -1455,10 +1456,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                     .then( (updated)=> {
                         if (updated) {
                             this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
-                            this.db.save(route,false).catch( err=>{ this.logError(err,'addRoute') })
+                            const saved = this.db.save(route,false)
                             const cardInfo = this.findCard(route)
                             cardInfo?.card?.emitUpdate()
-
+                            return saved
                         }
                     })
                     .catch( err=>{ this.logError(err,'addRoute') })
@@ -1548,13 +1549,15 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                         .then( (updated)=> {
                             if (updated) {
                                 this.logEvent({message:'preload route updated', route:card?.getData()?.title, reason:'country added', country:route?.description?.country})
-                                this.db.save(route,false).catch( err=>{ this.logError(err,'preloadDetails') })
+                                const saved = this.db.save(route,false)
                                 card.emitUpdate()
+                                return saved
                             }
                             else {
                                 this.logEvent({message:'preload route undefined country', route:card?.getData()?.title})
                             }
                         })
+                        .catch( err=>{ this.logError(err,'preloadDetails') })
                 }
 
                 // Self-heal a route that's marked as downloaded but whose local
@@ -1816,7 +1819,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             route.updateCountryFromPoints()
                 .then(() => {
                     this.logEvent({message:'route updated (country)',route:route.title, country: route?.description?.country})
-                    this.db.save(route, false).catch( err=>{ this.logError(err,'verifyRouteCountry') });
+                    return this.db.save(route, false)
                 })
                 .catch(err => {
                     this.logError(err,'verifyRouteCountry',{id:route.description.id, title:route.description.title})

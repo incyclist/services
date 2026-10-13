@@ -374,7 +374,7 @@ export class DevicePairingService  extends IncyclistService{
                 this.pauseScanDelay()
                   .then( ()=> {
                     if (this.deviceSelectState)
-                        startScan().catch( err=>{ this.logError(err, 'startDeviceSelection') })
+                        return startScan()
                 })
                   .catch( err=>{ this.logError(err, 'startDeviceSelection') })
             }
