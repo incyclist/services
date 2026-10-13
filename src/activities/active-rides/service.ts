@@ -736,7 +736,7 @@ export class ActiveRidesService extends IncyclistService {
 
         // reconnect after connection loss - subscribe again to activity events
         if (!initial && this.current && !this.isSubscribed)
-            await this.subscribeActivityEvents()
+            this.subscribeActivityEvents().catch( err=>{ this.logError(err,'onConnect') })
 
     }
 

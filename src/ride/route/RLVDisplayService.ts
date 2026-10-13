@@ -807,7 +807,7 @@ export class RLVDisplayService extends RouteDisplayService {
             return false
         }
 
-        await this.addVideo( nextRoute, false,current)
+        this.addVideo( nextRoute, false,current).catch( err=>{ this.logError(err,'checkForAdditionalVideos') })
         return true
 
     }

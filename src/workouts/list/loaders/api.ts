@@ -27,7 +27,7 @@ export class WorkoutsApiLoader extends Loader {
         this.api.getWorkouts().then (async (res:Array<Workout|Plan>) => {
             this.workouts = res
 
-            for (const record of res) {
+            res.forEach( record=> {
 
                 let data = record;
 
@@ -38,9 +38,9 @@ export class WorkoutsApiLoader extends Loader {
                 const fromDB = this.getFromDB(id)
                 if (!fromDB || fromDB.hash!==data.hash) {
                     this.loadObserver.emit( fromDB?  'workout.updated' : 'workout.added', data)
-                    await this.save(record)
+                    this.save(record).catch( ()=>{ /* best-effort: no logging infra in this loader */ })
                 }
-            }
+            })
 
             this.loadObserver.emit('done')
             await waitNextTick()

@@ -266,7 +266,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
                 return
             }
 
-            await this.getDeviceRide().sendUpdate(update)
+            this.getDeviceRide().sendUpdate(update).catch( err=>{ this.logError(err,'sendUpdate') })
         }
     }
 

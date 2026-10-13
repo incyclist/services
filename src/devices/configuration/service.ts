@@ -123,7 +123,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             this.initWifiInterface()
     
             this.verifyCapabilitySettings()
-            await this.removeLegacySettings()
+            this.removeLegacySettings().catch( err=>{ this.logError(err,'init()') })
 
             this.logEvent({message:'DeviceConfig.init done'})
             this.emitInitialized()

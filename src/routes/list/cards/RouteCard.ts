@@ -958,7 +958,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         details.video.url = dropped.url
         details.video.format = ext
 
-        await this.save()
+        this.save().catch( err=>{ this.logError(err,'onVideoSelected') })
 
 
         return null

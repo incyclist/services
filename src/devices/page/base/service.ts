@@ -474,9 +474,9 @@ export abstract class PairingPageService extends IncyclistPageService {
 
     protected async start( ) {
         this.getDevicePairing().usage = this.getUsageMode()
-        await this.getDevicePairing().start( ()=>{
+        this.getDevicePairing().start( ()=>{
             this.updatePage()
-        })
+        }).catch( err=>{ this.logError(err,'start') })
     }
 
     async stop(adapters:Array<string>=[],forExit:boolean=false ):Promise<void> {

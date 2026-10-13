@@ -260,7 +260,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             this.verifyRouteHash(item.route)
 
             if (save)
-                await this.save(item.route, true);
+                this.save(item.route, true).catch( err=>{ this.logger.logEvent({message:'could not save route', id:item.route?.description?.id, error:err.message}) });
 
         //});
         }

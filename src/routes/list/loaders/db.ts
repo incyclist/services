@@ -55,13 +55,13 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
         if (changed) {
             this.isDirty = true;
             this.write()
-            await this.writeDetails(route)
+            this.writeDetails(route).catch( err=>{ this.logger.logEvent({message:'error',fn:'writeDetails', error:err.message,stack:err.stack}) })
         }
         else {
             const details = await this.loadDetailRecord(route,false)
 
             if (!details || enforcedWriteDetails)
-                await this.writeDetails(route)
+                this.writeDetails(route).catch( err=>{ this.logger.logEvent({message:'error',fn:'writeDetails', error:err.message,stack:err.stack}) })
         }
 
     }
@@ -366,10 +366,10 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
             this.emitRouteUpdate(route)
         this.emitRouteAdded(route)
 
-        await this.verifyCountry(route)
+        this.verifyCountry(route).catch( err=>{ this.logger.logEvent({message:'error',fn:'loadDetails', error:err.message,stack:err.stack}) })
 
         if (updated)
-            await this.save(route)
+            this.save(route).catch( err=>{ this.logger.logEvent({message:'error',fn:'loadDetails', error:err.message,stack:err.stack}) })
 
 
     } 
@@ -434,12 +434,12 @@ export class RoutesDbLoader extends DBLoader<RouteInfoDBEntry>{
     
             try {
                 await repo.delete(id)
-                await waitNextTick()
-                delete this.routesSaveObserver[id]
+                waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
+                    .catch( err=>{ this.logger.logEvent({message:'error',fn:'deleteRouteDetails', error:err.message,stack:err.stack}) })
             }
             catch(err) {
-                await waitNextTick()
-                delete this.routesSaveObserver[id]
+                waitNextTick().then( ()=> {delete this.routesSaveObserver[id]})
+                    .catch( cleanupErr=>{ this.logger.logEvent({message:'error',fn:'deleteRouteDetails', error:cleanupErr.message,stack:cleanupErr.stack}) })
                 throw err
             }
         }

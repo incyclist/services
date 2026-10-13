@@ -1662,7 +1662,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         
         try {
             const updated = await syncProdider?.loadDetails(route)
-            await this.db.save(updated,true)
+            this.db.save(updated,true).catch( err=>{ this.logError(err,'loadSyncedRouteDetails') })
             return updated
         }
         catch( err) {

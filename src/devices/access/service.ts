@@ -193,7 +193,7 @@ export class DeviceAccessService  extends IncyclistService{
                 info.isScanning = !stopped
                 this.emit('interface-changed', ifaceName,this.interfaces[ifaceName])
                 if (stopped)
-                    await this.disableInterface(ifaceName)
+                    this.disableInterface(ifaceName).catch( err=>{ this.logEvent({message:'Error', fn:'disableInterface', error:err.message, stack:err.stack}) })
                 
             
             }
