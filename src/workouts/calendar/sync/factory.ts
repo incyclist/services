@@ -48,7 +48,7 @@ export class WorkoutSyncFactory {
         if (!target?.length) {
 
             observer.emit('done')
-            waitNextTick().then(()=>{ observer.stop()})
+            waitNextTick().then(()=>{ observer.stop()}).catch(()=>{ /* best-effort cleanup */ })
             return null
         }
 
@@ -81,7 +81,7 @@ export class WorkoutSyncFactory {
                         observer.emit('done')
                     }
 
-                    waitNextTick().then(()=>{ observer.stop()})
+                    waitNextTick().then(()=>{ observer.stop()}).catch(()=>{ /* best-effort cleanup */ })
                 }
                 
             }
