@@ -92,7 +92,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
 
                     sleep(5).then( ()=>{
                             this.updatePageDisplay()
-                    })
+                    }).catch( err=>{ this.logError(err,'openPage') })
 
                     this.onRouteListLoaded()
                 }
@@ -605,7 +605,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     onDownloadDelete(routeId: string): void {
         try {
             if (this.isServerDownloadRow(routeId))
-                this.getRouteList().getCard(routeId)?.deleteDownload()
+                this.getRouteList().getCard(routeId)?.deleteDownload().catch(err => this.logError(err, 'onDownloadDelete'))
             // iCloud rows have no delete action here - removal is only ever explicit, via the
             // route details "Remove" flow (RouteVideoAvailabilityService.remove).
         }

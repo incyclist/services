@@ -123,8 +123,8 @@ export class DeviceConfigurationService  extends IncyclistService{
             this.initWifiInterface()
     
             this.verifyCapabilitySettings()
-            this.removeLegacySettings() 
-    
+            this.removeLegacySettings().catch( err=>{ this.logError(err,'init()') })
+
             this.logEvent({message:'DeviceConfig.init done'})
             this.emitInitialized()
     
@@ -892,9 +892,9 @@ export class DeviceConfigurationService  extends IncyclistService{
                     capabilities.push( {capability:IncyclistCapability.HeartRate, devices:[], selected:undefined, disabled:true})
             }
     
-            this.removeLegacySettings() 
-            
-            this.settings = { devices, capabilities, interfaces}               
+            this.removeLegacySettings().catch( err=>{ this.logError(err,'init()') })
+
+            this.settings = { devices, capabilities, interfaces}
             this.updateUserSettings()
     
     

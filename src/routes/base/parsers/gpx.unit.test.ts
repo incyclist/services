@@ -1,4 +1,5 @@
 import { loadFile } from '../../../../__tests__/utils/loadFile'
+import { expectToMatchFixture } from '../../../../__tests__/utils/fixture'
 import { FileInfo, getBindings } from '../../../api'
 import { parseXml } from '../../../utils'
 import { GPXParser } from './gpx'
@@ -53,7 +54,7 @@ describe('GPXParser',()=>{
                 expect(data.isLocal).toBe(true)
                 expect(data.id).toBeDefined()
 
-                expect( {data,details}).toMatchSnapshot()
+                expectToMatchFixture( {data,details}, './__tests__/data/routes/parsed/Etzelbergrennen.gpx.json')
 
             },100000)
     

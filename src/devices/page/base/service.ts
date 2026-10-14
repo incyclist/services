@@ -287,6 +287,7 @@ export abstract class PairingPageService extends IncyclistPageService {
 
         this.closeDeviceSelection()
         this.getDevicePairing().selectDevice( capability, d.udid,addAll)
+            .catch( err=>{ this.logError(err,'onDeviceSelected') })
 
         this.updatePage()
     }
@@ -314,6 +315,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.logEvent( {message:'device delete requested', capability, device:d.name})
 
         this.getDevicePairing().deleteDevice( capability, d.udid)
+            .catch( err=>{ this.logError(err,'onDeviceDelete') })
 
         this.updatePage()
     }
@@ -328,7 +330,8 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.logEvent( {message:'capability closed', capability:this.openedCapability, caller:new Error().stack})
 
         this.openedCapability = undefined
-        this.stateMachine.onDeviceSelectionClosed()
+        Promise.resolve(this.stateMachine.onDeviceSelectionClosed())
+            .catch( err=>{ this.logError(err,'closeDeviceSelection') })
         this.updatePage()
     }
 
@@ -473,7 +476,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.getDevicePairing().usage = this.getUsageMode()
         this.getDevicePairing().start( ()=>{
             this.updatePage()
-        })
+        }).catch( err=>{ this.logError(err,'start') })
     }
 
     async stop(adapters:Array<string>=[],forExit:boolean=false ):Promise<void> {

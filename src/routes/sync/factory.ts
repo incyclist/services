@@ -50,7 +50,7 @@ export class RouteSyncFactory {
         if (!target?.length) {
 
             observer.emit('done')
-            waitNextTick().then(()=>{ observer.stop()})
+            waitNextTick().then(()=>{ observer.stop()}).catch(()=>{ /* best-effort cleanup */ })
             return null
         }
 
@@ -68,7 +68,7 @@ export class RouteSyncFactory {
                     delete syncs[service]
                     if (Object.keys(syncs).length===0) {
                         observer.emit('done')
-                        waitNextTick().then(()=>{ observer.stop()})
+                        waitNextTick().then(()=>{ observer.stop()}).catch(()=>{ /* best-effort cleanup */ })
                     }
                 })
 

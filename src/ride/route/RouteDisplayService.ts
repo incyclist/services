@@ -189,7 +189,7 @@ export class RouteDisplayService extends RideModeService {
     onStarted() {
         try {
             this.prepareActiveRides()
-            this.sendUpdate(this.buildRequest())
+            this.sendUpdate(this.buildRequest()).catch( err=>{ this.logError(err,'onStarted') })
 
         }
         /* istanbul ignore catch */

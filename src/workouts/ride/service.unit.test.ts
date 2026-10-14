@@ -1837,7 +1837,7 @@ describe('WorkoutRide',()=>{
         })
 
         const setDeviceMode = (mode) => {
-            sendUpdate = jest.fn()
+            sendUpdate = jest.fn().mockResolvedValue(undefined)
             getCyclingMode = jest.fn().mockReturnValue(mode)
             Inject('DeviceRide', { sendUpdate, getCyclingMode })
         }

@@ -141,7 +141,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
 
         const request = this.buildRequest({limits})
 
-        this.sendUpdate(request)
+        this.sendUpdate(request).catch( err=>{ this.logError(err,'onActivityUpdate') })
 
         this.prevLimits = limits
     }
@@ -266,7 +266,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
                 return
             }
 
-            this.getDeviceRide().sendUpdate(update)
+            this.getDeviceRide().sendUpdate(update).catch( err=>{ this.logError(err,'sendUpdate') })
         }
     }
 
@@ -285,7 +285,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
 
             if (this.queued.length>0) {
                 const request = this.queued.shift()
-                send(request)
+                send(request).catch( err=>{ this.logError(err,'processPowerDeltaRequest') })
             }
 
         }
@@ -305,8 +305,8 @@ export class RideModeService extends IncyclistService implements IRideModeServic
             return
         }
 
-        send(request)
-        
+        send(request).catch( err=>{ this.logError(err,'processPowerDeltaRequest') })
+
     }
 
     protected isForcedERG() {

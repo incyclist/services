@@ -101,10 +101,10 @@ export class RouteDownloadService extends IncyclistService {
             if (videoDir) {
                 observer.once( 'stopped',()=>{
 
-                    this.deleteIncompleteFile(route,videoDir)
+                    this.deleteIncompleteFile(route,videoDir).catch( err=>{ this.logError(err,'_download') })
                 })
-                this.downloadRoute(route,videoDir,observer)
-            }    
+                this.downloadRoute(route,videoDir,observer).catch( err=>{ this.logError(err,'_download') })
+            }
             else {
                 this.logEvent( {message:'could not start download', reason:'video dir not specified'})
             }

@@ -53,7 +53,7 @@ export class Activity implements ActivityInfo{
         this.loadingObserver = loading
         this.loadingObserver.wait().then( ()=>{
             this.loadingObserver = null
-        })
+        }).catch( err=>{ this.logError(err,'setLoading') })
     }
 
     isLoading() {

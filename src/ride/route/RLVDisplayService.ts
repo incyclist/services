@@ -83,7 +83,7 @@ export class RLVDisplayService extends RouteDisplayService {
         this.addVideo(this.getRouteList().getRideRoute(), true).then( ()=>{
             this.videosInitialized = true
             this.emit('state-update')
-        })
+        }).catch( err=>{ this.logError(err,'initView') })
 
         this.isInitialized = true
         this.offset = 0
@@ -848,7 +848,7 @@ export class RLVDisplayService extends RouteDisplayService {
             return false
         }
 
-        this.addVideo( nextRoute, false,current)
+        this.addVideo( nextRoute, false,current).catch( err=>{ this.logError(err,'checkForAdditionalVideos') })
         return true
 
     }

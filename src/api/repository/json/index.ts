@@ -156,7 +156,7 @@ export class JsonRepository {
     protected async close():Promise<boolean> {        
         const db = getBindings().db
  
-        db.release(this.name)
+        db.release(this.name).catch(()=>{ /* best-effort release */ })
         delete this.access
         return true
     }

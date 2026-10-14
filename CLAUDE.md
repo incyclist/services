@@ -188,6 +188,7 @@ Guidelines from `.github/instructions/tests.instructions.md`:
 - Tests must be deterministic; do not use random data or rely on external state.
 
 - If the service reacts on messages sent to observers, simulate the message flow and verify expected outcome.  Especially on page services (extending `IncyclistPageService`) you need to verify the `getPageDisplayProps()` in case the message handler emits a `page-update`event
+- Do not use `toMatchSnapshot()` for results containing computed floating-point numbers (e.g. route/parser output with `heading`, `slope`, `distance`, ...) — the last binary digits differ between CPU architectures (Apple Silicon vs. x86), so exact snapshots pass on one architecture and fail on another. Use `expectToMatchFixture(actual, fixturePath)` from `__tests__/utils/fixture.ts` instead: it compares against a JSON fixture with a relative tolerance (1e-9) on numeric values. Run with `UPDATE_FIXTURES=1` to (re)create the fixture from the current result.
 
 ### Mocking Singleton Dependencies
 

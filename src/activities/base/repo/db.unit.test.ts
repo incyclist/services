@@ -148,8 +148,8 @@ describe('ActivityDB',()=>{
             db.getRouteList = jest.fn().mockReturnValue({
                 getRouteDescription:jest.fn().mockReturnValue( { originalName:'ORIGINAL', title: 'TEST'}),
             })
-            db.writeDetails = jest.fn()
-            db.writeRepo = jest.fn()
+            db.writeDetails = jest.fn().mockResolvedValue(undefined)
+            db.writeRepo = jest.fn().mockResolvedValue(undefined)
         }
         const cleanupMocks = (db)=>{
             db.reset()

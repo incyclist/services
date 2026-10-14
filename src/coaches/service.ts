@@ -106,8 +106,8 @@ export class CoachesService extends IncyclistService {
                 const mode= this.getDeviceRide().getCyclingMode()
                 const bikeType = mode?.getSetting('bikeType')??'Race'
                 c.initSimulator(user,bikeType)
-                c.start(onDataUpdate)
-            })        
+                c.start(onDataUpdate).catch( err=>{ this.logError(err,'startRide') })
+            })
 
             const setupListeners = (userRide:Observer)=> {
                 userRide.on('data',this.onUserDataUpdate.bind(this))
@@ -140,13 +140,14 @@ export class CoachesService extends IncyclistService {
 
 
             waitNextTick().then( ()=>{
-                link()
-                this.observer.emit('started') 
-            })            
-    
+                this.observer.emit('started')
+                return link()
+            })
+                .catch( err=>{ this.logError(err,'startRide') })
+
         }
         catch(err) {
-            this.logError(err,'startRide')            
+            this.logError(err,'startRide')
         }
 
         return this.observer

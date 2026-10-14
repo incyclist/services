@@ -4,6 +4,7 @@ import { IncyclistXMLParser } from './incyclist'
 import path from 'path'
 import { IFileSystem } from '../../../api/fs'
 import { RoutePoint } from '../types'
+import { expectToMatchFixture } from '../../../../__tests__/utils/fixture'
 
 describe('IncyclistParser',()=>{
     let parser:IncyclistXMLParser
@@ -72,7 +73,7 @@ describe('IncyclistParser',()=>{
                 expect(data.isLocal).toBe(true)
                 expect(data.id).toBe('e106d4b6b06e22d91fff110f29a1c0a0')
 
-                expect( {data,details}).toMatchSnapshot()
+                expectToMatchFixture( {data,details}, './__tests__/data/rlv/parsed/Triathlon_Woerrstadt_Loop.xml.json')
 
             })
 

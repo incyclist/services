@@ -36,15 +36,15 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
             waitNextTick().then( ()=>{
                 this.stopRequested = false
                 delete this.observer
-            })
+            }).catch( err=>{ this.logError(err,'sync') })
         }
 
         this.observer.once('done',onDone)
         this.observer.once('loaded',onDone)
 
         this.observer.once('stop',()=>{this.stopSync() })
-       
-        this.loadWorkouts()
+
+        this.loadWorkouts().catch( err=>{ this.logError(err,'sync') })
         return this.observer
 
     }
