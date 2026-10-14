@@ -1112,6 +1112,133 @@ describe('PairingService',()=>{
 
 
         })
+
+        describe('previewSelectDevice',()=>{
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+            })
+            afterEach( ()=>{
+                svc.resetServices()
+                svc.reset()
+                TestWrapper.resetMocks()
+            })
+
+            test('classifies the other capabilities the device supports as filled, unchanged, or conflicting',()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power','speed','cadence']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'} ])                              // empty -> filled
+                svc.setupMockData( 'speed',   [ {udid:'4', selected:true} ])               // already udid 4 -> unchanged
+                svc.setupMockData( 'cadence', [ {udid:'4'}, {udid:'2', selected:true} ])   // held by '2' -> conflict
+                svc.getCapabilityData('cadence').deviceName = 'Other Sensor'
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'4')
+
+                expect(impact.filled).toEqual([IncyclistCapability.Power])
+                expect(impact.unchanged).toEqual([IncyclistCapability.Speed])
+                expect(impact.conflicts).toEqual([{capability:IncyclistCapability.Cadence, currentName:'Other Sensor'}])
+            })
+
+            test('skips a disabled capability: not listed as filled even though its slot is empty',()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'} ])
+                svc.getCapabilityData('power').disabled = true
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'4')
+
+                expect(impact.filled).toEqual([])
+                expect(impact.unchanged).toEqual([])
+                expect(impact.conflicts).toEqual([])
+            })
+
+            test('skips a capability where this device is on the session delete list',()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4', deleted:true} ])
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'4')
+
+                expect(impact.filled).toEqual([])
+            })
+
+            test('no adapter for the udid returns an empty impact',()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true} ])
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'unknown-udid')
+
+                expect(impact).toEqual({filled:[], unchanged:[], conflicts:[]})
+            })
+        })
+
+        describe('selectDevice object mode',()=>{
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+                svc.simulateScanning()
+                svc.mock('run',jest.fn())
+            })
+            afterEach( ()=>{
+                svc.resetServices()
+                svc.reset()
+                TestWrapper.resetMocks()
+            })
+
+            test('{replace:[]} fills only the empty slots, leaving a conflicting slot untouched',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power','cadence']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'} ])                              // empty -> filled
+                svc.setupMockData( 'cadence', [ {udid:'4'}, {udid:'2', selected:true} ])   // held by '2' -> kept
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[]})
+
+                expect(configuration.select).toHaveBeenCalledWith('4','control',{emit:false})
+                expect(configuration.select).toHaveBeenCalledWith('4','power',{emit:false})
+                expect(configuration.select).not.toHaveBeenCalledWith('4','cadence',expect.anything())
+            })
+
+            test('replace commits the named conflicting capability as well',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['cadence']} ])
+                svc.setupMockData( 'cadence', [ {udid:'4'}, {udid:'2', selected:true} ])
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[IncyclistCapability.Cadence]})
+
+                expect(configuration.select).toHaveBeenCalledWith('4','cadence',{emit:false})
+            })
+
+            test('a disabled capability is skipped even when it is named in replace',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'}, {udid:'2', selected:true} ])
+                svc.getCapabilityData('power').disabled = true
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[IncyclistCapability.Power]})
+
+                expect(configuration.select).not.toHaveBeenCalledWith('4','power',expect.anything())
+            })
+
+            test('a capability where this device is on the session delete list is skipped even when empty',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4', deleted:true} ])
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[]})
+
+                expect(configuration.select).not.toHaveBeenCalledWith('4','power',expect.anything())
+            })
+
+            test('re-evaluates at commit: a slot filled after preview is kept, not overwritten',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'} ])
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'4')
+                expect(impact.filled).toEqual([IncyclistCapability.Power])
+
+                // the rider's slot gets filled by something else between preview and commit
+                svc.getCapabilityData('power').selected = '2'
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[]})
+
+                expect(configuration.select).not.toHaveBeenCalledWith('4','power',expect.anything())
+                expect(svc.getCapabilityData('power').selected).toBe('2')
+            })
+        })
         describe('deleteDevice',()=>{
             describe('scanning',()=> {
                 beforeEach( ()=>{
