@@ -89,7 +89,7 @@ export class CoachesService extends IncyclistService {
 
             const onDataUpdate = this.onCoachDataUpdate.bind(this)
             this.coaches.forEach( c => {
-                const startSettings = this.routesService.getStartSettings() as RouteSettings
+                const startSettings = this.getStartSettings()
                 let pos = 0;
                 if ( startSettings.type==='Route') {
                     pos = startSettings.startPos
@@ -101,7 +101,7 @@ export class CoachesService extends IncyclistService {
                 c.setRiderPosition(pos)
                 this.setCoachPosition(c,lead+pos)
     
-                const user = this.userService.get('user',{})
+                const user = this.getUserSettings().get('user',{})
                 
                 const mode= this.getDeviceRide().getCyclingMode()
                 const bikeType = mode?.getSetting('bikeType')??'Race'
@@ -226,25 +226,28 @@ export class CoachesService extends IncyclistService {
 
         if (this.isPaused)
             return;
-        
-        const startSettings = this.routesService.getStartSettings() as RouteSettings
-        const {distance} = data        
-        const route = this.route
 
-        if(!route || !coach || !data)
-            return;
+        try {
+            const startSettings = this.getStartSettings()
+            const route = this.route
 
-        const prevRouteDistance = coach.getProgess()??0;
-        const newRouteDistance = prevRouteDistance + data.distance 
-        coach.setProgress(newRouteDistance)             
-        
-        if (startSettings.type==='Free-Ride')
-            return;
-        
-        // update slope in simulator
-        this.setCoachPosition(coach, distance);
+            if(!route || !coach || !data)
+                return;
 
+            const {distance} = data
+            const prevRouteDistance = coach.getProgess()??0;
+            const newRouteDistance = prevRouteDistance + distance
+            coach.setProgress(newRouteDistance)
 
+            if (startSettings.type==='Free-Ride')
+                return;
+
+            // update slope in simulator
+            this.setCoachPosition(coach, distance);
+        }
+        catch(err) {
+            this.logError(err,'onCoachDataUpdate')
+        }
     }
 
 
@@ -252,26 +255,35 @@ export class CoachesService extends IncyclistService {
         if (!this.observer)
             return;
 
-        const startSettings = this.routesService.getStartSettings() as RouteSettings
-        const {realityFactor=0} = startSettings
-        const route = this.getRideDisplay().route
+        try {
+            const {realityFactor=0} = this.getStartSettings()
+            const route = this.getRideDisplay().route
 
-        if (!route)
-            return
+            if (!route)
+                return
 
-        const prevPosition = coach.getPosition() || route.points[0];
+            const prevPosition = coach.getPosition() || route.points[0];
 
-        if (distance > 0) {
-            const nextPosition = getNextPosition(route, { distance, prev: prevPosition });
-            if (nextPosition) {
-                const { slope } = nextPosition;
-                coach.sendDeviceUpdate({ slope: slope * realityFactor / 100 });
+            if (distance > 0) {
+                const nextPosition = getNextPosition(route, { distance, prev: prevPosition });
+                if (nextPosition) {
+                    const { slope } = nextPosition;
+                    coach.sendDeviceUpdate({ slope: slope * realityFactor / 100 });
+                }
             }
-    
+        }
+        catch(err) {
+            this.logError(err,'setCoachPosition')
         }
     }
 
-    protected get routesService():RouteListService {
+    // getStartSettings() is null after RouteListService.unselect(), e.g. when a workout is started without a route
+    protected getStartSettings():RouteSettings {
+        return (this.getRouteList().getStartSettings() ?? {}) as RouteSettings
+    }
+
+    @Injectable
+    protected getRouteList():RouteListService {
         return useRouteList()
     }
 
@@ -293,7 +305,8 @@ export class CoachesService extends IncyclistService {
         return useDevicePairing()
     }
 
-    protected get userService():UserSettingsService {
+    @Injectable
+    protected getUserSettings():UserSettingsService {
         return useUserSettings()
     }
 
