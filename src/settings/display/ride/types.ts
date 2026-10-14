@@ -7,7 +7,13 @@ export interface TRideViewOption {
     message?: string
 }
 
+export interface TVideoOption {
+    enableAudio: boolean
+}
+
 export interface RideSettingsDisplayProps  {
     rideView: TRideView
     rideViewOptions: Map<TRideView,TRideViewOption>
+    showVideo?:boolean
+    videoOptions?: TVideoOption
 }

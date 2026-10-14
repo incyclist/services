@@ -4,7 +4,7 @@ import { IncyclistService } from "../../../base/service";
 import { Observer } from "../../../base/types";
 import { IObserver } from "../../../types";
 import { UserSettingsService, useUserSettings } from "../../service";
-import { RideSettingsDisplayProps, TRideView, TRideViewOption } from "./types";
+import { RideSettingsDisplayProps, TRideView, TRideViewOption, TVideoOption } from "./types";
 
 // English-only for now - no i18n system exists yet. Resolving a reason code to display text is
 // a WHAT decision (what to tell the user), so it belongs here in services, not in mobile/web-ui.
@@ -17,22 +17,25 @@ const DEFAULT_UNAVAILABLE_MESSAGE = 'This view is currently unavailable on your 
 export class RideSettingsDisplayService extends IncyclistService {
 
     protected observer:Observer;
+    protected isRide?:boolean
 
 
     constructor() {
         super('GearSettings')
     }
 
-    open():IObserver {
+    open(isRide:boolean=false):IObserver {
         if (this.observer)
             this.close()
         
         this.observer =  new Observer()
+        this.isRide = isRide
         return this.observer
     }
 
     close() {
         this.observer.stop()
+        delete this.isRide
         delete this.observer
     }
 
@@ -40,7 +43,8 @@ export class RideSettingsDisplayService extends IncyclistService {
     getDisplayProps():RideSettingsDisplayProps { 
         return {
             rideView: this.getRideView(),
-            rideViewOptions:  this.getRideViewOptions()
+            rideViewOptions:  this.getRideViewOptions(),
+            ...this.getVideoOptions()
         }        
     }
 
@@ -52,6 +56,23 @@ export class RideSettingsDisplayService extends IncyclistService {
             this.logError(err,'setRideView')
         }
 
+    }
+
+    setVideoAudioEnabled(enabled:boolean) {
+        try {
+            this.getUserSettings().set('preferences.video.sound',enabled)           
+
+        }
+        catch(err) {
+            this.logError(err,'setVideoAudioEnabled')
+        }
+    }
+
+    protected getVideoOptions():{showVideo?:boolean, videoOptions?: TVideoOption} {
+        
+        const enableAudio = this.getUserSettings().getValue('preferences.video.sound',false)           
+        return {showVideo:true,videoOptions:{enableAudio}}    
+        
     }
 
     protected emitChanged() {
