@@ -62,7 +62,7 @@ describe('DeviceConfigurationService - session exclusions', () => {
             expect(service.getExclusions()).toHaveLength(0)
         })
 
-        test('excludeDevice excludes every capability the device is currently selected for (D3)', () => {
+        test('excludeDevice excludes every capability the device is currently selected for', () => {
             const udid = service.add(Trainer('1')) // fills Control/Power/Speed/Cadence
 
             service.excludeDevice(udid, { reason: 'not-available', scope: 'until-next-pairing' })
@@ -229,7 +229,7 @@ describe('DeviceConfigurationService - session exclusions', () => {
             expect(info?.udid).not.toBe(trainerUdid)
         })
 
-        test('canStartRide(): excluding the only selected capability gives the same result as no device configured (R1)', () => {
+        test('canStartRide(): excluding the only selected capability gives the same result as no device configured', () => {
             service.add(Trainer('1'))
             expect(service.canStartRide()).toBe(true)
 
@@ -240,7 +240,7 @@ describe('DeviceConfigurationService - session exclusions', () => {
             expect(service.canStartRide()).toBe(false)
         })
 
-        test('canStartRide(): an unrelated connected Power meter still works once Control is excluded (R1)', () => {
+        test('canStartRide(): an unrelated connected Power meter still works once Control is excluded', () => {
             const trainerUdid = service.add(Trainer('1'))
             service.excludeDevice(trainerUdid, { reason: 'not-available', scope: 'until-next-pairing' })
             expect(service.canStartRide()).toBe(false)
@@ -273,6 +273,63 @@ describe('DeviceConfigurationService - session exclusions', () => {
             service.add(Trainer('2'))
 
             expect(service.getConfiguredSelection(IncyclistCapability.Control)).toBe(first)
+        })
+    })
+
+    describe('an exclusion never carries over to another device', () => {
+
+        test('deleting the excluded selected device drops the exclusion and leaves the next device active', () => {
+            const first = service.add(Trainer('1'))
+            const second = service.add(Trainer('2'))
+            service.excludeCapability(IncyclistCapability.Control, { reason: 'not-available', scope: 'until-next-pairing' })
+
+            service.delete(first, IncyclistCapability.Control, true)
+
+            expect(service.getConfiguredSelection(IncyclistCapability.Control)).toBe(second)
+            expect(service.getSelected(IncyclistCapability.Control)).toBe(service.adapters[second])
+            expect(service.getExclusions()).toHaveLength(0)
+        })
+
+        test('a device losing an excluded capability via updateCapabilities() drops the exclusion and leaves the next device active', () => {
+            const first = service.add(Trainer('1'))
+            const second = service.add(Trainer('2'))
+            service.excludeCapability(IncyclistCapability.Control, { reason: 'not-available', scope: 'until-next-pairing' })
+
+            const reduced = service.adapters[first].getCapabilities().filter(c => c !== IncyclistCapability.Control)
+            jest.spyOn(service.adapters[first], 'getCapabilities').mockReturnValue(reduced)
+            service.updateCapabilities(first)
+
+            expect(service.getConfiguredSelection(IncyclistCapability.Control)).toBe(second)
+            expect(service.getSelected(IncyclistCapability.Control)).toBe(service.adapters[second])
+            expect(service.getExclusions().some(e => e.capability === IncyclistCapability.Control)).toBe(false)
+        })
+
+        test('a device filling a slot emptied by deleting the excluded device is not excluded', () => {
+            const first = service.add(Trainer('1'))
+            service.excludeCapability(IncyclistCapability.Control, { reason: 'not-available', scope: 'until-next-pairing' })
+
+            service.delete(first, IncyclistCapability.Control, true)
+            expect(service.getConfiguredSelection(IncyclistCapability.Control)).toBeUndefined()
+
+            const third = service.add(Trainer('3'))
+
+            expect(service.getConfiguredSelection(IncyclistCapability.Control)).toBe(third)
+            expect(service.getSelected(IncyclistCapability.Control)).toBe(service.adapters[third])
+            expect(service.getExclusions().some(e => e.capability === IncyclistCapability.Control)).toBe(false)
+        })
+
+        test('an exclusion bound to a device that is no longer selected has no effect', () => {
+            const first = service.add(Trainer('1'))
+            const second = service.add(Trainer('2'))
+            service.excludeCapability(IncyclistCapability.Control, { reason: 'not-available', scope: 'until-next-pairing' })
+
+            // change the selection without going through select(), as a path that forgets to drop the exclusion would
+            const control = service.settings.capabilities.find(c => c.capability === IncyclistCapability.Control)!
+            control.selected = second
+
+            expect(service.getExclusions()[0]).toMatchObject({ capability: IncyclistCapability.Control, udid: first })
+            expect(service.getSelected(IncyclistCapability.Control)).toBe(service.adapters[second])
+            expect(service.load().capabilities[IncyclistCapability.Control].excluded).toBeUndefined()
         })
     })
 })

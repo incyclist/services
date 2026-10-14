@@ -7,7 +7,7 @@ import {
     PairingPlatform,
     PairingStatusId
 } from './guidance'
-import { isCapabilityActive } from './capability'
+import { ActivatableCapability, isCapabilityActive } from './capability'
 
 export type PairingStatusDot = 'red' | 'green' | 'amber'
 
@@ -20,10 +20,21 @@ export interface PairingStatusDisplayProps {
     dot: PairingStatusDot
 }
 
+/**
+ * The per-capability input the status line needs. Readiness is only ever decided through
+ * {@link isCapabilityActive}, so the fields it reads come from {@link ActivatableCapability}
+ * rather than being declared again here.
+ */
+export type PairingStatusCapability = ActivatableCapability & {
+    capability: string
+    deviceName?: string
+    connectState?: string
+}
+
 export interface PairingStatusSource {
     platform: PairingPlatform
     interfaces: ReadonlyArray<PairingInterfaceState>
-    capabilities: ReadonlyArray<{ capability: string, selected?: string, disabled?: boolean, excluded?: unknown, deviceName?: string, connectState?: string }>
+    capabilities: ReadonlyArray<PairingStatusCapability>
     canStartRide: boolean
     loading: boolean
     rideMode: boolean
