@@ -318,6 +318,10 @@ export class GpxDisplayService extends RouteDisplayService {
         // getRideView() to 'map' (so the ride actually renders Map), but the overlay must keep
         // reporting the Street View row/state - including through the SV_FALLBACK_HOLD - rather
         // than falling into the generic (instant-complete) map branch below.
+        // getRideView() is evaluated first because it may abandon a Street View flow that a
+        // simulated ride made obsolete.
+        const rideView = this.getRideView()
+
         if (this.svFlowActive) {
             const resolved = this.svViewState==='loaded' || this.svViewState==='unavailable'
             return {
@@ -327,8 +331,6 @@ export class GpxDisplayService extends RouteDisplayService {
                 viewFallbackCause: this.svViewState==='unavailable' ? this.svFallbackCause : undefined
             }
         }
-
-        const rideView = this.getRideView()
 
         if (rideView === 'map' || (this.isMobile() && !this.waitsForStreetView() && !this.waitsForSatelliteView())) {
             return {
@@ -355,12 +357,14 @@ export class GpxDisplayService extends RouteDisplayService {
      * @returns True if the view is loaded and ready, false if still loading
      */
     isStartRideCompleted(): boolean {
-        // see getStartOverlayProps() for why this is checked first, ahead of getRideView()
+        // evaluated first: it may abandon a Street View flow that a simulated ride made obsolete
+        const rideView = this.getRideView()
+
+        // see getStartOverlayProps() for why this is checked ahead of the rideView
         if (this.svFlowActive) {
             return this.mapLoaded
         }
 
-        const rideView = this.getRideView()
         if (rideView==='map' || (this.isMobile() && !this.waitsForStreetView() && !this.waitsForSatelliteView())) {
             this.mapLoaded = true
             return true;
@@ -427,10 +431,27 @@ export class GpxDisplayService extends RouteDisplayService {
 
         if (this.service?.isSimulated() && !this.getGoogleMaps().hasPersonalApiKey()) {
             this.rideViewOverride = 'map'
+            this.abandonStreetViewFlow()
         }
-            
 
         return this.rideViewOverride ?? this.getRideSettingsDisplay().getRideView()
+    }
+
+    /**
+     * Called once the ride view has been switched to Map for a reason other than Street View
+     * itself failing (simulated ride without personal API key). A Street View start that has
+     * not resolved yet will then never resolve - no panorama is requested for a ride that is
+     * rendering Map - so it must not keep gating `isStartRideCompleted()` until its own start
+     * timeout runs out. Street View fallbacks (`fallbackToMap()`) resolve the state machine
+     * first and are therefore left alone.
+     */
+    protected abandonStreetViewFlow() {
+        if (!this.svFlowActive || this.svViewState==='loaded' || this.svViewState==='unavailable')
+            return
+
+        this.clearStreetViewPhaseTimers()
+        this.svFlowActive = false
+        this.emit('state-update')
     }
 
     /**
