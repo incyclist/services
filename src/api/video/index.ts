@@ -19,6 +19,8 @@ export interface IVideoConversion extends EventEmitter{
 export interface IVideoProcessor {
     isScreenshotSuported():boolean
     isConvertSuported():boolean
+    /** true if converted (streamed) videos can include the audio track - optional, platforms without it stream video only */
+    isConvertAudioSupported?():boolean
     screenshot( url:string, props?): Promise<string>
     convert( url:string, props?): Promise<Observer>        
     convertOnline(url:string, props?): Promise<IVideoConversion>

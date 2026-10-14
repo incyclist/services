@@ -392,6 +392,136 @@ describe('RLVDisplayService', () => {
     });
   });
 
+  describe('getDisplayProperties - video sound', () => {
+    const enableSound = (enabled: boolean | undefined) => {
+      mockUserSettings.get.mockImplementation((key: string, defValue: unknown) =>
+        key === 'preferences.video.sound' ? enabled : defValue)
+    }
+
+    const getVideoProps = async () => {
+      service.initView();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return service.getDisplayProperties({ state: 'active' } as any);
+    }
+
+    beforeEach(() => {
+      setupMocks(mockRoute);
+      service.init(mockRideService as any);
+    });
+
+    afterEach(() => {
+      mockUserSettings.get.mockReset();
+    });
+
+    test('video is muted when the setting is not set', async () => {
+      enableSound(undefined)
+
+      const props = await getVideoProps()
+
+      expect(props.video).toBeDefined()
+      expect(props.video?.muted).toBe(true)
+      expect(mockUserSettings.get).toHaveBeenCalledWith('preferences.video.sound', false)
+    });
+
+    test('video is muted when sound is disabled', async () => {
+      enableSound(false)
+
+      const props = await getVideoProps()
+
+      expect(props.video?.muted).toBe(true)
+    });
+
+    test('video is not muted when sound is enabled', async () => {
+      enableSound(true)
+
+      const props = await getVideoProps()
+
+      expect(props.video).toBeDefined()
+      expect(props.video?.muted).toBe(false)
+    });
+
+    describe('converted videos', () => {
+      afterEach(() => {
+        delete (mockBindings as any).video
+      })
+
+      test('are muted when the platform can not stream audio', async () => {
+        enableSound(true)
+        await getVideoProps()
+        ;(service as any).currentVideo.playback = 'converted'
+
+        expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(true)
+      });
+
+      test('play sound when the platform streams audio', async () => {
+        enableSound(true)
+        ;(mockBindings as any).video = { isConvertAudioSupported: () => true }
+        await getVideoProps()
+        ;(service as any).currentVideo.playback = 'converted'
+
+        expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(false)
+      });
+
+      test('stay muted when sound is disabled', async () => {
+        enableSound(false)
+        ;(mockBindings as any).video = { isConvertAudioSupported: () => true }
+        await getVideoProps()
+        ;(service as any).currentVideo.playback = 'converted'
+
+        expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(true)
+      });
+    });
+
+    test('video is muted at extreme playback rates and unmuted again in the normal range', async () => {
+      enableSound(true)
+      const props = await getVideoProps()
+      const onUpdate = jest.fn()
+      service.on('state-update', onUpdate)
+      ;(service as any).currentVideo.syncHelper = { onVideoPlaybackUpdate: jest.fn() }
+
+      props.video?.onPlaybackUpdate?.(10, 2.5, undefined)
+      expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(true)
+      expect(onUpdate).toHaveBeenCalledTimes(1)
+
+      props.video?.onPlaybackUpdate?.(11, 2.4, undefined)
+      expect(onUpdate).toHaveBeenCalledTimes(1)          // no update while the state does not change
+
+      props.video?.onPlaybackUpdate?.(12, 1.0, undefined)
+      expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(false)
+      expect(onUpdate).toHaveBeenCalledTimes(2)
+      service.off('state-update', onUpdate)
+    });
+
+    test('no UI update for rate changes when sound is disabled', async () => {
+      enableSound(false)
+      const props = await getVideoProps()
+      const onUpdate = jest.fn()
+      service.on('state-update', onUpdate)
+      ;(service as any).currentVideo.syncHelper = { onVideoPlaybackUpdate: jest.fn() }
+
+      props.video?.onPlaybackUpdate?.(10, 2.5, undefined)
+
+      expect(onUpdate).not.toHaveBeenCalled()
+      expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(true)
+      service.off('state-update', onUpdate)
+    });
+
+    test('only the current video is unmuted when multiple videos are loaded', async () => {
+      enableSound(true)
+      await getVideoProps()
+
+      const [current] = (service as any).videos
+      const next = { ...current, isCurrent: false, isInitial: false, route: { details: { id: 'next' } } }
+      ;(service as any).videos = [current, next]
+
+      const props = service.getDisplayProperties({ state: 'active' } as any)
+
+      expect(props.videos).toHaveLength(2)
+      expect(props.videos?.[0].muted).toBe(false)
+      expect(props.videos?.[1].muted).toBe(true)
+    });
+  });
+
   describe('getStartOverlayProps', () => {
     test('returns object with videoState, videoStateError, and videoProgress', () => {
       const props = service.getStartOverlayProps();
