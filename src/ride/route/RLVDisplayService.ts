@@ -232,7 +232,7 @@ export class RLVDisplayService extends RouteDisplayService {
                 startTime,
                 autoConvert,
                 info:this.getInfotextDisplayProps(),
-                muted: !this.isVideoAudible(),
+                muted: !this.isVideoAudible(this.currentVideo),
                 loop: this.isLoopEnabled() ? true : undefined,
                 playback: this.currentVideo?.playback,
                 observer: this.currentVideo?.observer,
@@ -265,7 +265,7 @@ export class RLVDisplayService extends RouteDisplayService {
                     hidden: !video.isCurrent,
                     info:video.isCurrent ? this.getInfotextDisplayProps() : undefined,
                     // hidden (preloaded) videos stay muted, otherwise their sound would overlap
-                    muted: !(video.isCurrent && this.isVideoAudible()),
+                    muted: !(video.isCurrent && this.isVideoAudible(video)),
                     playback: video.playback,
                     observer: video.observer,
                     onLoaded: (bufferedTime: number) => { this.onVideoLoaded(bufferedTime, video) },
@@ -762,8 +762,23 @@ export class RLVDisplayService extends RouteDisplayService {
         return resolvePlaybackUrl(url)
     }
 
-    protected isVideoAudible(): boolean {
-        return this.isVideoSoundEnabled() && this.audibleRate
+    // sound is played if the user enabled it, the playback rate is in the audible range and the
+    // video actually has sound (converted videos only have it if the platform can stream audio)
+    protected isVideoAudible(video?:VideoState): boolean {
+        if (!this.isVideoSoundEnabled() || !this.audibleRate)
+            return false
+        if (video?.playback==='converted')
+            return this.isConvertedAudioSupported()
+        return true
+    }
+
+    protected isConvertedAudioSupported(): boolean {
+        try {
+            return this.getBindings()?.video?.isConvertAudioSupported?.() ?? false
+        }
+        catch {
+            return false
+        }
     }
 
     protected isVideoSoundEnabled(): boolean {

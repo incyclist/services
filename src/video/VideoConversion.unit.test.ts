@@ -24,9 +24,36 @@ describe('VideoConversion', () => {
         })
 
         test('passes the requested props to the platform', async () => {
-            await conversion.convert({ audio: true })
+            await conversion.convert({ foo: 'bar' })
+
+            expect(convertOnline).toHaveBeenCalledWith('video:///route.avi', { progressInterval: 1, foo: 'bar' })
+        })
+
+        test('includes the audio track when the platform can stream it', async () => {
+            Inject('VideoBindings', { convertOnline, isConvertAudioSupported: () => true })
+            conversion = new VideoConversion('video:///route.avi')
+
+            expect(conversion.isAudioSupported()).toBe(true)
+            await conversion.convert()
 
             expect(convertOnline).toHaveBeenCalledWith('video:///route.avi', { progressInterval: 1, audio: true })
+        })
+
+        test('video only on platforms without audio in conversions', async () => {
+            Inject('VideoBindings', { convertOnline, isConvertAudioSupported: () => false })
+            conversion = new VideoConversion('video:///route.avi')
+
+            expect(conversion.isAudioSupported()).toBe(false)
+            await conversion.convert()
+
+            expect(convertOnline).toHaveBeenCalledWith('video:///route.avi', { progressInterval: 1 })
+        })
+
+        test('older platforms without the capability stream video only', async () => {
+            await conversion.convert()
+
+            expect(conversion.isAudioSupported()).toBe(false)
+            expect(convertOnline).toHaveBeenCalledWith('video:///route.avi', { progressInterval: 1 })
         })
 
         test('passes the start info (MIME type) on with convert-start', async () => {

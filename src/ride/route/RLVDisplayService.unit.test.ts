@@ -440,6 +440,38 @@ describe('RLVDisplayService', () => {
       expect(props.video?.muted).toBe(false)
     });
 
+    describe('converted videos', () => {
+      afterEach(() => {
+        delete (mockBindings as any).video
+      })
+
+      test('are muted when the platform can not stream audio', async () => {
+        enableSound(true)
+        await getVideoProps()
+        ;(service as any).currentVideo.playback = 'converted'
+
+        expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(true)
+      });
+
+      test('play sound when the platform streams audio', async () => {
+        enableSound(true)
+        ;(mockBindings as any).video = { isConvertAudioSupported: () => true }
+        await getVideoProps()
+        ;(service as any).currentVideo.playback = 'converted'
+
+        expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(false)
+      });
+
+      test('stay muted when sound is disabled', async () => {
+        enableSound(false)
+        ;(mockBindings as any).video = { isConvertAudioSupported: () => true }
+        await getVideoProps()
+        ;(service as any).currentVideo.playback = 'converted'
+
+        expect(service.getDisplayProperties({ state: 'active' } as any).video?.muted).toBe(true)
+      });
+    });
+
     test('video is muted at extreme playback rates and unmuted again in the normal range', async () => {
       enableSound(true)
       const props = await getVideoProps()

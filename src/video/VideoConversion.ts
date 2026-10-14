@@ -39,8 +39,10 @@ export class VideoConversion extends IncyclistService {
 
 
         try {
+            // the audio track is included whenever the platform can stream it, so the sound can be switched on during the ride
+            const audio = this.isAudioSupported() ? { audio:true } : {}
             const p = props??{}
-            this.conversion = await video.convertOnline(this.url,{ progressInterval: 1,...p})
+            this.conversion = await video.convertOnline(this.url,{ progressInterval: 1,...audio,...p})
             this.conversion.on('started', this.onConvertStart.bind(this) );
             this.conversion.on('progress', this.onConvertProgress.bind(this));
             this.conversion.once('error', this.onConvertError.bind(this));
@@ -144,6 +146,18 @@ export class VideoConversion extends IncyclistService {
         this.observer.emit('convert-error',err.message)
     }
 
+
+    /**
+     * Indicates whether the platform can include the audio track in converted (streamed) videos
+     */
+    isAudioSupported():boolean {
+        try {
+            return this.getVideoBindings()?.isConvertAudioSupported?.() ?? false
+        }
+        catch {
+            return false
+        }
+    }
 
     @Injectable
     protected getVideoBindings() {
