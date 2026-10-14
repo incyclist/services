@@ -1181,7 +1181,7 @@ export class DevicePairingService  extends IncyclistService{
                 }
             }
             const device = this.getCapabilityDevice(c)
-            if (device && device.udid===udid && !(keepConnectAttempts && this.isConnectAttemptState(device.connectState))) {
+            if (device?.udid===udid && !(keepConnectAttempts && this.isConnectAttemptState(device.connectState))) {
                 device.connectState = connectState
             }
         })
