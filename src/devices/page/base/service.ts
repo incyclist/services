@@ -73,7 +73,7 @@ export abstract class PairingPageService extends IncyclistPageService {
             }
 
             const onStateMachineUpdate = ()=>{
-                this.getPageObserver().emit('page-update')
+                this.updatePage()
             }
 
             this.stateMachine.start( onStateMachineUpdate)
@@ -114,6 +114,12 @@ export abstract class PairingPageService extends IncyclistPageService {
             this.isVisitOpen = false
             EventLogger.setGlobalConfig('page',null)
             this.isPairingForRide =false
+
+            // stopped before the page observer is deleted, so the orchestrator is already winding
+            // down when the observer goes away (see openPage(): stop() may or may not return a
+            // promise). Whatever it still has in flight is fenced off by updatePage().
+            void this.stateMachine.stop()
+
             super.closePage()
 
             // OK/Simulate already called prepareForRide(), which pauses every adapter except the
@@ -123,9 +129,6 @@ export abstract class PairingPageService extends IncyclistPageService {
             if (!this.handingOffToRide)
                 this.stop().catch( err=>{ this.logError(err,'closePage') })
             this.handingOffToRide = false
-
-            // see openPage(): orchestrator.stop() may or may not return a promise
-            void this.stateMachine.stop()
 
         }
         catch(err) {
@@ -259,8 +262,13 @@ export abstract class PairingPageService extends IncyclistPageService {
 
     }
 
+    /**
+     * Tells the UI to re-read the display props. A no-op once the page is closed: the scan/pair
+     * loop and already-queued UI events can still call back after `closePage()` has deleted the
+     * page observer.
+     */
     protected updatePage() {
-        this.getPageObserver().emit('page-update')
+        this.getPageObserver()?.emit('page-update')
     }
 
     protected onEnableCapability(enabled:boolean) {
