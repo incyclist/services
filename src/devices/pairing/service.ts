@@ -1,6 +1,6 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import { AdapterInfo, CapabilityExclusion, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
-import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState  } from "./model";
+import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact  } from "./model";
 import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
@@ -535,26 +535,28 @@ export class DevicePairingService  extends IncyclistService{
      * 
      * @param capability the capability to be managed <br><br> One of ( 'control', 'power', 'heartrate', 'speed', 'cadence')
      * @param udid The unique device ID of the device to be selected
-     * @param addAll if true, the device will be selected for all capability it supports
-     * 
-     * @example 
+     * @param mode `true` selects the device for every capability it supports (today's "for all"), `false` (default)
+     * this slot only, and `{others:'fill-empty', replace}` fills whatever is empty and replaces only the named
+     * capabilities - both re-evaluated at commit, see {@link previewSelectDevice}
+     *
+     * @example
      * const service = useDevicePairing()
      * await service.selectDevice('control,'508c6bf1-3f2f-4e8d-bcef-bc1910bd2f07', true)
-     * 
-     * @throws  
+     *
+     * @throws
      * Does not throw errors
-     * 
+     *
     */
-   async selectDevice(capability:IncyclistCapability,udid:string, addAll:boolean=false):Promise<void> {
-        
+   async selectDevice(capability:IncyclistCapability,udid:string, mode:SelectDeviceMode=false):Promise<void> {
+
         let changed:boolean = false;
-    
+
         try {
-            const adapter = this.getDeviceAdapter(udid) 
+            const adapter = this.getDeviceAdapter(udid)
             if (!adapter)
                 return;
-            
-            if (addAll) {
+
+            if (mode===true) {
                 const capabilities = adapter.getCapabilities().filter( name=> this.wouldChangeCapability(name,udid) )
 
                 capabilities.forEach( (c,idx) => {
@@ -563,22 +565,97 @@ export class DevicePairingService  extends IncyclistService{
                     changed = changed || wasChanged
                 })
             }
+            else if (mode && typeof mode==='object') {
+                changed = this.selectDeviceObjectMode(capability,udid,mode)
+            }
             else {
                 changed = this.selectCapabilityDevice(capability,udid)
-            }        
+            }
 
             if (changed) {
                 this.emitStateChange({capabilities:this.state.capabilities})
-                
+
             }
 
             this.checkCanStart()
-            await this._stopDeviceSelection(changed)      
-    
+            await this._stopDeviceSelection(changed)
+
         }
         catch (err) { // istanbul ignore next
-            this.logError(err, 'selectDevice',{capability,udid,addAll})
+            this.logError(err, 'selectDevice',{capability,udid,mode})
         }
+    }
+
+    /**
+     * What picking `udid` for `capability` would also do to the device's other capabilities:
+     * which empty slots it would fill, which already hold it, and which hold a different device.
+     * Skips a capability that's `disabled` or has this udid on its session delete list - the
+     * object mode never touches those either, see {@link selectDeviceObjectMode}.
+     */
+    previewSelectDevice(capability:IncyclistCapability, udid:string):SelectionImpact {
+        const adapter = this.getDeviceAdapter(udid)
+        if (!adapter)
+            return {filled:[], unchanged:[], conflicts:[]}
+
+        const candidates = adapter.getCapabilities().filter( c=> c!==capability )
+        return this.computeSelectionImpact(udid,candidates)
+    }
+
+    /**
+     * Classifies each of `candidateCapabilities` by what picking `udid` for it would do right
+     * now: empty (`filled`), already this device (`unchanged`), or holding a different device
+     * (`conflicts`). Shared by the manual preview above and, later, by detection - manual passes
+     * every other capability the device supports, detection passes only the ones it's newly
+     * known for.
+     */
+    protected computeSelectionImpact(udid:string, candidateCapabilities:IncyclistCapability[]):SelectionImpact {
+        const filled: IncyclistCapability[] = []
+        const unchanged: IncyclistCapability[] = []
+        const conflicts: Array<{capability:IncyclistCapability, currentName:string}> = []
+
+        candidateCapabilities.forEach( capability => {
+            const c = this.getCapability(capability)
+            if (!c || c.disabled || this.isOnDeletedList(capability,udid))
+                return
+
+            if (c.selected===udid)
+                unchanged.push(capability)
+            else if (!c.selected)
+                filled.push(capability)
+            else
+                conflicts.push({capability, currentName:c.deviceName})
+        })
+
+        return {filled, unchanged, conflicts}
+    }
+
+    /**
+     * Selects `udid` for `capability`, then, for every other capability the device supports:
+     * skips it if `disabled` or on this device's session delete list, otherwise fills it if
+     * empty or replaces it if named in `mode.replace` - read fresh here rather than from a
+     * caller's earlier {@link previewSelectDevice}, so a slot filled in the meantime is kept.
+     */
+    protected selectDeviceObjectMode(capability:IncyclistCapability, udid:string, mode:{others:'fill-empty', replace:IncyclistCapability[]}):boolean {
+        let changed = this.selectCapabilityDevice(capability,udid,false)
+
+        const adapter = this.getDeviceAdapter(udid)
+        const others = adapter.getCapabilities().filter( c=> c!==capability )
+
+        others.forEach( c => {
+            const current = this.getCapability(c)
+            if (!current || current.disabled || this.isOnDeletedList(c,udid))
+                return
+
+            const isEmpty = !current.selected
+            const shouldReplace = mode.replace.includes(c)
+            if (!isEmpty && !shouldReplace)
+                return
+
+            const wasChanged = this.selectCapabilityDevice(c,udid,false)
+            changed = changed || wasChanged
+        })
+
+        return changed
     }
 
    /**

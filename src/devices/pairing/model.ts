@@ -99,6 +99,25 @@ export interface DeviceSelectState {
     isScanning?: boolean
 }
 
+/**
+ * What picking `udid` would do to every capability it supports other than the one it's being
+ * picked for: `filled` slots are currently empty, `unchanged` already hold this same device, and
+ * `conflicts` hold a different device (`currentName` is for display only, never logged).
+ */
+export interface SelectionImpact {
+    filled: IncyclistCapability[]
+    unchanged: IncyclistCapability[]
+    conflicts: Array<{ capability: IncyclistCapability, currentName: string }>
+}
+
+/**
+ * `true` keeps today's meaning (overwrite every capability the device supports) and `false`
+ * means this slot only. The object form fills whatever is empty at commit time and replaces only
+ * the capabilities named in `replace`; a capability that's `disabled` or on this device's session
+ * delete list is skipped either way, not filled and not replaced.
+ */
+export type SelectDeviceMode = boolean | { others: 'fill-empty', replace: IncyclistCapability[] }
+
 
 
 export interface PairingSettings {
