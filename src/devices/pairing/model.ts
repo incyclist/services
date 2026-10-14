@@ -25,7 +25,12 @@ export interface CapabilityData {
     deviceNames: string
     selected?:string
     disabled:boolean
-    /** set while this capability's configured device is excluded from the effective selection (e.g. a case B fallback); `selected` stays raw */
+    /**
+     * Set only while the device named by `selected` is itself excluded from the effective
+     * selection (e.g. riding on a fallback device while the trainer isn't available); `selected`
+     * keeps the raw, persisted udid regardless. Cleared automatically the moment `selected`
+     * changes - never describes some other, previously-selected device.
+     */
     excluded?: { reason: ExclusionReason, scope: ExclusionScope }
     interface:string
     devices:Array<DevicePairingData>

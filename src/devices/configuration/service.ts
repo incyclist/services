@@ -382,6 +382,8 @@ export class DeviceConfigurationService  extends IncyclistService{
 
                 if (record.selected===udid) {
                     record.selected=undefined
+                    if (capability!=='bike')
+                        this.removeExclusions({capability:capability as IncyclistCapability}) // the persisted selection is about to change
 
                     const items = record.devices.length
                     if (deviceIdx===items-1 && items>1) { // selected was last entry in the list -> try to select previous record
@@ -792,8 +794,21 @@ export class DeviceConfigurationService  extends IncyclistService{
         return this.settings?.capabilities?.find( c=>c.capability===capability)?.selected
     }
 
+    /** Whether the device currently selected for this capability - not any other remembered device - is excluded right now. */
     protected isExcluded(capability:ExtendedIncyclistCapability):boolean {
-        return this.exclusions.some( e=>e.capability===capability)
+        const setting = this.settings?.capabilities?.find( c=>c.capability===capability)
+        return this.findExclusion(setting)!==undefined
+    }
+
+    /**
+     * The exclusion that currently applies to this capability record, if any. It only applies
+     * while the capability's persisted selection is still the device it was raised against, so
+     * an exclusion that outlives a selection change can never suppress a different device.
+     */
+    protected findExclusion(setting:{capability:ExtendedIncyclistCapability, selected?:string}|undefined):CapabilityExclusion|undefined {
+        if (!setting?.selected)
+            return undefined
+        return this.exclusions.find( e=>e.capability===setting.capability && e.udid===setting.selected)
     }
 
     protected setExclusion(capability:IncyclistCapability, udid:string, opts:ExclusionOptions):void {
@@ -1324,7 +1339,7 @@ export class DeviceConfigurationService  extends IncyclistService{
     
             const info:CapabilityInformation[] = capabilities.map( c=> {
 
-                const exclusion = this.exclusions.find( e=>e.capability===c.capability)
+                const exclusion = this.findExclusion(c)
 
                 const ci:CapabilityInformation = {
 
