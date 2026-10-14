@@ -19,6 +19,7 @@ describe('PairingPage state machine',()=> {
 
         checkPairingSuccess () { return this.pairingSuccess}
         checkPairingComplete () { return this.pairingComplete}
+        isPairingSettled () { return this.pairingComplete}
         prepareForRide () {}
         async startPairing () {}
         async startScanning () {}

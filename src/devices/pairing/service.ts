@@ -1,5 +1,5 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
-import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
+import { AdapterInfo, CapabilityExclusion, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
 import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState  } from "./model";
 import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
@@ -75,6 +75,10 @@ export class DevicePairingService  extends IncyclistService{
     protected static readonly STALLED_AFTER_MS = 30*1000
     protected stalledTimer?: ReturnType<typeof setTimeout>
     protected stalledLogged = false
+
+    // whether a Pairing page visit is open - see setVisitOpen()
+    protected visitOpen = false
+    protected visitOpenedAt?: number
 
 
     protected onPairingStartedHandler = this.onPairingStarted.bind(this)
@@ -273,6 +277,112 @@ export class DevicePairingService  extends IncyclistService{
         return await this.stop([],true)
     }
 
+    /**
+     * Tells the service whether a Pairing page visit is open.
+     *
+     * Opening a visit clears every exclusion scoped `until-next-pairing`, so the rider's devices
+     * are re-evaluated from scratch. That happens on every call with `true`, also when a visit is
+     * already open, so a visit that was never closed (crash, fast navigation) can't keep one alive.
+     *
+     * While a visit is open, a device excluded as `not-available` keeps being tried, and is taken
+     * back into use as soon as it connects. Without an open visit neither happens: a device that
+     * connects in the background, e.g. during ride start, stays excluded.
+     *
+     * @param open `true` when the Pairing page opens, `false` when it is left
+     */
+    setVisitOpen(open:boolean):void {
+        try {
+            if (open) {
+                this.visitOpenedAt ??= Date.now()
+                this.getDeviceConfiguration().clearExclusions({scope:'until-next-pairing'})
+            }
+            else {
+                delete this.visitOpenedAt
+            }
+            this.visitOpen = open
+        }
+        catch(err) {
+            this.logError(err,'setVisitOpen')
+        }
+    }
+
+    /**
+     * Whether pairing has nothing left to do: every active capability is connected, and no device
+     * excluded as `not-available` is still being waited for while a visit is open.
+     *
+     * Both pairing modes use this to decide whether to keep trying, so they agree on it.
+     */
+    isPairingSettled():boolean {
+        return this.checkPairingComplete() && !this.isAwaitingExcludedDevice()
+    }
+
+    /** Whether a visit is open and a device excluded as `not-available` should still be tried. */
+    protected isAwaitingExcludedDevice():boolean {
+        if (!this.visitOpen)
+            return false
+        return this.getRevertableExclusions().length>0
+    }
+
+    protected getRevertableExclusions(udid?:string):CapabilityExclusion[] {
+        return this.getDeviceConfiguration().getExclusions()
+            .filter( e=> e.reason==='not-available' && (udid===undefined || e.udid===udid))
+    }
+
+    /**
+     * A device excluded as `not-available` has connected. If a visit is open, it's taken back into
+     * use for every capability it was excluded from.
+     */
+    protected revertExclusionsOnConnect(udid:string):void {
+        try {
+            if (!this.visitOpen || !udid)
+                return
+
+            const reverted = this.getRevertableExclusions(udid)
+            if (reverted.length===0)
+                return
+
+            const configuration = this.getDeviceConfiguration()
+            reverted.forEach( e=> { configuration.includeCapability(e.capability) })
+
+            const now = Date.now()
+            const since = Math.min(...reverted.map(e=>e.since))
+            this.logEvent({
+                message:'pairing fallback reverted',
+                msSinceOpen: this.visitOpenedAt===undefined ? undefined : now-this.visitOpenedAt,
+                msSinceFallback: now-since,
+            })
+            this.emit('exclusion-reverted', {udid, capabilities: reverted.map(e=>e.capability)})
+        }
+        catch(err) {
+            this.logError(err,'revertExclusionsOnConnect')
+        }
+    }
+
+    /**
+     * The adapters of excluded devices that are still trying to connect. A device that is still in
+     * use for a capability that isn't excluded is not included.
+     */
+    protected getExcludedPairingAttempts():AdapterInfo[] {
+        try {
+            const configuration = this.getDeviceConfiguration()
+            const excluded = new Set(configuration.getExclusions().map(e=>e.udid))
+            if (excluded.size===0)
+                return []
+
+            const inUse = new Set(configuration.getSelectedDevices().map(d=>d.selected))
+            return (this.state?.adapters??[])
+                .filter( ai=> excluded.has(ai.udid) && !inUse.has(ai.udid) && !ai.adapter?.isStarted())
+        }
+        catch(err) {
+            this.logError(err,'getExcludedPairingAttempts')
+            return []
+        }
+    }
+
+    protected async stopPairingAttempts(adapters:AdapterInfo[]):Promise<void> {
+        await Promise.allSettled( adapters.map( ai=> ai.adapter.stop()))
+    }
+
 
     async prepareStart(adapterFilter:Array<string>=[]):Promise<void> {
         const stillPairing = this.isPairing()
@@ -282,6 +392,11 @@ export class DevicePairingService  extends IncyclistService{
         this.logEvent({message:'Stop Pairing (OK)', stillPairing,stillScanning})
         try {
             this.pauseAdapters(adapters.filter( a=> !adapterFilter.includes(a.udid)));
+
+            // the ride won't use an excluded device, so a connection attempt still running for one is stopped
+            const excludedAttempts = this.getExcludedPairingAttempts()
+            if (excludedAttempts.length>0)
+                await this.stopPairingAttempts(excludedAttempts)
 
             // Pairing is intentionally left running in the background here: the user is only
             // skipping the pairing *page*, not asking to abandon devices that may still connect.
@@ -1189,12 +1304,17 @@ export class DevicePairingService  extends IncyclistService{
         if (notify && changed) {
             if (this.settings.onStateChanged && typeof this.settings.onStateChanged === 'function') {
                 this.settings.onStateChanged({capabilities})
-            }   
+            }
         }
 
         if (this.usage==='page') {
             this.emit('state-update')
         }
+
+        // every connect path of both pairing modes (pairing success, detection during a scan,
+        // an adapter found already running) ends up here
+        if (connectState==='connected')
+            this.revertExclusionsOnConnect(udid)
     }
 
     protected onPairingStarted() {
@@ -1611,7 +1731,8 @@ export class DevicePairingService  extends IncyclistService{
         //await this.waitForInterfacesInitialized()
 
         if (configOKToStart && !this.deviceSelectState && !props.enforcedScan)  {
-            if (this.checkPairingSuccess()!==true)
+            // ready to ride, but a device excluded as not available is still tried while the page is open
+            if (this.checkPairingSuccess()!==true || this.isAwaitingExcludedDevice())
                 await this.startPairing(adapters, props);
             else {
                 this.logEvent({message:'Pairing completed'})
@@ -1636,7 +1757,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     async startPairing(adapters: AdapterInfo[], props: PairingProps) {
-        if (this.checkPairingComplete())  {
+        if (this.isPairingSettled())  {
             if (this.usage==='page')
                 this.emit('pairing-done');
             return;
@@ -1729,7 +1850,7 @@ export class DevicePairingService  extends IncyclistService{
 
         this.emit('pairing-done');
 
-        if (!this.checkPairingComplete()) {
+        if (!this.isPairingSettled()) {
             this.logEvent({ message: 'Pairing done', adapters, props });
                 await this.rideService.stop()
 
@@ -2336,6 +2457,8 @@ export class DevicePairingService  extends IncyclistService{
         }
         this.removePairingCallbacks()
         this.removeScanningCallbacks()
+        this.visitOpen = false
+        delete this.visitOpenedAt
     }
 
     @Injectable
