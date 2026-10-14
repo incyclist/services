@@ -1784,6 +1784,84 @@ describe('PairingService',()=>{
                     expect(svc.getState()?.scan?.adapters?.length).toBe(1)
                 })
 
+                describe('connect attempt already known for the detected device',()=>{
+
+                    const detectDevice1 = () => {
+                        configuration.add = jest.fn().mockReturnValue('1')
+                        configuration.getAdapter = jest.fn().mockReturnValue( {
+                            onScanStart:jest.fn(),
+                            onScanStop:jest.fn(),
+                            getCapabilities: jest.fn().mockReturnValue( [IncyclistCapability.Control]),
+                            on:jest.fn(),
+                            getUniqueName:jest.fn().mockReturnValue('1'),
+                            getInterface:jest.fn().mockReturnValue('ant')
+                        })
+                        access.emit('device',{name:'1',interface:'ant', deviceID:'1',profile:'FE'} )
+                    }
+
+                    test('a failed connection is not turned into connected by a re-detection',()=>{
+                        const control = svc.getCapabilityData('control')
+                        const device1 = control.devices.find(d=>d.udid==='1')||{} as any
+                        control.connectState = 'failed'
+                        device1.connectState = 'failed'
+
+                        detectDevice1()
+
+                        expect(control.connectState).toBe('failed')
+                        expect(device1.connectState).toBe('failed')
+                    })
+
+                    test('a connection in progress is not turned into connected by a re-detection',()=>{
+                        const control = svc.getCapabilityData('control')
+                        const device1 = control.devices.find(d=>d.udid==='1')||{} as any
+                        control.connectState = 'connecting'
+                        device1.connectState = 'connecting'
+
+                        detectDevice1()
+
+                        expect(control.connectState).toBe('connecting')
+                        expect(device1.connectState).toBe('connecting')
+                    })
+
+                    test('the pairing outcome reported by the ride service still wins after a re-detection',()=>{
+                        const control = svc.getCapabilityData('control')
+                        const device1 = control.devices.find(d=>d.udid==='1')||{} as any
+                        control.connectState = 'connecting'
+                        device1.connectState = 'connecting'
+
+                        detectDevice1()
+                        svc['onPairingError']('1')
+
+                        expect(control.connectState).toBe('failed')
+                        expect(device1.connectState).toBe('failed')
+                    })
+                })
+
+            })
+
+            describe('scan restart',()=>{
+
+                test('restarting the scan callbacks without stopping leaves exactly one device listener',()=>{
+                    svc.simulateScanning()
+                    svc['initScanningCallbacks']()
+                    svc['initScanningCallbacks']()
+
+                    configuration.add = jest.fn().mockReturnValue(undefined)
+                    access.emit('device',{name:'10',interface:'ant', deviceID:'10',profile:'FE'} )
+
+                    expect(configuration.add).toHaveBeenCalledTimes(1)
+                    expect(access.listenerCount('device')).toBe(1)
+                    expect(access.listenerCount('data')).toBe(1)
+                })
+
+                test('stopping after a restart removes the listener',()=>{
+                    svc.simulateScanning()
+                    svc['initScanningCallbacks']()
+                    svc['removeScanningCallbacks']()
+
+                    expect(access.listenerCount('device')).toBe(0)
+                    expect(access.listenerCount('data')).toBe(0)
+                })
             })
 
         })

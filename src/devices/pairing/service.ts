@@ -1139,7 +1139,12 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     protected initScanningCallbacks():void {
-        
+
+        // startScanning() restarts without going through stopScanning(), so a registration from
+        // the previous scan must not be left behind
+        this.access.off('device',this.onDeviceDetectedHandler)
+        this.access.off('data', this.onDeviceDataHandler)
+
         this.access.on('device',this.onDeviceDetectedHandler)
         this.access.on('data', this.onDeviceDataHandler)
     }
@@ -1368,7 +1373,8 @@ export class DevicePairingService  extends IncyclistService{
             })
 
             const adapter = this.getDeviceConfiguration().getAdapter(udid)
-            
+            const hasConnectAttempt = this.hasConnectAttempt(udid)
+
             if (adapter) {
                 adapter.onScanStart()
                 this.markConnected(adapter, udid);
@@ -1391,8 +1397,16 @@ export class DevicePairingService  extends IncyclistService{
                 this.logEvent({message:'Could not get adapter', deviceSettings})
             }
             
-            this.onPairingSuccess(udid)       
-    
+            // a device that was merely announced is not necessarily connected: if a connection
+            // attempt is in progress or has failed, its outcome is reported by the ride service
+            // ('pair-success' / 'pair-error') and must not be overwritten here
+            if (hasConnectAttempt) {
+                if (this.usage==='page')
+                    this.emit('state-update')
+            }
+            else {
+                this.onPairingSuccess(udid)
+            }
 
         }
         catch(err) {
@@ -1416,17 +1430,30 @@ export class DevicePairingService  extends IncyclistService{
             let device = this.getCapabilityDevice(c, udid);
 
             if (device) {
-                device.connectState = 'connected';
+                if (!this.isConnectAttemptState(device.connectState))
+                    device.connectState = 'connected';
             }
             else {
                 device = { udid, connectState: 'connected', selected: false, name: adapter.getUniqueName(), interface: adapter.getInterface() };
                 info.devices.push(device);
             }
 
-            if (info.selected === udid) {
+            if (info.selected === udid && !this.isConnectAttemptState(info.connectState)) {
                 info.connectState = 'connected';
             }
         });
+    }
+
+    private isConnectAttemptState(connectState?:string):boolean {
+        return connectState==='connecting' || connectState==='failed'
+    }
+
+    /** true if a connection attempt for this device is in progress, or has failed */
+    private hasConnectAttempt(udid:string):boolean {
+        return (this.state.capabilities??[]).some( c =>
+            (c.selected===udid && this.isConnectAttemptState(c.connectState)) ||
+            this.isConnectAttemptState(this.getCapabilityDevice(c,udid)?.connectState)
+        )
     }
 
     protected disconnectInterface(name:string):void {
