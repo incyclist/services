@@ -646,6 +646,108 @@ describe('GpxDisplayService', () => {
 
             expect(service['updateDurations'].length).toBe(1)
         })
+
+        describe('simulating without personal API key (switch to Map after Street View was latched)', () => {
+
+            const simulate = () => {
+                mockRideService.isSimulated.mockReturnValue(true)
+                Inject('GoogleMaps', {
+                    hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                    hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+                })
+            }
+
+            test('completes the start immediately instead of waiting for the abandoned Street View timeout', () => {
+                jest.useFakeTimers()
+                try {
+                    setupSVMocks(service, svMobile())
+                    service['release']('control-ready')
+                    expect(service['svFlowActive']).toBe(true)
+                    expect(service.isStartRideCompleted()).toBe(false)
+
+                    simulate()
+
+                    expect(service.isStartRideCompleted()).toBe(true)
+                    expect(service.getStartOverlayProps()).toEqual({mapType: 'Map', mapState: 'Loaded'})
+                }
+                finally {
+                    jest.useRealTimers()
+                }
+            })
+
+            test('does not run the abandoned Street View timeout', () => {
+                jest.useFakeTimers()
+                try {
+                    setupSVMocks(service, svMobile())
+                    service['release']('control-ready')
+                    simulate()
+                    service.isStartRideCompleted()
+
+                    jest.advanceTimersByTime(15000+1500)
+
+                    expect(service['svViewState']).not.toBe('unavailable')
+                    expect(service['rideViewNotice']).toBeUndefined()
+                }
+                finally {
+                    jest.useRealTimers()
+                }
+            })
+
+            test('completes immediately when simulating before Street View was released', () => {
+                setupSVMocks(service, svMobile())
+                expect(service.isStartRideCompleted()).toBe(false)
+
+                simulate()
+
+                expect(service.isStartRideCompleted()).toBe(true)
+            })
+
+            test('does not release Street View once the ride is simulated', () => {
+                setupSVMocks(service, svMobile())
+                simulate()
+
+                service.onStartDevicesReady()
+
+                expect(service['svReleased']).toBe(false)
+            })
+
+            test('a genuine Street View timeout fallback still holds the start for SV_FALLBACK_HOLD', () => {
+                jest.useFakeTimers()
+                try {
+                    setupSVMocks(service, svMobile())
+                    service['release']('control-ready')
+
+                    jest.advanceTimersByTime(15000)
+                    expect(service['svViewState']).toBe('unavailable')
+                    expect(service.isStartRideCompleted()).toBe(false)
+
+                    jest.advanceTimersByTime(1500)
+                    expect(service.isStartRideCompleted()).toBe(true)
+                }
+                finally {
+                    jest.useRealTimers()
+                }
+            })
+
+            test('simulating after Street View already fell back keeps the fallback hold', () => {
+                jest.useFakeTimers()
+                try {
+                    setupSVMocks(service, svMobile())
+                    service['release']('control-ready')
+                    jest.advanceTimersByTime(15000)
+
+                    simulate()
+
+                    expect(service['svFlowActive']).toBe(true)
+                    expect(service.isStartRideCompleted()).toBe(false)
+                    jest.advanceTimersByTime(1500)
+                    expect(service.isStartRideCompleted()).toBe(true)
+                }
+                finally {
+                    jest.useRealTimers()
+                }
+            })
+        })
     })
 
     describe('waitsForSatelliteView', () => {
