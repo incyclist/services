@@ -1823,6 +1823,24 @@ describe('PairingService',()=>{
                         expect(device1.connectState).toBe('connecting')
                     })
 
+                    test('only the capabilities of the device that are connecting keep their state',()=>{
+                        const control = svc.getCapabilityData('control')
+                        const power = svc.getCapabilityData('power')
+                        const controlDevice1 = control.devices.find(d=>d.udid==='1')||{} as any
+                        const powerDevice1 = power.devices.find(d=>d.udid==='1')||{} as any
+                        control.connectState = 'connecting'
+                        controlDevice1.connectState = 'connecting'
+                        power.connectState = 'waiting'
+                        powerDevice1.connectState = 'waiting'
+
+                        detectDevice1()
+
+                        expect(control.connectState).toBe('connecting')
+                        expect(controlDevice1.connectState).toBe('connecting')
+                        expect(power.connectState).toBe('connected')
+                        expect(powerDevice1.connectState).toBe('connected')
+                    })
+
                     test('the pairing outcome reported by the ride service still wins after a re-detection',()=>{
                         const control = svc.getCapabilityData('control')
                         const device1 = control.devices.find(d=>d.udid==='1')||{} as any

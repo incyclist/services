@@ -1157,13 +1157,20 @@ export class DevicePairingService  extends IncyclistService{
 
 
 
-    protected onPairingStatusUpdate( udid:string, connectState:DevicePairingStatus,notify:boolean=true) {
+    /**
+     * @param keepConnectAttempts leave capabilities/devices untouched that are connecting or have failed.
+     *  Used when the update is derived from a device merely being detected: the outcome of a connection
+     *  attempt is reported by the ride service ('pair-success' / 'pair-error') and must not be overwritten.
+     *  This is decided per capability/device entry, as one device can serve several capabilities of
+     *  which only some are being connected.
+     */
+    protected onPairingStatusUpdate( udid:string, connectState:DevicePairingStatus,notify:boolean=true, keepConnectAttempts:boolean=false) {
         const capabilities=this.state.capabilities
         let changed = false;
 
         capabilities.forEach (c => {
-            
-            if (c.selected===udid) {                
+
+            if (c.selected===udid && !(keepConnectAttempts && this.isConnectAttemptState(c.connectState))) {
                 if (c.connectState!==connectState) {
                     c.connectState = connectState
                     changed = true
@@ -1174,7 +1181,7 @@ export class DevicePairingService  extends IncyclistService{
                 }
             }
             const device = this.getCapabilityDevice(c)
-            if (device && device.udid===udid) {
+            if (device && device.udid===udid && !(keepConnectAttempts && this.isConnectAttemptState(device.connectState))) {
                 device.connectState = connectState
             }
         })
@@ -1373,7 +1380,6 @@ export class DevicePairingService  extends IncyclistService{
             })
 
             const adapter = this.getDeviceConfiguration().getAdapter(udid)
-            const hasConnectAttempt = this.hasConnectAttempt(udid)
 
             if (adapter) {
                 adapter.onScanStart()
@@ -1397,16 +1403,9 @@ export class DevicePairingService  extends IncyclistService{
                 this.logEvent({message:'Could not get adapter', deviceSettings})
             }
             
-            // a device that was merely announced is not necessarily connected: if a connection
-            // attempt is in progress or has failed, its outcome is reported by the ride service
-            // ('pair-success' / 'pair-error') and must not be overwritten here
-            if (hasConnectAttempt) {
-                if (this.usage==='page')
-                    this.emit('state-update')
-            }
-            else {
-                this.onPairingSuccess(udid)
-            }
+            // a device that was merely announced is not necessarily connected: entries that are
+            // connecting or have failed keep their state
+            this.onPairingStatusUpdate(udid,'connected',true,true)
 
         }
         catch(err) {
@@ -1446,14 +1445,6 @@ export class DevicePairingService  extends IncyclistService{
 
     private isConnectAttemptState(connectState?:string):boolean {
         return connectState==='connecting' || connectState==='failed'
-    }
-
-    /** true if a connection attempt for this device is in progress, or has failed */
-    private hasConnectAttempt(udid:string):boolean {
-        return (this.state.capabilities??[]).some( c =>
-            (c.selected===udid && this.isConnectAttemptState(c.connectState)) ||
-            this.isConnectAttemptState(this.getCapabilityDevice(c,udid)?.connectState)
-        )
     }
 
     protected disconnectInterface(name:string):void {
