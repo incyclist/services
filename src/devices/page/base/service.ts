@@ -112,6 +112,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         try {
             this.logEvent({message:'page closed', page:'Pairing'})
             this.isVisitOpen = false
+            this.setPairingVisitOpen(false)
             EventLogger.setGlobalConfig('page',null)
             this.isPairingForRide =false
 
@@ -407,6 +408,10 @@ export abstract class PairingPageService extends IncyclistPageService {
     }
 
     protected openVisit():void {
+        // runs on every open, also when a visit is already open: the pairing service clears
+        // the exclusions that last until the next visit each time
+        this.setPairingVisitOpen(true)
+
         if (this.isVisitOpen)
             return
         this.trackVisit( t=>t.openVisit({forRide:this.isPairingForRide}), 'openVisit')
@@ -416,6 +421,16 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected closeVisit(via:PairingExitVia):void {
         this.trackVisit( t=>t.closeVisit(via,{canStartRide:this.canStartRide()}), 'closeVisit')
         this.isVisitOpen = false
+        this.setPairingVisitOpen(false)
+    }
+
+    protected setPairingVisitOpen(open:boolean):void {
+        try {
+            this.getDevicePairing().setVisitOpen(open)
+        }
+        catch(err) {
+            this.logError(err,'setPairingVisitOpen')
+        }
     }
 
     protected canStartRide():boolean {

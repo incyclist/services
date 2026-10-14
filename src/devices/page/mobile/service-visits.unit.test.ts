@@ -18,6 +18,7 @@ describe('DevicesPageService - pairing visit tracking', ()=> {
         stop: jest.fn().mockResolvedValue(undefined),
         prepareStart: jest.fn().mockResolvedValue(undefined),
         setReadyToStart: jest.fn(),
+        setVisitOpen: jest.fn(),
         usage: undefined,
     }
 
