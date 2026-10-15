@@ -2,6 +2,7 @@
 import {  IncyclistCapability, IncyclistDeviceAdapter, DeviceProperties, IncyclistDevice,DeviceSettings } from 'incyclist-devices'
 import { CapabilityInformation, DeviceConfigurationService, DeviceConfigurationSettings, ExtendedIncyclistCapability, InterfaceSetting, useDeviceConfiguration,} from '../configuration'
 import {DevicePairingService} from './service'
+import { isCapabilityActive } from './capability'
 import { DeviceAccessService, useDeviceAccess } from '../access'
 import { DeviceRideService, useDeviceRide } from '../ride'
 import UserSettingsMock from '../../settings/service/mock'
@@ -775,6 +776,55 @@ describe('PairingService',()=>{
                 svc.getCapabilityData('control').connectState = 'waiting'
 
                 expect((svc as any).isStalled()).toBe(false)
+            })
+        })
+
+        // One table, every reader: checkPairingSuccess, checkPairingComplete and isStalled must all treat
+        // "is this capability in play" exactly the way isCapabilityActive defines it - not re-derive their
+        // own version of "selected and not disabled and not excluded". With only Control configured and
+        // nothing else to fall back on, each reader's outcome is forced to depend entirely on that one
+        // question, so a reader that silently went back to checking raw `selected` would fail here even
+        // though it might still pass a hand-picked example test.
+        describe('agreement: every readiness reader treats "in play" exactly like isCapabilityActive',()=>{
+
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+                svc.setCanStartRide(true)
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            const CASES: Array<{name:string, selected:boolean, disabled:boolean, excluded:boolean, active:boolean}> = [
+                {name:'selected, not disabled, not excluded', selected:true,  disabled:false, excluded:false, active:true},
+                {name:'not selected',                         selected:false, disabled:false, excluded:false, active:false},
+                {name:'selected and disabled',                selected:true,  disabled:true,  excluded:false, active:false},
+                {name:'selected and excluded',                selected:true,  disabled:false, excluded:true,  active:false},
+                {name:'selected, disabled and excluded',      selected:true,  disabled:true,  excluded:true,  active:false},
+            ]
+
+            test.each(CASES)('$name',({selected, disabled, excluded, active})=>{
+                svc.setupMockData(IncyclistCapability.Control, selected ? [ {udid:'1', selected:true} ] : [ {udid:'1'} ])
+                const control = svc.getCapabilityData('control')
+                control.disabled = disabled
+                control.excluded = excluded ? {reason:'not-available', scope:'until-next-pairing'} : undefined
+
+                expect(isCapabilityActive(control)).toBe(active)
+
+                // checkPairingSuccess: Control is the only capability configured, so success can only
+                // come from it being both active and connected
+                control.connectState = 'connected'
+                expect(svc.checkPairingSuccess()).toBe(active)
+
+                // checkPairingComplete/isStalled: Control is selected but not yet connected - complete
+                // (nothing active left pending) exactly when Control doesn't count; stalled exactly when it does
+                control.connectState = 'waiting'
+                expect(svc.checkPairingComplete()).toBe(!active)
+                expect((svc as any).isStalled()).toBe(active)
             })
         })
 
