@@ -625,14 +625,15 @@ describe( 'DeviceConfigurationService',()=>{
                 }
             }
 
-            service.add( {interface:'ant',deviceID:'4711',profile:'PWR'},{legacy:true})
+            const udid = service.add( {interface:'ant',deviceID:'4711',profile:'PWR'},{legacy:true})
 
             const settings = service.settings
             expect(settings.devices.length).toBe(3)
-            
-            expect(settings.capabilities.length).toBe(6)  
+
+            expect(settings.capabilities.length).toBe(6)
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:undefined})
-            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:undefined})
+            // any device now fills the empty, non-disabled slots it supports - a power sensor fills Power
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:undefined})
         })
 

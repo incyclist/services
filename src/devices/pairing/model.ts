@@ -118,6 +118,25 @@ export interface SelectionImpact {
  */
 export type SelectDeviceMode = boolean | { others: 'fill-empty', replace: IncyclistCapability[] }
 
+/**
+ * A device that wants slots already held by a different device. Nothing is replaced until the
+ * rider answers: until then, the current selection is kept and readiness is computed on it.
+ *
+ * `deviceName` and `conflicts[].currentName` are for display only and are never logged.
+ */
+export interface SelectionConflict {
+    /** stable for this device and detection, opaque to the UI */
+    id: string
+    origin: 'detection' | 'manual'
+    deviceName: string
+    /** empty slots that were already filled with this device */
+    filled: IncyclistCapability[]
+    conflicts: Array<{ capability: IncyclistCapability, currentName: string }>
+}
+
+/** How a conflict ended without being answered: the rider dismissed it, or left the page. */
+export type ConflictDismissal = 'dismissed' | 'left_page'
+
 
 
 export interface PairingSettings {

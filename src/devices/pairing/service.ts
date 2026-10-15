@@ -1,6 +1,6 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
-import { AdapterInfo, CapabilityExclusion, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
-import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact  } from "./model";
+import { AddDeviceResult, AdapterInfo, CapabilityExclusion, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
+import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact, SelectionConflict, ConflictDismissal  } from "./model";
 import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
@@ -79,6 +79,10 @@ export class DevicePairingService  extends IncyclistService{
     // whether a Pairing page visit is open - see setVisitOpen()
     protected visitOpen = false
     protected visitOpenedAt?: number
+
+    // selection conflicts raised during the open visit, oldest first, one per device
+    protected pendingConflicts: Array<{udid:string, conflict:SelectionConflict}> = []
+    protected static conflictCounter = 0
 
 
     protected onPairingStartedHandler = this.onPairingStarted.bind(this)
@@ -298,12 +302,171 @@ export class DevicePairingService  extends IncyclistService{
             }
             else {
                 delete this.visitOpenedAt
+                // the rider left without answering: the current selection is kept
+                this.dismissPendingConflicts('left_page')
             }
             this.visitOpen = open
         }
         catch(err) {
             this.logError(err,'setVisitOpen')
         }
+    }
+
+    /**
+     * The selection conflicts raised during the open visit that the rider hasn't answered yet,
+     * oldest first, one per device.
+     */
+    getPendingConflicts():SelectionConflict[] {
+        return this.pendingConflicts.map( e=> clone(e.conflict))
+    }
+
+    /**
+     * Answers a pending conflict: the device replaces the current one in each of the `replace`
+     * capabilities, and every other row keeps the current device.
+     *
+     * The rows are checked again now, so a capability whose slot no longer holds a different
+     * device (it was changed since the conflict was raised) is left alone. The selection itself
+     * goes through {@link selectDevice}'s object mode.
+     *
+     * @param id the conflict's `id`
+     * @param replace the capabilities in which the device should replace the current one
+     */
+    async resolveConflict(id:string, replace:IncyclistCapability[]):Promise<void> {
+        try {
+            const entry = this.takePendingConflict(id)
+            if (!entry)
+                return
+
+            const {udid, conflict} = entry
+            const asked = conflict.conflicts.map( c=>c.capability)
+            const stillConflicting = this.computeSelectionImpact(udid, asked).conflicts.map( c=>c.capability)
+            const toReplace = (replace??[]).filter( c=> stillConflicting.includes(c))
+
+            if (toReplace.length>0) {
+                const [first,...rest] = toReplace
+                await this.selectDevice(first, udid, {others:'fill-empty', replace:rest})
+            }
+            this.logConflictResolved(conflict, 'done', toReplace.length)
+        }
+        catch(err) {
+            this.logError(err,'resolveConflict')
+        }
+    }
+
+    /**
+     * Closes a pending conflict without changing anything: the current device is kept in every row.
+     *
+     * @param id the conflict's `id`
+     * @param via whether the rider dismissed it, or left the page without answering
+     */
+    dismissConflict(id:string, via:ConflictDismissal='dismissed'):void {
+        try {
+            const entry = this.takePendingConflict(id)
+            if (entry)
+                this.logConflictResolved(entry.conflict, via, 0)
+        }
+        catch(err) {
+            this.logError(err,'dismissConflict')
+        }
+    }
+
+    protected dismissPendingConflicts(via:ConflictDismissal):void {
+        const pending = this.pendingConflicts
+        this.pendingConflicts = []
+        pending.forEach( e=> { this.logConflictResolved(e.conflict, via, 0) })
+    }
+
+    protected takePendingConflict(id:string):{udid:string, conflict:SelectionConflict}|undefined {
+        const idx = this.pendingConflicts.findIndex( e=>e.conflict.id===id)
+        if (idx===-1)
+            return undefined
+        const [entry] = this.pendingConflicts.splice(idx,1)
+        return entry
+    }
+
+    /**
+     * A detected device was added: logs the empty slots it filled, and raises a conflict for the
+     * slots it's newly known for that already hold a different device. Capabilities it was
+     * retracted from again (deleted earlier in this session) are left out of both.
+     */
+    protected onDeviceAdded(udid:string, added:AddDeviceResult, retracted:IncyclistCapability[]):void {
+        try {
+            const autoSelected = added.autoSelected.filter( a=> !retracted.includes(a.capability))
+            autoSelected.forEach( a=> {
+                this.logEvent({message:'device auto selected', capability:a.capability, rule:a.rule, visitOpen:this.visitOpen})
+            })
+
+            const newlyKnown = added.newlyKnown.filter( c=> !retracted.includes(c))
+            this.raiseDetectionConflict(udid, newlyKnown, autoSelected.map( a=>a.capability))
+        }
+        catch(err) {
+            this.logError(err,'onDeviceAdded')
+        }
+    }
+
+    // only a device that's newly known for a capability is asked about it, so a device already known
+    // for it is never asked again; nothing is replaced until the rider answers
+    protected raiseDetectionConflict(udid:string, newlyKnown:IncyclistCapability[], filled:IncyclistCapability[]):void {
+        if (newlyKnown.length===0)
+            return
+
+        const {conflicts} = this.computeSelectionImpact(udid, newlyKnown)
+        if (conflicts.length===0)
+            return
+
+        const deviceName = this.getCapabilityDevice(newlyKnown[0],udid)?.name
+            ?? this.getDeviceConfiguration().getAdapter(udid)?.getUniqueName() ?? ''
+
+        if (!this.visitOpen) {
+            // no page to ask on: keep the current selection, as if the rider had left the page
+            const conflict:SelectionConflict = {id:this.nextConflictId(udid), origin:'detection', deviceName, filled, conflicts}
+            this.logConflictShown(conflict, conflicts.length, 0)
+            this.logConflictResolved(conflict, 'left_page', 0)
+            return
+        }
+
+        const conflict = this.addPendingConflict(udid, deviceName, filled, conflicts)
+        this.logConflictShown(conflict, conflicts.length, this.pendingConflicts.length-1)
+        this.emit('selection-conflict', clone(conflict))
+    }
+
+    // one entry per device: a device that raises another conflict in the same visit gets its rows added to its entry
+    protected addPendingConflict(udid:string, deviceName:string, filled:IncyclistCapability[], conflicts:SelectionConflict['conflicts']):SelectionConflict {
+        const existing = this.pendingConflicts.find( e=>e.udid===udid)?.conflict
+        if (!existing) {
+            const conflict:SelectionConflict = {id:this.nextConflictId(udid), origin:'detection', deviceName, filled, conflicts}
+            this.pendingConflicts.push({udid, conflict})
+            return conflict
+        }
+
+        filled.filter( c=> !existing.filled.includes(c)).forEach( c=> existing.filled.push(c))
+        conflicts.filter( c=> !existing.conflicts.some( e=>e.capability===c.capability)).forEach( c=> existing.conflicts.push(c))
+        return existing
+    }
+
+    protected nextConflictId(udid:string):string {
+        return `${udid}:${++DevicePairingService.conflictCounter}`
+    }
+
+    // capability names and counts only: device names are never logged
+    protected logConflictShown(conflict:SelectionConflict, conflictCount:number, queued:number):void {
+        this.logEvent({
+            message:'device select conflict shown',
+            origin: conflict.origin,
+            conflictCount,
+            conflictCapabilities: conflict.conflicts.map( c=>c.capability).join(','),
+            queued,
+        })
+    }
+
+    protected logConflictResolved(conflict:SelectionConflict, resolution:'done'|ConflictDismissal, replacedCount:number):void {
+        this.logEvent({
+            message:'device select conflict resolved',
+            origin: conflict.origin,
+            resolution,
+            replacedCount,
+            conflictCount: conflict.conflicts.length,
+        })
     }
 
     /**
@@ -1552,7 +1715,8 @@ export class DevicePairingService  extends IncyclistService{
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
 
         try {
-            const udid = this.getDeviceConfiguration().add(deviceSettings,{legacy:false})
+            let added:AddDeviceResult|undefined
+            const udid = this.getDeviceConfiguration().add(deviceSettings,{legacy:false, onAdded:(result)=>{ added=result }})
             this.logEvent({message:'device detected',device:deviceSettings,udid, isScanning:this.isScanning()})
 
             if(!udid) {
@@ -1576,6 +1740,9 @@ export class DevicePairingService  extends IncyclistService{
             deletedCapabilities.forEach( capability => {
                 this.getDeviceConfiguration().delete(udid,capability,true)
             })
+
+            if (added)
+                this.onDeviceAdded(udid, added, deletedCapabilities)
 
             const adapter = this.getDeviceConfiguration().getAdapter(udid)
 
@@ -2536,6 +2703,7 @@ export class DevicePairingService  extends IncyclistService{
         this.removeScanningCallbacks()
         this.visitOpen = false
         delete this.visitOpenedAt
+        this.pendingConflicts = []
     }
 
     @Injectable

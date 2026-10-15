@@ -75,27 +75,26 @@ describe('DeviceConfigurationService.add() - baseline auto-select matrix', () =>
             expect(selectedOf(IncyclistCapability.HeartRate)).toBe(udid)
         })
 
-        test('power meter does NOT fill empty Power/Speed/Cadence slots (only control-capable devices and heart-rate monitors auto-select today)', () => {
+        test('power meter fills empty Power/Speed/Cadence slots (changed: any device now fills the empty, non-disabled slots it supports)', () => {
             const udid = service.add(PowerMeter('1'))
 
-            expect(selectedOf(IncyclistCapability.Power)).toBeUndefined()
-            expect(selectedOf(IncyclistCapability.Speed)).toBeUndefined()
-            expect(selectedOf(IncyclistCapability.Cadence)).toBeUndefined()
-            // it is still listed as a known device for those capabilities
+            expect(selectedOf(IncyclistCapability.Power)).toBe(udid)
+            expect(selectedOf(IncyclistCapability.Speed)).toBe(udid)
+            expect(selectedOf(IncyclistCapability.Cadence)).toBe(udid)
             expect(devicesOf(IncyclistCapability.Power)).toContain(udid)
         })
 
-        test('CSC does NOT fill empty Speed/Cadence slots (only control-capable devices and heart-rate monitors auto-select today)', () => {
+        test('CSC fills empty Speed/Cadence slots (changed: any device now fills the empty, non-disabled slots it supports)', () => {
             const udid = service.add(Csc('1'))
 
-            expect(selectedOf(IncyclistCapability.Speed)).toBeUndefined()
-            expect(selectedOf(IncyclistCapability.Cadence)).toBeUndefined()
+            expect(selectedOf(IncyclistCapability.Speed)).toBe(udid)
+            expect(selectedOf(IncyclistCapability.Cadence)).toBe(udid)
             expect(devicesOf(IncyclistCapability.Speed)).toContain(udid)
         })
 
-        test('Zwift Play controller does NOT fill empty app_control slot (only control-capable devices and heart-rate monitors auto-select today)', () => {
+        test('Zwift Play controller fills empty app_control slot (changed: any device now fills the empty, non-disabled slots it supports)', () => {
             const udid = service.add(ZwiftPlay('1'))
-            expect(selectedOf(IncyclistCapability.AppControl)).toBeUndefined()
+            expect(selectedOf(IncyclistCapability.AppControl)).toBe(udid)
             expect(devicesOf(IncyclistCapability.AppControl)).toContain(udid)
         })
     })
@@ -110,11 +109,12 @@ describe('DeviceConfigurationService.add() - baseline auto-select matrix', () =>
             expect(selectedOf(IncyclistCapability.Control)).toBe(udid)
         })
 
-        test('power meter re-detected still does NOT fill empty Power slot (only control-capable devices and heart-rate monitors auto-select today)', () => {
+        test('power meter re-detected fills a Power slot that was emptied in the meantime (changed: any device now fills the empty, non-disabled slots it supports)', () => {
             const udid = service.add(PowerMeter('1'))
+            service.unselect(IncyclistCapability.Power)
             service.add(PowerMeter('1'))
 
-            expect(selectedOf(IncyclistCapability.Power)).toBeUndefined()
+            expect(selectedOf(IncyclistCapability.Power)).toBe(udid)
             expect(devicesOf(IncyclistCapability.Power)).toContain(udid)
         })
     })

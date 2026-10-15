@@ -1,6 +1,6 @@
 import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle, InterfaceFactory, BleDeviceSettings } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
-import { AdapterInfo, CapabilityExclusion, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExclusionFilter, ExclusionOptions, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting,
+import { AddDeviceResult, AdapterInfo, AutoSelectRule, CapabilityExclusion, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExclusionFilter, ExclusionOptions, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting,
          LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"
 import { v4 as generateUdid } from 'uuid';
 import { merge } from "../../utils/merge";
@@ -283,7 +283,24 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.emitCapabiltyChanged(capability)
     }
 
-    add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {
+    /**
+     * Adds a device (or recognizes a known one) and lists it for every capability it supports.
+     * Every empty, non-disabled slot the device supports is filled with it.
+     *
+     * @param props.onAdded called once the device is added, with what happened per capability:
+     * which capabilities the device is newly known for, and which empty slots it filled (and why)
+     * @returns the device's udid, or `undefined` if no adapter could be created for the settings
+     */
+    add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean, onAdded?:(result:AddDeviceResult)=>void}):string {
+        const result = this.addDevice(deviceSettings,props)
+        if (result.udid)
+            props?.onAdded?.(result)
+        return result.udid
+    }
+
+    protected addDevice(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):AddDeviceResult {
+        const result:AddDeviceResult = { newlyKnown:[], autoSelected:[] }
+
         let udid = this.getUdid(deviceSettings)
         udid ??= this.getUdidForWifiAddressChange(deviceSettings)
 
@@ -317,7 +334,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             adapter = this.getAdapterFromSetting(deviceSettings)
             if (!adapter) {
                 this.logEvent({message:'could not create adapter'})
-                return;
+                return result;
             }
 
             udid = this.settings.devices?.find( d=> adapter.isEqual(d.settings))?.udid ?? this.getUdidForWifiAddressChange(deviceSettings)
@@ -338,29 +355,48 @@ export class DeviceConfigurationService  extends IncyclistService{
         }
 
         this.initCapabilties()
-            
+        // initCapabilties() doesn't create the Controller slot: a controller needs it to exist
+        // before it can be listed or fill it
+        if (adapter.hasCapability(IncyclistCapability.AppControl))
+            this.verifyCapabilityExists(IncyclistCapability.AppControl)
+
+        result.udid = udid
         this.settings.capabilities.forEach( c=> {
-            if (c.devices.includes(udid) && c.selected!==undefined && c.selected!==null)
-                return udid;
-
-            const isBike = adapter.hasCapability(IncyclistCapability.Control)
-
-            if ( adapter.hasCapability(c.capability) && c.capability!=='bike') {
-                if (!c.devices.includes(udid)) {
-                    c.devices.push(udid)
-                }
-
-                if (!c.selected && !c.disabled && (isBike || c.capability===IncyclistCapability.HeartRate))
-                    c.selected = udid
-            }
-
-
+            this.addToCapabilityRecord(c, udid, adapter, result)
         })
 
         this.updateUserSettings()
         this.emitCapabiltyChanged()
-        return udid
+        return result
 
+    }
+
+    // lists the device for this capability (if it supports it) and fills the slot if it's empty and not disabled
+    protected addToCapabilityRecord(c:CapabilitySetting, udid:string, adapter:IncyclistDeviceAdapter, result:AddDeviceResult):void {
+        if (c.capability==='bike')
+            return
+
+        const capability = c.capability as IncyclistCapability
+        if (!adapter.hasCapability(capability))
+            return
+        if (!c.devices.includes(udid)) {
+            c.devices.push(udid)
+            result.newlyKnown.push(capability)
+        }
+
+        if (c.selected || c.disabled)
+            return
+
+        c.selected = udid
+        result.autoSelected.push({capability, rule:this.getAutoSelectRule(adapter,capability)})
+    }
+
+    protected getAutoSelectRule(adapter:IncyclistDeviceAdapter, capability:IncyclistCapability):AutoSelectRule {
+        if (adapter.hasCapability(IncyclistCapability.Control))
+            return 'control'
+        if (capability===IncyclistCapability.HeartRate)
+            return 'heartrate'
+        return 'new-rule'
     }
 
     delete(udid:string, capability?:ExtendedIncyclistCapability, forceSingle=false):void {
