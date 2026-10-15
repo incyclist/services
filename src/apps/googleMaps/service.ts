@@ -15,7 +15,9 @@ export class GoogleMapsService extends IncyclistService {
 
     constructor() {
         super('GoogleMaps')
-        const observer = this.getUserSettings().requestNotifyOnChange('maps','GOOGLE_MAPS_API_KEY')
+        
+        // some tests might mock UserSettings without setting requestNotifyOnChange
+        const observer = this.getUserSettings().requestNotifyOnChange?.('maps','GOOGLE_MAPS_API_KEY')
         observer?.on('changed',this.onPersonalApiKeySet.bind(this))
     }
 
