@@ -1206,7 +1206,8 @@ export class DevicePairingService  extends IncyclistService{
             return
 
         this.stalledLogged = true
-        // only enums, booleans and names of interfaces and capabilities: no device names or ids
+        // only enums, booleans and comma-joined interface/capability names and states: no object
+        // arrays (a key must have one type across every event in the index), no device names or ids
         this.logEvent({
             message: 'pairing stalled',
             usage: this.usage,
@@ -1214,8 +1215,8 @@ export class DevicePairingService  extends IncyclistService{
             isScanning: this.isScanning(),
             waiting: Boolean(this.state.waiting),
             sentinel: this.state.tsPrevStart===-1,
-            interfaces: (this.state.interfaces??[]).map( i=>({name:i.name, state:i.state})),
-            capabilities: (this.state.capabilities??[]).filter( c=>c.selected).map( c=>({capability:c.capability, connectState:c.connectState})),
+            interfaceStates: (this.state.interfaces??[]).map( i=>`${i.name}:${i.state}`).join(','),
+            capabilityStates: (this.state.capabilities??[]).filter( c=>c.selected).map( c=>`${c.capability}:${c.connectState}`).join(','),
         })
     }
 

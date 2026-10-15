@@ -176,12 +176,25 @@ describe('DevicePairingService pairing stalled event', ()=> {
 
         const [event] = stalledCalls(logEvent)[0]
         // 'ts' is added by the logger itself
-        expect(Object.keys(event).sort()).toEqual(['capabilities','interfaces','isPairing','isScanning','message','sentinel','ts','usage','waiting'])
+        expect(Object.keys(event).sort()).toEqual(['capabilityStates','interfaceStates','isPairing','isScanning','message','sentinel','ts','usage','waiting'])
         expect(JSON.stringify(event)).not.toContain('udid-1')
-        expect(event.capabilities).toEqual([
-            { capability:'control', connectState:'waiting' },
-            { capability:'power', connectState:'waiting' },
-        ])
+        expect(event.capabilityStates).toBe('control:waiting,power:waiting')
+        expect(event.interfaceStates).toBe('')
+    })
+
+    test('multiple interfaces are joined as name:state pairs', async ()=> {
+        const { svc } = createStalledService()
+        ;(svc.getState() as any).interfaces = [
+            { name:'ble', state:'connected' },
+            { name:'ant', state:'unavailable' },
+        ]
+        const logEvent = jest.spyOn(svc as any, 'logEvent')
+
+        ;(svc as any).emitStateChange()
+        await jest.advanceTimersByTimeAsync(30_000)
+
+        const [event] = stalledCalls(logEvent)[0]
+        expect(event.interfaceStates).toBe('ble:connected,ant:unavailable')
     })
 
     test('is not logged while a scan is running', async ()=> {
