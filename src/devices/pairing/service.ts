@@ -339,8 +339,8 @@ export class DevicePairingService  extends IncyclistService{
 
             const {udid, conflict} = entry
             const asked = conflict.conflicts.map( c=>c.capability)
-            const stillConflicting = this.computeSelectionImpact(udid, asked).conflicts.map( c=>c.capability)
-            const toReplace = (replace??[]).filter( c=> stillConflicting.includes(c))
+            const stillConflicting = new Set(this.computeSelectionImpact(udid, asked).conflicts.map( c=>c.capability))
+            const toReplace = (replace??[]).filter( c=> stillConflicting.has(c))
 
             if (toReplace.length>0) {
                 const [first,...rest] = toReplace
