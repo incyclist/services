@@ -156,6 +156,30 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
             expect(props.capabilities.rowLabels.top).toEqual(getGuidanceFor('row-required'))
         })
 
+        // the row label and the readiness checks (DevicePairingService.checkPairingSuccess/checkPairingComplete/
+        // isStalled) must all agree on what "the trainer is in play" means, since they all read the same
+        // selected/disabled/excluded state - a disabled or excluded control device is never in play, even
+        // though it's still `selected` and still remembered
+        test('the top row label uses the plain wording when the selected control device is disabled', ()=> {
+            setPairingState({
+                capabilities: [ { capability: IncyclistCapability.Control, devices: [device()], selected: 'udid-1', deviceName: 'Trainer', disabled: true } ],
+            })
+
+            const props = service.getPageDisplayProperties()
+
+            expect(props.capabilities.rowLabels.top).toEqual(getGuidanceFor('row-required'))
+        })
+
+        test('the top row label uses the plain wording when the selected control device is excluded', ()=> {
+            setPairingState({
+                capabilities: [ { capability: IncyclistCapability.Control, devices: [device()], selected: 'udid-1', deviceName: 'Trainer', excluded: { reason: 'not-available', scope: 'until-next-pairing' } } ],
+            })
+
+            const props = service.getPageDisplayProperties()
+
+            expect(props.capabilities.rowLabels.top).toEqual(getGuidanceFor('row-required'))
+        })
+
         test('the bottom row label is always the optional wording', ()=> {
             setPairingState({})
 
