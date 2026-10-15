@@ -30,7 +30,7 @@ describe('DeviceConfigurationService - session exclusions', () => {
             capabilities: ALL_CAPABILITIES.map(capability => ({ capability, devices: [], selected: undefined, disabled: false }))
         }
         service.adapters = {}
-        service.emitCapabiltyChanged = jest.fn()
+        ;(service as any).emitCapabiltyChanged = jest.fn()
         service.inject('UserSettings', { set: jest.fn(), get: jest.fn(), save: jest.fn() } as any)
         SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue({})
     })
