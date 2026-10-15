@@ -115,6 +115,8 @@ export default class IncyclistRoutesApi {
 
         let url;
         if (Array.isArray(query)) {
+            if (!query.length)
+                return;
             const points = query.slice(0,100).map( (p:LatLng) => `${p.lat},${p.lng}` ).join(';')
             url = `/country?points=${points}`
         }
