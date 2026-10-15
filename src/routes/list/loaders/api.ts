@@ -1,7 +1,6 @@
 import { EventLogger } from "gd-eventlog";
 import { Observer, PromiseObserver } from "../../../base/types/observer";
-import IncyclistRoutesApi from "../../base/api";
-import { RouteApiDescription, RouteApiDetail } from "../../base/api/types";
+import { IIncyclistRoutesApi, RouteApiDescription, RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
 import { addDetails } from "../../base/utils/route";
@@ -9,6 +8,8 @@ import { RoutesDbLoader } from "./db";
 import { Loader,LoadDetailsTargets } from "./types";
 import { sleep } from "../../../utils/sleep";
 import { settleWithLimit } from "../../../utils/settleWithLimit";
+import { Injectable } from "../../../base/decorators";
+import { useIncyclistRoutesApi } from "../../base/api/factory";
 
 const ROUTE_DETAILS_CONCURRENCY = 4
 
@@ -36,13 +37,13 @@ const ExistingAndNotUpdated = (existing: RouteInfo, descr: RouteInfo) => {
 
 export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
-    protected api: IncyclistRoutesApi
+    protected api: IIncyclistRoutesApi
     protected saveObserver: PromiseObserver<void>
     protected logger: EventLogger
 
     constructor () {
         super()
-        this.api = IncyclistRoutesApi.getInstance()        
+        this.api = this.getIncyclistRoutesApi().create() 
         this.logger = new EventLogger('RoutesApi')
     }
 
@@ -304,6 +305,12 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
         return data;
     }
+
+    @Injectable
+    protected getIncyclistRoutesApi() {
+        return useIncyclistRoutesApi()
+    }
+
 
 
  

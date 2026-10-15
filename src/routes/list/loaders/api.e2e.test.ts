@@ -1,8 +1,8 @@
-import IncyclistRoutesApi from '../../base/api'
 import { Route } from '../../base/model/route'
 import {RoutesApiLoader}  from './api'
 import { RouteListService } from '../service'
 import { waitNextTick } from '../../../utils'
+import { useIncyclistRoutesApi } from '../../base/api/factory'
 const DEFAULT_ROUTE_API = 'https://dlws.incyclist.com/api/v1/routes'
 
 describe('RouteApiLoader',()=>{
@@ -12,7 +12,7 @@ describe('RouteApiLoader',()=>{
 
         test('e2e test - should only be executed manually',async ()=>{
 
-            const api = IncyclistRoutesApi.getInstance() 
+            const api = useIncyclistRoutesApi().create()
             api['getBaseUrl'] = jest.fn().mockReturnValue(DEFAULT_ROUTE_API)
 
             const list = new RouteListService()

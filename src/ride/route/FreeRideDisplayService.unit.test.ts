@@ -134,7 +134,9 @@ describe('FreeRideDisplayService', () => {
         })
 
         // createRoute() calls route.updateCountryFromPoints() on every start() - without a mock it hits the live Routes API
-        jest.spyOn(IncyclistRoutesApi, 'getInstance').mockReturnValue({ getCountry: jest.fn().mockResolvedValue(undefined) } as unknown as IncyclistRoutesApi)
+        Inject('IncyclistRoutesApi', {
+            create: jest.fn().mockReturnValue({ getCountry: jest.fn().mockResolvedValue(undefined) } as unknown as IncyclistRoutesApi)
+        })
 
         mockFreeRideService = {
             getOptions: jest.fn().mockReturnValue(options.hasOwnProperty('freeRideOptions') ? options.freeRideOptions : [mockOption1, mockOption2]),
@@ -182,6 +184,17 @@ describe('FreeRideDisplayService', () => {
         if (mockRideService)
             mockRideService.reset?.()
         jest.clearAllMocks()
+        Inject('UserSettings', null)
+        Inject('RouteList',null)
+        Inject('ActiveRides',null)
+        Inject('DeviceRide', null)
+        Inject('AppInfo',null)
+        Inject('Bindings',null)
+        Inject('UnitConverter',null)
+        Inject('GoogleMaps',null)
+        Inject('IncyclistRoutesApi',null)
+        Inject('FreeRideService',null)
+        Inject('ActivityRideService',null)
     }
 
     describe('start', () => {

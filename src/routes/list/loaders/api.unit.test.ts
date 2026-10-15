@@ -8,6 +8,7 @@ import videos from '../../../../__tests__/data/db/videos.json'
 
 import valdrome from '../../../../__tests__/data/rlv/valdrome.json'
 import { RouteApiDescription } from '../../base/api/types'
+import { Inject } from '../../../base/decorators'
 
 
 const DEFAULT_ROUTE_API = 'https://dlws.incyclist.com/api/v1/routes'
@@ -19,17 +20,13 @@ describe('RoutesApiLoader',()=>{
         let api,service
 
         beforeEach( ()=>{
-            service = new RoutesApiLoader()
-            //capi = Route.prototype.updateCountryFromPoints
-            service.verifyCountry = jest.fn()
-            service.save = jest.fn().mockResolvedValue(undefined)
+            
 
             mockRouteList()
 
         })
         afterEach( ()=>{
-            api._reset()
-            //Route.prototype.updateCountryFromPoints = capi
+            Inject('IncyclistRoutesApi',null)
 
         })
 
@@ -65,12 +62,14 @@ describe('RoutesApiLoader',()=>{
         })
 
         const setupApiMock = ( props:{gpx?, videos?, details?,fn?}) =>{           
-            api = IncyclistRoutesApi.getInstance() 
-            api.getRouteDescriptions = jest.fn( async (q) => {return ( q.type==='gpx' ? props.gpx??gpx: props.videos??videos) as RouteApiDescription[]})
-            api.getRouteDetails = jest.fn( async id => props.details? props.details[id] : props.fn(id)??undefined)
-            
-            api.getBaseUrl = jest.fn().mockReturnValue(DEFAULT_ROUTE_API)
+            const api = {
+                getRouteDescriptions: jest.fn( async (q) => {return ( q.type==='gpx' ? props.gpx??gpx: props.videos??videos) as RouteApiDescription[]}),
+                getRouteDetails: jest.fn( async id => props.details? props.details[id] : props.fn(id)??undefined),
+                getBaseUrl: jest.fn().mockReturnValue(DEFAULT_ROUTE_API)
+            }
+            Inject('IncyclistRoutesApi',{create:()=>api})
             return api
+            
         }
 
         const mockRouteList = () => {
@@ -85,6 +84,10 @@ describe('RoutesApiLoader',()=>{
         test('initial load',async ()=>{
 
             setupApiMock({fn: ()=>valdrome})
+            service = new RoutesApiLoader()
+            //capi = Route.prototype.updateCountryFromPoints
+            service.verifyCountry = jest.fn()
+            service.save = jest.fn().mockResolvedValue(undefined)
 
             const run1 = await run()
 

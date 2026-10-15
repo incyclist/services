@@ -18,7 +18,6 @@ import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
 import { RouteListObserver } from "./RouteListObserver";
-import IncyclistRoutesApi from "../base/api";
 import { ActiveImportCard } from "./cards/ActiveImportCard";
 import { SelectedRoutes, score } from "./lists/selected";
 import { AlternativeRoutes } from "./lists/alternatives";
@@ -37,6 +36,7 @@ import { usePreviewStore } from "../previews/store";
 import { useRouteShapeStore } from "../shapes/store";
 import type { RouteShape } from "../shapes/types";
 import { useRouteLibraryScanner } from "../library/service";
+import { useIncyclistRoutesApi } from "../base/api/factory";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -1898,7 +1898,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     async createPreview( descr:RouteInfo) {
 
         try {
-            const routesApi = IncyclistRoutesApi.getInstance() 
+            const routesApi = this.getIncyclistRoutesApi().create() 
             const res = await Promise.allSettled([
                 routesApi.getRoutePreview(descr.id),
                 routesApi.getRoutePreview(descr.originalName||descr.title)
@@ -2408,6 +2408,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable
     protected getRouteLibraryScanner() {
         return useRouteLibraryScanner()
+    }
+
+    @Injectable 
+    protected getIncyclistRoutesApi() {
+        return useIncyclistRoutesApi()
     }
 
     reset() {

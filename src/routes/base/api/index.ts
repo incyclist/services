@@ -1,5 +1,5 @@
 import {EventLogger} from 'gd-eventlog'
-import { RouteApiDescription, RouteApiDetail, RouteDescriptionQuery } from "./types";
+import { IIncyclistRoutesApi, RouteApiDescription, RouteApiDetail, RouteDescriptionQuery } from "./types";
 import { AxiosInstance, AxiosRequestConfig } from "axios";
 import { DEFAULT_DOMAIN, NO_CACHE, ROUTE_API } from './consts'
 import { IncyclistRestApiClient } from '../../../api';
@@ -7,21 +7,36 @@ import { useUserSettings } from '../../../settings';
 import { RoutePoint } from '../types';
 import { Injectable } from '../../../base/decorators';
 import { LatLng } from '../../../utils/geo';
+import { IncyclistExternalRestApiClient } from '../../../api/rest/external';
 
-export default class IncyclistRoutesApi { 
+const fixMissingRouteDistances = (points:Array<RoutePoint>) => {
+    let routeDistance = 0
+    points.forEach( (p)=> {
+        if (!p.routeDistance)
+            p.routeDistance = routeDistance
+        routeDistance = p.routeDistance+p['distance']
+    })
+}
 
-    protected static _instance
+// verifies that the route does not contain the legacy format (poinst in decoded property)
+const verify = (route)  => {
+    if (route['decoded'] ) {
+        route.points =route['decoded']
+        delete route['decoded']
 
-    static getInstance():IncyclistRoutesApi{        
-        IncyclistRoutesApi._instance = IncyclistRoutesApi._instance ??new IncyclistRoutesApi()        
-        return IncyclistRoutesApi._instance
+        fixMissingRouteDistances(route.points)
     }
+}
+
+export default class IncyclistRoutesApi implements IIncyclistRoutesApi { 
 
     protected logger: EventLogger
     protected api: AxiosInstance
+    protected baseUrl?: string
 
-    constructor() {
+    constructor(baseUrl?:string) {
         this.logger = new EventLogger('RouteListApi')
+        this.baseUrl = baseUrl
     }
 
     protected logError( err:Error, fn:string, logInfo?) {
@@ -31,7 +46,9 @@ export default class IncyclistRoutesApi {
 
     protected getApi():AxiosInstance {
         if (!this.api) {
-            this.api = IncyclistRestApiClient.getClient()
+            this.api = this.baseUrl ? 
+                IncyclistExternalRestApiClient.getClient() :
+                IncyclistRestApiClient.getClient()
             return this.api
         }
         return this.api
@@ -39,9 +56,12 @@ export default class IncyclistRoutesApi {
 
 
      protected getBaseUrl() {
-        const domain = this.getSetting('DOMAIN',DEFAULT_DOMAIN)
+        if (this.baseUrl)
+            return this.baseUrl
+
+        const domain = this.getUserSettings().getValue('DOMAIN',DEFAULT_DOMAIN)
         const defaultUrl = `https://dlws.${domain}/api/v1/routes`
-        const baseUrl = this.getSetting(ROUTE_API,defaultUrl)
+        const baseUrl = this.getUserSettings().getValue(ROUTE_API,defaultUrl)
         return baseUrl
     }
 
@@ -65,31 +85,12 @@ export default class IncyclistRoutesApi {
         }
     }
 
-    static verify(route) {
-        if (route['decoded'] ) {
-            route.points =route['decoded']
-            delete route['decoded']
-
-            IncyclistRoutesApi.fixMissingRouteDistances(route.points)
-        }
-
-    }
-
-    protected static fixMissingRouteDistances(points:Array<RoutePoint>) {
-        let routeDistance = 0
-        points.forEach( (p)=> {
-            if (!p.routeDistance)
-                p.routeDistance = routeDistance
-            routeDistance = p.routeDistance+p['distance']
-        })
-
-    }
 
     async getRouteDetails( routeId: string): Promise<RouteApiDetail> {
 
         try {
             const res = await this._get( `/${routeId}` )  
-            IncyclistRoutesApi.verify(res.data)
+            verify(res.data)
             return res.data;           
         }
         catch {
@@ -115,8 +116,6 @@ export default class IncyclistRoutesApi {
 
         let url;
         if (Array.isArray(query)) {
-            if (!query.length)
-                return;
             const points = query.slice(0,100).map( (p:LatLng) => `${p.lat},${p.lng}` ).join(';')
             url = `/country?points=${points}`
         }
@@ -167,21 +166,6 @@ export default class IncyclistRoutesApi {
         
         return await api.get( baseUrl+url, ...args )       
     }
-
-    // only to be used by unit tests
-    protected _reset() {
-        IncyclistRoutesApi._instance = undefined
-    }
-
-    protected getSetting(key:string, def:any) {
-        try {
-            return this.getUserSettings().get(key, def)
-        }
-        catch {
-            return def
-        }
-    }
-
 
 
     @Injectable

@@ -1,4 +1,5 @@
 import { LocalizedText } from "../../../i18n"
+import { LatLng } from "../../../utils/geo"
 import { DaumEpp, RouteBase, RouteCategory, RouteInfoText, RoutePoint, RouteProvider, RouteSegment, RouteType, VideoDescription } from "../types"
 
 export type RouteDescriptionQuery = {
@@ -86,3 +87,10 @@ export type RouteApiDetail = {
 }    
 
 
+export interface IIncyclistRoutesApi  {
+    getRouteDescriptions(query:RouteDescriptionQuery, throws:boolean): Promise<Array<RouteApiDescription>>
+    getRouteDetails( routeId: string): Promise<RouteApiDetail> 
+    getRoutePreview( routeId: string): Promise<string>
+    getCountry?(query:LatLng|Array<LatLng>):Promise<string|undefined>
+    reload():Promise<void>
+}
