@@ -38,8 +38,8 @@ describe('DeviceConfigurationService.add() - baseline auto-select matrix', () =>
             capabilities: ALL_CAPABILITIES.map(capability => ({ capability, devices: [], selected: undefined, disabled: false }))
         }
         service.adapters = {}
-        service.updateUserSettings = jest.fn()
-        service.emitCapabiltyChanged = jest.fn()
+        ;(service as any).updateUserSettings = jest.fn()
+        ;(service as any).emitCapabiltyChanged = jest.fn()
         SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue({})
     })
 
