@@ -141,6 +141,7 @@ export interface    RouteInfo extends RouteBase{
     originalName?:string
     version?:number,
     source?:string,
+    apiServer?:string,
     isLoopVerified?:boolean
     sourceTreeUri?: string
 }

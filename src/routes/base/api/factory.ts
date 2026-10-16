@@ -1,4 +1,4 @@
-import IncyclistRoutesApi from ".";
+import IncyclistRoutesApi from "./api";
 import { Injectable, Singleton } from "../../../base/decorators";
 import { useUserSettings } from "../../../settings";
 import { IIncyclistRoutesApi } from "./types";
@@ -24,8 +24,10 @@ export class IncyclistRoutesApiFactory {
             return api
         }
         else {
-            const api = new IncyclistRoutesApi(`routes.servers.${key}`)
-            this.apis.set('default',api)
+            const baseUrl = this.getUserSettings().getValue(`routes.servers.${key}`,null)
+            const api = new IncyclistRoutesApi(baseUrl??key)
+            api.setSource(key)
+            this.apis.set(key,api)
             return api
         }
 

@@ -29,6 +29,7 @@ export interface RouteApiDescription extends RouteBase {
     requiresDownload?:boolean,
     isDeleted?:boolean
     selectableSegments?: Array<RouteSegment>
+    apiServer?:string
 
     
 }
@@ -93,4 +94,5 @@ export interface IIncyclistRoutesApi  {
     getRoutePreview( routeId: string): Promise<string>
     getCountry?(query:LatLng|Array<LatLng>):Promise<string|undefined>
     reload():Promise<void>
+    setSource?(source:string):void
 }

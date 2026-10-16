@@ -1,4 +1,4 @@
-import  IncyclistRoutesApi  from './index'
+import  IncyclistRoutesApi  from './api'
 
 const DEFAULT_ROUTE_API = 'https://dlws.incyclist.com/api/v1/routes'
 
