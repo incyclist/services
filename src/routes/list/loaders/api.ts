@@ -1,7 +1,6 @@
 import { EventLogger } from "gd-eventlog";
 import { Observer, PromiseObserver } from "../../../base/types/observer";
-import IncyclistRoutesApi from "../../base/api";
-import { RouteApiDescription, RouteApiDetail } from "../../base/api/types";
+import { IIncyclistRoutesApi, RouteApiDescription, RouteApiDetail } from "../../base/api/types";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
 import { addDetails } from "../../base/utils/route";
@@ -9,6 +8,10 @@ import { RoutesDbLoader } from "./db";
 import { Loader,LoadDetailsTargets } from "./types";
 import { sleep } from "../../../utils/sleep";
 import { settleWithLimit } from "../../../utils/settleWithLimit";
+import { Injectable } from "../../../base/decorators";
+import { useIncyclistRoutesApi } from "../../base/api/factory";
+import { useUserSettings } from "../../../settings";
+import { pascalCase } from "../../../utils";
 
 const ROUTE_DETAILS_CONCURRENCY = 4
 
@@ -36,28 +39,33 @@ const ExistingAndNotUpdated = (existing: RouteInfo, descr: RouteInfo) => {
 
 export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
-    protected api: IncyclistRoutesApi
+    protected api: IIncyclistRoutesApi
     protected saveObserver: PromiseObserver<void>
     protected logger: EventLogger
+    protected processed: Array<string> = []
 
     constructor () {
         super()
-        this.api = IncyclistRoutesApi.getInstance()        
+        this.api = this.getIncyclistRoutesApi().create() 
         this.logger = new EventLogger('RoutesApi')
     }
 
 
     load():Observer {
+        this.processed = []
+
         // no concurrent loads
         if (this.loadObserver)
             return this.loadObserver
 
         // run two async REST queries in parallel
         const enrichApi = (v:RouteApiDescription,type)=> ({type, ...v })
+                
         const api = [
             this.api.getRouteDescriptions({type:'gpx'},true).then( v=> v.map(e=>enrichApi(e,'gpx'))).catch(error => {throw new ApiError(error,'gpx')}) ,
             this.api.getRouteDescriptions({type:'video'},true).then( v=> v.map(e=>enrichApi(e,'video'))).catch(error => {throw new ApiError(error,'video')}) ,
         ]
+
 
         this.loadObserver = new Observer()
 
@@ -67,11 +75,54 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             await this.onLoadDone(api,res)
         }).catch( err=>{ this.logger.logEvent({message:'could not process route list load', error:err.message}) });
 
+
+        const external = this.getExternalRouteServers()
+        const promises = []
+        if (external.length) {
+            
+            for (const externalApi of external) {
+                // promises.push(
+                //     externalApi.getRouteDescriptions({type:'gpx'},true).then( v=> v.map(e=>enrichApi(e,'gpx'))).catch(error => {throw new ApiError(error,'gpx')}) 
+                // )
+                promises.push(
+                    externalApi.getRouteDescriptions({type:'video'},true).then( v=> v.map(e=>enrichApi(e,'video'))).catch(error => {throw new ApiError(error,'video')}) 
+                )
+            }
+
+            Promise.allSettled( promises).then (async res => {
+                await this.onLoadDone(api,res,true)
+            }).catch( err=>{ this.logger.logEvent({message:'could not process route list load', error:err.message}) });
+
+        }
+
+
+
         return this.loadObserver
         
     }
 
-    private async onLoadDone(api,res) {
+    protected getExternalRouteServers():Array<IIncyclistRoutesApi> {
+        const externalConfig:Record<string,string> = this.getUserSettings().getValue('routes.servers',null)
+        
+        const apis = []
+        if (!externalConfig)
+            return apis
+
+        Object.keys(externalConfig).forEach(key=> {
+            const baseUrl = externalConfig[key]
+
+            this.logger.logEvent({message:'adding external route server', key, url:baseUrl})
+
+            const api = this.getIncyclistRoutesApi().create(key) 
+            apis.push(api)
+        })
+        return apis
+
+
+    }
+
+    private async onLoadDone(api,res,isExternal=false) {
+
         // join lists
         const loadDetailRequired: Array<{route:Route, added:boolean}> = []
 
@@ -85,6 +136,8 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             }
 
             for (let j=0;j<p.value.length;j++) {
+                if (isExternal && this.processed.includes(p.value[j].id))
+                    continue;
                 await this.processRouteFromApi(p.value[j],loadDetailRequired)
             }
             
@@ -106,9 +159,13 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     private async processRouteFromApi(descr,items) {
         let description;
         const existing = this.getDescriptionFromDB(descr.routeId??descr.id)
+        const alreadyProcessed = this.processed.includes(descr.routeId??descr.id)
+
+        if (alreadyProcessed)
+            return
 
         if (ExistingAndNotUpdated(existing, descr)) {
-
+            this.processed.push(existing.id)
             const details = await this.getDetailsFromDB(existing.id)
             if (details) {
                 return
@@ -124,6 +181,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
                 return
             }
                     
+            this.processed.push(descr.id)
             if (!existing) {
                 this.logger.logEvent({message:'route added',id:description.id,title:description.title,ts:description.tsImported})
                 
@@ -143,6 +201,8 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
 
     private emitAndPrepareLoadDetails(description: any,items,existing) {
+
+        
         const route = new Route(description);
         const isComplete = this.isCompleted(route);
 
@@ -253,7 +313,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         for (const element of success) {
             const item = element
 //        success.forEach(item => {
-            this.emitRouteEvents(item.added===true,item.route)
+            this.emitRouteEvents(true,item.route)
 
 
             await this.verifyCountry(item.route);
@@ -270,14 +330,19 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
     protected async getDetails(route:Route):Promise<void> {
 
-        const details = await this.api.getRouteDetails(route.description.legacyId||route.description.id)
+
+        let api = this.api;
+        if (route.description.apiServer) {
+            api = this.getIncyclistRoutesApi().create(route.description.apiServer)
+        }
+        const details = await api.getRouteDetails(route.description.legacyId||route.description.id)
         addDetails(route,details)
 
             
     }
 
     protected buildRouteInfo( descr:RouteApiDescription, isLocal?:boolean): RouteInfo {
-        const { id,routeId,title,localizedTitle,country,distance,elevation, category,provider, video, requiresDownload,points,previewUrl,downloadUrl,routeHash,version,isDeleted} = descr
+        const { id,routeId,title,localizedTitle,country,distance,elevation, category,provider, video, requiresDownload,points,previewUrl,downloadUrl,routeHash,version,isDeleted,apiServer} = descr
         
         const data:RouteInfo = { title,localizedTitle,country,distance,elevation,provider,category,previewUrl,requiresDownload,downloadUrl,routeHash,version,isDeleted}
 
@@ -301,9 +366,24 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             if (video.format) data.videoFormat = video.format
             if (video.url && !data.videoUrl) data.videoUrl = video.url            
         }
+        if (apiServer) {
+            data.apiServer = apiServer
+            data.source =  pascalCase(apiServer)
+        }
 
         return data;
     }
+
+    @Injectable
+    protected getIncyclistRoutesApi() {
+        return useIncyclistRoutesApi()
+    }
+
+    @Injectable
+    protected getUserSettings() {
+        return useUserSettings()
+    }
+
 
 
  

@@ -51,11 +51,12 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
      * Imports and parses a Tacx route file.
      *
      * @param file - File information for the RLV or PGMF file to parse
-     * @param data - Optional pre-loaded file data as ArrayBuffer
+     * @param _data - Optional pre-loaded file data as ArrayBuffer
      * @returns Parsed route data and route details
      * @throws Error if files don't contain required slope or distance information
      */
-    async import(file: FileInfo, data?: ArrayBuffer): Promise<ParseResult<RouteApiDetail>> {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async import(file: FileInfo, _data?: ArrayBuffer): Promise<ParseResult<RouteApiDetail>> {
         const context = this.buildContext(file)
         
         await this.parseRlv(context)
@@ -72,6 +73,7 @@ export class TacxParser implements Parser<ArrayBuffer,RouteApiDetail> {
      * @returns File data as ArrayBuffer
      * @throws Error if file cannot be opened or read
      */
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async getData(info: FileInfo, _data?: ArrayBuffer): Promise<ArrayBuffer> {
         const loader = this.getBindings().loader
         info.encoding = 'binary'

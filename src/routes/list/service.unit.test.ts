@@ -214,6 +214,99 @@ describe('RouteListService',()=>{
 
     })
 
+    describe('getFilterRouteSources',()=>{
+
+        let service
+        let appsServiceMock
+        let userSettingsMock
+
+        beforeEach(()=>{
+            service = prepareMock(null,{mockLoad:true})
+            appsServiceMock = { getAvailableServices: jest.fn().mockReturnValue([]) }
+            userSettingsMock = { getValue: jest.fn().mockReturnValue(null) }
+            Inject('AppsService', appsServiceMock)
+            Inject('UserSettings', userSettingsMock)
+        })
+
+        afterEach(()=>{
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            service.reset()
+            Inject('AppsService', null)
+            Inject('UserSettings', null)
+        })
+
+        const stubRoutes = (routes) => {
+            service['getRoutesForFilterOptions'] = jest.fn().mockReturnValue(routes)
+        }
+
+        test('no routes: always includes Local and Incyclist',()=>{
+            stubRoutes([])
+
+            const sources = service.getFilterRouteSources()
+
+            expect(sources).toEqual(['Local','Incyclist'])
+        })
+
+        test('route source matches a registered app: is appended',()=>{
+            appsServiceMock.getAvailableServices.mockReturnValue(['Strava'])
+            stubRoutes([{source:'Strava'}])
+
+            const sources = service.getFilterRouteSources()
+
+            expect(sources).toEqual(['Local','Incyclist','Strava'])
+        })
+
+        test('route source matches a configured external route server: is appended',()=>{
+            userSettingsMock.getValue.mockReturnValue({myserver:'https://myserver.example.com'})
+            stubRoutes([{source:'Myserver'}])
+
+            const sources = service.getFilterRouteSources()
+
+            expect(sources).toEqual(['Local','Incyclist','Myserver'])
+        })
+
+        test('route has no source: is ignored',()=>{
+            stubRoutes([{source:undefined}])
+
+            const sources = service.getFilterRouteSources()
+
+            expect(sources).toEqual(['Local','Incyclist'])
+        })
+
+        test('route source matches neither a registered app nor a configured external server: is ignored',()=>{
+            stubRoutes([{source:'unknown'}])
+
+            const sources = service.getFilterRouteSources()
+
+            expect(sources).toEqual(['Local','Incyclist'])
+        })
+
+        test('no external route servers configured: does not throw',()=>{
+            userSettingsMock.getValue.mockReturnValue(null)
+            stubRoutes([{source:'anything'}])
+
+            expect(()=>service.getFilterRouteSources()).not.toThrow()
+        })
+
+        test('multiple routes sharing a matching source: source is appended once',()=>{
+            appsServiceMock.getAvailableServices.mockReturnValue(['Strava'])
+            stubRoutes([{source:'Strava'},{source:'Strava'}])
+
+            const sources = service.getFilterRouteSources()
+
+            expect(sources).toEqual(['Local','Incyclist','Strava'])
+        })
+
+        test('passes the filters through to getRoutesForFilterOptions, excluding the routeSource dimension',()=>{
+            stubRoutes([])
+
+            service.getFilterRouteSources({contentType:'Video'})
+
+            expect(service['getRoutesForFilterOptions']).toHaveBeenCalledWith({contentType:'Video'},'routeSource')
+        })
+
+    })
+
 
     describe( 'search',()=>{
 

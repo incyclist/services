@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { EventLogger } from 'gd-eventlog';
 import { v4 } from 'uuid';
-import { ApiClientInitProps } from './types';
+import { ApiClientInitProps, ExternalApiClientInitProps } from './types';
 
 export class ApiClient {
 
@@ -22,13 +22,11 @@ export class ApiClient {
      * the Incyclist APIs
      *
      */
-    init(props: ApiClientInitProps): void {
-        const { uuid, apiKey, requestLog = true, version, appVersion, channel = 'desktop', platform } = props;
+    init(props: ApiClientInitProps | ExternalApiClientInitProps): void {
+        const { requestLog = true, version, appVersion, channel = 'desktop', platform } = props;
 
 
         const headers:Record<string,any> = {
-            "X-uuid": uuid,
-            "X-API-Key": apiKey,
             "x-app-channel": channel,
             "x-app-version": appVersion,
             "x-react-version": version
@@ -36,6 +34,13 @@ export class ApiClient {
 
         if (platform) {
             headers['x-app-platform'] = platform
+        }
+
+        if (props['uuid']) {
+            headers['X-uuid'] = props['uuid']
+        }
+        if (props['apiKey']) {
+            headers['X-API-Key'] = props['apiKey']
         }
 
         this.axios = axios.create({ headers });

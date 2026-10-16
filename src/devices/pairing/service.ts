@@ -790,9 +790,6 @@ export class DevicePairingService  extends IncyclistService{
         delete state.waiting
 
         state.interfaces = state.interfaces?.filter( i=>!i.invisible)
-        const oldState = this.state??{}
-        
-
         return state
     }
 

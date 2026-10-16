@@ -111,7 +111,7 @@ export class AppsService extends IncyclistService   {
     }
 
     getConnectedServices(operation:AppsOperation):Array<AppDefinition> {
-        const available = this.services[operation]
+        const available = this.getAvailableServices(operation)
 
         if (operation === 'ActivityUpload') {
             const factory = this.getActivityUploadFactory()
@@ -129,6 +129,10 @@ export class AppsService extends IncyclistService   {
 
         }
         return []
+    }
+
+    getAvailableServices(operation:AppsOperation):Array<string> {
+        return this.services[operation]        
     }
 
     getName( key:string ) {

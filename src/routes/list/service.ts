@@ -18,7 +18,6 @@ import { RoutesDbLoader } from "./loaders/db";
 import { valid } from "../../utils/valid";
 import { getCountries  } from "../../i18n/countries";
 import { RouteListObserver } from "./RouteListObserver";
-import IncyclistRoutesApi from "../base/api";
 import { ActiveImportCard } from "./cards/ActiveImportCard";
 import { SelectedRoutes, score } from "./lists/selected";
 import { AlternativeRoutes } from "./lists/alternatives";
@@ -37,6 +36,8 @@ import { usePreviewStore } from "../previews/store";
 import { useRouteShapeStore } from "../shapes/store";
 import type { RouteShape } from "../shapes/types";
 import { useRouteLibraryScanner } from "../library/service";
+import { useIncyclistRoutesApi } from "../base/api/factory";
+import { pascalCase } from "../../utils";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -260,7 +261,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const settingsFilter = clone(requestedFilters)
 
 
-        const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
+        const [C] = this.getUnitConverter().getUnitConversionShortcuts()
 
         const Dist = (v) => {
             if (v?.value!==undefined && v.unit ) {
@@ -356,7 +357,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     getAllAppRoutes( source:string ):Array<RouteInfo> {
+        
         let routes = this.routes.map(r=>r.description)
+
         routes = this.applySourceFilter({routeSource:source},routes)
         return routes
 
@@ -386,10 +389,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 return {routes,cards,filters,observer:this.observer,units}
             }
 
-
             if (!filters.includeDeleted) {
                 routes = routes.filter( r =>  !r?.isDeleted)
             }
+
+
 
             routes = this.applyTitleFilter(filters, routes);
             routes = this.applyDistanceFilter(filters, routes);
@@ -411,14 +415,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         }
     }
-
-
-    /*
-
-    
-    */
-    
-
 
 
     
@@ -530,49 +526,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
 
-    private applyRouteTypeFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
-        if (filters.routeType) {
-            const loop = filters.routeType === undefined || filters.routeType === 'Loop';
-            const p2p = filters.routeType === undefined || filters.routeType === 'Point to Point';
-            routes = routes.filter(r => (loop && r.isLoop) || (p2p && !r.isLoop));
-        }
-        return routes;
-    }
-
-    private applySourceFilter(filters: SearchFilter, routes: RouteInfo[]) {
-        routes = routes.filter( r=> r.source===undefined || this.getAppsService().isEnabled(r.source,'RouteDownload') )
-        
-        if (filters.routeSource) {
-            const local = filters.routeSource==='Local'
-            const internal = filters.routeSource==='Incyclist';
-            const sources = filters.routeSource.split('|').map( s=> this.getAppsService().getKey(s))
-            
-            routes = routes.filter(r => 
-                (r.source===undefined && !r.isLocal && internal) ||  
-                (r.source===undefined && r.isLocal && local) ||                  
-                (r.source && !internal && sources.includes(r.source))
-            );
-        }
-        return routes;
-    }
-
-    private applyContentTypeFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
-        if (filters.contentType) {
-            const video = filters.contentType === undefined || filters.contentType === 'Video';
-            const gpx = filters.contentType === undefined || filters.contentType === 'GPX';
-            routes = routes.filter(r => (video && r.hasVideo) || (gpx && !r.hasVideo));
-        }
-        return routes;
-    }
-
-    private applyCountryFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
-        if (filters.country) {
-            const iso = filters.country === 'Unknown' ? undefined : getCountries().getIsoFromCountry(filters.country);
-            routes = routes.filter(r => r.country === iso);
-        }
-        return routes;
-    }
-
     getFilterValue(filters: SearchFilter, scope:'distance'|'elevation', minMax:'min'|'max'):number {
         if (!filters)
             return
@@ -589,38 +542,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             return this.getUnitConverter().convert(v.value,scope,{from:v.unit,to:'m'})
         }
         return
-    }
-
-    private applyElevationFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
-
-        const elevationMin = this.getFilterValue(filters,'elevation','min')
-        const elevationMax = this.getFilterValue(filters,'elevation','max')
-
-        if (elevationMin!==undefined)
-            routes = routes.filter(r => r.elevation >= elevationMin);
-
-        if (elevationMax!==undefined)
-            routes = routes.filter(r => r.elevation <= elevationMax);
-        return routes;
-    }
-
-    private applyDistanceFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
-        const distanceMin = this.getFilterValue(filters,'distance','min')
-        const distanceMax = this.getFilterValue(filters,'distance','max')
-
-        if (distanceMin!==undefined)
-            routes = routes.filter(r => r.distance >= distanceMin);
-
-        if (distanceMax!==undefined)
-            routes = routes.filter(r => r.distance <= distanceMax);
-        return routes;
-    }
-
-    private applyTitleFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
-        if (filters.title?.length) {
-            routes = routes.filter(r => r.title?.toUpperCase()?.includes(filters.title.toUpperCase()));
-        }
-        return routes;
     }
 
     stopSearch():void {        
@@ -651,31 +572,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return {countries,contentTypes,routeTypes,routeSources}
     }
 
-    /**
-     * Builds the route set used to compute the available options for one filter dimension:
-     * every OTHER active filter is applied, but `excludeKey` itself is not, so its own
-     * selection doesn't narrow its own option list.
-     */
-    private getRoutesForFilterOptions(filters:SearchFilter, excludeKey:keyof SearchFilter):SummaryCardDisplayProps[] {
-        const activeFilters:SearchFilter = {...filters, [excludeKey]:undefined}
-
-        let routes:SummaryCardDisplayProps[] = this.getAllSearchCards().map( c=> c.getDisplayProperties())
-
-        if (!activeFilters.includeDeleted) {
-            routes = routes.filter( r =>  !r?.isDeleted)
-        }
-
-        routes = this.applyTitleFilter(activeFilters, routes);
-        routes = this.applyDistanceFilter(activeFilters, routes);
-        routes = this.applyElevationFilter(activeFilters, routes);
-        routes = this.applyCountryFilter(activeFilters, routes);
-        routes = this.applyContentTypeFilter(activeFilters, routes);
-        routes = this.applyRouteTypeFilter(activeFilters, routes);
-        routes = this.applySourceFilter(activeFilters, routes) as SummaryCardDisplayProps[]
-
-        return routes
-    }
-
     onResize() {
         try {
             this.resetCards()
@@ -695,7 +591,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
             // after 100ms set next items to visible
             setTimeout ( ()=>{ 
-                list.getCards().forEach( (card,idx) => { 
+                list.getCards().forEach( (card) => { 
                     card.setVisible(true)
                 })
             },100)
@@ -782,35 +678,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             sleep(0).then( ()=>{delete this.preloadObserver}).catch( err=>{ this.logError(err,'preload') })
         }
         return this.preloadObserver
-    }
-
-
-
-    private createRoutesLogEntry(includeDetails=false):RouteListLog {
-        try {
-            const log:RouteListLog = {
-                counts: {
-                    myRoutes: this.myRoutes.length,
-                    selected: this.selectedRoutes.length,
-                    alternatives: this.alternatives.length
-                }
-            };
-
-            if(includeDetails) {
-                log.titles = {}
-                const getTitleLog = (list) => list?.getCards()?.map( r=> r.getTitle()).join(',')
-                
-                log.titles.myRoutes = getTitleLog(this.myRoutes)
-                log.titles.selected = getTitleLog(this.selectedRoutes)
-                log.titles.alternaties = getTitleLog(this.alternatives)
-            }
-
-            return log
-        }
-        catch(err) {
-            this.logError(err,'createRoutesLogEntry')
-        }
-    
     }
 
     getLists(forUi:boolean=true):Array<CardList<Route>> {
@@ -926,23 +793,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    /**
-     * Stores a shape for a route whose details are loaded but which has none yet (routes
-     * imported before shapes existed), and updates its card once it is available.
-     * Fire-and-forget: never delays the caller.
-     */
-    protected backfillRouteShape(route:Route):void {
-        if (!route?.details || this.getRouteShapeStore().get(route.description?.id))
-            return
-
-        this.getRouteShapeStore().backfill(route)
-            .then( added => {
-                if (added)
-                    this.getCard(route.description.id)?.emitUpdate()
-            })
-            .catch( err => this.logError(err,'backfillRouteShape',{id:route.description?.id}))
-    }
-
     getRouteDescription(id:string) {
         try {
             if (!id) return undefined
@@ -1011,6 +861,514 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         this.getRideRoute()
         return this.rideRoute?.appliedLevel ?? 0
     }
+
+
+    async getSelectedRouteDetails():Promise<RouteApiDetail> {
+        try {
+            const selected = this.getSelected()
+            if (selected.details)
+                return selected.details;
+    
+            return this.getRouteDetails(selected.description.id)
+    
+        }
+        catch(err) {
+            this.logError(err,'getSelectedRouteDetails')
+        }
+    }
+
+    unselect() {
+
+        this.selectedRoute = null
+        this.startSettings = null;
+        this.sessionSmoothingLevel = undefined
+        this.rideRoute = undefined
+
+        this.observer?.emit('selected', null)
+    }
+
+    select(route:Route) {
+        this.selectedRoute = route
+        this.observer?.emit('selected', route)
+    }
+
+    selectCard(card:Card<Route>) {
+        this.selectedRoute = card.getData()
+        
+    }
+    unselectCard(card:Card<Route>) {
+        if ( this.selectedRoute === card.getData())
+            this.selectedRoute = undefined
+    }
+
+    import( info:FileInfo|Array<FileInfo>, props?:{ retry?:ActiveImportCard, importId?:string, observer?:IObserver}):void {
+        try {
+            const files = Array.isArray(info) ? info : [info]
+
+            const importCards: Array<ActiveImportCard> = []
+            const {retry, importId,observer} = props??{}
+
+            if (!retry && !importId) {
+                files.forEach( (file)=>{
+                    if (!file)
+                        return;
+
+                    const card = this.addImportCard(file)
+                    importCards.push(card)
+                    this.emitLists('updated')
+                })
+            }
+            else if (retry) {
+                importCards.push(retry)
+            }
+
+
+            files.forEach( (file,idx)=>{
+                const importCard = importId? null : importCards[idx]
+                this.importOneFile(file, importCard, importId, observer).catch( err=>{ this.logError(err,'import') })
+            })
+    
+
+        }
+        catch(err) {
+            this.logError(err,'import',info)
+        }
+    }
+    pauseListUpdates() {
+        this.isListUpdatePaused = true
+    }
+    resumeListUpdates() {
+        this.isListUpdatePaused = false        
+    }
+
+    emitLists( event:'loaded'|'updated',props?:{log?:boolean, source?:'user'|'system'}) {
+
+        if (this.isListUpdatePaused)
+            return
+
+        try {
+
+            const {log,source='user'} = props??{}
+
+            if (this.currentView === 'grid'||this.currentView ==='list') {
+                const d = this.searchAgain()
+                this.observer.emit(event,d,source)
+                return;
+            }
+
+            if (log) {
+                const logs = this.createRoutesLogEntry(true)??{}
+                this.logEvent({message:`RoutesList ${event}`, ...logs})
+        
+            }
+
+
+            const lists = this.getLists()
+           
+            if (this.observer)
+                this.observer.emit(event,lists,source)
+    
+        }
+        catch(err) {
+            this.logError(err,'emitLists',event)
+
+        }
+    }
+
+
+    getCard(id:string):RouteCard {
+        const res = this.findCard(id)
+        return res?.card
+    }
+
+    // card has already removed itself from the list and needs to be re-added (most likely on MyRoutes)
+    addCardAgain(card:RouteCard) {        
+        const route = card.getData()        
+        const list = this.selectList(route)
+        list.add( card)
+        card.enableDelete(list.getId()==='myRoutes')
+        card.setList(list)
+        this.emitLists('updated',{log:true})                
+
+    }
+
+    /**
+     * Returns `true` if any route in the current route list has a `sourceTreeUri` or
+     * `videoUrl` matching the given URI.
+     *
+     * Used by `RouteLibraryScannerService` to populate the `alreadyImported` flag on
+     * a discovered route before the ingest phase begins.
+     *
+     * @param uri URI to check against each route's `sourceTreeUri` and `videoUrl` fields.
+     */
+    existsBySourceUri(uri: string): boolean {
+        try {
+            return this.routes.some(r =>
+                r.description?.sourceTreeUri === uri ||
+                r.description?.videoUrl === uri
+            )
+        }
+        catch(err) {
+            this.logError(err,'existsBySourceUri',{uri})
+            return false;
+        }
+    }    
+
+    /**
+     * Returns `true` if any route in the current route list has a `sourceTreeUri` or
+     * `videoUrl` matching the given URI.
+     *
+     * Used by `RouteLibraryScannerService` to populate the `alreadyImported` flag on
+     * a discovered route before the ingest phase begins.
+     *
+     * @param uri URI to check against each route's `sourceTreeUri` and `videoUrl` fields.
+     */
+    getBySourceUri(uri: string): Route {
+        try {
+            return this.routes.find(r =>
+                r.description?.sourceTreeUri === uri ||
+                r.description?.videoUrl === uri
+            )
+        }
+        catch(err) {
+            this.logError(err,'getBySourceUri',{uri})
+        }
+    }    
+
+
+    /**
+     * Adds an in-memory `Route` object to the route lists and emits a list-updated event.
+     *
+     * @param route Route to add.
+     * @param source Whether the addition originated from a user action or the system.
+     */
+
+    public addRoute(route:Route,source:'user'|'system'|'import'='system'):void {
+        // route already present
+        const existing = source==='system' ? this.getRoute(route.description.id) :
+            this.routes.find( r=>r.description?.id===route.description.id)
+           
+
+        if (existing ) {
+            const wasDeleted = existing.description?.isDeleted
+            existing.replace(route)
+
+            // a system update refreshes a route in place; an explicit user import must also
+            // leave the route visible - revive a tombstoned route or one whose card is detached
+            if (source==='system' || (!wasDeleted && this.hasAttachedCard(existing))) {
+                return;
+            }
+            route = existing
+        }
+        else {
+            this.routes.push(route)
+        }
+        if (route.description?.isDeleted) {
+            return
+        }
+
+        if (!route.description?.isDeleted) {
+            if (source==='user') {
+                this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
+            }
+
+            if (!route.description.country) {
+                this.logEvent({message:'route update required (country)',route:route.title})
+                route.updateCountryFromPoints()
+                    .then( (updated)=> {
+                        if (updated) {
+                            this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
+                            const saved = this.db.save(route,false)
+                            const cardInfo = this.findCard(route)
+                            cardInfo?.card?.emitUpdate()
+                            return saved
+                        }
+                    })
+                    .catch( err=>{ this.logError(err,'addRoute') })
+            }
+        }
+
+        const list = this.selectList(route)
+
+        const card = new RouteCard(route,{list})
+
+        this.cardLookup[route.description.id] = { card, list};
+
+        card.verify()
+        list.add( card)
+        if ( list.getId()==='myRoutes')
+            card.enableDelete(true)    
+        
+        this.emitLists('updated',{source: source==='user' ? 'user':'system'})                
+
+    }
+
+    /**
+     * Drops a route from the in-memory state after its last persisted copy was removed
+     * (local route hard-deleted), so a later import of the same file is treated as new.
+     */
+    forgetRoute(target:Route|string):void {
+        const id = typeof target==='string' ? target : target?.description?.id
+        if (!id)
+            return
+        const card = this.cardLookup[id]?.card
+        this.routes = this.routes.filter( r=> r.description?.id!==id)
+        delete this.cardLookup[id]
+        this.cardPropsCache.delete(id)
+        if (card)
+            this.cardPropsSubscribed.delete(card)
+        this.sortedSearchCache = undefined
+    }
+
+    async createPreview( descr:RouteInfo) {
+
+        try {
+            const routesApi = this.getIncyclistRoutesApi().create() 
+            const res = await Promise.allSettled([
+                routesApi.getRoutePreview(descr.id),
+                routesApi.getRoutePreview(descr.originalName||descr.title)
+            ])
+
+            const previewUrl = (res[0].status==='fulfilled' ? res[0].value:undefined) ?? 
+                               (res[1].status==='fulfilled' ? res[1].value:undefined)
+            if (previewUrl) {
+                descr.previewUrl = previewUrl
+                return;
+            }
+
+            this.logEvent({message:'preview not found',title:descr.originalName||descr.title, id: descr.id})
+
+
+        }
+        catch (err){
+            this.logError(err,'createPreview')            
+        }
+        
+        // As we would be overloading ffmpeg by creating multiple screenshots
+        // at the same time, we are queueing the requests        
+        return new Promise( done => {
+            this.createPreviewQueue.push( {descr,done} )
+            this.processPreviewQueue()
+    
+        })
+    }
+
+
+    findCard(target:Route|string):{ card:RouteCard, list:CardList<Route>} {
+        
+        try {
+            let id:string;
+            let legacyId;
+            if (typeof target==='string') {
+                id = target
+            }
+            else {
+                const route = target
+                id = route?.description?.id
+                legacyId = route?.description?.legacyId
+            }
+
+            if (!id && !legacyId) {
+                return;
+            }
+
+            const res = this.cardLookup[id] 
+            if (res?.card) {
+                return res
+            }
+
+
+
+            let card =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===id || c.getData()?.description?.legacyId===id ) as RouteCard
+            if (card)
+                return {card,list:this.myRoutes}
+
+            if (legacyId) {
+                const legacyCard =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===legacyId ) as RouteCard
+                if (legacyCard) {
+                    this.myRoutes.remove(legacyCard)
+                    const idx = this.routes.findIndex( r => r?.description?.id===legacyId && !r?.description?.isDeleted)
+                    if (idx!==-1) {
+                        this.routes.splice(idx,1)
+                    }
+                    return
+                }
+            }
+        
+            const lists = [this.selectedRoutes,this.alternatives, ...this.custom??[] ]         
+            for (const list of lists) {
+                card = list.getCards().find(c=>c.getData()?.description?.id===id) as RouteCard
+                if (card)
+                    return {card,list}
+            }
+        }
+        catch (err) {
+            this.logError(err,'findCard',{target})
+        }
+    }
+
+    // External Routes API helpers
+    getExternalApiProviders() : Map<string,string>|null{
+        const obj = this.getUserSettings().getValue('routes.servers',null)
+        if (!obj)
+            return null
+        return new Map(Object.entries(obj));
+    }
+
+    addExternalApiProvider(key:string, url: string) {
+        this.getUserSettings().set(`routes.servers.${key}`,url)
+    }
+    deleteExternalApiProvider(key:string) {
+        this.getUserSettings().set(`routes.servers.${key}`,null)
+    }
+
+    // ----- protected and private below this -------
+
+    private applyRouteTypeFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.routeType) {
+            const loop = filters.routeType === undefined || filters.routeType === 'Loop';
+            const p2p = filters.routeType === undefined || filters.routeType === 'Point to Point';
+            routes = routes.filter(r => (loop && r.isLoop) || (p2p && !r.isLoop));
+        }
+        return routes;
+    }
+
+    private applySourceFilter(filters: SearchFilter, routes: RouteInfo[]) {
+        if (filters.routeSource) {
+            const local = filters.routeSource==='Local'
+            const internal = filters.routeSource==='Incyclist';
+            const sources = new Set(filters.routeSource.split('|').map(pascalCase))
+            //const sources = [ ...this.getAllExternalRouteSources(), ...this.getAllAppSources()]
+            
+            routes = routes.filter(r => 
+                (r.source===undefined && !r.isLocal && internal) ||  
+                (r.source===undefined && r.isLocal && local) ||                  
+                (r.source && !internal && sources.has(pascalCase(r.source)))
+            );
+        }
+        return routes;
+    }
+
+    private applyContentTypeFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.contentType) {
+            const video = filters.contentType === undefined || filters.contentType === 'Video';
+            const gpx = filters.contentType === undefined || filters.contentType === 'GPX';
+            routes = routes.filter(r => (video && r.hasVideo) || (gpx && !r.hasVideo));
+        }
+        return routes;
+    }
+
+    private applyCountryFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.country) {
+            const iso = filters.country === 'Unknown' ? undefined : getCountries().getIsoFromCountry(filters.country);
+            routes = routes.filter(r => r.country === iso);
+        }
+        return routes;
+    }
+
+
+    private applyElevationFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+
+        const elevationMin = this.getFilterValue(filters,'elevation','min')
+        const elevationMax = this.getFilterValue(filters,'elevation','max')
+
+        if (elevationMin!==undefined)
+            routes = routes.filter(r => r.elevation >= elevationMin);
+
+        if (elevationMax!==undefined)
+            routes = routes.filter(r => r.elevation <= elevationMax);
+        return routes;
+    }
+
+    private applyDistanceFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        const distanceMin = this.getFilterValue(filters,'distance','min')
+        const distanceMax = this.getFilterValue(filters,'distance','max')
+
+        if (distanceMin!==undefined)
+            routes = routes.filter(r => r.distance >= distanceMin);
+
+        if (distanceMax!==undefined)
+            routes = routes.filter(r => r.distance <= distanceMax);
+        return routes;
+    }
+
+    private applyTitleFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
+        if (filters.title?.length) {
+            routes = routes.filter(r => r.title?.toUpperCase()?.includes(filters.title.toUpperCase()));
+        }
+        return routes;
+    }
+
+    /**
+     * Builds the route set used to compute the available options for one filter dimension:
+     * every OTHER active filter is applied, but `excludeKey` itself is not, so its own
+     * selection doesn't narrow its own option list.
+     */
+    private getRoutesForFilterOptions(filters:SearchFilter, excludeKey:keyof SearchFilter):SummaryCardDisplayProps[] {
+        const activeFilters:SearchFilter = {...filters, [excludeKey]:undefined}
+
+        let routes:SummaryCardDisplayProps[] = this.getAllSearchCards().map( c=> c.getDisplayProperties())
+        if (!activeFilters.includeDeleted) {
+            routes = routes.filter( r =>  !r?.isDeleted)
+        }
+
+        routes = this.applyTitleFilter(activeFilters, routes);
+        routes = this.applyDistanceFilter(activeFilters, routes);
+        routes = this.applyElevationFilter(activeFilters, routes);
+        routes = this.applyCountryFilter(activeFilters, routes);
+        routes = this.applyContentTypeFilter(activeFilters, routes);
+        routes = this.applyRouteTypeFilter(activeFilters, routes);
+        routes = this.applySourceFilter(activeFilters, routes) as SummaryCardDisplayProps[]
+
+        return routes
+    }
+
+
+    private createRoutesLogEntry(includeDetails=false):RouteListLog {
+        try {
+            const log:RouteListLog = {
+                counts: {
+                    myRoutes: this.myRoutes.length,
+                    selected: this.selectedRoutes.length,
+                    alternatives: this.alternatives.length
+                }
+            };
+
+            if(includeDetails) {
+                log.titles = {}
+                const getTitleLog = (list) => list?.getCards()?.map( r=> r.getTitle()).join(',')
+                
+                log.titles.myRoutes = getTitleLog(this.myRoutes)
+                log.titles.selected = getTitleLog(this.selectedRoutes)
+                log.titles.alternaties = getTitleLog(this.alternatives)
+            }
+
+            return log
+        }
+        catch(err) {
+            this.logError(err,'createRoutesLogEntry')
+        }
+    
+    }
+
+    /**
+     * Stores a shape for a route whose details are loaded but which has none yet (routes
+     * imported before shapes existed), and updates its card once it is available.
+     * Fire-and-forget: never delays the caller.
+     */
+    protected backfillRouteShape(route:Route):void {
+        if (!route?.details || this.getRouteShapeStore().get(route.description?.id))
+            return
+
+        this.getRouteShapeStore().backfill(route)
+            .then( added => {
+                if (added)
+                    this.getCard(route.description.id)?.emitUpdate()
+            })
+            .catch( err => this.logError(err,'backfillRouteShape',{id:route.description?.id}))
+    }
+
+
 
     /**
      * Records how noisy the elevation track of the route being ridden is.
@@ -1118,78 +1476,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return Number.isFinite(level) ? level : 0
     }
 
-    async getSelectedRouteDetails():Promise<RouteApiDetail> {
-        try {
-            const selected = this.getSelected()
-            if (selected.details)
-                return selected.details;
-    
-            return this.getRouteDetails(selected.description.id)
-    
-        }
-        catch(err) {
-            this.logError(err,'getSelectedRouteDetails')
-        }
-    }
-
-    unselect() {
-
-        this.selectedRoute = null
-        this.startSettings = null;
-        this.sessionSmoothingLevel = undefined
-        this.rideRoute = undefined
-
-        this.observer?.emit('selected', null)
-    }
-
-    select(route:Route) {
-        this.selectedRoute = route
-        this.observer?.emit('selected', route)
-    }
-
-    selectCard(card:Card<Route>) {
-        this.selectedRoute = card.getData()
-        
-    }
-    unselectCard(card:Card<Route>) {
-        if ( this.selectedRoute === card.getData())
-            this.selectedRoute = undefined
-    }
-
-    import( info:FileInfo|Array<FileInfo>, props?:{ retry?:ActiveImportCard, importId?:string, observer?:IObserver}):void {
-        try {
-            const files = Array.isArray(info) ? info : [info]
-
-            const importCards: Array<ActiveImportCard> = []
-            const {retry, importId,observer} = props??{}
-
-            if (!retry && !importId) {
-                files.forEach( (file)=>{
-                    if (!file)
-                        return;
-
-                    const card = this.addImportCard(file)
-                    importCards.push(card)
-                    this.emitLists('updated')
-                })
-            }
-            else if (retry) {
-                importCards.push(retry)
-            }
-
-
-            files.forEach( (file,idx)=>{
-                const importCard = importId? null : importCards[idx]
-                this.importOneFile(file, importCard, importId, observer).catch( err=>{ this.logError(err,'import') })
-            })
-    
-
-        }
-        catch(err) {
-            this.logError(err,'import',info)
-        }
-    }
-
     /**
      * Imports one file dropped onto the route list; fire-and-forget per file.
      *
@@ -1230,63 +1516,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    pauseListUpdates() {
-        this.isListUpdatePaused = true
-    }
-    resumeListUpdates() {
-        this.isListUpdatePaused = false        
-    }
 
-    emitLists( event:'loaded'|'updated',props?:{log?:boolean, source?:'user'|'system'}) {
-
-        if (this.isListUpdatePaused)
-            return
-
-        try {
-
-            const {log,source='user'} = props??{}
-
-            if (this.currentView === 'grid'||this.currentView ==='list') {
-                const d = this.searchAgain()
-                this.observer.emit(event,d,source)
-                return;
-            }
-
-            if (log) {
-                const logs = this.createRoutesLogEntry(true)??{}
-                this.logEvent({message:`RoutesList ${event}`, ...logs})
-        
-            }
-
-
-            const lists = this.getLists()
-           
-            if (this.observer)
-                this.observer.emit(event,lists,source)
-    
-        }
-        catch(err) {
-            this.logError(err,'emitLists',event)
-
-        }
-    }
-
-
-    getCard(id:string):RouteCard {
-        const res = this.findCard(id)
-        return res?.card
-    }
-
-    // card has already removed itself from the list and needs to be re-added (most likely on MyRoutes)
-    addCardAgain(card:RouteCard) {        
-        const route = card.getData()        
-        const list = this.selectList(route)
-        list.add( card)
-        card.enableDelete(list.getId()==='myRoutes')
-        card.setList(list)
-        this.emitLists('updated',{log:true})                
-
-    }
 
     protected addImportCard(file:FileInfo):ActiveImportCard {
         const card = new ActiveImportCard(file)
@@ -1323,20 +1553,37 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected getFilterRouteSources(filters:SearchFilter={}):Array<string> {
         const options = ['Local','Incyclist']
 
+        const apps = this.getAllAppSources()
+        const external = this.getAllExternalRouteSources()
+
         this.getRoutesForFilterOptions(filters,'routeSource').forEach(r=> {
-            const source = r.source
-            if (!source)
+            const source = pascalCase(r.source)
+            if (!source || options.includes(source))
                 return;
 
-            const option = this.getAppsService().getName(source)
-            if (option && !options.includes(option)) {
-                options.push(option)
+
+            if (apps.includes(source) || external.includes(source) ){
+                options.push(source)
             }
 
         })
 
         return options
     }
+
+    private getAllAppSources():Array<string> {
+        const apps= this.getAppsService().getAvailableServices('RouteDownload')??[]
+        return apps.map(pascalCase)
+
+    }
+    private getAllExternalRouteSources():Array<string> {
+        const external = this.getUserSettings().getValue('routes.servers',null)
+        if (!external)
+            return []
+        const keys = Object.keys(external)??[]
+        return keys.map(pascalCase)
+    }
+
 
     protected getFilterCountries(filters:SearchFilter={}):Array<string> {
         try {
@@ -1370,116 +1617,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         }
     }
 
-    /**
-     * Returns `true` if any route in the current route list has a `sourceTreeUri` or
-     * `videoUrl` matching the given URI.
-     *
-     * Used by `RouteLibraryScannerService` to populate the `alreadyImported` flag on
-     * a discovered route before the ingest phase begins.
-     *
-     * @param uri URI to check against each route's `sourceTreeUri` and `videoUrl` fields.
-     */
-    existsBySourceUri(uri: string): boolean {
-        try {
-            return this.routes.some(r =>
-                r.description?.sourceTreeUri === uri ||
-                r.description?.videoUrl === uri
-            )
-        }
-        catch(err) {
-            this.logError(err,'existsBySourceUri',{uri})
-            return false;
-        }
-    }    
-
-    /**
-     * Returns `true` if any route in the current route list has a `sourceTreeUri` or
-     * `videoUrl` matching the given URI.
-     *
-     * Used by `RouteLibraryScannerService` to populate the `alreadyImported` flag on
-     * a discovered route before the ingest phase begins.
-     *
-     * @param uri URI to check against each route's `sourceTreeUri` and `videoUrl` fields.
-     */
-    getBySourceUri(uri: string): Route {
-        try {
-            return this.routes.find(r =>
-                r.description?.sourceTreeUri === uri ||
-                r.description?.videoUrl === uri
-            )
-        }
-        catch(err) {
-            this.logError(err,'getBySourceUri',{uri})
-        }
-    }    
-
-
-    /**
-     * Adds an in-memory `Route` object to the route lists and emits a list-updated event.
-     *
-     * @param route Route to add.
-     * @param source Whether the addition originated from a user action or the system.
-     */
-
-    public addRoute(route:Route,source:'user'|'system'|'import'='system'):void {
-
-        // route already present
-        const existing = source==='system' ? this.getRoute(route.description.id) :
-            this.routes.find( r=>r.description?.id===route.description.id)
-           
-
-        if (existing ) {
-            const wasDeleted = existing.description?.isDeleted
-            existing.replace(route)
-
-            // a system update refreshes a route in place; an explicit user import must also
-            // leave the route visible - revive a tombstoned route or one whose card is detached
-            if (source==='system' || (!wasDeleted && this.hasAttachedCard(existing)))
-                return;
-            route = existing
-        }
-        else {
-            this.routes.push(route)
-        }
-        if (route.description?.isDeleted) {
-            return
-        }
-
-        if (!route.description?.isDeleted) {
-            if (source==='user') {
-                this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
-            }
-
-            if (!route.description.country) {
-                this.logEvent({message:'route update required (country)',route:route.title})
-                route.updateCountryFromPoints()
-                    .then( (updated)=> {
-                        if (updated) {
-                            this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
-                            const saved = this.db.save(route,false)
-                            const cardInfo = this.findCard(route)
-                            cardInfo?.card?.emitUpdate()
-                            return saved
-                        }
-                    })
-                    .catch( err=>{ this.logError(err,'addRoute') })
-            }
-        }
-
-        const list = this.selectList(route)
-
-        const card = new RouteCard(route,{list})
-
-        this.cardLookup[route.description.id] = { card, list};
-
-        card.verify()
-        list.add( card)
-        if ( list.getId()==='myRoutes')
-            card.enableDelete(true)    
-        
-        this.emitLists('updated',{source: source==='user' ? 'user':'system'})                
-
-    }
 
     /** true when the route's card is currently part of a card list */
     protected hasAttachedCard(route:Route):boolean {
@@ -1488,31 +1625,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             .some( l=> l?.getCards()?.some( c=> c.getData?.()?.description?.id===id))
     }
 
-    /**
-     * Drops a route from the in-memory state after its last persisted copy was removed
-     * (local route hard-deleted), so a later import of the same file is treated as new.
-     */
-    forgetRoute(target:Route|string):void {
-        const id = typeof target==='string' ? target : target?.description?.id
-        if (!id)
-            return
-        const card = this.cardLookup[id]?.card
-        this.routes = this.routes.filter( r=> r.description?.id!==id)
-        delete this.cardLookup[id]
-        this.cardPropsCache.delete(id)
-        if (card)
-            this.cardPropsSubscribed.delete(card)
-        this.sortedSearchCache = undefined
-    }
-
     protected async addFromApi(route:Route):Promise<void> {
         this.addRoute(route,'system')
     }
 
-    protected async update(route:Route,source:'user'|'system'='user'):Promise<void> { 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    protected update(route:Route,_source:'user'|'system'='user'):Promise<void> { 
         const existing = this.findCard(route)
         if (existing)        
             existing.card.updateRoute(route)
+        return Promise.resolve()
     }
 
     protected async loadRoutes():Promise<void> {
@@ -1832,6 +1954,8 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const description = route.description
 
         if (description.source) {
+                const apps = this.getAllAppSources()
+                if (apps.includes(pascalCase(description.source)))
             return this.selectListForSource(route)
         }
 
@@ -1894,39 +2018,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return customList
     }
 
-
-    async createPreview( descr:RouteInfo) {
-
-        try {
-            const routesApi = IncyclistRoutesApi.getInstance() 
-            const res = await Promise.allSettled([
-                routesApi.getRoutePreview(descr.id),
-                routesApi.getRoutePreview(descr.originalName||descr.title)
-            ])
-
-            const previewUrl = (res[0].status==='fulfilled' ? res[0].value:undefined) ?? 
-                               (res[1].status==='fulfilled' ? res[1].value:undefined)
-            if (previewUrl) {
-                descr.previewUrl = previewUrl
-                return;
-            }
-
-            this.logEvent({message:'preview not found',title:descr.originalName||descr.title, id: descr.id})
-
-
-        }
-        catch (err){
-            this.logError(err,'createPreview')            
-        }
-        
-        // As we would be overloading ffmpeg by creating multiple screenshots
-        // at the same time, we are queueing the requests        
-        return new Promise( done => {
-            this.createPreviewQueue.push( {descr,done} )
-            this.processPreviewQueue()
-    
-        })
-    }
 
     protected async checkExistingPreviewFiles(descr:RouteInfo):Promise<string|undefined> {
         const videoUrl = descr.videoUrl || descr.downloadUrl
@@ -2076,60 +2167,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     }
 
-
-    findCard(target:Route|string):{ card:RouteCard, list:CardList<Route>} {
-        
-        try {
-            let id:string;
-            let legacyId;
-            if (typeof target==='string') {
-                id = target
-            }
-            else {
-                const route = target
-                id = route?.description?.id
-                legacyId = route?.description?.legacyId
-            }
-
-            if (!id && !legacyId) {
-                return;
-            }
-
-            const res = this.cardLookup[id] 
-            if (res?.card) {
-                return res
-            }
-
-
-
-            let card =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===id || c.getData()?.description?.legacyId===id ) as RouteCard
-            if (card)
-                return {card,list:this.myRoutes}
-
-            if (legacyId) {
-                const legacyCard =this.myRoutes.getCards().find(c=>c.getData()?.description?.id===legacyId ) as RouteCard
-                if (legacyCard) {
-                    this.myRoutes.remove(legacyCard)
-                    const idx = this.routes.findIndex( r => r?.description?.id===legacyId && !r?.description?.isDeleted)
-                    if (idx!==-1) {
-                        this.routes.splice(idx,1)
-                    }
-                    return
-                }
-            }
-        
-            const lists = [this.selectedRoutes,this.alternatives, ...this.custom??[] ]         
-            for (const list of lists) {
-                card = list.getCards().find(c=>c.getData()?.description?.id===id) as RouteCard
-                if (card)
-                    return {card,list}
-            }
-        }
-        catch (err) {
-            this.logError(err,'findCard',{target})
-        }
-    }
-
     protected resetCards() {
         const lists = this.getLists()??[]
 
@@ -2157,10 +2194,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         this.sortedSearchCache = undefined
     }
 
-    protected getAllSearchCards() {
+    protected   getAllSearchCards() {
         const cards:Array<RouteCard> = []
         
         this.getLists(false)?.forEach( list=> {
+
             list.getCards().forEach( (card) => {
                 if(!card)
                     return
@@ -2408,6 +2446,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable
     protected getRouteLibraryScanner() {
         return useRouteLibraryScanner()
+    }
+
+    @Injectable 
+    protected getIncyclistRoutesApi() {
+        return useIncyclistRoutesApi()
     }
 
     reset() {

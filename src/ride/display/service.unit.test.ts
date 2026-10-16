@@ -78,7 +78,8 @@ describe('RideDisplayService', () => {
 
         beforeEach(() => {
             Inject('UserSettings', {
-                get: jest.fn().mockReturnValue(process.env.DEBUG)
+                get: jest.fn().mockReturnValue(process.env.DEBUG),
+                getValue: jest.fn().mockReturnValue(process.env.DEBUG)
             })
 
             service = new RideDisplayService()
@@ -240,6 +241,15 @@ describe('RideDisplayService', () => {
                     }
                     catch { return d}
                 }),
+                getValue: jest.fn((k, d) => {
+                    try {
+                        const parts = k.split('.');
+                        const overlay = parts[parts.length-1];
+                        return props?.sideViews?.[overlay]??d
+                    }
+                    catch { return d}
+                }),
+                
                 set: props?.setFn??jest.fn()
             })
 
@@ -332,6 +342,7 @@ describe('RideDisplayService', () => {
         const setupMocks = (getFn?, setFn?) => {
             Inject('UserSettings', {
                 get: getFn ?? jest.fn().mockReturnValue(false),
+                getValue: getFn ?? jest.fn().mockReturnValue(false),
                 set: setFn ?? jest.fn()
             })
         }

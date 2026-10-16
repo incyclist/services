@@ -3,7 +3,7 @@ import { Singleton } from "../../base/types";
 import { CountryList  } from "./model";
 import defaultList from './countries.json'
 import { LatLng } from "../../utils/geo";
-import IncyclistRoutesApi from "../../routes/base/api";
+import { useIncyclistRoutesApi } from "../../routes/base/api/factory";
 
 /**
  * Service for managing country information and resolving geographic coordinates to country ISO codes.
@@ -132,7 +132,7 @@ export class Countries extends IncyclistService {
      * const iso = await countries.getIsoFromLatLng({ lat: 51.5074, lng: -0.1278 }); // 'GB' (London)
      */
     async getIsoFromLatLng(point: LatLng|Array<LatLng>): Promise<string> {
-        const api = IncyclistRoutesApi.getInstance()        
+        const api = useIncyclistRoutesApi().create()     
         return api.getCountry(point)
 
     }

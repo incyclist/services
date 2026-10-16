@@ -5,8 +5,6 @@ import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
 import { Loader } from "./types";
 
-const DETAILS_PRELOAD_CNT = 20;
-
 export abstract class DBLoader<T> extends Loader<T> {
 
     protected routeDescriptions: Array<T>;
