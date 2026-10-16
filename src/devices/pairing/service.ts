@@ -1,6 +1,7 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
-import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
-import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState  } from "./model";
+import { AddDeviceResult, AdapterInfo, CapabilityExclusion, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
+import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact, SelectionConflict, ConflictDismissal  } from "./model";
+import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
@@ -74,6 +75,14 @@ export class DevicePairingService  extends IncyclistService{
     protected static readonly STALLED_AFTER_MS = 30*1000
     protected stalledTimer?: ReturnType<typeof setTimeout>
     protected stalledLogged = false
+
+    // whether a Pairing page visit is open - see setVisitOpen()
+    protected visitOpen = false
+    protected visitOpenedAt?: number
+
+    // selection conflicts raised during the open visit, oldest first, one per device
+    protected pendingConflicts: Array<{udid:string, conflict:SelectionConflict}> = []
+    protected static conflictCounter = 0
 
 
     protected onPairingStartedHandler = this.onPairingStarted.bind(this)
@@ -272,6 +281,271 @@ export class DevicePairingService  extends IncyclistService{
         return await this.stop([],true)
     }
 
+    /**
+     * Tells the service whether a Pairing page visit is open.
+     *
+     * Opening a visit clears every exclusion scoped `until-next-pairing`, so the rider's devices
+     * are re-evaluated from scratch. That happens on every call with `true`, also when a visit is
+     * already open, so a visit that was never closed (crash, fast navigation) can't keep one alive.
+     *
+     * While a visit is open, a device excluded as `not-available` keeps being tried, and is taken
+     * back into use as soon as it connects. Without an open visit neither happens: a device that
+     * connects in the background, e.g. during ride start, stays excluded.
+     *
+     * @param open `true` when the Pairing page opens, `false` when it is left
+     */
+    setVisitOpen(open:boolean):void {
+        try {
+            if (open) {
+                this.visitOpenedAt ??= Date.now()
+                this.getDeviceConfiguration().clearExclusions({scope:'until-next-pairing'})
+            }
+            else {
+                delete this.visitOpenedAt
+                // the rider left without answering: the current selection is kept
+                this.dismissPendingConflicts('left_page')
+            }
+            this.visitOpen = open
+        }
+        catch(err) {
+            this.logError(err,'setVisitOpen')
+        }
+    }
+
+    /**
+     * The selection conflicts raised during the open visit that the rider hasn't answered yet,
+     * oldest first, one per device.
+     */
+    getPendingConflicts():SelectionConflict[] {
+        return this.pendingConflicts.map( e=> clone(e.conflict))
+    }
+
+    /**
+     * Answers a pending conflict: the device replaces the current one in each of the `replace`
+     * capabilities, and every other row keeps the current device.
+     *
+     * The rows are checked again now, so a capability whose slot no longer holds a different
+     * device (it was changed since the conflict was raised) is left alone. The selection itself
+     * goes through {@link selectDevice}'s object mode.
+     *
+     * @param id the conflict's `id`
+     * @param replace the capabilities in which the device should replace the current one
+     */
+    async resolveConflict(id:string, replace:IncyclistCapability[]):Promise<void> {
+        try {
+            const entry = this.takePendingConflict(id)
+            if (!entry)
+                return
+
+            const {udid, conflict} = entry
+            const asked = conflict.conflicts.map( c=>c.capability)
+            const stillConflicting = new Set(this.computeSelectionImpact(udid, asked).conflicts.map( c=>c.capability))
+            const toReplace = (replace??[]).filter( c=> stillConflicting.has(c))
+
+            if (toReplace.length>0) {
+                const [first,...rest] = toReplace
+                await this.selectDevice(first, udid, {others:'fill-empty', replace:rest})
+            }
+            this.logConflictResolved(conflict, 'done', toReplace.length)
+        }
+        catch(err) {
+            this.logError(err,'resolveConflict')
+        }
+    }
+
+    /**
+     * Closes a pending conflict without changing anything: the current device is kept in every row.
+     *
+     * @param id the conflict's `id`
+     * @param via whether the rider dismissed it, or left the page without answering
+     */
+    dismissConflict(id:string, via:ConflictDismissal='dismissed'):void {
+        try {
+            const entry = this.takePendingConflict(id)
+            if (entry)
+                this.logConflictResolved(entry.conflict, via, 0)
+        }
+        catch(err) {
+            this.logError(err,'dismissConflict')
+        }
+    }
+
+    protected dismissPendingConflicts(via:ConflictDismissal):void {
+        const pending = this.pendingConflicts
+        this.pendingConflicts = []
+        pending.forEach( e=> { this.logConflictResolved(e.conflict, via, 0) })
+    }
+
+    protected takePendingConflict(id:string):{udid:string, conflict:SelectionConflict}|undefined {
+        const idx = this.pendingConflicts.findIndex( e=>e.conflict.id===id)
+        if (idx===-1)
+            return undefined
+        const [entry] = this.pendingConflicts.splice(idx,1)
+        return entry
+    }
+
+    /**
+     * A detected device was added: logs the empty slots it filled, and raises a conflict for the
+     * slots it's newly known for that already hold a different device. Capabilities it was
+     * retracted from again (deleted earlier in this session) are left out of both.
+     */
+    protected onDeviceAdded(udid:string, added:AddDeviceResult, retracted:IncyclistCapability[]):void {
+        try {
+            const autoSelected = added.autoSelected.filter( a=> !retracted.includes(a.capability))
+            autoSelected.forEach( a=> {
+                this.logEvent({message:'device auto selected', capability:a.capability, rule:a.rule, visitOpen:this.visitOpen})
+            })
+
+            const newlyKnown = added.newlyKnown.filter( c=> !retracted.includes(c))
+            this.raiseDetectionConflict(udid, newlyKnown, autoSelected.map( a=>a.capability))
+        }
+        catch(err) {
+            this.logError(err,'onDeviceAdded')
+        }
+    }
+
+    // only a device that's newly known for a capability is asked about it, so a device already known
+    // for it is never asked again; nothing is replaced until the rider answers
+    protected raiseDetectionConflict(udid:string, newlyKnown:IncyclistCapability[], filled:IncyclistCapability[]):void {
+        if (newlyKnown.length===0)
+            return
+
+        const {conflicts} = this.computeSelectionImpact(udid, newlyKnown)
+        if (conflicts.length===0)
+            return
+
+        const deviceName = this.getCapabilityDevice(newlyKnown[0],udid)?.name
+            ?? this.getDeviceConfiguration().getAdapter(udid)?.getUniqueName() ?? ''
+
+        if (!this.visitOpen) {
+            // no page to ask on: keep the current selection, as if the rider had left the page
+            const conflict:SelectionConflict = {id:this.nextConflictId(udid), origin:'detection', deviceName, filled, conflicts}
+            this.logConflictShown(conflict, conflicts.length, 0)
+            this.logConflictResolved(conflict, 'left_page', 0)
+            return
+        }
+
+        const conflict = this.addPendingConflict(udid, deviceName, filled, conflicts)
+        this.logConflictShown(conflict, conflicts.length, this.pendingConflicts.length-1)
+        this.emit('selection-conflict', clone(conflict))
+    }
+
+    // one entry per device: a device that raises another conflict in the same visit gets its rows added to its entry
+    protected addPendingConflict(udid:string, deviceName:string, filled:IncyclistCapability[], conflicts:SelectionConflict['conflicts']):SelectionConflict {
+        const existing = this.pendingConflicts.find( e=>e.udid===udid)?.conflict
+        if (!existing) {
+            const conflict:SelectionConflict = {id:this.nextConflictId(udid), origin:'detection', deviceName, filled, conflicts}
+            this.pendingConflicts.push({udid, conflict})
+            return conflict
+        }
+
+        filled.filter( c=> !existing.filled.includes(c)).forEach( c=> existing.filled.push(c))
+        conflicts.filter( c=> !existing.conflicts.some( e=>e.capability===c.capability)).forEach( c=> existing.conflicts.push(c))
+        return existing
+    }
+
+    protected nextConflictId(udid:string):string {
+        return `${udid}:${++DevicePairingService.conflictCounter}`
+    }
+
+    // capability names and counts only: device names are never logged
+    protected logConflictShown(conflict:SelectionConflict, conflictCount:number, queued:number):void {
+        this.logEvent({
+            message:'device select conflict shown',
+            origin: conflict.origin,
+            conflictCount,
+            conflictCapabilities: conflict.conflicts.map( c=>c.capability).join(','),
+            queued,
+        })
+    }
+
+    protected logConflictResolved(conflict:SelectionConflict, resolution:'done'|ConflictDismissal, replacedCount:number):void {
+        this.logEvent({
+            message:'device select conflict resolved',
+            origin: conflict.origin,
+            resolution,
+            replacedCount,
+            conflictCount: conflict.conflicts.length,
+        })
+    }
+
+    /**
+     * Whether pairing has nothing left to do: every active capability is connected, and no device
+     * excluded as `not-available` is still being waited for while a visit is open.
+     *
+     * Both pairing modes use this to decide whether to keep trying, so they agree on it.
+     */
+    isPairingSettled():boolean {
+        return this.checkPairingComplete() && !this.isAwaitingExcludedDevice()
+    }
+
+    /** Whether a visit is open and a device excluded as `not-available` should still be tried. */
+    protected isAwaitingExcludedDevice():boolean {
+        if (!this.visitOpen)
+            return false
+        return this.getRevertableExclusions().length>0
+    }
+
+    protected getRevertableExclusions(udid?:string):CapabilityExclusion[] {
+        return this.getDeviceConfiguration().getExclusions()
+            .filter( e=> e.reason==='not-available' && (udid===undefined || e.udid===udid))
+    }
+
+    /**
+     * A device excluded as `not-available` has connected. If a visit is open, it's taken back into
+     * use for every capability it was excluded from.
+     */
+    protected revertExclusionsOnConnect(udid:string):void {
+        try {
+            if (!this.visitOpen || !udid)
+                return
+
+            const reverted = this.getRevertableExclusions(udid)
+            if (reverted.length===0)
+                return
+
+            const configuration = this.getDeviceConfiguration()
+            reverted.forEach( e=> { configuration.includeCapability(e.capability) })
+
+            const now = Date.now()
+            const since = Math.min(...reverted.map(e=>e.since))
+            this.logEvent({
+                message:'pairing fallback reverted',
+                msSinceOpen: this.visitOpenedAt===undefined ? undefined : now-this.visitOpenedAt,
+                msSinceFallback: now-since,
+            })
+            this.emit('exclusion-reverted', {udid, capabilities: reverted.map(e=>e.capability)})
+        }
+        catch(err) {
+            this.logError(err,'revertExclusionsOnConnect')
+        }
+    }
+
+    /**
+     * The adapters of excluded devices that are still trying to connect. A device that is still in
+     * use for a capability that isn't excluded is not included.
+     */
+    protected getExcludedPairingAttempts():AdapterInfo[] {
+        try {
+            const configuration = this.getDeviceConfiguration()
+            const excluded = new Set(configuration.getExclusions().map(e=>e.udid))
+            if (excluded.size===0)
+                return []
+
+            const inUse = new Set(configuration.getSelectedDevices().map(d=>d.selected))
+            return (this.state?.adapters??[])
+                .filter( ai=> excluded.has(ai.udid) && !inUse.has(ai.udid) && !ai.adapter?.isStarted())
+        }
+        catch(err) {
+            this.logError(err,'getExcludedPairingAttempts')
+            return []
+        }
+    }
+
+    protected async stopPairingAttempts(adapters:AdapterInfo[]):Promise<void> {
+        await Promise.allSettled( adapters.map( ai=> ai.adapter.stop()))
+    }
+
 
     async prepareStart(adapterFilter:Array<string>=[]):Promise<void> {
         const stillPairing = this.isPairing()
@@ -281,6 +555,11 @@ export class DevicePairingService  extends IncyclistService{
         this.logEvent({message:'Stop Pairing (OK)', stillPairing,stillScanning})
         try {
             this.pauseAdapters(adapters.filter( a=> !adapterFilter.includes(a.udid)));
+
+            // the ride won't use an excluded device, so a connection attempt still running for one is stopped
+            const excludedAttempts = this.getExcludedPairingAttempts()
+            if (excludedAttempts.length>0)
+                await this.stopPairingAttempts(excludedAttempts)
 
             // Pairing is intentionally left running in the background here: the user is only
             // skipping the pairing *page*, not asking to abandon devices that may still connect.
@@ -419,26 +698,28 @@ export class DevicePairingService  extends IncyclistService{
      * 
      * @param capability the capability to be managed <br><br> One of ( 'control', 'power', 'heartrate', 'speed', 'cadence')
      * @param udid The unique device ID of the device to be selected
-     * @param addAll if true, the device will be selected for all capability it supports
-     * 
-     * @example 
+     * @param mode `true` selects the device for every capability it supports (today's "for all"), `false` (default)
+     * this slot only, and `{others:'fill-empty', replace}` fills whatever is empty and replaces only the named
+     * capabilities - both re-evaluated at commit, see {@link previewSelectDevice}
+     *
+     * @example
      * const service = useDevicePairing()
      * await service.selectDevice('control,'508c6bf1-3f2f-4e8d-bcef-bc1910bd2f07', true)
-     * 
-     * @throws  
+     *
+     * @throws
      * Does not throw errors
-     * 
+     *
     */
-   async selectDevice(capability:IncyclistCapability,udid:string, addAll:boolean=false):Promise<void> {
-        
+   async selectDevice(capability:IncyclistCapability,udid:string, mode:SelectDeviceMode=false):Promise<void> {
+
         let changed:boolean = false;
-    
+
         try {
-            const adapter = this.getDeviceAdapter(udid) 
+            const adapter = this.getDeviceAdapter(udid)
             if (!adapter)
                 return;
-            
-            if (addAll) {
+
+            if (mode===true) {
                 const capabilities = adapter.getCapabilities().filter( name=> this.wouldChangeCapability(name,udid) )
 
                 capabilities.forEach( (c,idx) => {
@@ -447,22 +728,97 @@ export class DevicePairingService  extends IncyclistService{
                     changed = changed || wasChanged
                 })
             }
+            else if (mode && typeof mode==='object') {
+                changed = this.selectDeviceObjectMode(capability,udid,mode)
+            }
             else {
                 changed = this.selectCapabilityDevice(capability,udid)
-            }        
+            }
 
             if (changed) {
                 this.emitStateChange({capabilities:this.state.capabilities})
-                
+
             }
 
             this.checkCanStart()
-            await this._stopDeviceSelection(changed)      
-    
+            await this._stopDeviceSelection(changed)
+
         }
         catch (err) { // istanbul ignore next
-            this.logError(err, 'selectDevice',{capability,udid,addAll})
+            this.logError(err, 'selectDevice',{capability,udid,mode})
         }
+    }
+
+    /**
+     * What picking `udid` for `capability` would also do to the device's other capabilities:
+     * which empty slots it would fill, which already hold it, and which hold a different device.
+     * Skips a capability that's `disabled` or has this udid on its session delete list - the
+     * object mode never touches those either, see {@link selectDeviceObjectMode}.
+     */
+    previewSelectDevice(capability:IncyclistCapability, udid:string):SelectionImpact {
+        const adapter = this.getDeviceAdapter(udid)
+        if (!adapter)
+            return {filled:[], unchanged:[], conflicts:[]}
+
+        const candidates = adapter.getCapabilities().filter( c=> c!==capability )
+        return this.computeSelectionImpact(udid,candidates)
+    }
+
+    /**
+     * Classifies each of `candidateCapabilities` by what picking `udid` for it would do right
+     * now: empty (`filled`), already this device (`unchanged`), or holding a different device
+     * (`conflicts`). Shared by the manual preview above and, later, by detection - manual passes
+     * every other capability the device supports, detection passes only the ones it's newly
+     * known for.
+     */
+    protected computeSelectionImpact(udid:string, candidateCapabilities:IncyclistCapability[]):SelectionImpact {
+        const filled: IncyclistCapability[] = []
+        const unchanged: IncyclistCapability[] = []
+        const conflicts: Array<{capability:IncyclistCapability, currentName:string}> = []
+
+        candidateCapabilities.forEach( capability => {
+            const c = this.getCapability(capability)
+            if (!c || c.disabled || this.isOnDeletedList(capability,udid))
+                return
+
+            if (c.selected===udid)
+                unchanged.push(capability)
+            else if (!c.selected)
+                filled.push(capability)
+            else
+                conflicts.push({capability, currentName:c.deviceName})
+        })
+
+        return {filled, unchanged, conflicts}
+    }
+
+    /**
+     * Selects `udid` for `capability`, then, for every other capability the device supports:
+     * skips it if `disabled` or on this device's session delete list, otherwise fills it if
+     * empty or replaces it if named in `mode.replace` - read fresh here rather than from a
+     * caller's earlier {@link previewSelectDevice}, so a slot filled in the meantime is kept.
+     */
+    protected selectDeviceObjectMode(capability:IncyclistCapability, udid:string, mode:{others:'fill-empty', replace:IncyclistCapability[]}):boolean {
+        let changed = this.selectCapabilityDevice(capability,udid,false)
+
+        const adapter = this.getDeviceAdapter(udid)
+        const others = adapter.getCapabilities().filter( c=> c!==capability )
+
+        others.forEach( c => {
+            const current = this.getCapability(c)
+            if (!current || current.disabled || this.isOnDeletedList(c,udid))
+                return
+
+            const isEmpty = !current.selected
+            const shouldReplace = mode.replace.includes(c)
+            if (!isEmpty && !shouldReplace)
+                return
+
+            const wasChanged = this.selectCapabilityDevice(c,udid,false)
+            changed = changed || wasChanged
+        })
+
+        return changed
     }
 
    /**
@@ -837,7 +1193,7 @@ export class DevicePairingService  extends IncyclistService{
         if (this.isPairing() || this.isScanning())
             return false
 
-        const selected = (this.state.capabilities??[]).filter( c=>c.selected )
+        const selected = (this.state.capabilities??[]).filter( c=>isCapabilityActive(c) )
         return selected.length>0 && selected.every( c=>c.connectState==='waiting')
     }
 
@@ -847,7 +1203,8 @@ export class DevicePairingService  extends IncyclistService{
             return
 
         this.stalledLogged = true
-        // only enums, booleans and names of interfaces and capabilities: no device names or ids
+        // only enums, booleans and comma-joined interface/capability names and states: no object
+        // arrays (a key must have one type across every event in the index), no device names or ids
         this.logEvent({
             message: 'pairing stalled',
             usage: this.usage,
@@ -855,8 +1212,8 @@ export class DevicePairingService  extends IncyclistService{
             isScanning: this.isScanning(),
             waiting: Boolean(this.state.waiting),
             sentinel: this.state.tsPrevStart===-1,
-            interfaces: (this.state.interfaces??[]).map( i=>({name:i.name, state:i.state})),
-            capabilities: (this.state.capabilities??[]).filter( c=>c.selected).map( c=>({capability:c.capability, connectState:c.connectState})),
+            interfaceStates: (this.state.interfaces??[]).map( i=>`${i.name}:${i.state}`).join(','),
+            capabilityStates: (this.state.capabilities??[]).filter( c=>c.selected).map( c=>`${c.capability}:${c.connectState}`).join(','),
         })
     }
 
@@ -1185,12 +1542,17 @@ export class DevicePairingService  extends IncyclistService{
         if (notify && changed) {
             if (this.settings.onStateChanged && typeof this.settings.onStateChanged === 'function') {
                 this.settings.onStateChanged({capabilities})
-            }   
+            }
         }
 
         if (this.usage==='page') {
             this.emit('state-update')
         }
+
+        // every connect path of both pairing modes (pairing success, detection during a scan,
+        // an adapter found already running) ends up here
+        if (connectState==='connected')
+            this.revertExclusionsOnConnect(udid)
     }
 
     protected onPairingStarted() {
@@ -1351,7 +1713,8 @@ export class DevicePairingService  extends IncyclistService{
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
 
         try {
-            const udid = this.getDeviceConfiguration().add(deviceSettings,{legacy:false})
+            let added:AddDeviceResult|undefined
+            const udid = this.getDeviceConfiguration().add(deviceSettings,{legacy:false, onAdded:(result)=>{ added=result }})
             this.logEvent({message:'device detected',device:deviceSettings,udid, isScanning:this.isScanning()})
 
             if(!udid) {
@@ -1375,6 +1738,9 @@ export class DevicePairingService  extends IncyclistService{
             deletedCapabilities.forEach( capability => {
                 this.getDeviceConfiguration().delete(udid,capability,true)
             })
+
+            if (added)
+                this.onDeviceAdded(udid, added, deletedCapabilities)
 
             const adapter = this.getDeviceConfiguration().getAdapter(udid)
 
@@ -1512,10 +1878,17 @@ export class DevicePairingService  extends IncyclistService{
         const power = this.getCapability(IncyclistCapability.Power)
         const speed =  this.getCapability(IncyclistCapability.Speed)
 
-        const controlOK = (control?.selected && control?.connectState==='connected')
-        const powerOK = (!control?.selected && power?.selected && power?.connectState==='connected')
-        const speedOK = (!control?.selected && !power?.selected && speed?.selected && speed?.connectState==='connected')
-        
+        const controlActive = isCapabilityActive(control)
+        const powerActive = isCapabilityActive(power)
+        const speedActive = isCapabilityActive(speed)
+
+        // a switched-off or excluded tier is skipped entirely, not treated as "still occupying
+        // the slot" - a disabled Resistance tile with a connected power meter must not block
+        // the ride on the power meter's tier
+        const controlOK = (controlActive && control?.connectState==='connected')
+        const powerOK = (!controlActive && powerActive && power?.connectState==='connected')
+        const speedOK = (!controlActive && !powerActive && speedActive && speed?.connectState==='connected')
+
         const success = controlOK || powerOK || speedOK
             
 
@@ -1528,7 +1901,7 @@ export class DevicePairingService  extends IncyclistService{
     checkPairingComplete():boolean {
 
         const incomplete = this.state.capabilities.find(c => {
-            return (c.selected && c.connectState !== 'connected')
+            return (isCapabilityActive(c) && c.connectState !== 'connected')
         });
 
         return !incomplete
@@ -1600,7 +1973,8 @@ export class DevicePairingService  extends IncyclistService{
         //await this.waitForInterfacesInitialized()
 
         if (configOKToStart && !this.deviceSelectState && !props.enforcedScan)  {
-            if (this.checkPairingSuccess()!==true)
+            // ready to ride, but a device excluded as not available is still tried while the page is open
+            if (this.checkPairingSuccess()!==true || this.isAwaitingExcludedDevice())
                 await this.startPairing(adapters, props);
             else {
                 this.logEvent({message:'Pairing completed'})
@@ -1625,7 +1999,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     async startPairing(adapters: AdapterInfo[], props: PairingProps) {
-        if (this.checkPairingComplete())  {
+        if (this.isPairingSettled())  {
             if (this.usage==='page')
                 this.emit('pairing-done');
             return;
@@ -1718,7 +2092,7 @@ export class DevicePairingService  extends IncyclistService{
 
         this.emit('pairing-done');
 
-        if (!this.checkPairingComplete()) {
+        if (!this.isPairingSettled()) {
             this.logEvent({ message: 'Pairing done', adapters, props });
                 await this.rideService.stop()
 
@@ -2325,6 +2699,9 @@ export class DevicePairingService  extends IncyclistService{
         }
         this.removePairingCallbacks()
         this.removeScanningCallbacks()
+        this.visitOpen = false
+        delete this.visitOpenedAt
+        this.pendingConflicts = []
     }
 
     @Injectable

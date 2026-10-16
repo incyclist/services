@@ -197,7 +197,9 @@ export class PairingPageStateMachine {
 
             if (hasDevices && this.selectState==='Closed') {
 
-                const pairingDone = service.checkPairingComplete()
+                // same "done" rule as the direct pairing loop, which also covers retrying a device
+                // excluded as not available while the page is open
+                const pairingDone = service.isPairingSettled()
 
                 if (pairingDone) {
                     //service.stopPairing

@@ -2,6 +2,7 @@
 import {  IncyclistCapability, IncyclistDeviceAdapter, DeviceProperties, IncyclistDevice,DeviceSettings } from 'incyclist-devices'
 import { CapabilityInformation, DeviceConfigurationService, DeviceConfigurationSettings, ExtendedIncyclistCapability, InterfaceSetting, useDeviceConfiguration,} from '../configuration'
 import {DevicePairingService} from './service'
+import { isCapabilityActive } from './capability'
 import { DeviceAccessService, useDeviceAccess } from '../access'
 import { DeviceRideService, useDeviceRide } from '../ride'
 import UserSettingsMock from '../../settings/service/mock'
@@ -677,6 +678,154 @@ describe('PairingService',()=>{
 
                 expect(svc.isPairing()).toBe(false)
             })
+
+            // Pins today's prepareStart() adapterFilter behaviour: which adapters stay
+            // running vs. get paused when the rider presses OK.
+            describe('adapterFilter',()=>{
+
+                beforeEach( ()=>{
+                    svc.setupMockData( IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                    svc.setupMockData( IncyclistCapability.Power, [ {udid:'2', selected:true} ])
+                })
+
+                const pauseOf = (udid:string) => svc.getState().adapters.find(ai=>ai.udid===udid).adapter.pause
+
+                test('no filter: every selected adapter is paused',async ()=>{
+                    await svc.prepareStart()
+
+                    expect(pauseOf('1')).toHaveBeenCalled()
+                    expect(pauseOf('2')).toHaveBeenCalled()
+                })
+
+                test('filter keeps the listed udid running and still pauses the rest',async ()=>{
+                    await svc.prepareStart(['1'])
+
+                    expect(pauseOf('1')).not.toHaveBeenCalled()
+                    expect(pauseOf('2')).toHaveBeenCalled()
+                })
+
+                test('filter listing every selected udid pauses nothing',async ()=>{
+                    await svc.prepareStart(['1','2'])
+
+                    expect(pauseOf('1')).not.toHaveBeenCalled()
+                    expect(pauseOf('2')).not.toHaveBeenCalled()
+                })
+            })
+        })
+
+        // A switched-off (disabled) or excluded capability must never count as "still occupying
+        // the slot" in these readiness checks - otherwise a rider who turns off the Resistance
+        // tile keeps being blocked from riding on a connected power meter.
+        describe('effective selection (disabled/excluded) in readiness checks',()=>{
+
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            test('checkPairingSuccess: a disabled Control does not block a connected Power meter',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.setupMockData(IncyclistCapability.Power, [ {udid:'2', selected:true} ])
+                svc.getCapabilityData('control').disabled = true
+                svc.getCapabilityData('control').connectState = 'waiting'
+                svc.getCapabilityData('power').connectState = 'connected'
+                svc.setCanStartRide(true)
+
+                expect(svc.checkPairingSuccess()).toBe(true)
+            })
+
+            test('checkPairingSuccess: an excluded Control does not block a connected Power meter',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.setupMockData(IncyclistCapability.Power, [ {udid:'2', selected:true} ])
+                svc.getCapabilityData('control').excluded = {reason:'not-available', scope:'until-next-pairing'}
+                svc.getCapabilityData('control').connectState = 'connecting'
+                svc.getCapabilityData('power').connectState = 'connected'
+                svc.setCanStartRide(true)
+
+                expect(svc.checkPairingSuccess()).toBe(true)
+            })
+
+            test('checkPairingSuccess: a disabled Control that is still (somehow) connected does not win over a connected Power meter',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.setupMockData(IncyclistCapability.Power, [ {udid:'2', selected:true} ])
+                svc.getCapabilityData('control').disabled = true
+                svc.getCapabilityData('control').connectState = 'connected'
+                svc.getCapabilityData('power').connectState = 'connected'
+                svc.setCanStartRide(true)
+
+                expect(svc.checkPairingSuccess()).toBe(true)
+            })
+
+            test('checkPairingComplete: a disabled capability that is not connected is ignored',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.getCapabilityData('control').disabled = true
+                svc.getCapabilityData('control').connectState = 'waiting'
+
+                expect(svc.checkPairingComplete()).toBe(true)
+            })
+
+            test('isStalled: a disabled capability stuck on waiting does not count as stalled',()=>{
+                svc.setupMockData(IncyclistCapability.Control, [ {udid:'1', selected:true} ])
+                svc.getCapabilityData('control').disabled = true
+                svc.getCapabilityData('control').connectState = 'waiting'
+
+                expect((svc as any).isStalled()).toBe(false)
+            })
+        })
+
+        // One table, every reader: checkPairingSuccess, checkPairingComplete and isStalled must all treat
+        // "is this capability in play" exactly the way isCapabilityActive defines it - not re-derive their
+        // own version of "selected and not disabled and not excluded". With only Control configured and
+        // nothing else to fall back on, each reader's outcome is forced to depend entirely on that one
+        // question, so a reader that silently went back to checking raw `selected` would fail here even
+        // though it might still pass a hand-picked example test.
+        describe('agreement: every readiness reader treats "in play" exactly like isCapabilityActive',()=>{
+
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+                svc.setCanStartRide(true)
+            })
+
+            afterEach( ()=>{
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            const CASES: Array<{name:string, selected:boolean, disabled:boolean, excluded:boolean, active:boolean}> = [
+                {name:'selected, not disabled, not excluded', selected:true,  disabled:false, excluded:false, active:true},
+                {name:'not selected',                         selected:false, disabled:false, excluded:false, active:false},
+                {name:'selected and disabled',                selected:true,  disabled:true,  excluded:false, active:false},
+                {name:'selected and excluded',                selected:true,  disabled:false, excluded:true,  active:false},
+                {name:'selected, disabled and excluded',      selected:true,  disabled:true,  excluded:true,  active:false},
+            ]
+
+            test.each(CASES)('$name',({selected, disabled, excluded, active})=>{
+                svc.setupMockData(IncyclistCapability.Control, selected ? [ {udid:'1', selected:true} ] : [ {udid:'1'} ])
+                const control = svc.getCapabilityData('control')
+                control.disabled = disabled
+                control.excluded = excluded ? {reason:'not-available', scope:'until-next-pairing'} : undefined
+
+                expect(isCapabilityActive(control)).toBe(active)
+
+                // checkPairingSuccess: Control is the only capability configured, so success can only
+                // come from it being both active and connected
+                control.connectState = 'connected'
+                expect(svc.checkPairingSuccess()).toBe(active)
+
+                // checkPairingComplete/isStalled: Control is selected but not yet connected - complete
+                // (nothing active left pending) exactly when Control doesn't count; stalled exactly when it does
+                control.connectState = 'waiting'
+                expect(svc.checkPairingComplete()).toBe(!active)
+                expect((svc as any).isStalled()).toBe(active)
+            })
         })
 
         describe('startPairing',()=>{
@@ -1012,6 +1161,133 @@ describe('PairingService',()=>{
             })
 
 
+        })
+
+        describe('previewSelectDevice',()=>{
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+            })
+            afterEach( ()=>{
+                svc.resetServices()
+                svc.reset()
+                TestWrapper.resetMocks()
+            })
+
+            test('classifies the other capabilities the device supports as filled, unchanged, or conflicting',()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power','speed','cadence']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'} ])                              // empty -> filled
+                svc.setupMockData( 'speed',   [ {udid:'4', selected:true} ])               // already udid 4 -> unchanged
+                svc.setupMockData( 'cadence', [ {udid:'4'}, {udid:'2', selected:true} ])   // held by '2' -> conflict
+                svc.getCapabilityData('cadence').deviceName = 'Other Sensor'
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'4')
+
+                expect(impact.filled).toEqual([IncyclistCapability.Power])
+                expect(impact.unchanged).toEqual([IncyclistCapability.Speed])
+                expect(impact.conflicts).toEqual([{capability:IncyclistCapability.Cadence, currentName:'Other Sensor'}])
+            })
+
+            test('skips a disabled capability: not listed as filled even though its slot is empty',()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'} ])
+                svc.getCapabilityData('power').disabled = true
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'4')
+
+                expect(impact.filled).toEqual([])
+                expect(impact.unchanged).toEqual([])
+                expect(impact.conflicts).toEqual([])
+            })
+
+            test('skips a capability where this device is on the session delete list',()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4', deleted:true} ])
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'4')
+
+                expect(impact.filled).toEqual([])
+            })
+
+            test('no adapter for the udid returns an empty impact',()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true} ])
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'unknown-udid')
+
+                expect(impact).toEqual({filled:[], unchanged:[], conflicts:[]})
+            })
+        })
+
+        describe('selectDevice object mode',()=>{
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+                svc.simulateScanning()
+                svc.mock('run',jest.fn())
+            })
+            afterEach( ()=>{
+                svc.resetServices()
+                svc.reset()
+                TestWrapper.resetMocks()
+            })
+
+            test('{replace:[]} fills only the empty slots, leaving a conflicting slot untouched',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power','cadence']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'} ])                              // empty -> filled
+                svc.setupMockData( 'cadence', [ {udid:'4'}, {udid:'2', selected:true} ])   // held by '2' -> kept
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[]})
+
+                expect(configuration.select).toHaveBeenCalledWith('4','control',{emit:false})
+                expect(configuration.select).toHaveBeenCalledWith('4','power',{emit:false})
+                expect(configuration.select).not.toHaveBeenCalledWith('4','cadence',expect.anything())
+            })
+
+            test('replace commits the named conflicting capability as well',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['cadence']} ])
+                svc.setupMockData( 'cadence', [ {udid:'4'}, {udid:'2', selected:true} ])
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[IncyclistCapability.Cadence]})
+
+                expect(configuration.select).toHaveBeenCalledWith('4','cadence',{emit:false})
+            })
+
+            test('a disabled capability is skipped even when it is named in replace',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'}, {udid:'2', selected:true} ])
+                svc.getCapabilityData('power').disabled = true
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[IncyclistCapability.Power]})
+
+                expect(configuration.select).not.toHaveBeenCalledWith('4','power',expect.anything())
+            })
+
+            test('a capability where this device is on the session delete list is skipped even when empty',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4', deleted:true} ])
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[]})
+
+                expect(configuration.select).not.toHaveBeenCalledWith('4','power',expect.anything())
+            })
+
+            test('re-evaluates at commit: a slot filled after preview is kept, not overwritten',async ()=>{
+                svc.setupMockData( 'control', [ {udid:'1', selected:true}, {udid:'4', c:['power']} ])
+                svc.setupMockData( 'power',   [ {udid:'4'} ])
+
+                const impact = svc.previewSelectDevice(IncyclistCapability.Control,'4')
+                expect(impact.filled).toEqual([IncyclistCapability.Power])
+
+                // the rider's slot gets filled by something else between preview and commit
+                svc.getCapabilityData('power').selected = '2'
+
+                await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[]})
+
+                expect(configuration.select).not.toHaveBeenCalledWith('4','power',expect.anything())
+                expect(svc.getCapabilityData('power').selected).toBe('2')
+            })
         })
         describe('deleteDevice',()=>{
             describe('scanning',()=> {

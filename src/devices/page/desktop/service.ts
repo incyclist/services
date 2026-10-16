@@ -11,7 +11,7 @@ import type { DeviceSelectionItemProps, DeviceSelectionProps, PairingExitVia, TC
 import type { DesktopInterfaceDisplayProps, DesktopInterfaceSettingsDisplayProps, DesktopPairingDisplayProps } from './types'
 
 import { EnrichedInterfaceSetting, useDeviceAccess } from '../../access'
-import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../../pairing'
+import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, isCapabilityActive, toPairingInterfaceStates } from '../../pairing'
 import type { IncyclistDeviceSettings, InterfaceSetting } from '../../configuration/model'
 import type { DevicePairingData, DeviceSelectState } from '../../pairing/model'
 
@@ -84,7 +84,7 @@ export class DesktopPairingPageService extends PairingPageService {
                 CP(IncyclistCapability.AppControl)
             ].filter( c=>c!==null && c!==undefined)
 
-            const trainerSelected = Boolean(caps.find( c=>c.capability===IncyclistCapability.Control)?.selected)
+            const trainerSelected = isCapabilityActive(caps.find( c=>c.capability===IncyclistCapability.Control))
             const rowLabels = {
                 top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected)),
                 bottom: getPairingGuidanceText('row-optional'),

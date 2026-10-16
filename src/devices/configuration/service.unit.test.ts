@@ -625,14 +625,15 @@ describe( 'DeviceConfigurationService',()=>{
                 }
             }
 
-            service.add( {interface:'ant',deviceID:'4711',profile:'PWR'},{legacy:true})
+            const udid = service.add( {interface:'ant',deviceID:'4711',profile:'PWR'},{legacy:true})
 
             const settings = service.settings
             expect(settings.devices.length).toBe(3)
-            
-            expect(settings.capabilities.length).toBe(6)  
+
+            expect(settings.capabilities.length).toBe(6)
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Control)).toMatchObject( {selected:undefined})
-            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:undefined})
+            // any device now fills the empty, non-disabled slots it supports - a power sensor fills Power
+            expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.Power)).toMatchObject( {selected:udid})
             expect(settings.capabilities.find(c=>c.capability===IncyclistCapability.HeartRate)).toMatchObject( {selected:undefined})
         })
 
@@ -1231,7 +1232,41 @@ describe( 'DeviceConfigurationService',()=>{
             expect(options).toEqual(['PowerMeter','Smart Trainer','ERG'])
         })
 
-        
+        test('default udid chain skips a disabled Control capability and falls through to Power',async ()=>{
+            const settings = clone(SampleSettings)
+            service.inject('UserSettings', new UserSettingsMock(settings))
+            await service.init()
+
+            service.disableCapability(IncyclistCapability.Control,true)
+
+            const res = service.getModeSettings()
+            expect(res?.udid).toBe('2')
+        })
+
+        test('default udid chain returns nothing once every capability in the chain is disabled',async ()=>{
+            const settings = clone(SampleSettings)
+            service.inject('UserSettings', new UserSettingsMock(settings))
+            await service.init()
+
+            service.disableCapability(IncyclistCapability.Control,true)
+            service.disableCapability(IncyclistCapability.Power,true)
+
+            const res = service.getModeSettings()
+            expect(res).toBeUndefined()
+        })
+
+        test('an explicit udid bypasses the default chain regardless of disabled',async ()=>{
+            const settings = clone(SampleSettings)
+            service.inject('UserSettings', new UserSettingsMock(settings))
+            await service.init()
+
+            service.disableCapability(IncyclistCapability.Control,true)
+
+            const res = service.getModeSettings('1')
+            expect(res?.udid).toBe('1')
+        })
+
+
     })
 
     describe('getAdapters',()=>{
