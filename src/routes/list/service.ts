@@ -1237,13 +1237,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (filters.routeSource) {
             const local = filters.routeSource==='Local'
             const internal = filters.routeSource==='Incyclist';
-            const sources = filters.routeSource.split('|').map(pascalCase)
+            const sources = new Set(filters.routeSource.split('|').map(pascalCase))
             //const sources = [ ...this.getAllExternalRouteSources(), ...this.getAllAppSources()]
             
             routes = routes.filter(r => 
                 (r.source===undefined && !r.isLocal && internal) ||  
                 (r.source===undefined && r.isLocal && local) ||                  
-                (r.source && !internal && sources.includes(pascalCase(r.source)))
+                (r.source && !internal && sources.has(pascalCase(r.source)))
             );
         }
         return routes;
@@ -1634,6 +1634,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         const existing = this.findCard(route)
         if (existing)        
             existing.card.updateRoute(route)
+        return Promise.resolve()
     }
 
     protected async loadRoutes():Promise<void> {
