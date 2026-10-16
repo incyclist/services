@@ -1630,7 +1630,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    protected async update(route:Route,_source:'user'|'system'='user'):Promise<void> { 
+    protected update(route:Route,_source:'user'|'system'='user'):Promise<void> { 
         const existing = this.findCard(route)
         if (existing)        
             existing.card.updateRoute(route)

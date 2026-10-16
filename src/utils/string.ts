@@ -9,7 +9,9 @@ export const camelCase = (str: string) => {
 
     return str
         .toLowerCase()
-        .replace(/[^a-zA-Z0-9]+([a-zA-Z0-9])/g, (_, chr) => chr.toUpperCase());
+        .split(/[^a-z0-9]+/)
+        .map((word, i) => i === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1))
+        .join('')
 }
 
 export const pascalCase = (str: string) => {
