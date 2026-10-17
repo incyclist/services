@@ -592,7 +592,7 @@ export class UserInterfaceServcie extends IncyclistService {
 
             const promises = [
                 routes.preload().wait(),
-                freeRide.selectStartPosition(),
+                freeRide.init(),
                 workouts.preload().wait(),
                 activities.preload().wait()
             ]

@@ -38,6 +38,7 @@ import type { RouteShape } from "../shapes/types";
 import { useRouteLibraryScanner } from "../library/service";
 import { useIncyclistRoutesApi } from "../base/api/factory";
 import { pascalCase } from "../../utils";
+import { useFreeRideService } from "../free-ride";
 
 
 const SYNC_INTERVAL = 5* 60*1000
@@ -1034,6 +1035,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.logError(err,'getBySourceUri',{uri})
         }
     }    
+
+
+    isFreeRideSupported():boolean {
+        return this.getFreeRideService().isInitialized()        
+    }
 
 
     /**
@@ -2451,6 +2457,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable 
     protected getIncyclistRoutesApi() {
         return useIncyclistRoutesApi()
+    }
+
+    @Injectable
+    protected getFreeRideService() {
+        return useFreeRideService()
     }
 
     reset() {

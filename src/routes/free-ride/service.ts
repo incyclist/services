@@ -13,6 +13,8 @@ import { OptionManager } from "../../maps/MapArea/options";
 import { waitNextTick } from "../../utils";
 import clone from "../../utils/clone";
 
+const INIT_RETRY = 15*1000; // 15s
+const MAX_RETRIES = 1
 
 @Singleton
 export class FreeRideService extends IncyclistService {
@@ -23,12 +25,43 @@ export class FreeRideService extends IncyclistService {
     protected options:FreeRideContinuation[]
     protected currentSegment: FreeRideContinuation
     protected lastOptionsQueryValid: boolean = true
+    protected initialized: boolean = false
+    protected ivInit?: NodeJS.Timeout
+    protected cntInitRetry:number = 0
 
     constructor() {
         super('FreeRide')
         this.options = []
     }   
 
+    init() {
+        this.logEvent({message:'init free ride service'})
+        this.selectStartPosition()
+        .catch( err=> {
+            this.logError(err,'init')
+        })
+        .finally( ()=>{
+            
+            this.logEvent({message:'init free ride service result', success:this.initialized})
+            this.ivInit = setInterval( ()=>{
+                if (this.cntInitRetry<MAX_RETRIES) {
+                    this.cntInitRetry++;
+                    this.logEvent({message:'init free ride service retry'})
+                    this.selectStartPosition()
+                }
+                else {
+                    clearInterval(this.ivInit)
+                    delete this.ivInit
+                }
+
+            }, INIT_RETRY)
+        })
+       
+    }
+
+    isInitialized() {
+        return this.initialized
+    }
 
     /**
      * Sets the start position for the free ride and loads the map area. 
@@ -39,6 +72,9 @@ export class FreeRideService extends IncyclistService {
         this.setStartPosition(position)  
 
         const map = await this.getMapArea().load(this.startPosition)
+        if (!this.initialized && map) {
+            this.setInitialized()
+        }
        
         await this.getStartOptions(map)
 
@@ -129,6 +165,16 @@ export class FreeRideService extends IncyclistService {
 
         this.logEvent({message:'current segment changed', segment: this.buildId(this.selectedOption)})
 
+    }
+
+    protected setInitialized() {
+        this.initialized = true
+        if (this.ivInit) {
+            clearInterval(this.ivInit)
+            delete this.ivInit
+            this.logEvent({message:'init free ride service success'})
+        }
+        this.emit('initialized')
     }
 
     protected getOption(option:FreeRideOption):FreeRideContinuation {
