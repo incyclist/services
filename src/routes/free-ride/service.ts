@@ -47,7 +47,7 @@ export class FreeRideService extends IncyclistService {
                 if (this.cntInitRetry<MAX_RETRIES) {
                     this.cntInitRetry++;
                     this.logEvent({message:'init free ride service retry'})
-                    this.selectStartPosition()
+                    this.selectStartPosition().catch( err=> { this.logError(err,'init')})
                 }
                 else {
                     clearInterval(this.ivInit)
