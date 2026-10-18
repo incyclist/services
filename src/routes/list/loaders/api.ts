@@ -142,16 +142,16 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             }
             
         }
-        this.loadObserver.emit('loaded')
+        this.loadObserver?.emit('loaded')
 
         if (loadDetailRequired.length>0) {            
             await this.loadDetails(loadDetailRequired,true)
         }
 
-        this.loadObserver.emit('done')
+        this.loadObserver?.emit('done')
 
         await sleep(1)        
-        this.loadObserver.stop()
+        this.loadObserver?.stop()
         delete this.loadObserver        
         
     }
