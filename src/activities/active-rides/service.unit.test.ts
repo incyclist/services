@@ -1,4 +1,3 @@
-import { beforeEach } from 'node:test'
 import { EventEmitter } from 'events'
 import { Inject } from '../../base/decorators'
 import { Observer } from '../../base/types'
@@ -365,4 +364,162 @@ describe('ActiveRides',()=>{
         Inject('IncyclistActiveRidesApi', undefined)
     })
 
+})
+
+describe('ActiveRides - route list live pill updates', () => {
+
+    class FakeRouteList extends EventEmitter {
+        routes: Array<{description:{id:string, routeHash:string}}> = []
+        getAllRoutes() { return this.routes }
+    }
+
+    let service: ActiveRidesService
+    let routeList: FakeRouteList
+    let mockApi: {getAll: jest.Mock}
+    let mockMq: {subscribe: jest.Mock, unsubscribe: jest.Mock, onConnect: jest.Mock, onDisconnect: jest.Mock, unsubscribeAll: jest.Mock, sendMessage: jest.Mock}
+
+    const open = async (routeSet = routeList.routes) => {
+        routeList.routes = routeSet
+        routeList.emit('opened', new EventEmitter(), true)
+        await Promise.resolve()
+    }
+
+    // the handler onRouteListActivityEvent() registered with the message queue mock
+    const liveHandler = () => mockMq.subscribe.mock.calls.find( ([topic])=>topic==='incyclist/activity/+/+/+')?.[1]
+
+    beforeEach(() => {
+        routeList = new FakeRouteList()
+        Inject('RouteList', routeList)
+
+        mockApi = { getAll: jest.fn().mockResolvedValue([]) }
+        Inject('IncyclistActiveRidesApi', mockApi)
+        useOnlineStatusMonitoring().initialize(true)
+
+        mockMq = { subscribe: jest.fn(), unsubscribe: jest.fn(), onConnect: jest.fn(), onDisconnect: jest.fn(), unsubscribeAll: jest.fn(), sendMessage: jest.fn() }
+
+        service = useActiveRides()
+        ;(service as any).getMessageQueue = jest.fn().mockReturnValue(mockMq)
+    })
+
+    afterEach(() => {
+        service.reset()
+        Inject('RouteList', undefined)
+        Inject('IncyclistActiveRidesApi', undefined)
+        jest.clearAllMocks()
+    })
+
+    test('builds the live session set from the initial REST snapshot, deduped by session', async () => {
+        mockApi.getAll.mockResolvedValue([
+            {id:'a', sessionId:'s1', ride:{routeHash:'R1'}},
+            {id:'b', sessionId:'s1', ride:{routeHash:'R1'}}, // duplicate delivery of the same session
+            {id:'c', sessionId:'s2', ride:{routeHash:'R1'}},
+            {id:'d', sessionId:'s3', ride:{routeHash:'R2'}},
+        ])
+
+        await open([{description:{id:'route-1', routeHash:'R1'}},{description:{id:'route-2', routeHash:'R2'}}])
+
+        const stats = (service as any).routesStats
+        expect(stats.find((s:any)=>s.routeHash==='R1').count).toBe(2)
+        expect(stats.find((s:any)=>s.routeHash==='R2').count).toBe(1)
+    })
+
+    test('subscribes to the global activity wildcard exactly once, not again on a later filter change', async () => {
+        await open([{description:{id:'route-1', routeHash:'R1'}}])
+        await open([{description:{id:'route-1', routeHash:'R1'}}])
+
+        expect(mockMq.subscribe).toHaveBeenCalledTimes(1)
+        expect(mockApi.getAll).toHaveBeenCalledTimes(1)
+    })
+
+    test('a live start event increments the affected route only, without a REST call', async () => {
+        await open([{description:{id:'route-1', routeHash:'R1'}},{description:{id:'route-2', routeHash:'R2'}}])
+        mockApi.getAll.mockClear()
+
+        const emitted:any[] = []
+        ;(service as any).routeListObserver.on('stats-update', (s:any)=>emitted.push(s))
+
+        liveHandler()('incyclist/activity/newSession/R1/start')
+
+        expect(mockApi.getAll).not.toHaveBeenCalled()
+        expect(emitted).toEqual([[{count:1, routeId:'route-1', routeHash:'R1'}]])
+        expect((service as any).routesStats.find((s:any)=>s.routeHash==='R2').count).toBe(0)
+    })
+
+    test('a live stop event decrements the affected route', async () => {
+        mockApi.getAll.mockResolvedValue([{id:'a', sessionId:'s1', ride:{routeHash:'R1'}}])
+        await open([{description:{id:'route-1', routeHash:'R1'}}])
+
+        liveHandler()('incyclist/activity/s1/R1/stop')
+
+        expect((service as any).routesStats.find((s:any)=>s.routeHash==='R1').count).toBe(0)
+    })
+
+    test('a duplicate start for an already-counted session is a no-op', async () => {
+        mockApi.getAll.mockResolvedValue([{id:'a', sessionId:'s1', ride:{routeHash:'R1'}}])
+        await open([{description:{id:'route-1', routeHash:'R1'}}])
+
+        const emitted:any[] = []
+        ;(service as any).routeListObserver.on('stats-update', (s:any)=>emitted.push(s))
+
+        liveHandler()('incyclist/activity/s1/R1/start')
+
+        expect(emitted).toEqual([])
+        expect((service as any).routesStats.find((s:any)=>s.routeHash==='R1').count).toBe(1)
+    })
+
+    test('a stop for a session never counted is a no-op', async () => {
+        await open([{description:{id:'route-1', routeHash:'R1'}}])
+
+        const emitted:any[] = []
+        ;(service as any).routeListObserver.on('stats-update', (s:any)=>emitted.push(s))
+
+        liveHandler()('incyclist/activity/unknown/R1/stop')
+
+        expect(emitted).toEqual([])
+    })
+
+    test('unsubscribes from the message queue when the route list closes', async () => {
+        await open([{description:{id:'route-1', routeHash:'R1'}}])
+
+        routeList.emit('closed')
+
+        expect(mockMq.unsubscribe).toHaveBeenCalledWith('incyclist/activity/+/+/+')
+    })
+
+    test('re-subscribes after a reconnect if the route list is still open', async () => {
+        await open([{description:{id:'route-1', routeHash:'R1'}}])
+        mockMq.subscribe.mockClear()
+
+        ;(service as any).onDisconnect()
+        await (service as any).onConnect()
+
+        expect(mockMq.subscribe).toHaveBeenCalledWith('incyclist/activity/+/+/+', expect.any(Function), 'incyclist/activity')
+    })
+
+    test('does not re-subscribe after a reconnect once the route list has been closed', async () => {
+        await open([{description:{id:'route-1', routeHash:'R1'}}])
+        routeList.emit('closed')
+        mockMq.subscribe.mockClear()
+
+        ;(service as any).onDisconnect()
+        await (service as any).onConnect()
+
+        expect(mockMq.subscribe).not.toHaveBeenCalled()
+    })
+
+    // onTopicMessage() dispatches to every handler whose filter the topic matches, not just the
+    // one registered for that exact topic - now that onRouteListActivityEvent() shares the
+    // 'incyclist/activity' filter with the per-ride onActivityEvent(), the latter needs its own
+    // routeHash check to keep ignoring other routes' nearby-rider events
+    test('onActivityEvent still ignores events for routes other than the current ride', () => {
+        const s:any = service
+        s.current = { ride:{routeHash:'MY_ROUTE'}, sessionId:'me' }
+        s.activityEventHandlers.start = jest.fn()
+
+        s.onActivityEvent('incyclist/activity/other/OTHER_ROUTE/start', {})
+        expect(s.activityEventHandlers.start).not.toHaveBeenCalled()
+
+        s.onActivityEvent('incyclist/activity/other/MY_ROUTE/start', {})
+        expect(s.activityEventHandlers.start).toHaveBeenCalledWith('other', {})
+    })
 })

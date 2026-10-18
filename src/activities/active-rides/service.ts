@@ -60,6 +60,12 @@ export class ActiveRidesService extends IncyclistService {
 
     protected routeListObserver: Observer
     protected routesStats: ActiveRideCount [] = []
+    // sessionIds per routeHash, seeded from getActiveRideCounts()'s REST snapshot and kept live
+    // by onRouteListActivityEvent() - a Set rather than a running increment/decrement so a
+    // duplicate or out-of-order start/stop delivery (MQTT at-least-once, reconnect replay) can't
+    // drift the count
+    protected routeListSessions: Map<string,Set<string>> = new Map()
+    protected isSubscribedRouteListEvents = false
 
     protected readonly activityEventHandlers = {
         update: this.onActivityUpdateEvent.bind(this),
@@ -79,6 +85,7 @@ export class ActiveRidesService extends IncyclistService {
         routeList.on('opened', this.onRoutePageOpened.bind(this))
         routeList.on('closed', () => {
             delete this.routeListObserver
+            this.unsubscribeRouteListEvents()
         })
         
     }
@@ -168,38 +175,39 @@ export class ActiveRidesService extends IncyclistService {
     protected async onRoutePageOpened (observer:Observer ) {
         this.routeListObserver = observer
 
-        await this.getActiveRideCounts()
-            
+        // only fetch+subscribe once per app session - search()/open() emit 'opened' again on
+        // every filter change while the route list stays open, and the live MQTT subscription
+        // (once established) keeps routesStats current without a fresh REST call each time
+        if (!this.isSubscribedRouteListEvents) {
+            await this.getActiveRideCounts()
+            this.subscribeRouteListEvents()
+        }
+
         this.routeListObserver.emit('stats-update', this.routesStats)
-        
-    }    
+
+    }
 
     protected async getActiveRideCounts():  Promise<ActiveRideCount[]> {
         try {
             const isOnline = this.getOnlineStatusMonitoring().onlineStatus
             if (!isOnline)
                 return
-            
-            const activeRides = (await this.getApi().getAll()).filter(ar=>ar.ride!==undefined && ar.ride!==null)
-            
-            const routes = this.getRouteList().getAllRoutes()
 
-            const counts: ActiveRideCount[] = []
-            routes.forEach( route => {
-                const routeRides = activeRides.filter( ar => ar.ride?.routeHash && ar.ride?.routeHash === route.description?.routeHash)??[]
-                const count = routeRides.length
-               
-                counts.push( {
-                    count,
-                    routeId: route.description.id,
-                    routeHash: route.description.routeHash
-                })
-                
+            const activeRides = (await this.getApi().getAll()).filter(ar=>ar.ride!==undefined && ar.ride!==null)
+
+            this.routeListSessions = new Map()
+            activeRides.forEach( ar => {
+                const hash = ar.ride?.routeHash
+                if (!hash)
+                    return
+                if (!this.routeListSessions.has(hash))
+                    this.routeListSessions.set(hash, new Set())
+                this.routeListSessions.get(hash).add(ar.sessionId??ar.id)
             })
 
-            this.routesStats = counts
+            this.routesStats = this.buildRouteListStats()
 
-            return counts
+            return this.routesStats
 
         }
         catch(err) {
@@ -208,6 +216,82 @@ export class ActiveRidesService extends IncyclistService {
                 this.logError(err,'getActiveRideCounts')
         }
         return []
+    }
+
+    protected buildRouteListStats(): ActiveRideCount[] {
+        const routes = this.getRouteList().getAllRoutes()
+        return routes.map( route => ({
+            count: this.routeListSessions.get(route.description.routeHash)?.size ?? 0,
+            routeId: route.description.id,
+            routeHash: route.description.routeHash
+        }))
+    }
+
+    protected subscribeRouteListEvents() {
+        if (this.isSubscribedRouteListEvents)
+            return
+        this.getMessageQueue()?.subscribe('incyclist/activity/+/+/+', this.onRouteListActivityEvent.bind(this), 'incyclist/activity')
+        this.isSubscribedRouteListEvents = true
+    }
+
+    protected unsubscribeRouteListEvents() {
+        if (!this.isSubscribedRouteListEvents)
+            return
+        this.getMessageQueue()?.unsubscribe('incyclist/activity/+/+/+')
+        this.isSubscribedRouteListEvents = false
+    }
+
+    protected onRouteListActivityEvent(topic:string) {
+        const keys = topic.split('/')
+        const session = keys[2]
+        const routeHash = keys[3]
+        const event = keys[4]
+
+        if (!routeHash || !session)
+            return
+
+        if (event==='start')
+            this.addRouteListSession(routeHash,session)
+        else if (event==='stop')
+            this.removeRouteListSession(routeHash,session)
+    }
+
+    protected addRouteListSession(routeHash:string, session:string) {
+        if (!this.routeListSessions.has(routeHash))
+            this.routeListSessions.set(routeHash, new Set())
+        const sessions = this.routeListSessions.get(routeHash)
+        if (sessions.has(session))
+            return
+        sessions.add(session)
+        this.emitRouteListStatUpdate(routeHash)
+    }
+
+    protected removeRouteListSession(routeHash:string, session:string) {
+        const sessions = this.routeListSessions.get(routeHash)
+        if (!sessions?.has(session))
+            return
+        sessions.delete(session)
+        this.emitRouteListStatUpdate(routeHash)
+    }
+
+    protected emitRouteListStatUpdate(routeHash:string) {
+        const route = this.getRouteList().getAllRoutes().find( r=>r.description.routeHash===routeHash)
+        if (!route)
+            return
+
+        const stat: ActiveRideCount = {
+            count: this.routeListSessions.get(routeHash)?.size ?? 0,
+            routeId: route.description.id,
+            routeHash
+        }
+
+        const idx = this.routesStats?.findIndex( s=>s.routeHash===routeHash) ?? -1
+        if (idx>=0)
+            this.routesStats[idx] = stat
+        else
+            (this.routesStats??=[]).push(stat)
+
+        this.routeListObserver?.emit('stats-update', [stat])
     }
 
     protected start(session:string) {
@@ -725,6 +809,8 @@ export class ActiveRidesService extends IncyclistService {
     protected onDisconnect() {
         this.getMessageQueue().onDisconnect()
         this.isSubscribed = false
+        // getMessageQueue().onDisconnect() already dropped every broker-side subscription
+        this.isSubscribedRouteListEvents = false
     }
 
     protected async onConnect(props?:{initial:boolean}) {
@@ -737,6 +823,10 @@ export class ActiveRidesService extends IncyclistService {
         // reconnect after connection loss - subscribe again to activity events
         if (!initial && this.current && !this.isSubscribed)
             this.subscribeActivityEvents().catch( err=>{ this.logError(err,'onConnect') })
+
+        // same for the route list's live pill updates, if the route list is still open
+        if (!initial && this.routeListObserver && !this.isSubscribedRouteListEvents)
+            this.subscribeRouteListEvents()
 
     }
 
@@ -761,9 +851,17 @@ export class ActiveRidesService extends IncyclistService {
     protected onActivityEvent(topic:string, payload:ActiveRideListMessage) {
         const keys = topic.split('/');
         const session = keys[2];
+        const routeHash = keys[3];
 
         // ignore own events
         if (session===this.current.sessionId)
+            return;
+
+        // onTopicMessage() dispatches by filter prefix, not by this handler's own subscribed
+        // topic - now that onRouteListActivityEvent() also subscribes under the same
+        // 'incyclist/activity' filter (wildcarding every route, not just this ride's), this
+        // handler would otherwise start receiving other routes' events too
+        if (routeHash!==this.current?.ride?.routeHash)
             return;
 
         const event = keys[4];
