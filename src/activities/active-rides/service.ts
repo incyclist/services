@@ -286,10 +286,13 @@ export class ActiveRidesService extends IncyclistService {
         }
 
         const idx = this.routesStats?.findIndex( s=>s.routeHash===routeHash) ?? -1
-        if (idx>=0)
+        if (idx>=0) {
             this.routesStats[idx] = stat
-        else
-            (this.routesStats??=[]).push(stat)
+        }
+        else {
+            this.routesStats ??= []
+            this.routesStats.push(stat)
+        }
 
         this.routeListObserver?.emit('stats-update', [stat])
     }
