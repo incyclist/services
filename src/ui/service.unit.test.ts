@@ -5,6 +5,9 @@ import { IncyclistPageService } from '../base/pages'
 import * as deviceAccess from '../devices/access'
 import * as devicePairing from '../devices/pairing'
 import * as pairingVisit from '../devices/page/base/visit-log-factory'
+import * as routes from '../routes'
+import * as workouts from '../workouts'
+import * as activities from '../activities'
 
 describe('UserInterfaceServcie - onSessionStart', () => {
 
@@ -120,6 +123,50 @@ jest.mock('../devices/page/base/visit-log-factory', () => ({
     usePairingVisitTracker: jest.fn(),
     initPairingVisitTracker: jest.fn(),
 }))
+jest.mock('../routes', () => ({
+    ...jest.requireActual('../routes'),
+    useRouteList: jest.fn(),
+    useFreeRideService: jest.fn(),
+}))
+jest.mock('../workouts', () => ({
+    ...jest.requireActual('../workouts'),
+    useWorkoutList: jest.fn(),
+}))
+jest.mock('../activities', () => ({
+    ...jest.requireActual('../activities'),
+    useActivityList: jest.fn(),
+    useActiveRides: jest.fn(),
+}))
+
+describe('UserInterfaceServcie - preloadData', () => {
+    let service: UserInterfaceServcie
+
+    beforeEach(() => {
+        service = new UserInterfaceServcie()
+        ;(service as any).logError = jest.fn()
+
+        const preloadResult = { wait: jest.fn().mockResolvedValue(undefined) }
+        ;(routes.useRouteList as jest.Mock).mockReturnValue({ preload: jest.fn().mockReturnValue(preloadResult) })
+        ;(routes.useFreeRideService as jest.Mock).mockReturnValue({ init: jest.fn().mockResolvedValue(undefined) })
+        ;(workouts.useWorkoutList as jest.Mock).mockReturnValue({ preload: jest.fn().mockReturnValue(preloadResult) })
+        ;(activities.useActivityList as jest.Mock).mockReturnValue({ preload: jest.fn().mockReturnValue(preloadResult) })
+        ;(activities.useActiveRides as jest.Mock).mockReturnValue(undefined)
+    })
+
+    afterEach(() => {
+        delete (service as any).logError
+        jest.clearAllMocks()
+    })
+
+    // Regression test: ActiveRidesService only wires its routeList 'opened' listener in its own
+    // constructor, and nothing else used to construct it before a ride was started - so the
+    // route list's "N live" pill never populated if the list was opened earlier than that.
+    test('constructs ActiveRidesService eagerly, before routes/workouts/activities finish preloading', async () => {
+        await service.preloadData()
+
+        expect(activities.useActiveRides).toHaveBeenCalled()
+    })
+})
 
 describe('UserInterfaceServcie - onAppExit', () => {
 

@@ -12,7 +12,7 @@ import { useDevicePairing } from "../devices/pairing";
 import { initPairingVisitTracker, usePairingVisitTracker } from "../devices/page/base/visit-log-factory";
 import { useFreeRideService, useRouteList } from "../routes";
 import { useWorkoutList } from "../workouts";
-import { useActivityList } from "../activities";
+import { useActiveRides, useActivityList } from "../activities";
 import { IMessageQueueBinding } from "../api/mq";
 import { OnlineStateMonitoringService, useOnlineStatusMonitoring } from "../monitoring";
 import { AppFeatures, Interfaces, useAppState, useFeatureToggleSync } from "../appstate";
@@ -589,6 +589,12 @@ export class UserInterfaceServcie extends IncyclistService {
             const freeRide = useFreeRideService()
             const workouts = useWorkoutList()
             const activities = useActivityList()
+
+            // Constructing ActiveRidesService registers its routeList 'opened'/'closed' listeners
+            // (see its constructor) - without this, that only happened once a ride was first
+            // started in the process, so the route list's "N live" pill never populated if opened
+            // before any ride had run.
+            useActiveRides()
 
             const promises = [
                 routes.preload().wait(),

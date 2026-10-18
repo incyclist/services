@@ -1,6 +1,8 @@
 import { beforeEach } from 'node:test'
+import { EventEmitter } from 'events'
 import { Inject } from '../../base/decorators'
 import { Observer } from '../../base/types'
+import { useOnlineStatusMonitoring } from '../../monitoring'
 import { ActivityRideService } from '../ride'
 import { ActiveRideListMessageQueue } from './mq'
 import {ActiveRidesService, useActiveRides} from './service'
@@ -335,5 +337,32 @@ describe('ActiveRides',()=>{
         expect(run(service,'undefined undefined')).toBe('Random')
     })
 
-        
+    test('regression: getAll() is unreachable until something has constructed ActiveRidesService', async ()=>{
+        // ActiveRidesService only wires its routeList 'opened' listener in its own constructor
+        // (see service.ts). Before anything calls useActiveRides() - previously only a ride
+        // start did that - opening the route list silently never fetches active-ride counts, so
+        // the "N live" pill never populates. Fixed by UserInterfaceServcie.preloadData() calling
+        // useActiveRides() eagerly at app launch; this test pins the underlying mechanism.
+        const routeList = new EventEmitter()
+        Inject('RouteList', routeList)
+
+        const mockApi: Partial<any> = { getAll: jest.fn().mockResolvedValue([]) }
+        Inject('IncyclistActiveRidesApi', mockApi)
+        useOnlineStatusMonitoring().initialize(true)
+
+        routeList.emit('opened', new EventEmitter(), true)
+        await Promise.resolve()
+        expect(mockApi.getAll).not.toHaveBeenCalled()
+
+        service = useActiveRides()
+        setupMocks(service)
+
+        routeList.emit('opened', new EventEmitter(), true)
+        await Promise.resolve()
+        expect(mockApi.getAll).toHaveBeenCalled()
+
+        Inject('RouteList', undefined)
+        Inject('IncyclistActiveRidesApi', undefined)
+    })
+
 })
