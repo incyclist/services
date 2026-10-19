@@ -1,4 +1,4 @@
-import { isRoundabout, concatPaths } from './utils'
+import { isRoundabout, concatPaths, getBounds, boundaryToString } from './utils'
 import { IncyclistWay, IncyclistNode } from './types'
 
 describe('MapArea utils', () => {
@@ -287,6 +287,53 @@ describe('MapArea utils', () => {
                 expect(isRoundabout(way)).toBe(true)
             })
 
+        })
+
+    })
+
+    describe('getBounds', () => {
+
+        test('normal longitude stays within range', () => {
+            const boundary = getBounds(50, 10, 1000)
+            expect(boundary.northeast.lng).toBeGreaterThan(-180)
+            expect(boundary.northeast.lng).toBeLessThanOrEqual(180)
+            expect(boundary.southwest.lng).toBeGreaterThan(-180)
+            expect(boundary.southwest.lng).toBeLessThanOrEqual(180)
+        })
+
+        test('wraps a centre longitude picked on a map copy east of the antimeridian', () => {
+            // mirrors the real Wave 1 failure: a start point of lng=279.93 instead of -80.06
+            const boundary = getBounds(45, 279.93, 1000)
+            expect(boundary.northeast.lng).toBeLessThanOrEqual(180)
+            expect(boundary.northeast.lng).toBeGreaterThan(-180)
+            expect(boundary.southwest.lng).toBeLessThanOrEqual(180)
+            expect(boundary.southwest.lng).toBeGreaterThan(-180)
+        })
+
+        test('wraps a centre longitude picked on a map copy west of the antimeridian', () => {
+            const boundary = getBounds(45, -279.93, 1000)
+            expect(boundary.northeast.lng).toBeGreaterThanOrEqual(-180)
+            expect(boundary.northeast.lng).toBeLessThan(180)
+            expect(boundary.southwest.lng).toBeGreaterThanOrEqual(-180)
+            expect(boundary.southwest.lng).toBeLessThan(180)
+        })
+
+    })
+
+    describe('boundaryToString', () => {
+
+        test('rounds coordinates to 7 decimals', () => {
+            const boundary = {
+                southwest: { lat: 50.123456789, lng: 10.987654321 },
+                northeast: { lat: 50.223456789, lng: 10.887654321 }
+            }
+            expect(boundaryToString(boundary)).toBe('50.1234568,10.9876543,50.2234568,10.8876543')
+        })
+
+        test('two boundaries differing only beyond the 7th decimal serialise identically', () => {
+            const a = { southwest: { lat: 50.12345671, lng: 10.98765431 }, northeast: { lat: 50.1, lng: 10.1 } }
+            const b = { southwest: { lat: 50.12345673, lng: 10.98765433 }, northeast: { lat: 50.1, lng: 10.1 } }
+            expect(boundaryToString(a)).toBe(boundaryToString(b))
         })
 
     })
