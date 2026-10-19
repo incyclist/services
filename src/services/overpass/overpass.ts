@@ -3,9 +3,9 @@ import { sleep } from '../../utils/sleep';
 import { AppApiBase } from '../../apps/base/api/base';
 import { EventLogger } from 'gd-eventlog';
 import { Injectable } from '../../base/decorators';
-import { getBindings } from '../../api';
+import { getBindings, IncyclistRestApiClient } from '../../api';
 import { UserSettingsService, useUserSettings } from '../../settings';
-import { AxiosResponse } from 'axios';
+import { AxiosInstance, AxiosResponse } from 'axios';
 import type { IFetchBinding } from '../../api/fetch/types';
 
 const OVERPASS_URL_PRIMARY = 'https://overpass-api.de/api/interpreter';
@@ -14,6 +14,15 @@ const OVERPASS_URL_ALT2 = 'https://lz4.overpass-api.de/api/interpreter';
 const OVERPASS_URL_ALT3 = 'https://maps.mail.ru/osm/tools/overpass/api/interpreter';
 
 export const OVERPASS_URL_DEFAULT = OVERPASS_URL_PRIMARY;
+
+// The self-hosted cluster proxy, tried before the public mirrors. Overridable via the
+// `OVERPASS_API` user setting (a test instance, never an off switch - there is no empty-string
+// escape hatch, see query()).
+const OVERPASS_SELF_HOSTED_URL_DEFAULT = 'https://overpass.incyclist.com/api/v1/interpreter';
+
+// Upper bound on the self-hosted attempt, independent of the caller's overall timeout - leaves
+// enough of the caller's budget for the public-mirror fallback (see query()).
+const SELF_HOSTED_MAX_TIMEOUT_MS = 5000;
 
 
 /**
@@ -41,10 +50,13 @@ export class OverpassApi extends AppApiBase {
     protected url:string
     protected mirrors:string[] = []
     protected logger:EventLogger
+    protected restClient:AxiosInstance
 
     constructor(props?:{url:string}) {
         super()
-        this.mirrors = DEFAULT_MIRRORS
+        // Copy, not the shared DEFAULT_MIRRORS array itself - push() below (and on every other
+        // instance) would otherwise mutate the shared default for everyone, including reset().
+        this.mirrors = [...DEFAULT_MIRRORS]
         this.url = props?.url??  this.mirrors[0];
         this.logger = new EventLogger('Overpass')
         if (props?.url) {
@@ -77,6 +89,9 @@ export class OverpassApi extends AppApiBase {
         }
     }
 
+    // Used only for the public mirrors - see trySelfHosted() for the self-hosted request,
+    // which goes through IncyclistRestApiClient instead (same client the app already uses to
+    // talk to other Incyclist backends), not through this method.
     protected async post(url:string, data?:object|string, conf?:object):Promise<AxiosResponse> {
         // Desktop: issue the request from the Electron main process via the `fetch` binding,
         // so a cross-origin Referer can be set with referrerPolicy:'unsafe-url' - the renderer's
@@ -163,22 +178,125 @@ export class OverpassApi extends AppApiBase {
 
 
     /**
-     * Executes a Overpass query and returns the result. If a timeout is specified, the first result that comes back within the timeout will be returned. If no result comes back within the timeout, the function will return undefined.
-     * 
-     * As overpass servers are not 100% reliable or implement strct rate limits, the query is executed against multiple mirrors, the first successful response will be returned.
-     * 
+     * Executes an Overpass query against the self-hosted proxy first, falling back to the
+     * public mirrors on any failure (network error, HTTP>=400, timeout, or an unparseable
+     * body). A 200 response carrying an Overpass `remark` (partial/empty result from the
+     * server's own timeout or memory limit) is not a failure - it is returned as-is, exactly
+     * as a mirror response would be today.
+     *
+     * The self-hosted URL is never part of the mirrors' `Promise.any` race: it is tried alone
+     * first, with its own bounded timeout, specifically so a slow/down self-hosted path cannot
+     * eat the caller's whole budget before the fallback even starts.
+     *
      * @param queryOL the Overpass query language query
-     * @param timeout the timeout in ms
+     * @param timeout the overall timeout in ms, shared between the self-hosted attempt and the fallback
      * @returns The result of the query as a JSON object or string
      */
     async query( queryOL:string, timeout?:number):Promise<JSON|string|undefined> {
         const ts = Date.now()
-        this.logger.logEvent({message:'query', queryOL, queryId:ts, timeout})
-        const res = await this.bulkQuery(queryOL, timeout)
-        //const res = await this.sequentialQuery(queryOL, timeout)
-        this.logger.logEvent({message:'query result', queryId:ts, hasData: res!==undefined, duration: Date.now()-ts})
+        const queryId = ts
+        this.logger.logEvent({message:'query', queryOL, queryId, timeout})
+
+        const hasOverallTimeout = timeout!==undefined && timeout!==null
+        const selfHostedTimeout = hasOverallTimeout ? Math.min(timeout/2, SELF_HOSTED_MAX_TIMEOUT_MS) : SELF_HOSTED_MAX_TIMEOUT_MS
+
+        const selfHosted = await this.trySelfHosted(queryOL, queryId, selfHostedTimeout)
+        if (selfHosted.ok) {
+            this.logger.logEvent({message:'query result', queryId, hasData:true, duration:Date.now()-ts, source:'self-hosted', fallback:false, cache:selfHosted.cache})
+            return selfHosted.data
+        }
+
+        const remaining = hasOverallTimeout ? Math.max(timeout-(Date.now()-ts),0) : undefined
+        const res = await this.bulkQuery(queryOL, remaining)
+
+        this.logger.logEvent({message:'query result', queryId, hasData: res!==undefined, duration: Date.now()-ts, source: res!==undefined?'public':'none', fallback:true, cache:'n/a'})
         return res
-    } 
+    }
+
+    // Single attempt against the self-hosted proxy, bounded by its own timeout so it can never
+    // consume the caller's entire budget. Uses the same sleep-race idiom as bulkQuery()'s
+    // timeout handling, for consistency, rather than a true request abort.
+    protected async trySelfHosted(queryOL:string, queryId:number, timeoutMs:number): Promise<{ok:boolean, data?:JSON|string, cache?:string}> {
+        const ts = Date.now()
+        const url = this.getSelfHostedUrl()
+
+        try {
+            // validateStatus:()=>true - resolve instead of throwing on 4xx/5xx, so the status
+            // checks below run uniformly for every outcome except a genuine network/timeout
+            // failure (caught below). Content-Type must be set explicitly: axios only infers
+            // one for a plain object body (JSON-stringifying it), never for a string, and a
+            // request with no Content-Type at all arrives at the proxy's bodyParser.text() as
+            // an empty body on some transports (confirmed: React Native's networking layer
+            // refuses to send a body with no Content-Type at all; axios in Node sends it but
+            // without a header). Desktop's own Chromium-based XHR path happened to add
+            // text/plain by itself, which is why this wasn't caught earlier.
+            const outcome = await Promise.race([
+                this.getRestClient().post(url, queryOL, {headers: {'Content-Type': 'text/plain'}, validateStatus: () => true}),
+                sleep(timeoutMs).then(()=>'timeout' as const)
+            ])
+
+            if (outcome==='timeout') {
+                this.logger.logEvent({message:'self-hosted failed', queryId, reason:'timeout', duration:Date.now()-ts})
+                return {ok:false}
+            }
+
+            if (outcome.status>=400) {
+                this.logger.logEvent({message:'self-hosted failed', queryId, reason:'http', httpStatus:outcome.status, duration:Date.now()-ts})
+                return {ok:false}
+            }
+
+            if (!this.isValidOverpassBody(outcome.data)) {
+                this.logger.logEvent({message:'self-hosted failed', queryId, reason:'invalid-body', duration:Date.now()-ts})
+                return {ok:false}
+            }
+
+            return {ok:true, data:outcome.data, cache:this.extractCacheHeader(outcome)}
+        }
+        catch {
+            this.logger.logEvent({message:'self-hosted failed', queryId, reason:'network', duration:Date.now()-ts})
+            return {ok:false}
+        }
+    }
+
+    // Only non-empty responses count as parseable - MapAreaService.createMapData() already
+    // tolerates either a JSON object or a raw string, so this deliberately doesn't sniff the
+    // body's shape any further.
+    protected isValidOverpassBody(data:JSON|string|undefined|null):boolean {
+        if (data===undefined || data===null) return false
+        if (typeof data === 'string') return data.trim().length>0
+        return true
+    }
+
+    protected extractCacheHeader(res:AxiosResponse):string {
+        const headers = res.headers as Record<string,unknown>|undefined
+        if (!headers) return 'n/a'
+        const value = headers['x-cache'] ?? headers['X-Cache']
+        return typeof value === 'string' ? value : 'n/a'
+    }
+
+    // getUserSettings().get(...) (not getValue()) follows the ACTIVE_RIDES_API/KOMOOT_API
+    // pattern: an unset/empty setting falls through to the compiled-in default, there is no
+    // off switch (see query()'s doc comment).
+    protected getSelfHostedUrl():string {
+        try {
+            return this.getUserSettings().get('OVERPASS_API', OVERPASS_SELF_HOSTED_URL_DEFAULT)
+        }
+        catch {
+            return OVERPASS_SELF_HOSTED_URL_DEFAULT
+        }
+    }
+
+    // IncyclistRestApiClient already attaches X-uuid/X-API-Key/x-app-channel (and more) to
+    // every request it makes - see IncyclistRestApiClient.getClient()/ApiClient.init(). Cached
+    // per instance, same pattern as IncyclistRoutesApi.getApi() - the header values (uuid,
+    // channel, version, key) don't change within a running session, so there's no reason to
+    // reinitialise it on every query.
+    protected getRestClient():AxiosInstance {
+        if (!this.restClient) {
+            this.restClient = IncyclistRestApiClient.getClient()
+        }
+        return this.restClient
+    }
 
     /**
      * Executes a Overpass query and returns the result. The query is executed against a single server, specified by the `url` property.
@@ -316,7 +434,7 @@ export class OverpassApi extends AppApiBase {
     }
 
     reset() {
-        this.mirrors = DEFAULT_MIRRORS
+        this.mirrors = [...DEFAULT_MIRRORS]
         this.url = this.mirrors[0]
     }
 
