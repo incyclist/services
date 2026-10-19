@@ -56,6 +56,17 @@ describe ('OverpassClient Unit Test' ,() => {
             client.reset()
         })
 
+        test ( 'self-hosted request sets Content-Type explicitly (not every transport infers one for a string body)',async  () => {
+            const selfHostedPost = mockSelfHosted(client,{response:{status:200,data:'success',headers:{}}})
+
+            await client.query("myquery");
+
+            expect(selfHostedPost).toHaveBeenCalledWith(
+                expect.anything(), expect.anything(),
+                expect.objectContaining({headers: expect.objectContaining({'Content-Type':'text/plain'})}),
+            )
+        } );
+
         test ( 'self-hosted succeeds: no fallback to mirrors',async  () => {
             const selfHostedPost = mockSelfHosted(client,{response:{status:200,data:'success',headers:{}}})
             const mirrorPost = mockMirrors(client,{response:{status:200,data:'should-not-be-used',headers:{}}})

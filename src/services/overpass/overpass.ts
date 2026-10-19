@@ -223,9 +223,15 @@ export class OverpassApi extends AppApiBase {
         try {
             // validateStatus:()=>true - resolve instead of throwing on 4xx/5xx, so the status
             // checks below run uniformly for every outcome except a genuine network/timeout
-            // failure (caught below).
+            // failure (caught below). Content-Type must be set explicitly: axios only infers
+            // one for a plain object body (JSON-stringifying it), never for a string, and a
+            // request with no Content-Type at all arrives at the proxy's bodyParser.text() as
+            // an empty body on some transports (confirmed: React Native's networking layer
+            // refuses to send a body with no Content-Type at all; axios in Node sends it but
+            // without a header). Desktop's own Chromium-based XHR path happened to add
+            // text/plain by itself, which is why this wasn't caught earlier.
             const outcome = await Promise.race([
-                this.getRestClient().post(url, queryOL, {validateStatus: () => true}),
+                this.getRestClient().post(url, queryOL, {headers: {'Content-Type': 'text/plain'}, validateStatus: () => true}),
                 sleep(timeoutMs).then(()=>'timeout' as const)
             ])
 
