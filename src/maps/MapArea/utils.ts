@@ -420,6 +420,13 @@ export function generateQuery(location:LatLng,radius:number):string {
 }
 
 
+// Rounds to 7 decimals (~1cm) so that repeated queries around the same position (e.g. the
+// shared default start position) hash to the same Overpass cache key instead of missing on
+// float noise around the 10th-11th decimal. See overpass-proxy's body-hash cache key.
+function round7(n:number):number {
+    return Math.round(n*1e7)/1e7
+}
+
 export function boundaryToString(boundary:Boundary) {
     if ( boundary===undefined )
         return 'undefined';
@@ -428,9 +435,9 @@ export function boundaryToString(boundary:Boundary) {
     let sw = boundary.southwest;
 
     if (ne!==undefined && (ne.lat===undefined || ne.lng===undefined))
-        return 'error: northeast incorrect' 
+        return 'error: northeast incorrect'
     if (sw!==undefined && (sw.lat===undefined || sw.lng===undefined))
-        return 'error: southwest incorrect' 
+        return 'error: southwest incorrect'
 
     ne = ne??sw;
     sw = sw??ne;
@@ -438,7 +445,7 @@ export function boundaryToString(boundary:Boundary) {
     if (sw===undefined)
         return'undefined';
 
-    return  sw.lat + ',' + sw.lng +','+ ne.lat + ',' + ne.lng;    
+    return  round7(sw.lat) + ',' + round7(sw.lng) +','+ round7(ne.lat) + ',' + round7(ne.lng);
 }
 
 
@@ -846,19 +853,31 @@ export function getVector( p1:LatLng, p2:LatLng) {
 }
 
 
+// A start point picked on a wrapped copy of the map (lng outside [-180,180], e.g. a marker
+// placed on a map copy one world-width to the east) otherwise produces a boundary with an
+// out-of-range lng, which Overpass rejects with HTTP 400. Wrapping here only fixes a centre
+// lng that is itself out of range - a boundary whose *edges* cross the antimeridian after a
+// valid centre is a separate, unhandled case.
+function normalizeLongitude(lng:number):number {
+    let normalized = lng % 360;
+    if (normalized>180) normalized -= 360;
+    if (normalized<-180) normalized += 360;
+    return normalized;
+}
+
 export function getBounds( lat:number, lng:number, offset:number ):Boundary {
     const pi = Math.PI;
     const m =  (1 / ((2 * pi / 360) * RADIUS_EARTH)) / 1000;  //1 meter in degree;
-    
+
     const boundary = {
         northeast:{lat:undefined, lng:undefined},
         southwest:{lat:undefined, lng:undefined}
-    }    
+    }
 
     boundary.northeast.lat = lat+offset*m;
-    boundary.northeast.lng = lng+(offset*m)/Math.cos(lat*pi/180)
+    boundary.northeast.lng = normalizeLongitude(lng+(offset*m)/Math.cos(lat*pi/180))
     boundary.southwest.lat = lat-offset*m;
-    boundary.southwest.lng = lng-(offset*m)/Math.cos(lat*pi/180)
+    boundary.southwest.lng = normalizeLongitude(lng-(offset*m)/Math.cos(lat*pi/180))
     return boundary;
 }
 

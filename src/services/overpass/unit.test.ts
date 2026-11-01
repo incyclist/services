@@ -8,73 +8,131 @@ describe ('OverpassClient Unit Test' ,() => {
     describe ( 'query', () => {
 
         let client:OverpassApi;
-        let mock:any
+        let timeoutsToClear:NodeJS.Timeout[]
 
-        const setupMocks = (c:any,props:{response?:any,error?:any, noResponse?:boolean}) => {
+        // The self-hosted request goes through getRestClient() (IncyclistRestApiClient),
+        // never through post() - post() is only ever used for the public mirrors.
+        const mockSelfHosted = (c:any,props:{response?:any,error?:any, noResponse?:boolean}) => {
+            const {response,error,noResponse} = props
+            let postMock:jest.Mock
+            if (response)
+                postMock = jest.fn().mockResolvedValue(response)
+            else if (error)
+                postMock = jest.fn().mockRejectedValue(error)
+            else if (noResponse) {
+                postMock = jest.fn(() => new Promise((done) => {
+                    const to = setTimeout(() => done('success'), 1000000)
+                    timeoutsToClear.push(to)
+                }))
+            }
+            c.getRestClient = jest.fn(() => ({ post: postMock }))
+            return postMock
+        }
+
+        const mockMirrors = (c:any,props:{response?:any,error?:any, noResponse?:boolean}) => {
             const {response,error,noResponse} = props
             if (response)
-                c.post = jest.fn().mockResolvedValue(response)               
-            else if (error) {                
-                c.post = jest.fn().mockRejectedValue(error);
-            }
+                c.post = jest.fn().mockResolvedValue(response)
+            else if (error)
+                c.post = jest.fn().mockRejectedValue(error)
             else if (noResponse) {
-                c.timeouts = []
-                c.post = jest.fn(async (query) => new Promise((done) => { 
+                c.post = jest.fn(() => new Promise((done) => {
                     const to = setTimeout(() => done('success'), 1000000)
-                    c.timeouts.push(to)
-                }));
+                    timeoutsToClear.push(to)
+                }))
             }
-            else {
-                c.post = jest.spyOn(c,'post')
-            }
-
-            mock = { post: c.post, timeouts: c.timeouts}
-            return mock
+            return c.post
         }
 
         beforeEach( ()=> {
             client = new OverpassApi();
+            timeoutsToClear = []
         })
 
         afterEach( ()=>{
-            if (mock) {
-                const timeouts = mock.timeouts??[]
-                timeouts.forEach( (t:NodeJS.Timeout)=>clearTimeout(t) )
-                jest.resetAllMocks()
-                jest.useRealTimers()
-                client.reset()
-            }
+            timeoutsToClear.forEach( (t:NodeJS.Timeout)=>clearTimeout(t) )
+            jest.resetAllMocks()
+            jest.useRealTimers()
+            client.reset()
         })
 
-        test ( 'positive case',async  () => {
-            const response = {status:200,data:'success', statusText: 'OK', headers: {}, config: {}}
-            const mocks = setupMocks(client,{response})
+        test ( 'self-hosted request sets Content-Type explicitly (not every transport infers one for a string body)',async  () => {
+            const selfHostedPost = mockSelfHosted(client,{response:{status:200,data:'success',headers:{}}})
+
+            await client.query("myquery");
+
+            expect(selfHostedPost).toHaveBeenCalledWith(
+                expect.anything(), expect.anything(),
+                expect.objectContaining({headers: expect.objectContaining({'Content-Type':'text/plain'})}),
+            )
+        } );
+
+        test ( 'self-hosted succeeds: no fallback to mirrors',async  () => {
+            const selfHostedPost = mockSelfHosted(client,{response:{status:200,data:'success',headers:{}}})
+            const mirrorPost = mockMirrors(client,{response:{status:200,data:'should-not-be-used',headers:{}}})
+
             const result = await client.query("myquery");
-            expect(mocks.post).toHaveBeenCalledTimes(3)
+
+            expect(selfHostedPost).toHaveBeenCalledTimes(1)
+            expect(mirrorPost).not.toHaveBeenCalled()
             expect(result).toBe('success');
         } );
 
-        test ( 'server sends error',async  () => {
-            const error =  new Error('error-text')
-            setupMocks(client,{error})
-            await expect( async ()=> {await client.query("myquery")}).rejects.toThrow('All promises were rejected')
-            
+        test ( 'self-hosted succeeds with a remark (200, partial result): accepted as-is',async  () => {
+            const remarkBody = '{"remark":"runtime error: Query timed out","elements":[]}'
+            mockSelfHosted(client,{response:{status:200,data:remarkBody,headers:{}}})
+
+            const result = await client.query("myquery");
+
+            expect(result).toBe(remarkBody);
         } );
-        test ( 'timeout',async  () => {
+
+        test ( 'self-hosted returns HTTP 400: falls back and succeeds on a mirror',async  () => {
+            const selfHostedPost = mockSelfHosted(client,{response:{status:400,data:'bad request',headers:{}}})
+            const mirrorPost = mockMirrors(client,{response:{status:200,data:'from-mirror',headers:{}}})
+
+            const result = await client.query("myquery");
+
+            expect(selfHostedPost).toHaveBeenCalledTimes(1)
+            expect(mirrorPost).toHaveBeenCalledTimes(3) // 3 mirrors
+            expect(result).toBe('from-mirror');
+        } );
+
+        test ( 'self-hosted network error, mirrors also fail: rejects',async  () => {
+            const error =  new Error('error-text')
+            mockSelfHosted(client,{error})
+            mockMirrors(client,{error})
+
+            await expect( async ()=> {await client.query("myquery")}).rejects.toThrow('All promises were rejected')
+
+        } );
+        test ( 'self-hosted and mirrors all time out: resolves undefined',async  () => {
 
             jest.useFakeTimers()
-            const mocks = setupMocks(client,{noResponse:true})
+            mockSelfHosted(client,{noResponse:true})
+            mockMirrors(client,{noResponse:true})
 
             let result:string|JSON|undefined = 'some dummy value'
             client.query("myquery",5000).then( res=> { result = res});
-            
+
+            // self-hosted gets min(5000/2, 5000)=2500ms, the mirror race gets the remaining ~2500ms
             jest.advanceTimersByTime(5000)
             jest.advanceTimersByTime(100)
             await jest.runAllTimersAsync()
-            
-            expect(mocks.post).toHaveBeenCalledTimes(3)
+
             expect(result).toBeUndefined()
-            
+
+        } );
+
+        test ( 'self-hosted goes through IncyclistRestApiClient (getRestClient()), never through the manual post() path used by mirrors',async  () => {
+            const getRestClientMock = jest.fn(()=>({post: jest.fn().mockResolvedValue({status:503,data:'unavailable',headers:{}})}))
+            ;(client as any).getRestClient = getRestClientMock
+            const mirrorPost = mockMirrors(client,{response:{status:200,data:'from-mirror',headers:{}}})
+
+            await client.query("myquery");
+
+            expect(getRestClientMock).toHaveBeenCalledTimes(1)
+            expect(mirrorPost).toHaveBeenCalledTimes(3)
         } );
 
         test.skip ( 'real api - explore query',async  () => {
@@ -170,6 +228,46 @@ describe ('OverpassClient Unit Test' ,() => {
 
             expect(legacySpy).toHaveBeenCalled()
             expect(res.data).toBe('legacy')
+        })
+
+    })
+
+    describe ( 'self-hosted URL override (OVERPASS_API user setting)', () => {
+
+        let client:OverpassApi
+
+        beforeEach( ()=> {
+            client = new OverpassApi();
+        })
+
+        test ('a configured OVERPASS_API setting overrides the compiled-in default', async () => {
+            const selfHostedPost = jest.fn().mockResolvedValue({status:200,data:'from-preprod',headers:{}})
+            ;(client as any).getRestClient = jest.fn(()=>({post:selfHostedPost}))
+            ;(client as any).getUserSettings = jest.fn( ()=> ({ get: () => 'http://192.168.121.149/api/v1/interpreter', getValue: (_key:string, defValue:string) => defValue }) )
+
+            await client.query("myquery");
+
+            expect(selfHostedPost).toHaveBeenCalledWith('http://192.168.121.149/api/v1/interpreter', 'myquery', expect.anything())
+        })
+
+        test ('falls back to the compiled-in default when the setting is not configured', async () => {
+            const selfHostedPost = jest.fn().mockResolvedValue({status:200,data:'from-default',headers:{}})
+            ;(client as any).getRestClient = jest.fn(()=>({post:selfHostedPost}))
+            ;(client as any).getUserSettings = jest.fn( ()=> ({ get: (_key:string, defValue:string) => defValue, getValue: (_key:string, defValue:string) => defValue }) )
+
+            await client.query("myquery");
+
+            expect(selfHostedPost).toHaveBeenCalledWith('https://overpass.incyclist.com/api/v1/interpreter', 'myquery', expect.anything())
+        })
+
+        test ('falls back to the compiled-in default if settings are not yet initialized', async () => {
+            const selfHostedPost = jest.fn().mockResolvedValue({status:200,data:'from-default',headers:{}})
+            ;(client as any).getRestClient = jest.fn(()=>({post:selfHostedPost}))
+            ;(client as any).getUserSettings = jest.fn( ()=> ({ get: () => { throw new Error('Settings are not yet initialized') }, getValue: (_key:string, defValue:string) => defValue }) )
+
+            await client.query("myquery");
+
+            expect(selfHostedPost).toHaveBeenCalledWith('https://overpass.incyclist.com/api/v1/interpreter', 'myquery', expect.anything())
         })
 
     })
