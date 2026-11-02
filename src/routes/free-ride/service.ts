@@ -432,128 +432,136 @@ export class FreeRideService extends IncyclistService {
     protected async getNextLevelOptions(opts: FreeRideContinuation[] ) {
 
         let segmentUpdated = false
-        this.once('segment-update', () => { segmentUpdated = true } )
+        const onSegmentUpdate = () => { segmentUpdated = true }
+        this.once('segment-update', onSegmentUpdate)
 
         const optionManager: OptionManager = useMapArea().getOptionManager()        
 
-        // run in sequence to not overload overpass servers
-        for (const o of opts??[]) {
+        // the listener is only removed by the event itself, which is not emitted at every junction.
+        // Without removing it here, one listener per junction would pile up
+        try {
+            // run in sequence to not overload overpass servers
+            for (const o of opts??[]) {
 
-            if (segmentUpdated)
-                return
+                if (segmentUpdated)
+                    return
 
 
-            let segment = o;
-            let done = false
-            let isSingle = false
-            let lastHandlerWasNoOption = false
+                let segment = o;
+                let done = false
+                let isSingle = false
+                let lastHandlerWasNoOption = false
 
-            do {
-                const nextOptsResult = await optionManager.getNextOptions(segment);
-                const nextOpts = nextOptsResult.options
-                const isValid = nextOptsResult.isValid
+                do {
+                    const nextOptsResult = await optionManager.getNextOptions(segment);
+                    const nextOpts = nextOptsResult.options
+                    const isValid = nextOptsResult.isValid
 
-                const handleSingleOption = () => {
-                    if (segmentUpdated)
-                        return
-                    isSingle = true
+                    const handleSingleOption = () => {
+                        if (segmentUpdated)
+                            return
+                        isSingle = true
         
-                    try {
-                        segment = nextOpts[0];
-                        concatPaths(o.path, segment.path, 'after');
-                        const originatingPoint = segment.path[1];
+                        try {
+                            segment = nextOpts[0];
+                            concatPaths(o.path, segment.path, 'after');
+                            const originatingPoint = segment.path[1];
         
                         
         
-                        // remove option that poins back to the originating point
-                        if (segment.options?.length > 0) {
-                            segment.options = segment.options.filter( o => o.path.at(-1).id !== originatingPoint.id);
-                        }
-    
-                    }
-                    catch(err) {
-                        this.logError(err,'getNextLevelOptions#handleSingleOption')                        
-                    }
-
-                }
-
-                const handleNoOption = () => {
-                    if (segmentUpdated)
-                        return
-
-                    // if we are looking for the continuation of a single option, we can stop here.
-                    if (isSingle) {
-                        o.options = [segment]
-                        done = true;
-                        return
-                    }
-
-                    if (lastHandlerWasNoOption) {
-                        o.options = []
-                        done = true
-                        return
-                    }
-
-                    try {
-                        const map = segment.map ?? this.getMapArea().getMap(segment.path[0])
-    
-                        const newPath = []
-                        segment.path.forEach( p => { 
-                            newPath.push( clone(p) )
-                        })
-                        newPath.reverse()
-    
-                        
-    
-                        const way = map?.getWay(segment.id)
-    
-                        if ( !isOneWay(way) ||  isAllowed(way, newPath[0], newPath.at(-1))) {
-                            segment = {
-                                id:o.id,
-                                map:o.map,                            
-                                direction: 180,
-                                path: newPath
-    
+                            // remove option that poins back to the originating point
+                            if (segment.options?.length > 0) {
+                                segment.options = segment.options.filter( o => o.path.at(-1).id !== originatingPoint.id);
                             }
-                            
-                            concatPaths(o.path, newPath, 'after');
     
                         }
-                        else {
+                        catch(err) {
+                            this.logError(err,'getNextLevelOptions#handleSingleOption')                        
+                        }
+
+                    }
+
+                    const handleNoOption = () => {
+                        if (segmentUpdated)
+                            return
+
+                        // if we are looking for the continuation of a single option, we can stop here.
+                        if (isSingle) {
+                            o.options = [segment]
+                            done = true;
+                            return
+                        }
+
+                        if (lastHandlerWasNoOption) {
                             o.options = []
                             done = true
+                            return
                         }
+
+                        try {
+                            const map = segment.map ?? this.getMapArea().getMap(segment.path[0])
     
-                    }
-                    catch(err) {
-                        this.logError(err,'getNextLevelOptions#handleNoOption')
-                    }
+                            const newPath = []
+                            segment.path.forEach( p => { 
+                                newPath.push( clone(p) )
+                            })
+                            newPath.reverse()
+    
+                        
+    
+                            const way = map?.getWay(segment.id)
+    
+                            if ( !isOneWay(way) ||  isAllowed(way, newPath[0], newPath.at(-1))) {
+                                segment = {
+                                    id:o.id,
+                                    map:o.map,                            
+                                    direction: 180,
+                                    path: newPath
+    
+                                }
+                            
+                                concatPaths(o.path, newPath, 'after');
+    
+                            }
+                            else {
+                                o.options = []
+                                done = true
+                            }
+    
+                        }
+                        catch(err) {
+                            this.logError(err,'getNextLevelOptions#handleNoOption')
+                        }
 
-                }
+                    }
     
 
 
-                if (nextOpts?.length === 1) {
-                    handleSingleOption()
-                    lastHandlerWasNoOption = false
-                }
-                else if (!nextOpts?.length && isValid) {
-                    handleNoOption()
-                    lastHandlerWasNoOption = true
-                }
-                else if (!nextOpts?.length && !isValid) {
-                    o.options = []
-                    done = true
-                    lastHandlerWasNoOption = false
-                }
-                else {
-                    o.options = nextOpts;
-                    done = true
-                    lastHandlerWasNoOption = false
-                }
+                    if (nextOpts?.length === 1) {
+                        handleSingleOption()
+                        lastHandlerWasNoOption = false
+                    }
+                    else if (!nextOpts?.length && isValid) {
+                        handleNoOption()
+                        lastHandlerWasNoOption = true
+                    }
+                    else if (!nextOpts?.length && !isValid) {
+                        o.options = []
+                        done = true
+                        lastHandlerWasNoOption = false
+                    }
+                    else {
+                        o.options = nextOpts;
+                        done = true
+                        lastHandlerWasNoOption = false
+                    }
 
-                await waitNextTick()
-            } while (!done);
+                    await waitNextTick()
+                } while (!done);
+            }
+        }
+        finally {
+            this.off('segment-update', onSegmentUpdate)
         }
 
     }

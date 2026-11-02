@@ -166,6 +166,35 @@ describe('FreeRideService', () => {
         })
     })
 
+    describe('segment-update listener', () => {
+        test('is removed when the next level options are loaded, so listeners do not pile up per junction', async () => {
+            await service.selectStartPosition()
+            service.applyStartOption({ id: NORTH } as never)
+
+            for (let i = 0; i < 12; i++) {
+                await service.getNextOptions(true)
+            }
+
+            // the next level is also pre-calculated in the background: let it finish
+            for (let i = 0; i < 100 && service.listenerCount('segment-update') > 0; i++) {
+                await new Promise(resolve => setImmediate(resolve))
+            }
+
+            expect(service.listenerCount('segment-update')).toBe(0)
+        })
+
+        test('is removed when loading stops because the segment changed', async () => {
+            await service.selectStartPosition()
+            service.applyStartOption({ id: NORTH } as never)
+
+            const pending = service.getNextOptions(true)
+            service.setCurrentSegment(service.getSelectedOption())
+            await pending
+
+            expect(service.listenerCount('segment-update')).toBe(0)
+        })
+    })
+
     describe('selectStartPosition', () => {
 
         // Reproduces the "grey options" bug: the start dialog re-runs selectStartPosition() when the user
