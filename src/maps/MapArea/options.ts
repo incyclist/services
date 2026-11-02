@@ -4,6 +4,7 @@ import { FreeRideContinuation, GetNextOptionProps, IMapArea, IMapAreaService, In
 import { concatPaths, isAllowed, isOneWay, isRoundabout, pointEquals, removeDuplicatePaths, removeDuplicates, splitAtIndex, splitAtPoint  } from "./utils";
 import { calculateDistance } from "../../utils/geo";
 import { waitNextTick } from "../../utils";
+import { normalizeAngle } from "../../routes/free-ride/option-labels";
 
 /**
  * Manages the discovery and retrieval of continuation options for free ride navigation.
@@ -201,9 +202,7 @@ export class OptionManager {
             const currentDirection = this.map?.getHeading(way, 'end')??0;
             options.forEach( (option) => {
                 const direction = this.map?.getHeading(option as WayInfo, 'start')??0;
-                option.direction = direction-currentDirection
-                if (option.direction>180)
-                    option.direction = option.direction-360;
+                option.direction = normalizeAngle(direction-currentDirection)
             })
 
 
