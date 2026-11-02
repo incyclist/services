@@ -143,6 +143,9 @@ describe('FreeRideDisplayService', () => {
             getCurrentSegment: jest.fn().mockReturnValue(options.currentSegment ?? mockOption1),
             setCurrentSegment: jest.fn(),
             selectOption: jest.fn(),
+            selectOptionByUser: jest.fn(),
+            isLastQueryValid: jest.fn().mockReturnValue(true),
+            getStartSource: jest.fn().mockReturnValue('default'),
             applyStartOption: jest.fn(),
             applyOption: jest.fn(),
             buildUIOptions: jest.fn((opts) => (opts ?? []).map((o: any, i: number) => ({ id: o.id, label: `Option ${i}` }))),
@@ -304,7 +307,7 @@ describe('FreeRideDisplayService', () => {
         test('delegates to FreeRideService selectOption', () => {
             setupMocks(service, { mockRideService: true })
             service.selectOption('option-id')
-            expect(mockFreeRideService.selectOption).toHaveBeenCalledWith('option-id')
+            expect(mockFreeRideService.selectOptionByUser).toHaveBeenCalledWith('option-id')
         })
 
         test('returns formatted UI options', () => {
@@ -867,7 +870,7 @@ describe('FreeRideDisplayService', () => {
         test('selectOption by string id', () => {
             setupMocks(service, { mockRideService: true })
             service.selectOption('way1')
-            expect(mockFreeRideService.selectOption).toHaveBeenCalledWith('way1')
+            expect(mockFreeRideService.selectOptionByUser).toHaveBeenCalledWith('way1')
         })
 
         test('selectOption returns formatted options for UI', () => {
@@ -954,7 +957,7 @@ describe('FreeRideDisplayService', () => {
             service.selectOption('option1')
             service.selectOption('option2')
             service.selectOption('option3')
-            expect(mockFreeRideService.selectOption).toHaveBeenCalledTimes(3)
+            expect(mockFreeRideService.selectOptionByUser).toHaveBeenCalledTimes(3)
         })
 
         test('multiple activity updates processed sequentially', () => {
@@ -1841,6 +1844,85 @@ describe('FreeRideDisplayService', () => {
             })
             const displayProps = service.getDisplayProperties({ hideAll: false } as any)
             expect(displayProps.optionProps.optionsId).toBe('none')
+        })
+
+        describe('options visibility log', () => {
+            const uiOptions = [
+                { id: 'a', index: 1, maneuverText: 'Left', roadLabel: 'Via del Mar', selected: false },
+                { id: 'b', index: 2, maneuverText: 'Straight', roadLabel: 'Unnamed road', selected: true, selectedBy: 'auto' }
+            ]
+
+            test('lists the buttons when the options are shown', () => {
+                setupMocks(service, { mockRideService: true })
+                mockFreeRideService.buildUIOptions.mockReturnValue(uiOptions)
+                const logEvent = jest.spyOn(service as any, 'logEvent')
+
+                ;(service as any).onOptionsVisibleChanged(true, 'hover')
+
+                expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({
+                    message: 'free ride options visibility', visible: true, reason: 'hover',
+                    buttons: '1·Left·Via del Mar|2·Straight·Unnamed road·AUTO'
+                }))
+            })
+
+            test('marks the rider\'s choice as NEXT', () => {
+                setupMocks(service, { mockRideService: true })
+                mockFreeRideService.buildUIOptions.mockReturnValue([
+                    { ...uiOptions[0], selected: true, selectedBy: 'user' }, { ...uiOptions[1], selected: false }])
+                const logEvent = jest.spyOn(service as any, 'logEvent')
+
+                ;(service as any).onOptionsVisibleChanged(true, 'key')
+
+                expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({ buttons: '1·Left·Via del Mar·NEXT|2·Straight·Unnamed road' }))
+            })
+
+            test('the first options of a ride are logged, new buttons are logged again, the same buttons are not', () => {
+                setupMocks(service, { mockRideService: true })
+                mockFreeRideService.buildUIOptions.mockReturnValue(uiOptions)
+                const logEvent = jest.spyOn(service as any, 'logEvent')
+                const visibilityLogs = () => logEvent.mock.calls.filter(c => (c[0] as any).message === 'free ride options visibility')
+
+                ;(service as any).onOptionsVisibleChanged(true, 'new options')
+                ;(service as any).onOptionsVisibleChanged(true, 'new options')
+                expect(visibilityLogs()).toHaveLength(1)
+
+                mockFreeRideService.buildUIOptions.mockReturnValue([{ ...uiOptions[1], index: 1 }])
+                ;(service as any).onOptionsVisibleChanged(true, 'new options')
+                expect(visibilityLogs()).toHaveLength(2)
+            })
+
+            test('no button list when the options are hidden', () => {
+                setupMocks(service, { mockRideService: true })
+                ;(service as any).optionsVisible = true
+                const logEvent = jest.spyOn(service as any, 'logEvent')
+
+                ;(service as any).onOptionsVisibleChanged(false, 'timeout')
+
+                const props = logEvent.mock.calls.find(c => (c[0] as any).message === 'free ride options visibility')[0] as any
+                expect(props.visible).toBe(false)
+                expect(props.buttons).toBeUndefined()
+            })
+        })
+
+        describe('optionsState', () => {
+            const stateOf = (opts: { freeRideOptions?: any, valid?: boolean }) => {
+                setupMocks(service, { mockRideService: true, ...(opts.hasOwnProperty('freeRideOptions') ? { freeRideOptions: opts.freeRideOptions } : {}) })
+                mockFreeRideService.isLastQueryValid.mockReturnValue(opts.valid ?? true)
+                return service.getDisplayProperties({ hideAll: false } as any).optionProps.optionsState
+            }
+
+            test('ready if there are options', () => {
+                expect(stateOf({ freeRideOptions: [mockOption1, mockOption2] })).toBe('ready')
+            })
+            test('loading while the next options are not available', () => {
+                expect(stateOf({ freeRideOptions: undefined })).toBe('loading')
+            })
+            test('none if the query was valid but found nothing', () => {
+                expect(stateOf({ freeRideOptions: [], valid: true })).toBe('none')
+            })
+            test('failed if the roads could not be loaded', () => {
+                expect(stateOf({ freeRideOptions: [], valid: false })).toBe('failed')
+            })
         })
     })
 

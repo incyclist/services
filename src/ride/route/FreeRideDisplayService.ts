@@ -46,6 +46,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
     protected prevViewport: MapViewPort
     protected tsLastOptionChange:number
     protected optionsVisible: boolean
+    protected lastLoggedButtons: string|undefined
     protected mapProps:MapOverlayDisplayProps
     protected distanceRemaining: number 
     protected timeRemaining: number 
@@ -115,7 +116,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
      */
     selectOption(option:FreeRideOption|string) {
         try {
-            this.getFreeRideService().selectOption(option)
+            this.getFreeRideService().selectOptionByUser(option)
             return this.getFreeRideService().buildUIOptions(this.currentOptions)
 
         }
@@ -328,7 +329,8 @@ export class FreeRideDisplayService extends GpxDisplayService {
                 optionsId: this.getOptionsId(),
                 distance ,
                 isNearby: this.isNearbyOption && distance!==undefined,
-                turn: this.isTurnEnabled
+                turn: this.isTurnEnabled,
+                optionsState: this.getOptionsState()
             }
 
             return {
@@ -435,6 +437,7 @@ export class FreeRideDisplayService extends GpxDisplayService {
                 mode:'free ride',
                 rideView,
                 lat,lng,
+                startSource: this.getFreeRideService().getStartSource(),
                 ...bikeProps
             }
 
@@ -447,6 +450,39 @@ export class FreeRideDisplayService extends GpxDisplayService {
         }
     }
 
+
+    /**
+     * 'loading': the options of the next junction are not available yet
+     * 'ready': options can be shown, 'none': a single way on, 'failed': the roads could not be loaded 
+     */
+    protected getOptionsState():'loading'|'ready'|'none'|'failed' {
+        const options = this.getFreeRideService().getOptions()
+        if (this.isStarting || options===undefined)
+            return 'loading'
+        if (options.length>0)
+            return 'ready'
+        return this.getFreeRideService().isLastQueryValid() ? 'none' : 'failed'
+    }
+
+    /**
+     * What the rider sees on the buttons: <Nr>·<turn word>·<road>[·AUTO|NEXT], separated by '|' 
+     * (AUTO: taken automatically, NEXT: chosen by the rider)
+     */
+    protected getButtonsLogInfo():string {
+        try {
+            return this.getFreeRideService().buildUIOptions(this.currentOptions??[]).map( o => {
+                let marker:string|undefined
+                if (o.selected)
+                    marker = o.selectedBy==='user' ? 'NEXT' : 'AUTO'
+                return [o.index, o.maneuverText, o.roadLabel, marker].filter( v => v!==undefined).join('·')
+            }).join('|')
+        }
+        /* istanbul ignore next */
+        catch(err) {
+            this.logError(err,'getButtonsLogInfo')
+            return ''
+        }
+    }
 
     protected getOptionsId() {
         if (!this.currentOptions?.length)
@@ -706,13 +742,22 @@ export class FreeRideDisplayService extends GpxDisplayService {
         
     }
 
-    protected onOptionsVisibleChanged(visible) {
-        if (visible ===this.optionsVisible) {
-            return 
-        }
+    protected onOptionsVisibleChanged(visible:boolean, reason?:string) {
+        const changed = visible !== this.optionsVisible
+        const buttons = visible ? this.getButtonsLogInfo() : undefined
 
-        // TODO: consider logging this
+        // the buttons of a new junction are logged even if the options were visible already 
+        // (e.g. the very first options of a ride). The same buttons are never logged twice in a row
+        if (!changed && (!visible || buttons === this.lastLoggedButtons))
+            return
+
         this.optionsVisible = visible
+        this.lastLoggedButtons = visible ? buttons : undefined
+
+        const props:Record<string,string|number|boolean> = {visible, count: this.currentOptions?.length??0, reason: reason ?? 'unknown', pinned: this.isNearbyOption}
+        if (buttons!==undefined)
+            props.buttons = buttons
+        this.logEvent({message:'free ride options visibility', ...props})
     }
 
     protected emitRouteUpdate() {
