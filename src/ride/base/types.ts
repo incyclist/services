@@ -136,10 +136,12 @@ export interface GpxDisplayProps extends RouteDisplayProps {
 export interface RouteOptionDisplayProps { 
     optionsDelay?: number
     optionsId?: string
-    onOptionsVisibleChanged: (visible: boolean) => void
+    onOptionsVisibleChanged: (visible: boolean, reason?: string) => void
     isNearby?: boolean
     distance?: {value:number, unit:Unit}
     turn?: boolean
+    /** 'loading': options of the next junction not available yet; 'none': a single way on; 'failed': roads could not be loaded */
+    optionsState?: 'loading' | 'ready' | 'none' | 'failed'
 }
 
 export interface FreeRideDisplayProps extends GpxDisplayProps {

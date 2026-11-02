@@ -38,6 +38,7 @@ export type FreeRideContinuation = {
     id?: string,
     path: Array<IncyclistNode>
     onewayReverse?:boolean
+    roundabout?:boolean|string
     direction?:number
     options?: Array<FreeRideContinuation>
     map?: IMapArea
