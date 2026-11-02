@@ -471,7 +471,9 @@ export class FreeRideDisplayService extends GpxDisplayService {
     protected getButtonsLogInfo():string {
         try {
             return this.getFreeRideService().buildUIOptions(this.currentOptions??[]).map( o => {
-                const marker = o.selected ? (o.selectedBy==='user' ? 'NEXT' : 'AUTO') : undefined
+                let marker:string|undefined
+                if (o.selected)
+                    marker = o.selectedBy==='user' ? 'NEXT' : 'AUTO'
                 return [o.index, o.maneuverText, o.roadLabel, marker].filter( v => v!==undefined).join('·')
             }).join('|')
         }

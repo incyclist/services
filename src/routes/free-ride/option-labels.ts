@@ -128,6 +128,9 @@ export const getRoadLabel = (tags?: Record<string, string>): { roadName?: string
     return { roadLabel: FALLBACK_LABEL.unnamed }
 }
 
+const getDegradedText = (compass: string | undefined, idx: number): string =>
+    compass ? `Heading ${compass.toLowerCase()}` : `Road ${idx + 1}`
+
 const FORK_SIDES: Record<number, string[]> = {
     2: ['left fork', 'right fork'],
     3: ['left fork', 'middle fork', 'right fork']
@@ -152,7 +155,7 @@ export const buildOptionLabels = (options: OptionLabelInput[]): OptionLabel[] =>
 
         return {
             maneuver,
-            maneuverText: degraded ? (o.compass ? `Heading ${o.compass.toLowerCase()}` : `Road ${idx + 1}`) : MANEUVER_TEXT[maneuver],
+            maneuverText: degraded ? getDegradedText(o.compass, idx) : MANEUVER_TEXT[maneuver],
             roadName,
             roadLabel,
             compass: o.compass,
