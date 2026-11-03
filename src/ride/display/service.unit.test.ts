@@ -571,6 +571,180 @@ describe('RideDisplayService', () => {
         })
     })
 
+    describe('discardSimulatedRide', () => {
+        let service: any
+        let calls: string[]
+        let routeList: any
+        let workoutList: any
+        let activityRide: any
+
+        const route = { id: 'r1' }
+        const startSettings = { type: 'Route', startPos: 1500, realityFactor: 80 }
+        const workout = { id: 'w1', type: 'workout' }
+
+        beforeEach(() => {
+            calls = []
+            activityRide = { delete: jest.fn(async () => { calls.push('delete') }) }
+            routeList = {
+                getSelected: jest.fn().mockReturnValue(route),
+                getStartSettings: jest.fn().mockReturnValue(startSettings),
+                select: jest.fn(() => { calls.push('select route') }),
+                setStartSettings: jest.fn(() => { calls.push('set start settings') }),
+            }
+            workoutList = {
+                getSelected: jest.fn().mockReturnValue(workout),
+                select: jest.fn(() => { calls.push('select workout') }),
+            }
+            Inject('ActivityRide', activityRide)
+            Inject('RouteList', routeList)
+            Inject('WorkoutList', workoutList)
+
+            service = new RideDisplayService()
+            service.simulated = true
+            service.stop = jest.fn(async () => {
+                calls.push('stop')
+                // stopping a ride unselects route and workout
+                routeList.getSelected.mockReturnValue(null)
+                routeList.getStartSettings.mockReturnValue(null)
+                workoutList.getSelected.mockReturnValue(null)
+            })
+        })
+
+        afterEach(() => {
+            service?.reset()
+            Inject('ActivityRide', null)
+            Inject('RouteList', null)
+            Inject('WorkoutList', null)
+        })
+
+        test('refuses to touch a ride on a real device', async () => {
+            service.simulated = false
+
+            const res = await service.discardSimulatedRide()
+
+            expect(res).toBe(false)
+            expect(activityRide.delete).not.toHaveBeenCalled()
+            expect(service.stop).not.toHaveBeenCalled()
+        })
+
+        test('deletes the activity before stopping, then restores the selection', async () => {
+            const res = await service.discardSimulatedRide()
+
+            expect(res).toBe(true)
+            expect(calls).toEqual(['delete', 'stop', 'select route', 'set start settings', 'select workout'])
+            expect(routeList.select).toHaveBeenCalledWith(route)
+            expect(routeList.setStartSettings).toHaveBeenCalledWith(startSettings)
+            expect(workoutList.select).toHaveBeenCalledWith(workout)
+        })
+
+        test('free ride: has no selected route, only the start settings are restored', async () => {
+            const freeRideSettings = { type: 'Free-Ride', position: { lat: 1, lng: 2 }, option: { id: 'o1' } }
+            routeList.getSelected.mockReturnValue(null)
+            routeList.getStartSettings.mockReturnValue(freeRideSettings)
+            workoutList.getSelected.mockReturnValue(undefined)
+
+            const res = await service.discardSimulatedRide()
+
+            expect(res).toBe(true)
+            expect(routeList.select).not.toHaveBeenCalled()
+            expect(routeList.setStartSettings).toHaveBeenCalledWith(freeRideSettings)
+            expect(workoutList.select).not.toHaveBeenCalled()
+        })
+
+        test('workout without a route: only the workout is restored', async () => {
+            routeList.getSelected.mockReturnValue(null)
+            routeList.getStartSettings.mockReturnValue(null)
+
+            await service.discardSimulatedRide()
+
+            expect(routeList.select).not.toHaveBeenCalled()
+            expect(routeList.setStartSettings).not.toHaveBeenCalled()
+            expect(workoutList.select).toHaveBeenCalledWith(workout)
+        })
+
+        test('still stops and restores if the activity could not be deleted', async () => {
+            activityRide.delete.mockRejectedValue(new Error('disk error'))
+
+            const res = await service.discardSimulatedRide()
+
+            expect(res).toBe(true)
+            expect(service.stop).toHaveBeenCalled()
+            expect(routeList.select).toHaveBeenCalledWith(route)
+        })
+
+        test('returns false if the selection could not be restored', async () => {
+            routeList.select.mockImplementation(() => { throw new Error('boom') })
+
+            const res = await service.discardSimulatedRide()
+
+            expect(res).toBe(false)
+            expect(service.stop).toHaveBeenCalled()
+        })
+
+        test('returns false if stopping fails', async () => {
+            service.stop.mockRejectedValue(new Error('boom'))
+
+            expect(await service.discardSimulatedRide()).toBe(false)
+        })
+    })
+
+    describe('ride view restriction delegates', () => {
+        let service: any
+        let restriction: any
+
+        beforeEach(() => {
+            restriction = {
+                onNoticeAction: jest.fn(),
+                onNoticeClosed: jest.fn(),
+                setReminderEnabled: jest.fn(),
+                getDialogProps: jest.fn().mockReturnValue({ title: 'dialog' }),
+            }
+            Inject('RideViewRestriction', restriction)
+            service = new RideDisplayService()
+        })
+
+        afterEach(() => {
+            service?.reset()
+            Inject('RideViewRestriction', null)
+        })
+
+        test('forwards notice actions and close', () => {
+            service.onRideViewNoticeAction('how-to')
+            service.onRideViewNoticeClosed()
+
+            expect(restriction.onNoticeAction).toHaveBeenCalledWith('how-to')
+            expect(restriction.onNoticeClosed).toHaveBeenCalled()
+        })
+
+        test('forwards the reminder setting', () => {
+            service.setRideViewReminder(false)
+
+            expect(restriction.setReminderEnabled).toHaveBeenCalledWith(false)
+        })
+
+        test.each([
+            ['Active', true, true],
+            ['Paused', true, true],
+            ['Started', true, true],
+            ['Active', false, false],
+            ['Finished', true, false],
+        ])('dialog props in state %s (simulated=%s) -> inRide=%s', (state, simulated, inRide) => {
+            service.state = state
+            service.simulated = simulated
+
+            const props = service.getRideViewRestrictionDialogProps()
+
+            expect(props).toEqual({ title: 'dialog' })
+            expect(restriction.getDialogProps).toHaveBeenCalledWith({ inRide })
+        })
+
+        test('does not throw if the restriction service fails', () => {
+            restriction.onNoticeAction.mockImplementation(() => { throw new Error('boom') })
+
+            expect(() => service.onRideViewNoticeAction('how-to')).not.toThrow()
+        })
+    })
+
     describe('start - pairing visit', () => {
         let service
         const tracker = { onRideStarted: jest.fn() }

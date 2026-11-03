@@ -78,7 +78,12 @@ const setupMocks = (rideType: string = 'GPX') => {
         getStartOverlayProps: jest.fn().mockReturnValue({ mode: rideType, rideState: 'Idle', devices: [], readyToStart: false }),
         getDisplayProperties: jest.fn().mockReturnValue({ state: 'Idle' }),
         adjustDevicePower: jest.fn(),
-        getRideModeService: jest.fn().mockReturnValue(undefined)
+        getRideModeService: jest.fn().mockReturnValue(undefined),
+        onRideViewNoticeAction: jest.fn(),
+        onRideViewNoticeClosed: jest.fn(),
+        setRideViewReminder: jest.fn(),
+        getRideViewRestrictionDialogProps: jest.fn().mockReturnValue({ title: 'dialog', body: '', options: [], reminder: { label: 'r', checked: true } }),
+        discardSimulatedRide: jest.fn().mockResolvedValue(true)
     }
     MockWorkoutRide = {
         getObserver: jest.fn(),
@@ -2991,6 +2996,164 @@ describe('RidePageService', () => {
         test('is a no-op when the visit never captured any route ids', () => {
             expect(() => s.onVideoKeepInstead()).not.toThrow()
             expect(MockRouteVideoPageActions.onVideoKeepInstead).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('ride view restriction (simulated ride)', () => {
+
+        const notice = { id: 7, state: 'message', text: 'Street View isn\'t available in simulated rides. Showing the Map instead.', actions: [] }
+
+        beforeEach(() => {
+            MockRideDisplay.getRideType.mockReturnValue('GPX')
+            MockRideDisplay.getState.mockReturnValue('Active')
+            MockRideDisplay.getDisplayProperties.mockReturnValue({ rideView: 'map', rideViewRestriction: { cause: 'simulation', preferredView: 'sv' }, rideViewRestrictionNotice: notice })
+            MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 5 })
+            MockActivityRide.getCurrentValues.mockReturnValue({ cadence: 80 })
+            s.openPage()
+        })
+
+        describe('notice', () => {
+            test('passed through once the start overlay and the gesture hint are gone', () => {
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionNotice).toEqual(notice)
+            })
+
+            test('held back while the start overlay is showing', () => {
+                MockRideDisplay.getState.mockReturnValue('Starting')
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionNotice).toBeUndefined()
+            })
+
+            test('held back behind the gesture hint, without being consumed by any page read', () => {
+                MockActivityRide.getActivity.mockReturnValue({ logs: [], time: 0 })
+                MockActivityRide.getCurrentValues.mockReturnValue({ cadence: 0 })
+
+                for (let i = 0; i < 5; i++) {
+                    const props = s.getPageDisplayProps() as any
+                    expect(props.gestureHint).toEqual({ visible: true })
+                    expect(props.rideViewRestrictionNotice).toBeUndefined()
+                }
+
+                // hint is gone: the very same notice arrives
+                MockActivityRide.getCurrentValues.mockReturnValue({ cadence: 40 })
+                const props = s.getPageDisplayProps() as any
+                expect(props.gestureHint).toBeNull()
+                expect(props.rideViewRestrictionNotice).toEqual(notice)
+                expect(props.rideViewRestrictionNotice.id).toBe(7)
+            })
+
+            test('the restriction itself is passed through', () => {
+                expect((s.getPageDisplayProps() as any).rideViewRestriction).toEqual({ cause: 'simulation', preferredView: 'sv' })
+            })
+
+            test('onRideViewNoticeClosed informs the ride and refreshes the page', () => {
+                const updateSpy = jest.fn()
+                s.getPageObserver().on('page-update', updateSpy)
+
+                s.onRideViewNoticeClosed()
+
+                expect(MockRideDisplay.onRideViewNoticeClosed).toHaveBeenCalled()
+                expect(updateSpy).toHaveBeenCalled()
+            })
+
+            test.each(['how-to', 'change-this'] as const)('action %s forwards and opens the dialog', (id) => {
+                const updateSpy = jest.fn()
+                s.getPageObserver().on('page-update', updateSpy)
+
+                s.onRideViewNoticeAction(id)
+
+                expect(MockRideDisplay.onRideViewNoticeAction).toHaveBeenCalledWith(id)
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog).toMatchObject({ title: 'dialog' })
+                expect(updateSpy).toHaveBeenCalled()
+            })
+
+            test('action dont-show-again forwards but keeps the dialog closed', () => {
+                s.onRideViewNoticeAction('dont-show-again')
+
+                expect(MockRideDisplay.onRideViewNoticeAction).toHaveBeenCalledWith('dont-show-again')
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog).toBeNull()
+            })
+        })
+
+        describe('dialog', () => {
+            test('closed by default', () => {
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog).toBeNull()
+            })
+
+            test('opens from the chip-row link and closes again, each with a page-update', () => {
+                const updateSpy = jest.fn()
+                s.getPageObserver().on('page-update', updateSpy)
+
+                s.onOpenRideViewRestrictionDialog()
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog).toMatchObject({ title: 'dialog' })
+                expect(updateSpy).toHaveBeenCalledTimes(1)
+
+                s.onCloseRideViewRestrictionDialog()
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog).toBeNull()
+                expect(updateSpy).toHaveBeenCalledTimes(2)
+            })
+
+            test('changing the reminder saves it and refreshes the open dialog', () => {
+                s.onOpenRideViewRestrictionDialog()
+                MockRideDisplay.getRideViewRestrictionDialogProps.mockReturnValue({ title: 'dialog', body: '', options: [], reminder: { label: 'r', checked: false } })
+                const updateSpy = jest.fn()
+                s.getPageObserver().on('page-update', updateSpy)
+
+                s.onRideViewReminderChanged(false)
+
+                expect(MockRideDisplay.setRideViewReminder).toHaveBeenCalledWith(false)
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog.reminder.checked).toBe(false)
+                expect(updateSpy).toHaveBeenCalled()
+            })
+
+            test('is closed once the ride has finished', () => {
+                s.openPage()
+                s.onOpenRideViewRestrictionDialog()
+
+                ;(s as any).onDisplayStateUpdate('Finished')
+
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog).toBeNull()
+            })
+        })
+
+        describe('onDiscardSimulatedRide', () => {
+            test('discards, closes the dialog and continues with Pairing', async () => {
+                s.openPage()
+                s.onOpenRideViewRestrictionDialog()
+
+                await s.onDiscardSimulatedRide()
+
+                expect(MockRideDisplay.discardSimulatedRide).toHaveBeenCalled()
+                expect(MockBindings.ui.openPage).toHaveBeenCalledWith('/pairingStart')
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog).toBeNull()
+            })
+
+            test('goes back to the content page if the ride could not be restored', async () => {
+                s.openPage()
+                MockRideDisplay.discardSimulatedRide.mockResolvedValue(false)
+                MockAppState.getPersistedState.mockReturnValue('routes')
+
+                await s.onDiscardSimulatedRide()
+
+                expect(MockBindings.ui.openPage).toHaveBeenCalledWith('routes')
+                expect(MockBindings.ui.openPage).not.toHaveBeenCalledWith('/pairingStart')
+            })
+
+            test('never throws', async () => {
+                MockRideDisplay.discardSimulatedRide.mockRejectedValue(new Error('boom'))
+
+                await expect(s.onDiscardSimulatedRide()).resolves.toBeUndefined()
+            })
+        })
+
+        test('methods never throw if the ride display fails', () => {
+            MockRideDisplay.onRideViewNoticeAction.mockImplementation(() => { throw new Error('boom') })
+            MockRideDisplay.onRideViewNoticeClosed.mockImplementation(() => { throw new Error('boom') })
+            MockRideDisplay.setRideViewReminder.mockImplementation(() => { throw new Error('boom') })
+            MockRideDisplay.getRideViewRestrictionDialogProps.mockImplementation(() => { throw new Error('boom') })
+
+            expect(() => s.onRideViewNoticeAction('how-to')).not.toThrow()
+            expect(() => s.onRideViewNoticeClosed()).not.toThrow()
+            expect(() => s.onRideViewReminderChanged(true)).not.toThrow()
+            expect(() => s.onOpenRideViewRestrictionDialog()).not.toThrow()
         })
     })
 })
