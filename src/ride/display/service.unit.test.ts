@@ -681,6 +681,30 @@ describe('RideDisplayService', () => {
             expect(service.stop).toHaveBeenCalled()
         })
 
+        test('logs the discard', async () => {
+            const logEvent = jest.spyOn(service, 'logEvent')
+
+            await service.discardSimulatedRide()
+
+            expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({ message: 'simulated ride discarded', restored: true }))
+        })
+
+        test('a second request while one is running is ignored (double click)', async () => {
+            const [first, second] = await Promise.all([service.discardSimulatedRide(), service.discardSimulatedRide()])
+
+            expect(first).toBe(true)
+            expect(second).toBe(false)
+            expect(activityRide.delete).toHaveBeenCalledTimes(1)
+            expect(service.stop).toHaveBeenCalledTimes(1)
+        })
+
+        test('can be used again once finished', async () => {
+            await service.discardSimulatedRide()
+            service.simulated = true
+
+            expect(await service.discardSimulatedRide()).toBe(true)
+        })
+
         test('returns false if stopping fails', async () => {
             service.stop.mockRejectedValue(new Error('boom'))
 

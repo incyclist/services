@@ -203,6 +203,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             EventLogger.setGlobalConfig('page', pageLogName)
 
             this.gestureHintDismissed = false
+            this.rideViewRestrictionDialog = null
             this.prevRidesShown = false
             this.nearbyRidersSubscribed = false
             this.videoVisit = { started: false, routeIds: [], exitHandled: false }
@@ -289,6 +290,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             return
 
         try {
+            // a dialog of this ride must not show up at the start of the next one
+            this.rideViewRestrictionDialog = null
+
             EventLogger.setGlobalConfig('page', null)
             this.logEvent({ message: 'page closed', page: this.getPageLogName() })
 
@@ -700,7 +704,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         try {
             this.rideViewRestrictionDialog = null
             const discarded = await this.getRideDisplay().discardSimulatedRide()
-            this.logEvent({ message: 'simulated ride discarded', restored: discarded })
+            // moveTo() also closes the page, which stops the (already stopped) ride like onEndRide() does
             this.moveTo(discarded ? '/pairingStart' : '$contentPage')
         }
         catch (err: any) {

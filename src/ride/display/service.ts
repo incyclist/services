@@ -49,6 +49,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected isResuming: boolean
     //protected prevRides: PrevRidesListDisplayProps
     protected stateUpdateHandler = this.onStateUpdate.bind(this)
+    /** a discard is running: a second request (e.g. a double click) must not run it again */
+    protected discarding = false
     /** guards the one-time RideModeService.onStartDevicesReady() call */
     protected controlDevicesReadyNotified: boolean = false
 
@@ -298,11 +300,15 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
      * should navigate to the page the ride was started from instead of Pairing.
      */
     async discardSimulatedRide(): Promise<boolean> {
+        if (this.discarding)
+            return false
+
         try {
             if (!this.isSimulated()) {
                 this.logError(new Error('not a simulated ride'),'discardSimulatedRide')
                 return false
             }
+            this.discarding = true
 
             const selection = this.getRideSelection()
 
@@ -311,11 +317,16 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             await this.deleteActivityOnDiscard()
             await this.stop()
 
-            return this.restoreRideSelection(selection)
+            const restored = this.restoreRideSelection(selection)
+            this.logEvent({ message: 'simulated ride discarded', restored })
+            return restored
         }
         catch(err) {
             this.logError(err,'discardSimulatedRide')
             return false
+        }
+        finally {
+            this.discarding = false
         }
     }
 

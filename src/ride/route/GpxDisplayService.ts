@@ -121,7 +121,6 @@ export class GpxDisplayService extends RouteDisplayService {
      * during init(), and start() is called again on retries.
      */
     protected restrictionEvaluated: boolean = false
-    protected restrictionChangedHandler = () => { this.emit('state-update') }
 
     protected svPhaseDelayTimeout: NodeJS.Timeout
     protected svSlowTimeout: NodeJS.Timeout
@@ -231,14 +230,12 @@ export class GpxDisplayService extends RouteDisplayService {
 
         try {
             const restriction = this.getRideViewRestriction()
+            // Changes of the notice reach the UI through the ride display service (state-update at
+            // start, overlay-update after the rider acted on it), so nothing is subscribed here.
             restriction.beginRide({
                 simulated: this.service?.isSimulated()===true,
                 preferredView: this.getRideSettingsDisplay().getRideView()
             })
-            // only one ride runs at a time: whoever starts last owns the notifications, so a ride
-            // that was torn down without stop() can not leave a stale listener behind
-            restriction.removeAllListeners('changed')
-            restriction.on('changed', this.restrictionChangedHandler)
         }
         /* istanbul ignore catch */
         catch(err) {
@@ -248,9 +245,7 @@ export class GpxDisplayService extends RouteDisplayService {
 
     protected endViewRestriction() {
         try {
-            const restriction = this.getRideViewRestriction()
-            restriction.off('changed', this.restrictionChangedHandler)
-            restriction.endRide()
+            this.getRideViewRestriction().endRide()
         }
         /* istanbul ignore catch */
         catch(err) {

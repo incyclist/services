@@ -3104,6 +3104,22 @@ describe('RidePageService', () => {
                 expect(updateSpy).toHaveBeenCalled()
             })
 
+            test('does not survive the page: closing it resets the dialog for the next ride', () => {
+                s.onOpenRideViewRestrictionDialog()
+
+                s.closePage()
+
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog).toBeNull()
+            })
+
+            test('opening the page for a new ride starts without a dialog', () => {
+                s.onOpenRideViewRestrictionDialog()
+
+                s.openPage()
+
+                expect((s.getPageDisplayProps() as any).rideViewRestrictionDialog).toBeNull()
+            })
+
             test('is closed once the ride has finished', () => {
                 s.openPage()
                 s.onOpenRideViewRestrictionDialog()
@@ -3135,6 +3151,15 @@ describe('RidePageService', () => {
 
                 expect(MockBindings.ui.openPage).toHaveBeenCalledWith('routes')
                 expect(MockBindings.ui.openPage).not.toHaveBeenCalledWith('/pairingStart')
+            })
+
+            test('closes the page, like End Ride does', async () => {
+                s.openPage()
+                const closePage = jest.spyOn(s, 'closePage')
+
+                await s.onDiscardSimulatedRide()
+
+                expect(closePage).toHaveBeenCalled()
             })
 
             test('never throws', async () => {

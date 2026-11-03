@@ -1043,16 +1043,14 @@ describe('GpxDisplayService', () => {
             expect(service.getDisplayProperties({ hideAll: false } as any).rideViewRestrictionNotice).toBeUndefined()
         })
 
-        test('a change of the notice is forwarded as state-update', () => {
+        test('does not subscribe to the shared restriction service', () => {
             setupMocks(service, { mockRideService: true })
             simulateWithoutKey()
+            const restriction = (service as any).getRideViewRestriction()
+
             service.start()
-            service.onStarted()
-            ;(service.emit as jest.Mock).mockClear()
 
-            ;(service as any).getRideViewRestriction().onNoticeClosed()
-
-            expect(service.emit).toHaveBeenCalledWith('state-update')
+            expect(restriction.listenerCount('changed')).toBe(0)
         })
 
         test('stop ends the restriction', async () => {
