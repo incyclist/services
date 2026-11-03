@@ -6,6 +6,7 @@ import { RouteApiDetail } from '../../routes/base/api/types'
 import { GpxDisplayService } from './GpxDisplayService'
 import { Observer } from '../../base/types'
 import { RouteSettings } from '../../routes/list/cards/types'
+import { RideViewRestrictionService } from '../view-restriction/service'
 
 describe('GpxDisplayService', () => {
 
@@ -77,6 +78,7 @@ describe('GpxDisplayService', () => {
 
         Inject('GoogleMaps', {
             hasPersonalApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasPersonalApiKey),
+            hasActivePersonalApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasPersonalApiKey),
             hasDevelopmentApiKey: jest.fn().mockReturnValue(mockGoogleMaps.hasDevelopmentApiKey)
 
         })
@@ -106,6 +108,8 @@ describe('GpxDisplayService', () => {
 
     const cleanupMocks = (s:any)=>{
         s.reset()
+        // @Singleton: the restriction state must not leak into the next test
+        new RideViewRestrictionService().reset()
         if (mockRideService)
             mockRideService.reset()
         jest.clearAllMocks()
@@ -187,6 +191,7 @@ describe('GpxDisplayService', () => {
 
             Inject('GoogleMaps', {
                 hasPersonalApiKey: jest.fn().mockReturnValue(true),
+                hasActivePersonalApiKey: jest.fn().mockReturnValue(true),
                 hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
 
             })
@@ -208,6 +213,7 @@ describe('GpxDisplayService', () => {
 
             Inject('GoogleMaps', {
                 hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasActivePersonalApiKey: jest.fn().mockReturnValue(false),
                 hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
 
             })
@@ -322,9 +328,11 @@ describe('GpxDisplayService', () => {
             mockRideService.isSimulated.mockReturnValue(false)
             Inject('GoogleMaps', {
                 hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasActivePersonalApiKey: jest.fn().mockReturnValue(false),
                 hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
             })
 
+            service.start()
             expect((service as any).getRideView()).toBe('sv')
         })
 
@@ -333,9 +341,11 @@ describe('GpxDisplayService', () => {
             mockRideService.isSimulated.mockReturnValue(true)
             Inject('GoogleMaps', {
                 hasPersonalApiKey: jest.fn().mockReturnValue(true),
+                hasActivePersonalApiKey: jest.fn().mockReturnValue(true),
                 hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
             })
 
+            service.start()
             expect((service as any).getRideView()).toBe('sv')
         })
 
@@ -344,9 +354,11 @@ describe('GpxDisplayService', () => {
             mockRideService.isSimulated.mockReturnValue(true)
             Inject('GoogleMaps', {
                 hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasActivePersonalApiKey: jest.fn().mockReturnValue(false),
                 hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
             })
 
+            service.start()
             expect((service as any).getRideView()).toBe('map')
         })
 
@@ -355,9 +367,11 @@ describe('GpxDisplayService', () => {
             mockRideService.isSimulated.mockReturnValue(true)
             Inject('GoogleMaps', {
                 hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasActivePersonalApiKey: jest.fn().mockReturnValue(false),
                 hasDevelopmentApiKey: jest.fn().mockReturnValue(true)
             })
 
+            service.start()
             expect((service as any).getRideView()).toBe('map')
         })
 
@@ -366,8 +380,10 @@ describe('GpxDisplayService', () => {
             mockRideService.isSimulated.mockReturnValue(true)
             Inject('GoogleMaps', {
                 hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasActivePersonalApiKey: jest.fn().mockReturnValue(false),
                 hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
             })
+            service.start()
             expect((service as any).getRideView()).toBe('map')
 
             mockRideService.isSimulated.mockReturnValue(false)
@@ -382,6 +398,7 @@ describe('GpxDisplayService', () => {
             setupMocks(service, {})
 
             expect(() => (service as any).getRideView()).not.toThrow()
+            service.start()
             expect((service as any).getRideView()).toBe('sv')
         })
     })
@@ -653,8 +670,11 @@ describe('GpxDisplayService', () => {
                 mockRideService.isSimulated.mockReturnValue(true)
                 Inject('GoogleMaps', {
                     hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                    hasActivePersonalApiKey: jest.fn().mockReturnValue(false),
                     hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
                 })
+                // isSimulated() is only known at start, which is where the restriction is latched
+                service.start()
             }
 
             test('completes the start immediately instead of waiting for the abandoned Street View timeout', () => {
@@ -943,6 +963,133 @@ describe('GpxDisplayService', () => {
             finally {
                 jest.useRealTimers()
             }
+        })
+    })
+
+    describe('ride view restriction', () => {
+        let service: GpxDisplayService
+
+        const simulateWithoutKey = () => {
+            mockRideService.isSimulated.mockReturnValue(true)
+            Inject('GoogleMaps', {
+                hasPersonalApiKey: jest.fn().mockReturnValue(false),
+                hasActivePersonalApiKey: jest.fn().mockReturnValue(false),
+                hasDevelopmentApiKey: jest.fn().mockReturnValue(false)
+            })
+        }
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            cleanupMocks(service)
+        })
+
+        test('both props are always present, undefined without a restriction', () => {
+            setupMocks(service, { mockRideService: true })
+            service.start()
+
+            const props = service.getDisplayProperties({ hideAll: false } as any)
+
+            expect(props).toHaveProperty('rideViewRestriction', undefined)
+            expect(props).toHaveProperty('rideViewRestrictionNotice', undefined)
+        })
+
+        test('simulated without key: map is shown and the restriction is reported', () => {
+            setupMocks(service, { mockRideService: true })
+            simulateWithoutKey()
+            service.start()
+
+            const props = service.getDisplayProperties({ hideAll: false } as any)
+
+            expect(props.rideView).toBe('map')
+            expect(props.rideViewRestriction).toEqual({ cause: 'simulation', preferredView: 'sv' })
+        })
+
+        test('notice is only reported after the ride has started, and reading does not consume it', () => {
+            setupMocks(service, { mockRideService: true })
+            simulateWithoutKey()
+            service.start()
+            expect(service.getDisplayProperties({ hideAll: false } as any).rideViewRestrictionNotice).toBeUndefined()
+
+            service.onStarted()
+
+            const first = service.getDisplayProperties({ hideAll: false } as any).rideViewRestrictionNotice
+            const second = service.getDisplayProperties({ hideAll: false } as any).rideViewRestrictionNotice
+            expect(first).toMatchObject({ state: 'message' })
+            expect(second).toEqual(first)
+        })
+
+        test('the INC-42 fallback notice is not set by the restriction', () => {
+            setupMocks(service, { mockRideService: true })
+            simulateWithoutKey()
+            service.start()
+            service.onStarted()
+
+            expect(service.getDisplayProperties({ hideAll: false } as any).rideViewNotice).toBeUndefined()
+        })
+
+        test('is evaluated once per ride: a retry of start() does not re-arm the notice', () => {
+            setupMocks(service, { mockRideService: true })
+            simulateWithoutKey()
+            service.start()
+            service.onStarted()
+            const restriction = (service as any).getRideViewRestriction()
+            restriction.onNoticeClosed()
+
+            service.start()
+
+            expect(service.getDisplayProperties({ hideAll: false } as any).rideViewRestrictionNotice).toBeUndefined()
+        })
+
+        test('a change of the notice is forwarded as state-update', () => {
+            setupMocks(service, { mockRideService: true })
+            simulateWithoutKey()
+            service.start()
+            service.onStarted()
+            ;(service.emit as jest.Mock).mockClear()
+
+            ;(service as any).getRideViewRestriction().onNoticeClosed()
+
+            expect(service.emit).toHaveBeenCalledWith('state-update')
+        })
+
+        test('stop ends the restriction', async () => {
+            setupMocks(service, { mockRideService: true })
+            simulateWithoutKey()
+            service.start()
+            service.onStarted()
+
+            await service.stop()
+
+            const props = service.getDisplayProperties({ hideAll: false } as any)
+            expect(props.rideViewRestriction).toBeUndefined()
+            expect(props.rideViewRestrictionNotice).toBeUndefined()
+        })
+
+        test('picking street view in ride settings neither lifts the override nor releases street view', () => {
+            setupMocks(service, { mockRideService: true })
+            simulateWithoutKey()
+            service.start()
+            expect((service as any).getRideView()).toBe('map')
+            const release = jest.spyOn(service as any, 'release')
+
+            service.onRideSettingsChanged({ rideView: 'sv' })
+
+            expect(release).not.toHaveBeenCalled()
+            expect((service as any).rideViewOverride).toBe('map')
+            expect(service.getDisplayProperties({ hideAll: false } as any).rideView).toBe('map')
+        })
+
+        test('without a restriction, picking street view mid-ride still releases it', () => {
+            setupMocks(service, { mockRideService: true, userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? 'map' : def) })
+            service.start()
+            const release = jest.spyOn(service as any, 'release').mockImplementation(() => undefined)
+
+            service.onRideSettingsChanged({ rideView: 'sv' })
+
+            expect(release).toHaveBeenCalledWith('mid-ride')
         })
     })
 

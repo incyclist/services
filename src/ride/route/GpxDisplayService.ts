@@ -8,6 +8,7 @@ import { Route } from "../../routes/base/model/route";
 import { useRideSettingsDisplay } from "../../settings/display";
 import { RoutePoint } from "../../types";
 import { CurrentPosition, CurrentRideDisplayProps, GpxDisplayProps, RideViewType, RouteDisplayProps } from "../base";
+import { useRideViewRestriction } from "../view-restriction/service";
 import { RouteDisplayService } from "./RouteDisplayService";
 import { SatelliteViewEvent, StreetViewEvent, SvFallbackCause, SvViewState } from "./types";
 
@@ -114,6 +115,14 @@ export class GpxDisplayService extends RouteDisplayService {
     /** false while the current position has no imagery, true once imagery is shown again */
     protected svHasCoverage: boolean
 
+    /**
+     * Whether the ride view restriction (simulated ride without an active personal key) has been
+     * evaluated for this ride. It can only be evaluated in start(): isSimulated() is still false
+     * during init(), and start() is called again on retries.
+     */
+    protected restrictionEvaluated: boolean = false
+    protected restrictionChangedHandler = () => { this.emit('state-update') }
+
     protected svPhaseDelayTimeout: NodeJS.Timeout
     protected svSlowTimeout: NodeJS.Timeout
     protected svStartTimeout: NodeJS.Timeout
@@ -129,6 +138,7 @@ export class GpxDisplayService extends RouteDisplayService {
     protected initView() {
         try {
             this.tsInit = Date.now()
+            this.restrictionEvaluated = false
 
             const rideView = this.getRideView()
             if ( rideView==='sv') {
@@ -203,6 +213,49 @@ export class GpxDisplayService extends RouteDisplayService {
         }
 
         return props
+    }
+
+    /**
+     * Starts the ride and decides, once per ride, whether the ride view is restricted to the Map
+     * (see RideViewRestrictionService). This is the earliest point where isSimulated() is known.
+     */
+    start(): void {
+        super.start()
+        this.startViewRestriction()
+    }
+
+    protected startViewRestriction() {
+        if (this.restrictionEvaluated)
+            return
+        this.restrictionEvaluated = true
+
+        try {
+            const restriction = this.getRideViewRestriction()
+            restriction.beginRide({
+                simulated: this.service?.isSimulated()===true,
+                preferredView: this.getRideSettingsDisplay().getRideView()
+            })
+            // only one ride runs at a time: whoever starts last owns the notifications, so a ride
+            // that was torn down without stop() can not leave a stale listener behind
+            restriction.removeAllListeners('changed')
+            restriction.on('changed', this.restrictionChangedHandler)
+        }
+        /* istanbul ignore catch */
+        catch(err) {
+            this.logError(err,'startViewRestriction')
+        }
+    }
+
+    protected endViewRestriction() {
+        try {
+            const restriction = this.getRideViewRestriction()
+            restriction.off('changed', this.restrictionChangedHandler)
+            restriction.endRide()
+        }
+        /* istanbul ignore catch */
+        catch(err) {
+            this.logError(err,'endViewRestriction')
+        }
     }
 
     isSideViewsSupported():boolean {
@@ -411,10 +464,18 @@ export class GpxDisplayService extends RouteDisplayService {
         delete this.svCoverageNotice
         const svHasCoverage = this.svHasCoverage
 
+        // both keys are always present (undefined when not applicable), because the apps merge
+        // the props into their state and would otherwise keep a stale value
+        const restriction = this.getRideViewRestriction()
+        const rideViewRestriction = restriction.getActiveRestriction()
+        const rideViewRestrictionNotice = restriction.getNotice()
+
         return {
            rideView ,
            svInitAllowed: rideView==='sv' && this.svReleased,
            rideViewNotice,
+           rideViewRestriction,
+           rideViewRestrictionNotice,
            svCoverageNotice,
            svHasCoverage,
            ...routeProps
@@ -429,7 +490,7 @@ export class GpxDisplayService extends RouteDisplayService {
      */
     protected getRideView() {
 
-        if (this.service?.isSimulated() && !this.getGoogleMaps().hasPersonalApiKey()) {
+        if (this.getRideViewRestriction().getActiveRestriction()) {
             this.rideViewOverride = 'map'
             this.abandonStreetViewFlow()
         }
@@ -463,6 +524,11 @@ export class GpxDisplayService extends RouteDisplayService {
      */
     onRideSettingsChanged(settings:{rideView?:string} = {}): void {
         super.onRideSettingsChanged(settings)
+
+        // the restriction holds for the whole ride: picking a view must neither lift the Map
+        // override nor start a Street View flow that getRideView() would abandon right away
+        if (this.getRideViewRestriction().getActiveRestriction())
+            return
 
         if (this.rideViewOverride && settings?.rideView) {
             delete this.rideViewOverride
@@ -831,10 +897,12 @@ export class GpxDisplayService extends RouteDisplayService {
             this.release('start-completed')
 
         this.clearSatelliteViewStartTimeout()
+        this.getRideViewRestriction().onRideStarted()
         super.onStarted()
     }
 
     async stop(): Promise<void> {
+        this.endViewRestriction()
         this.clearStreetViewPhaseTimers()
         this.clearSatelliteViewStartTimeout()
         if (this.svFallbackHoldTimeout) {
@@ -948,6 +1016,11 @@ export class GpxDisplayService extends RouteDisplayService {
     @Injectable
     protected getRideSettingsDisplay() {
         return useRideSettingsDisplay()
+    }
+
+    @Injectable
+    protected getRideViewRestriction() {
+        return useRideViewRestriction()
     }
 
     @Injectable
