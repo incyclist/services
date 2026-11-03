@@ -9,9 +9,9 @@ describe('RideViewRestrictionService', () => {
     let settingsValues: Record<string, unknown>
     let channel: string
 
-    const UserSettingsMock = {
-        get: jest.fn((key: string, def: unknown) => settingsValues[key] ?? def),
-        set: jest.fn((key: string, value: unknown) => { settingsValues[key] = value }),
+    const AppStateMock = {
+        getPersistedState: jest.fn((key: string) => settingsValues[key]),
+        setPersistedState: jest.fn((key: string, value: unknown) => { settingsValues[key] = value }),
     }
     const GoogleMapsMock = {
         hasActivePersonalApiKey: jest.fn(),
@@ -31,14 +31,14 @@ describe('RideViewRestrictionService', () => {
         GoogleMapsMock.hasActivePersonalApiKey.mockReturnValue(false)
         GoogleMapsMock.isPersonalApiKeyPendingRestart.mockReturnValue(false)
         service = new RideViewRestrictionService()
-        Inject('UserSettings', UserSettingsMock)
+        Inject('AppState', AppStateMock)
         Inject('GoogleMaps', GoogleMapsMock)
         Inject('Bindings', BindingsMock)
     })
 
     afterEach(() => {
         (service as unknown as { reset: () => void }).reset()
-        Inject('UserSettings', null)
+        Inject('AppState', null)
         Inject('GoogleMaps', null)
         Inject('Bindings', null)
         jest.clearAllMocks()
@@ -116,7 +116,7 @@ describe('RideViewRestrictionService', () => {
         test.each([
             ['preferred view is map', true, 'map', {}],
             ['not simulated', false, 'sv', {}],
-            ['reminder switched off', true, 'sv', { 'hints.simulatedRideView': true }],
+            ['reminder switched off', true, 'sv', { 'simulatedRideViewNoticeOff': true }],
         ])('not shown if %s', (_name, simulated, view, settings) => {
             settingsValues = { ...settings }
             begin(simulated as boolean, view as 'sv' | 'map')
@@ -150,7 +150,7 @@ describe('RideViewRestrictionService', () => {
             service.onRideStarted()
             service.onNoticeAction('dont-show-again')
 
-            expect(UserSettingsMock.set).toHaveBeenCalledWith('hints.simulatedRideView', true)
+            expect(AppStateMock.setPersistedState).toHaveBeenCalledWith('simulatedRideViewNoticeOff', true)
             expect(service.isReminderEnabled()).toBe(false)
             expect(service.getNotice()).toMatchObject({
                 state: 'acknowledged',
@@ -160,7 +160,7 @@ describe('RideViewRestrictionService', () => {
         })
 
         test('acknowledgement is shown even if the setting could not be written', () => {
-            UserSettingsMock.set.mockImplementationOnce(() => { throw new Error('disk full') })
+            AppStateMock.setPersistedState.mockImplementationOnce(() => { throw new Error('disk full') })
             begin()
             service.onRideStarted()
             service.onNoticeAction('dont-show-again')
@@ -230,17 +230,17 @@ describe('RideViewRestrictionService', () => {
 
         test('setReminderEnabled(false) writes true to the hint', () => {
             service.setReminderEnabled(false)
-            expect(UserSettingsMock.set).toHaveBeenCalledWith('hints.simulatedRideView', true)
+            expect(AppStateMock.setPersistedState).toHaveBeenCalledWith('simulatedRideViewNoticeOff', true)
         })
 
         test('setReminderEnabled(true) writes false to the hint', () => {
             service.setReminderEnabled(true)
-            expect(UserSettingsMock.set).toHaveBeenCalledWith('hints.simulatedRideView', false)
+            expect(AppStateMock.setPersistedState).toHaveBeenCalledWith('simulatedRideViewNoticeOff', false)
             expect(service.isReminderEnabled()).toBe(true)
         })
 
         test('does not throw if the setting can not be written', () => {
-            UserSettingsMock.set.mockImplementationOnce(() => { throw new Error('disk full') })
+            AppStateMock.setPersistedState.mockImplementationOnce(() => { throw new Error('disk full') })
             expect(() => service.setReminderEnabled(false)).not.toThrow()
         })
     })
@@ -288,7 +288,7 @@ describe('RideViewRestrictionService', () => {
         })
 
         test('reminder reflects the stored setting', () => {
-            settingsValues['hints.simulatedRideView'] = true
+            settingsValues['simulatedRideViewNoticeOff'] = true
             begin()
             expect(service.getDialogProps({ inRide: true }).reminder.checked).toBe(false)
         })

@@ -4,7 +4,7 @@ import { useGoogleMaps } from '../../apps/googleMaps/service'
 import { Injectable } from '../../base/decorators'
 import { IncyclistService } from '../../base/service'
 import { Singleton } from '../../base/types'
-import { useUserSettings } from '../../settings/service'
+import { useAppState } from '../../appstate/service'
 import {
     RideViewDeviceOption, RideViewNoticeActionId, RideViewOwnKeyOption, RideViewRestriction,
     RideViewRestrictionDialogProps, RideViewRestrictionNoticeProps, RideViewRestrictionStartProps
@@ -12,7 +12,8 @@ import {
 
 // English-only for now - no i18n system exists yet. Which text the rider sees is a WHAT decision,
 // so it lives here in services and not in the apps (precedent: UNAVAILABLE_MESSAGES).
-const HINT_KEY = 'hints.simulatedRideView'
+// persisted app state: true = the notice is switched off
+const NOTICE_OFF_STATE_KEY = 'simulatedRideViewNoticeOff'
 const DIALOG_TITLE = 'Street View in simulated rides'
 const DIALOG_BODY = 'Street View and Satellite View use Google Maps, and Google charges Incyclist for every ride that uses them. To keep Incyclist free, these views come with rides on a connected device. A simulated ride shows the Map instead.'
 const DEVICE_TEXT = 'Connect your smart trainer, power meter or speed sensor before you start. Street View then works as usual.'
@@ -137,13 +138,13 @@ export class RideViewRestrictionService extends IncyclistService {
 
     /** Is the notice shown in simulated rides? */
     isReminderEnabled(): boolean {
-        return this.getUserSettings().get(HINT_KEY, false) !== true
+        return this.getAppState().getPersistedState(NOTICE_OFF_STATE_KEY) !== true
     }
 
     /** Switches the notice on or off for all following simulated rides */
     setReminderEnabled(enabled: boolean): void {
         try {
-            this.getUserSettings().set(HINT_KEY, !enabled)
+            this.getAppState().setPersistedState(NOTICE_OFF_STATE_KEY, !enabled)
         }
         catch (err) {
             this.logError(err, 'setReminderEnabled')
@@ -206,8 +207,8 @@ export class RideViewRestrictionService extends IncyclistService {
     }
 
     @Injectable
-    protected getUserSettings() {
-        return useUserSettings()
+    protected getAppState() {
+        return useAppState()
     }
 
     @Injectable
