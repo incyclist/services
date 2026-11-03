@@ -323,6 +323,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     onRideViewNoticeAction(id:RideViewNoticeActionId):void {
         try {
             this.getRideViewRestriction().onNoticeAction(id)
+            this.observer?.emit('overlay-update', this.getDisplayProperties())
         }
         catch(err) {
             this.logError(err,'onRideViewNoticeAction')
@@ -333,6 +334,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     onRideViewNoticeClosed():void {
         try {
             this.getRideViewRestriction().onNoticeClosed()
+            this.observer?.emit('overlay-update', this.getDisplayProperties())
         }
         catch(err) {
             this.logError(err,'onRideViewNoticeClosed')

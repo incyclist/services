@@ -716,6 +716,18 @@ describe('RideDisplayService', () => {
             expect(restriction.onNoticeClosed).toHaveBeenCalled()
         })
 
+        test('pushes the new display properties to the UI after a notice action or close', () => {
+            const emit = jest.fn()
+            service.observer = { emit }
+            service.getDisplayProperties = jest.fn().mockReturnValue({ rideViewRestrictionNotice: undefined })
+
+            service.onRideViewNoticeAction('dont-show-again')
+            service.onRideViewNoticeClosed()
+
+            expect(emit).toHaveBeenCalledTimes(2)
+            expect(emit).toHaveBeenCalledWith('overlay-update', { rideViewRestrictionNotice: undefined })
+        })
+
         test('forwards the reminder setting', () => {
             service.setRideViewReminder(false)
 
