@@ -12,6 +12,7 @@ import { MapViewPort, StreetViewEvent, SvFallbackCause } from "../route/types"
 import { LatLng } from "../../utils/geo"
 import { Unit } from "../../i18n"
 import { IObserver } from "../../types"
+import type { RideViewRestriction, RideViewRestrictionNoticeProps } from "../view-restriction/types"
 
 export type RideType = 'Free-Ride' | 'GPX' | 'Video' | 'Workout'
 
@@ -125,6 +126,12 @@ export interface GpxDisplayProps extends RouteDisplayProps {
     svInitAllowed?: boolean
     /** set once, right after an automatic Street View start fallback. Cleared after being read. */
     rideViewNotice?: {cause: SvFallbackCause}
+    /** why the ride is limited to the Map for the whole ride (simulated ride without an active personal
+     *  key). Always present in the display props, undefined when there is no restriction. */
+    rideViewRestriction?: RideViewRestriction
+    /** one-time explanation of the restriction. Not consumed by reading - the app reports back when it
+     *  was acted on or closed. Always present in the display props, undefined when nothing is to be shown. */
+    rideViewRestrictionNotice?: RideViewRestrictionNoticeProps
     /** set every time Street View answers with no imagery at the current position (start or
      *  mid-ride) - never a fallback, just a transient "no coverage here" notice. Cleared after
      *  being read. */

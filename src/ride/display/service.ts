@@ -26,6 +26,8 @@ import { FreeRideOption } from "../../routes/list/types";
 import { RLVDisplayService } from "../route/RLVDisplayService";
 import { ActivityUpdate } from "../../activities/ride/types";
 import { getCoachesService } from "../../coaches";
+import { useRideViewRestriction } from "../view-restriction/service";
+import { RideViewNoticeActionId, RideViewRestrictionDialogProps } from "../view-restriction/types";
 
 @Singleton
 export class RideDisplayService extends IncyclistService implements ICurrentRideService {
@@ -47,6 +49,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected isResuming: boolean
     //protected prevRides: PrevRidesListDisplayProps
     protected stateUpdateHandler = this.onStateUpdate.bind(this)
+    /** a discard is running: a second request (e.g. a double click) must not run it again */
+    protected discarding = false
     /** guards the one-time RideModeService.onStartDevicesReady() call */
     protected controlDevicesReadyNotified: boolean = false
 
@@ -283,6 +287,85 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.getActivityRide().cleanup().catch( err=>{ this.logError(err,'stop') })
         this.getCoaches().stopRide().catch( err=>{ this.logError(err,'stop') })
 
+    }
+
+    /**
+     * Throws a simulated ride away: the activity is deleted (no summary, nothing was uploaded),
+     * the ride is stopped and the route/start settings/workout of the ride are selected again, so
+     * that the rider can continue with the Pairing screen for the same ride.
+     *
+     * Never touches a ride on a real device.
+     *
+     * @returns true if the ride was discarded and its selection restored. If false, the caller
+     * should navigate to the page the ride was started from instead of Pairing.
+     */
+    async discardSimulatedRide(): Promise<boolean> {
+        if (this.discarding)
+            return false
+
+        try {
+            if (!this.isSimulated()) {
+                this.logError(new Error('not a simulated ride'),'discardSimulatedRide')
+                return false
+            }
+            this.discarding = true
+
+            const selection = this.getRideSelection()
+
+            // the activity has to be deleted first: stopping the ride would unselect route and
+            // workout, and deleting a stopped ride is a no-op
+            await this.deleteActivityOnDiscard()
+            await this.stop()
+
+            const restored = this.restoreRideSelection(selection)
+            this.logEvent({ message: 'simulated ride discarded', restored })
+            return restored
+        }
+        catch(err) {
+            this.logError(err,'discardSimulatedRide')
+            return false
+        }
+        finally {
+            this.discarding = false
+        }
+    }
+
+    /** The notice of a restricted ride was acted on */
+    onRideViewNoticeAction(id:RideViewNoticeActionId):void {
+        try {
+            this.getRideViewRestriction().onNoticeAction(id)
+            this.observer?.emit('overlay-update', this.getDisplayProperties())
+        }
+        catch(err) {
+            this.logError(err,'onRideViewNoticeAction')
+        }
+    }
+
+    /** The notice of a restricted ride was closed (✕ or timeout) */
+    onRideViewNoticeClosed():void {
+        try {
+            this.getRideViewRestriction().onNoticeClosed()
+            this.observer?.emit('overlay-update', this.getDisplayProperties())
+        }
+        catch(err) {
+            this.logError(err,'onRideViewNoticeClosed')
+        }
+    }
+
+    /** Switches the notice for restricted rides on or off */
+    setRideViewReminder(enabled:boolean):void {
+        try {
+            this.getRideViewRestriction().setReminderEnabled(enabled)
+        }
+        catch(err) {
+            this.logError(err,'setRideViewReminder')
+        }
+    }
+
+    /** Content of the dialog that explains the restriction of the ride view */
+    getRideViewRestrictionDialogProps():RideViewRestrictionDialogProps {
+        const inRide = this.isSimulated() && (this.state==='Started' || this.state==='Active' || this.state==='Paused')
+        return this.getRideViewRestriction().getDialogProps({inRide})
     }
 
     toggleCyclingMode() {
@@ -595,6 +678,45 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
 
 
+
+    protected getRideSelection() {
+        const routeList = this.getRouteList()
+        return {
+            route: routeList.getSelected(),
+            startSettings: routeList.getStartSettings(),
+            workout: this.getWorkoutList().getSelected()
+        }
+    }
+
+    protected async deleteActivityOnDiscard():Promise<void> {
+        try {
+            await this.getActivityRide().delete()
+        }
+        catch(err) {
+            // the rider must not be trapped in the ride: a left-over activity can still be deleted from the list
+            this.logError(err,'discardSimulatedRide')
+        }
+    }
+
+    protected restoreRideSelection( selection:ReturnType<RideDisplayService['getRideSelection']> ):boolean {
+        try {
+            const { route, startSettings, workout } = selection
+            const routeList = this.getRouteList()
+
+            // a free ride has no selected route, only start settings
+            if (route)
+                routeList.select(route)
+            if (startSettings)
+                routeList.setStartSettings(startSettings)
+            if (workout)
+                this.getWorkoutList().select(workout)
+            return true
+        }
+        catch(err) {
+            this.logError(err,'discardSimulatedRide')
+            return false
+        }
+    }
 
     protected setState(state:CurrentRideState) {        
         this.state = state
@@ -1523,6 +1645,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     @Injectable
     protected getCoaches() {
         return getCoachesService()
+    }
+
+    @Injectable
+    protected getRideViewRestriction() {
+        return useRideViewRestriction()
     }
 
     @Injectable

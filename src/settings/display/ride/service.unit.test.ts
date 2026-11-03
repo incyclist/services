@@ -1,3 +1,4 @@
+import { Inject } from '../../../base/decorators'
 import { RideSettingsDisplayService } from './service'
 import { AvailabilityResult } from '../../../api/mapAvailability/types'
 
@@ -9,6 +10,7 @@ describe('RideSettingsDisplayService', () => {
         service = new RideSettingsDisplayService()
         ;(service as any).getUserSettings = jest.fn().mockReturnValue({
             get: jest.fn().mockReturnValue(props.rideView ?? 'sv'),
+            getValue: jest.fn().mockReturnValue(false),
             set: jest.fn()
         })
         ;(service as any).getBindings = jest.fn().mockReturnValue({
@@ -137,6 +139,86 @@ describe('RideSettingsDisplayService', () => {
         test('non-mobile: binding always undefined, behavior unchanged', () => {
             setup({ rideView: 'sat', mapAvailability: undefined, isMobile: false })
             expect(service.getRideView()).toBe('sat')
+        })
+    })
+
+    describe('ride view restriction', () => {
+
+        const restrictionMock = { getActiveRestriction: jest.fn() }
+
+        const restrict = (preferredView: 'sv' | 'sat' | 'map' = 'sv') => {
+            restrictionMock.getActiveRestriction.mockReturnValue({ cause: 'simulation', preferredView })
+        }
+
+        beforeEach(() => {
+            Inject('RideViewRestriction', restrictionMock)
+        })
+
+        afterEach(() => {
+            Inject('RideViewRestriction', null)
+            restrictionMock.getActiveRestriction.mockReset()
+        })
+
+        test('no restriction: all options enabled, no help', () => {
+            setup({})
+            const props = service.getDisplayProps()
+
+            expect(props.rideViewOptions.get('sv')).toEqual({ label: 'Street View' })
+            expect(props.rideViewOptions.get('sat')).toEqual({ label: 'Satellite View' })
+            expect(props.rideViewHelp).toBeUndefined()
+            expect(props.rideView).toBe('sv')
+        })
+
+        test('restricted: street view and satellite view are disabled with the reason, map stays enabled', () => {
+            setup({})
+            restrict()
+
+            const res = service.getRideViewOptions()
+
+            const expected = { disabled: true, message: 'Not available in simulated rides', reason: 'simulation' }
+            expect(res.get('sv')).toEqual({ label: 'Street View', ...expected })
+            expect(res.get('sat')).toEqual({ label: 'Satellite View', ...expected })
+            expect(res.get('map')).toEqual({ label: 'Map' })
+        })
+
+        test('restricted: map is reported as the selected view and help is offered', () => {
+            setup({ rideView: 'sat' })
+            restrict('sat')
+
+            const props = service.getDisplayProps()
+
+            expect(props.rideView).toBe('map')
+            expect(props.rideViewHelp).toEqual({ label: 'How to get Satellite View' })
+        })
+
+        test('restricted with map preference: help refers to street view', () => {
+            setup({ rideView: 'map' })
+            restrict('map')
+
+            expect(service.getDisplayProps().rideViewHelp).toEqual({ label: 'How to get Street View' })
+        })
+
+        test('getRideView() still reports the saved preference (it is the input of the restriction)', () => {
+            setup({ rideView: 'sv' })
+            restrict()
+
+            expect(service.getRideView()).toBe('sv')
+        })
+
+        test('platform unavailability takes precedence over the restriction', () => {
+            setup({ mapAvailability: { isAvailable: () => ({ status: 'unavailable', messageKey: 'need.playservices' }) } })
+            restrict()
+
+            expect(service.getRideViewOptions().get('sv')).toEqual({
+                label: 'Street View', disabled: true, message: 'Install Google Play Services to use this view'
+            })
+        })
+
+        test('not-supported options stay removed', () => {
+            setup({ mapAvailability: { isAvailable: () => ({ status: 'not-supported' }) } })
+            restrict()
+
+            expect(service.getRideViewOptions().has('sv')).toBe(false)
         })
     })
 

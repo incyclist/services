@@ -2,6 +2,7 @@ import { getBindings } from "../../../api";
 import { Injectable, Singleton } from "../../../base/decorators";
 import { IncyclistService } from "../../../base/service";
 import { Observer } from "../../../base/types";
+import { useRideViewRestriction } from "../../../ride/view-restriction/service";
 import { IObserver } from "../../../types";
 import { UserSettingsService, useUserSettings } from "../../service";
 import { RideSettingsDisplayProps, TRideView, TRideViewOption, TVideoOption } from "./types";
@@ -12,6 +13,7 @@ const UNAVAILABLE_MESSAGES: Record<string,string> = {
     'need.playservices': 'Install Google Play Services to use this view',
 }
 const DEFAULT_UNAVAILABLE_MESSAGE = 'This view is currently unavailable on your device'
+const SIMULATION_MESSAGE = 'Not available in simulated rides'
 
 @Singleton
 export class RideSettingsDisplayService extends IncyclistService {
@@ -40,12 +42,20 @@ export class RideSettingsDisplayService extends IncyclistService {
     }
 
 
-    getDisplayProps():RideSettingsDisplayProps { 
-        return {
-            rideView: this.getRideView(),
+    getDisplayProps():RideSettingsDisplayProps {
+        const restriction = this.getRideViewRestriction().getActiveRestriction()
+
+        const props:RideSettingsDisplayProps = {
+            // while restricted, the Map is what is in effect - the saved preference stays untouched
+            rideView: restriction ? 'map' : this.getRideView(),
             rideViewOptions:  this.getRideViewOptions(),
             ...this.getVideoOptions()
-        }        
+        }
+        if (restriction) {
+            const view = restriction.preferredView === 'sat' ? 'Satellite View' : 'Street View'
+            props.rideViewHelp = { label: `How to get ${view}` }
+        }
+        return props
     }
 
     setRideView(rideView:TRideView) {
@@ -114,6 +124,11 @@ export class RideSettingsDisplayService extends IncyclistService {
             return
         }
 
+        if (this.getRideViewRestriction().getActiveRestriction()) {
+            map.set(key,{label, disabled:true, message:SIMULATION_MESSAGE, reason:'simulation'})
+            return
+        }
+
         map.set(key,{label})
     }
 
@@ -126,6 +141,12 @@ export class RideSettingsDisplayService extends IncyclistService {
     }
     protected isIOS() {
         return this.getBindings().appInfo?.getOS()?.platform==='ios'
+    }
+
+    /* istanbul ignore next */
+    @Injectable
+    protected getRideViewRestriction() {
+        return useRideViewRestriction()
     }
 
     /* istanbul ignore next */

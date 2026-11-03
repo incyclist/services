@@ -42,6 +42,7 @@ import { getNextVideoId } from "../../routes/base/utils/route";
 import type { Route } from "../../routes/base/model/route";
 import type { VideoDisplayProps } from "../base/types";
 import type { RouteVideoState } from "../../routes/video-availability/types";
+import type { RideViewNoticeActionId, RideViewRestrictionDialogProps } from "../view-restriction/types";
 
 const BACKGROUND_PAUSE_TIMEOUT_MS = 300000
 const UPCOMING_STEPS_COUNT = 3
@@ -101,6 +102,8 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     // this-ride-only suppression of the gesture-hint overlay (reset on every openPage()) -
     // distinct from the persisted hints.workoutRideGestures flag, which suppresses it forever.
     protected gestureHintDismissed = false
+    /** content of the dialog that explains the ride view restriction, null while it is closed */
+    protected rideViewRestrictionDialog: RideViewRestrictionDialogProps | null = null
 
     // Set once buildPrevRides() first returns a non-empty row set - closes the "prevRides stays
     // hidden until an unrelated page-update happens" gap (ActivityRideService's own list is
@@ -200,6 +203,7 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             EventLogger.setGlobalConfig('page', pageLogName)
 
             this.gestureHintDismissed = false
+            this.rideViewRestrictionDialog = null
             this.prevRidesShown = false
             this.nearbyRidersSubscribed = false
             this.videoVisit = { started: false, routeIds: [], exitHandled: false }
@@ -286,6 +290,9 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             return
 
         try {
+            // a dialog of this ride must not show up at the start of the next one
+            this.rideViewRestrictionDialog = null
+
             EventLogger.setGlobalConfig('page', null)
             this.logEvent({ message: 'page closed', page: this.getPageLogName() })
 
@@ -629,9 +636,84 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
             svInitAllowed: props.svInitAllowed,
             rideViewNotice: props.rideViewNotice,
             svCoverageNotice: props.svCoverageNotice,
-            svHasCoverage: props.svHasCoverage
+            svHasCoverage: props.svHasCoverage,
+            rideViewRestriction: props.rideViewRestriction,
+            rideViewRestrictionNotice: this.canShowRideViewRestrictionNotice(base) ? props.rideViewRestrictionNotice : undefined,
+            rideViewRestrictionDialog: this.rideViewRestrictionDialog
         }
         return displayProps
+    }
+
+    // At most one start-of-ride message at a time: the gesture hint goes first. The notice is not
+    // consumed by reading, so it arrives intact once the hint is gone.
+    protected canShowRideViewRestrictionNotice(base: ReturnType<RidePageService['buildBaseDisplayProps']>): boolean {
+        return !base.startOverlayProps && !base.gestureHint
+    }
+
+    onRideViewNoticeAction(id: RideViewNoticeActionId): void {
+        try {
+            this.getRideDisplay().onRideViewNoticeAction(id)
+            if (id === 'how-to' || id === 'change-this')
+                this.openRideViewRestrictionDialog()
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onRideViewNoticeAction')
+        }
+    }
+
+    onRideViewNoticeClosed(): void {
+        try {
+            this.getRideDisplay().onRideViewNoticeClosed()
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onRideViewNoticeClosed')
+        }
+    }
+
+    onOpenRideViewRestrictionDialog(): void {
+        try {
+            this.openRideViewRestrictionDialog()
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onOpenRideViewRestrictionDialog')
+        }
+    }
+
+    onCloseRideViewRestrictionDialog(): void {
+        this.rideViewRestrictionDialog = null
+        this.updatePageDisplay()
+    }
+
+    onRideViewReminderChanged(enabled: boolean): void {
+        try {
+            this.getRideDisplay().setRideViewReminder(enabled)
+            // the dialog shows the stored value
+            if (this.rideViewRestrictionDialog)
+                this.openRideViewRestrictionDialog()
+            this.updatePageDisplay()
+        }
+        catch (err: any) {
+            this.logError(err, 'onRideViewReminderChanged')
+        }
+    }
+
+    async onDiscardSimulatedRide(): Promise<void> {
+        try {
+            this.rideViewRestrictionDialog = null
+            const discarded = await this.getRideDisplay().discardSimulatedRide()
+            // moveTo() also closes the page, which stops the (already stopped) ride like onEndRide() does
+            this.moveTo(discarded ? '/pairingStart' : '$contentPage')
+        }
+        catch (err: any) {
+            this.logError(err, 'onDiscardSimulatedRide')
+        }
+    }
+
+    protected openRideViewRestrictionDialog(): void {
+        this.rideViewRestrictionDialog = this.getRideDisplay().getRideViewRestrictionDialogProps()
     }
 
     /**
@@ -1796,6 +1878,10 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
     }
 
     protected onDisplayStateUpdate(state: CurrentRideState) {
+        // a ride that ended by itself must not leave a dialog behind that offers to discard it
+        if (this.rideViewRestrictionDialog && state !== 'Started' && state !== 'Active' && state !== 'Paused')
+            this.rideViewRestrictionDialog = null
+
         // The workout observer may only become available once the ride is actually running -
         // (re-)subscribe here in addition to onRideHandlersRegistered's initial attempt.
         this.subscribeToWorkoutObserver()

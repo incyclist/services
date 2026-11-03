@@ -6,6 +6,7 @@ import type { LoadButtonMode, PowerAdjustmentResult } from "../../workouts/ride/
 import type { WorkoutGraphPlanBar } from "../../workouts/base/graph/types"
 import type { Avatar } from "../../avatars"
 import type { ActiveRideListAvatar } from "../../activities"
+import type { RideViewNoticeActionId, RideViewRestriction, RideViewRestrictionDialogProps, RideViewRestrictionNoticeProps } from "../view-restriction/types"
 
 
 export interface StartGateProps {
@@ -182,6 +183,14 @@ export interface GPXRidePageDisplayProps extends RidePageDisplayProps {
     svCoverageNotice?: {ts: number}
     /** false while there is no imagery at the current position, true once imagery is back */
     svHasCoverage?: boolean
+    /** why the ride is limited to the Map (simulated ride without an active personal key) */
+    rideViewRestriction?: RideViewRestriction
+    /** explanation of that restriction. Only present once nothing else (start overlay, gesture hint)
+     *  is competing for attention, and not consumed by reading - report back through
+     *  onRideViewNoticeAction() / onRideViewNoticeClosed(). */
+    rideViewRestrictionNotice?: RideViewRestrictionNoticeProps
+    /** content of the dialog that explains the restriction, null while it is closed */
+    rideViewRestrictionDialog?: RideViewRestrictionDialogProps | null
 }
 
 // Union for consumers that need to handle all ride types. RidePageDisplayProps itself already
@@ -209,6 +218,16 @@ interface RidePageCallbacks {
     onEndRide     ():void
     onRefreshSecrets(): void
     onContinueAnyway(): void
+
+    // Simulated ride without personal Maps key: the ride view is limited to the Map
+    onRideViewNoticeAction(id: RideViewNoticeActionId): void
+    onRideViewNoticeClosed(): void
+    /** opens the explanation dialog (e.g. from the link below the ride view selector) */
+    onOpenRideViewRestrictionDialog(): void
+    onCloseRideViewRestrictionDialog(): void
+    onRideViewReminderChanged(enabled: boolean): void
+    /** deletes the simulated ride and continues with the Pairing screen for the same ride */
+    onDiscardSimulatedRide(): Promise<void>
 
     // Workout ride callbacks
     onStop        (): void
