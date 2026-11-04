@@ -79,6 +79,50 @@ describe('FreeRideService', () => {
         })
     })
 
+    describe('ensureInitialized', () => {
+
+        test('retries when an earlier attempt failed and the map is available again', async () => {
+            load.mockResolvedValue(undefined)   // overpass down: MapArea.load() resolves without a map
+            await service.selectStartPosition()
+            expect(service.isInitialized()).toBe(false)
+
+            load.mockResolvedValue(map)         // overpass back up
+            const res = await service.ensureInitialized()
+
+            expect(res).toBe(true)
+            expect(service.isInitialized()).toBe(true)
+        })
+
+        test('returns false if the map still can not be loaded', async () => {
+            load.mockResolvedValue(undefined)
+
+            expect(await service.ensureInitialized()).toBe(false)
+            expect(service.isInitialized()).toBe(false)
+        })
+
+        test('returns false if loading the map throws', async () => {
+            load.mockRejectedValue(new Error('overpass not available'))
+
+            expect(await service.ensureInitialized()).toBe(false)
+        })
+
+        test('does not reload the map if already initialized', async () => {
+            await service.selectStartPosition()
+            load.mockClear()
+
+            expect(await service.ensureInitialized()).toBe(true)
+            expect(load).not.toHaveBeenCalled()
+        })
+
+        test('shares one attempt between concurrent calls', async () => {
+            load.mockResolvedValue(undefined)
+
+            await Promise.all([service.ensureInitialized(), service.ensureInitialized()])
+
+            expect(load).toHaveBeenCalledTimes(1)
+        })
+    })
+
     describe('start options', () => {
 
         test('default position offers North and South as start options', async () => {
