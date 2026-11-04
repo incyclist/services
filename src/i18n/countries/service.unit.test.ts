@@ -145,4 +145,27 @@ describe('Countries', () => {
         })
     })
 
+    describe('getIsoFromLatLng', () => {
+        const getCountry = jest.fn()
+
+        beforeEach(() => {
+            service = new Countries()
+            Inject('IncyclistRoutesApi', { create: jest.fn().mockReturnValue({ getCountry }) })
+        })
+
+        afterEach(() => {
+            Inject('IncyclistRoutesApi', null)
+            jest.clearAllMocks()
+        })
+
+        test('delegates to the injected routes api', async () => {
+            getCountry.mockResolvedValue('FR')
+
+            const result = await service.getIsoFromLatLng({ lat: 48.8566, lng: 2.3522 })
+
+            expect(result).toBe('FR')
+            expect(getCountry).toHaveBeenCalledWith({ lat: 48.8566, lng: 2.3522 })
+        })
+    })
+
 })
