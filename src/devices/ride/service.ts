@@ -1330,7 +1330,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     protected stopHealthChecks(udid?:string) {
-        for (const ai of [...this.healthChecks]) {
+        for (const ai of this.healthChecks) {
             if (!udid || ai.udid===udid)
                 this.stopHealthCheck(ai)
         }
