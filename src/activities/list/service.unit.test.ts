@@ -802,9 +802,24 @@ describe('ActivityListService',()=>{
             const success = await service.export('fit')
             expect(success).toBe(false)
             expect(target.export).toHaveBeenCalledWith('fit',expect.any(Observer))
-            expect(updatedSpy).toHaveBeenCalledTimes(2)            
-        })    
-    })    
+            expect(updatedSpy).toHaveBeenCalledTimes(2)
+        })
+
+        test('selection closed while export is running',async ()=>{
+            const target = service.getSelected()
+            target.export = jest.fn( async (format:string,observer:Observer):Promise<boolean> => {
+                observer.emit('export',{status:'started',format})
+                await waitNextTick()
+                service.closeSelected()
+                observer.emit('export',{status:'done',format,success:true})
+                return true
+            })
+
+            const success = await service.export('tcx')
+            expect(success).toBe(true)
+            expect(service.getSelected()).toBeNull()
+        })
+    })
 
     describe('upload',()=>{
 
@@ -873,6 +888,23 @@ describe('ActivityListService',()=>{
             expect(success).toBe(false)
             expect(target.upload).toHaveBeenCalledWith('strava',expect.any(Observer))
             expect(updatedSpy).toHaveBeenCalledTimes(2)
+        })
+
+        test('selection closed while upload is running',async ()=>{
+            const target = service.getSelected()
+            target.upload = jest.fn( async (connectedApp:string,observer:Observer):Promise<boolean> => {
+                observer.emit('upload',{status:'started',connectedApp})
+                await waitNextTick()
+                service.closeSelected()
+                observer.emit('upload',{status:'update',connectedApp})
+                observer.emit('export',{status:'done',format:'tcx',success:true})
+                observer.emit('upload',{status:'done',connectedApp,success:true})
+                return true
+            })
+
+            const success = await service.upload('strava')
+            expect(success).toBe(true)
+            expect(service.getSelected()).toBeNull()
         })
     })
 
