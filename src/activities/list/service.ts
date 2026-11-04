@@ -422,9 +422,8 @@ export class ActivityListService extends IncyclistService {
 
         return new Promise( done => {
             const emitUpdate = async (update:{status:'started'|'done', format:string, success:boolean, error:string} )=>{
-                
-                this.exports = await this.selected.getExports()
-                this.emitSelected('updated')
+
+                await this.refreshExports()
                 if (update.status==='done')
                     done(update.success)
             }
@@ -455,9 +454,8 @@ export class ActivityListService extends IncyclistService {
                     }
                 }
             }
-            const emitExportUpdate = async (update:{status:'started'|'done', format:string, success:boolean, error:string} )=>{                
-                this.exports = await this.selected.getExports()
-                this.emitSelected('updated')
+            const emitExportUpdate = async ()=>{
+                await this.refreshExports()
             }
 
             const observer = new Observer()
@@ -680,8 +678,24 @@ export class ActivityListService extends IncyclistService {
         return props;
     }
 
-    protected emitSelected(event:'loaded'|'updated') { 
-        
+    // reloads the exports of the selected activity and notifies the UI; no-op if the selection was closed meanwhile
+    private async refreshExports():Promise<void> {
+        const selected = this.selected
+        if (!selected)
+            return
+
+        const exports = await selected.getExports()
+        if (!this.selected)
+            return
+
+        this.exports = exports
+        this.emitSelected('updated')
+    }
+
+    protected emitSelected(event:'loaded'|'updated') {
+        if (!this.selected)
+            return
+
         const displayProps =this.getSelectedActivityDisplayProps()
         this.getObserver()?.emit(event, displayProps)                
     }
