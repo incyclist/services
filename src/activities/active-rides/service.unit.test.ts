@@ -263,6 +263,127 @@ describe('ActiveRides',()=>{
             expect(observerEmit).toHaveBeenCalledWith('update', s.getDisplayProps())
         })
 
+        describe('unresolved remote rider', () => {
+            const payload = {
+                position:{lat:1,lng:2,elevation:3,slope:4},
+                rideDistance: 100,
+                speed: 20, power: 150, cadence: 80, heartrate: 120, lap: 1, duration: 30
+            }
+            let api: { getBySessionId: jest.Mock }
+            let now: number
+
+            beforeEach(() => {
+                api = { getBySessionId: jest.fn().mockResolvedValue([]) }
+                Inject('IncyclistActiveRidesApi', api)
+                now = 1_000_000
+                jest.spyOn(Date, 'now').mockImplementation(() => now)
+            })
+
+            afterEach(() => {
+                Inject('IncyclistActiveRidesApi', undefined)
+                jest.restoreAllMocks()
+            })
+
+            const prepare = () => {
+                service = useActiveRides()
+                setupMocks(service)
+                const s:any = service
+                setupService(s)
+                s.others = []
+                s.logEvent = jest.fn()
+                return s
+            }
+
+            test('sequential updates trigger a single lookup', async () => {
+                const s = prepare()
+                for (let i=0;i<5;i++) {
+                    await s.onActivityUpdateEvent('REMOTE', payload)
+                }
+                expect(api.getBySessionId).toHaveBeenCalledTimes(1)
+            })
+
+            test('concurrent updates share one lookup', async () => {
+                const s = prepare()
+                await Promise.all([
+                    s.onActivityUpdateEvent('REMOTE', payload),
+                    s.onActivityUpdateEvent('REMOTE', payload)
+                ])
+                expect(api.getBySessionId).toHaveBeenCalledTimes(1)
+            })
+
+            test('concurrent burst leaves a single entry for the session', async () => {
+                const s = prepare()
+                await Promise.all(Array.from({length:8}, () => s.onActivityUpdateEvent('REMOTE', payload)))
+                expect(s.others.filter((o:any)=>o.sessionId==='REMOTE')).toHaveLength(1)
+            })
+
+            test('only the add is logged as joined', async () => {
+                const s = prepare()
+                await Promise.all(Array.from({length:4}, () => s.onActivityUpdateEvent('REMOTE', payload)))
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                expect(s.logEvent).toHaveBeenCalledTimes(1)
+            })
+
+            test('live data is applied to an unresolved entry', async () => {
+                const s = prepare()
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                await s.onActivityUpdateEvent('REMOTE', {...payload, power:300})
+                expect(s.others[0].currentPower).toBe(300)
+            })
+
+            test('retries after the backoff period, with growing delay', async () => {
+                const s = prepare()
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                now += 29_000
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                expect(api.getBySessionId).toHaveBeenCalledTimes(1)
+
+                now += 2_000
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                expect(api.getBySessionId).toHaveBeenCalledTimes(2)
+
+                // second delay is longer than the first
+                now += 31_000
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                expect(api.getBySessionId).toHaveBeenCalledTimes(2)
+            })
+
+            test('lookup failure also backs off', async () => {
+                const s = prepare()
+                api.getBySessionId.mockRejectedValue(new Error('boom'))
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                expect(api.getBySessionId).toHaveBeenCalledTimes(1)
+                expect(s.others).toHaveLength(1)
+            })
+
+            test('resolved lookup sets the user and stops further lookups', async () => {
+                const s = prepare()
+                api.getBySessionId.mockResolvedValue([{id:'x', sessionId:'REMOTE', user:{id:'u2',name:'Jane'}}])
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                await s.onActivityUpdateEvent('REMOTE', payload)
+                expect(api.getBySessionId).toHaveBeenCalledTimes(1)
+                expect(s.others).toHaveLength(1)
+                expect(s.others[0].user.id).toBe('u2')
+            })
+
+            test('cleanup resets the route list subscription flag and lookup state', () => {
+                const s = prepare()
+                s.isSubscribedRouteListEvents = true
+                s.lookupBackoff.set('REMOTE', {until:1, delay:1})
+                s.cleanup()
+                expect(s.isSubscribedRouteListEvents).toBe(false)
+                expect(s.lookupBackoff.size).toBe(0)
+            })
+
+            test('onActivityStopEvent removes every entry of the session', () => {
+                const s = prepare()
+                s.others = [{sessionId:'REMOTE'},{sessionId:'OTHER'},{sessionId:'REMOTE'}]
+                s.onActivityStopEvent('REMOTE', {})
+                expect(s.others.map((o:any)=>o.sessionId)).toEqual(['OTHER'])
+            })
+        })
+
         test('onActivityStartEvent - new rider joins: adds rider and emits update', () => {
             service = useActiveRides()
             setupMocks(service)

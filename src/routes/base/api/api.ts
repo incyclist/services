@@ -28,6 +28,13 @@ const verify = (route)  => {
     }
 }
 
+// a request that never received an HTTP response (offline, DNS failure, connection refused, ...)
+const isNoResponseError = (err): boolean => {
+    return err?.message === 'Network Error' ||
+        err?.code === 'ERR_NETWORK' ||
+        (err?.isAxiosError === true && !err.response)
+}
+
 export default class IncyclistRoutesApi implements IIncyclistRoutesApi { 
 
     protected logger: EventLogger
@@ -160,6 +167,11 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
             return res.data.country?.toUpperCase()
         }
         catch(err) {
+            if (isNoResponseError(err)) {
+                // device is offline or server not reachable - not an application error
+                this.logger.logEvent({message:'getCountry failed: no response from server', reason:err.message})
+                return
+            }
             this.logError(err,'getCountry')
         }
 

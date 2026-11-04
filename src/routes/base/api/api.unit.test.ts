@@ -284,6 +284,32 @@ describe('IncyclistRoutesApi', () => {
             )
         })
 
+        test('network error without response: logs a non-error event and returns undefined', async () => {
+            api = new IncyclistRoutesApi()
+            internalGet.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true, code: 'ERR_NETWORK' }))
+
+            const res = await api.getCountry({ lat: 1, lng: 2 })
+
+            expect(res).toBeUndefined()
+            expect(EventLogger.prototype.logEvent).not.toHaveBeenCalledWith(
+                expect.objectContaining({ message: 'Error' })
+            )
+            expect(EventLogger.prototype.logEvent).toHaveBeenCalledWith(
+                expect.objectContaining({ message: 'getCountry failed: no response from server', reason: 'Network Error' })
+            )
+        })
+
+        test('error with an http response: still logged as error', async () => {
+            api = new IncyclistRoutesApi()
+            internalGet.mockRejectedValue(Object.assign(new Error('Request failed with status code 504'), { isAxiosError: true, response: { status: 504 } }))
+
+            await api.getCountry({ lat: 1, lng: 2 })
+
+            expect(EventLogger.prototype.logEvent).toHaveBeenCalledWith(
+                expect.objectContaining({ message: 'Error', fn: 'getCountry' })
+            )
+        })
+
         test('request fails: logs the error and returns undefined', async () => {
             api = new IncyclistRoutesApi()
             internalGet.mockRejectedValue(new Error('timeout'))

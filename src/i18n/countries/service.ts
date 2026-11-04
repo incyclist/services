@@ -1,5 +1,6 @@
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
+import { Injectable } from "../../base/decorators";
 import { CountryList  } from "./model";
 import defaultList from './countries.json'
 import { LatLng } from "../../utils/geo";
@@ -132,9 +133,14 @@ export class Countries extends IncyclistService {
      * const iso = await countries.getIsoFromLatLng({ lat: 51.5074, lng: -0.1278 }); // 'GB' (London)
      */
     async getIsoFromLatLng(point: LatLng|Array<LatLng>): Promise<string> {
-        const api = useIncyclistRoutesApi().create()     
+        const api = this.getIncyclistRoutesApi().create()
         return api.getCountry(point)
 
+    }
+
+    @Injectable
+    protected getIncyclistRoutesApi() {
+        return useIncyclistRoutesApi()
     }
 
 
