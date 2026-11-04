@@ -418,6 +418,64 @@ describe('DeviceRideService',()=>{
             })
         })
 
+        describe('no-data watchdog',()=>{
+            const setReconnecting = (ai:AdapterRideInfo, reconnecting:boolean) => {
+                ai.adapter.isReconnecting = jest.fn().mockImplementation(()=>reconnecting)
+            }
+
+            beforeEach( ()=>{
+                (service as unknown as { getEnabledCapabilities: unknown }).getEnabledCapabilities = jest.fn().mockReturnValue({enabledCapabilities:[]})
+            })
+
+            test('does not call prepareReconnect while the adapter is reconnecting',()=>{
+                const ai = createInfo('1')
+                setReconnecting(ai, true)
+                service.prepareReconnect = jest.fn().mockResolvedValue(undefined)
+                service.startHealthCheck(ai)
+
+                jest.advanceTimersByTime(60000)
+
+                expect(service.prepareReconnect).not.toHaveBeenCalled()
+                expect(ai.isHealthy).toBe(true)
+            })
+
+            test('calls prepareReconnect once the reconnect has ended and there is still no data',()=>{
+                const ai = createInfo('1')
+                let reconnecting = true
+                ai.adapter.isReconnecting = jest.fn().mockImplementation(()=>reconnecting)
+                service.prepareReconnect = jest.fn().mockResolvedValue(undefined)
+                service.startHealthCheck(ai)
+
+                jest.advanceTimersByTime(60000)
+                reconnecting = false
+                jest.advanceTimersByTime(2000)
+
+                expect(service.prepareReconnect).toHaveBeenCalledTimes(1)
+            })
+
+            test('calls prepareReconnect when the adapter does not report a reconnect',()=>{
+                const ai = createInfo('1')
+                service.prepareReconnect = jest.fn().mockResolvedValue(undefined)
+                service.startHealthCheck(ai)
+
+                jest.advanceTimersByTime(60000)
+
+                expect(service.prepareReconnect).toHaveBeenCalledTimes(1)
+            })
+
+            test('prepareReconnect does not restart an adapter that is reconnecting',async ()=>{
+                const ai = createInfo('1')
+                setReconnecting(ai, true)
+                service.startHealthCheck = jest.fn()
+                setLastData(service, ai)
+
+                await service.prepareReconnect(ai)
+
+                expect(ai.adapter.restart).not.toHaveBeenCalled()
+                expect(ai.isRestarting).toBeFalsy()
+            })
+        })
+
         describe('stop',()=>{
             test('stops the health check when rideAdapters was deleted before stop()',async ()=>{
                 const ai = createInfo('1')

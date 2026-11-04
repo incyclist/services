@@ -891,7 +891,9 @@ export class DeviceRideService  extends IncyclistService{
                 ai.dataStatus = 'red'
 
 
-            if (ai.isHealthy && (isAmber || isRed)) {                
+            // a BLE reconnect in flight is bounded and retried by the adapter itself, restarting the adapter now
+            // would only interrupt it. If there is still no data once it has ended, the next check triggers the restart
+            if (ai.isHealthy && (isAmber || isRed) && !ai.adapter.isReconnecting?.()) {
                 ai.isHealthy = false;
                 this.logEvent({message:'device unhealthy', device:ai.adapter.getUniqueName(), udid:ai.udid, noDataSince: (tsNow-tsLastData), tsLastData:new Date(tsLastData).toISOString()  })
                 this.prepareReconnect(ai).catch( err=>{ this.logError(err,'startHealthCheck') })
@@ -967,6 +969,11 @@ export class DeviceRideService  extends IncyclistService{
 
         if (unhealthy.isRestarting) {
             this.logEvent({message:'skipped reconnect - device already restarting', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (tsNow-tsLastData), tsLastData:tsLastDataStr  })
+            return;
+        }
+
+        if (unhealthy.adapter.isReconnecting?.()) {
+            this.logEvent({message:'skipped reconnect - device is reconnecting', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, noDataSince: (tsNow-tsLastData), tsLastData:tsLastDataStr  })
             return;
         }
 
