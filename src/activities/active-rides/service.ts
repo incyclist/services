@@ -1065,7 +1065,7 @@ export class ActiveRidesService extends IncyclistService {
      */
     protected async lookupRemoteRider(session:string):Promise<boolean> {
         const inFlight = this.lookupsInFlight.get(session)
-        if (inFlight)
+        if (inFlight!==undefined)
             return inFlight
 
         const backoff = this.lookupBackoff.get(session)
