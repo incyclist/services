@@ -41,6 +41,9 @@ import { ActiveRideBike, ActiveRideEntry, ActiveRideListDisplayItem, ActiveRideL
  * 
  */
 
+const LOOKUP_BACKOFF_START = 30_000
+const LOOKUP_BACKOFF_MAX = 300_000
+
 @Singleton
 export class ActiveRidesService extends IncyclistService {
     protected session: string
@@ -66,6 +69,8 @@ export class ActiveRidesService extends IncyclistService {
     // drift the count
     protected routeListSessions: Map<string,Set<string>> = new Map()
     protected isSubscribedRouteListEvents = false
+    protected lookupsInFlight: Map<string,Promise<boolean>> = new Map()
+    protected lookupBackoff: Map<string,{until:number, delay:number}> = new Map()
 
     protected readonly activityEventHandlers = {
         update: this.onActivityUpdateEvent.bind(this),
@@ -950,7 +955,7 @@ export class ActiveRidesService extends IncyclistService {
             }
 
             if (!payload.user) {
-                this.getRemoteActivityDetails(session).catch( err=>{ this.logError(err,'onActivityStartEvent') })
+                this.lookupRemoteRider(session).then( resolved=>{ if (resolved) this.observer?.emit('update', this.getDisplayProps()) }).catch( err=>{ this.logError(err,'onActivityStartEvent') })
             }
 
             this.observer.emit('update', this.getDisplayProps())
@@ -981,9 +986,7 @@ export class ActiveRidesService extends IncyclistService {
             localItem.bike = item.bike
             localItem.ride = item.ride
         }
-        else {
-            this.addActiveRide( item)
-        }
+        // an entry that was removed while the lookup was running (rider stopped) must not be re-added
         return item
 
 
@@ -1005,67 +1008,87 @@ export class ActiveRidesService extends IncyclistService {
             // ignore events published by ourselves
             if (session===this.session )
                 return
-            
-            const others = this.others??[]
-            const existing = others.find( ar=>ar.sessionId===session ) 
-            
 
             const prevActive = this.others?.length
+            let existing = (this.others??[]).find( ar=>ar.sessionId===session )
+            const isNew = !existing
 
-            if (existing?.user) {
-                existing.currentPosition = payload.position
-                existing.currentDuration = payload.duration
-                existing.currentPower = payload.power
-                existing.currentRideDistance = payload.rideDistance
-                existing.currentSpeed = payload.speed
-                existing.currentLap = payload.lap
-                existing.tsLastUpdate = Date.now()
-            }
-            else {
-
-                const item = await this.getRemoteActivityDetails(session)
-                if (!item) {
-               
-                    const entry: Partial<ActiveRideEntry> = {
-                        id:Date.now().toString(),   
-                        tsLastUpdate:Date.now(),
-                        sessionId:session,
-                        currentPosition: payload.position,
-                        currentDuration: payload.duration,
-                        currentPower: payload.power,
-                        currentRideDistance: payload.rideDistance,
-                        currentSpeed: payload.speed,
-                        currentLap: payload.lap
-        
-                    }
-
-                    if (!existing) {
-                        this.addActiveRide(entry as ActiveRideEntry )
-                    }
-                }
-
+            // the entry is added synchronously (before any await), so a burst of updates
+            // for the same session can never produce more than one entry
+            if (!existing) {
+                existing = { id:Date.now().toString(), sessionId:session } as ActiveRideEntry
+                this.addActiveRide(existing)
                 this.isStarted = true
-                const remote = (item===undefined || item===null) ? {session } : { uuid:item.user?.id, session:item.sessionId}
-
-                if ( prevActive===0) {
-                    this.logEvent({message:'group ride started', active:this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), remote})
-                }
-                else {
-                    this.logEvent({message:'group ride user joined', active: this.others.length+1, activityId:this.activity?.id, route:this.activity.route?.title, routeHash:this.getRouteHash(), remote} )
-                }
-
-
             }
+            this.applyLiveData(existing, payload)
+
+            if (isNew)
+                this.logJoined(prevActive, { session })
 
             this.observer.emit('update', this.getDisplayProps())
 
+            if (!existing.user) {
+                const resolved = await this.lookupRemoteRider(session)
+                if (resolved)
+                    this.observer.emit('update', this.getDisplayProps())
+            }
+
         }
         catch(err) {
-            this.logError(err,'onActivityStartEvent')
+            this.logError(err,'onActivityUpdateEvent')
 
         }
 
 
+    }
+
+    protected applyLiveData(entry:ActiveRideEntry, payload:ActivityUpdateMessage) {
+        entry.currentPosition = payload.position
+        entry.currentDuration = payload.duration
+        entry.currentPower = payload.power
+        entry.currentRideDistance = payload.rideDistance
+        entry.currentSpeed = payload.speed
+        entry.currentLap = payload.lap
+        entry.tsLastUpdate = Date.now()
+    }
+
+    protected logJoined(prevActive:number, remote:{uuid?:string, session:string}) {
+        const message = prevActive===0 ? 'group ride started' : 'group ride user joined'
+        this.logEvent({message, active:this.others.length+1, activityId:this.activity?.id, route:this.activity?.route?.title, routeHash:this.getRouteHash(), remote})
+    }
+
+    /**
+     * Resolves the details of a remote rider via REST, at most once at a time per session.
+     * After an unresolved (or failed) lookup, the session is not looked up again until a
+     * growing backoff period has passed.
+     * @returns true if the rider could be resolved
+     */
+    protected async lookupRemoteRider(session:string):Promise<boolean> {
+        const inFlight = this.lookupsInFlight.get(session)
+        if (inFlight!==undefined)
+            return inFlight
+
+        const backoff = this.lookupBackoff.get(session)
+        if (backoff && Date.now()<backoff.until)
+            return false
+
+        const promise = this.getRemoteActivityDetails(session)
+            .then( item => item?.user!==undefined && item?.user!==null)
+            .catch( err => { this.logError(err,'lookupRemoteRider'); return false })
+            .then( resolved => {
+                if (resolved) {
+                    this.lookupBackoff.delete(session)
+                }
+                else {
+                    const delay = Math.min((backoff?.delay ?? LOOKUP_BACKOFF_START/2)*2, LOOKUP_BACKOFF_MAX)
+                    this.lookupBackoff.set(session, {delay, until:Date.now()+delay})
+                }
+                return resolved
+            })
+            .finally( () => { this.lookupsInFlight.delete(session) })
+
+        this.lookupsInFlight.set(session, promise)
+        return promise
     }
 
     protected addActiveRide( ride:ActiveRideEntry) {
@@ -1093,11 +1116,12 @@ export class ActiveRidesService extends IncyclistService {
         if (!this.others?.length)
             return
         
-        const idx = this.others.findIndex( ar=> ar.sessionId===session)
-        if (idx===-1)
+        const remaining = this.others.filter( ar=> ar.sessionId!==session)
+        if (remaining.length===this.others.length)
             return
 
-        this.others.splice(idx,1)
+        this.others = remaining
+        this.lookupBackoff.delete(session)
         this.observer.emit('update', this.getDisplayProps())
 
         if (!this.isStarted)
@@ -1157,6 +1181,9 @@ export class ActiveRidesService extends IncyclistService {
 
         this.getMessageQueue().unsubscribeAll()
         this.isSubscribed = false
+        this.isSubscribedRouteListEvents = false
+        this.lookupsInFlight.clear()
+        this.lookupBackoff.clear()
         this.observer.stop()
 
     }
