@@ -346,4 +346,125 @@ describe('DeviceRideService',()=>{
 
     })
 
+    describe('health check',()=>{
+        type ServiceInternals = { rideAdapters?: AdapterRideInfo[] }
+
+        const setLastData = (s:DeviceRideService, ai:AdapterRideInfo) => {
+            (s as unknown as { setLastDataTS: (ai:AdapterRideInfo, ts:number)=>void }).setLastDataTS(ai, Date.now())
+        }
+
+        let service: DeviceRideService
+
+        const createInfo = (udid:string):AdapterRideInfo => {
+            const adapter = {
+                getName: jest.fn().mockReturnValue('mock'),
+                getUniqueName: jest.fn().mockReturnValue(`mock-${udid}`),
+                getInterface: jest.fn().mockReturnValue('serial'),
+                isPaused: jest.fn().mockReturnValue(false),
+                on: jest.fn(),
+                off: jest.fn(),
+                stop: jest.fn().mockResolvedValue(true),
+                restart: jest.fn().mockResolvedValue(true),
+            }
+            return { udid, adapter, capabilities: [] } as unknown as AdapterRideInfo
+        }
+
+        beforeEach( ()=>{
+            jest.useFakeTimers()
+            service = new DeviceRideService()
+            service.resumeLogging = jest.fn()
+        })
+
+        afterEach( ()=>{
+            service.reset()
+            jest.clearAllTimers()
+            jest.useRealTimers()
+            jest.clearAllMocks()
+        })
+
+        describe('prepareReconnect',()=>{
+            test('rideAdapters not set: does not throw and resets isRestarting',async ()=>{
+                const ai = createInfo('1')
+                service.startHealthCheck = jest.fn()
+                service.stopHealthCheck = jest.fn()
+                setLastData(service, ai)
+                expect((service as unknown as ServiceInternals).rideAdapters).toBeUndefined()
+
+                await expect(service.prepareReconnect(ai)).resolves.toBeUndefined()
+
+                expect(ai.isRestarting).toBe(false)
+            })
+
+            test('rideAdapters not set: reconnects the unhealthy adapter',async ()=>{
+                const ai = createInfo('1')
+                service.startHealthCheck = jest.fn()
+                service.stopHealthCheck = jest.fn()
+                setLastData(service, ai)
+
+                await service.prepareReconnect(ai)
+
+                expect(ai.adapter.restart).toHaveBeenCalledTimes(1)
+                expect(service.startHealthCheck).toHaveBeenCalledWith(ai)
+            })
+
+            test('isRestarting is reset when the reconnect logic throws',async ()=>{
+                const ai = createInfo('1')
+                setLastData(service, ai)
+                ;(ai.adapter.getInterface as jest.Mock).mockImplementationOnce(()=>{ throw new Error('boom') })
+
+                await service.prepareReconnect(ai).catch(()=>{})
+
+                expect(ai.isRestarting).toBe(false)
+            })
+        })
+
+        describe('stop',()=>{
+            test('stops the health check when rideAdapters was deleted before stop()',async ()=>{
+                const ai = createInfo('1')
+                service.startHealthCheck(ai)
+                expect(jest.getTimerCount()).toBe(1)
+
+                delete (service as unknown as ServiceInternals).rideAdapters
+                await service.stop()
+
+                expect(jest.getTimerCount()).toBe(0)
+                expect(ai.ivToCheck).toBeUndefined()
+            })
+
+            test('stops the health check when rideAdapters was rebuilt with new objects',async ()=>{
+                const ai = createInfo('1')
+                service.startHealthCheck(ai)
+                ;(service as unknown as ServiceInternals).rideAdapters = [createInfo('1')]
+
+                await service.stop()
+
+                expect(jest.getTimerCount()).toBe(0)
+            })
+
+            test('stop(udid) only stops the health check of that device',async ()=>{
+                const ai1 = createInfo('1')
+                const ai2 = createInfo('2')
+                service.startHealthCheck(ai1)
+                service.startHealthCheck(ai2)
+
+                await service.stop('1')
+
+                expect(ai1.ivToCheck).toBeUndefined()
+                expect(ai2.ivToCheck).toBeDefined()
+                expect(jest.getTimerCount()).toBe(1)
+            })
+
+            test('no unhealthy event is raised after stop()',async ()=>{
+                const ai = createInfo('1')
+                service.prepareReconnect = jest.fn().mockResolvedValue(undefined)
+                service.startHealthCheck(ai)
+
+                await service.stop()
+                jest.advanceTimersByTime(120000)
+
+                expect(service.prepareReconnect).not.toHaveBeenCalled()
+            })
+        })
+    })
+
 })

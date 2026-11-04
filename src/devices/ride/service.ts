@@ -39,6 +39,7 @@ export class DeviceRideService  extends IncyclistService{
     protected initizialized: boolean
     protected adapters:AdapterRideInfo[]
     protected rideAdapters: AdapterRideInfo[]
+    protected healthChecks = new Set<AdapterRideInfo>()
     protected startPromises: Promise<boolean>[]
     protected data:DeviceData  ={}
     protected simulatorEnforced:boolean
@@ -917,6 +918,7 @@ export class DeviceRideService  extends IncyclistService{
 
 
         ai.ivToCheck = setInterval( ()=>{check()}, 1000)
+        this.healthChecks.add(ai)
         ai.isHealthy = true
         ai.isRestarting = false;
 
@@ -947,6 +949,7 @@ export class DeviceRideService  extends IncyclistService{
             clearInterval(ai.ivToCheck)
             delete ai.ivToCheck
             delete ai.isHealthy
+            this.healthChecks.delete(ai)
             this.removeOnDatahandler(ai)
             this.lastDataInfo = {}
         }
@@ -970,29 +973,29 @@ export class DeviceRideService  extends IncyclistService{
         unhealthy.isRestarting = true
         unhealthy.isHealthy = false
 
-        // are all adapters on the same interface down?
-        const ifName = unhealthy.adapter.getInterface()
-        const adapters = this.rideAdapters?.filter( ai=> ai.adapter.getInterface()===ifName)
-        const stillHealthy = adapters.filter(ai=>ai.isHealthy===undefined || ai.isHealthy===true)
-
-        this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, 
-                        noDataSince: (tsNow-tsLastData), 
-                        tsLastData:tsLastDataStr, stillHealthy:stillHealthy?.length, onSameInterface:adapters.length  })
-
         try {
-            if ( !stillHealthy?.length && adapters.length>1 && ifName!=='ble')  {
-                await this.reconnectInterface(ifName, adapters);
+            // are all adapters on the same interface down?
+            const ifName = unhealthy.adapter.getInterface()
+            const adapters = (this.rideAdapters ?? [unhealthy]).filter( ai=> ai.adapter.getInterface()===ifName)
+            const stillHealthy = adapters.filter(ai=>ai.isHealthy===undefined || ai.isHealthy===true)
 
+            this.logEvent({message:'reconnect confirmed', device:unhealthy.adapter.getUniqueName(), udid:unhealthy.udid, 
+                            noDataSince: (tsNow-tsLastData), 
+                            tsLastData:tsLastDataStr, stillHealthy:stillHealthy.length, onSameInterface:adapters.length  })
+
+            if ( !stillHealthy.length && adapters.length>1 && ifName!=='ble')  {
+                await this.reconnectInterface(ifName, adapters);
             }
             else {
                 await this.reconnectSingle(unhealthy);  
-                
             }
         }
         catch(err) {
             this.logError(err,'prepareReconnect')
         }
-        unhealthy.isRestarting = false;       
+        finally {
+            unhealthy.isRestarting = false;
+        }
     }
 
     private async reconnectInterface(ifName: string, adapters: AdapterRideInfo[]) {
@@ -1307,6 +1310,9 @@ export class DeviceRideService  extends IncyclistService{
 
         this.emit('stop-ride')
 
+        // health checks must be stopped independent of rideAdapters, which might have been deleted or rebuilt since they were started
+        this.stopHealthChecks(udid)
+
         const promises = adapters?.filter( ai=> udid ? ai.udid===udid : true)        
         .map(ai => {
             this.stopHealthCheck(ai)
@@ -1321,6 +1327,13 @@ export class DeviceRideService  extends IncyclistService{
         delete this.rideAdapters
         this.simulatorEnforced = false
         return true
+    }
+
+    protected stopHealthChecks(udid?:string) {
+        for (const ai of [...this.healthChecks]) {
+            if (!udid || ai.udid===udid)
+                this.stopHealthCheck(ai)
+        }
     }
 
     async resetLimits() {
