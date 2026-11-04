@@ -29,6 +29,7 @@ export class FreeRideService extends IncyclistService {
     protected initialized: boolean = false
     protected ivInit?: NodeJS.Timeout
     protected cntInitRetry:number = 0
+    protected pendingEnsure?: Promise<boolean>
     protected rideSeq:number = 0
     protected selectedBy: 'auto'|'user' = 'auto'
     protected startSource: 'default'|'last'|'search'|'map' = 'default'
@@ -71,6 +72,27 @@ export class FreeRideService extends IncyclistService {
 
     isInitialized() {
         return this.initialized
+    }
+
+    /**
+     * Makes sure the service is initialized, retrying the map load if the startup attempts failed
+     * (e.g. Overpass was not reachable at that time). Intended to be called when the user explicitly
+     * asks for a free ride, so that a temporary outage does not block free rides until the next app start.
+     * Concurrent calls share a single attempt.
+     * @returns true if the service is initialized
+     */
+    async ensureInitialized():Promise<boolean> {
+        if (this.initialized)
+            return true
+
+        if (!this.pendingEnsure) {
+            this.logEvent({message:'init free ride service on demand'})
+            this.pendingEnsure = this.selectStartPosition()
+                .catch( err=> { this.logError(err,'ensureInitialized') })
+                .then( ()=> this.initialized)
+                .finally( ()=> { delete this.pendingEnsure })
+        }
+        return this.pendingEnsure
     }
 
     /**

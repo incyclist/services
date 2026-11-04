@@ -1038,7 +1038,15 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
 
     isFreeRideSupported():boolean {
-        return this.getFreeRideService().isInitialized()        
+        return this.getFreeRideService().isInitialized()
+    }
+
+    /**
+     * Same as isFreeRideSupported(), but if the Free Ride service is not initialized (e.g. Overpass was
+     * unavailable at startup) it tries to initialize it again. To be used when the user asks for a free ride.
+     */
+    async ensureFreeRideSupported():Promise<boolean> {
+        return await this.getFreeRideService().ensureInitialized()
     }
 
 
