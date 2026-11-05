@@ -1663,6 +1663,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         this.startSync()
     }
 
+    protected async recoverDownloadState(card:RouteCard):Promise<void> {
+        try {
+            const recovered = await card.recoverDownloadState()
+            if (recovered)
+                this.logEvent({message:'preload route updated', route:card.getData()?.description?.title, reason:'download state recovered'})
+        }
+        catch(err:any) {
+            this.logError(err,'recoverDownloadState')
+        }
+    }
+
     protected async preloadDetails() {
         const {cards=[]} = this.searchRepo()
         const promises = []
@@ -1710,10 +1721,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                     })
                 }
                 else if (route.description.hasVideo && !route.description.isLocal) {
-                    card.recoverDownloadState().then( recovered => {
-                        if (recovered)
-                            this.logEvent({message:'preload route updated', route:card?.getData()?.description?.title, reason:'download state recovered'})
-                    }, err=>{ this.logError(err,'preloadDetails') })
+                    return this.recoverDownloadState(card)
                 }
 
             })
