@@ -2494,23 +2494,7 @@ export class DevicePairingService  extends IncyclistService{
                     
 
         if (interfaces.length===0) {
-            if (this.state.scanTo) 
-                return;
-
-            this.state.scanTo = setTimeout(() => {
-                delete this.state.scanTo
-                if (this.usage==='page') {
-                    this.emit('scanning-done')
-                    delete this.state.scan
-                    return;
-                }
-
-                if ( !this.isPairing() && (!this.isScanning()  || this.state.scan.preparing===preparing)) {
-                    delete this.state.scan
-                    this.run().catch( err=>{ this.logError(err,'startScanning') })
-                }
-            }, 1000);
-
+            this.scheduleScanRetryWhenNoInterfaces(preparing)
             return;
         }
 
@@ -2520,21 +2504,17 @@ export class DevicePairingService  extends IncyclistService{
 
         this.state.tsPrevStart = Date.now();
 
-        // multiple scans can be triggered within a few ms 
+        // multiple scans can be triggered within a few ms
 
         if (this.usage!=='page' &&  this.isScanning() && this.state.scan.preparing!==preparing)
             return;
 
 
-        this.logEvent({message:'Stopping Adapters',interfaces:interfaces.join(','),props})
-        const stopPromises = []
-        interfaces.forEach( i=> stopPromises.push(this.stopAdaptersOnInterface(i)))
-        await Promise.allSettled(stopPromises)
-        this.deregisterScanningDataHandlers()
+        await this.stopInterfacesForScan(interfaces, props)
 
         this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props})
         this.initScanningCallbacks()
-        
+
         let timeout = props.enforcedScan ? 1000*60*60 /*1h*/ : undefined
         if (isSearch)
             timeout = Math.max(this.getSearchRemaining(),1000)
@@ -2544,6 +2524,51 @@ export class DevicePairingService  extends IncyclistService{
         this.state.scan = {promise, adapters:[]}
         this.onPairingStarted()
 
+        await this.awaitScanPromise(promise)
+
+        if (isSearch)
+            this.onSearchScanDone()
+
+        this.emit('scanning-done')
+        this.emitStateChange({capabilities:this.state.capabilities})
+
+
+        if (this.usage==='page') {
+            return;
+        }
+
+        await this.restartAfterScan(props)
+
+    }
+
+    protected scheduleScanRetryWhenNoInterfaces(preparing: number) {
+        if (this.state.scanTo)
+            return;
+
+        this.state.scanTo = setTimeout(() => {
+            delete this.state.scanTo
+            if (this.usage==='page') {
+                this.emit('scanning-done')
+                delete this.state.scan
+                return;
+            }
+
+            if ( !this.isPairing() && (!this.isScanning()  || this.state.scan.preparing===preparing)) {
+                delete this.state.scan
+                this.run().catch( err=>{ this.logError(err,'startScanning') })
+            }
+        }, 1000);
+    }
+
+    protected async stopInterfacesForScan(interfaces: string[], props: PairingProps) {
+        this.logEvent({message:'Stopping Adapters',interfaces:interfaces.join(','),props})
+        const stopPromises = []
+        interfaces.forEach( i=> stopPromises.push(this.stopAdaptersOnInterface(i)))
+        await Promise.allSettled(stopPromises)
+        this.deregisterScanningDataHandlers()
+    }
+
+    protected async awaitScanPromise(promise: Promise<DeviceSettings[]>) {
         try {
             await promise
             this.cleanupScan()
@@ -2553,17 +2578,9 @@ export class DevicePairingService  extends IncyclistService{
         catch(err) {
             this.logError(err,'start()->scan')
         }
+    }
 
-        if (isSearch)
-            this.onSearchScanDone()
-
-        this.emit('scanning-done')
-        this.emitStateChange({capabilities:this.state.capabilities})
-        
-
-        if (this.usage==='page') {
-            return;
-        }
+    protected async restartAfterScan(props: PairingProps) {
         // after timeout, re-start to either trigger pairing or scan again
         // we don't do this for enforced scans, as the don't have timeouts, i.e. are always trigger manually
         if (!props.enforcedScan) {
@@ -2572,10 +2589,6 @@ export class DevicePairingService  extends IncyclistService{
             await sleep(500)
             this.run().catch( err=>{ this.logError(err,'startScanning') })
         }
-        
-
-        
-
     }
 
     protected deregisterScanningDataHandlers() {

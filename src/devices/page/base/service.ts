@@ -194,16 +194,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         // with a toggle that turns it straight back on, no new scan needed. T16b: nothing is
         // remembered (e.g. its device was deleted), shown as a plain tile inviting a fresh search.
         if (disabled) {
-            const hasRememberedDevice = Boolean(deviceName)
-            return {
-                title, capability,
-                deviceName: hasRememberedDevice ? deviceName : undefined,
-                disabled: true,
-                role, helpText,
-                emptyFooter: hasRememberedDevice ? 'Not used' : 'Not used · tap to search',
-                onClick,
-                onUse: hasRememberedDevice ? ()=> { this.onCapabilityUse(cap) } : undefined,
-            }
+            return this.getDisabledCapabilityDisplayProps(data, {title,capability,role,helpText,onClick})
         }
 
         const adapaters = this.state.adapters??[]
@@ -211,15 +202,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         const ifName = adapter?.adapter?.getInterface()
 
         const onUnselect = data.selected ? ()=> { this.onCapabilityUnselect(cap) } : undefined
-
-        let emptyFooter: string | undefined = undefined
-        if (noSearch)
-            emptyFooter = 'Not searching'
-        else if (role==='required' && this.getSearchStatus()?.ended)
-            // the search is over: the page isn't looking for this one any more
-            emptyFooter = cap===IncyclistCapability.Control && this.canStartRide() ? 'Not found · tap to search' : 'Not found'
-        else if (role)
-            emptyFooter = getEmptyTileFooterText(role)
+        const emptyFooter = this.getActiveCapabilityEmptyFooter(cap, role, noSearch)
 
         return {
             title, capability,deviceName, disabled:false, connectState,value:value?.toString(),unit,interface:ifName,
@@ -227,6 +210,33 @@ export abstract class PairingPageService extends IncyclistPageService {
             onClick, onUnselect
         }
 
+    }
+
+    protected getDisabledCapabilityDisplayProps(data:CapabilityData, common:{title:TDisplayCapability,capability:TIncyclistCapability,role:CapabilityDisplayProps['role'],helpText:CapabilityDisplayProps['helpText'],onClick:()=>void}):CapabilityDisplayProps {
+        const {capability:cap,deviceName} = data
+        const {title,capability,role,helpText,onClick} = common
+        const hasRememberedDevice = Boolean(deviceName)
+
+        return {
+            title, capability,
+            deviceName: hasRememberedDevice ? deviceName : undefined,
+            disabled: true,
+            role, helpText,
+            emptyFooter: hasRememberedDevice ? 'Not used' : 'Not used · tap to search',
+            onClick,
+            onUse: hasRememberedDevice ? ()=> { this.onCapabilityUse(cap) } : undefined,
+        }
+    }
+
+    protected getActiveCapabilityEmptyFooter(cap:IncyclistCapability, role:CapabilityDisplayProps['role'], noSearch:boolean):string|undefined {
+        if (noSearch)
+            return 'Not searching'
+        if (role==='required' && this.getSearchStatus()?.ended)
+            // the search is over: the page isn't looking for this one any more
+            return cap===IncyclistCapability.Control && this.canStartRide() ? 'Not found · tap to search' : 'Not found'
+        if (role)
+            return getEmptyTileFooterText(role)
+        return undefined
     }
 
     protected getDeviceListDisplayProps():DeviceSelectionProps|undefined {
