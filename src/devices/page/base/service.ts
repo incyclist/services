@@ -204,9 +204,13 @@ export abstract class PairingPageService extends IncyclistPageService {
         const onUnselect = data.selected ? ()=> { this.onCapabilityUnselect(cap) } : undefined
         const emptyFooter = this.getActiveCapabilityEmptyFooter(cap, role, noSearch)
 
+        // during a search, a device that was only seen and hasn't been started yet is "found", not connected
+        const found = Boolean(data.selected) && this.getSearchStatus()?.running===true && adapter?.adapter?.isStarted()!==true
+        const stateText = found ? 'Found' : undefined
+
         return {
             title, capability,deviceName, disabled:false, connectState,value:value?.toString(),unit,interface:ifName,
-            role, helpText, emptyFooter,
+            role, helpText, emptyFooter, stateText,
             onClick, onUnselect
         }
 
@@ -489,6 +493,24 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected isSearchEndedWithNothing():boolean {
         const search = this.getSearchStatus()
         return search?.ended===true && !search.rideCapableFound
+    }
+
+    // the search is running and has found something to ride with, but is still looking for more.
+    // Shown with the same delay as Stop searching, so a fast, complete search never flashes it.
+    protected isStillLooking():boolean {
+        const search = this.getSearchStatus()
+        return search?.running===true && search.canStop
+    }
+
+    /** The search state the status line needs, for {@link getPairingStatusDisplay}. */
+    protected getSearchStatusSource():{searchEndedWithNothing:boolean, stillLooking:boolean, missing:string[], searchEndedWithoutTrainer:boolean} {
+        const search = this.getSearchStatus()
+        return {
+            searchEndedWithNothing: this.isSearchEndedWithNothing(),
+            stillLooking: this.isStillLooking(),
+            missing: search?.missing ?? [],
+            searchEndedWithoutTrainer: search?.ended===true && !search.trainerFound,
+        }
     }
 
     protected onStopSearch():void {

@@ -57,6 +57,11 @@ export type CapabilityDisplayProps = {
     role?: 'required' | 'optional'
     helpText?: { full: string, short: string }
     emptyFooter?: string
+    /**
+     * Set on a tile with a device while a search runs and the device was only seen, not started yet
+     * ('Found'): show this instead of the connect state. Not set otherwise.
+     */
+    stateText?: string
     onClick: (item:CapabilityDisplayProps)=>void
     /** Turns the capability off. Only set on a tile with a selected, enabled device. */
     onUnselect?: ()=>void
