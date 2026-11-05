@@ -1250,6 +1250,81 @@ describe('RouteListService',()=>{
         })
     })
 
+    describe('preloadDetails - recover lost download state', () => {
+        // A finished download whose state was never persisted is recognisable from the description
+        // (original video URL set, isDownloaded missing). Only the first routes of the list get their
+        // details preloaded, so the recovery has to reach routes beyond that window as well.
+
+        let service:MockeableService
+
+        beforeEach(() => {
+            new RouteListService().reset()
+            service = prepareMock(null,{mockLoad:true})
+            ;(service as any).sortOrder = 'name'
+        })
+
+        afterEach(() => {
+            (service as any).reset()
+            ;(new RoutesDbLoader() as any).reset()
+        })
+
+        // retitled to sort last, so it is beyond the preload cap (PRELOAD_DESKTOP/PRELOAD_MOBILE)
+        const primeLastCard = (overrides:Partial<RouteInfo>):RouteCard => {
+            const routes = service['routes']
+            const route = routes[routes.length-1]
+            Object.assign(route.description, { title:'zzz-recover-test-route' }, overrides)
+            return service.getCard(route.description.id)
+        }
+
+        const lostDownload:Partial<RouteInfo> = {
+            hasVideo:true, isLocal:false, isDownloaded:undefined,
+            videoUrl:'https://videos.incyclist.com/x.mp4', originalVideoUrl:'https://videos.incyclist.com/x.mp4'
+        }
+
+        test('recovers a route outside the preload window, loading its details first',async () => {
+            const card = primeLastCard(lostDownload)
+            const details = { id:card.getId(), video:{ url:'video:///videos/x.mp4' } } as any
+            const getDetails = jest.spyOn((service as any).db,'getDetails').mockImplementation( async id => id===card.getId() ? details : undefined )
+            card.recoverDownloadState = jest.fn().mockResolvedValue(true)
+
+            await (service as any).preloadDetails()
+
+            expect(getDetails).toHaveBeenCalledWith(card.getId())
+            expect(card.getRouteData()).toBe(details)
+            expect(card.recoverDownloadState).toHaveBeenCalledTimes(1)
+        })
+
+        test('leaves a route alone that never completed a download',async () => {
+            const card = primeLastCard({ ...lostDownload, originalVideoUrl:undefined })
+            const getDetails = jest.spyOn((service as any).db,'getDetails').mockResolvedValue(undefined)
+            card.recoverDownloadState = jest.fn().mockResolvedValue(true)
+
+            await (service as any).preloadDetails()
+
+            expect(getDetails).not.toHaveBeenCalledWith(card.getId())
+            expect(card.recoverDownloadState).not.toHaveBeenCalled()
+        })
+
+        test('leaves a route alone that is marked as downloaded already',async () => {
+            const card = primeLastCard({ ...lostDownload, isDownloaded:true })
+            jest.spyOn((service as any).db,'getDetails').mockResolvedValue(undefined)
+            card.recoverDownloadState = jest.fn().mockResolvedValue(true)
+            card.videoExists = jest.fn().mockResolvedValue(true)
+
+            await (service as any).preloadDetails()
+
+            expect(card.recoverDownloadState).not.toHaveBeenCalled()
+        })
+
+        test('a failing recovery does not stop the other routes',async () => {
+            const card = primeLastCard(lostDownload)
+            jest.spyOn((service as any).db,'getDetails').mockResolvedValue({ id:card.getId(), video:{ url:'video:///videos/x.mp4' } } as any)
+            card.recoverDownloadState = jest.fn().mockRejectedValue(new Error('boom'))
+
+            await expect((service as any).preloadDetails()).resolves.toBeUndefined()
+        })
+    })
+
     describe('requestRouteDetails',()=>{
 
         let service:MockeableService

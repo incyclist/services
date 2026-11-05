@@ -1663,14 +1663,35 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         this.startSync()
     }
 
-    protected async recoverDownloadState(card:RouteCard):Promise<void> {
-        try {
-            const recovered = await card.recoverDownloadState()
-            if (recovered)
-                this.logEvent({message:'preload route updated', route:card.getData()?.description?.title, reason:'download state recovered'})
-        }
-        catch(err:any) {
-            this.logError(err,'recoverDownloadState')
+    /**
+     * Restores the download state of routes whose finished download was never persisted (see
+     * RouteCard.recoverDownloadState()). Independent of the preload window: only the first routes of
+     * the list get their details preloaded, but any route can be affected.
+     *
+     * Such a route is recognisable from its description alone - the original video URL is written
+     * when a download completes, while isDownloaded is missing - so only those few routes need
+     * their details loaded for the file check.
+     */
+    protected async recoverDownloadStates(cards:Array<RouteCard>):Promise<void> {
+        for (const card of cards) {
+            try {
+                const descr = card?.getRouteDescription()
+                if (!descr?.hasVideo || descr.isLocal || descr.isDownloaded || !descr.originalVideoUrl)
+                    continue
+
+                if (!card.getRouteData()) {
+                    const details = await this.db.getDetails( card.getId() )
+                    if (!details)
+                        continue
+                    card.setRouteData(details)
+                }
+
+                if (await card.recoverDownloadState())
+                    this.logEvent({message:'preload route updated', route:descr.title, reason:'download state recovered'})
+            }
+            catch(err:any) {
+                this.logError(err,'recoverDownloadStates')
+            }
         }
     }
 
@@ -1720,10 +1741,6 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                         }
                     })
                 }
-                else if (route.description.hasVideo && !route.description.isLocal) {
-                    return this.recoverDownloadState(card)
-                }
-
             })
             .catch( ()=>{
                 // ignore
@@ -1743,11 +1760,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         })
         
         await Promise.allSettled( promises)
-
+        await this.recoverDownloadStates(cards)
 
     }
 
-    protected startSync() { 
+    protected startSync() {
         try {
             if (!this.syncInfo.iv) {
                 // run sync every 5 minutes
