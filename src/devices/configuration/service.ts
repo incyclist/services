@@ -1,6 +1,6 @@
 import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle, InterfaceFactory, BleDeviceSettings } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
-import { AdapterInfo, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting, 
+import { AddDeviceResult, AdapterInfo, AutoSelectRule, CapabilityExclusion, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExclusionFilter, ExclusionOptions, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting,
          LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"
 import { v4 as generateUdid } from 'uuid';
 import { merge } from "../../utils/merge";
@@ -38,6 +38,10 @@ export class DeviceConfigurationService  extends IncyclistService{
     settings: DeviceConfigurationSettings
     adapters: DeviceAdapterList = {}
     protected features: {[index:string]:boolean}
+
+    // session-only, never persisted - see excludeCapability()/excludeDevice() below
+    protected exclusions: CapabilityExclusion[] = []
+    protected exclusionLeakLogged = false
 
     constructor() {
         super('DeviceConfig')
@@ -227,9 +231,11 @@ export class DeviceConfigurationService  extends IncyclistService{
         const settings = this.settings.capabilities.find( c =>c.capability===capability)
         if (settings) {
             settings.selected= null
+            if (capability!=='bike')
+                this.removeExclusions({capability:capability as IncyclistCapability}) // the persisted selection just changed
             this.updateUserSettings()
             if(shouldEmit)
-                this.emitCapabiltyChanged(settings.capability)            
+                this.emitCapabiltyChanged(settings.capability)
 
         }
     }
@@ -277,7 +283,24 @@ export class DeviceConfigurationService  extends IncyclistService{
         this.emitCapabiltyChanged(capability)
     }
 
-    add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):string {
+    /**
+     * Adds a device (or recognizes a known one) and lists it for every capability it supports.
+     * Every empty, non-disabled slot the device supports is filled with it.
+     *
+     * @param props.onAdded called once the device is added, with what happened per capability:
+     * which capabilities the device is newly known for, and which empty slots it filled (and why)
+     * @returns the device's udid, or `undefined` if no adapter could be created for the settings
+     */
+    add(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean, onAdded?:(result:AddDeviceResult)=>void}):string {
+        const result = this.addDevice(deviceSettings,props)
+        if (result.udid)
+            props?.onAdded?.(result)
+        return result.udid
+    }
+
+    protected addDevice(deviceSettings:IncyclistDeviceSettings, props?:{legacy?:boolean}):AddDeviceResult {
+        const result:AddDeviceResult = { newlyKnown:[], autoSelected:[] }
+
         let udid = this.getUdid(deviceSettings)
         udid ??= this.getUdidForWifiAddressChange(deviceSettings)
 
@@ -311,7 +334,7 @@ export class DeviceConfigurationService  extends IncyclistService{
             adapter = this.getAdapterFromSetting(deviceSettings)
             if (!adapter) {
                 this.logEvent({message:'could not create adapter'})
-                return;
+                return result;
             }
 
             udid = this.settings.devices?.find( d=> adapter.isEqual(d.settings))?.udid ?? this.getUdidForWifiAddressChange(deviceSettings)
@@ -332,29 +355,48 @@ export class DeviceConfigurationService  extends IncyclistService{
         }
 
         this.initCapabilties()
-            
+        // initCapabilties() doesn't create the Controller slot: a controller needs it to exist
+        // before it can be listed or fill it
+        if (adapter.hasCapability(IncyclistCapability.AppControl))
+            this.verifyCapabilityExists(IncyclistCapability.AppControl)
+
+        result.udid = udid
         this.settings.capabilities.forEach( c=> {
-            if (c.devices.includes(udid) && c.selected!==undefined && c.selected!==null)
-                return udid;
-
-            const isBike = adapter.hasCapability(IncyclistCapability.Control)
-
-            if ( adapter.hasCapability(c.capability) && c.capability!=='bike') {
-                if (!c.devices.includes(udid)) {
-                    c.devices.push(udid)
-                }
-
-                if (!c.selected && !c.disabled && (isBike || c.capability===IncyclistCapability.HeartRate))
-                    c.selected = udid
-            }
-
-
+            this.addToCapabilityRecord(c, udid, adapter, result)
         })
 
         this.updateUserSettings()
         this.emitCapabiltyChanged()
-        return udid
+        return result
 
+    }
+
+    // lists the device for this capability (if it supports it) and fills the slot if it's empty and not disabled
+    protected addToCapabilityRecord(c:CapabilitySetting, udid:string, adapter:IncyclistDeviceAdapter, result:AddDeviceResult):void {
+        if (c.capability==='bike')
+            return
+
+        const capability = c.capability as IncyclistCapability
+        if (!adapter.hasCapability(capability))
+            return
+        if (!c.devices.includes(udid)) {
+            c.devices.push(udid)
+            result.newlyKnown.push(capability)
+        }
+
+        if (c.selected || c.disabled)
+            return
+
+        c.selected = udid
+        result.autoSelected.push({capability, rule:this.getAutoSelectRule(adapter,capability)})
+    }
+
+    protected getAutoSelectRule(adapter:IncyclistDeviceAdapter, capability:IncyclistCapability):AutoSelectRule {
+        if (adapter.hasCapability(IncyclistCapability.Control))
+            return 'control'
+        if (capability===IncyclistCapability.HeartRate)
+            return 'heartrate'
+        return 'new-rule'
     }
 
     delete(udid:string, capability?:ExtendedIncyclistCapability, forceSingle=false):void {
@@ -376,6 +418,8 @@ export class DeviceConfigurationService  extends IncyclistService{
 
                 if (record.selected===udid) {
                     record.selected=undefined
+                    if (capability!=='bike')
+                        this.removeExclusions({capability:capability as IncyclistCapability}) // the persisted selection is about to change
 
                     const items = record.devices.length
                     if (deviceIdx===items-1 && items>1) { // selected was last entry in the list -> try to select previous record
@@ -529,10 +573,10 @@ export class DeviceConfigurationService  extends IncyclistService{
             return;
 
         try {
-            const udid = requestedUdid || 
-                capabilities.find( d=>d.capability===IncyclistCapability.Control)?.selected ||
-                capabilities.find( d=>d.capability===IncyclistCapability.Power)?.selected ||
-                capabilities.find( d=>d.capability===IncyclistCapability.Speed)?.selected
+            const udid = requestedUdid ||
+                capabilities.find( d=>d.capability===IncyclistCapability.Control && !d.disabled && !this.isExcluded(d.capability))?.selected ||
+                capabilities.find( d=>d.capability===IncyclistCapability.Power && !d.disabled && !this.isExcluded(d.capability))?.selected ||
+                capabilities.find( d=>d.capability===IncyclistCapability.Speed && !d.disabled && !this.isExcluded(d.capability))?.selected
 
             if (!udid)
                 return;
@@ -661,9 +705,9 @@ export class DeviceConfigurationService  extends IncyclistService{
         const adapters: AdapterInfo[] = []
 
         capabilities.forEach( c=> {
-            if (c.disabled || !c.selected)
+            if (c.disabled || !c.selected || this.isExcluded(c.capability))
                 return;
-        
+
             if (!devices.some( d=> d.udid===c.selected))
                 return;
 
@@ -716,9 +760,9 @@ export class DeviceConfigurationService  extends IncyclistService{
             return;
 
         const found = capabilities.find( c => c.capability===capability)
-        if (!found || found.disabled || !found.selected)
+        if (!found || found.disabled || !found.selected || this.isExcluded(capability))
             return
-        
+
         const udid = found.selected
         return this.adapters[udid]
     }
@@ -730,10 +774,105 @@ export class DeviceConfigurationService  extends IncyclistService{
             capabilites = this.settings?.capabilities.filter(c=>c.capability===capability)
         }
 
-        return capabilites.filter( c=>c.capability!=='bike' && c.disabled!==true && c.selected).map( c => {
+        return capabilites.filter( c=>c.capability!=='bike' && c.disabled!==true && c.selected && !this.isExcluded(c.capability)).map( c => {
             const {capability,selected} = c
             return {capability: capability as IncyclistCapability,selected}
-        })        
+        })
+    }
+
+    // -------------------------------------- Session exclusions (never persisted)
+
+    /**
+     * Excludes a single capability from the effective selection for the rest of the app
+     * session (or, with `scope:'until-next-pairing'`, until the Pairing page is next opened).
+     * The exclusion binds to that capability's currently selected device; it has no effect if
+     * nothing is selected for it.
+     */
+    excludeCapability(capability:IncyclistCapability, opts:ExclusionOptions):void {
+        const udid = this.settings?.capabilities?.find( c=>c.capability===capability)?.selected
+        if (!udid)
+            return
+
+        this.setExclusion(capability, udid, opts)
+    }
+
+    /**
+     * Excludes every capability this device is currently selected for - not just the one the
+     * caller cares about, since a multi-capability device (e.g. a smart trainer) would
+     * otherwise keep blocking a fallback through the capabilities it's still "selected" for.
+     */
+    excludeDevice(udid:string, opts:ExclusionOptions):void {
+        const capabilities = (this.settings?.capabilities??[]).filter( c=>c.selected===udid)
+        capabilities.forEach( c=> this.setExclusion(c.capability as IncyclistCapability, udid, opts))
+    }
+
+    /** Turns a capability's exclusion back off. Does not change the persisted selection. */
+    includeCapability(capability:IncyclistCapability):void {
+        const hadExclusion = this.exclusions.some( e=>e.capability===capability)
+        this.exclusions = this.exclusions.filter( e=>e.capability!==capability)
+        if (hadExclusion)
+            this.emitCapabiltyChanged(capability)
+    }
+
+    /** Clears every exclusion matching `filter`, or all of them if no filter is given. */
+    clearExclusions(filter?:ExclusionFilter):void {
+        if (this.removeExclusions(filter))
+            this.emitCapabiltyChanged()
+    }
+
+    /** A snapshot of every currently active exclusion. */
+    getExclusions():CapabilityExclusion[] {
+        return [...this.exclusions]
+    }
+
+    /** The raw, persisted selection for display (e.g. "Your trainer: Tacx Neo 2T"), ignoring disabled/excluded. */
+    getConfiguredSelection(capability:IncyclistCapability):string|undefined {
+        return this.settings?.capabilities?.find( c=>c.capability===capability)?.selected
+    }
+
+    /** Whether the device currently selected for this capability - not any other remembered device - is excluded right now. */
+    protected isExcluded(capability:ExtendedIncyclistCapability):boolean {
+        const setting = this.settings?.capabilities?.find( c=>c.capability===capability)
+        return this.findExclusion(setting)!==undefined
+    }
+
+    /**
+     * The exclusion that currently applies to this capability record, if any. It only applies
+     * while the capability's persisted selection is still the device it was raised against, so
+     * an exclusion that outlives a selection change can never suppress a different device.
+     */
+    protected findExclusion(setting:{capability:ExtendedIncyclistCapability, selected?:string}|undefined):CapabilityExclusion|undefined {
+        if (!setting?.selected)
+            return undefined
+        return this.exclusions.find( e=>e.capability===setting.capability && e.udid===setting.selected)
+    }
+
+    protected setExclusion(capability:IncyclistCapability, udid:string, opts:ExclusionOptions):void {
+        const {reason, scope, wasConnected=false} = opts
+        this.removeExclusions({capability})
+        this.exclusions.push({capability, udid, reason, scope, wasConnected, since:Date.now()})
+        this.emitCapabiltyChanged(capability)
+    }
+
+    /** @returns whether any exclusion was actually removed */
+    protected removeExclusions(filter?:ExclusionFilter):boolean {
+        if (!filter) {
+            if (this.exclusions.length===0)
+                return false
+            this.exclusions = []
+            return true
+        }
+
+        const remaining = this.exclusions.filter( e=> !(
+            (filter.capability===undefined || e.capability===filter.capability) &&
+            (filter.udid===undefined || e.udid===filter.udid) &&
+            (filter.scope===undefined || e.scope===filter.scope)
+        ))
+        if (remaining.length===this.exclusions.length)
+            return false
+
+        this.exclusions = remaining
+        return true
     }
 
     //  Interface methods
@@ -843,9 +982,27 @@ export class DeviceConfigurationService  extends IncyclistService{
     // -------------------------------------- Protected methods below
 
     protected updateUserSettings() {
+        this.checkNoExclusionLeak()
         this.getUserSettings().set('devices',this.settings.devices)
         this.getUserSettings().set('capabilities',this.settings.capabilities)
         this.getUserSettings().set('interfaces',this.settings.interfaces)
+    }
+
+    /**
+     * Exclusions live only in {@link exclusions}, never in {@link settings}, so persisting
+     * settings must never carry exclusion data. This is a safety net, not the mechanism: it
+     * logs once per launch if a future bug ever attaches an `excluded` field to a persisted
+     * capability record.
+     */
+    protected checkNoExclusionLeak() {
+        if (this.exclusionLeakLogged)
+            return
+
+        const leaked = (this.settings?.capabilities??[]).some( c => (c as unknown as {excluded?:unknown}).excluded!==undefined)
+        if (leaked) {
+            this.exclusionLeakLogged = true
+            this.logEvent({message:'pairing exclusion leaked'})
+        }
     }
 
 
@@ -1217,13 +1374,16 @@ export class DeviceConfigurationService  extends IncyclistService{
             const {adapters} = this
     
             const info:CapabilityInformation[] = capabilities.map( c=> {
-    
+
+                const exclusion = this.findExclusion(c)
+
                 const ci:CapabilityInformation = {
-    
+
                     capability: c.capability,
                     disabled: c.disabled||false,
+                    excluded: exclusion ? {reason:exclusion.reason, scope:exclusion.scope} : undefined,
                     devices: (c.devices??[]).filter( udid => devices.find( d=> d.udid===udid)).map( udid=>  {
-                        const adapter = adapters[udid]                                   
+                        const adapter = adapters[udid]
                         const device = devices.find( d=> d.udid===udid)
                         const mode = device.mode
                         const modeSetting = device.modes ? device.modes[mode] : undefined
@@ -1270,6 +1430,8 @@ export class DeviceConfigurationService  extends IncyclistService{
         capSettings.selected = udid;
         if (capSettings.disabled)
             delete capSettings.disabled;
+        if (capability!=='bike')
+            this.removeExclusions({capability:capability as IncyclistCapability}) // a manual pick clears any exclusion on this capability
     }
 
 
@@ -1357,6 +1519,8 @@ export class DeviceConfigurationService  extends IncyclistService{
     reset() {
         super.reset()
         this.settings = undefined
+        this.exclusions = []
+        this.exclusionLeakLogged = false
     }
 
     protected getAdapterFromSetting(settings) {

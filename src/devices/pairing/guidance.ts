@@ -91,7 +91,7 @@ export const getPairingHint = (input: PairingHintInput): PairingHint | undefined
     return undefined
 }
 
-export type PairingStatusId = 'S1' | 'S1b' | 'S2' | 'S3' | 'S4' | 'S5'
+export type PairingStatusId = 'S1' | 'S1b' | 'S2' | 'S2e' | 'S2w' | 'S3' | 'S4' | 'S5' | 'S9'
 
 export interface PairingStatusInput extends PairingHintInput {
     initialising: boolean
@@ -100,17 +100,27 @@ export interface PairingStatusInput extends PairingHintInput {
     readyDeviceName?: string
     connectingDeviceName?: string
     connectingIsTrainer?: boolean
+    /** the page's search has ended and found nothing to ride with */
+    searchEndedWithNothing?: boolean
+    /** a search is running, something to ride with was found, and the search is still looking for more */
+    stillLooking?: boolean
+    /** the page's search has ended without a trainer (the ready text then says so) */
+    searchEndedWithoutTrainer?: boolean
 }
 
 /**
- * Priority: S1 > S2 > S3 > S4 > S1b > S5. S4 sits above S1b so the first-use hint never shows
+ * Priority: S1 > S2w > S2/S2e > S3 > S4 > S9 > S1b > S5. S2w (found something, still looking) holds
+ * while a search runs; S2e is the ready text after a search that found no trainer. S9 (search finished, nothing found) replaces the
+ * searching text once nothing is searching any more. S4 sits above S1b so the first-use hint never shows
  * while the page is initialising. The 2 s hold after S4 is applied by the caller.
  */
 export const derivePairingStatus = (input: PairingStatusInput): PairingStatusId => {
     if (!canScanWithInterfaces(input.interfaces, input.platform)) return 'S1'
-    if (input.canStartRide) return 'S2'
+    if (input.stillLooking) return 'S2w'
+    if (input.canStartRide) return input.searchEndedWithoutTrainer ? 'S2e' : 'S2'
     if (input.connectingDeviceName) return 'S3'
     if (input.initialising) return 'S4'
+    if (input.searchEndedWithNothing) return 'S9'
     if (getPairingHint(input)) return 'S1b'
     return 'S5'
 }
@@ -125,9 +135,12 @@ export interface PairingGuidanceParams {
     rideMode?: boolean
     deviceName?: string
     isTrainer?: boolean
+    /** S2w: the capabilities the search is still looking for, in tile order */
+    missing?: ReadonlyArray<string>
 }
 
 export type PairingGuidanceId = PairingStatusId | 'row-required' | 'row-required-trainer' | 'row-ready' | 'row-optional'
+    | 'row-searching-trainer' | 'row-searching-found'
 
 export interface PairingGuidanceText {
     text: string
@@ -159,6 +172,31 @@ const getNoSearchText = (params: PairingGuidanceParams, isShort: boolean): Pairi
     const list = formatList(names)
     if (names.length === 2) return { text: `Can't search: ${list} are both unavailable.`, link: 'Check connections' }
     return { text: `Can't search: ${list} unavailable.`, link: 'Check connections' }
+}
+
+const SENSOR_NAMES: Record<string, string> = {
+    heartrate: 'heart-rate monitor',
+    cadence: 'cadence sensor',
+    speed: 'speed sensor',
+    power: 'power meter',
+}
+
+// names the most important thing still missing: the trainer, else the one sensor, else "other sensors"
+const getStillLookingText = (device: string, missing: ReadonlyArray<string>, isShort: boolean): PairingGuidanceText => {
+    if (missing.includes('control'))
+        return isShort
+            ? { text: `Found ${device}. Looking for a trainer…` }
+            : { text: `Found ${device}. Still looking for a smart trainer: if you have one, pedal a few strokes to wake it up. No trainer? Stop searching.` }
+
+    const sensors = missing.filter(c => SENSOR_NAMES[c] !== undefined).map(c => SENSOR_NAMES[c])
+    if (sensors.length === 1)
+        return isShort
+            ? { text: `Found ${device}. Looking for a ${sensors[0]}…` }
+            : { text: `Found ${device}. Still looking for a ${sensors[0]}. Don't have one? Stop searching.` }
+
+    return isShort
+        ? { text: `Found ${device}. Looking for other sensors…` }
+        : { text: `Found ${device}. Still looking for other sensors, like a ${sensors[0] ?? SENSOR_NAMES.heartrate}. No more sensors? Stop searching.` }
 }
 
 const getHintText = (hint: PairingHint, isShort: boolean): PairingGuidanceText => {
@@ -201,6 +239,14 @@ export const getPairingGuidanceText = (
             return { text: `Ready to ride with ${device}. ${tail}` }
         }
 
+        case 'S2e':
+            return isShort
+                ? { text: `Ready with ${device}. No trainer found.` }
+                : { text: `Ready to ride with ${device}. No smart trainer found. Have one? Wake it up, then search again.` }
+
+        case 'S2w':
+            return getStillLookingText(device, params.missing ?? [], isShort)
+
         case 'S3':
             if (params.isTrainer)
                 return { text: isShort ? `Connecting to ${device}…` : `Connecting to your trainer ${device}…` }
@@ -214,6 +260,11 @@ export const getPairingGuidanceText = (
                 ? { text: 'Searching… Pedal to wake your trainer.' }
                 : { text: 'Searching for devices… Tip: pedal a few strokes to wake up your trainer.' }
 
+        case 'S9':
+            return isShort
+                ? { text: 'Nothing found. Wake it, then search again.' }
+                : { text: 'Search finished, nothing found. Wake your trainer or sensor (pedal a few strokes or press a button), then search again.' }
+
         case 'row-required':
             return { text: 'TO RIDE', subtext: 'connect any one' }
         case 'row-required-trainer':
@@ -222,11 +273,22 @@ export const getPairingGuidanceText = (
             return { text: '✓ READY TO RIDE' }
         case 'row-optional':
             return { text: 'OPTIONAL', subtext: 'extras, not needed' }
+        case 'row-searching-trainer':
+            return { text: 'TO RIDE', subtext: 'still looking for a trainer' }
+        case 'row-searching-found':
+            return { text: 'TO RIDE', subtext: 'trainer found' }
     }
 }
 
-export const getPairingRowLabelId = (trainerSelected: boolean): PairingGuidanceId =>
-    trainerSelected ? 'row-required-trainer' : 'row-required'
+/**
+ * The label of the ride row. While a search is still looking for more devices (`stillLooking`), it
+ * says whether the trainer has been found; otherwise it follows whether a trainer is selected.
+ */
+export const getPairingRowLabelId = (trainerSelected: boolean, stillLooking: boolean = false): PairingGuidanceId => {
+    if (stillLooking)
+        return trainerSelected ? 'row-searching-found' : 'row-searching-trainer'
+    return trainerSelected ? 'row-required-trainer' : 'row-required'
+}
 
 export const getCapabilityHelpText = (capability: string, variant: PairingTextVariant = 'full'): string | undefined => {
     const isShort = variant === 'short'

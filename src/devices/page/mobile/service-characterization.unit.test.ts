@@ -18,6 +18,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
         selectDevice: jest.fn().mockResolvedValue(undefined),
         deleteDevice: jest.fn().mockResolvedValue(undefined),
         unselectDevices: jest.fn().mockResolvedValue(undefined),
+        setVisitOpen: jest.fn(),
         usage: undefined,
     }
 

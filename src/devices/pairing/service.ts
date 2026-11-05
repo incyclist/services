@@ -1,6 +1,7 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
-import { AdapterInfo, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
-import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState  } from "./model";
+import { AddDeviceResult, AdapterInfo, CapabilityExclusion, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
+import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact, SelectionConflict, ConflictDismissal, SearchEndReason, SearchStatus  } from "./model";
+import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
 import clone from "../../utils/clone";
@@ -17,6 +18,21 @@ const Units = [
     { capability:IncyclistCapability.Speed, unit:'km/h', value:'speed', decimals:1, convert:'speed'},
     { capability:IncyclistCapability.Cadence, unit:'rpm', value:'cadence', decimals:0},
 ]
+
+// the Pairing page's search for devices during the open visit
+interface SearchState {
+    phase: 'none' | 'running' | 'ended'
+    index: number
+    // the rider asked for another search, which hasn't started yet
+    requested: boolean
+    startedAt?: number
+    stopReason?: 'complete' | 'rider_stop'
+    // when something to ride with was first found during the running search
+    rideCapableSince?: number
+    stopOfferTimer?: ReturnType<typeof setTimeout>
+    // devices connected when the rider started another search: shown as connected while it runs
+    carried: Set<string>
+}
 
 const getInterfaceSettings = (ifName,v) => {
     if(!v)
@@ -74,6 +90,19 @@ export class DevicePairingService  extends IncyclistService{
     protected static readonly STALLED_AFTER_MS = 30*1000
     protected stalledTimer?: ReturnType<typeof setTimeout>
     protected stalledLogged = false
+
+    // whether a Pairing page visit is open - see setVisitOpen()
+    protected visitOpen = false
+    protected visitOpenedAt?: number
+
+    // selection conflicts raised during the open visit, oldest first, one per device
+    protected pendingConflicts: Array<{udid:string, conflict:SelectionConflict}> = []
+    protected static conflictCounter = 0
+
+    // the Pairing page's search for devices, while a visit is open - see getSearchStatus()
+    protected static readonly SEARCH_DURATION_MS = { desktop: 60*1000, mobile: 30*1000 }
+    protected static readonly STOP_OFFER_DELAY_MS = 2000
+    protected search: SearchState = DevicePairingService.initialSearchState()
 
 
     protected onPairingStartedHandler = this.onPairingStarted.bind(this)
@@ -272,6 +301,535 @@ export class DevicePairingService  extends IncyclistService{
         return await this.stop([],true)
     }
 
+    /**
+     * Tells the service whether a Pairing page visit is open.
+     *
+     * Opening a visit clears every exclusion scoped `until-next-pairing`, so the rider's devices
+     * are re-evaluated from scratch. That happens on every call with `true`, also when a visit is
+     * already open, so a visit that was never closed (crash, fast navigation) can't keep one alive.
+     *
+     * While a visit is open, a device excluded as `not-available` keeps being tried, and is taken
+     * back into use as soon as it connects. Without an open visit neither happens: a device that
+     * connects in the background, e.g. during ride start, stays excluded.
+     *
+     * @param open `true` when the Pairing page opens, `false` when it is left
+     */
+    setVisitOpen(open:boolean):void {
+        try {
+            if (open) {
+                this.visitOpenedAt ??= Date.now()
+                this.getDeviceConfiguration().clearExclusions({scope:'until-next-pairing'})
+                // a new visit gets its own automatic search; opening an already open visit again doesn't
+                if (!this.visitOpen)
+                    this.resetSearch()
+            }
+            else {
+                delete this.visitOpenedAt
+                // the rider left without answering: the current selection is kept
+                this.dismissPendingConflicts('left_page')
+                if (this.search.phase==='running')
+                    this.endSearch('left_page')
+            }
+            this.visitOpen = open
+        }
+        catch(err) {
+            this.logError(err,'setVisitOpen')
+        }
+    }
+
+    /**
+     * The state of the Pairing page's search for devices.
+     *
+     * While a visit is open, a search is a bounded thing: it runs once when the page opens (if the
+     * saved devices can't make the ride ready), and ends when Resistance, Power, Speed, Cadence and
+     * Heartrate all hold a device (a switched-off one counts as filled), when its time is up, or
+     * when the rider stops it. Nothing searches again until the rider asks via {@link searchAgain}.
+     */
+    getSearchStatus():SearchStatus {
+        const running = this.search.phase==='running'
+        const ended = this.search.phase==='ended'
+        const rideCapableFound = this.isRideCapableFound()
+        const trainerFound = this.isTrainerFound()
+        const missing = this.getMissingSearchCapabilities()
+
+        const since = this.search.rideCapableSince
+        const canStop = running && rideCapableFound && missing.length>0 && since!==undefined
+            && Date.now()-since >= DevicePairingService.STOP_OFFER_DELAY_MS
+        const canSearchAgain = ended && !trainerFound && !this.isScanning()
+
+        return { running, ended, index:this.search.index, rideCapableFound, trainerFound, canStop, canSearchAgain, missing }
+    }
+
+    /**
+     * Ends the running search, keeping every device found so far. Does nothing if no search is running.
+     */
+    stopSearch():void {
+        try {
+            if (this.search.phase!=='running')
+                return
+            this.search.stopReason = 'rider_stop'
+            this.stopSearchScan()
+        }
+        catch(err) {
+            this.logError(err,'stopSearch')
+        }
+    }
+
+    /**
+     * Starts another search after the last one ended. Devices that are connected stay shown as
+     * connected while it runs, even though the search briefly stops them, and they are started
+     * again once it ends.
+     */
+    searchAgain():void {
+        try {
+            if (!this.visitOpen || this.search.phase!=='ended' || this.isScanning())
+                return
+
+            const fromState = this.state.canStartRide ? 'ready_without_trainer' : 'nothing_found'
+            this.logEvent({message:'pairing search again', fromState, searchIndex:this.search.index+1})
+
+            this.search.phase = 'none'
+            this.search.requested = true
+            this.search.carried = new Set( (this.state.capabilities??[])
+                .filter( c=> c.selected && c.connectState==='connected')
+                .map( c=>c.selected))
+
+            if (this.usage==='page')
+                this.emit('search-again')
+            else
+                this.run().catch( err=>{ this.logError(err,'searchAgain') })
+        }
+        catch(err) {
+            this.logError(err,'searchAgain')
+        }
+    }
+
+    /**
+     * Whether the pairing loop may start a search now: always while no visit is open, and while a
+     * visit is open only until its search has ended.
+     */
+    isSearchAllowed():boolean {
+        return !this.visitOpen || this.search.phase!=='ended'
+    }
+
+    /**
+     * Whether a search is running or the rider asked for one, so the pairing loop has to keep
+     * searching even though the devices found so far may already be enough to ride.
+     */
+    isSearchPending():boolean {
+        if (!this.visitOpen)
+            return false
+        return this.search.phase==='running' || (this.search.phase==='none' && this.search.requested)
+    }
+
+    protected static initialSearchState():SearchState {
+        return { phase:'none', index:0, requested:false, carried:new Set() }
+    }
+
+    protected resetSearch():void {
+        this.clearStopOfferTimer()
+        this.search = DevicePairingService.initialSearchState()
+    }
+
+    protected getSearchDuration():number {
+        const {desktop,mobile} = DevicePairingService.SEARCH_DURATION_MS
+        return this.usage==='page' ? mobile : desktop
+    }
+
+    protected getPlatform():'desktop'|'mobile' {
+        return this.usage==='page' ? 'mobile' : 'desktop'
+    }
+
+    // whether a scan belongs to the page's search (not to a device list, and only while a visit is open)
+    protected isSearchScan(props:PairingProps):boolean {
+        return this.visitOpen && !props.enforcedScan && !props.deviceList && !this.deviceSelectState
+    }
+
+    protected beginSearch():void {
+        this.search.phase = 'running'
+        this.search.index++
+        this.search.requested = false
+        this.search.startedAt = Date.now()
+        delete this.search.stopReason
+        delete this.search.rideCapableSince
+        this.updateSearchProgress()
+    }
+
+    /**
+     * Starts the search if it hasn't started yet, and ends it if its time is up.
+     * @returns whether a scan should run for the search now
+     */
+    protected prepareSearchScan():boolean {
+        if (this.search.phase==='ended')
+            return false
+        if (this.search.phase==='none')
+            this.beginSearch()
+
+        if (this.getSearchRemaining()<=0) {
+            this.endSearch('time')
+            return false
+        }
+        return true
+    }
+
+    protected getSearchRemaining():number {
+        const elapsed = Date.now() - (this.search.startedAt ?? Date.now())
+        return this.getSearchDuration() - elapsed
+    }
+
+    // a scan of the search has finished: decide whether the search ended, or the scan was only interrupted
+    protected onSearchScanDone():void {
+        if (this.search.phase!=='running')
+            return
+        if (this.search.stopReason) {
+            this.endSearch(this.search.stopReason)
+            return
+        }
+        // a small tolerance, as the interfaces' timers don't fire to the millisecond
+        if (this.getSearchRemaining()<=500)
+            this.endSearch('time')
+    }
+
+    protected endSearch(via:SearchEndReason):void {
+        const startedAt = this.search.startedAt
+        this.search.phase = 'ended'
+        delete this.search.stopReason
+        this.clearStopOfferTimer()
+
+        this.restoreCarriedDevices()
+
+        const capabilities = this.state.capabilities??[]
+        this.logEvent({
+            message:'pairing search ended',
+            via,
+            searchIndex: this.search.index,
+            foundCapabilities: capabilities.filter( c=>c.selected).map( c=>c.capability).join(','),
+            missingCapabilities: this.getMissingSearchCapabilities().join(','),
+            trainerFound: this.isTrainerFound(),
+            durationMs: startedAt===undefined ? 0 : Date.now()-startedAt,
+            platform: this.getPlatform(),
+        })
+        this.emitStateChange()
+    }
+
+    // devices that were connected before a repeated search have been stopped by it: hand them back to
+    // pairing so they are started again before the ride is ready
+    protected restoreCarriedDevices():void {
+        const carried = this.search.carried
+        this.search.carried = new Set()
+        if (carried.size===0)
+            return
+
+        const adapters = this.state.adapters??[]
+        ;(this.state.capabilities??[]).forEach( c=> {
+            if (!c.selected || !carried.has(c.selected))
+                return
+            const adapter = adapters.find( ai=>ai.udid===c.selected)?.adapter
+            if (!adapter?.isStarted())
+                c.connectState = 'waiting'
+        })
+    }
+
+    protected isCarried(udid:string|undefined):boolean {
+        return this.search.phase!=='ended' && udid!==undefined && this.search.carried.has(udid)
+    }
+
+    protected stopSearchScan():void {
+        this.stopScanning().catch( err=>{ this.logError(err,'stopSearchScan') })
+    }
+
+    // called whenever the found devices may have changed while a search runs
+    protected updateSearchProgress():void {
+        if (this.search.phase!=='running')
+            return
+
+        if (this.getMissingSearchCapabilities().length===0) {
+            if (!this.search.stopReason) {
+                this.search.stopReason = 'complete'
+                this.stopSearchScan()
+            }
+            return
+        }
+
+        if (this.search.rideCapableSince===undefined && this.isRideCapableFound()) {
+            this.search.rideCapableSince = Date.now()
+            // let the page know once Stop searching becomes available
+            this.clearStopOfferTimer()
+            this.search.stopOfferTimer = setTimeout( ()=>{
+                delete this.search.stopOfferTimer
+                this.emitStateChange()
+            }, DevicePairingService.STOP_OFFER_DELAY_MS)
+        }
+    }
+
+    protected clearStopOfferTimer():void {
+        if (this.search?.stopOfferTimer)
+            clearTimeout(this.search.stopOfferTimer)
+        if (this.search)
+            delete this.search.stopOfferTimer
+    }
+
+    // a slot counts as filled if it holds a device or the rider switched it off; Controller never counts
+    protected getMissingSearchCapabilities():IncyclistCapability[] {
+        return DevicePairingService.SEARCH_CAPABILITIES.filter( capability=> {
+            const c = this.getCapability(capability)
+            return !c?.selected && !c?.disabled
+        })
+    }
+
+    protected static readonly SEARCH_CAPABILITIES:IncyclistCapability[] = [
+        IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed,
+        IncyclistCapability.Cadence, IncyclistCapability.HeartRate,
+    ]
+
+    protected isRideCapableFound():boolean {
+        return [IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed]
+            .some( capability=> {
+                const c = this.getCapability(capability)
+                return Boolean(c?.selected) && !c?.disabled
+            })
+    }
+
+    // a switched-off Resistance counts as found: the rider said they don't use a trainer
+    protected isTrainerFound():boolean {
+        const control = this.getCapability(IncyclistCapability.Control)
+        return Boolean(control?.selected) || Boolean(control?.disabled)
+    }
+
+    /**
+     * The selection conflicts raised during the open visit that the rider hasn't answered yet,
+     * oldest first, one per device.
+     */
+    getPendingConflicts():SelectionConflict[] {
+        return this.pendingConflicts.map( e=> clone(e.conflict))
+    }
+
+    /**
+     * Answers a pending conflict: the device replaces the current one in each of the `replace`
+     * capabilities, and every other row keeps the current device.
+     *
+     * The rows are checked again now, so a capability whose slot no longer holds a different
+     * device (it was changed since the conflict was raised) is left alone. The selection itself
+     * goes through {@link selectDevice}'s object mode.
+     *
+     * @param id the conflict's `id`
+     * @param replace the capabilities in which the device should replace the current one
+     */
+    async resolveConflict(id:string, replace:IncyclistCapability[]):Promise<void> {
+        try {
+            const entry = this.takePendingConflict(id)
+            if (!entry)
+                return
+
+            const {udid, conflict} = entry
+            const asked = conflict.conflicts.map( c=>c.capability)
+            const stillConflicting = new Set(this.computeSelectionImpact(udid, asked).conflicts.map( c=>c.capability))
+            const toReplace = (replace??[]).filter( c=> stillConflicting.has(c))
+
+            if (toReplace.length>0) {
+                const [first,...rest] = toReplace
+                await this.selectDevice(first, udid, {others:'fill-empty', replace:rest})
+            }
+            this.logConflictResolved(conflict, 'done', toReplace.length)
+        }
+        catch(err) {
+            this.logError(err,'resolveConflict')
+        }
+    }
+
+    /**
+     * Closes a pending conflict without changing anything: the current device is kept in every row.
+     *
+     * @param id the conflict's `id`
+     * @param via whether the rider dismissed it, or left the page without answering
+     */
+    dismissConflict(id:string, via:ConflictDismissal='dismissed'):void {
+        try {
+            const entry = this.takePendingConflict(id)
+            if (entry)
+                this.logConflictResolved(entry.conflict, via, 0)
+        }
+        catch(err) {
+            this.logError(err,'dismissConflict')
+        }
+    }
+
+    protected dismissPendingConflicts(via:ConflictDismissal):void {
+        const pending = this.pendingConflicts
+        this.pendingConflicts = []
+        pending.forEach( e=> { this.logConflictResolved(e.conflict, via, 0) })
+    }
+
+    protected takePendingConflict(id:string):{udid:string, conflict:SelectionConflict}|undefined {
+        const idx = this.pendingConflicts.findIndex( e=>e.conflict.id===id)
+        if (idx===-1)
+            return undefined
+        const [entry] = this.pendingConflicts.splice(idx,1)
+        return entry
+    }
+
+    /**
+     * A detected device was added: logs the empty slots it filled, and raises a conflict for the
+     * slots it's newly known for that already hold a different device. Capabilities it was
+     * retracted from again (deleted earlier in this session) are left out of both.
+     */
+    protected onDeviceAdded(udid:string, added:AddDeviceResult, retracted:IncyclistCapability[]):void {
+        try {
+            const autoSelected = added.autoSelected.filter( a=> !retracted.includes(a.capability))
+            autoSelected.forEach( a=> {
+                this.logEvent({message:'device auto selected', capability:a.capability, rule:a.rule, visitOpen:this.visitOpen})
+            })
+
+            const newlyKnown = added.newlyKnown.filter( c=> !retracted.includes(c))
+            this.raiseDetectionConflict(udid, newlyKnown, autoSelected.map( a=>a.capability))
+        }
+        catch(err) {
+            this.logError(err,'onDeviceAdded')
+        }
+    }
+
+    // only a device that's newly known for a capability is asked about it, so a device already known
+    // for it is never asked again; nothing is replaced until the rider answers
+    protected raiseDetectionConflict(udid:string, newlyKnown:IncyclistCapability[], filled:IncyclistCapability[]):void {
+        if (newlyKnown.length===0)
+            return
+
+        const {conflicts} = this.computeSelectionImpact(udid, newlyKnown)
+        if (conflicts.length===0)
+            return
+
+        const deviceName = this.getCapabilityDevice(newlyKnown[0],udid)?.name
+            ?? this.getDeviceConfiguration().getAdapter(udid)?.getUniqueName() ?? ''
+
+        if (!this.visitOpen) {
+            // no page to ask on: keep the current selection, as if the rider had left the page
+            const conflict:SelectionConflict = {id:this.nextConflictId(udid), origin:'detection', deviceName, filled, conflicts}
+            this.logConflictShown(conflict, conflicts.length, 0)
+            this.logConflictResolved(conflict, 'left_page', 0)
+            return
+        }
+
+        const conflict = this.addPendingConflict(udid, deviceName, filled, conflicts)
+        this.logConflictShown(conflict, conflicts.length, this.pendingConflicts.length-1)
+        this.emit('selection-conflict', clone(conflict))
+    }
+
+    // one entry per device: a device that raises another conflict in the same visit gets its rows added to its entry
+    protected addPendingConflict(udid:string, deviceName:string, filled:IncyclistCapability[], conflicts:SelectionConflict['conflicts']):SelectionConflict {
+        const existing = this.pendingConflicts.find( e=>e.udid===udid)?.conflict
+        if (!existing) {
+            const conflict:SelectionConflict = {id:this.nextConflictId(udid), origin:'detection', deviceName, filled, conflicts}
+            this.pendingConflicts.push({udid, conflict})
+            return conflict
+        }
+
+        filled.filter( c=> !existing.filled.includes(c)).forEach( c=> existing.filled.push(c))
+        conflicts.filter( c=> !existing.conflicts.some( e=>e.capability===c.capability)).forEach( c=> existing.conflicts.push(c))
+        return existing
+    }
+
+    protected nextConflictId(udid:string):string {
+        return `${udid}:${++DevicePairingService.conflictCounter}`
+    }
+
+    // capability names and counts only: device names are never logged
+    protected logConflictShown(conflict:SelectionConflict, conflictCount:number, queued:number):void {
+        this.logEvent({
+            message:'device select conflict shown',
+            origin: conflict.origin,
+            conflictCount,
+            conflictCapabilities: conflict.conflicts.map( c=>c.capability).join(','),
+            queued,
+        })
+    }
+
+    protected logConflictResolved(conflict:SelectionConflict, resolution:'done'|ConflictDismissal, replacedCount:number):void {
+        this.logEvent({
+            message:'device select conflict resolved',
+            origin: conflict.origin,
+            resolution,
+            replacedCount,
+            conflictCount: conflict.conflicts.length,
+        })
+    }
+
+    /**
+     * Whether pairing has nothing left to do: every active capability is connected, and no device
+     * excluded as `not-available` is still being waited for while a visit is open.
+     *
+     * Both pairing modes use this to decide whether to keep trying, so they agree on it.
+     */
+    isPairingSettled():boolean {
+        return this.checkPairingComplete() && !this.isAwaitingExcludedDevice()
+    }
+
+    /** Whether a visit is open and a device excluded as `not-available` should still be tried. */
+    protected isAwaitingExcludedDevice():boolean {
+        if (!this.visitOpen)
+            return false
+        return this.getRevertableExclusions().length>0
+    }
+
+    protected getRevertableExclusions(udid?:string):CapabilityExclusion[] {
+        return this.getDeviceConfiguration().getExclusions()
+            .filter( e=> e.reason==='not-available' && (udid===undefined || e.udid===udid))
+    }
+
+    /**
+     * A device excluded as `not-available` has connected. If a visit is open, it's taken back into
+     * use for every capability it was excluded from.
+     */
+    protected revertExclusionsOnConnect(udid:string):void {
+        try {
+            if (!this.visitOpen || !udid)
+                return
+
+            const reverted = this.getRevertableExclusions(udid)
+            if (reverted.length===0)
+                return
+
+            const configuration = this.getDeviceConfiguration()
+            reverted.forEach( e=> { configuration.includeCapability(e.capability) })
+
+            const now = Date.now()
+            const since = Math.min(...reverted.map(e=>e.since))
+            this.logEvent({
+                message:'pairing fallback reverted',
+                msSinceOpen: this.visitOpenedAt===undefined ? undefined : now-this.visitOpenedAt,
+                msSinceFallback: now-since,
+            })
+            this.emit('exclusion-reverted', {udid, capabilities: reverted.map(e=>e.capability)})
+        }
+        catch(err) {
+            this.logError(err,'revertExclusionsOnConnect')
+        }
+    }
+
+    /**
+     * The adapters of excluded devices that are still trying to connect. A device that is still in
+     * use for a capability that isn't excluded is not included.
+     */
+    protected getExcludedPairingAttempts():AdapterInfo[] {
+        try {
+            const configuration = this.getDeviceConfiguration()
+            const excluded = new Set(configuration.getExclusions().map(e=>e.udid))
+            if (excluded.size===0)
+                return []
+
+            const inUse = new Set(configuration.getSelectedDevices().map(d=>d.selected))
+            return (this.state?.adapters??[])
+                .filter( ai=> excluded.has(ai.udid) && !inUse.has(ai.udid) && !ai.adapter?.isStarted())
+        }
+        catch(err) {
+            this.logError(err,'getExcludedPairingAttempts')
+            return []
+        }
+    }
+
+    protected async stopPairingAttempts(adapters:AdapterInfo[]):Promise<void> {
+        await Promise.allSettled( adapters.map( ai=> ai.adapter.stop()))
+    }
+
 
     async prepareStart(adapterFilter:Array<string>=[]):Promise<void> {
         const stillPairing = this.isPairing()
@@ -281,6 +839,11 @@ export class DevicePairingService  extends IncyclistService{
         this.logEvent({message:'Stop Pairing (OK)', stillPairing,stillScanning})
         try {
             this.pauseAdapters(adapters.filter( a=> !adapterFilter.includes(a.udid)));
+
+            // the ride won't use an excluded device, so a connection attempt still running for one is stopped
+            const excludedAttempts = this.getExcludedPairingAttempts()
+            if (excludedAttempts.length>0)
+                await this.stopPairingAttempts(excludedAttempts)
 
             // Pairing is intentionally left running in the background here: the user is only
             // skipping the pairing *page*, not asking to abandon devices that may still connect.
@@ -419,26 +982,28 @@ export class DevicePairingService  extends IncyclistService{
      * 
      * @param capability the capability to be managed <br><br> One of ( 'control', 'power', 'heartrate', 'speed', 'cadence')
      * @param udid The unique device ID of the device to be selected
-     * @param addAll if true, the device will be selected for all capability it supports
-     * 
-     * @example 
+     * @param mode `true` selects the device for every capability it supports (today's "for all"), `false` (default)
+     * this slot only, and `{others:'fill-empty', replace}` fills whatever is empty and replaces only the named
+     * capabilities - both re-evaluated at commit, see {@link previewSelectDevice}
+     *
+     * @example
      * const service = useDevicePairing()
      * await service.selectDevice('control,'508c6bf1-3f2f-4e8d-bcef-bc1910bd2f07', true)
-     * 
-     * @throws  
+     *
+     * @throws
      * Does not throw errors
-     * 
+     *
     */
-   async selectDevice(capability:IncyclistCapability,udid:string, addAll:boolean=false):Promise<void> {
-        
+   async selectDevice(capability:IncyclistCapability,udid:string, mode:SelectDeviceMode=false):Promise<void> {
+
         let changed:boolean = false;
-    
+
         try {
-            const adapter = this.getDeviceAdapter(udid) 
+            const adapter = this.getDeviceAdapter(udid)
             if (!adapter)
                 return;
-            
-            if (addAll) {
+
+            if (mode===true) {
                 const capabilities = adapter.getCapabilities().filter( name=> this.wouldChangeCapability(name,udid) )
 
                 capabilities.forEach( (c,idx) => {
@@ -447,22 +1012,97 @@ export class DevicePairingService  extends IncyclistService{
                     changed = changed || wasChanged
                 })
             }
+            else if (mode && typeof mode==='object') {
+                changed = this.selectDeviceObjectMode(capability,udid,mode)
+            }
             else {
                 changed = this.selectCapabilityDevice(capability,udid)
-            }        
+            }
 
             if (changed) {
                 this.emitStateChange({capabilities:this.state.capabilities})
-                
+
             }
 
             this.checkCanStart()
-            await this._stopDeviceSelection(changed)      
-    
+            await this._stopDeviceSelection(changed)
+
         }
         catch (err) { // istanbul ignore next
-            this.logError(err, 'selectDevice',{capability,udid,addAll})
+            this.logError(err, 'selectDevice',{capability,udid,mode})
         }
+    }
+
+    /**
+     * What picking `udid` for `capability` would also do to the device's other capabilities:
+     * which empty slots it would fill, which already hold it, and which hold a different device.
+     * Skips a capability that's `disabled` or has this udid on its session delete list - the
+     * object mode never touches those either, see {@link selectDeviceObjectMode}.
+     */
+    previewSelectDevice(capability:IncyclistCapability, udid:string):SelectionImpact {
+        const adapter = this.getDeviceAdapter(udid)
+        if (!adapter)
+            return {filled:[], unchanged:[], conflicts:[]}
+
+        const candidates = adapter.getCapabilities().filter( c=> c!==capability )
+        return this.computeSelectionImpact(udid,candidates)
+    }
+
+    /**
+     * Classifies each of `candidateCapabilities` by what picking `udid` for it would do right
+     * now: empty (`filled`), already this device (`unchanged`), or holding a different device
+     * (`conflicts`). Shared by the manual preview above and, later, by detection - manual passes
+     * every other capability the device supports, detection passes only the ones it's newly
+     * known for.
+     */
+    protected computeSelectionImpact(udid:string, candidateCapabilities:IncyclistCapability[]):SelectionImpact {
+        const filled: IncyclistCapability[] = []
+        const unchanged: IncyclistCapability[] = []
+        const conflicts: Array<{capability:IncyclistCapability, currentName:string}> = []
+
+        candidateCapabilities.forEach( capability => {
+            const c = this.getCapability(capability)
+            if (!c || c.disabled || this.isOnDeletedList(capability,udid))
+                return
+
+            if (c.selected===udid)
+                unchanged.push(capability)
+            else if (!c.selected)
+                filled.push(capability)
+            else
+                conflicts.push({capability, currentName:c.deviceName})
+        })
+
+        return {filled, unchanged, conflicts}
+    }
+
+    /**
+     * Selects `udid` for `capability`, then, for every other capability the device supports:
+     * skips it if `disabled` or on this device's session delete list, otherwise fills it if
+     * empty or replaces it if named in `mode.replace` - read fresh here rather than from a
+     * caller's earlier {@link previewSelectDevice}, so a slot filled in the meantime is kept.
+     */
+    protected selectDeviceObjectMode(capability:IncyclistCapability, udid:string, mode:{others:'fill-empty', replace:IncyclistCapability[]}):boolean {
+        let changed = this.selectCapabilityDevice(capability,udid,false)
+
+        const adapter = this.getDeviceAdapter(udid)
+        const others = adapter.getCapabilities().filter( c=> c!==capability )
+
+        others.forEach( c => {
+            const current = this.getCapability(c)
+            if (!current || current.disabled || this.isOnDeletedList(c,udid))
+                return
+
+            const isEmpty = !current.selected
+            const shouldReplace = mode.replace.includes(c)
+            if (!isEmpty && !shouldReplace)
+                return
+
+            const wasChanged = this.selectCapabilityDevice(c,udid,false)
+            changed = changed || wasChanged
+        })
+
+        return changed
     }
 
    /**
@@ -698,7 +1338,12 @@ export class DevicePairingService  extends IncyclistService{
 
         }
 
-        (this.state.capabilities??[]).forEach(c => c.connectState='waiting')
+        (this.state.capabilities??[]).forEach(c => {
+            // a device connected before the rider searched again keeps showing as connected
+            if (this.isCarried(c.selected) && c.connectState==='connected')
+                return
+            c.connectState='waiting'
+        })
         this.state.waiting = true;
     }
 
@@ -837,7 +1482,7 @@ export class DevicePairingService  extends IncyclistService{
         if (this.isPairing() || this.isScanning())
             return false
 
-        const selected = (this.state.capabilities??[]).filter( c=>c.selected )
+        const selected = (this.state.capabilities??[]).filter( c=>isCapabilityActive(c) )
         return selected.length>0 && selected.every( c=>c.connectState==='waiting')
     }
 
@@ -847,7 +1492,8 @@ export class DevicePairingService  extends IncyclistService{
             return
 
         this.stalledLogged = true
-        // only enums, booleans and names of interfaces and capabilities: no device names or ids
+        // only enums, booleans and comma-joined interface/capability names and states: no object
+        // arrays (a key must have one type across every event in the index), no device names or ids
         this.logEvent({
             message: 'pairing stalled',
             usage: this.usage,
@@ -855,8 +1501,8 @@ export class DevicePairingService  extends IncyclistService{
             isScanning: this.isScanning(),
             waiting: Boolean(this.state.waiting),
             sentinel: this.state.tsPrevStart===-1,
-            interfaces: (this.state.interfaces??[]).map( i=>({name:i.name, state:i.state})),
-            capabilities: (this.state.capabilities??[]).filter( c=>c.selected).map( c=>({capability:c.capability, connectState:c.connectState})),
+            interfaceStates: (this.state.interfaces??[]).map( i=>`${i.name}:${i.state}`).join(','),
+            capabilityStates: (this.state.capabilities??[]).filter( c=>c.selected).map( c=>`${c.capability}:${c.connectState}`).join(','),
         })
     }
 
@@ -973,6 +1619,8 @@ export class DevicePairingService  extends IncyclistService{
             this.updateCapabilityConfig()
 
             this.checkCanStart()
+            // the rider may have filled or switched off the last missing slot meanwhile
+            this.updateSearchProgress()
         }
         catch (err) { // istanbul ignore next
             this.logError(err,'onConfigurationUpdate')   
@@ -1185,12 +1833,17 @@ export class DevicePairingService  extends IncyclistService{
         if (notify && changed) {
             if (this.settings.onStateChanged && typeof this.settings.onStateChanged === 'function') {
                 this.settings.onStateChanged({capabilities})
-            }   
+            }
         }
 
         if (this.usage==='page') {
             this.emit('state-update')
         }
+
+        // every connect path of both pairing modes (pairing success, detection during a scan,
+        // an adapter found already running) ends up here
+        if (connectState==='connected')
+            this.revertExclusionsOnConnect(udid)
     }
 
     protected onPairingStarted() {
@@ -1200,7 +1853,10 @@ export class DevicePairingService  extends IncyclistService{
 
         
         toBeStarted.forEach( ai=> {
-            const {udid} = ai;           
+            const {udid} = ai;
+            // stopped by the search the rider started, not reconnecting: keep showing it as connected
+            if (this.isCarried(udid))
+                return
             this.onPairingStatusUpdate(udid,'connecting',false)
         })
         if (this.settings.onStateChanged && typeof this.settings.onStateChanged === 'function') {
@@ -1351,7 +2007,8 @@ export class DevicePairingService  extends IncyclistService{
     protected onDeviceDetected(deviceSettings:IncyclistDeviceSettings) {
 
         try {
-            const udid = this.getDeviceConfiguration().add(deviceSettings,{legacy:false})
+            let added:AddDeviceResult|undefined
+            const udid = this.getDeviceConfiguration().add(deviceSettings,{legacy:false, onAdded:(result)=>{ added=result }})
             this.logEvent({message:'device detected',device:deviceSettings,udid, isScanning:this.isScanning()})
 
             if(!udid) {
@@ -1375,6 +2032,9 @@ export class DevicePairingService  extends IncyclistService{
             deletedCapabilities.forEach( capability => {
                 this.getDeviceConfiguration().delete(udid,capability,true)
             })
+
+            if (added)
+                this.onDeviceAdded(udid, added, deletedCapabilities)
 
             const adapter = this.getDeviceConfiguration().getAdapter(udid)
 
@@ -1404,6 +2064,7 @@ export class DevicePairingService  extends IncyclistService{
             // connecting or have failed keep their state
             this.onPairingStatusUpdate(udid,'connected',true,true)
 
+            this.updateSearchProgress()
         }
         catch(err) {
             this.logError(err,'onDeviceDetected')
@@ -1512,10 +2173,17 @@ export class DevicePairingService  extends IncyclistService{
         const power = this.getCapability(IncyclistCapability.Power)
         const speed =  this.getCapability(IncyclistCapability.Speed)
 
-        const controlOK = (control?.selected && control?.connectState==='connected')
-        const powerOK = (!control?.selected && power?.selected && power?.connectState==='connected')
-        const speedOK = (!control?.selected && !power?.selected && speed?.selected && speed?.connectState==='connected')
-        
+        const controlActive = isCapabilityActive(control)
+        const powerActive = isCapabilityActive(power)
+        const speedActive = isCapabilityActive(speed)
+
+        // a switched-off or excluded tier is skipped entirely, not treated as "still occupying
+        // the slot" - a disabled Resistance tile with a connected power meter must not block
+        // the ride on the power meter's tier
+        const controlOK = (controlActive && control?.connectState==='connected')
+        const powerOK = (!controlActive && powerActive && power?.connectState==='connected')
+        const speedOK = (!controlActive && !powerActive && speedActive && speed?.connectState==='connected')
+
         const success = controlOK || powerOK || speedOK
             
 
@@ -1528,7 +2196,7 @@ export class DevicePairingService  extends IncyclistService{
     checkPairingComplete():boolean {
 
         const incomplete = this.state.capabilities.find(c => {
-            return (c.selected && c.connectState !== 'connected')
+            return (isCapabilityActive(c) && c.connectState !== 'connected')
         });
 
         return !incomplete
@@ -1599,8 +2267,12 @@ export class DevicePairingService  extends IncyclistService{
 
         //await this.waitForInterfacesInitialized()
 
-        if (configOKToStart && !this.deviceSelectState && !props.enforcedScan)  {
-            if (this.checkPairingSuccess()!==true)
+        // a running search (or one the rider asked for) keeps searching, even if what it found is enough to ride
+        const searchPending = this.isSearchPending() && !this.deviceSelectState && !props.enforcedScan
+
+        if (configOKToStart && !this.deviceSelectState && !props.enforcedScan && !searchPending)  {
+            // ready to ride, but a device excluded as not available is still tried while the page is open
+            if (this.checkPairingSuccess()!==true || this.isAwaitingExcludedDevice())
                 await this.startPairing(adapters, props);
             else {
                 this.logEvent({message:'Pairing completed'})
@@ -1608,9 +2280,10 @@ export class DevicePairingService  extends IncyclistService{
             }
 
         }
-        else {
+        else if (searchPending || props.enforcedScan || this.deviceSelectState || this.isSearchAllowed()) {
             await this.startScanning(adapters, props);
         }
+        // otherwise the page's search has ended: nothing searches until the rider asks again
     }
 
     getState() {
@@ -1625,7 +2298,7 @@ export class DevicePairingService  extends IncyclistService{
     }
 
     async startPairing(adapters: AdapterInfo[], props: PairingProps) {
-        if (this.checkPairingComplete())  {
+        if (this.isPairingSettled())  {
             if (this.usage==='page')
                 this.emit('pairing-done');
             return;
@@ -1718,7 +2391,7 @@ export class DevicePairingService  extends IncyclistService{
 
         this.emit('pairing-done');
 
-        if (!this.checkPairingComplete()) {
+        if (!this.isPairingSettled()) {
             this.logEvent({ message: 'Pairing done', adapters, props });
                 await this.rideService.stop()
 
@@ -1809,28 +2482,19 @@ export class DevicePairingService  extends IncyclistService{
             return;
         }
 
+        const isSearch = this.isSearchScan(props)
+        if (isSearch && !this.prepareSearchScan()) {
+            if (this.usage==='page')
+                this.emit('scanning-done')
+            return;
+        }
+
         const preparing = DevicePairingService.scanCounter++
         this.state.scan={preparing,adapters:[]}   // will cause that next call to isPairing() will be true
                     
 
         if (interfaces.length===0) {
-            if (this.state.scanTo) 
-                return;
-
-            this.state.scanTo = setTimeout(() => {
-                delete this.state.scanTo
-                if (this.usage==='page') {
-                    this.emit('scanning-done')
-                    delete this.state.scan
-                    return;
-                }
-
-                if ( !this.isPairing() && (!this.isScanning()  || this.state.scan.preparing===preparing)) {
-                    delete this.state.scan
-                    this.run().catch( err=>{ this.logError(err,'startScanning') })
-                }
-            }, 1000);
-
+            this.scheduleScanRetryWhenNoInterfaces(preparing)
             return;
         }
 
@@ -1840,28 +2504,71 @@ export class DevicePairingService  extends IncyclistService{
 
         this.state.tsPrevStart = Date.now();
 
-        // multiple scans can be triggered within a few ms 
+        // multiple scans can be triggered within a few ms
 
         if (this.usage!=='page' &&  this.isScanning() && this.state.scan.preparing!==preparing)
             return;
 
 
+        await this.stopInterfacesForScan(interfaces, props)
+
+        this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props})
+        this.initScanningCallbacks()
+
+        let timeout = props.enforcedScan ? 1000*60*60 /*1h*/ : undefined
+        if (isSearch)
+            timeout = Math.max(this.getSearchRemaining(),1000)
+        interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
+                            .map(i=>i.name)
+        const promise = this.access.scan({interfaces,excludeDisabled:true},{includeKnown:props.enforcedScan, timeout, timeoutAllInterfaces:isSearch})
+        this.state.scan = {promise, adapters:[]}
+        this.onPairingStarted()
+
+        await this.awaitScanPromise(promise)
+
+        if (isSearch)
+            this.onSearchScanDone()
+
+        this.emit('scanning-done')
+        this.emitStateChange({capabilities:this.state.capabilities})
+
+
+        if (this.usage==='page') {
+            return;
+        }
+
+        await this.restartAfterScan(props)
+
+    }
+
+    protected scheduleScanRetryWhenNoInterfaces(preparing: number) {
+        if (this.state.scanTo)
+            return;
+
+        this.state.scanTo = setTimeout(() => {
+            delete this.state.scanTo
+            if (this.usage==='page') {
+                this.emit('scanning-done')
+                delete this.state.scan
+                return;
+            }
+
+            if ( !this.isPairing() && (!this.isScanning()  || this.state.scan.preparing===preparing)) {
+                delete this.state.scan
+                this.run().catch( err=>{ this.logError(err,'startScanning') })
+            }
+        }, 1000);
+    }
+
+    protected async stopInterfacesForScan(interfaces: string[], props: PairingProps) {
         this.logEvent({message:'Stopping Adapters',interfaces:interfaces.join(','),props})
         const stopPromises = []
         interfaces.forEach( i=> stopPromises.push(this.stopAdaptersOnInterface(i)))
         await Promise.allSettled(stopPromises)
         this.deregisterScanningDataHandlers()
+    }
 
-        this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props})
-        this.initScanningCallbacks()
-        
-        const timeout = props.enforcedScan ? 1000*60*60 /*1h*/ : undefined
-        interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
-                            .map(i=>i.name)
-        const promise = this.access.scan({interfaces,excludeDisabled:true},{includeKnown:props.enforcedScan, timeout})
-        this.state.scan = {promise, adapters:[]}
-        this.onPairingStarted()
-
+    protected async awaitScanPromise(promise: Promise<DeviceSettings[]>) {
         try {
             await promise
             this.cleanupScan()
@@ -1871,15 +2578,9 @@ export class DevicePairingService  extends IncyclistService{
         catch(err) {
             this.logError(err,'start()->scan')
         }
+    }
 
-        
-        this.emit('scanning-done')
-        this.emitStateChange({capabilities:this.state.capabilities})
-        
-
-        if (this.usage==='page') {
-            return;
-        }
+    protected async restartAfterScan(props: PairingProps) {
         // after timeout, re-start to either trigger pairing or scan again
         // we don't do this for enforced scans, as the don't have timeouts, i.e. are always trigger manually
         if (!props.enforcedScan) {
@@ -1888,10 +2589,6 @@ export class DevicePairingService  extends IncyclistService{
             await sleep(500)
             this.run().catch( err=>{ this.logError(err,'startScanning') })
         }
-        
-
-        
-
     }
 
     protected deregisterScanningDataHandlers() {
@@ -2325,6 +3022,10 @@ export class DevicePairingService  extends IncyclistService{
         }
         this.removePairingCallbacks()
         this.removeScanningCallbacks()
+        this.visitOpen = false
+        delete this.visitOpenedAt
+        this.pendingConflicts = []
+        this.resetSearch()
     }
 
     @Injectable

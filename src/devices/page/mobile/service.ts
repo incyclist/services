@@ -10,7 +10,7 @@ import { Observer } from '../../../base/types'
 import type { InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, PairingDisplayProps, TIncyclistCapability, TInterface } from '../../../types'
 
 import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../../access'
-import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, toPairingInterfaceStates } from '../../pairing'
+import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, isCapabilityActive, toPairingInterfaceStates } from '../../pairing'
 import { useIncyclist } from '../../../ui'
 
 /**
@@ -64,6 +64,7 @@ export class MobilePairingPageService extends PairingPageService {
                 canStartRide: this.canStartRide(),
                 loading,
                 rideMode: this.isPairingForRide,
+                ...this.getSearchStatusSource(),
             })
             const capProps = caps.map( c=>this.getCapabilityDisplayProps( c, status.id==='S1' ))
 
@@ -80,13 +81,13 @@ export class MobilePairingPageService extends PairingPageService {
                 CP('app_control')
             ].filter( c=>c!==null && c!==undefined)
 
-            const trainerSelected = Boolean(caps.find( c=>c.capability===IncyclistCapability.Control)?.selected)
+            const trainerSelected = isCapabilityActive(caps.find( c=>c.capability===IncyclistCapability.Control))
             const rowLabels = {
-                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected)),
+                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking())),
                 bottom: getPairingGuidanceText('row-optional'),
             }
 
-            const buttons = this.getButtonsDisplayProps()
+            const buttons = this.getButtonsDisplayProps(status.id==='S1')
 
             return {
 
