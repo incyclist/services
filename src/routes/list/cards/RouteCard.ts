@@ -147,9 +147,54 @@ export class RouteCard extends BaseCard implements Card<Route> {
         if (!descr?.hasVideo || descr?.videoUrl===undefined)
             return false
 
-        const videoUrl = descr.videoUrl
+        return this.urlExists(descr.videoUrl)
+    }
 
-        if (!descr.videoUrl)
+    /**
+     * Brings back the download state of a route whose video file is on disk, but whose description
+     * was persisted without it (the repo write that carried the completed download used to get lost
+     * when it overlapped the previous one). The details record was written independently and still
+     * points to the local file, which is what gives the state away.
+     *
+     * Only acts if that file is really there, so a download that was removed in the meantime is
+     * not mistaken for one that was lost.
+     */
+    async recoverDownloadState():Promise<boolean> {
+        const descr = this.getRouteDescription()
+        const localUrl = this.getRouteData()?.video?.url
+
+        if (!descr?.hasVideo || descr.isLocal || descr.isDownloaded)
+            return false
+        if (!localUrl || !(localUrl.startsWith('video:///') || localUrl.startsWith('file:///')))
+            return false
+
+        // The remote source the file was downloaded from. A download is the only thing that leaves a
+        // local file named after it, so this keeps a video the user picked for the route themselves
+        // from being taken for a download. (On mobile the description's videoUrl may already have been
+        // pointed to the local file when the details were loaded, hence not looking at it alone.)
+        const remote = [descr.downloadUrl, descr.originalVideoUrl, descr.videoUrl].find( u=>u?.startsWith('http'))
+        if (!remote || this.fileNameOf(remote)!==this.fileNameOf(localUrl))
+            return false
+        if (!(await this.urlExists(localUrl)))
+            return false
+
+        descr.originalVideoUrl ??= remote
+        descr.downloadUrl ??= remote
+        descr.videoUrl = localUrl
+        descr.isDownloaded = true
+
+        await this.save()
+        this.emitUpdate()
+        return true
+    }
+
+    protected fileNameOf(url:string):string {
+        const name = url.split('?')[0].split(/[\\/]/).pop() ?? ''
+        return this.cleanupEncoding(name)
+    }
+
+    protected async urlExists(videoUrl:string|undefined):Promise<boolean> {
+        if (!videoUrl)
             return true
 
         // Some import/self-heal paths produce an extra leading slash (video:////, file:////)

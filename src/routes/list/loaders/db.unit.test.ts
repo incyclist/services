@@ -402,6 +402,34 @@ describe('RoutesDbLoader',()=>{
 
         })
 
+        // A download completion saves the route twice in the same tick (original video URL first,
+        // then the downloaded state). The second change arrives while the first repo write is in
+        // flight and must still make it to disk, otherwise the download is forgotten on restart.
+        test('a change made while a repo write is in flight is persisted',async ()=>{
+            const dlRoute:Route = routes.find( r=>r.description.requiresDownload) as Route
+
+            loaderObj.tsLastWrite = undefined
+            loaderObj.isDirty = false
+            routesRepo.write = jest.fn( async ()=> { await new Promise( done=>setTimeout(done,20)); return true })
+
+            dlRoute.description.originalVideoUrl = dlRoute.description.videoUrl
+            const first = loader.save( dlRoute, false)
+
+            dlRoute.description.isDownloaded = true
+            dlRoute.description.videoUrl = 'file:///videos/downloaded.mp4'
+            const second = loader.save( dlRoute, false)
+
+            await Promise.all([first,second])
+            await new Promise( done=>setTimeout(done,1300))
+
+            const writes = (routesRepo.write as jest.Mock).mock.calls.filter( c=>c[0]==='db')
+            const last = writes[writes.length-1][1] as unknown as Array<RouteInfo>
+            const persisted = last.find( d=>d.id===dlRoute.description.id)
+
+            expect(persisted?.isDownloaded).toBe(true)
+            expect(persisted?.videoUrl).toBe('file:///videos/downloaded.mp4')
+        })
+
     })
 
     describe( 'delete',()=>{
