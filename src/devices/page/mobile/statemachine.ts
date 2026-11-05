@@ -210,41 +210,10 @@ export class PairingPageStateMachine {
             this.logger.logEvent({message:'check next action', hasDevices})
 
             if (hasDevices && this.selectState==='Closed' && !searchPending) {
-
-                // same "done" rule as the direct pairing loop, which also covers retrying a device
-                // excluded as not available while the page is open
-                const pairingDone = service.isPairingSettled()
-
-                if (pairingDone) {
-                    //service.stopPairing
-                    service.prepareForRide()
-                    this.resetTimeouts()
-                    this.setState('Done')
-                    //this.setState('Idle')
-                }
-                else if (!this.pairingPromise) {
-                    // guard against overlapping startPairing() calls: performCheck() can be
-                    // triggered multiple times (e.g. repeated onDeviceSelectionClosed() calls)
-                    // before a previous startPairing() call has settled. DevicePairingService's
-                    // own reentrancy guard doesn't apply while usage==='page', so without this
-                    // the state machine could end up with several overlapping pairing attempts
-                    // racing each other and get stuck in 'Pairing' forever.
-                    this.setState('Pairing')
-                    this.pairingPromise = Promise.resolve(service.startPairing(adapters, {}))
-                        .catch( err=>{ this.logError(err,'startPairing') })
-                        .finally( ()=>{ delete this.pairingPromise })
-                }
-
+                this.checkPairingProgress(service, adapters)
             }
             else if ((this.selectState==='Closed' && !searchEnded) || this.selectState==='Active'){
-                if (!this.scanningPromise) {
-                    // same overlap guard as above, applied to startScanning()
-                    this.setState('Scanning')
-                    const props = this.selectState==='Active' ? {deviceList:true} : {}
-                    this.scanningPromise = Promise.resolve(service.startScanning(adapters, props))
-                        .catch( err=>{ this.logError(err,'startScanning') })
-                        .finally( ()=>{ delete this.scanningPromise })
-                }
+                this.checkScanningProgress(service, adapters)
             }
 
 
@@ -258,7 +227,44 @@ export class PairingPageStateMachine {
 
     }
 
-    protected onPairingStarted() {      
+    protected checkPairingProgress( service:ReturnType<typeof this.getDevicePairing>, adapters:ReturnType<ReturnType<typeof this.getDeviceConfiguration>['getAdapters']>) {
+        // same "done" rule as the direct pairing loop, which also covers retrying a device
+        // excluded as not available while the page is open
+        const pairingDone = service.isPairingSettled()
+
+        if (pairingDone) {
+            //service.stopPairing
+            service.prepareForRide()
+            this.resetTimeouts()
+            this.setState('Done')
+            //this.setState('Idle')
+        }
+        else if (!this.pairingPromise) {
+            // guard against overlapping startPairing() calls: performCheck() can be
+            // triggered multiple times (e.g. repeated onDeviceSelectionClosed() calls)
+            // before a previous startPairing() call has settled. DevicePairingService's
+            // own reentrancy guard doesn't apply while usage==='page', so without this
+            // the state machine could end up with several overlapping pairing attempts
+            // racing each other and get stuck in 'Pairing' forever.
+            this.setState('Pairing')
+            this.pairingPromise = Promise.resolve(service.startPairing(adapters, {}))
+                .catch( err=>{ this.logError(err,'startPairing') })
+                .finally( ()=>{ delete this.pairingPromise })
+        }
+    }
+
+    protected checkScanningProgress( service:ReturnType<typeof this.getDevicePairing>, adapters:ReturnType<ReturnType<typeof this.getDeviceConfiguration>['getAdapters']>) {
+        if (!this.scanningPromise) {
+            // same overlap guard as above, applied to startScanning()
+            this.setState('Scanning')
+            const props = this.selectState==='Active' ? {deviceList:true} : {}
+            this.scanningPromise = Promise.resolve(service.startScanning(adapters, props))
+                .catch( err=>{ this.logError(err,'startScanning') })
+                .finally( ()=>{ delete this.scanningPromise })
+        }
+    }
+
+    protected onPairingStarted() {
         // nothing to do for now just verify we are in the expected state
         if (this.state!=='Pairing') {
             this.logError( new Error('Illegal state'),'onPairingStarted')
