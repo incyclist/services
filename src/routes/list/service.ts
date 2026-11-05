@@ -1709,6 +1709,12 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                         }
                     })
                 }
+                else if (route.description.hasVideo && !route.description.isLocal) {
+                    card.recoverDownloadState().then( recovered => {
+                        if (recovered)
+                            this.logEvent({message:'preload route updated', route:card?.getData()?.description?.title, reason:'download state recovered'})
+                    }).catch( err=>{ this.logError(err,'preloadDetails') })
+                }
 
             })
             .catch( ()=>{

@@ -137,6 +137,123 @@ describe('RouteCard.videoExists', () => {
     });
 });
 
+describe('RouteCard.recoverDownloadState', () => {
+
+    const existsFile = jest.fn();
+    const remote = 'https://www.reallifevideo.eu/stream/DE_Arnbach.mp4';
+    const local = 'video:///home/guido/Videos/Incyclist/DE_Arnbach.mp4';
+
+    beforeEach(() => {
+        existsFile.mockReset();
+        getBindings().fs = { existsFile } as any;
+    });
+
+    // shape of a route whose completed download never made it into the persisted description
+    const createCard = (info: Partial<RouteInfo> = {}, detailsUrl: string | undefined = local) => {
+        const card = new RouteCard(new Route({
+            id: 'arnbach', hasVideo: true, isLocal: false, requiresDownload: false,
+            videoUrl: remote, originalVideoUrl: remote, downloadUrl: remote, ...info
+        } as RouteInfo));
+        card.getData().details = { video: { url: detailsUrl } } as any;
+        jest.spyOn(card, 'save').mockResolvedValue();
+        return card;
+    };
+
+    test('restores the download state when the details point to a file that exists', async () => {
+        existsFile.mockResolvedValue(true);
+        const card = createCard();
+
+        expect(await card.recoverDownloadState()).toBe(true);
+
+        const descr = card.getRouteDescription();
+        expect(existsFile).toHaveBeenCalledWith('/home/guido/Videos/Incyclist/DE_Arnbach.mp4');
+        expect(descr.isDownloaded).toBe(true);
+        expect(descr.videoUrl).toBe(local);
+        expect(descr.originalVideoUrl).toBe(remote);
+        expect(card.save).toHaveBeenCalledTimes(1);
+    });
+
+    test('fills in the original video URL if it was not persisted either', async () => {
+        existsFile.mockResolvedValue(true);
+        const card = createCard({ originalVideoUrl: undefined, downloadUrl: undefined });
+
+        await card.recoverDownloadState();
+
+        const descr = card.getRouteDescription();
+        expect(descr.originalVideoUrl).toBe(remote);
+        expect(descr.downloadUrl).toBe(remote);
+    });
+
+    test('recovers on mobile, where the description already points to the local file', async () => {
+        existsFile.mockResolvedValue(true);
+        const mobileLocal = 'file:///data/user/0/com.incyclist/files/videos/DE_Arnbach.mp4';
+        const card = createCard({ videoUrl: mobileLocal }, mobileLocal);
+
+        expect(await card.recoverDownloadState()).toBe(true);
+
+        const descr = card.getRouteDescription();
+        expect(existsFile).toHaveBeenCalledWith('/data/user/0/com.incyclist/files/videos/DE_Arnbach.mp4');
+        expect(descr.isDownloaded).toBe(true);
+        expect(descr.videoUrl).toBe(mobileLocal);
+    });
+
+    test('does not take a video the user picked for the route for a download', async () => {
+        existsFile.mockResolvedValue(true);
+        const picked = 'video:///home/guido/Videos/my-own-recording.mp4';
+        const card = createCard({ videoUrl: picked }, picked);
+
+        expect(await card.recoverDownloadState()).toBe(false);
+        expect(card.getRouteDescription().isDownloaded).toBeUndefined();
+        expect(card.save).not.toHaveBeenCalled();
+    });
+
+    test('does nothing when the file is gone', async () => {
+        existsFile.mockResolvedValue(false);
+        const card = createCard();
+
+        expect(await card.recoverDownloadState()).toBe(false);
+        expect(card.getRouteDescription().isDownloaded).toBeUndefined();
+        expect(card.getRouteDescription().videoUrl).toBe(remote);
+        expect(card.save).not.toHaveBeenCalled();
+    });
+
+    test('does nothing when the details still point to the remote video', async () => {
+        const card = createCard({}, remote);
+
+        expect(await card.recoverDownloadState()).toBe(false);
+        expect(existsFile).not.toHaveBeenCalled();
+        expect(card.save).not.toHaveBeenCalled();
+    });
+
+    test('does nothing when the details are not loaded', async () => {
+        const card = new RouteCard(new Route({ id: 'x', hasVideo: true, videoUrl: remote } as RouteInfo));
+
+        expect(await card.recoverDownloadState()).toBe(false);
+        expect(existsFile).not.toHaveBeenCalled();
+    });
+
+    test('leaves routes alone that already know they are downloaded', async () => {
+        const card = createCard({ isDownloaded: true, videoUrl: local });
+
+        expect(await card.recoverDownloadState()).toBe(false);
+        expect(existsFile).not.toHaveBeenCalled();
+    });
+
+    test('leaves imported local routes alone', async () => {
+        const card = createCard({ isLocal: true });
+
+        expect(await card.recoverDownloadState()).toBe(false);
+        expect(existsFile).not.toHaveBeenCalled();
+    });
+
+    test('leaves routes without video alone', async () => {
+        const card = createCard({ hasVideo: false });
+
+        expect(await card.recoverDownloadState()).toBe(false);
+        expect(existsFile).not.toHaveBeenCalled();
+    });
+});
+
 describe('RouteCard.updateStartPos', () => {
 
     const createCard = (info: RouteInfo = {}) => new RouteCard(new Route(info));
