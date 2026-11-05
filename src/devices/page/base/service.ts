@@ -4,7 +4,7 @@ import { IncyclistPageService } from '../../../base/pages'
 import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText } from '../../pairing'
 
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
-import type { CapabilityData, DevicePairingData, InternalPairingState } from '../../pairing'
+import type { CapabilityData, DevicePairingData, InternalPairingState, SearchStatus } from '../../pairing'
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../../configuration'
@@ -215,6 +215,9 @@ export abstract class PairingPageService extends IncyclistPageService {
         let emptyFooter: string | undefined = undefined
         if (noSearch)
             emptyFooter = 'Not searching'
+        else if (role==='required' && this.getSearchStatus()?.ended)
+            // the search is over: the page isn't looking for this one any more
+            emptyFooter = cap===IncyclistCapability.Control && this.canStartRide() ? 'Not found · tap to search' : 'Not found'
         else if (role)
             emptyFooter = getEmptyTileFooterText(role)
 
@@ -350,18 +353,41 @@ export abstract class PairingPageService extends IncyclistPageService {
     // DeviceRideService.canEnforceSimulator(), which protected the maps API key from being used
     // to simulate a GPX route without the rider's own key; that protection now belongs on the
     // ride page itself (falling back when there is no personal key), not here.
-    protected getButtonsDisplayProps() : PairingButtonProps{
+    //
+    // While a search runs, OK isn't offered; Stop searching is, once something to ride with was found.
+    // After a search that ended without a trainer, Search again is offered - next to OK if the ride is
+    // ready, otherwise as the main action, but not while a found device is still connecting. It's
+    // never offered when nothing can search (noSearch).
+    protected getButtonsDisplayProps(noSearch:boolean=false) : PairingButtonProps{
         const labelOK = this.isPairingForRide ? 'Start' : 'OK'
         const labelSkip = this.isPairingForRide ? 'Cancel' : 'Skip'
+        const search = this.getSearchStatus()
+        const skip = (primary:boolean) => ({ label:labelSkip, primary, onClick:this.onSkip.bind(this) })
+        const searchAgain = (primary:boolean) => ({ label:'Search again', primary, onClick:this.onSearchAgain.bind(this) })
 
-        if (this.state?.canStartRide)
+        if (search?.running && search.canStop)
             return [
-                { label:labelOK, primary:true, onClick:this.onOK.bind(this) }
+                { label:'Stop searching', primary:true, onClick:this.onStopSearch.bind(this) },
+                skip(false)
             ]
 
+        const offerSearchAgain = !noSearch && search?.canSearchAgain===true
+
+        if (this.canStartRide()) {
+            const ok = { label:labelOK, primary:true, onClick:this.onOK.bind(this) }
+            return offerSearchAgain ? [ ok, searchAgain(false) ] : [ ok ]
+        }
+
+        const nothingFound = offerSearchAgain && !search?.rideCapableFound
+
         if (!this.isPairingForRide)
+            return nothingFound ? [ searchAgain(true), skip(false) ] : [ skip(true) ]
+
+        if (nothingFound)
             return [
-                { label:labelSkip, primary:true, onClick:this.onSkip.bind(this) }
+                searchAgain(true),
+                { label:'Simulate', primary:false, onClick:this.onSimulate.bind(this) },
+                skip(false)
             ]
 
         return [
@@ -433,8 +459,38 @@ export abstract class PairingPageService extends IncyclistPageService {
         }
     }
 
+    // ready to ride right now: never while the page's search is still running
     protected canStartRide():boolean {
+        if (this.getSearchStatus()?.running)
+            return false
         return this.state?.canStartRide ?? false
+    }
+
+    protected getSearchStatus():SearchStatus|undefined {
+        try {
+            return this.getDevicePairing().getSearchStatus?.()
+        }
+        catch(err) {
+            this.logError(err,'getSearchStatus')
+            return undefined
+        }
+    }
+
+    protected isSearchEndedWithNothing():boolean {
+        const search = this.getSearchStatus()
+        return search?.ended===true && !search.rideCapableFound
+    }
+
+    protected onStopSearch():void {
+        this.logEvent( {message:'stop searching clicked', eventSource:'user'})
+        this.getDevicePairing().stopSearch()
+        this.updatePage()
+    }
+
+    protected onSearchAgain():void {
+        this.logEvent( {message:'search again clicked', eventSource:'user'})
+        this.getDevicePairing().searchAgain()
+        this.updatePage()
     }
 
     protected onSkip():void {

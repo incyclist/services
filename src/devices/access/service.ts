@@ -480,7 +480,15 @@ export class DeviceAccessService  extends IncyclistService{
      * @param filter [[ScanFilter]] allows to limit the search on specififc interfaces or capabilties
      * @returns [[DeviceSettings]][] a list of Devices that were detected during the scan
      */
-    async scan( filter:ScanFilter={},props:{timeout?:number,includeKnown?:boolean }={} ): Promise<DeviceSettings[]> {
+    /**
+     * Scans the interfaces matching `filter` for devices.
+     *
+     * @param props.timeout scan duration. By default it only applies to serial and TCP/IP; the other
+     * interfaces use their configured scan timeout.
+     * @param props.timeoutAllInterfaces apply `timeout` to every interface, so the whole scan lasts that long
+     * @param props.includeKnown report devices again that were already reported during this scan
+     */
+    async scan( filter:ScanFilter={},props:{timeout?:number,includeKnown?:boolean,timeoutAllInterfaces?:boolean }={} ): Promise<DeviceSettings[]> {
         this.logEvent({message:'device scan start', filter,props} )
         const detected = [];
         const onDataHandlers:OnDataHandlersMap  = {}
@@ -583,7 +591,8 @@ export class DeviceAccessService  extends IncyclistService{
                 const scanProps = info.properties||this.defaultProps
                 const {scanTimeout, port, protocol} = scanProps;
                 const timeout = this.getScanTimeout(props.timeout,scanTimeout)
-                const properties = ifaceName==='tcpip' || ifaceName==='serial' ? {timeout,port:port?.toString(),protocol} as SerialScannerProps : {timeout:scanTimeout}
+                const otherTimeout = props.timeoutAllInterfaces && timeout ? timeout : scanTimeout
+                const properties = ifaceName==='tcpip' || ifaceName==='serial' ? {timeout,port:port?.toString(),protocol} as SerialScannerProps : {timeout:otherTimeout}
 
                 this.scanState.promises.push( i.scan(properties) )
 

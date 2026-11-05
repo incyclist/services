@@ -1,6 +1,6 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import { AddDeviceResult, AdapterInfo, CapabilityExclusion, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
-import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact, SelectionConflict, ConflictDismissal  } from "./model";
+import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact, SelectionConflict, ConflictDismissal, SearchEndReason, SearchStatus  } from "./model";
 import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
@@ -18,6 +18,21 @@ const Units = [
     { capability:IncyclistCapability.Speed, unit:'km/h', value:'speed', decimals:1, convert:'speed'},
     { capability:IncyclistCapability.Cadence, unit:'rpm', value:'cadence', decimals:0},
 ]
+
+// the Pairing page's search for devices during the open visit
+interface SearchState {
+    phase: 'none' | 'running' | 'ended'
+    index: number
+    // the rider asked for another search, which hasn't started yet
+    requested: boolean
+    startedAt?: number
+    stopReason?: 'complete' | 'rider_stop'
+    // when something to ride with was first found during the running search
+    rideCapableSince?: number
+    stopOfferTimer?: ReturnType<typeof setTimeout>
+    // devices connected when the rider started another search: shown as connected while it runs
+    carried: Set<string>
+}
 
 const getInterfaceSettings = (ifName,v) => {
     if(!v)
@@ -83,6 +98,11 @@ export class DevicePairingService  extends IncyclistService{
     // selection conflicts raised during the open visit, oldest first, one per device
     protected pendingConflicts: Array<{udid:string, conflict:SelectionConflict}> = []
     protected static conflictCounter = 0
+
+    // the Pairing page's search for devices, while a visit is open - see getSearchStatus()
+    protected static readonly SEARCH_DURATION_MS = { desktop: 60*1000, mobile: 30*1000 }
+    protected static readonly STOP_OFFER_DELAY_MS = 2000
+    protected search: SearchState = DevicePairingService.initialSearchState()
 
 
     protected onPairingStartedHandler = this.onPairingStarted.bind(this)
@@ -299,17 +319,281 @@ export class DevicePairingService  extends IncyclistService{
             if (open) {
                 this.visitOpenedAt ??= Date.now()
                 this.getDeviceConfiguration().clearExclusions({scope:'until-next-pairing'})
+                // a new visit gets its own automatic search; opening an already open visit again doesn't
+                if (!this.visitOpen)
+                    this.resetSearch()
             }
             else {
                 delete this.visitOpenedAt
                 // the rider left without answering: the current selection is kept
                 this.dismissPendingConflicts('left_page')
+                if (this.search.phase==='running')
+                    this.endSearch('left_page')
             }
             this.visitOpen = open
         }
         catch(err) {
             this.logError(err,'setVisitOpen')
         }
+    }
+
+    /**
+     * The state of the Pairing page's search for devices.
+     *
+     * While a visit is open, a search is a bounded thing: it runs once when the page opens (if the
+     * saved devices can't make the ride ready), and ends when Resistance, Power, Speed, Cadence and
+     * Heartrate all hold a device (a switched-off one counts as filled), when its time is up, or
+     * when the rider stops it. Nothing searches again until the rider asks via {@link searchAgain}.
+     */
+    getSearchStatus():SearchStatus {
+        const running = this.search.phase==='running'
+        const ended = this.search.phase==='ended'
+        const rideCapableFound = this.isRideCapableFound()
+        const trainerFound = this.isTrainerFound()
+        const missing = this.getMissingSearchCapabilities()
+
+        const since = this.search.rideCapableSince
+        const canStop = running && rideCapableFound && missing.length>0 && since!==undefined
+            && Date.now()-since >= DevicePairingService.STOP_OFFER_DELAY_MS
+        const canSearchAgain = ended && !trainerFound && !this.isScanning()
+
+        return { running, ended, index:this.search.index, rideCapableFound, trainerFound, canStop, canSearchAgain, missing }
+    }
+
+    /**
+     * Ends the running search, keeping every device found so far. Does nothing if no search is running.
+     */
+    stopSearch():void {
+        try {
+            if (this.search.phase!=='running')
+                return
+            this.search.stopReason = 'rider_stop'
+            this.stopSearchScan()
+        }
+        catch(err) {
+            this.logError(err,'stopSearch')
+        }
+    }
+
+    /**
+     * Starts another search after the last one ended. Devices that are connected stay shown as
+     * connected while it runs, even though the search briefly stops them, and they are started
+     * again once it ends.
+     */
+    searchAgain():void {
+        try {
+            if (!this.visitOpen || this.search.phase!=='ended' || this.isScanning())
+                return
+
+            const fromState = this.state.canStartRide ? 'ready_without_trainer' : 'nothing_found'
+            this.logEvent({message:'pairing search again', fromState, searchIndex:this.search.index+1})
+
+            this.search.phase = 'none'
+            this.search.requested = true
+            this.search.carried = new Set( (this.state.capabilities??[])
+                .filter( c=> c.selected && c.connectState==='connected')
+                .map( c=>c.selected))
+
+            if (this.usage==='page')
+                this.emit('search-again')
+            else
+                this.run().catch( err=>{ this.logError(err,'searchAgain') })
+        }
+        catch(err) {
+            this.logError(err,'searchAgain')
+        }
+    }
+
+    /**
+     * Whether the pairing loop may start a search now: always while no visit is open, and while a
+     * visit is open only until its search has ended.
+     */
+    isSearchAllowed():boolean {
+        return !this.visitOpen || this.search.phase!=='ended'
+    }
+
+    /**
+     * Whether a search is running or the rider asked for one, so the pairing loop has to keep
+     * searching even though the devices found so far may already be enough to ride.
+     */
+    isSearchPending():boolean {
+        if (!this.visitOpen)
+            return false
+        return this.search.phase==='running' || (this.search.phase==='none' && this.search.requested)
+    }
+
+    protected static initialSearchState():SearchState {
+        return { phase:'none', index:0, requested:false, carried:new Set() }
+    }
+
+    protected resetSearch():void {
+        this.clearStopOfferTimer()
+        this.search = DevicePairingService.initialSearchState()
+    }
+
+    protected getSearchDuration():number {
+        const {desktop,mobile} = DevicePairingService.SEARCH_DURATION_MS
+        return this.usage==='page' ? mobile : desktop
+    }
+
+    protected getPlatform():'desktop'|'mobile' {
+        return this.usage==='page' ? 'mobile' : 'desktop'
+    }
+
+    // whether a scan belongs to the page's search (not to a device list, and only while a visit is open)
+    protected isSearchScan(props:PairingProps):boolean {
+        return this.visitOpen && !props.enforcedScan && !props.deviceList && !this.deviceSelectState
+    }
+
+    protected beginSearch():void {
+        this.search.phase = 'running'
+        this.search.index++
+        this.search.requested = false
+        this.search.startedAt = Date.now()
+        delete this.search.stopReason
+        delete this.search.rideCapableSince
+        this.updateSearchProgress()
+    }
+
+    /**
+     * Starts the search if it hasn't started yet, and ends it if its time is up.
+     * @returns whether a scan should run for the search now
+     */
+    protected prepareSearchScan():boolean {
+        if (this.search.phase==='ended')
+            return false
+        if (this.search.phase==='none')
+            this.beginSearch()
+
+        if (this.getSearchRemaining()<=0) {
+            this.endSearch('time')
+            return false
+        }
+        return true
+    }
+
+    protected getSearchRemaining():number {
+        const elapsed = Date.now() - (this.search.startedAt ?? Date.now())
+        return this.getSearchDuration() - elapsed
+    }
+
+    // a scan of the search has finished: decide whether the search ended, or the scan was only interrupted
+    protected onSearchScanDone():void {
+        if (this.search.phase!=='running')
+            return
+        if (this.search.stopReason) {
+            this.endSearch(this.search.stopReason)
+            return
+        }
+        // a small tolerance, as the interfaces' timers don't fire to the millisecond
+        if (this.getSearchRemaining()<=500)
+            this.endSearch('time')
+    }
+
+    protected endSearch(via:SearchEndReason):void {
+        const startedAt = this.search.startedAt
+        this.search.phase = 'ended'
+        delete this.search.stopReason
+        this.clearStopOfferTimer()
+
+        this.restoreCarriedDevices()
+
+        const capabilities = this.state.capabilities??[]
+        this.logEvent({
+            message:'pairing search ended',
+            via,
+            searchIndex: this.search.index,
+            foundCapabilities: capabilities.filter( c=>c.selected).map( c=>c.capability).join(','),
+            missingCapabilities: this.getMissingSearchCapabilities().join(','),
+            trainerFound: this.isTrainerFound(),
+            durationMs: startedAt===undefined ? 0 : Date.now()-startedAt,
+            platform: this.getPlatform(),
+        })
+        this.emitStateChange()
+    }
+
+    // devices that were connected before a repeated search have been stopped by it: hand them back to
+    // pairing so they are started again before the ride is ready
+    protected restoreCarriedDevices():void {
+        const carried = this.search.carried
+        this.search.carried = new Set()
+        if (carried.size===0)
+            return
+
+        const adapters = this.state.adapters??[]
+        ;(this.state.capabilities??[]).forEach( c=> {
+            if (!c.selected || !carried.has(c.selected))
+                return
+            const adapter = adapters.find( ai=>ai.udid===c.selected)?.adapter
+            if (!adapter?.isStarted())
+                c.connectState = 'waiting'
+        })
+    }
+
+    protected isCarried(udid:string|undefined):boolean {
+        return this.search.phase!=='ended' && udid!==undefined && this.search.carried.has(udid)
+    }
+
+    protected stopSearchScan():void {
+        this.stopScanning().catch( err=>{ this.logError(err,'stopSearchScan') })
+    }
+
+    // called whenever the found devices may have changed while a search runs
+    protected updateSearchProgress():void {
+        if (this.search.phase!=='running')
+            return
+
+        if (this.getMissingSearchCapabilities().length===0) {
+            if (!this.search.stopReason) {
+                this.search.stopReason = 'complete'
+                this.stopSearchScan()
+            }
+            return
+        }
+
+        if (this.search.rideCapableSince===undefined && this.isRideCapableFound()) {
+            this.search.rideCapableSince = Date.now()
+            // let the page know once Stop searching becomes available
+            this.clearStopOfferTimer()
+            this.search.stopOfferTimer = setTimeout( ()=>{
+                delete this.search.stopOfferTimer
+                this.emitStateChange()
+            }, DevicePairingService.STOP_OFFER_DELAY_MS)
+        }
+    }
+
+    protected clearStopOfferTimer():void {
+        if (this.search?.stopOfferTimer)
+            clearTimeout(this.search.stopOfferTimer)
+        if (this.search)
+            delete this.search.stopOfferTimer
+    }
+
+    // a slot counts as filled if it holds a device or the rider switched it off; Controller never counts
+    protected getMissingSearchCapabilities():IncyclistCapability[] {
+        return DevicePairingService.SEARCH_CAPABILITIES.filter( capability=> {
+            const c = this.getCapability(capability)
+            return !c?.selected && !c?.disabled
+        })
+    }
+
+    protected static readonly SEARCH_CAPABILITIES:IncyclistCapability[] = [
+        IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed,
+        IncyclistCapability.Cadence, IncyclistCapability.HeartRate,
+    ]
+
+    protected isRideCapableFound():boolean {
+        return [IncyclistCapability.Control, IncyclistCapability.Power, IncyclistCapability.Speed]
+            .some( capability=> {
+                const c = this.getCapability(capability)
+                return Boolean(c?.selected) && !c?.disabled
+            })
+    }
+
+    // a switched-off Resistance counts as found: the rider said they don't use a trainer
+    protected isTrainerFound():boolean {
+        const control = this.getCapability(IncyclistCapability.Control)
+        return Boolean(control?.selected) || Boolean(control?.disabled)
     }
 
     /**
@@ -1054,7 +1338,12 @@ export class DevicePairingService  extends IncyclistService{
 
         }
 
-        (this.state.capabilities??[]).forEach(c => c.connectState='waiting')
+        (this.state.capabilities??[]).forEach(c => {
+            // a device connected before the rider searched again keeps showing as connected
+            if (this.isCarried(c.selected) && c.connectState==='connected')
+                return
+            c.connectState='waiting'
+        })
         this.state.waiting = true;
     }
 
@@ -1330,6 +1619,8 @@ export class DevicePairingService  extends IncyclistService{
             this.updateCapabilityConfig()
 
             this.checkCanStart()
+            // the rider may have filled or switched off the last missing slot meanwhile
+            this.updateSearchProgress()
         }
         catch (err) { // istanbul ignore next
             this.logError(err,'onConfigurationUpdate')   
@@ -1562,7 +1853,10 @@ export class DevicePairingService  extends IncyclistService{
 
         
         toBeStarted.forEach( ai=> {
-            const {udid} = ai;           
+            const {udid} = ai;
+            // stopped by the search the rider started, not reconnecting: keep showing it as connected
+            if (this.isCarried(udid))
+                return
             this.onPairingStatusUpdate(udid,'connecting',false)
         })
         if (this.settings.onStateChanged && typeof this.settings.onStateChanged === 'function') {
@@ -1770,6 +2064,7 @@ export class DevicePairingService  extends IncyclistService{
             // connecting or have failed keep their state
             this.onPairingStatusUpdate(udid,'connected',true,true)
 
+            this.updateSearchProgress()
         }
         catch(err) {
             this.logError(err,'onDeviceDetected')
@@ -1972,7 +2267,10 @@ export class DevicePairingService  extends IncyclistService{
 
         //await this.waitForInterfacesInitialized()
 
-        if (configOKToStart && !this.deviceSelectState && !props.enforcedScan)  {
+        // a running search (or one the rider asked for) keeps searching, even if what it found is enough to ride
+        const searchPending = this.isSearchPending() && !this.deviceSelectState && !props.enforcedScan
+
+        if (configOKToStart && !this.deviceSelectState && !props.enforcedScan && !searchPending)  {
             // ready to ride, but a device excluded as not available is still tried while the page is open
             if (this.checkPairingSuccess()!==true || this.isAwaitingExcludedDevice())
                 await this.startPairing(adapters, props);
@@ -1982,9 +2280,10 @@ export class DevicePairingService  extends IncyclistService{
             }
 
         }
-        else {
+        else if (searchPending || props.enforcedScan || this.deviceSelectState || this.isSearchAllowed()) {
             await this.startScanning(adapters, props);
         }
+        // otherwise the page's search has ended: nothing searches until the rider asks again
     }
 
     getState() {
@@ -2183,6 +2482,13 @@ export class DevicePairingService  extends IncyclistService{
             return;
         }
 
+        const isSearch = this.isSearchScan(props)
+        if (isSearch && !this.prepareSearchScan()) {
+            if (this.usage==='page')
+                this.emit('scanning-done')
+            return;
+        }
+
         const preparing = DevicePairingService.scanCounter++
         this.state.scan={preparing,adapters:[]}   // will cause that next call to isPairing() will be true
                     
@@ -2229,10 +2535,12 @@ export class DevicePairingService  extends IncyclistService{
         this.logEvent({message:'Start Scanning',interfaces:interfaces.join(','),props})
         this.initScanningCallbacks()
         
-        const timeout = props.enforcedScan ? 1000*60*60 /*1h*/ : undefined
+        let timeout = props.enforcedScan ? 1000*60*60 /*1h*/ : undefined
+        if (isSearch)
+            timeout = Math.max(this.getSearchRemaining(),1000)
         interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
                             .map(i=>i.name)
-        const promise = this.access.scan({interfaces,excludeDisabled:true},{includeKnown:props.enforcedScan, timeout})
+        const promise = this.access.scan({interfaces,excludeDisabled:true},{includeKnown:props.enforcedScan, timeout, timeoutAllInterfaces:isSearch})
         this.state.scan = {promise, adapters:[]}
         this.onPairingStarted()
 
@@ -2246,7 +2554,9 @@ export class DevicePairingService  extends IncyclistService{
             this.logError(err,'start()->scan')
         }
 
-        
+        if (isSearch)
+            this.onSearchScanDone()
+
         this.emit('scanning-done')
         this.emitStateChange({capabilities:this.state.capabilities})
         
@@ -2702,6 +3012,7 @@ export class DevicePairingService  extends IncyclistService{
         this.visitOpen = false
         delete this.visitOpenedAt
         this.pendingConflicts = []
+        this.resetSearch()
     }
 
     @Injectable

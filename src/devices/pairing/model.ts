@@ -47,6 +47,35 @@ export interface PairingData {
 export interface PairingProps {
     filter?: RideServiceCheckFilter,
     enforcedScan?: boolean
+    /** the scan feeds an open device list, it isn't the page's search for devices */
+    deviceList?: boolean
+}
+
+/** Why a search for devices on the Pairing page ended. */
+export type SearchEndReason = 'complete' | 'time' | 'rider_stop' | 'left_page'
+
+/**
+ * The Pairing page's search for devices. A search runs once when the page opens (if the saved
+ * devices can't make the ride ready), ends by itself when it's complete or its time is up, or when
+ * the rider stops it. Nothing searches again until the rider asks for it.
+ */
+export interface SearchStatus {
+    /** a search is running */
+    running: boolean
+    /** a search ran during this visit and has ended */
+    ended: boolean
+    /** 1 for the automatic search, 2 and up for every search the rider started again; 0 before any search */
+    index: number
+    /** a device to ride with (trainer, power meter or speed sensor) has been found */
+    rideCapableFound: boolean
+    /** a trainer has been found (or the rider switched Resistance off) */
+    trainerFound: boolean
+    /** the rider can stop the running search: something to ride with was found, the search isn't complete, and that has held for a moment */
+    canStop: boolean
+    /** the rider can start another search: the last one ended without a trainer */
+    canSearchAgain: boolean
+    /** the measuring capabilities that are neither filled nor switched off */
+    missing: IncyclistCapability[]
 }
 
 export interface PairingState {
