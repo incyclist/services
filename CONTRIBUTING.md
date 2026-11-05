@@ -1,92 +1,108 @@
 # Contributing to incyclist-services
 
-Thank you for your interest in contributing! This document covers everything you need to get started.
+Thank you for your interest in contributing! This repo is MIT-licensed and open to everyone.
+This document covers how to get set up and how changes get from your branch into `main`.
 
-## Development Environment Setup
+## Development environment setup
 
-**Prerequisites:** Node.js (check `.nvmrc` or `package.json` for the required version) and npm.
+**Prerequisites:** Node.js 24 or newer (see `.github/workflows/PR.yml` for the versions CI
+tests against) and npm.
 
 ```bash
 git clone https://github.com/incyclist/services.git
 cd services
 npm install
-```
-
-To verify your setup, run the build:
-
-```bash
 npm run build
+npm test
 ```
 
-## Running Tests and Linting
+No devices, accounts or credentials are needed: the unit tests mock everything external. If
+you want to see your change in the running app, see "Working on services together with a
+front-end" in [README.MD](./README.MD).
+
+## Before you start
+
+For anything beyond a trivial fix (typo, small doc change, obvious one-line bug), please open
+an issue first, or comment on an existing one, describing what you want to change and why.
+This avoids effort on a PR that turns out not to be the right direction. Small, obvious
+fixes can go straight to a PR.
+
+Changes to this library often affect both front-ends (desktop/web and mobile). If your change
+alters behaviour a user can see, mention that in the issue so we can agree on it for both.
+
+## Code conventions
+
+**Read [docs/CODEBASE_GUIDE.md](./docs/CODEBASE_GUIDE.md) before writing code, and follow
+it.** It covers the module layout, the service pattern (`@Singleton`, `@Injectable`,
+`IncyclistService`), page services, platform bindings, coding style, and testing
+conventions. PRs that don't follow it will be asked to be reworked.
+
+The points reviews most often come back to:
+
+- Types and interfaces go in the module's `types.ts`, not inline in implementation files.
+- New public exports are registered in `src/index.ts`.
+- Publicly exported functions, classes and methods have JSDoc.
+- No platform APIs in services: use the bindings.
+- No secrets in code.
+- 4-space indentation, single quotes, no semicolons.
+
+## Testing
+
+Every change needs unit tests (`*.unit.test.ts`, next to the file under test). Before you
+push, run:
 
 ```bash
-npm run lint          # ESLint — fix all warnings and errors before committing
-npm test              # Unit tests with coverage
-npm run test:unit     # Unit tests only
-npm run test:e2e      # End-to-end tests
-npm run test:all      # All tests
+npm run lint
+npm run typecheck
+npm test
 ```
 
-To run a single test file:
+All three must pass. CI runs the same checks plus the build on every push, and SonarCloud
+analyses the code. Don't skip or suppress errors.
 
-```bash
-npx jest src/path/to/file.unit.test.ts
-```
+To run a single test file or folder, use `npm test -- <path>`. **Don't run bare `npx jest`
+or `npm run test:all`**: they include the E2E tests, which hit real backends and need
+credentials you won't have.
 
-All checks must pass before a pull request can be merged. Do not skip or suppress errors.
+## Branch naming and commits
 
-## Branch Naming Conventions
-
-Use the format:
-
-```
-<type>/issue-<number>-<short-description>
-```
-
-Where `<type>` is one of: `feat`, `fix`, `refactor`, `test`, `docs`. Examples:
+Use a short, descriptive branch name prefixed with the type of change:
 
 ```
-feat/issue-42-ftp-auto-detection
-fix/issue-99-device-pairing-crash
-docs/issue-413-add-contributing-md
+fix/device-pairing-reconnect-crash
+feat/ftp-auto-detection
+docs/update-contributing-guide
 ```
 
-## Commit Message Format
-
-Use a short, descriptive message in this format:
-
-```
-<type>: <summary> (#<issue-number>)
-```
-
-Where `<type>` is one of: `feat`, `fix`, `refactor`, `test`, `docs`. Examples:
+Commit messages follow a loose [Conventional Commits](https://www.conventionalcommits.org)
+style, `<type>: <short summary>`, where `<type>` is one of `feat`, `fix`, `refactor`, `test`,
+`chore`, `docs`:
 
 ```
-feat: add FTP auto-detection to WorkoutRideService (#42)
-fix: resolve crash during device pairing on reconnect (#99)
-docs: add CONTRIBUTING.md (#413)
+fix: resolve crash during device pairing on reconnect
+feat: add FTP auto-detection to WorkoutRideService
 ```
 
-Keep the summary concise (under 72 characters). Do not end with a period.
+No issue number is required in the commit message. Reference the issue in the PR description
+instead.
 
-## Submitting a Pull Request
+## Submitting a pull request
 
-1. Fork the repository and create a branch from `main` following the branch naming convention above.
-2. Implement your changes following the conventions in [`CLAUDE.md`](./CLAUDE.md):
-   - Use the `@Singleton` / `@Injectable` / `IncyclistService` service pattern.
-   - Place types and interfaces in `types.ts`, not inline in implementation files.
-   - Register any new public exports in `src/index.ts`.
-   - Add JSDoc to all publicly exported functions, classes, and methods.
-   - Use 4-space indentation, single quotes, and omit semicolons.
-3. Run all checks and fix any issues:
-   ```bash
-   npm run lint
-   npx tsc --noEmit
-   npm test
-   ```
-4. Commit your changes using the commit message format described above.
-5. Push your branch and open a pull request against `main`.
-6. In the pull request description, summarise what changed and why. Reference the issue number (e.g. `Closes #42`).
+`main` is protected: nobody pushes to it directly, and every change goes through a reviewed
+pull request.
 
-Pull requests are reviewed by maintainers. Please be responsive to feedback and update your branch as requested.
+1. Clone the repository and create a branch from `main` following the naming convention
+   above. If you don't have push access yet, ask in your issue, or open the PR from a fork.
+2. Implement your change, following [docs/CODEBASE_GUIDE.md](./docs/CODEBASE_GUIDE.md).
+3. Run `npm run lint`, `npm run typecheck` and `npm test`, and fix any failures.
+4. Push your branch and open a pull request against `main`.
+5. In the description, summarise what changed and why, and link the related issue if there
+   is one (e.g. `Closes #42`).
+
+The maintainer reviews every pull request and merges it once it's ready. Please respond to
+feedback and update your branch as requested.
+
+## Releases
+
+Releases to npm are made by the maintainer. Don't bump the version in `package.json` in your
+PR.
