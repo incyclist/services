@@ -171,4 +171,65 @@ describe.each([
 
         expect(labels()).toEqual(['OK*'])
     })
+
+    describe('status line, row label and tiles while still looking', ()=> {
+
+        const top = () => service.getPageDisplayProperties().capabilities.top
+        const tile = (capability:string) => top().find( (t: {capability:string}) => t.capability===capability)
+
+        test('the status line names what is still missing once Stop searching is offered', ()=> {
+            setSearch({ running:true, rideCapableFound:true, canStop:true, missing:[IncyclistCapability.Control] })
+            setPairingState({ capabilities:[emptyControl, power] })
+
+            const props = service.getPageDisplayProperties()
+            expect(props.status.id).toBe('S2w')
+            expect(props.status.text).toMatch(/^Found Stages\. Still looking for a smart trainer/)
+            expect(props.capabilities.rowLabels.top).toEqual({ text:'TO RIDE', subtext:'still looking for a trainer' })
+        })
+
+        test('before Stop searching is offered, the searching text and the usual row label stay', ()=> {
+            setSearch({ running:true, rideCapableFound:true, canStop:false, missing:[IncyclistCapability.Control] })
+            setPairingState({ capabilities:[emptyControl, power] })
+
+            const props = service.getPageDisplayProperties()
+            expect(props.status.id).not.toBe('S2w')
+            expect(props.capabilities.rowLabels.top.subtext).not.toBe('still looking for a trainer')
+        })
+
+        test('with the trainer found, the row label says so', ()=> {
+            setSearch({ running:true, rideCapableFound:true, trainerFound:true, canStop:true, missing:[IncyclistCapability.HeartRate] })
+            setPairingState({ capabilities:[{ capability: IncyclistCapability.Control, devices: [], selected: 'neo', deviceName:'Neo', connectState:'connected' }] })
+
+            expect(service.getPageDisplayProperties().capabilities.rowLabels.top).toEqual({ text:'TO RIDE', subtext:'trainer found' })
+        })
+
+        test('a device seen during the search but not started yet shows "Found"', ()=> {
+            setSearch({ running:true, rideCapableFound:true, canStop:true, missing:[IncyclistCapability.Control] })
+            setPairingState({ capabilities:[emptyControl, power], adapters:[{ udid:'pwr', adapter:{ isStarted:()=>false, getInterface:()=>'ble' } }] })
+
+            expect(tile('power').stateText).toBe('Found')
+            expect(tile('control').stateText).toBeUndefined()
+        })
+
+        test('a started device keeps its connect state during the search', ()=> {
+            setSearch({ running:true, rideCapableFound:true, canStop:true, missing:[IncyclistCapability.Control] })
+            setPairingState({ capabilities:[emptyControl, power], adapters:[{ udid:'pwr', adapter:{ isStarted:()=>true, getInterface:()=>'ble' } }] })
+
+            expect(tile('power').stateText).toBeUndefined()
+        })
+
+        test('once the search has ended, no tile says "Found"', ()=> {
+            setSearch({ ended:true, canSearchAgain:true, rideCapableFound:true })
+            setPairingState({ capabilities:[emptyControl, power], canStartRide:true, adapters:[{ udid:'pwr', adapter:{ isStarted:()=>false, getInterface:()=>'ble' } }] })
+
+            expect(tile('power').stateText).toBeUndefined()
+        })
+
+        test('after a search without a trainer, the ready line says no trainer was found', ()=> {
+            setSearch({ ended:true, canSearchAgain:true, rideCapableFound:true })
+            setPairingState({ capabilities:[emptyControl, power], canStartRide:true })
+
+            expect(service.getPageDisplayProperties().status.id).toBe('S2e')
+        })
+    })
 })

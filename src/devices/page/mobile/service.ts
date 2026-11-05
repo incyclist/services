@@ -64,7 +64,7 @@ export class MobilePairingPageService extends PairingPageService {
                 canStartRide: this.canStartRide(),
                 loading,
                 rideMode: this.isPairingForRide,
-                searchEndedWithNothing: this.isSearchEndedWithNothing(),
+                ...this.getSearchStatusSource(),
             })
             const capProps = caps.map( c=>this.getCapabilityDisplayProps( c, status.id==='S1' ))
 
@@ -83,7 +83,7 @@ export class MobilePairingPageService extends PairingPageService {
 
             const trainerSelected = isCapabilityActive(caps.find( c=>c.capability===IncyclistCapability.Control))
             const rowLabels = {
-                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected)),
+                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking())),
                 bottom: getPairingGuidanceText('row-optional'),
             }
 
