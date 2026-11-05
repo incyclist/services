@@ -68,6 +68,7 @@ export class DesktopPairingPageService extends PairingPageService {
                 canStartRide: this.canStartRide(),
                 loading: this.promiseOpen!==undefined,
                 rideMode: this.isPairingForRide,
+                searchEndedWithNothing: this.isSearchEndedWithNothing(),
             })
             const capProps = caps.map( c=>this.getCapabilityDisplayProps(c, status.id==='S1'))
 
@@ -90,7 +91,7 @@ export class DesktopPairingPageService extends PairingPageService {
                 bottom: getPairingGuidanceText('row-optional'),
             }
 
-            const buttons = this.getButtonsDisplayProps()
+            const buttons = this.getButtonsDisplayProps(status.id==='S1')
 
             return {
                 title,

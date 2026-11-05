@@ -38,6 +38,8 @@ export interface PairingStatusSource {
     canStartRide: boolean
     loading: boolean
     rideMode: boolean
+    /** the page's search has ended and found nothing to ride with */
+    searchEndedWithNothing?: boolean
 }
 
 const REQUIRED_CAPABILITIES = ['control', 'power', 'speed']
@@ -73,6 +75,7 @@ export const getPairingStatusDisplay = (src: PairingStatusSource): PairingStatus
         readyDeviceName: readyCapability?.deviceName,
         connectingDeviceName: connectingCapability?.deviceName,
         connectingIsTrainer: connectingCapability?.capability === 'control',
+        searchEndedWithNothing: src.searchEndedWithNothing,
     })
 
     let id: PairingStatusId = derived === 'S1b' ? 'S5' : derived

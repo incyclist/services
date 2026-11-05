@@ -91,7 +91,7 @@ export const getPairingHint = (input: PairingHintInput): PairingHint | undefined
     return undefined
 }
 
-export type PairingStatusId = 'S1' | 'S1b' | 'S2' | 'S3' | 'S4' | 'S5'
+export type PairingStatusId = 'S1' | 'S1b' | 'S2' | 'S3' | 'S4' | 'S5' | 'S9'
 
 export interface PairingStatusInput extends PairingHintInput {
     initialising: boolean
@@ -100,10 +100,13 @@ export interface PairingStatusInput extends PairingHintInput {
     readyDeviceName?: string
     connectingDeviceName?: string
     connectingIsTrainer?: boolean
+    /** the page's search has ended and found nothing to ride with */
+    searchEndedWithNothing?: boolean
 }
 
 /**
- * Priority: S1 > S2 > S3 > S4 > S1b > S5. S4 sits above S1b so the first-use hint never shows
+ * Priority: S1 > S2 > S3 > S4 > S9 > S1b > S5. S9 (search finished, nothing found) replaces the
+ * searching text once nothing is searching any more. S4 sits above S1b so the first-use hint never shows
  * while the page is initialising. The 2 s hold after S4 is applied by the caller.
  */
 export const derivePairingStatus = (input: PairingStatusInput): PairingStatusId => {
@@ -111,6 +114,7 @@ export const derivePairingStatus = (input: PairingStatusInput): PairingStatusId 
     if (input.canStartRide) return 'S2'
     if (input.connectingDeviceName) return 'S3'
     if (input.initialising) return 'S4'
+    if (input.searchEndedWithNothing) return 'S9'
     if (getPairingHint(input)) return 'S1b'
     return 'S5'
 }
@@ -213,6 +217,11 @@ export const getPairingGuidanceText = (
             return isShort
                 ? { text: 'Searching… Pedal to wake your trainer.' }
                 : { text: 'Searching for devices… Tip: pedal a few strokes to wake up your trainer.' }
+
+        case 'S9':
+            return isShort
+                ? { text: 'Nothing found. Wake it, then search again.' }
+                : { text: 'Search finished, nothing found. Wake your trainer or sensor (pedal a few strokes or press a button), then search again.' }
 
         case 'row-required':
             return { text: 'TO RIDE', subtext: 'connect any one' }
