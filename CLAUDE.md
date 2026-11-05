@@ -2,217 +2,37 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Overview
+`incyclist-services` is the business logic library of the [Incyclist](https://incyclist.com)
+indoor cycling app, consumed by `web-ui` and the mobile app. It publishes dual ESM + CJS builds.
 
-This is `incyclist-services`, the business logic library for the [Incyclist](https://incyclist.com) Indoor Cycling App. It provides React-consumable services (via `useXXX` / `initXXX` hooks) for devices, workouts, routes, activities, rides, and more. The library publishes dual ESM + CJS builds.
+**Read [docs/CODEBASE_GUIDE.md](docs/CODEBASE_GUIDE.md) before touching any file in this repo.**
+It covers the module layout, variant hierarchies, the service pattern, page services, bindings,
+coding style, SonarQube rules, and testing conventions, including how to mock singletons with
+`Inject`. Follow it, don't improvise a different structure. [CONTRIBUTING.md](CONTRIBUTING.md)
+covers branches, commits and PRs.
 
 ## Commands
 
 ```bash
 npm run build          # Build both ESM and CJS
-npm run build:esm      # ESM only (tsc -p tsconfig.esm.json)
-npm run build:cjs      # CJS only (tsc -p tsconfig.cjs.json)
 npm run dev            # Watch mode (ESM)
 npm run lint           # ESLint
-npm test               # Unit tests with coverage
-npm run test:unit      # Unit tests with coverage (jest.unit-config.cjs)
-npm run test:e2e       # E2E tests
-npm run test:all       # All tests
+npm run typecheck      # tsc --noEmit (includes test files)
+npm test               # Unit tests (jest.unit-config.cjs)
+npm test -- <path>     # Unit tests for one file or folder
+npm run coverage       # Unit tests with coverage
+npm run test:e2e       # E2E tests: real backends, only when explicitly asked
 ```
 
-To run a single test file:
-```bash
-npx jest src/path/to/file.unit.test.ts
-```
+## Rules for agents
 
-**Never run bare `npx jest` (or `jest`) with no file argument and no `-c` flag.** It falls back to the default config, whose `testRegex` matches everything — including `*.e2e.test.ts`, which hit real backends and can create/mutate real test data. For a full run, always use `npm test` / `npm run test:unit` (or `npm run test:e2e` / `npm run test:all` if you deliberately mean to include e2e/integ). Targeting a single file by path, as above, is fine regardless of config, since an explicit path bypasses `testRegex`.
-
-## Architecture
-
-### Module Layout
-
-Each top-level directory under `src/` is a domain module (`activities`, `devices`, `ride`, `workouts`, `routes`, `settings`, `coaches`, etc.). Each module follows this internal structure:
-
-```
-src/<module>/
-├── index.ts          # barrel export
-├── types.ts          # interfaces and types for this module
-├── service.ts        # main service class (or descriptively named)
-├── *.unit.test.ts    # unit tests colocated with source
-└── base/             # base classes scoped to this module
-```
-
-### Variant Hierarchies (platform subclasses)
-
-When a module needs more than one concrete implementation of the same contract — most commonly a
-platform split (desktop vs. mobile) — **give each variant its own folder; never put an abstract
-base class and all its subclasses flat in one folder.** A folder holding more than one concrete
-`service.ts` for the same contract is the signal to split.
-
-Reference layout (`src/devices/page/`, a base class with a desktop and a mobile subclass):
-
-```
-src/<module>/
-├── index.ts              # barrel; picks the right variant by platform/channel
-├── types.ts              # pure re-export barrel: `export type * from './base/types'` etc. —
-│                          # never new types of its own
-├── base/
-│   ├── service.ts         # the abstract class — shared logic and abstract/overridable hooks only
-│   └── types.ts           # types shared by every variant
-├── desktop/
-│   ├── service.ts         # extends the base class; only this platform's differences
-│   └── types.ts           # types that extend/specialise the base ones for this variant only —
-│                           # omit this file entirely if the variant adds no types of its own
-└── mobile/
-    ├── service.ts
-    └── types.ts            # likewise, omitted here if mobile needs no types beyond the base ones
-```
-
-Rules:
-- One concrete class per variant folder, named after the variant's `service.ts` export (not the
-  folder) — e.g. `DesktopPairingPageService` in `desktop/service.ts`.
-- A variant folder's own `types.ts` only ever *extends or narrows* the base types
-  (`Omit<BaseProps,...> & {...}`), never redefines a field the base already owns under a new shape.
-- The module's top-level `types.ts` stays a barrel. If you catch yourself adding an actual `type`
-  or `interface` body there instead of to the right variant's own file, that's the module outgrowing
-  the barrel — split it, don't accumulate in the root.
-- This mirrors `base/` already called out above — the difference is purely folder-per-variant once
-  there's more than one concrete subclass, so the base/desktop/mobile split doesn't collapse back
-  into one folder as a module grows.
-
-**Why this matters beyond readability:** `types.ts` files that are already isolated per
-variant/module and never hold implementation are what would let a future `incyclist-services-types`
-package be extracted by moving files, not by rewriting them. Keep every exported type/interface in
-the owning folder's `types.ts` — never inline in `service.ts`, never in a sibling file — even for a
-single-variant module that doesn't (yet) need this split.
-
-### Service Pattern
-
-All services follow the same skeleton:
-
-```typescript
-@Singleton
-export class MyService extends IncyclistService {
-    constructor() {
-        super('MyService')   // sets logger name
-    }
-
-    @Injectable
-    protected getDep(): DepType {
-        return useDep()      // resolved from DI container in tests
-    }
-}
-
-export const useMyService = () => new MyService()
-```
-
-- `@Singleton` — enforces a single instance; `new MyService()` always returns the same object.
-- `@Injectable` — marks getter methods for other services so tests can swap them with `Inject('MyService')`. Every `protected` getter that returns an other service of this library or dependency **must** be decorated with `@Injectable`; the decorator derives the injection key by stripping the leading `get` (e.g. `getApi` → `'Api'`, `getUserSettings` → `'UserSettings'`).
-- `IncyclistService` extends `EventEmitter` and exposes `this.logEvent(...)` / `this.logError(err, method, context)` via `gd-eventlog`.
-
-### Observer Pattern for Async Operations
-
-Long-running operations return an `Observer` that callers chain:
-
-```typescript
-const observer = service.init()
-observer
-  .on('data', (data) => { /* ... */ })
-  .on('error', (err) => { /* ... */ })
-  .once('completed', () => { /* ... */ })
-```
-
-Services internally emit state transitions (`'Starting'`, `'Active'`, `'Paused'`, `'Finished'`, `'error'`) on the observer.
-
-### Public API Shape
-
-The library is consumed by the React front-end as:
-
-```ts
-import { useDeviceConfiguration, initUserSettings } from 'incyclist-services'
-```
-
-Every domain module re-exports its public surface through `src/index.ts`. When adding a new export, register it there.
-
-## Coding Style
-
-### Naming
-
-| Construct | Convention | Example |
-|---|---|---|
-| Classes | PascalCase | `RideDisplayService` |
-| Interfaces | PascalCase, `I`-prefix for structural contracts | `IObserver`, `ICurrentRideService` |
-| Types / Enums | PascalCase | `RideType`, `CoachType` |
-| Hook functions | camelCase `useXXX` / `initXXX` | `useActivityRide()` |
-| Constants | UPPER_SNAKE_CASE | `SYNC_INTERVAL` |
-| Private fields | `_` prefix or TypeScript access modifier | `_state`, `private observer` |
-
-### Formatting
-
-There is no auto-formatter (no Prettier). ESLint (`eslint.config.mjs`) enforces `js.configs.recommended` + `typescript-eslint` recommended rules. Run `npm run lint` before committing.
-
-- **Indentation**: 4 spaces (no tabs).
-- **Quotes**: Single quotes for all strings and import paths.
-- **Semicolons**: Omitted on most statements and imports. Do not add them when writing new code.
-- **Trailing whitespace / blank lines**: One blank line between class members of different logical groups; no trailing whitespace.
-- **Imports**: Group as — external packages, then internal modules, then the file's own siblings — with no blank lines between groups inside a file unless it aids clarity.
-
-### TypeScript
-
-- Target is ES2024; avoid hacks for older targets.
-- No lax `any` — use proper types or `unknown`.
-- Types and interfaces live in `types.ts`; keep implementation files clean of type sprawl.
-- These are recurring SonarQube findings — apply them while first writing code, not as a post-hoc fix pass. SonarCloud only reports back after a push/PR, so it cannot be the first line of defense: before considering any change to this repo done, re-read your own diff once specifically against this list (not just against functional correctness) — this has been missed repeatedly.
-  - Built-in Node module imports use the `node:` protocol prefix (`import fs from 'node:fs'`), never a bare specifier (`'fs'`).
-  - Last array element: `arr.at(-1)`, not `arr[arr.length - 1]`.
-  - NaN checks: `Number.isNaN(x)`, not the global `isNaN(x)`.
-  - NaN value: `Number.NaN`, not the bare global `NaN` literal (e.g. `{ value: Number.NaN }`, not `{ value: NaN }`).
-  - Existence + property chains: optional chaining (`step?.power === undefined`), not `step === undefined || step.power === undefined`.
-  - Cognitive complexity: SonarQube flags functions above ~15. When a function accumulates many nested if/else branches (e.g. dual-branch formatting logic, multi-case builders), extract small named helpers per logical concern as you write it, rather than one large function refactored later. This applies to a function you're *extending*, not just ones you write from scratch — adding even one more branch/ternary to an already-dense function can push it over the threshold, so re-check complexity on touched functions too.
-
-### Documentation
-
-All publicly exported functions, methods, and classes must have a JSDoc comment. At minimum include a one-line description; add `@param` / `@returns` tags when the signature is not self-explanatory. Internal/private/protected members do not require JSDoc.
-
-## Testing
-
-Guidelines from `.github/instructions/tests.instructions.md`:
-
-- Test files: `<module>.unit.test.ts` or `<module>.e2e.test.ts`, colocated next to source.
-- One `describe` block per method; `test` blocks for individual cases.
-- Test case names describe the behavior being tested — do **not** start with "should".
-- Mock all external dependencies; clear all mocks in `afterEach` / `afterAll`.
-- Protected methods are tested indirectly through the public method flows that exercise them.
-- Test data goes in a `__tests__/` subdirectory, organised by what it represents (user, routes, workouts, …).
-- Imports order: external libraries → internal libraries → module under test.
-- Tests must be deterministic; do not use random data or rely on external state.
-
-- If the service reacts on messages sent to observers, simulate the message flow and verify expected outcome.  Especially on page services (extending `IncyclistPageService`) you need to verify the `getPageDisplayProps()` in case the message handler emits a `page-update`event
-- Do not use `toMatchSnapshot()` for results containing computed floating-point numbers (e.g. route/parser output with `heading`, `slope`, `distance`, ...) — the last binary digits differ between CPU architectures (Apple Silicon vs. x86), so exact snapshots pass on one architecture and fail on another. Use `expectToMatchFixture(actual, fixturePath)` from `__tests__/utils/fixture.ts` instead: it compares against a JSON fixture with a relative tolerance (1e-9) on numeric values. Run with `UPDATE_FIXTURES=1` to (re)create the fixture from the current result.
-
-### Mocking Singleton Dependencies
-
-Singleton services accessed via `@Injectable` getter methods must be injected using `Inject` from `base/decorators` — **never** by monkey-patching the getter directly on the service instance.
-
-```typescript
-import { Inject } from '<path>/base/decorators'
-import { UserSettingsService } from '<path>/settings'
-
-const UserSettingsMock: Partial<UserSettingsService> = {
-    get: jest.fn((_key: string, defValue: unknown) => defValue),
-}
-
-beforeEach(() => {
-    service = new MyService()
-    Inject('UserSettings', UserSettingsMock)   // name matches the singleton registration
-})
-
-afterEach(() => {
-    Inject('UserSettings', null)               // restore so other tests are not affected
-    jest.clearAllMocks()
-})
-```
-
-- The first argument to `Inject` is the singleton's registered name (e.g. `'UserSettings'`, not `'UserSettingsService'`).
-- Type the mock as `Partial<ServiceClass>` so only the methods exercised by the test need to be provided.
-- Always restore with `Inject('ServiceName', null)` in `afterEach` to prevent state leaking between tests.
+- **Never run bare `npx jest` (or `jest`, or `npm run test:all`) without a file argument and a
+  `-c` flag.** It falls back to the default config, whose `testRegex` matches everything,
+  including `*.e2e.test.ts`, which hit real backends and can create or change real test data.
+  Use `npm test` / `npm test -- <path>`.
+- **Self-review against the SonarQube list before calling a change done.** SonarCloud only reports
+  after a push, so it can't be the first line of defense. Re-read your own diff once specifically
+  against the "SonarQube rules" section of the codebase guide, not just for functional
+  correctness. This has been missed repeatedly. Re-check cognitive complexity on functions you
+  extended, not only on new ones.
+- Before committing, run `npm run lint`, `npm run typecheck` and `npm test`.

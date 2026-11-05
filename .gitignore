@@ -24,6 +24,9 @@ coverage
 coverage.e2e
 coverage.integ
 
+# Generated API docs (npm run docgen)
+doc
+
 # Grunt intermediate storage (http://gruntjs.com/creating-plugins#storing-task-files)
 .grunt
 
