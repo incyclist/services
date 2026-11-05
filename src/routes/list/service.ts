@@ -1673,25 +1673,28 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * their details loaded for the file check.
      */
     protected async recoverDownloadStates(cards:Array<RouteCard>):Promise<void> {
-        for (const card of cards) {
-            try {
-                const descr = card?.getRouteDescription()
-                if (!descr?.hasVideo || descr.isLocal || descr.isDownloaded || !descr.originalVideoUrl)
-                    continue
+        const candidates = cards.filter( card => {
+            const descr = card?.getRouteDescription()
+            return descr?.hasVideo && !descr.isLocal && !descr.isDownloaded && descr.originalVideoUrl
+        })
 
-                if (!card.getRouteData()) {
-                    const details = await this.db.getDetails( card.getId() )
-                    if (!details)
-                        continue
-                    card.setRouteData(details)
-                }
+        await Promise.allSettled( candidates.map( card => this.recoverDownloadState(card)) )
+    }
 
-                if (await card.recoverDownloadState())
-                    this.logEvent({message:'preload route updated', route:descr.title, reason:'download state recovered'})
+    protected async recoverDownloadState(card:RouteCard):Promise<void> {
+        try {
+            if (!card.getRouteData()) {
+                const details = await this.db.getDetails( card.getId() )
+                if (!details)
+                    return
+                card.setRouteData(details)
             }
-            catch(err:any) {
-                this.logError(err,'recoverDownloadStates')
-            }
+
+            if (await card.recoverDownloadState())
+                this.logEvent({message:'preload route updated', route:card.getRouteDescription().title, reason:'download state recovered'})
+        }
+        catch(err:any) {
+            this.logError(err,'recoverDownloadState')
         }
     }
 
