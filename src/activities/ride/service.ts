@@ -483,7 +483,7 @@ export class ActivityRideService extends IncyclistService {
         }
         info.push({ title: 'Heartrate', data: [{ value: formatNumber(heartrate, 0), unit: 'bpm' }, heartrateDetails], dataState: this.current.dataState?.heartrate });
 
-        const cadenceUnit = this.activity.sport==='rowing' ? 'spm' : 'rpm'
+        const cadenceUnit = this.activity?.sport==='rowing' ? 'spm' : 'rpm'
         const cadenceInfo = { title: 'Cadence', data: [{ value: formatNumber(cadence, 0), unit: cadenceUnit }, cadenceDetails], dataState: this.current.dataState?.cadence }
         info.push(cadenceInfo);
 
@@ -519,7 +519,7 @@ export class ActivityRideService extends IncyclistService {
         
         if (speed>0 && this.durationCalculator)  {
             timeRemaining = this.durationCalculator.getRemainingTime(
-                {route:this.current.route, speed:this.current.deviceData?.speed,routePos:this.activity.distance+(this.activity?.startPos??0), endPos:this.current?.endPos}
+                {route:this.current.route, speed:this.current.deviceData?.speed,routePos:(this.activity?.distance??0)+(this.activity?.startPos??0), endPos:this.current?.endPos}
             )    
         }
 
@@ -559,10 +559,10 @@ export class ActivityRideService extends IncyclistService {
             const stats = this.activity?.stats
             const avgSpeed = stats?.speed?.avg
 
-            const sport = this.activity.sport??'cycling'
+            const sport = this.activity?.sport??'cycling'
             const data = this.speedHandler[sport](avgSpeed)
 
-            const speedDetails = this.activity.sport==='cycling' ?
+            const speedDetails = this.activity?.sport==='cycling' ?
                 { value: formatNumber(C(avgSpeed,'speed'),1), label: 'avg' }:
                 { value: data.value, label:'max'  };
 
@@ -648,10 +648,10 @@ export class ActivityRideService extends IncyclistService {
         if (!workout)
             return undefined
 
-        const ftp = activity.user?.ftp ?? 0
+        const ftp = activity?.user?.ftp ?? 0
         const bars = getWorkoutGraphSeries(workout, { ftp, absValues: true })
         const lastBarX = bars.length ? bars.at(-1).x : 0
-        const lastLogTime = activity.logs?.length ? activity.logs.at(-1).time : 0
+        const lastLogTime = activity?.logs?.length ? activity?.logs.at(-1).time : 0
         const maxXCandidates = [lastLogTime, lastBarX, workout.duration ?? 0].filter(Number.isFinite)
         const maxX = maxXCandidates.length ? Math.max(...maxXCandidates) : 0
         const maxBarPower = bars.length ? Math.max(...bars.map(b => b.y)) : 0
@@ -664,10 +664,10 @@ export class ActivityRideService extends IncyclistService {
         }
 
         const actuals: WorkoutGraphActuals = {
-            power: (activity.logs ?? [])
+            power: (activity?.logs ?? [])
                 .filter(log => Number.isFinite(log.time) && Number.isFinite(log.power))
                 .map(log => ({ x: log.time, y: log.power })),
-            heartrate: (activity.logs ?? [])
+            heartrate: (activity?.logs ?? [])
                 .filter(log => Number.isFinite(log.time) && Number.isFinite(log.heartrate))
                 .map(log => ({ x: log.time, y: log.heartrate as number })),
             // no "current position" marker makes sense for a finished ride - keep it outside the
