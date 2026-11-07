@@ -466,7 +466,7 @@ export class ActivityRideService extends IncyclistService {
                 { value: distanceRemaining === undefined ? undefined : `-${C(distanceRemaining,'distance',{from:'km'}).toFixed(2) }`}] 
             });
 
-        const sport = this.activity.sport??'cycling'
+        const sport = this.activity?.sport??'cycling'
         info.push({ title: 'Speed', 
                 data: [
                     this.speedHandler[sport](speed),
@@ -532,10 +532,10 @@ export class ActivityRideService extends IncyclistService {
 
             const stats = this.activity?.stats
             const maxSpeed = stats?.speed?.max
-            const sport = this.activity.sport??'cycling'
+            const sport = this.activity?.sport??'cycling'
             const data = this.speedHandler[sport](maxSpeed)
 
-            const speedDetails = this.activity.sport==='cycling' ?
+            const speedDetails = this.activity?.sport==='cycling' ?
                 { value: formatNumber(C(maxSpeed,'speed'),1), label: 'max' }:
                 { value: data.value, label:'max'  };
 
