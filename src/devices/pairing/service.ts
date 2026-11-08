@@ -1942,7 +1942,7 @@ export class DevicePairingService  extends IncyclistService{
                 return;
 
             const unitInfo = Units.find( ui=> ui.capability === c.capability)
-            const device =this.getCapabilityDevice(c,udid)
+            let device =this.getCapabilityDevice(c,udid)
 
             // did the device capabilities change?
             const alphabetical = (a, b) => a.localeCompare(b);
@@ -1951,10 +1951,13 @@ export class DevicePairingService  extends IncyclistService{
 
             if (known!==current) {
                 this.getDeviceConfiguration().updateCapabilities(udid)
+                // updateCapabilities() may have just registered this device under a
+                // capability it didn't have yet - refetch so the connect state below applies
+                device = this.getCapabilityDevice(c,udid)
             }
-                
-            
-            
+
+
+
 
             if (unitInfo) {
                 let value = data[unitInfo.value]?.toFixed(unitInfo.decimals)

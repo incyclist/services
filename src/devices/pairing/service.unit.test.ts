@@ -2245,14 +2245,63 @@ describe('PairingService',()=>{
                 expect(pwr.unit).toBe('W')
                 expect(pwr.devices.find(d=>d.udid==='1')).toMatchObject({value:'100', unit:'W'})
 
-                expect(onStateChanged).not.toHaveBeenCalled() 
+                expect(onStateChanged).not.toHaveBeenCalled()
 
             })
 
-
-
         })
         // emitted when a device sends data during pairing
+
+        describe('access:data - capability discovered after the initial connection',()=>{
+
+            // a device that only reveals part of its capability set after the initial connection
+            // (e.g. a BLE FTMS trainer whose Heart Rate service is discovered only once its full
+            // service list has been read) must get a connect state for that capability in the
+            // very same onDeviceData() call that discovers it - not a later one, which may never
+            // come.
+
+            beforeEach( ()=>{
+                TestWrapper.setupMocks()
+                svc = new TestWrapper()
+                svc.initServices()
+
+                svc.setSettings( {onStateChanged})
+                svc.simulateScanning()
+
+                // 'heartrate' is set up first (another device, udid '9', is selected for it) so it
+                // is the first capability the onDeviceData() forEach iterates over - udid '1' is not
+                // registered under it yet
+                svc.setupMockData( IncyclistCapability.HeartRate, [ {udid:'9', selected:true} ])
+                svc.setupMockData( IncyclistCapability.Power, [ {udid:'1', selected:true} ])
+            })
+
+            afterEach( ()=>{
+                svc.reset()
+                svc.resetServices()
+                TestWrapper.resetMocks()
+                jest.resetAllMocks()
+            })
+
+            test('the newly discovered capability gets a connect state in the same call',()=>{
+
+                const adapter = svc.getDeviceAdapter('1')
+                ;(adapter.getCapabilities as jest.Mock).mockReturnValue([IncyclistCapability.Power, IncyclistCapability.HeartRate])
+
+                configuration.updateCapabilities = jest.fn( (udid)=>{
+                    const hr = svc.getCapabilityData(IncyclistCapability.HeartRate)
+                    if (!hr.devices.find(d=>d.udid===udid))
+                        hr.devices.push({udid, name:udid, interface:'ant', selected:false, connectState:'connecting'})
+                })
+
+                access.emit('data',{power:120,heartrate:145},'1')
+
+                expect(configuration.updateCapabilities).toHaveBeenCalledWith('1')
+
+                const hr = svc.getCapabilityData(IncyclistCapability.HeartRate)
+                expect(hr.devices.find(d=>d.udid==='1')).toMatchObject({connectState:'connected', value:'145', unit:'bpm'})
+            })
+
+        })
 
 
         describe('ride:data',()=>{
