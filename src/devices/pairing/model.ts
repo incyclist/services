@@ -1,7 +1,7 @@
 import { DeviceData, DeviceSettings, IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices"
 import { EnrichedInterfaceSetting } from "../access"
 import { RideServiceCheckFilter } from "../ride"
-import { AdapterInfo, IncyclistDeviceSettings } from "../configuration"
+import { AdapterInfo, ExclusionReason, ExclusionScope, IncyclistDeviceSettings } from "../configuration"
 
 
 export interface DevicePairingData {
@@ -20,11 +20,18 @@ export interface CapabilityData {
     capability: IncyclistCapability,
     value?: number,
     unit?: string,
-    connectState?: DevicePairingStatus,   
+    connectState?: DevicePairingStatus,
     deviceName:string
     deviceNames: string
     selected?:string
     disabled:boolean
+    /**
+     * Set only while the device named by `selected` is itself excluded from the effective
+     * selection (e.g. riding on a fallback device while the trainer isn't available); `selected`
+     * keeps the raw, persisted udid regardless. Cleared automatically the moment `selected`
+     * changes - never describes some other, previously-selected device.
+     */
+    excluded?: { reason: ExclusionReason, scope: ExclusionScope }
     interface:string
     devices:Array<DevicePairingData>
 }
@@ -40,6 +47,35 @@ export interface PairingData {
 export interface PairingProps {
     filter?: RideServiceCheckFilter,
     enforcedScan?: boolean
+    /** the scan feeds an open device list, it isn't the page's search for devices */
+    deviceList?: boolean
+}
+
+/** Why a search for devices on the Pairing page ended. */
+export type SearchEndReason = 'complete' | 'time' | 'rider_stop' | 'left_page'
+
+/**
+ * The Pairing page's search for devices. A search runs once when the page opens (if the saved
+ * devices can't make the ride ready), ends by itself when it's complete or its time is up, or when
+ * the rider stops it. Nothing searches again until the rider asks for it.
+ */
+export interface SearchStatus {
+    /** a search is running */
+    running: boolean
+    /** a search ran during this visit and has ended */
+    ended: boolean
+    /** 1 for the automatic search, 2 and up for every search the rider started again; 0 before any search */
+    index: number
+    /** a device to ride with (trainer, power meter or speed sensor) has been found */
+    rideCapableFound: boolean
+    /** a trainer has been found (or the rider switched Resistance off) */
+    trainerFound: boolean
+    /** the rider can stop the running search: something to ride with was found, the search isn't complete, and that has held for a moment */
+    canStop: boolean
+    /** the rider can start another search: the last one ended without a trainer */
+    canSearchAgain: boolean
+    /** the measuring capabilities that are neither filled nor switched off */
+    missing: IncyclistCapability[]
 }
 
 export interface PairingState {
@@ -91,6 +127,44 @@ export interface DeviceSelectState {
     devices:Array<DevicePairingData>
     isScanning?: boolean
 }
+
+/**
+ * What picking `udid` would do to every capability it supports other than the one it's being
+ * picked for: `filled` slots are currently empty, `unchanged` already hold this same device, and
+ * `conflicts` hold a different device (`currentName` is for display only, never logged).
+ */
+export interface SelectionImpact {
+    filled: IncyclistCapability[]
+    unchanged: IncyclistCapability[]
+    conflicts: Array<{ capability: IncyclistCapability, currentName: string }>
+}
+
+/**
+ * `true` keeps today's meaning (overwrite every capability the device supports) and `false`
+ * means this slot only. The object form fills whatever is empty at commit time and replaces only
+ * the capabilities named in `replace`; a capability that's `disabled` or on this device's session
+ * delete list is skipped either way, not filled and not replaced.
+ */
+export type SelectDeviceMode = boolean | { others: 'fill-empty', replace: IncyclistCapability[] }
+
+/**
+ * A device that wants slots already held by a different device. Nothing is replaced until the
+ * rider answers: until then, the current selection is kept and readiness is computed on it.
+ *
+ * `deviceName` and `conflicts[].currentName` are for display only and are never logged.
+ */
+export interface SelectionConflict {
+    /** stable for this device and detection, opaque to the UI */
+    id: string
+    origin: 'detection' | 'manual'
+    deviceName: string
+    /** empty slots that were already filled with this device */
+    filled: IncyclistCapability[]
+    conflicts: Array<{ capability: IncyclistCapability, currentName: string }>
+}
+
+/** How a conflict ended without being answered: the rider dismissed it, or left the page. */
+export type ConflictDismissal = 'dismissed' | 'left_page'
 
 
 

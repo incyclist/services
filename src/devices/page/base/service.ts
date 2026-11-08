@@ -4,7 +4,7 @@ import { IncyclistPageService } from '../../../base/pages'
 import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText } from '../../pairing'
 
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
-import type { CapabilityData, DevicePairingData, InternalPairingState } from '../../pairing'
+import type { CapabilityData, DevicePairingData, InternalPairingState, SearchStatus } from '../../pairing'
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../../configuration'
@@ -112,6 +112,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         try {
             this.logEvent({message:'page closed', page:'Pairing'})
             this.isVisitOpen = false
+            this.setPairingVisitOpen(false)
             EventLogger.setGlobalConfig('page',null)
             this.isPairingForRide =false
 
@@ -193,16 +194,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         // with a toggle that turns it straight back on, no new scan needed. T16b: nothing is
         // remembered (e.g. its device was deleted), shown as a plain tile inviting a fresh search.
         if (disabled) {
-            const hasRememberedDevice = Boolean(deviceName)
-            return {
-                title, capability,
-                deviceName: hasRememberedDevice ? deviceName : undefined,
-                disabled: true,
-                role, helpText,
-                emptyFooter: hasRememberedDevice ? 'Not used' : 'Not used · tap to search',
-                onClick,
-                onUse: hasRememberedDevice ? ()=> { this.onCapabilityUse(cap) } : undefined,
-            }
+            return this.getDisabledCapabilityDisplayProps(data, {title,capability,role,helpText,onClick})
         }
 
         const adapaters = this.state.adapters??[]
@@ -210,19 +202,45 @@ export abstract class PairingPageService extends IncyclistPageService {
         const ifName = adapter?.adapter?.getInterface()
 
         const onUnselect = data.selected ? ()=> { this.onCapabilityUnselect(cap) } : undefined
+        const emptyFooter = this.getActiveCapabilityEmptyFooter(cap, role, noSearch)
 
-        let emptyFooter: string | undefined = undefined
-        if (noSearch)
-            emptyFooter = 'Not searching'
-        else if (role)
-            emptyFooter = getEmptyTileFooterText(role)
+        // during a search, a device that was only seen and hasn't been started yet is "found", not connected
+        const found = Boolean(data.selected) && this.getSearchStatus()?.running===true && adapter?.adapter?.isStarted()!==true
+        const stateText = found ? 'Found' : undefined
 
         return {
             title, capability,deviceName, disabled:false, connectState,value:value?.toString(),unit,interface:ifName,
-            role, helpText, emptyFooter,
+            role, helpText, emptyFooter, stateText,
             onClick, onUnselect
         }
 
+    }
+
+    protected getDisabledCapabilityDisplayProps(data:CapabilityData, common:{title:TDisplayCapability,capability:TIncyclistCapability,role:CapabilityDisplayProps['role'],helpText:CapabilityDisplayProps['helpText'],onClick:()=>void}):CapabilityDisplayProps {
+        const {capability:cap,deviceName} = data
+        const {title,capability,role,helpText,onClick} = common
+        const hasRememberedDevice = Boolean(deviceName)
+
+        return {
+            title, capability,
+            deviceName: hasRememberedDevice ? deviceName : undefined,
+            disabled: true,
+            role, helpText,
+            emptyFooter: hasRememberedDevice ? 'Not used' : 'Not used · tap to search',
+            onClick,
+            onUse: hasRememberedDevice ? ()=> { this.onCapabilityUse(cap) } : undefined,
+        }
+    }
+
+    protected getActiveCapabilityEmptyFooter(cap:IncyclistCapability, role:CapabilityDisplayProps['role'], noSearch:boolean):string|undefined {
+        if (noSearch)
+            return 'Not searching'
+        if (role==='required' && this.getSearchStatus()?.ended)
+            // the search is over: the page isn't looking for this one any more
+            return cap===IncyclistCapability.Control && this.canStartRide() ? 'Not found · tap to search' : 'Not found'
+        if (role)
+            return getEmptyTileFooterText(role)
+        return undefined
     }
 
     protected getDeviceListDisplayProps():DeviceSelectionProps|undefined {
@@ -349,18 +367,41 @@ export abstract class PairingPageService extends IncyclistPageService {
     // DeviceRideService.canEnforceSimulator(), which protected the maps API key from being used
     // to simulate a GPX route without the rider's own key; that protection now belongs on the
     // ride page itself (falling back when there is no personal key), not here.
-    protected getButtonsDisplayProps() : PairingButtonProps{
+    //
+    // While a search runs, OK isn't offered; Stop searching is, once something to ride with was found.
+    // After a search that ended without a trainer, Search again is offered - next to OK if the ride is
+    // ready, otherwise as the main action, but not while a found device is still connecting. It's
+    // never offered when nothing can search (noSearch).
+    protected getButtonsDisplayProps(noSearch:boolean=false) : PairingButtonProps{
         const labelOK = this.isPairingForRide ? 'Start' : 'OK'
         const labelSkip = this.isPairingForRide ? 'Cancel' : 'Skip'
+        const search = this.getSearchStatus()
+        const skip = (primary:boolean) => ({ label:labelSkip, primary, onClick:this.onSkip.bind(this) })
+        const searchAgain = (primary:boolean) => ({ label:'Search again', primary, onClick:this.onSearchAgain.bind(this) })
 
-        if (this.state?.canStartRide)
+        if (search?.running && search.canStop)
             return [
-                { label:labelOK, primary:true, onClick:this.onOK.bind(this) }
+                { label:'Stop searching', primary:true, onClick:this.onStopSearch.bind(this) },
+                skip(false)
             ]
 
+        const offerSearchAgain = !noSearch && search?.canSearchAgain===true
+
+        if (this.canStartRide()) {
+            const ok = { label:labelOK, primary:true, onClick:this.onOK.bind(this) }
+            return offerSearchAgain ? [ ok, searchAgain(false) ] : [ ok ]
+        }
+
+        const nothingFound = offerSearchAgain && !search?.rideCapableFound
+
         if (!this.isPairingForRide)
+            return nothingFound ? [ searchAgain(true), skip(false) ] : [ skip(true) ]
+
+        if (nothingFound)
             return [
-                { label:labelSkip, primary:true, onClick:this.onSkip.bind(this) }
+                searchAgain(true),
+                { label:'Simulate', primary:false, onClick:this.onSimulate.bind(this) },
+                skip(false)
             ]
 
         return [
@@ -407,6 +448,10 @@ export abstract class PairingPageService extends IncyclistPageService {
     }
 
     protected openVisit():void {
+        // runs on every open, also when a visit is already open: the pairing service clears
+        // the exclusions that last until the next visit each time
+        this.setPairingVisitOpen(true)
+
         if (this.isVisitOpen)
             return
         this.trackVisit( t=>t.openVisit({forRide:this.isPairingForRide}), 'openVisit')
@@ -416,10 +461,68 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected closeVisit(via:PairingExitVia):void {
         this.trackVisit( t=>t.closeVisit(via,{canStartRide:this.canStartRide()}), 'closeVisit')
         this.isVisitOpen = false
+        this.setPairingVisitOpen(false)
     }
 
+    protected setPairingVisitOpen(open:boolean):void {
+        try {
+            this.getDevicePairing().setVisitOpen(open)
+        }
+        catch(err) {
+            this.logError(err,'setPairingVisitOpen')
+        }
+    }
+
+    // ready to ride right now: never while the page's search is still running
     protected canStartRide():boolean {
+        if (this.getSearchStatus()?.running)
+            return false
         return this.state?.canStartRide ?? false
+    }
+
+    protected getSearchStatus():SearchStatus|undefined {
+        try {
+            return this.getDevicePairing().getSearchStatus?.()
+        }
+        catch(err) {
+            this.logError(err,'getSearchStatus')
+            return undefined
+        }
+    }
+
+    protected isSearchEndedWithNothing():boolean {
+        const search = this.getSearchStatus()
+        return search?.ended===true && !search.rideCapableFound
+    }
+
+    // the search is running and has found something to ride with, but is still looking for more.
+    // Shown with the same delay as Stop searching, so a fast, complete search never flashes it.
+    protected isStillLooking():boolean {
+        const search = this.getSearchStatus()
+        return search?.running===true && search.canStop
+    }
+
+    /** The search state the status line needs, for {@link getPairingStatusDisplay}. */
+    protected getSearchStatusSource():{searchEndedWithNothing:boolean, stillLooking:boolean, missing:string[], searchEndedWithoutTrainer:boolean} {
+        const search = this.getSearchStatus()
+        return {
+            searchEndedWithNothing: this.isSearchEndedWithNothing(),
+            stillLooking: this.isStillLooking(),
+            missing: search?.missing ?? [],
+            searchEndedWithoutTrainer: search?.ended===true && !search.trainerFound,
+        }
+    }
+
+    protected onStopSearch():void {
+        this.logEvent( {message:'stop searching clicked', eventSource:'user'})
+        this.getDevicePairing().stopSearch()
+        this.updatePage()
+    }
+
+    protected onSearchAgain():void {
+        this.logEvent( {message:'search again clicked', eventSource:'user'})
+        this.getDevicePairing().searchAgain()
+        this.updatePage()
     }
 
     protected onSkip():void {
