@@ -524,7 +524,7 @@ describe('PairingGuidance - status line', ()=> {
 
         test('without anything shown', ()=> {
             guidance.getStatus(antBack)
-            expect(guidance.getExitFields()).toEqual({ pairingCase:'no-trainer', partialOutageShown:false, switchedOffRequired:false })
+            expect(guidance.getExitFields()).toEqual({ pairingCase:'no-trainer', partialOutageShown:false, switchedOffRequired:false, helperShown:false })
         })
 
         test('with the partial outage shown, even after it cleared', ()=> {

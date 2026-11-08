@@ -56,7 +56,9 @@ describe('DevicesPageService - pairing visit tracking', ()=> {
     })
 
     afterEach( ()=> {
-        (service as any).reset()
+        // stops the visit's timers, so none outlives the test
+        (service as any).guidance?.closeVisit()
+        ;(service as any).reset()
         Inject('PairingVisitTracker', null)
         Inject('DevicePairing', null)
         Inject('AppState', null)

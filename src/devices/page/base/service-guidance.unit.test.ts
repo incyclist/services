@@ -6,7 +6,7 @@ import { Observer } from '../../../base/types'
 import { DesktopPairingPageService } from '../desktop/service'
 import { DevicesPageService } from '../mobile/service'
 import { PARTIAL_OUTAGE_DEBOUNCE_MS } from '../../pairing'
-import { TRAINER_ATTEMPT_TIMEOUT_MS } from './guidance'
+import { HELPER_THRESHOLD_MS, TRAINER_ATTEMPT_TIMEOUT_MS } from './guidance'
 
 type Trainer = { selected?:string, connectState?:string, interface?:string, disabled?:boolean }
 
@@ -196,6 +196,8 @@ describe.each([
         stop: jest.fn(),
         pause: jest.fn().mockResolvedValue(undefined),
         resume: jest.fn(),
+        onDeviceSelectionOpened: jest.fn(),
+        onDeviceSelectionClosed: jest.fn(),
     }
 
     const trainer = (connectState?:string) => ({ capability:'control', selected:'trainer-1', interface:'ble', disabled:false, devices:[], deviceName:'Tacx Flux', deviceNames:'Tacx Flux', connectState })
@@ -228,6 +230,8 @@ describe.each([
         pairing.setReadyToStart = jest.fn()
         pairing.setVisitOpen = jest.fn()
         pairing.getSearchStatus = jest.fn().mockReturnValue(undefined)
+        pairing.startDeviceSelection = jest.fn()
+        pairing.stopDeviceSelection = jest.fn().mockResolvedValue(undefined)
         tracker = { openVisit: jest.fn().mockReturnValue({visitId:'visit-1'}), closeVisit: jest.fn(), setExitFields: jest.fn(), onBackground: jest.fn(), onForeground: jest.fn() }
 
         Inject('DevicePairing', pairing)
@@ -407,7 +411,7 @@ describe.each([
             expect(typeof provider).toBe('function')
             expect(tracker.setExitFields).toHaveBeenLastCalledWith(undefined)
             // the fields as they stood when the tracker closed the visit
-            expect(exitFieldsAtClose).toEqual({ pairingCase:'trainer-unavailable', trainerPhase:'unavailable', partialOutageShown:false, switchedOffRequired:false })
+            expect(exitFieldsAtClose).toEqual({ pairingCase:'trainer-unavailable', trainerPhase:'unavailable', partialOutageShown:false, switchedOffRequired:false, helperShown:false })
         })
 
         let exitFieldsAtClose:any
@@ -427,6 +431,162 @@ describe.each([
             ;(service as any).onSkip()
 
             expect(exitFieldsAtClose).toMatchObject({ pairingCase:'no-trainer', switchedOffRequired:true })
+        })
+
+        test('helperShown and lastReason once the rider used the helper', async ()=> {
+            await openReady()
+            tracker.closeVisit.mockImplementation( ()=>{ exitFieldsAtClose = tracker.setExitFields.mock.calls[0][0]() })
+            emit([])
+            helper().onOpen()
+            pickReason('asleep')
+            ;(service as any).onSkip()
+
+            expect(exitFieldsAtClose).toMatchObject({ helperShown:true, lastReason:'asleep' })
+        })
+    })
+
+    const helper = () => service.getPageDisplayProperties().helper!
+    const pickReason = (id:string) => helper().reasons.find( r=>r.id===id)!.onSelect()
+    const threshold = HELPER_THRESHOLD_MS[platform as 'mobile'|'desktop']
+
+    describe('helper', ()=> {
+
+        test('opens by itself at the platform threshold with nothing found, and updates the page', async ()=> {
+            const observer = await openReady() as Observer
+            const onUpdate = jest.fn()
+            observer.on('page-update', onUpdate)
+            emit([])
+            expect(helper().phase).toBe('hidden')
+
+            jest.advanceTimersByTime(threshold)
+            expect(onUpdate).toHaveBeenCalled()
+            expect(helper()).toMatchObject({
+                phase: 'open',
+                title: "Can't find your trainer?",
+                subline: "Pick what fits best and we'll show you what to try.",
+                footer: 'Still searching. Your tiles light up as soon as something is found.',
+            })
+            expect(helper().tip).toBeUndefined()
+            expect(helper().action).toBeUndefined()
+        })
+
+        test('offers the answers for the case, with the platform\'s wording', async ()=> {
+            await openReady()
+            emit([])
+            helper().onOpen()
+
+            expect(helper().reasons.map( r=>r.id)).toEqual(['asleep','other_app','interface','no_device','unsure'])
+            expect(helper().reasons.find( r=>r.id==='interface')!.label)
+                .toBe(platform==='mobile' ? "Bluetooth isn't working" : "Bluetooth or ANT+ isn't working")
+        })
+
+        test('a picked answer shows its tip, and the subline goes away', async ()=> {
+            await openReady()
+            emit([])
+            helper().onOpen()
+            pickReason('asleep')
+
+            expect(helper().reasons.find( r=>r.id==='asleep')!.selected).toBe(true)
+            expect(helper().subline).toBeUndefined()
+            expect(helper().tip).toEqual({
+                text: 'Most trainers and sensors go to sleep when idle. Pedal a few strokes or press a button on the device. We keep trying automatically.',
+                shortText: 'Pedal a few strokes or press a button on it. We keep trying.',
+            })
+            expect(helper().action).toBeUndefined()
+        })
+
+        test('"no device" outside ride mode: the action is its own prop, and it browses routes', async ()=> {
+            await openReady()
+            emit([])
+            helper().onOpen()
+            pickReason('no_device')
+
+            expect(helper().tip?.text).toBe("To ride, Incyclist needs a smart trainer, a power meter or a speed sensor. A heart-rate monitor or cadence sensor alone isn't enough.")
+            expect(helper().action).toMatchObject({ label:'Browse routes for now', note:"You'll need one of these devices to start a ride." })
+
+            helper().action!.onClick()
+            expect(tracker.closeVisit).toHaveBeenCalledWith('skip', expect.anything())
+        })
+
+        test('"no device" in ride mode simulates', async ()=> {
+            service.openPage(true)
+            await jest.advanceTimersByTimeAsync(0)
+            emit([])
+            helper().onOpen()
+            pickReason('no_device')
+
+            expect(helper().action).toEqual({ label:'Ride with simulated power', onClick:expect.any(Function) })
+            helper().action!.onClick()
+            expect(tracker.closeVisit).toHaveBeenCalledWith('simulate', expect.anything())
+        })
+
+        test('the trainer case: its title and footer, and "not available today" once it is unavailable', async ()=> {
+            await openReady()
+            emit([trainer('connecting'), trainerPower('connecting')])
+            helper().onOpen()
+            expect(helper()).toMatchObject({ title:"Can't connect to your trainer?", footer:'Still trying to connect to your saved devices.' })
+            expect(helper().reasons.map( r=>r.id)).not.toContain('trainer_unavailable')
+
+            jest.advanceTimersByTime(TRAINER_ATTEMPT_TIMEOUT_MS.ble)
+            pickReason('trainer_unavailable')
+            expect(helper().tip?.text).toBe('To ride without your trainer, Incyclist needs a power meter or speed sensor, and none is connected. Have one? Tap the Power or Speed tile to add it.')
+            expect(helper().action?.label).toBe('Browse routes for now')
+        })
+
+        test('waits while a device list is open, and opens once it closes', async ()=> {
+            await openReady()
+            emit([])
+            ;(service as any).openDeviceSelection('control')
+            jest.advanceTimersByTime(threshold)
+            expect(helper().phase).toBe('hidden')
+
+            ;(service as any).closeDeviceSelection()
+            expect(helper().phase).toBe('open')
+        })
+
+        test('a device making the row ready resolves it', async ()=> {
+            await openReady()
+            emit([])
+            helper().onOpen()
+            emit([{ capability:'power', selected:'pm-1', interface:'ant', disabled:false, devices:[], deviceName:'Stages', deviceNames:'Stages', connectState:'connected' }], true)
+
+            expect(helper()).toMatchObject({ phase:'resolved', resolvedText:'Found it! Ready to ride.' })
+        })
+
+        test('dismissing closes it', async ()=> {
+            await openReady()
+            emit([])
+            helper().onOpen()
+            helper().onDismiss()
+            expect(helper().phase).toBe('hidden')
+        })
+
+        test('the threshold pauses while the page is in the background', async ()=> {
+            await openReady()
+            emit([])
+            jest.advanceTimersByTime(5000)
+            await service.pausePage()
+            jest.advanceTimersByTime(threshold * 2)
+            expect(helper().phase).toBe('hidden')
+
+            const resumed = service.resumePage()
+            await jest.advanceTimersByTimeAsync(threshold - 5000)
+            await resumed
+            expect(helper().phase).toBe('open')
+        })
+
+        test('restarts on every page open', async ()=> {
+            await openReady()
+            emit([])
+            jest.advanceTimersByTime(threshold - 1000)
+            service.closePage()
+
+            await openReady()
+            emit([])
+            jest.advanceTimersByTime(threshold - 1)
+            expect(helper().phase).toBe('hidden')
+            jest.advanceTimersByTime(1)
+            expect(helper().phase).toBe('open')
         })
     })
 })

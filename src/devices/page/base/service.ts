@@ -3,20 +3,22 @@ import { Injectable } from '../../../base/decorators'
 import { IncyclistPageService } from '../../../base/pages'
 import {
     useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText,
-    getPairingRowLabelId, getPairingStatusDisplay, isCapabilityActive
+    getPairingRowLabelId, getPairingStatusDisplay, isCapabilityActive,
+    getPairingHelperFooter, getPairingHelperReasonLabel, getPairingHelperTip, getPairingHelperTitle, hasContinueWithoutDeviceAction,
+    PAIRING_HELPER_RESOLVED_TEXT, PAIRING_HELPER_SUBLINE
 } from '../../pairing'
 
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
 import type {
-    CapabilityData, DevicePairingData, InternalPairingState, PairingInterfaceState, PairingPlatform, PairingRole,
-    PairingStatusDisplayProps, PairingStatusSource, SearchStatus
+    CapabilityData, ContinueWithoutDeviceTarget, DevicePairingData, InternalPairingState, PairingHelperReason, PairingInterfaceState,
+    PairingPlatform, PairingRole, PairingStatusDisplayProps, PairingStatusSource, SearchStatus
 } from '../../pairing'
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../../configuration'
 import { usePairingVisitTracker } from './visit-log-factory'
 import type { PairingVisitTracker } from './visit-log'
-import type { PairingExitVia } from './types'
+import type { PairingExitVia, PairingHelperDisplayProps } from './types'
 import type { DesktopPairingDisplayProps } from '../desktop/types'
 import type { PairingOrchestrator } from './orchestrator'
 import { PairingGuidance } from './guidance'
@@ -34,7 +36,7 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected promiseOpen:Promise<void>|undefined
     protected stateMachine: PairingOrchestrator
     protected logObserver:PageLogObserver
-    protected openedCapability: IncyclistCapability|undefined
+    protected _openedCapability: IncyclistCapability|undefined
     protected isPairingForRide: boolean = false
     protected isVisitOpen: boolean = false
 
@@ -56,6 +58,17 @@ export abstract class PairingPageService extends IncyclistPageService {
             log: (message, fields)=>{ this.logEvent({message, ...fields}) },
             onChange: ()=>{ this.updatePage() },
         })
+    }
+
+    // the capability whose device list is open. The guidance hears about every change, from either
+    // platform's list handling, so the helper waits while a list is open.
+    protected get openedCapability(): IncyclistCapability|undefined {
+        return this._openedCapability
+    }
+
+    protected set openedCapability(cap: IncyclistCapability|undefined) {
+        this._openedCapability = cap
+        this.guidance?.setDeviceListOpen(cap!==undefined)
     }
 
     /** The orchestrator that drives the pairing lifecycle for this platform. */
@@ -480,7 +493,10 @@ export abstract class PairingPageService extends IncyclistPageService {
             return
         let visitId:string|undefined
         this.trackVisit( t=>{ visitId = t.openVisit({forRide:this.isPairingForRide})?.visitId }, 'openVisit')
-        this.withGuidance( g=>g.openVisit({visitId}), 'openVisit')
+        this.withGuidance( g=>{
+            g.openVisit({visitId, platform:this.getPlatform(), forRide:this.isPairingForRide})
+            g.setDeviceListOpen(this.openedCapability!==undefined)
+        }, 'openVisit')
         // whichever way the visit ends - also by app exit - its exit event carries the guidance fields
         this.trackVisit( t=>t.setExitFields( ()=>({...this.guidance.getExitFields()}) ), 'openVisit')
         this.isVisitOpen = true
@@ -571,14 +587,94 @@ export abstract class PairingPageService extends IncyclistPageService {
     }
 
     /** The guidance part of the display props. Not yet rendered by any consumer. */
-    protected getGuidanceDisplayProps():Pick<PairingDisplayProps,'pairingCase'|'trainerPhase'> {
+    protected getGuidanceDisplayProps():Pick<PairingDisplayProps,'pairingCase'|'trainerPhase'|'helper'> {
         try {
             const {pairingCase, trainerPhase} = this.guidance.getState()
-            return {pairingCase, trainerPhase}
+            return {pairingCase, trainerPhase, helper:this.getHelperDisplayProps()}
         }
         catch(err) {
             this.logError(err,'getGuidanceDisplayProps')
             return {}
+        }
+    }
+
+    protected getHelperDisplayProps():PairingHelperDisplayProps|undefined {
+        if (!this.isVisitOpen)
+            return undefined
+
+        const helper = this.guidance.getHelper()
+        const {platform, selectedReason, separateSensor} = helper
+        const trainerConfigured = helper.trainerPhase!==undefined
+
+        const props:PairingHelperDisplayProps = {
+            phase: helper.phase,
+            title: getPairingHelperTitle(trainerConfigured),
+            reasons: helper.reasons.map( id=>({
+                id,
+                label: getPairingHelperReasonLabel(id, platform),
+                selected: id===selectedReason,
+                onSelect: ()=>{ this.onHelperReasonSelected(id) },
+            })),
+            footer: getPairingHelperFooter(trainerConfigured),
+            onOpen: ()=>{ this.onHelperOpen() },
+            onDismiss: ()=>{ this.onHelperDismissed() },
+        }
+
+        if (helper.phase==='resolved')
+            props.resolvedText = PAIRING_HELPER_RESOLVED_TEXT
+
+        if (!selectedReason) {
+            props.subline = PAIRING_HELPER_SUBLINE
+            return props
+        }
+
+        props.tip = getPairingHelperTip(selectedReason, {platform, separateSensor})
+        if (hasContinueWithoutDeviceAction(selectedReason, separateSensor)) {
+            const {label, note} = this.guidance.getContinueWithoutDeviceAction()
+            props.action = { label, onClick: ()=>{ this.onContinueWithoutDevice() } }
+            if (note)
+                props.action.note = note
+        }
+        return props
+    }
+
+    protected onHelperOpen():void {
+        this.withGuidance( g=>g.openHelper(), 'onHelperOpen')
+        this.updatePage()
+    }
+
+    protected onHelperDismissed():void {
+        this.withGuidance( g=>g.dismissHelper(), 'onHelperDismissed')
+        this.updatePage()
+    }
+
+    protected onHelperReasonSelected(reason:PairingHelperReason):void {
+        this.withGuidance( g=>g.selectReason(reason), 'onHelperReasonSelected')
+        this.updatePage()
+    }
+
+    /**
+     * The helper's no-device action. It runs this page's own Simulate, Skip or Cancel, so a
+     * platform's override of those applies here too.
+     */
+    protected onContinueWithoutDevice():void {
+        const target = this.getContinueWithoutDeviceTarget()
+        if (target==='simulate')
+            this.onSimulate()
+        else if (target==='cancel')
+            this.onCancel()
+        else
+            this.onSkip()
+    }
+
+    protected getContinueWithoutDeviceTarget():ContinueWithoutDeviceTarget {
+        try {
+            return this.guidance.continueWithoutDevice()
+        }
+        catch(err) {
+            // the rider still gets away from the page
+            this.logError(err,'onContinueWithoutDevice')
+            return this.isPairingForRide ? 'cancel' : 'skip'
         }
     }
 

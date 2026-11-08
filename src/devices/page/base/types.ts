@@ -1,6 +1,7 @@
 import type { DevicePairingStatus } from "../../pairing/model"
 import type { PairingStatusDisplayProps } from "../../pairing/status"
-import type { PairingCase, TrainerPhase } from "./guidance/types"
+import type { PairingHelperReason } from "../../pairing/helper"
+import type { PairingCase, PairingHelperPhase, TrainerPhase } from "./guidance/types"
 
 export type PageState    =  'Idle' | 'Scanning' | 'Pairing' | 'Done' | 'Closed' 
 export type SelectState  =  'Closed' | 'Waiting' | 'Active' 
@@ -27,6 +28,42 @@ export type PairingDisplayProps = {
     pairingCase?: PairingCase
     /** where the configured trainer's connection attempt stands; not set without a trainer */
     trainerPhase?: TrainerPhase
+    /** the "can't find your trainer" helper; set while a visit is open. Not yet rendered by any consumer. */
+    helper?: PairingHelperDisplayProps
+}
+
+/** One answer in the helper. */
+export type PairingHelperReasonProps = {
+    id: PairingHelperReason
+    label: string
+    selected: boolean
+    onSelect: ()=>void
+}
+
+/** The action under a tip. A prop of its own, so a UI can pin it apart from the tip text. */
+export type PairingHelperActionProps = {
+    label: string
+    /** a line shown above the button */
+    note?: string
+    onClick: ()=>void
+}
+
+export type PairingHelperDisplayProps = {
+    phase: PairingHelperPhase
+    title: string
+    /** shown until an answer is picked */
+    subline?: string
+    reasons: Array<PairingHelperReasonProps>
+    /** the picked answer's tip; `shortText` is the phone copy */
+    tip?: { text: string, shortText: string }
+    action?: PairingHelperActionProps
+    /** the line at the bottom of the panel (desktop and tablet) */
+    footer: string
+    /** set while `phase` is `resolved` */
+    resolvedText?: string
+    /** opens the helper on the rider's request, e.g. from the status line's link */
+    onOpen: ()=>void
+    onDismiss: ()=>void
 }
 
 export type DeviceSelectionProps = {
