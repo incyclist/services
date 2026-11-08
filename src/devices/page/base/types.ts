@@ -1,5 +1,6 @@
 import type { DevicePairingStatus } from "../../pairing/model"
 import type { PairingStatusDisplayProps } from "../../pairing/status"
+import type { PairingTrainerRole } from "../../pairing/guidance"
 import type { PairingHelperReason } from "../../pairing/helper"
 import type { PairingCase, PairingHelperPhase, TrainerPhase } from "./guidance/types"
 
@@ -104,6 +105,14 @@ export type CapabilityDisplayProps = {
      * ('Found'): show this instead of the connect state. Not set otherwise.
      */
     stateText?: string
+    /** How the tile relates to the configured trainer. Only set while the trainer can't be reached. */
+    trainerRole?: PairingTrainerRole
+    /** A content line that says how the tile relates to the trainer, e.g. "Your trainer". */
+    roleLabel?: string
+    /** When set, shown as the footer instead of `stateText`, `connectState` or `emptyFooter`. */
+    footerText?: { full: string, short: string }
+    /** The page is waiting for this tile: show the amber outline. */
+    awaited: boolean
     onClick: (item:CapabilityDisplayProps)=>void
     /** Turns the capability off. Only set on a tile with a selected, enabled device. */
     onUnselect?: ()=>void

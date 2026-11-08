@@ -3,7 +3,7 @@ import { Injectable } from '../../../base/decorators'
 import { IncyclistPageService } from '../../../base/pages'
 import {
     useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText,
-    getPairingRowLabelId, getPairingStatusDisplay, isCapabilityActive,
+    getPairingRowLabelId, getPairingStatusDisplay, getPairingTileState, isCapabilityActive,
     getPairingHelperFooter, getPairingHelperReasonLabel, getPairingHelperTip, getPairingHelperTitle, hasContinueWithoutDeviceAction,
     PAIRING_HELPER_RESOLVED_TEXT, PAIRING_HELPER_SUBLINE
 } from '../../pairing'
@@ -11,7 +11,7 @@ import {
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
 import type {
     CapabilityData, ContinueWithoutDeviceTarget, DevicePairingData, InternalPairingState, PairingHelperReason, PairingInterfaceState,
-    PairingPlatform, PairingRole, PairingStatusDisplayProps, PairingStatusSource, SearchStatus
+    PairingPlatform, PairingRole, PairingStatusDisplayProps, PairingStatusSource, PairingTileState, SearchStatus
 } from '../../pairing'
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
@@ -248,9 +248,31 @@ export abstract class PairingPageService extends IncyclistPageService {
         return {
             title, capability,deviceName, disabled:false, connectState,value:value?.toString(),unit,interface:ifName,
             role, helpText, emptyFooter, stateText,
+            ...this.getTileState(data, role, noSearch),
             onClick, onUnselect
         }
 
+    }
+
+    // how the tile relates to the configured trainer, and whether the page is waiting for it
+    protected getTileState(data:CapabilityData, role:CapabilityDisplayProps['role'], noSearch:boolean):PairingTileState {
+        try {
+            const control = (this.state.capabilities??[]).find( c=>c.capability===IncyclistCapability.Control)
+            const { trainerPhase } = this.guidance.getState()
+            const { selectedReason, separateSensor } = this.guidance.getHelper()
+
+            return getPairingTileState({
+                capability: data.capability, role, disabled: data.disabled, selected: data.selected, connectState: data.connectState,
+                noSearch, canStartRide: this.canStartRide(),
+                trainerPhase, trainerUdid: control?.selected,
+                trainerUnavailablePicked: selectedReason==='trainer_unavailable',
+                separateSensor: separateSensor!==undefined,
+            })
+        }
+        catch(err) {
+            this.logError(err,'getTileState')
+            return { awaited:false }
+        }
     }
 
     protected getDisabledCapabilityDisplayProps(data:CapabilityData, common:{title:TDisplayCapability,capability:TIncyclistCapability,role:CapabilityDisplayProps['role'],helpText:CapabilityDisplayProps['helpText'],onClick:()=>void}):CapabilityDisplayProps {
@@ -264,6 +286,8 @@ export abstract class PairingPageService extends IncyclistPageService {
             disabled: true,
             role, helpText,
             emptyFooter: hasRememberedDevice ? 'Not used' : 'Not used · tap to search',
+            // the page never waits for a capability the rider switched off
+            awaited: false,
             onClick,
             onUse: hasRememberedDevice ? ()=> { this.onCapabilityUse(cap) } : undefined,
         }

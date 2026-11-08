@@ -1,7 +1,8 @@
 import { IncyclistCapability } from "incyclist-devices"
 import {
-    PAIRING_CAPABILITY_ROLES, PARTIAL_OUTAGE_DEBOUNCE_MS, PairingInterfaceState, PairingStatusId, PairingStatusInput,
-    canScanWithInterfaces, derivePairingStatus, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText, getPairingHint, getPairingRowLabelId, getUnavailableInterfaces
+    PAIRING_CAPABILITY_ROLES, PARTIAL_OUTAGE_DEBOUNCE_MS, PairingInterfaceState, PairingStatusId, PairingStatusInput, PairingTileStateInput,
+    canScanWithInterfaces, derivePairingStatus, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText, getPairingHint, getPairingRowLabelId,
+    getPairingTileState, getUnavailableInterfaces
 } from "./guidance"
 
 const up = (id: PairingInterfaceState['id']): PairingInterfaceState => ({ id, enabled: true, available: true })
@@ -418,6 +419,120 @@ describe('getEmptyTileFooterText', () => {
 
     it('optional empty tiles say optional', () => {
         expect(getEmptyTileFooterText('optional')).toBe('Optional')
+    })
+})
+
+describe('getPairingTileState', () => {
+    type Slot = 'empty' | 'trainer' | 'separate-connecting' | 'separate-connected'
+    type Phase = PairingTileStateInput['trainerPhase']
+
+    const TRAINER = 'trainer-1'
+
+    const tile = (capability: string, slot: Slot, phase: Phase, extra: Partial<PairingTileStateInput> = {}): PairingTileStateInput => {
+        const role = PAIRING_CAPABILITY_ROLES.find(r => r.capability === capability)?.role
+        const trainerUdid = phase === undefined ? undefined : TRAINER
+        const base: PairingTileStateInput = { capability, role, trainerPhase: phase, trainerUdid }
+        switch (slot) {
+            case 'empty': return { ...base, ...extra }
+            case 'trainer': return { ...base, selected: TRAINER, connectState: 'connecting', ...extra }
+            case 'separate-connecting': return { ...base, selected: 'pm-1', connectState: 'connecting', ...extra }
+            case 'separate-connected': return { ...base, selected: 'pm-1', connectState: 'connected', separateSensor: true, ...extra }
+        }
+    }
+
+    const optionalForNow = { full: 'Optional for now', short: 'Optional for now' }
+    const tapToAdd = { full: 'Tap to add', short: 'Tap to add' }
+    const waitingForTrainer = { full: 'Waiting for trainer', short: 'Via trainer' }
+    const canReplaceTrainer = { full: 'CONNECTED · can replace trainer', short: 'Can replace trainer' }
+    const trainerWaiting = { full: 'Not connected · waiting', short: 'Waiting…' }
+
+    // power and speed tiles: trainer phase × what the tile holds × whether the rider said the trainer isn't available today
+    it.each<[Phase, Slot, boolean, ReturnType<typeof getPairingTileState>]>([
+        // no trainer: nothing about a trainer, an empty required tile is waited for
+        [undefined, 'empty', false, { awaited: true }],
+        [undefined, 'separate-connecting', false, { awaited: false }],
+        [undefined, 'separate-connected', false, { awaited: false }],
+        // the trainer is still connecting: empty tiles keep searching, the tile holding the trainer is plain
+        ['connecting', 'empty', false, { awaited: true }],
+        ['connecting', 'trainer', false, { awaited: false }],
+        ['connecting', 'separate-connecting', false, { awaited: false }],
+        ['connecting', 'separate-connected', false, { awaited: false }],
+        // the trainer is connected: nothing about a trainer
+        ['connected', 'empty', false, { awaited: true }],
+        ['connected', 'trainer', false, { awaited: false }],
+        ['connected', 'separate-connected', false, { awaited: false }],
+        // the trainer can't be reached, before the rider said it isn't available today
+        ['unavailable', 'empty', false, { footerText: optionalForNow, awaited: false }],
+        ['unavailable', 'trainer', false, { trainerRole: 'via-trainer', roleLabel: 'via your trainer', footerText: waitingForTrainer, awaited: false }],
+        ['unavailable', 'separate-connecting', false, { awaited: false }],
+        ['unavailable', 'separate-connected', false, { trainerRole: 'separate', footerText: canReplaceTrainer, awaited: false }],
+        // ... and after it, with no separate power meter or speed sensor connected
+        ['unavailable', 'empty', true, { footerText: tapToAdd, awaited: true }],
+        ['unavailable', 'trainer', true, { trainerRole: 'via-trainer', roleLabel: 'via your trainer', footerText: tapToAdd, awaited: true }],
+        ['unavailable', 'separate-connecting', true, { awaited: false }],
+        ['unavailable', 'separate-connected', true, { trainerRole: 'separate', footerText: canReplaceTrainer, awaited: false }],
+    ])('power and speed, trainer %s, tile %s, not available today picked: %s', (phase, slot, picked, expected) => {
+        expect(getPairingTileState(tile('power', slot, phase, { trainerUnavailablePicked: picked }))).toEqual(expected)
+        expect(getPairingTileState(tile('speed', slot, phase, { trainerUnavailablePicked: picked }))).toEqual(expected)
+    })
+
+    it('once another power meter or speed sensor is connected, the other tiles are optional again after "not available today"', () => {
+        const picked = { trainerUnavailablePicked: true, separateSensor: true }
+        expect(getPairingTileState(tile('speed', 'empty', 'unavailable', picked))).toEqual({ footerText: optionalForNow, awaited: false })
+        expect(getPairingTileState(tile('speed', 'trainer', 'unavailable', picked)))
+            .toEqual({ trainerRole: 'via-trainer', roleLabel: 'via your trainer', footerText: waitingForTrainer, awaited: false })
+    })
+
+    it.each<[Phase, boolean, ReturnType<typeof getPairingTileState>]>([
+        ['connecting', false, { awaited: true }],
+        ['connected', false, { awaited: false }],
+        ['unavailable', false, { trainerRole: 'trainer', roleLabel: 'Your trainer', footerText: trainerWaiting, awaited: true }],
+        ['unavailable', true, { trainerRole: 'trainer', roleLabel: 'Your trainer', footerText: trainerWaiting, awaited: true }],
+    ])('the Resistance tile holding the trainer, trainer %s, not available today picked: %s', (phase, picked, expected) => {
+        expect(getPairingTileState(tile('control', 'trainer', phase, { trainerUnavailablePicked: picked }))).toEqual(expected)
+    })
+
+    it('an empty Resistance tile is waited for without a trainer', () => {
+        expect(getPairingTileState(tile('control', 'empty', undefined))).toEqual({ awaited: true })
+    })
+
+    it.each(['heartrate', 'cadence'])('a %s tile holding the trainer waits for it, also after "not available today"', (capability) => {
+        const expected = { trainerRole: 'via-trainer', roleLabel: 'via your trainer', footerText: waitingForTrainer, awaited: false }
+        expect(getPairingTileState(tile(capability, 'trainer', 'unavailable'))).toEqual(expected)
+        expect(getPairingTileState(tile(capability, 'trainer', 'unavailable', { trainerUnavailablePicked: true }))).toEqual(expected)
+    })
+
+    it.each(['heartrate', 'cadence', 'app_control'])('an empty or separate %s tile is unchanged while the trainer cannot be reached', (capability) => {
+        expect(getPairingTileState(tile(capability, 'empty', 'unavailable', { trainerUnavailablePicked: true }))).toEqual({ awaited: false })
+        expect(getPairingTileState(tile(capability, 'separate-connected', 'unavailable'))).toEqual({ awaited: false })
+    })
+
+    describe('precedence', () => {
+        it.each<[string, Slot]>([
+            ['control', 'trainer'], ['power', 'trainer'], ['power', 'empty'], ['speed', 'separate-connected'], ['cadence', 'trainer'],
+        ])('a switched-off %s tile (%s) has no trainer state and is not waited for', (capability, slot) => {
+            expect(getPairingTileState(tile(capability, slot, 'unavailable', { disabled: true, trainerUnavailablePicked: true }))).toEqual({ awaited: false })
+            expect(getPairingTileState(tile(capability, slot, 'connecting', { disabled: true }))).toEqual({ awaited: false })
+        })
+
+        it('a switched-off tile without a remembered device has no trainer state and is not waited for', () => {
+            expect(getPairingTileState(tile('power', 'empty', 'unavailable', { disabled: true }))).toEqual({ awaited: false })
+            expect(getPairingTileState(tile('power', 'empty', undefined, { disabled: true }))).toEqual({ awaited: false })
+        })
+
+        it.each<[string, Slot]>([
+            ['control', 'trainer'], ['power', 'trainer'], ['power', 'empty'], ['speed', 'separate-connected'], ['heartrate', 'trainer'],
+        ])('while nothing can search, a %s tile (%s) has no trainer state and is not waited for', (capability, slot) => {
+            expect(getPairingTileState(tile(capability, slot, 'unavailable', { noSearch: true, trainerUnavailablePicked: true }))).toEqual({ awaited: false })
+            expect(getPairingTileState(tile(capability, slot, 'connecting', { noSearch: true }))).toEqual({ awaited: false })
+            expect(getPairingTileState(tile(capability, slot, undefined, { noSearch: true }))).toEqual({ awaited: false })
+        })
+
+        it('nothing is waited for once the row is ready', () => {
+            expect(getPairingTileState(tile('power', 'empty', undefined, { canStartRide: true }))).toEqual({ awaited: false })
+            expect(getPairingTileState(tile('control', 'trainer', 'unavailable', { canStartRide: true })))
+                .toEqual({ trainerRole: 'trainer', roleLabel: 'Your trainer', footerText: trainerWaiting, awaited: false })
+        })
     })
 })
 

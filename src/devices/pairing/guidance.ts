@@ -213,7 +213,15 @@ export interface PairingGuidanceParams {
     fallbackCapability?: 'power' | 'speed'
 }
 
-export type PairingGuidanceId = PairingStatusId | 'row-required' | 'row-required-trainer' | 'row-ready' | 'row-optional'
+/**
+ * Tile copy while the configured trainer can't be reached: the role lines, and the footers of the
+ * Resistance tile, of tiles holding the trainer, of a separate connected power meter or speed sensor,
+ * and of an empty power or speed tile before and after the rider said the trainer isn't available.
+ */
+export type PairingTileTextId = 'tile-role-trainer' | 'tile-role-via-trainer' | 'tile-trainer-waiting' | 'tile-waiting-for-trainer'
+    | 'tile-can-replace-trainer' | 'tile-optional-for-now' | 'tile-tap-to-add'
+
+export type PairingGuidanceId = PairingStatusId | PairingTileTextId | 'row-required' | 'row-required-trainer' | 'row-ready' | 'row-optional'
     | 'row-searching-trainer' | 'row-searching-found'
 
 export interface PairingGuidanceText {
@@ -368,6 +376,27 @@ const getRowLabelText = (id: PairingGuidanceId): PairingGuidanceText | undefined
     }
 }
 
+const getTileText = (id: PairingGuidanceId, isShort: boolean): PairingGuidanceText | undefined => {
+    switch (id) {
+        case 'tile-role-trainer':
+            return { text: 'Your trainer' }
+        case 'tile-role-via-trainer':
+            return { text: 'via your trainer' }
+        case 'tile-trainer-waiting':
+            return { text: isShort ? 'Waiting…' : 'Not connected · waiting' }
+        case 'tile-waiting-for-trainer':
+            return { text: isShort ? 'Via trainer' : 'Waiting for trainer' }
+        case 'tile-can-replace-trainer':
+            return { text: isShort ? 'Can replace trainer' : 'CONNECTED · can replace trainer' }
+        case 'tile-optional-for-now':
+            return { text: 'Optional for now' }
+        case 'tile-tap-to-add':
+            return { text: 'Tap to add' }
+        default:
+            return undefined
+    }
+}
+
 export const getPairingGuidanceText = (
     id: PairingGuidanceId,
     params: PairingGuidanceParams = {},
@@ -377,6 +406,9 @@ export const getPairingGuidanceText = (
     if (rowLabel) return rowLabel
 
     const isShort = variant === 'short'
+    const tileText = getTileText(id, isShort)
+    if (tileText) return tileText
+
     const device = params.deviceName ?? ''
 
     switch (id as PairingStatusId) {
@@ -438,3 +470,110 @@ export const getCapabilityHelpText = (capability: string, variant: PairingTextVa
 
 export const getEmptyTileFooterText = (role: PairingRole): string =>
     role === 'required' ? 'Searching…' : 'Optional'
+
+/**
+ * A tile's part while the configured trainer can't be reached: `trainer` is the Resistance tile,
+ * `via-trainer` any other tile holding the trainer, `separate` a power meter or speed sensor that is
+ * a different device and connected.
+ */
+export type PairingTrainerRole = 'trainer' | 'via-trainer' | 'separate'
+
+export interface PairingTileStateInput {
+    capability: string
+    role?: PairingRole
+    /** the rider switched the capability off */
+    disabled?: boolean
+    /** the selected device's udid */
+    selected?: string
+    connectState?: string
+    /** nothing can search */
+    noSearch?: boolean
+    /** the row is ready to ride */
+    canStartRide?: boolean
+    /** only set while a trainer is configured */
+    trainerPhase?: PairingStatusTrainerPhase
+    /** the configured trainer's udid */
+    trainerUdid?: string
+    /** the rider said in the helper that the trainer isn't available today */
+    trainerUnavailablePicked?: boolean
+    /** a power meter or speed sensor other than the trainer is connected */
+    separateSensor?: boolean
+}
+
+export interface PairingTileState {
+    trainerRole?: PairingTrainerRole
+    /** the line under the title that says how the tile relates to the trainer */
+    roleLabel?: string
+    /** when set, shown as the footer instead of the state text, the connect state or the empty-tile footer */
+    footerText?: { full: string, short: string }
+    /** the page is waiting for this tile: it gets the amber outline */
+    awaited: boolean
+}
+
+// the tiles that can stand in for the trainer when it isn't available
+const TRAINER_REPLACEMENTS = new Set(['power', 'speed'])
+
+const ACTIVE_TRAINER_PHASES = new Set<PairingStatusTrainerPhase>(['connecting', 'unavailable'])
+
+const tileFooter = (id: PairingTileTextId): { full: string, short: string } => ({
+    full: getPairingGuidanceText(id).text,
+    short: getPairingGuidanceText(id, {}, 'short').text,
+})
+
+const tileRoleLabel = (id: PairingTileTextId): string => getPairingGuidanceText(id).text
+
+// the trainer can't be reached: the Resistance tile, tiles holding the trainer, and the power and
+// speed tiles that could stand in for it. Any other tile keeps its usual state.
+const getUnavailableTrainerTileState = (input: PairingTileStateInput): PairingTileState | undefined => {
+    const { capability, selected, trainerUdid } = input
+
+    if (capability === 'control')
+        return { trainerRole: 'trainer', roleLabel: tileRoleLabel('tile-role-trainer'), footerText: tileFooter('tile-trainer-waiting'), awaited: true }
+
+    const canReplace = TRAINER_REPLACEMENTS.has(capability)
+    // the rider said the trainer isn't available, and nothing that could replace it is connected yet
+    const needsReplacement = canReplace && input.trainerUnavailablePicked === true && !input.separateSensor
+
+    if (selected !== undefined && selected === trainerUdid)
+        return {
+            trainerRole: 'via-trainer',
+            roleLabel: tileRoleLabel('tile-role-via-trainer'),
+            footerText: tileFooter(needsReplacement ? 'tile-tap-to-add' : 'tile-waiting-for-trainer'),
+            awaited: needsReplacement,
+        }
+
+    if (!canReplace)
+        return undefined
+    if (!selected)
+        return { footerText: tileFooter(needsReplacement ? 'tile-tap-to-add' : 'tile-optional-for-now'), awaited: needsReplacement }
+    if (input.connectState === 'connected')
+        return { trainerRole: 'separate', footerText: tileFooter('tile-can-replace-trainer'), awaited: false }
+    return undefined
+}
+
+// outside the trainer's own states: an empty required tile, and the Resistance tile while its trainer
+// connects or can't be reached
+const isAwaitedByDefault = (input: PairingTileStateInput): boolean => {
+    if (!input.selected)
+        return input.role === 'required'
+    return input.capability === 'control' && input.trainerPhase !== undefined && ACTIVE_TRAINER_PHASES.has(input.trainerPhase)
+}
+
+/**
+ * How a tile relates to the configured trainer, its footer when that overrides the usual one, and
+ * whether the page is waiting for it (the amber outline).
+ *
+ * A switched-off tile and every tile while nothing can search have neither, and aren't waited for.
+ * Otherwise, while the trainer can't be reached, the Resistance tile, tiles holding the trainer and
+ * the power and speed tiles say how they relate to it. Nothing is waited for once the row is ready.
+ *
+ * @param input the tile, the trainer and what the rider said in the helper
+ */
+export const getPairingTileState = (input: PairingTileStateInput): PairingTileState => {
+    if (input.disabled || input.noSearch)
+        return { awaited: false }
+
+    const trainerState = input.trainerPhase === 'unavailable' ? getUnavailableTrainerTileState(input) : undefined
+    const state = trainerState ?? { awaited: isAwaitedByDefault(input) }
+    return input.canStartRide ? { ...state, awaited: false } : state
+}
