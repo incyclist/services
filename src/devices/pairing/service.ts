@@ -2362,12 +2362,17 @@ export class DevicePairingService  extends IncyclistService{
         
         this.emitStateChange({capabilities:this.state.capabilities})
 
-        const selected = this.state.capabilities.map( c=>c.selected)
-
-        const target = adapters.filter(ai => /*!ai.adapter.isStarted() &&*/ selected.includes(ai.udid));
+        const target = this.getPairingTarget(adapters)
 
         if ( this.usage!=='page' && this.isPairing() && this.state.check.preparing!==preparing) {
             return;
+        }
+
+        // every selected device is already connected for what it's requested for: nothing to start
+        if (target.length===0) {
+            this.completeAttempt()
+            await this.retryUnsettledPairing()
+            return
         }
 
         this.initPairingCallbacks();
@@ -2380,33 +2385,71 @@ export class DevicePairingService  extends IncyclistService{
 
 
         this.logEvent({ message: 'Start Pairing', adapters, props });
-        await this.state.check.promise;
+        try {
+            await this.state.check.promise;
+        }
+        catch(err) {
+            // a start that crashed is handled like a failed one, so the next attempt can follow
+            this.logError(err,'startPairing')
+        }
 
         // if pairing was interrupted and a scan was started we don't need to continue here
         if (this.usage!=='page' && this.isScanning())
             return;
 
+        this.completeAttempt()
+
+        if (!this.isPairingSettled()) {
+            this.logEvent({ message: 'Pairing done', adapters, props });
+
+            // only stop the devices of this attempt that didn't connect, never one that is connected
+            const failed = target.filter( ai=> !ai.adapter.isStarted()).map( ai=> ai.udid)
+            await this.rideService.stopDevices(failed)
+
+            await this.retryUnsettledPairing()
+        }
+
+
+    }
+
+    // the selected devices that still need to be started: not started yet, or started for fewer
+    // capabilities than they are now requested for
+    protected getPairingTarget(adapters: AdapterInfo[]): AdapterInfo[] {
+        const selected = this.state.capabilities.map( c=>c.selected)
+
+        return adapters.filter(ai => selected.includes(ai.udid) && this.needsPairingStart(ai))
+    }
+
+    protected needsPairingStart(ai: AdapterInfo): boolean {
+        if (!ai.adapter.isStarted())
+            return true
+
+        // started outside of a tracked start: we can't tell what for, so start it again
+        const started = this.rideService.getStartedCapabilities(ai.udid)
+        if (!started)
+            return true
+
+        const requested = this.state.capabilities.filter( c=> c.selected===ai.udid).map(c=>c.capability)
+        return requested.some( c=> !started.includes(c))
+    }
+
+    protected completeAttempt() {
         this.checkCanStart()
 
-        //targetResume.forEach( ai=> {ai.adapter.resume()})
         if (this.state.check)
             delete this.state.check
 
         this.emit('pairing-done');
+    }
 
-        if (!this.isPairingSettled()) {
-            this.logEvent({ message: 'Pairing done', adapters, props });
-                await this.rideService.stop()
-
-            if (this.usage==='page')
+    // page mode: the page's state machine schedules the next attempt
+    protected async retryUnsettledPairing() {
+        if (this.usage==='page' || this.isPairingSettled())
             return;
 
-            await sleep(this.getPairingRetryDelay());
-            if (!this.state.scan)
-                this.run().catch( err=>{ this.logError(err,'startPairing') })
-        }
-
-
+        await sleep(this.getPairingRetryDelay());
+        if (!this.state.scan)
+            this.run().catch( err=>{ this.logError(err,'startPairing') })
     }
 
     protected setRequestedCapabilties(selectedAdapters: AdapterInfo[]) {

@@ -1,6 +1,6 @@
 import { sleep } from "../../utils/sleep";
 import { useDeviceAccess } from "../access/service";
-import {AdapterInfo,  IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
+import {AdapterInfo,  ExtendedIncyclistCapability,  IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
 import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./types";
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
@@ -41,6 +41,8 @@ export class DeviceRideService  extends IncyclistService{
     protected rideAdapters: AdapterRideInfo[]
     protected healthChecks = new Set<AdapterRideInfo>()
     protected startPromises: Promise<boolean>[]
+    // capabilities each device (by udid) was last successfully started for
+    protected startedCapabilities = new Map<string,ExtendedIncyclistCapability[]>()
     protected data:DeviceData  ={}
     protected simulatorEnforced:boolean
     protected promiseSendUpdate: Promise<UpdateRequest|void>[]
@@ -663,29 +665,34 @@ export class DeviceRideService  extends IncyclistService{
         
         const duplicates = this.checkAntSameDeviceID(adapters)
 
-        this.startPromises = adapters?.map( async ai=> 
+        const startPromises = adapters?.map( async ai=>
             this.startSingleAdapter(ai,duplicates,props,startType)
         )
+        this.startPromises = startPromises
 
-        if (!this.startPromises?.length)
+        if (!startPromises?.length)
             return true;
 
-        if (startType==='pair') {
-            this.registerOnDataHandler( adapters)
+        try {
+            if (startType==='pair') {
+                this.registerOnDataHandler( adapters)
+            }
+
+            const status = await Promise.all(startPromises)
+            const allOK = !status.includes(false)
+            this.emit(`${startType}-result`, allOK)
+
+            if (allOK && (startType==='start' )) {
+                this.registerOnDataHandler( adapters)
+            }
+
+            return allOK;
+        }
+        finally {
+            // also on a rejected start, so no stale start is left for the next one to wait for
+            this.startPromises = null;
         }
 
-
-        const status = await Promise.all(this.startPromises)
-        const allOK = !status.includes(false)
-        this.emit(`${startType}-result`, allOK)
-
-        if (allOK && (startType==='start' )) {
-            this.registerOnDataHandler( adapters)
-        }
-
-        this.startPromises = null;
-        return allOK;
-        
     }
 
     protected async startSingleAdapter(ai: AdapterRideInfo,duplicates:Array<DuplicateInfo>,props,startType: 'start' | 'check' | 'pair' ) {
@@ -709,8 +716,7 @@ export class DeviceRideService  extends IncyclistService{
             this.initForStart(ai, startProps, route, startPos, realityFactor, rideMode);
         }
 
-        ai.adapter.resumeLogging()
-        this.resumeLogging()
+        this.resumeLoggingForStart(ai)
 
         const sType = (ai.isControl ) ? 'bike' : 'sensor'
 
@@ -746,6 +752,17 @@ export class DeviceRideService  extends IncyclistService{
                 return false
             })
 
+    }
+
+    // logging must never prevent a device from being started
+    private resumeLoggingForStart(ai: AdapterRideInfo) {
+        try {
+            ai.adapter.resumeLogging()
+            this.resumeLogging()
+        }
+        catch(err) {
+            this.logError(err,'startSingleAdapter->resumeLogging')
+        }
     }
 
     private initForStart(ai: AdapterRideInfo, startProps: any, route: any, startPos: any, realityFactor: any, rideMode: any) {
@@ -820,6 +837,7 @@ export class DeviceRideService  extends IncyclistService{
         }
 
         ai.isStarted = false;
+        this.startedCapabilities.delete(ai.udid)
     }
 
     private async handleStartFailure(startType: string, ai: AdapterRideInfo, duplicates: DuplicateInfo[], sType: string, logProps: any) {
@@ -833,6 +851,7 @@ export class DeviceRideService  extends IncyclistService{
             await ai.adapter.stop().catch(console.log);
 
         ai.isStarted = false;
+        this.startedCapabilities.delete(ai.udid)
     }
 
     private async handleStartSuccess(startType: string, ai: AdapterRideInfo, duplicates: DuplicateInfo[], sType: string, logProps: any) {
@@ -850,10 +869,21 @@ export class DeviceRideService  extends IncyclistService{
 
         if (startType === 'start') {
             this.startHealthCheck(ai);
-            
+
         }
 
         ai.isStarted = true
+        this.startedCapabilities.set(ai.udid, [...(ai.capabilities ?? [])])
+    }
+
+    /**
+     * Provides the capabilities a device was last successfully started for
+     *
+     * @param udid the unique device id of the device
+     * @returns the capabilities, or `undefined` if the device's last start did not succeed (or it was never started)
+     */
+    getStartedCapabilities(udid:string):ExtendedIncyclistCapability[]|undefined {
+        return this.startedCapabilities.get(udid)
     }
 
     startHealthCheck(ai: AdapterRideInfo) {
@@ -1334,6 +1364,35 @@ export class DeviceRideService  extends IncyclistService{
         delete this.rideAdapters
         this.simulatorEnforced = false
         return true
+    }
+
+    /**
+     * Stops only the given devices.
+     *
+     * Unlike {@link stop}, all other devices (and the list of devices used for the ride) are left
+     * untouched, so devices that are connected keep running.
+     *
+     * @param udids the unique device ids of the devices to stop
+     */
+    async stopDevices(udids:string[]):Promise<void> {
+        if (!udids?.length)
+            return
+
+        const known = this.rideAdapters ?? []
+        const configured = this.getAllAdapters() ?? []
+        const promises = udids.map( udid => {
+            const ai = known.find( a=> a.udid===udid) ?? configured.find( a=> a.udid===udid)
+            if (!ai?.adapter)
+                return Promise.resolve(true)
+
+            this.logEvent( {message:'stop device',udid})
+            this.stopHealthChecks(udid)
+            this.unsubscribeDeviceEvents(ai.adapter)
+            ai.isStarted = false
+            return ai.adapter.stop()
+        })
+
+        await Promise.allSettled(promises)
     }
 
     protected stopHealthChecks(udid?:string) {
