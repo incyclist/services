@@ -808,9 +808,9 @@ export class DeviceConfigurationService  extends IncyclistService{
 
 
     getSelectedDevices(capability?:IncyclistCapability): Array<{capability:IncyclistCapability,selected?:string }>{
-        let capabilites = this.settings?.capabilities
+        let capabilites = this.settings?.capabilities ?? []
         if (capability) {
-            capabilites = this.settings?.capabilities.filter(c=>c.capability===capability)
+            capabilites = capabilites.filter(c=>c.capability===capability)
         }
 
         return capabilites.filter( c=>c.capability!=='bike' && c.disabled!==true && c.selected && !this.isExcluded(c.capability)).map( c => {
