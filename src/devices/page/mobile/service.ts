@@ -99,7 +99,8 @@ export class MobilePairingPageService extends PairingPageService {
                 deviceSelection: this.getDeviceListDisplayProps(),
                 showInterfaceSettings: this.openedInterfaceSettings,
                 buttons,
-                onExit
+                onExit,
+                ...this.getGuidanceDisplayProps(),
             }
 
         }

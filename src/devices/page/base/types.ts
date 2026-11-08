@@ -1,5 +1,6 @@
 import type { DevicePairingStatus } from "../../pairing/model"
 import type { PairingStatusDisplayProps } from "../../pairing/status"
+import type { PairingCase, TrainerPhase } from "./guidance/types"
 
 export type PageState    =  'Idle' | 'Scanning' | 'Pairing' | 'Done' | 'Closed' 
 export type SelectState  =  'Closed' | 'Waiting' | 'Active' 
@@ -22,6 +23,10 @@ export type PairingDisplayProps = {
     showExit?: boolean,
     onExit?:()=>void
 
+    /** no trainer configured, or where the configured trainer's connection attempt stands */
+    pairingCase?: PairingCase
+    /** where the configured trainer's connection attempt stands; not set without a trainer */
+    trainerPhase?: TrainerPhase
 }
 
 export type DeviceSelectionProps = {

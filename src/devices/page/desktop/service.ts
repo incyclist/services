@@ -102,6 +102,7 @@ export class DesktopPairingPageService extends PairingPageService {
                 deviceSelection: this.getDeviceListDisplayProps(),
                 buttons,
                 showInterfaceSettings: this.getInterfaceSettingsDisplayProps(),
+                ...this.getGuidanceDisplayProps(),
             }
         }
         catch(err) {

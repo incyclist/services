@@ -13,6 +13,8 @@ import type { PairingVisitTracker } from './visit-log'
 import type { PairingExitVia } from './types'
 import type { DesktopPairingDisplayProps } from '../desktop/types'
 import type { PairingOrchestrator } from './orchestrator'
+import { PairingGuidance } from './guidance'
+import type { PairingState } from '../../pairing'
 
 /**
  * Pairing page logic shared by all platforms: page lifecycle, device list, tile and button props,
@@ -37,10 +39,17 @@ export abstract class PairingPageService extends IncyclistPageService {
     // never set it - only a confirmed real device should.
     protected handingOffToRide: boolean = false
 
+    protected guidance: PairingGuidance
+    protected onPairingStateHandler = this.onPairingState.bind(this)
+
     constructor() {
         super('pairing')
         this.stateMachine = this.createOrchestrator()
         this.logObserver = new PageLogObserver('Pairing')
+        this.guidance = new PairingGuidance({
+            log: (message, fields)=>{ this.logEvent({message, ...fields}) },
+            onChange: ()=>{ this.updatePage() },
+        })
     }
 
     /** The orchestrator that drives the pairing lifecycle for this platform. */
@@ -63,6 +72,7 @@ export abstract class PairingPageService extends IncyclistPageService {
             this.isPairingForRide = forRide??false
             this.handingOffToRide = false
             this.openVisit()
+            this.listenToPairingState(true)
 
             EventLogger.setGlobalConfig('page','Pairing')
             super.openPage()
@@ -113,6 +123,8 @@ export abstract class PairingPageService extends IncyclistPageService {
             this.logEvent({message:'page closed', page:'Pairing'})
             this.isVisitOpen = false
             this.setPairingVisitOpen(false)
+            this.listenToPairingState(false)
+            this.withGuidance( g=>g.closeVisit(), 'closeVisit')
             EventLogger.setGlobalConfig('page',null)
             this.isPairingForRide =false
 
@@ -140,6 +152,7 @@ export abstract class PairingPageService extends IncyclistPageService {
     async pausePage() {
         try {
             this.trackVisit( t=>t.onBackground({canStartRide:this.canStartRide()}), 'onBackground')
+            this.withGuidance( g=>g.pauseVisit(), 'pauseVisit')
             await this.stateMachine.pause()
             this.logEvent({message:'page paused', page:'Pairing'})
         }
@@ -151,6 +164,7 @@ export abstract class PairingPageService extends IncyclistPageService {
     async resumePage() {
         try {
             this.trackVisit( t=>t.onForeground(), 'onForeground')
+            this.withGuidance( g=>g.resumeVisit(), 'resumeVisit')
             this.stateMachine.resume()
 
             if (this.promiseOpen!==undefined)
@@ -455,13 +469,53 @@ export abstract class PairingPageService extends IncyclistPageService {
         if (this.isVisitOpen)
             return
         this.trackVisit( t=>t.openVisit({forRide:this.isPairingForRide}), 'openVisit')
+        this.withGuidance( g=>g.openVisit(), 'openVisit')
         this.isVisitOpen = true
     }
 
     protected closeVisit(via:PairingExitVia):void {
         this.trackVisit( t=>t.closeVisit(via,{canStartRide:this.canStartRide()}), 'closeVisit')
+        this.withGuidance( g=>g.closeVisit(), 'closeVisit')
         this.isVisitOpen = false
         this.setPairingVisitOpen(false)
+    }
+
+    protected withGuidance( fn:(guidance:PairingGuidance)=>void, name:string):void {
+        try {
+            fn(this.guidance)
+        }
+        catch(err) {
+            this.logError(err,name)
+        }
+    }
+
+    // observes the pairing state alongside the orchestrator, which keeps the onStateChanged callback
+    protected listenToPairingState(listen:boolean):void {
+        try {
+            const pairing = this.getDevicePairing()
+            pairing.off?.('pairing-state', this.onPairingStateHandler)
+            if (listen)
+                pairing.on?.('pairing-state', this.onPairingStateHandler)
+        }
+        catch(err) {
+            this.logError(err,'listenToPairingState')
+        }
+    }
+
+    protected onPairingState(state:PairingState):void {
+        this.withGuidance( g=>g.onPairingState(state), 'onPairingState')
+    }
+
+    /** The guidance part of the display props. Not yet rendered by any consumer. */
+    protected getGuidanceDisplayProps():Pick<PairingDisplayProps,'pairingCase'|'trainerPhase'> {
+        try {
+            const {pairingCase, trainerPhase} = this.guidance.getState()
+            return {pairingCase, trainerPhase}
+        }
+        catch(err) {
+            this.logError(err,'getGuidanceDisplayProps')
+            return {}
+        }
     }
 
     protected setPairingVisitOpen(open:boolean):void {

@@ -1458,11 +1458,29 @@ export class DevicePairingService  extends IncyclistService{
         
 
         if (onStateChanged && typeof onStateChanged ==='function') {
-            onStateChanged( {...state}) 
+            onStateChanged( {...state})
         }
+        this.emitPairingState()
 
         if (onDeviceSelectStateChanged && typeof onDeviceSelectStateChanged==='function')
             onDeviceSelectStateChanged( this.getDeviceSelectionState() )
+    }
+
+    /**
+     * Tells any number of listeners about the current pairing state ('pairing-state', with the full
+     * external state), in both usage modes. Unlike the single `onStateChanged` callback, which
+     * belongs to whoever drives pairing, this is for readers that only observe. A listener that
+     * throws is logged and never interrupts pairing.
+     */
+    protected emitPairingState() {
+        try {
+            if (this.listenerCount('pairing-state')===0)
+                return
+            this.emit('pairing-state', this.getExternaState())
+        }
+        catch(err) {
+            this.logError(err,'emitPairingState')
+        }
     }
 
     protected checkPairingStalled() {
@@ -1522,8 +1540,9 @@ export class DevicePairingService  extends IncyclistService{
 
 
         if (onStateChanged && typeof onStateChanged ==='function') {
-            onStateChanged( {canStartRide}) 
+            onStateChanged( {canStartRide})
         }
+        this.emitPairingState()
 
     }
 
@@ -1835,6 +1854,10 @@ export class DevicePairingService  extends IncyclistService{
                 this.settings.onStateChanged({capabilities})
             }
         }
+        // connect-state changes don't go through emitStateChange(): without this, an observer
+        // would never see e.g. a pairing error that the next retry overwrites right away
+        if (changed)
+            this.emitPairingState()
 
         if (this.usage==='page') {
             this.emit('state-update')
