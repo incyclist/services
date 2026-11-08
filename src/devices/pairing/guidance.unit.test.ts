@@ -443,8 +443,8 @@ describe('getPairingTileState', () => {
     const optionalForNow = { full: 'Optional for now', short: 'Optional for now' }
     const tapToAdd = { full: 'Tap to add', short: 'Tap to add' }
     const waitingForTrainer = { full: 'Waiting for trainer', short: 'Via trainer' }
-    const canReplaceTrainer = { full: 'CONNECTED · can replace trainer', short: 'Can replace trainer' }
-    const trainerWaiting = { full: 'Not connected · waiting', short: 'Waiting…' }
+    const canReplaceTrainer = { full: 'Can replace trainer', short: 'Can replace trainer' }
+    const trainerWaiting = { full: 'Waiting to connect', short: 'Waiting…' }
 
     // power and speed tiles: trainer phase × what the tile holds × whether the rider said the trainer isn't available today
     it.each<[Phase, Slot, boolean, ReturnType<typeof getPairingTileState>]>([

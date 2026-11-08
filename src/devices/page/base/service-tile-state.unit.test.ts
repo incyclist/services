@@ -105,7 +105,7 @@ describe.each([
 
             expect(tileOf('control')).toMatchObject({
                 trainerRole:'trainer', roleLabel:'Your trainer', deviceName:'Tacx Flux',
-                footerText:{ full:'Not connected · waiting', short:'Waiting…' }, awaited:true,
+                footerText:{ full:'Waiting to connect', short:'Waiting…' }, awaited:true,
             })
         })
 
@@ -136,7 +136,7 @@ describe.each([
 
             expect(tileOf('power')).toMatchObject({
                 trainerRole:'separate', deviceName:'Stages', connectState:'connected',
-                footerText:{ full:'CONNECTED · can replace trainer', short:'Can replace trainer' }, awaited:false,
+                footerText:{ full:'Can replace trainer', short:'Can replace trainer' }, awaited:false,
             })
             expect(tileOf('power').roleLabel).toBeUndefined()
         })
@@ -198,7 +198,7 @@ describe.each([
             pickReason('trainer_unavailable')
 
             expect(tileOf('power')).toMatchObject({ disabled:true, deviceName:'Tacx Flux', emptyFooter:'Not used', awaited:false })
-            expect(tileOf('speed')).toMatchObject({ disabled:true, emptyFooter:'Not used · tap to search', awaited:false })
+            expect(tileOf('speed')).toMatchObject({ disabled:true, emptyFooter:'Tap to search', awaited:false })
             for (const capability of ['power','speed']) {
                 expect(tileOf(capability).trainerRole).toBeUndefined()
                 expect(tileOf(capability).roleLabel).toBeUndefined()

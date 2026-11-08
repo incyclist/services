@@ -223,7 +223,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
 
             expect(tile.deviceName).toBeUndefined()
             expect(tile.disabled).toBe(true)
-            expect(tile.emptyFooter).toBe('Not used · tap to search')
+            expect(tile.emptyFooter).toBe('Tap to search')
             expect(tile.onUse).toBeUndefined()
         })
 

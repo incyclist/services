@@ -383,11 +383,11 @@ const getTileText = (id: PairingGuidanceId, isShort: boolean): PairingGuidanceTe
         case 'tile-role-via-trainer':
             return { text: 'via your trainer' }
         case 'tile-trainer-waiting':
-            return { text: isShort ? 'Waiting…' : 'Not connected · waiting' }
+            return { text: isShort ? 'Waiting…' : 'Waiting to connect' }
         case 'tile-waiting-for-trainer':
             return { text: isShort ? 'Via trainer' : 'Waiting for trainer' }
         case 'tile-can-replace-trainer':
-            return { text: isShort ? 'Can replace trainer' : 'CONNECTED · can replace trainer' }
+            return { text: 'Can replace trainer' }
         case 'tile-optional-for-now':
             return { text: 'Optional for now' }
         case 'tile-tap-to-add':

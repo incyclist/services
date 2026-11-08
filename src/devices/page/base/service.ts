@@ -285,7 +285,7 @@ export abstract class PairingPageService extends IncyclistPageService {
             deviceName: hasRememberedDevice ? deviceName : undefined,
             disabled: true,
             role, helpText,
-            emptyFooter: hasRememberedDevice ? 'Not used' : 'Not used · tap to search',
+            emptyFooter: hasRememberedDevice ? 'Not used' : 'Tap to search',
             // the page never waits for a capability the rider switched off
             awaited: false,
             onClick,
