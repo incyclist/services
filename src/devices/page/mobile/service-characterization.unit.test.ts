@@ -45,6 +45,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
     const tracker = {
         openVisit: jest.fn(),
         closeVisit: jest.fn(),
+        setExitFields: jest.fn(),
         onBackground: jest.fn(),
         onForeground: jest.fn(),
     }

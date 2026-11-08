@@ -1,12 +1,26 @@
 import { IncyclistCapability } from 'incyclist-devices'
 
 import { isCapabilityActive } from '../../../pairing/capability'
+import { PARTIAL_OUTAGE_DEBOUNCE_MS } from '../../../pairing/guidance'
+import { getPairingStatusDisplay, getPartialOutageHint } from '../../../pairing/status'
 import type { CapabilityData, PairingState } from '../../../pairing/model'
-import type { PairingInterfaceId } from '../../../pairing/guidance'
-import type { PairingCase, PairingGuidanceDeps, PairingGuidanceState, TrainerPhase, TrainerPhaseCause } from './types'
+import type { PairingHint, PairingInterfaceId, PairingStatusId } from '../../../pairing/guidance'
+import type { PairingStatusDisplayProps, PairingStatusSource } from '../../../pairing/status'
+import type {
+    PairingCase, PairingGuidanceDeps, PairingGuidanceExitFields, PairingGuidanceState, PartialOutage, TrainerPhase, TrainerPhaseCause
+} from './types'
 
 /** Logged on every trainer phase change, with `fromPhase`, `toPhase`, `cause`, `attemptMs` and `interface`. */
 export const TRAINER_PHASE_EVENT = 'pairing trainer phase changed'
+
+/** Logged once per visit when the first-use partial-outage hint first shows. */
+export const PARTIAL_OUTAGE_EVENT = 'pairing partial outage shown'
+
+const PARTIAL_OUTAGE_BY_HINT: Record<PairingHint, PartialOutage> = {
+    'bluetooth-permission': { interface: 'ble', reason: 'permission' },
+    'bluetooth-off': { interface: 'ble', reason: 'off' },
+    'ant': { interface: 'ant', reason: 'not-found' },
+}
 
 /**
  * How long a configured trainer gets to connect before it counts as unavailable: the adapter's
@@ -58,6 +72,15 @@ export class PairingGuidance {
     protected attemptResumedAt?: number
     protected attemptTimer?: ReturnType<typeof setTimeout>
 
+    protected visitId?: string
+    protected openedAt = 0
+
+    // the first-use partial outage: since when it holds, its hold timer, and what was shown this visit
+    protected partialOutageSince?: number
+    protected partialOutageTimer?: ReturnType<typeof setTimeout>
+    protected partialOutageShown?: PartialOutage
+    protected lastStatusId?: PairingStatusId
+
     /**
      * @param deps where events are logged, and who is told when the state changes on its own
      */
@@ -65,10 +88,16 @@ export class PairingGuidance {
         this.deps = deps
     }
 
-    /** Starts a visit: the trainer is evaluated from scratch with the next pairing state. */
-    openVisit(): void {
+    /**
+     * Starts a visit: the trainer and the status line are evaluated from scratch.
+     *
+     * @param options `visitId`: the id the visit tracker gave this visit, for the events of this visit
+     */
+    openVisit({ visitId }: { visitId?: string } = {}): void {
         this.reset()
         this.visitOpen = true
+        this.visitId = visitId
+        this.openedAt = Date.now()
     }
 
     /** Ends the visit: nothing is tracked, and no timer runs, until the next {@link openVisit}. */
@@ -83,6 +112,8 @@ export class PairingGuidance {
         this.paused = true
         this.stopAttemptClock()
         this.clearAttemptTimer()
+        // the partial outage is held again from scratch once the app is back and the page is ready
+        this.clearPartialOutage()
     }
 
     /** The app is back: the attempt timer runs on for the time it had left. */
@@ -131,6 +162,104 @@ export class PairingGuidance {
         const trainerPhase = this.trainerConfigured ? this.phase : undefined
         const pairingCase: PairingCase = trainerPhase ? CASE_BY_PHASE[trainerPhase] : 'no-trainer'
         return { trainerConfigured: this.trainerConfigured, trainerPhase, pairingCase }
+    }
+
+    /**
+     * The status line for the page's current state, with the trainer phase and the partial-outage hold
+     * applied. A partial outage that starts to hold here asks for a page update once it has held long
+     * enough to show.
+     *
+     * @param src the page's pairing state
+     * @returns the status line's display props
+     */
+    getStatus(src: PairingStatusSource): PairingStatusDisplayProps {
+        const hint = this.visitOpen && !this.paused ? getPartialOutageHint(src) : undefined
+        this.trackPartialOutage(hint)
+
+        const status = getPairingStatusDisplay({
+            ...src,
+            trainerPhase: this.getState().trainerPhase,
+            partialOutageSince: this.partialOutageSince,
+            now: Date.now(),
+        })
+
+        if (this.visitOpen) {
+            this.lastStatusId = status.id
+            if (status.id === 'S1b' && hint)
+                this.onPartialOutageShown(src, hint)
+        }
+        return status
+    }
+
+    /** What this visit adds to the `pairing page left` event. */
+    getExitFields(): PairingGuidanceExitFields {
+        const { pairingCase, trainerPhase } = this.getState()
+        const fields: PairingGuidanceExitFields = {
+            pairingCase,
+            partialOutageShown: this.partialOutageShown !== undefined,
+            switchedOffRequired: this.lastStatusId === 'S8',
+        }
+        if (trainerPhase)
+            fields.trainerPhase = trainerPhase
+        if (this.partialOutageShown) {
+            fields.partialOutageInterface = this.partialOutageShown.interface
+            fields.partialOutageReason = this.partialOutageShown.reason
+        }
+        return fields
+    }
+
+    protected trackPartialOutage(hint: PairingHint | undefined): void {
+        if (!hint) {
+            this.clearPartialOutage()
+            return
+        }
+        if (this.partialOutageSince !== undefined)
+            return
+
+        this.partialOutageSince = Date.now()
+        this.partialOutageTimer = setTimeout(() => { this.onPartialOutageHeld() }, PARTIAL_OUTAGE_DEBOUNCE_MS)
+    }
+
+    protected onPartialOutageHeld(): void {
+        delete this.partialOutageTimer
+        try {
+            this.deps.onChange()
+        }
+        catch {
+            // a failing page update must not leave the timer callback throwing
+        }
+    }
+
+    protected clearPartialOutage(): void {
+        if (this.partialOutageTimer)
+            clearTimeout(this.partialOutageTimer)
+        delete this.partialOutageTimer
+        delete this.partialOutageSince
+    }
+
+    // logged only the first time this visit; strings and numbers only, never a device id or name
+    protected onPartialOutageShown(src: PairingStatusSource, hint: PairingHint): void {
+        if (this.partialOutageShown)
+            return
+        this.partialOutageShown = PARTIAL_OUTAGE_BY_HINT[hint]
+
+        const fields: Record<string, unknown> = {}
+        if (this.visitId !== undefined)
+            fields.visitId = this.visitId
+        fields.platform = src.platform
+        fields.interface = this.partialOutageShown.interface
+        fields.reason = this.partialOutageShown.reason
+        fields.msSinceOpen = Date.now() - this.openedAt
+        this.safeLog(PARTIAL_OUTAGE_EVENT, fields)
+    }
+
+    protected safeLog(message: string, fields: Record<string, unknown>): void {
+        try {
+            this.deps.log(message, fields)
+        }
+        catch {
+            // logging must never interfere with pairing
+        }
     }
 
     protected startTrainer(control: CapabilityData): void {
@@ -197,13 +326,7 @@ export class PairingGuidance {
         if (attemptMs !== undefined)
             fields.attemptMs = attemptMs
         fields.interface = this.trainerInterface ?? 'unknown'
-
-        try {
-            this.deps.log(TRAINER_PHASE_EVENT, fields)
-        }
-        catch {
-            // logging must never interfere with pairing
-        }
+        this.safeLog(TRAINER_PHASE_EVENT, fields)
     }
 
     protected startAttempt(): void {
@@ -264,8 +387,12 @@ export class PairingGuidance {
 
     protected reset(): void {
         this.endTrainer()
+        this.clearPartialOutage()
         this.visitOpen = false
         this.paused = false
         this.trainerConfigured = false
+        delete this.visitId
+        delete this.partialOutageShown
+        delete this.lastStatusId
     }
 }

@@ -1,9 +1,11 @@
+import type { PairingStatusTrainerPhase } from '../../../pairing/guidance'
+
 /**
  * Where the configured trainer is in its connection attempt during a Pairing page visit.
  * `unavailable` means the attempt has failed or timed out (or the rider said the trainer isn't
  * available). It stays that way through later retries until the trainer actually connects.
  */
-export type TrainerPhase = 'connecting' | 'connected' | 'unavailable'
+export type TrainerPhase = PairingStatusTrainerPhase
 
 /**
  * The Pairing page's case: no trainer configured (any power meter or speed sensor will do), or a
@@ -20,6 +22,26 @@ export interface PairingGuidanceState {
     /** only set while a trainer is configured and a visit is open */
     trainerPhase?: TrainerPhase
     pairingCase: PairingCase
+}
+
+/** Why an interface counts as a partial outage, as logged. */
+export type PartialOutageReason = 'permission' | 'off' | 'not-found' | 'unknown'
+
+/** The interface and reason of a first-use partial outage, as logged. */
+export interface PartialOutage {
+    interface: string
+    reason: PartialOutageReason
+}
+
+/** What the guidance adds to the `pairing page left` event. Strings are omitted when there's nothing to say. */
+export interface PairingGuidanceExitFields {
+    pairingCase: PairingCase
+    trainerPhase?: TrainerPhase
+    partialOutageShown: boolean
+    partialOutageInterface?: string
+    partialOutageReason?: PartialOutageReason
+    /** every required capability was switched off when the rider left */
+    switchedOffRequired: boolean
 }
 
 export interface PairingGuidanceDeps {

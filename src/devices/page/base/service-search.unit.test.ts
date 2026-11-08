@@ -28,7 +28,7 @@ describe.each([
     }
 
     const appState = { setState: jest.fn(), getState: jest.fn(), getPersistedState: jest.fn() }
-    const tracker = { openVisit: jest.fn(), closeVisit: jest.fn(), onBackground: jest.fn(), onForeground: jest.fn() }
+    const tracker = { openVisit: jest.fn(), closeVisit: jest.fn(), setExitFields: jest.fn(), onBackground: jest.fn(), onForeground: jest.fn() }
 
     const IDLE: SearchStatus = { running:false, ended:false, index:0, rideCapableFound:false, trainerFound:false, canStop:false, canSearchAgain:false, missing:[] }
     const setSearch = (status: Partial<SearchStatus>) => { pairing.getSearchStatus.mockReturnValue({ ...IDLE, ...status }) }

@@ -1,10 +1,16 @@
 import { EventLogger } from 'gd-eventlog'
 import { Injectable } from '../../../base/decorators'
 import { IncyclistPageService } from '../../../base/pages'
-import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText } from '../../pairing'
+import {
+    useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText,
+    getPairingRowLabelId, getPairingStatusDisplay, isCapabilityActive
+} from '../../pairing'
 
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
-import type { CapabilityData, DevicePairingData, InternalPairingState, SearchStatus } from '../../pairing'
+import type {
+    CapabilityData, DevicePairingData, InternalPairingState, PairingInterfaceState, PairingPlatform, PairingRole,
+    PairingStatusDisplayProps, PairingStatusSource, SearchStatus
+} from '../../pairing'
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../../configuration'
@@ -66,6 +72,9 @@ export abstract class PairingPageService extends IncyclistPageService {
      */
     protected abstract getUsageMode(): 'page' | 'direct'
 
+    /** Which platform's status line rules and copy apply. */
+    protected abstract getPlatform(): PairingPlatform
+
     openPage(forRide?:boolean):IObserver {
         try {
             this.logEvent({message:'page shown', page:'Pairing', forRide})
@@ -124,6 +133,7 @@ export abstract class PairingPageService extends IncyclistPageService {
             this.isVisitOpen = false
             this.setPairingVisitOpen(false)
             this.listenToPairingState(false)
+            this.trackVisit( t=>t.setExitFields(undefined), 'closePage')
             this.withGuidance( g=>g.closeVisit(), 'closeVisit')
             EventLogger.setGlobalConfig('page',null)
             this.isPairingForRide =false
@@ -468,13 +478,17 @@ export abstract class PairingPageService extends IncyclistPageService {
 
         if (this.isVisitOpen)
             return
-        this.trackVisit( t=>t.openVisit({forRide:this.isPairingForRide}), 'openVisit')
-        this.withGuidance( g=>g.openVisit(), 'openVisit')
+        let visitId:string|undefined
+        this.trackVisit( t=>{ visitId = t.openVisit({forRide:this.isPairingForRide})?.visitId }, 'openVisit')
+        this.withGuidance( g=>g.openVisit({visitId}), 'openVisit')
+        // whichever way the visit ends - also by app exit - its exit event carries the guidance fields
+        this.trackVisit( t=>t.setExitFields( ()=>({...this.guidance.getExitFields()}) ), 'openVisit')
         this.isVisitOpen = true
     }
 
     protected closeVisit(via:PairingExitVia):void {
         this.trackVisit( t=>t.closeVisit(via,{canStartRide:this.canStartRide()}), 'closeVisit')
+        this.trackVisit( t=>t.setExitFields(undefined), 'closeVisit')
         this.withGuidance( g=>g.closeVisit(), 'closeVisit')
         this.isVisitOpen = false
         this.setPairingVisitOpen(false)
@@ -504,6 +518,56 @@ export abstract class PairingPageService extends IncyclistPageService {
 
     protected onPairingState(state:PairingState):void {
         this.withGuidance( g=>g.onPairingState(state), 'onPairingState')
+    }
+
+    /**
+     * The status line, from the page's current state and the guidance it tracks.
+     *
+     * @param interfaces the interface states the status line considers (each platform decides which)
+     */
+    protected getStatusDisplayProps(interfaces:ReadonlyArray<PairingInterfaceState>):PairingStatusDisplayProps {
+        const src:PairingStatusSource = {
+            platform: this.getPlatform(),
+            interfaces,
+            capabilities: this.state.capabilities??[],
+            canStartRide: this.canStartRide(),
+            loading: this.promiseOpen!==undefined,
+            rideMode: this.isPairingForRide,
+            ...this.getSearchStatusSource(),
+        }
+        try {
+            return this.guidance.getStatus(src)
+        }
+        catch(err) {
+            // without the guidance, the status line still follows the pairing state
+            this.logError(err,'getStatusDisplayProps')
+            return getPairingStatusDisplay(src)
+        }
+    }
+
+    /**
+     * The tiles in their rows - required first, then optional, in tile order - and the row labels.
+     *
+     * @param noSearch nothing can search (the status line says so), so tiles don't claim to be searching
+     */
+    protected getCapabilityRowsDisplayProps(noSearch:boolean):NonNullable<PairingDisplayProps['capabilities']> {
+        const caps = this.state.capabilities??[]
+        const capProps = caps.map( c=>this.getCapabilityDisplayProps(c, noSearch))
+
+        const row = (role:PairingRole) => PAIRING_CAPABILITY_ROLES
+            .filter( r=>r.role===role)
+            .map( r=>capProps.find( c=>c.capability===this.getTCapability(r.capability)))
+            .filter( c=>c!==undefined)
+
+        const trainerSelected = isCapabilityActive(caps.find( c=>c.capability===IncyclistCapability.Control))
+        return {
+            top: row('required'),
+            bottom: row('optional'),
+            rowLabels: {
+                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking())),
+                bottom: getPairingGuidanceText('row-optional'),
+            },
+        }
     }
 
     /** The guidance part of the display props. Not yet rendered by any consumer. */

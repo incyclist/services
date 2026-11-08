@@ -1,6 +1,6 @@
 import { IncyclistCapability } from "incyclist-devices"
 import {
-    PAIRING_CAPABILITY_ROLES, PairingInterfaceState, PairingStatusInput,
+    PAIRING_CAPABILITY_ROLES, PARTIAL_OUTAGE_DEBOUNCE_MS, PairingInterfaceState, PairingStatusId, PairingStatusInput,
     canScanWithInterfaces, derivePairingStatus, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText, getPairingHint, getPairingRowLabelId, getUnavailableInterfaces
 } from "./guidance"
 
@@ -25,6 +25,9 @@ const desktop: PairingStatusInput = {
     searching: false,
     canStartRide: false,
 }
+
+// a partial outage that has held for long enough to be shown
+const held = { partialOutageSince: 1000, now: 1000 + PARTIAL_OUTAGE_DEBOUNCE_MS }
 
 describe('PAIRING_CAPABILITY_ROLES', () => {
     it('orders the required row first, then the optional row', () => {
@@ -86,7 +89,7 @@ describe('derivePairingStatus', () => {
     })
 
     it('desktop: does not return S1 when only ANT+ is down, but shows the ANT+ hint on first use', () => {
-        expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), up('ble')] })).toBe('S1b')
+        expect(derivePairingStatus({ ...desktop, ...held, interfaces: [down('ant'), up('ble')] })).toBe('S1b')
     })
 
     it('desktop: does not return S1 when ANT+ and Bluetooth are off but Wi-Fi (always on outside Windows) can still scan', () => {
@@ -102,7 +105,7 @@ describe('derivePairingStatus', () => {
     })
 
     it('mobile: does not return S1 when only Wi-Fi is available, and shows the Bluetooth hint', () => {
-        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), up('wifi')] })).toBe('S1b')
+        expect(derivePairingStatus({ ...mobile, ...held, interfaces: [down('ble'), up('wifi')] })).toBe('S1b')
     })
 
     it('returns S2 when the row is ready', () => {
@@ -135,6 +138,49 @@ describe('derivePairingStatus', () => {
 
     it('ranks S3 above S4', () => {
         expect(derivePairingStatus({ ...mobile, connectingDeviceName: 'X', initialising: true })).toBe('S3')
+    })
+})
+
+describe('derivePairingStatus - status priority order', () => {
+    // each row holds both neighbouring states' conditions at once; the higher one has to win
+    const outage = { ...held, interfaces: [down('ble'), up('wifi')] }
+    const ready = { canStartRide: true, readyDeviceName: 'PM' }
+    const boundaries: Array<[string, Partial<PairingStatusInput>, PairingStatusId]> = [
+        ['S1 over S2', { interfaces: [down('ble'), down('wifi')], ...ready }, 'S1'],
+        ['S2 over S8', { ...ready, allRequiredSwitchedOff: true }, 'S2'],
+        ['S8 over S3', { allRequiredSwitchedOff: true, connectingDeviceName: 'HRM' }, 'S8'],
+        ['S3 over S7 while the trainer is still connecting', { trainerPhase: 'connecting', trainerName: 'Neo', connectingDeviceName: 'Neo' }, 'S3'],
+        ['S7 over S3 once the trainer is unavailable', { trainerPhase: 'unavailable', trainerName: 'Neo', connectingDeviceName: 'Neo' }, 'S7'],
+        ['S7 over S1b', { ...outage, trainerPhase: 'unavailable', trainerName: 'Neo' }, 'S7'],
+        ['S1b over S4', { ...outage, initialising: true }, 'S1b'],
+        ['S4 over S5', { initialising: true, searching: true }, 'S4'],
+        ['S6 over S5 once the helper threshold is reached', { searching: true, helperThresholdReached: true }, 'S6'],
+        // within the ready slot
+        ['S2c over S2b', { ...ready, fallbackReverted: true, fallbackActive: true }, 'S2c'],
+        ['S2b over S2d', { ...ready, fallbackActive: true, resistanceSwitchedOff: true }, 'S2b'],
+        ['S2d over S2e', { ...ready, resistanceSwitchedOff: true, searchEndedWithoutTrainer: true }, 'S2d'],
+        ['S2e over S2', { ...ready, searchEndedWithoutTrainer: true }, 'S2e'],
+        // the search states
+        ['S2w over S2', { ...ready, stillLooking: true }, 'S2w'],
+        ['S7 over S9', { trainerPhase: 'unavailable', trainerName: 'Neo', searchEndedWithNothing: true }, 'S7'],
+        ['S1b over S9', { ...outage, searchEndedWithNothing: true }, 'S1b'],
+        ['S9 over S5', { searchEndedWithNothing: true }, 'S9'],
+    ]
+
+    it.each(boundaries)('%s', (_name, input, expected) => {
+        expect(derivePairingStatus({ ...mobile, ...input })).toBe(expected)
+    })
+
+    it('while the trainer is still connecting, S3 holds even between its connection retries', () => {
+        expect(derivePairingStatus({ ...mobile, trainerPhase: 'connecting', trainerName: 'Neo' })).toBe('S3')
+    })
+
+    it('S3 for any connecting device without a configured trainer', () => {
+        expect(derivePairingStatus({ ...mobile, connectingDeviceName: 'PM' })).toBe('S3')
+    })
+
+    it('a connected trainer does not show S7', () => {
+        expect(derivePairingStatus({ ...mobile, trainerPhase: 'connected', trainerName: 'Neo' })).toBe('S5')
     })
 })
 
@@ -217,6 +263,65 @@ describe('getPairingGuidanceText', () => {
     })
 })
 
+describe('getPairingGuidanceText - trainer, fallback and switched-off states', () => {
+    it('S7 names the trainer and always carries the not-available link', () => {
+        expect(getPairingGuidanceText('S7', { trainerName: 'Tacx Flux' })).toEqual({
+            text: "Can't reach your trainer Tacx Flux. Pedal a few strokes to wake it up.",
+            link: 'Not available today?',
+        })
+        expect(getPairingGuidanceText('S7', { trainerName: 'Tacx Flux' }, 'short')).toEqual({
+            text: "Can't reach Tacx Flux. Pedal to wake it",
+            link: 'Not available?',
+        })
+    })
+
+    it('S8 with at least one switch to turn back on', () => {
+        expect(getPairingGuidanceText('S8', { switchedOffCanToggle: true })).toEqual({
+            text: 'Resistance, Power and Speed are all switched off. Switch one back on to ride.',
+        })
+        expect(getPairingGuidanceText('S8', { switchedOffCanToggle: true }, 'short')).toEqual({
+            text: 'To ride: all switched off. Switch one on.',
+        })
+    })
+
+    it('S8 with nothing remembered on any of them', () => {
+        expect(getPairingGuidanceText('S8', { switchedOffCanToggle: false })).toEqual({
+            text: 'Resistance, Power and Speed are all switched off. Tap one to choose a device.',
+        })
+        expect(getPairingGuidanceText('S8', { switchedOffCanToggle: false }, 'short')).toEqual({
+            text: 'To ride: all switched off. Tap one to choose.',
+        })
+    })
+
+    it('S2d says resistance is switched off', () => {
+        expect(getPairingGuidanceText('S2d', { deviceName: 'Stages Power' })).toEqual({
+            text: 'Ready to ride with Stages Power, without resistance control (Resistance is switched off).',
+        })
+        expect(getPairingGuidanceText('S2d', { deviceName: 'Stages Power' }, 'short')).toEqual({
+            text: 'Ready with Stages Power. No resistance control.',
+        })
+    })
+
+    it('S2b names the kind of device the ride falls back to', () => {
+        expect(getPairingGuidanceText('S2b', { fallbackCapability: 'power' }).text)
+            .toBe('Ready to ride with your power meter, without resistance control, until you next open Devices.')
+        expect(getPairingGuidanceText('S2b', { fallbackCapability: 'power' }, 'short').text)
+            .toBe('Ready with power meter. No resistance control.')
+        expect(getPairingGuidanceText('S2b', { fallbackCapability: 'speed' }).text)
+            .toBe('Ready to ride with your speed sensor, without resistance control, until you next open Devices.')
+    })
+
+    it('S2c says resistance control is back', () => {
+        expect(getPairingGuidanceText('S2c')).toEqual({ text: 'Your trainer connected. Resistance control is back on.' })
+        expect(getPairingGuidanceText('S2c', {}, 'short')).toEqual({ text: 'Trainer connected. Resistance control is on.' })
+    })
+
+    it('S6 keeps searching and offers help', () => {
+        expect(getPairingGuidanceText('S6')).toEqual({ text: 'Still searching…', link: "Can't find your trainer?" })
+        expect(getPairingGuidanceText('S6', {}, 'short')).toEqual({ text: 'Still searching', link: 'Need help?' })
+    })
+})
+
 describe('getPairingHint (S1b)', () => {
     it('mobile: Bluetooth permission denied', () => {
         const interfaces = [{ id: 'ble' as const, enabled: true, available: false, permissionDenied: true }, up('wifi')]
@@ -227,8 +332,8 @@ describe('getPairingHint (S1b)', () => {
         expect(getPairingHint({ platform: 'mobile', interfaces: [down('ble'), up('wifi')], anyDeviceSelected: false })).toBe('bluetooth-off')
     })
 
-    it('mobile: Wi-Fi off while Bluetooth works', () => {
-        expect(getPairingHint({ platform: 'mobile', interfaces: [up('ble'), down('wifi')], anyDeviceSelected: false })).toBe('wifi-off')
+    it('mobile: Wi-Fi off while Bluetooth works gives no hint, because Wi-Fi-off detection is not verified yet', () => {
+        expect(getPairingHint({ platform: 'mobile', interfaces: [up('ble'), down('wifi')], anyDeviceSelected: false })).toBeUndefined()
     })
 
     it('mobile: a disabled Wi-Fi never triggers a hint', () => {
@@ -247,28 +352,33 @@ describe('getPairingHint (S1b)', () => {
         expect(getPairingHint({ platform: 'desktop', interfaces: [down('ant')], anyDeviceSelected: true })).toBeUndefined()
     })
 
-    it('derivePairingStatus returns S1b for a hint on first use', () => {
-        expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), up('ble')] })).toBe('S1b')
+    it('derivePairingStatus returns S1b for a hint on first use, once it has held long enough', () => {
+        expect(derivePairingStatus({ ...desktop, ...held, interfaces: [down('ant'), up('ble')] })).toBe('S1b')
     })
 
-    it('S4 takes precedence over S1b while initialising', () => {
-        expect(derivePairingStatus({ ...desktop, interfaces: [down('ant'), up('ble')], initialising: true })).toBe('S4')
+    it('no S1b before the hint has held long enough', () => {
+        const input = { ...desktop, interfaces: [down('ant'), up('ble')] }
+        expect(derivePairingStatus(input)).toBe('S5')
+        expect(derivePairingStatus({ ...input, partialOutageSince: 1000, now: 1000 + PARTIAL_OUTAGE_DEBOUNCE_MS - 1 })).toBe('S5')
+    })
+
+    it('no S1b with any device selected, even once it would have held long enough', () => {
+        expect(derivePairingStatus({ ...desktop, ...held, interfaces: [down('ant'), up('ble')], anyDeviceSelected: true })).toBe('S5')
     })
 
     it('S2 and S3 take precedence over S1b', () => {
-        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), up('wifi')], canStartRide: true })).toBe('S2')
-        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), up('wifi')], connectingDeviceName: 'X' })).toBe('S3')
+        expect(derivePairingStatus({ ...mobile, ...held, interfaces: [down('ble'), up('wifi')], canStartRide: true })).toBe('S2')
+        expect(derivePairingStatus({ ...mobile, ...held, interfaces: [down('ble'), up('wifi')], connectingDeviceName: 'X' })).toBe('S3')
     })
 
     it('S1 still wins when nothing can scan', () => {
-        expect(derivePairingStatus({ ...mobile, interfaces: [down('ble'), down('wifi')] })).toBe('S1')
+        expect(derivePairingStatus({ ...mobile, ...held, interfaces: [down('ble'), down('wifi')] })).toBe('S1')
     })
 
     it('copy for each hint, full and short', () => {
         expect(getPairingGuidanceText('S1b', { hint: 'bluetooth-permission' }).link).toBe('Open settings')
         expect(getPairingGuidanceText('S1b', { hint: 'bluetooth-permission' }, 'short').text).toBe('Bluetooth not allowed.')
-        expect(getPairingGuidanceText('S1b', { hint: 'wifi-off' }).text)
-            .toBe('Wi-Fi is off. If your trainer connects over Wi-Fi, turn Wi-Fi on.')
+        expect(getPairingGuidanceText('S1b', { hint: 'bluetooth-off' })).toEqual({ text: "Bluetooth is off, so most trainers won't show up.", link: 'Bluetooth settings' })
         expect(getPairingGuidanceText('S1b', { hint: 'ant' }).text)
             .toBe('ANT+ stick not found. If you use one, plug it in, try another USB port, or close other apps that use it.')
         expect(getPairingGuidanceText('S1b', { hint: 'ant' }).link).toBeUndefined()

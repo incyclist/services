@@ -1,5 +1,3 @@
-import { IncyclistCapability } from 'incyclist-devices'
-
 import { Injectable, Singleton } from '../../../base/decorators'
 
 import { PairingPageService } from '../base/service'
@@ -7,10 +5,11 @@ import { createStateMachineOrchestrator } from './orchestrator'
 import type { PairingOrchestrator } from '../base/orchestrator'
 
 import { Observer } from '../../../base/types'
-import type { InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, PairingDisplayProps, TIncyclistCapability, TInterface } from '../../../types'
+import type { InterfaceDisplayProps, InterfaceDisplayState, InterfaceSettingsDisplayProps, PairingDisplayProps, TInterface } from '../../../types'
 
 import { EnrichedInterfaceSetting, InterfaceState, useDeviceAccess } from '../../access'
-import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, isCapabilityActive, toPairingInterfaceStates } from '../../pairing'
+import { toPairingInterfaceStates } from '../../pairing'
+import type { PairingPlatform } from '../../pairing'
 import { useIncyclist } from '../../../ui'
 
 /**
@@ -29,6 +28,10 @@ export class MobilePairingPageService extends PairingPageService {
 
     protected getUsageMode(): 'page' | 'direct' {
         return 'page'
+    }
+
+    protected getPlatform(): PairingPlatform {
+        return 'mobile'
     }
 
     getPageDisplayProperties():PairingDisplayProps {
@@ -50,55 +53,24 @@ export class MobilePairingPageService extends PairingPageService {
         }
 
         try {
-            const caps = this.state.capabilities??[]
             const ifs = this.state.interfaces??[]
             useDeviceAccess().enrichWithAccessState(ifs)
 
             const interfaces = ifs.map( i=>{ return this.getInterfaceDisplayProps(i) })
 
-            const loading = this.promiseOpen!=undefined
-            const status = getPairingStatusDisplay({
-                platform: 'mobile',
-                interfaces: toPairingInterfaceStates(ifs),
-                capabilities: caps,
-                canStartRide: this.canStartRide(),
-                loading,
-                rideMode: this.isPairingForRide,
-                ...this.getSearchStatusSource(),
-            })
-            const capProps = caps.map( c=>this.getCapabilityDisplayProps( c, status.id==='S1' ))
-
-            const CP = (cap:TIncyclistCapability) => capProps.find( c => c.capability===cap)
-
-            const top = [
-                CP('control'),
-                CP('power'),
-                CP('speed')
-            ].filter( c=>c!==null && c!==undefined)
-            const bottom = [
-                CP('heartrate'),
-                CP('cadence'),
-                CP('app_control')
-            ].filter( c=>c!==null && c!==undefined)
-
-            const trainerSelected = isCapabilityActive(caps.find( c=>c.capability===IncyclistCapability.Control))
-            const rowLabels = {
-                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking())),
-                bottom: getPairingGuidanceText('row-optional'),
-            }
-
-            const buttons = this.getButtonsDisplayProps(status.id==='S1')
+            const status = this.getStatusDisplayProps(toPairingInterfaceStates(ifs))
+            const noSearch = status.id==='S1'
 
             return {
 
                 title,
                 readyToStart: this.canStartRide(),
                 status,
-                capabilities: { top, bottom, rowLabels },
+                capabilities: this.getCapabilityRowsDisplayProps(noSearch),
                 interfaces,
                 deviceSelection: this.getDeviceListDisplayProps(),
                 showInterfaceSettings: this.openedInterfaceSettings,
-                buttons,
+                buttons: this.getButtonsDisplayProps(noSearch),
                 onExit,
                 ...this.getGuidanceDisplayProps(),
             }

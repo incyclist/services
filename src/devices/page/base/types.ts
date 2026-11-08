@@ -150,6 +150,9 @@ export interface PairingVisitStore {
     set(record: PairingVisitRecord): void
 }
 
+/** Extra `pairing page left` fields from the open page: strings, numbers and booleans only, never identifiers. */
+export type PairingVisitExitFieldsProvider = () => Record<string, string | number | boolean>
+
 export interface PairingVisitTrackerDeps {
     store: PairingVisitStore
     sessionId: string

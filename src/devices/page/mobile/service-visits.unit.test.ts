@@ -8,6 +8,7 @@ describe('DevicesPageService - pairing visit tracking', ()=> {
     const tracker = {
         openVisit: jest.fn(),
         closeVisit: jest.fn(),
+        setExitFields: jest.fn(),
         onBackground: jest.fn(),
         onForeground: jest.fn(),
     }

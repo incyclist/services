@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { PairingGuidance, TRAINER_ATTEMPT_TIMEOUT_MS } from './guidance'
-import type { PairingState } from '../../../pairing'
+import { PARTIAL_OUTAGE_DEBOUNCE_MS } from '../../../pairing'
+import type { PairingState, PairingStatusSource } from '../../../pairing'
 
 const PHASE_EVENT = 'pairing trainer phase changed'
 
@@ -365,6 +366,188 @@ describe('PairingGuidance', ()=> {
 
             expect( ()=>guidance.onPairingState(stateWith({connectState:'failed'}))).not.toThrow()
             expect(guidance.getState().trainerPhase).toBe('unavailable')
+        })
+    })
+})
+
+describe('PairingGuidance - status line', ()=> {
+
+    let guidance: PairingGuidance
+    let log: jest.Mock
+    let onChange: jest.Mock
+
+    const OUTAGE_EVENT = 'pairing partial outage shown'
+    const outageEvents = () => log.mock.calls.filter( ([message])=>message===OUTAGE_EVENT).map( ([,fields])=>fields)
+
+    const antMissing: PairingStatusSource = {
+        platform: 'desktop',
+        interfaces: [{ id:'ant', enabled:true, available:false }, { id:'ble', enabled:true, available:true }],
+        capabilities: [],
+        canStartRide: false,
+        loading: false,
+        rideMode: false,
+    }
+    const antBack: PairingStatusSource = { ...antMissing, interfaces: [{ id:'ant', enabled:true, available:true }, { id:'ble', enabled:true, available:true }] }
+    const bleOffMobile: PairingStatusSource = {
+        ...antMissing,
+        platform: 'mobile',
+        interfaces: [{ id:'ble', enabled:true, available:false }, { id:'wifi', enabled:true, available:true }],
+    }
+    const withPowerMeter = (src:PairingStatusSource):PairingStatusSource => ({
+        ...src, capabilities: [{ capability:'power', selected:'pm-1', deviceName:'PM', connectState:'connecting' }],
+    })
+
+    beforeEach( ()=> {
+        jest.useFakeTimers()
+        log = jest.fn()
+        onChange = jest.fn()
+        guidance = new PairingGuidance({log, onChange})
+        guidance.openVisit({visitId:'visit-1'})
+    })
+
+    afterEach( ()=> {
+        guidance.closeVisit()
+        jest.useRealTimers()
+        jest.clearAllMocks()
+    })
+
+    describe('first-use partial outage', ()=> {
+
+        test('shows only once the outage has held for 2 s after the page got ready, and updates the page then', ()=> {
+            expect(guidance.getStatus({...antMissing, loading:true}).id).toBe('S4')
+            jest.advanceTimersByTime(5000)
+            expect(guidance.getStatus(antMissing).id).toBe('S5')
+            expect(onChange).not.toHaveBeenCalled()
+
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS - 1)
+            expect(guidance.getStatus(antMissing).id).toBe('S5')
+
+            jest.advanceTimersByTime(1)
+            expect(onChange).toHaveBeenCalledTimes(1)
+            expect(guidance.getStatus(antMissing).id).toBe('S1b')
+        })
+
+        test('clears at once when the outage clears, and needs the full hold again when it comes back', ()=> {
+            guidance.getStatus(antMissing)
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+            expect(guidance.getStatus(antMissing).id).toBe('S1b')
+
+            expect(guidance.getStatus(antBack).id).toBe('S5')
+            expect(guidance.getStatus(antMissing).id).toBe('S5')
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+            expect(guidance.getStatus(antMissing).id).toBe('S1b')
+        })
+
+        test('an outage that clears within the hold never shows, and no update fires for it', ()=> {
+            guidance.getStatus(antMissing)
+            jest.advanceTimersByTime(1000)
+            guidance.getStatus(antBack)
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+
+            expect(onChange).not.toHaveBeenCalled()
+            expect(outageEvents()).toHaveLength(0)
+        })
+
+        test('never shows with any device selected', ()=> {
+            guidance.getStatus(withPowerMeter(antMissing))
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS * 2)
+
+            expect(guidance.getStatus(withPowerMeter(antMissing)).id).toBe('S3')
+            expect(onChange).not.toHaveBeenCalled()
+        })
+
+        test('a device selected after the outage started takes the hint away', ()=> {
+            guidance.getStatus(antMissing)
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+            expect(guidance.getStatus(withPowerMeter(antMissing)).id).toBe('S3')
+            expect(guidance.getStatus({...antMissing, capabilities:[{ capability:'power', selected:'pm-1', deviceName:'PM', connectState:'waiting' }]}).id).toBe('S5')
+        })
+
+        test('is logged once per visit, when it first shows, without identifiers', ()=> {
+            jest.advanceTimersByTime(1500)
+            guidance.getStatus(bleOffMobile)
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+            guidance.getStatus(bleOffMobile)
+            guidance.getStatus(bleOffMobile)
+
+            expect(outageEvents()).toEqual([{ visitId:'visit-1', platform:'mobile', interface:'ble', reason:'off', msSinceOpen:1500 + PARTIAL_OUTAGE_DEBOUNCE_MS }])
+        })
+
+        test('the reason says when Bluetooth is not allowed', ()=> {
+            const denied = { ...bleOffMobile, interfaces: [{ id:'ble' as const, enabled:true, available:false, permissionDenied:true }, { id:'wifi' as const, enabled:true, available:true }] }
+            guidance.getStatus(denied)
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+            guidance.getStatus(denied)
+
+            expect(outageEvents()[0]).toMatchObject({ interface:'ble', reason:'permission' })
+        })
+
+        test('the ANT+ reason is not-found', ()=> {
+            guidance.getStatus(antMissing)
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+            guidance.getStatus(antMissing)
+
+            expect(outageEvents()[0]).toMatchObject({ platform:'desktop', interface:'ant', reason:'not-found' })
+        })
+
+        test('no outage is tracked outside a visit', ()=> {
+            guidance.closeVisit()
+            guidance.getStatus(antMissing)
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+
+            expect(guidance.getStatus(antMissing).id).toBe('S5')
+            expect(onChange).not.toHaveBeenCalled()
+        })
+
+        test('the hold stops while the app is in the background', ()=> {
+            guidance.getStatus(antMissing)
+            guidance.pauseVisit()
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+
+            expect(onChange).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('the trainer', ()=> {
+
+        test('the status follows the trainer phase', ()=> {
+            const trainer = (connectState:string) => [{ capability:'control', selected:'trainer-1', deviceName:'Tacx Flux', connectState }]
+            guidance.onPairingState({ capabilities:[{ capability:'control', selected:'trainer-1', interface:'ble', connectState:'connecting' } as any] })
+            expect(guidance.getStatus({...antBack, capabilities:trainer('connecting')}).id).toBe('S3')
+
+            guidance.onPairingState({ capabilities:[{ capability:'control', selected:'trainer-1', interface:'ble', connectState:'failed' } as any] })
+            expect(guidance.getStatus({...antBack, capabilities:trainer('connecting')}).id).toBe('S7')
+        })
+    })
+
+    describe('exit fields', ()=> {
+
+        test('without anything shown', ()=> {
+            guidance.getStatus(antBack)
+            expect(guidance.getExitFields()).toEqual({ pairingCase:'no-trainer', partialOutageShown:false, switchedOffRequired:false })
+        })
+
+        test('with the partial outage shown, even after it cleared', ()=> {
+            guidance.getStatus(antMissing)
+            jest.advanceTimersByTime(PARTIAL_OUTAGE_DEBOUNCE_MS)
+            guidance.getStatus(antMissing)
+            guidance.getStatus(antBack)
+
+            expect(guidance.getExitFields()).toMatchObject({ partialOutageShown:true, partialOutageInterface:'ant', partialOutageReason:'not-found' })
+        })
+
+        test('with the trainer phase', ()=> {
+            guidance.onPairingState({ capabilities:[{ capability:'control', selected:'trainer-1', interface:'ble', connectState:'connecting' } as any] })
+            expect(guidance.getExitFields()).toMatchObject({ pairingCase:'trainer-connecting', trainerPhase:'connecting' })
+        })
+
+        test('switchedOffRequired while every required capability is switched off', ()=> {
+            const off = (capability:string) => ({ capability, disabled:true })
+            guidance.getStatus({...antBack, capabilities:[off('control'), off('power'), off('speed')]})
+            expect(guidance.getExitFields().switchedOffRequired).toBe(true)
+
+            guidance.getStatus(antBack)
+            expect(guidance.getExitFields().switchedOffRequired).toBe(false)
         })
     })
 })

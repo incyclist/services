@@ -62,7 +62,9 @@ export const canScanWithInterfaces = (interfaces: ReadonlyArray<PairingInterface
 export const getUnavailableInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform): PairingInterfaceId[] =>
     namedInterfaces(interfaces, platform).filter(i => i.enabled && !i.available).map(i => i.id)
 
-export type PairingHint = 'bluetooth-permission' | 'bluetooth-off' | 'wifi-off' | 'ant'
+// a Wi-Fi-off hint on mobile is left out until it's confirmed on a device that the mobile Wi-Fi
+// interface really reports itself unavailable while Wi-Fi is off
+export type PairingHint = 'bluetooth-permission' | 'bluetooth-off' | 'ant'
 
 export interface PairingHintInput {
     platform: PairingPlatform
@@ -83,7 +85,6 @@ export const getPairingHint = (input: PairingHintInput): PairingHint | undefined
     if (input.platform === 'mobile') {
         const ble = isBrokenInterface(input.interfaces, 'ble')
         if (ble) return ble.permissionDenied ? 'bluetooth-permission' : 'bluetooth-off'
-        if (isBrokenInterface(input.interfaces, 'wifi')) return 'wifi-off'
         return undefined
     }
 
@@ -91,7 +92,23 @@ export const getPairingHint = (input: PairingHintInput): PairingHint | undefined
     return undefined
 }
 
-export type PairingStatusId = 'S1' | 'S1b' | 'S2' | 'S2e' | 'S2w' | 'S3' | 'S4' | 'S5' | 'S9'
+/**
+ * The status line's states:
+ * - S1 nothing can search, S1b a partial outage on first use;
+ * - S2 ready, with its variants S2b (riding on the fallback), S2c (the trainer came back while on the
+ *   fallback), S2d (ready while Resistance is switched off), S2e (ready, search found no trainer) and
+ *   S2w (found something, the search is still looking for more);
+ * - S3 connecting, S4 getting ready, S5 searching, S6 still searching after the help threshold;
+ * - S7 the configured trainer can't be reached, S8 every required capability is switched off;
+ * - S9 the search finished and found nothing.
+ */
+export type PairingStatusId = 'S1' | 'S1b' | 'S2' | 'S2b' | 'S2c' | 'S2d' | 'S2e' | 'S2w' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7' | 'S8' | 'S9'
+
+/** How long a partial outage has to hold, after the page has finished getting ready, before S1b shows. */
+export const PARTIAL_OUTAGE_DEBOUNCE_MS = 2000
+
+/** Where the configured trainer's connection attempt stands (see the Pairing page guidance). */
+export type PairingStatusTrainerPhase = 'connecting' | 'connected' | 'unavailable'
 
 export interface PairingStatusInput extends PairingHintInput {
     initialising: boolean
@@ -106,23 +123,74 @@ export interface PairingStatusInput extends PairingHintInput {
     stillLooking?: boolean
     /** the page's search has ended without a trainer (the ready text then says so) */
     searchEndedWithoutTrainer?: boolean
+    /** only set while a trainer is configured */
+    trainerPhase?: PairingStatusTrainerPhase
+    /** the configured trainer's name, for display only */
+    trainerName?: string
+    /** Resistance, Power and Speed are all switched off */
+    allRequiredSwitchedOff?: boolean
+    /** Resistance is switched off with its trainer still remembered */
+    resistanceSwitchedOff?: boolean
+    /** the ride falls back to a power meter or speed sensor because the trainer isn't available */
+    fallbackActive?: boolean
+    /** the trainer connected while the fallback was active, and the page says so for a moment */
+    fallbackReverted?: boolean
+    /** the page has been searching for longer than the help threshold */
+    helperThresholdReached?: boolean
+    /** when the partial-outage condition started to hold, once the page had finished getting ready */
+    partialOutageSince?: number
+    /** the current time, for the partial-outage hold; defaults to now */
+    now?: number
+}
+
+const getReadyStatus = (input: PairingStatusInput): PairingStatusId => {
+    if (input.fallbackReverted) return 'S2c'
+    if (input.fallbackActive) return 'S2b'
+    if (input.resistanceSwitchedOff) return 'S2d'
+    if (input.searchEndedWithoutTrainer) return 'S2e'
+    return 'S2'
+}
+
+const isPartialOutageShown = (input: PairingStatusInput): boolean => {
+    if (input.partialOutageSince === undefined || !getPairingHint(input))
+        return false
+    const now = input.now ?? Date.now()
+    return now - input.partialOutageSince >= PARTIAL_OUTAGE_DEBOUNCE_MS
+}
+
+// the trainer's own states: S3 while its attempt runs, S7 once it can't be reached. While it can't be
+// reached, nothing connecting - the trainer's own retries or any other device - brings S3 back.
+const getTrainerStatus = (input: PairingStatusInput): PairingStatusId | undefined => {
+    if (input.trainerPhase === 'connecting') return 'S3'
+    if (input.trainerPhase === 'unavailable') return 'S7'
+    if (input.connectingDeviceName) return 'S3'
+    return undefined
+}
+
+const getSearchingStatus = (input: PairingStatusInput): PairingStatusId => {
+    if (input.initialising) return 'S4'
+    if (input.searchEndedWithNothing) return 'S9'
+    return input.helperThresholdReached ? 'S6' : 'S5'
 }
 
 /**
- * Priority: S1 > S2w > S2/S2e > S3 > S4 > S9 > S1b > S5. S2w (found something, still looking) holds
- * while a search runs; S2e is the ready text after a search that found no trainer. S9 (search finished, nothing found) replaces the
- * searching text once nothing is searching any more. S4 sits above S1b so the first-use hint never shows
- * while the page is initialising. The 2 s hold after S4 is applied by the caller.
+ * Priority: S1 > S2w > S2 (S2c > S2b > S2d > S2e > S2) > S8 > S3/S7 > S1b > S4 > S9 > S6/S5.
+ * - S3 shows while the configured trainer is still connecting, or for any connecting device without a
+ *   configured trainer; once the trainer can't be reached, S7 holds instead.
+ * - S1b needs the partial outage to have held for {@link PARTIAL_OUTAGE_DEBOUNCE_MS}; the caller
+ *   keeps `partialOutageSince` and re-evaluates once that time has passed.
  */
 export const derivePairingStatus = (input: PairingStatusInput): PairingStatusId => {
     if (!canScanWithInterfaces(input.interfaces, input.platform)) return 'S1'
     if (input.stillLooking) return 'S2w'
-    if (input.canStartRide) return input.searchEndedWithoutTrainer ? 'S2e' : 'S2'
-    if (input.connectingDeviceName) return 'S3'
-    if (input.initialising) return 'S4'
-    if (input.searchEndedWithNothing) return 'S9'
-    if (getPairingHint(input)) return 'S1b'
-    return 'S5'
+    if (input.canStartRide) return getReadyStatus(input)
+    if (input.allRequiredSwitchedOff) return 'S8'
+
+    const trainerStatus = getTrainerStatus(input)
+    if (trainerStatus) return trainerStatus
+
+    if (isPartialOutageShown(input)) return 'S1b'
+    return getSearchingStatus(input)
 }
 
 export type PairingTextVariant = 'full' | 'short'
@@ -137,6 +205,12 @@ export interface PairingGuidanceParams {
     isTrainer?: boolean
     /** S2w: the capabilities the search is still looking for, in tile order */
     missing?: ReadonlyArray<string>
+    /** S3 for the configured trainer, S7: the trainer's name */
+    trainerName?: string
+    /** S8: at least one of the switched-off capabilities still remembers its device, so it has a switch */
+    switchedOffCanToggle?: boolean
+    /** S2b: what the ride falls back to */
+    fallbackCapability?: 'power' | 'speed'
 }
 
 export type PairingGuidanceId = PairingStatusId | 'row-required' | 'row-required-trainer' | 'row-ready' | 'row-optional'
@@ -209,10 +283,6 @@ const getHintText = (hint: PairingHint, isShort: boolean): PairingGuidanceText =
             return isShort
                 ? { text: 'Bluetooth is off.', link: 'Settings' }
                 : { text: "Bluetooth is off, so most trainers won't show up.", link: 'Bluetooth settings' }
-        case 'wifi-off':
-            return isShort
-                ? { text: 'Wi-Fi is off · needed for Wi-Fi trainers' }
-                : { text: 'Wi-Fi is off. If your trainer connects over Wi-Fi, turn Wi-Fi on.' }
         case 'ant':
             return { text: 'ANT+ stick not found. If you use one, plug it in, try another USB port, or close other apps that use it.' }
     }
@@ -234,6 +304,40 @@ const getConnectingText = (device: string, isTrainer: boolean | undefined, isSho
         return { text: isShort ? `Connecting to ${device}…` : `Connecting to your trainer ${device}…` }
     return { text: `Connecting to ${device}…` }
 }
+
+const getReadyWithoutResistanceText = (device: string, isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: `Ready with ${device}. No resistance control.` }
+        : { text: `Ready to ride with ${device}, without resistance control (Resistance is switched off).` }
+
+const getFallbackText = (capability: PairingGuidanceParams['fallbackCapability'], isShort: boolean): PairingGuidanceText => {
+    const sensor = capability === 'speed' ? SENSOR_NAMES.speed : SENSOR_NAMES.power
+    return isShort
+        ? { text: `Ready with ${sensor}. No resistance control.` }
+        : { text: `Ready to ride with your ${sensor}, without resistance control, until you next open Devices.` }
+}
+
+const getFallbackRevertedText = (isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: 'Trainer connected. Resistance control is on.' }
+        : { text: 'Your trainer connected. Resistance control is back on.' }
+
+const getTrainerUnreachableText = (trainer: string, isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: `Can't reach ${trainer}. Pedal to wake it`, link: 'Not available?' }
+        : { text: `Can't reach your trainer ${trainer}. Pedal a few strokes to wake it up.`, link: 'Not available today?' }
+
+const getAllSwitchedOffText = (canToggle: boolean | undefined, isShort: boolean): PairingGuidanceText => {
+    if (isShort)
+        return { text: canToggle ? 'To ride: all switched off. Switch one on.' : 'To ride: all switched off. Tap one to choose.' }
+    const remedy = canToggle ? 'Switch one back on to ride.' : 'Tap one to choose a device.'
+    return { text: `Resistance, Power and Speed are all switched off. ${remedy}` }
+}
+
+const getStillSearchingText = (isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: 'Still searching', link: 'Need help?' }
+        : { text: 'Still searching…', link: "Can't find your trainer?" }
 
 const getSearchingText = (isShort: boolean): PairingGuidanceText =>
     isShort
@@ -282,6 +386,12 @@ export const getPairingGuidanceText = (
             return getHintText(params.hint!, isShort)
         case 'S2':
             return getReadyText(device, params.rideMode, isShort)
+        case 'S2b':
+            return getFallbackText(params.fallbackCapability, isShort)
+        case 'S2c':
+            return getFallbackRevertedText(isShort)
+        case 'S2d':
+            return getReadyWithoutResistanceText(device, isShort)
         case 'S2e':
             return getReadyWithoutTrainerText(device, isShort)
         case 'S2w':
@@ -292,6 +402,12 @@ export const getPairingGuidanceText = (
             return { text: 'Getting ready to search…' }
         case 'S5':
             return getSearchingText(isShort)
+        case 'S6':
+            return getStillSearchingText(isShort)
+        case 'S7':
+            return getTrainerUnreachableText(params.trainerName ?? '', isShort)
+        case 'S8':
+            return getAllSwitchedOffText(params.switchedOffCanToggle, isShort)
         case 'S9':
             return getSearchEndedText(isShort)
     }
