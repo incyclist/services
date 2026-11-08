@@ -4,17 +4,11 @@
 name: Commit and PR
 
 on:
-  push: 
+  push:
     branches:
       - '**'
     tags-ignore:
       - '**'
-    paths-ignore:
-      - 'README.MD'
-      - '.github/**'
-
-  pull_request:
-    branches: [ main ]
     paths-ignore:
       - 'README.MD'
       - '.github/**'
