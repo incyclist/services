@@ -218,53 +218,35 @@ const getHintText = (hint: PairingHint, isShort: boolean): PairingGuidanceText =
     }
 }
 
-export const getPairingGuidanceText = (
-    id: PairingGuidanceId,
-    params: PairingGuidanceParams = {},
-    variant: PairingTextVariant = 'full'
-): PairingGuidanceText => {
-    const isShort = variant === 'short'
-    const device = params.deviceName ?? ''
+const getReadyText = (device: string, rideMode: boolean | undefined, isShort: boolean): PairingGuidanceText => {
+    if (isShort) return { text: `Ready to ride with ${device}.` }
+    const tail = `You can add optional sensors, or press ${rideMode ? 'Start' : 'OK'}.`
+    return { text: `Ready to ride with ${device}. ${tail}` }
+}
 
+const getReadyWithoutTrainerText = (device: string, isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: `Ready with ${device}. No trainer found.` }
+        : { text: `Ready to ride with ${device}. No smart trainer found. Have one? Wake it up, then search again.` }
+
+const getConnectingText = (device: string, isTrainer: boolean | undefined, isShort: boolean): PairingGuidanceText => {
+    if (isTrainer)
+        return { text: isShort ? `Connecting to ${device}…` : `Connecting to your trainer ${device}…` }
+    return { text: `Connecting to ${device}…` }
+}
+
+const getSearchingText = (isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: 'Searching… Pedal to wake your trainer.' }
+        : { text: 'Searching for devices… Tip: pedal a few strokes to wake up your trainer.' }
+
+const getSearchEndedText = (isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: 'Nothing found. Wake it, then search again.' }
+        : { text: 'Search finished, nothing found. Wake your trainer or sensor (pedal a few strokes or press a button), then search again.' }
+
+const getRowLabelText = (id: PairingGuidanceId): PairingGuidanceText | undefined => {
     switch (id) {
-        case 'S1':
-            return getNoSearchText(params, isShort)
-
-        case 'S1b':
-            return getHintText(params.hint!, isShort)
-
-        case 'S2': {
-            if (isShort) return { text: `Ready to ride with ${device}.` }
-            const tail = `You can add optional sensors, or press ${params.rideMode ? 'Start' : 'OK'}.`
-            return { text: `Ready to ride with ${device}. ${tail}` }
-        }
-
-        case 'S2e':
-            return isShort
-                ? { text: `Ready with ${device}. No trainer found.` }
-                : { text: `Ready to ride with ${device}. No smart trainer found. Have one? Wake it up, then search again.` }
-
-        case 'S2w':
-            return getStillLookingText(device, params.missing ?? [], isShort)
-
-        case 'S3':
-            if (params.isTrainer)
-                return { text: isShort ? `Connecting to ${device}…` : `Connecting to your trainer ${device}…` }
-            return { text: `Connecting to ${device}…` }
-
-        case 'S4':
-            return { text: 'Getting ready to search…' }
-
-        case 'S5':
-            return isShort
-                ? { text: 'Searching… Pedal to wake your trainer.' }
-                : { text: 'Searching for devices… Tip: pedal a few strokes to wake up your trainer.' }
-
-        case 'S9':
-            return isShort
-                ? { text: 'Nothing found. Wake it, then search again.' }
-                : { text: 'Search finished, nothing found. Wake your trainer or sensor (pedal a few strokes or press a button), then search again.' }
-
         case 'row-required':
             return { text: 'TO RIDE', subtext: 'connect any one' }
         case 'row-required-trainer':
@@ -277,6 +259,41 @@ export const getPairingGuidanceText = (
             return { text: 'TO RIDE', subtext: 'still looking for a trainer' }
         case 'row-searching-found':
             return { text: 'TO RIDE', subtext: 'trainer found' }
+        default:
+            return undefined
+    }
+}
+
+export const getPairingGuidanceText = (
+    id: PairingGuidanceId,
+    params: PairingGuidanceParams = {},
+    variant: PairingTextVariant = 'full'
+): PairingGuidanceText => {
+    const rowLabel = getRowLabelText(id)
+    if (rowLabel) return rowLabel
+
+    const isShort = variant === 'short'
+    const device = params.deviceName ?? ''
+
+    switch (id as PairingStatusId) {
+        case 'S1':
+            return getNoSearchText(params, isShort)
+        case 'S1b':
+            return getHintText(params.hint!, isShort)
+        case 'S2':
+            return getReadyText(device, params.rideMode, isShort)
+        case 'S2e':
+            return getReadyWithoutTrainerText(device, isShort)
+        case 'S2w':
+            return getStillLookingText(device, params.missing ?? [], isShort)
+        case 'S3':
+            return getConnectingText(device, params.isTrainer, isShort)
+        case 'S4':
+            return { text: 'Getting ready to search…' }
+        case 'S5':
+            return getSearchingText(isShort)
+        case 'S9':
+            return getSearchEndedText(isShort)
     }
 }
 
