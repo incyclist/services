@@ -181,6 +181,8 @@ describe('getPairingStatusDisplay - the configured trainer', () => {
             id: 'S7',
             text: "Can't reach your trainer Tacx Flux. Pedal a few strokes to wake it up.",
             shortText: "Can't reach Tacx Flux. Pedal to wake it",
+            stateOnlyText: "Can't reach your trainer Tacx Flux.",
+            shortStateOnlyText: "Can't reach Tacx Flux.",
             link: 'Not available today?',
             shortLink: 'Not available?',
             dot: 'amber',

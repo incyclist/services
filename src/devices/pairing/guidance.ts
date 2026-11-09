@@ -229,6 +229,13 @@ export interface PairingGuidanceText {
     text: string
     link?: string
     subtext?: string
+    /**
+     * `text` without a tip that only makes sense with no other guidance nearby (e.g. a "pedal to
+     * wake it" aside) - for when the helper panel is open beside this text and already covers that
+     * ground. Only set where `text` actually has something to drop; otherwise callers fall back to
+     * `text` itself.
+     */
+    stateOnlyText?: string
 }
 
 const formatList = (names: string[]): string => {
@@ -333,8 +340,12 @@ const getFallbackRevertedText = (isShort: boolean): PairingGuidanceText =>
 
 const getTrainerUnreachableText = (trainer: string, isShort: boolean): PairingGuidanceText =>
     isShort
-        ? { text: `Can't reach ${trainer}. Pedal to wake it`, link: 'Not available?' }
-        : { text: `Can't reach your trainer ${trainer}. Pedal a few strokes to wake it up.`, link: 'Not available today?' }
+        ? { text: `Can't reach ${trainer}. Pedal to wake it`, link: 'Not available?', stateOnlyText: `Can't reach ${trainer}.` }
+        : {
+            text: `Can't reach your trainer ${trainer}. Pedal a few strokes to wake it up.`,
+            link: 'Not available today?',
+            stateOnlyText: `Can't reach your trainer ${trainer}.`,
+        }
 
 const getAllSwitchedOffText = (canToggle: boolean | undefined, isShort: boolean): PairingGuidanceText => {
     if (isShort)

@@ -270,10 +270,12 @@ describe('getPairingGuidanceText - trainer, fallback and switched-off states', (
         expect(getPairingGuidanceText('S7', { trainerName: 'Tacx Flux' })).toEqual({
             text: "Can't reach your trainer Tacx Flux. Pedal a few strokes to wake it up.",
             link: 'Not available today?',
+            stateOnlyText: "Can't reach your trainer Tacx Flux.",
         })
         expect(getPairingGuidanceText('S7', { trainerName: 'Tacx Flux' }, 'short')).toEqual({
             text: "Can't reach Tacx Flux. Pedal to wake it",
             link: 'Not available?',
+            stateOnlyText: "Can't reach Tacx Flux.",
         })
     })
 

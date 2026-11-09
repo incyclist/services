@@ -19,6 +19,10 @@ export interface PairingStatusDisplayProps {
     id: PairingStatusId
     text: string
     shortText: string
+    /** `text`/`shortText` without a tip that doesn't apply while something nearby (e.g. an open
+     * helper panel) already covers it - falls back to `text`/`shortText` where there's no tip to drop */
+    stateOnlyText: string
+    shortStateOnlyText: string
     link?: string
     shortLink?: string
     dot: PairingStatusDot
@@ -195,6 +199,8 @@ export const getPairingStatusDisplay = (src: PairingStatusSource): PairingStatus
         id,
         text: full.text,
         shortText: short.text,
+        stateOnlyText: full.stateOnlyText ?? full.text,
+        shortStateOnlyText: short.stateOnlyText ?? short.text,
         link: full.link,
         shortLink: short.link,
         dot: statusDot(id),
