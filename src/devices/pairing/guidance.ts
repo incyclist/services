@@ -219,7 +219,7 @@ export interface PairingGuidanceParams {
  * and of an empty power or speed tile before and after the rider said the trainer isn't available.
  */
 export type PairingTileTextId = 'tile-role-trainer' | 'tile-role-via-trainer' | 'tile-trainer-waiting' | 'tile-waiting-for-trainer'
-    | 'tile-can-replace-trainer' | 'tile-optional-for-now' | 'tile-tap-to-add'
+    | 'tile-optional-for-now' | 'tile-tap-to-add'
 
 export type PairingGuidanceId = PairingStatusId | PairingTileTextId | 'row-required' | 'row-required-trainer' | 'row-ready' | 'row-optional'
     | 'row-searching-trainer' | 'row-searching-found'
@@ -386,8 +386,6 @@ const getTileText = (id: PairingGuidanceId, isShort: boolean): PairingGuidanceTe
             return { text: isShort ? 'Waiting…' : 'Waiting to connect' }
         case 'tile-waiting-for-trainer':
             return { text: isShort ? 'Via trainer' : 'Waiting for trainer' }
-        case 'tile-can-replace-trainer':
-            return { text: 'Can replace trainer' }
         case 'tile-optional-for-now':
             return { text: 'Optional for now' }
         case 'tile-tap-to-add':
@@ -547,7 +545,10 @@ const getUnavailableTrainerTileState = (input: PairingTileStateInput): PairingTi
     if (!selected)
         return { footerText: tileFooter(needsReplacement ? 'tile-tap-to-add' : 'tile-optional-for-now'), awaited: needsReplacement }
     if (input.connectState === 'connected')
-        return { trainerRole: 'separate', footerText: tileFooter('tile-can-replace-trainer'), awaited: false }
+        // no footer override: a separate meter that's already connected looks exactly like any
+        // other connected tile (T5) - the way to ride without the trainer lives in the status
+        // line and helper, not as an action implied by this tile's footer
+        return { trainerRole: 'separate', awaited: false }
     return undefined
 }
 

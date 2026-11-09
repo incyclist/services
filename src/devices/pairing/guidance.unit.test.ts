@@ -443,7 +443,6 @@ describe('getPairingTileState', () => {
     const optionalForNow = { full: 'Optional for now', short: 'Optional for now' }
     const tapToAdd = { full: 'Tap to add', short: 'Tap to add' }
     const waitingForTrainer = { full: 'Waiting for trainer', short: 'Via trainer' }
-    const canReplaceTrainer = { full: 'Can replace trainer', short: 'Can replace trainer' }
     const trainerWaiting = { full: 'Waiting to connect', short: 'Waiting…' }
 
     // power and speed tiles: trainer phase × what the tile holds × whether the rider said the trainer isn't available today
@@ -465,12 +464,12 @@ describe('getPairingTileState', () => {
         ['unavailable', 'empty', false, { footerText: optionalForNow, awaited: false }],
         ['unavailable', 'trainer', false, { trainerRole: 'via-trainer', roleLabel: 'via your trainer', footerText: waitingForTrainer, awaited: false }],
         ['unavailable', 'separate-connecting', false, { awaited: false }],
-        ['unavailable', 'separate-connected', false, { trainerRole: 'separate', footerText: canReplaceTrainer, awaited: false }],
+        ['unavailable', 'separate-connected', false, { trainerRole: 'separate', awaited: false }],
         // ... and after it, with no separate power meter or speed sensor connected
         ['unavailable', 'empty', true, { footerText: tapToAdd, awaited: true }],
         ['unavailable', 'trainer', true, { trainerRole: 'via-trainer', roleLabel: 'via your trainer', footerText: tapToAdd, awaited: true }],
         ['unavailable', 'separate-connecting', true, { awaited: false }],
-        ['unavailable', 'separate-connected', true, { trainerRole: 'separate', footerText: canReplaceTrainer, awaited: false }],
+        ['unavailable', 'separate-connected', true, { trainerRole: 'separate', awaited: false }],
     ])('power and speed, trainer %s, tile %s, not available today picked: %s', (phase, slot, picked, expected) => {
         expect(getPairingTileState(tile('power', slot, phase, { trainerUnavailablePicked: picked }))).toEqual(expected)
         expect(getPairingTileState(tile('speed', slot, phase, { trainerUnavailablePicked: picked }))).toEqual(expected)

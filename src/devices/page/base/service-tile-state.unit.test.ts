@@ -130,14 +130,14 @@ describe.each([
             expect(tileOf('heartrate').footerText).toBeUndefined()
         })
 
-        test('a separate connected power meter can replace the trainer', async ()=> {
+        test('a separate connected power meter looks like any other connected tile', async ()=> {
             await openReady()
             makeUnavailable([trainer('control'), powerMeter('connected'), empty('speed')])
 
             expect(tileOf('power')).toMatchObject({
-                trainerRole:'separate', deviceName:'Stages', connectState:'connected',
-                footerText:{ full:'Can replace trainer', short:'Can replace trainer' }, awaited:false,
+                trainerRole:'separate', deviceName:'Stages', connectState:'connected', awaited:false,
             })
+            expect(tileOf('power').footerText).toBeUndefined()
             expect(tileOf('power').roleLabel).toBeUndefined()
         })
 
