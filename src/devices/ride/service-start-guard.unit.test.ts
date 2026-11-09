@@ -70,6 +70,71 @@ describe('DeviceRideService - device start robustness',()=>{
         })
     })
 
+    describe('dropPendingStart',()=>{
+
+        const never = ()=>new Promise<boolean>( ()=>{ /* never settles */ })
+
+        test('fires a stop on every device that has not started, without waiting for it, and leaves started ones alone',async ()=>{
+            const pending = createInfo('1','2606')
+            const connected = createInfo('2','2607')
+            ;(pending.adapter.start as jest.Mock).mockImplementation(never)
+            ;(pending.adapter.stop as jest.Mock).mockImplementation(never)
+            jest.spyOn(connected.adapter,'isStarted').mockReturnValue(true)
+            const pause = jest.spyOn(connected.adapter,'pause')
+            ;(service as any).rideAdapters = [pending,connected]
+            void service.startAdapters([pending],'pair')
+
+            service.dropPendingStart()
+
+            expect(pending.adapter.stop).toHaveBeenCalled()
+            expect(connected.adapter.stop).not.toHaveBeenCalled()
+            expect(pause).not.toHaveBeenCalled()
+            // nothing left for the next start to wait for, or to cancel
+            expect(await service.waitForPreviousStartToFinish()).toBe(true)
+            expect(await service.cancelStart()).toBeUndefined()
+            expect((service as any).rideAdapters).toBeUndefined()
+        })
+
+        test('a fired stop that fails does not leak an unhandled rejection',async ()=>{
+            const pending = createInfo('1','2606')
+            ;(pending.adapter.start as jest.Mock).mockImplementation(never)
+            ;(pending.adapter.stop as jest.Mock).mockRejectedValue(new Error('stop failed'))
+            ;(service as any).rideAdapters = [pending]
+            void service.startAdapters([pending],'pair')
+            const unhandled = jest.fn()
+            process.on('unhandledRejection',unhandled)
+
+            try {
+                service.dropPendingStart()
+                await new Promise( done=>setImmediate(done))
+            }
+            finally {
+                process.off('unhandledRejection',unhandled)
+            }
+
+            expect(pending.adapter.stop).toHaveBeenCalled()
+            expect(unhandled).not.toHaveBeenCalled()
+        })
+
+        test('a dropped start that settles later does not clear the start that followed it',async ()=>{
+            const ai = createInfo('1','2606')
+            let settleDropped:(ok:boolean)=>void = ()=>{}
+            ;(ai.adapter.start as jest.Mock)
+                .mockImplementationOnce( ()=>new Promise<boolean>( done=>{ settleDropped=done }))
+                .mockImplementationOnce(never)
+            ;(service as any).rideAdapters = [ai]
+            const dropped = service.startAdapters([ai],'pair')
+            service.dropPendingStart()
+            void service.startAdapters([ai],'pair')
+
+            settleDropped(false)
+            await dropped
+
+            // the newer start is still pending, so it can still be cancelled
+            expect(await service.cancelStart()).toBe(true)
+        })
+    })
+
     describe('getStartedCapabilities',()=>{
 
         test('provides the capabilities a device was successfully started for',async ()=>{
