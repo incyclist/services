@@ -253,6 +253,12 @@ class TestWrapper extends DevicePairingService {
         return super.isScanning()
     }
 
+    // some tests mock run() out (see the startDeviceSelection describe's beforeEach) - this
+    // restores the real implementation for a test that needs run() to actually execute
+    useRealRun() {
+        this.run = (props?) => super.run(props)
+    }
+
     simulateScanning() {
         this.state.check = undefined;
         this.state.scan= {
@@ -920,11 +926,41 @@ describe('PairingService',()=>{
                 await sleep(20) // before scan delay
 
                 expect(svc.getState().check).toBeUndefined()
-                
+
 
                 // scan is enforced
                 expect(_run).toHaveBeenCalledWith({enforcedScan:true})
 
+            })
+
+            test('an empty capability is only opened once stopping the running pairing attempt has actually finished', async ()=>{
+                // a background pairing attempt is active (e.g. the configured trainer is unreachable
+                // and retrying) when the rider opens an empty capability's device list. startScan()
+                // used to call stopPairing() without awaiting it, then call run() right after - run()
+                // (not mocked here, unlike this describe's other tests, so its own stopPairing()-via-
+                // _stop() call is exercised for real) sees pairing as still active and triggers its own,
+                // overlapping stopPairing() call. Both calls end up cancelling the same device
+                // concurrently - confirmed against real app logs showing two concurrent 'Stop Pairing'/
+                // 'cancel start of device' entries for the same device in the broken case, one in the
+                // working case (no background attempt to race with).
+                svc.useRealRun()
+                access.scan = jest.fn().mockResolvedValue([])
+
+                let stopPairingCalls = 0
+                let concurrentCall = false
+                const realStopPairing = svc.stopPairing.bind(svc)
+                svc.stopPairing = jest.fn().mockImplementation( async ()=>{
+                    if (stopPairingCalls>0)
+                        concurrentCall = true
+                    stopPairingCalls++
+                    await realStopPairing()
+                })
+
+                svc.startDeviceSelection(IncyclistCapability.AppControl, jest.fn())
+                await sleep(50)
+
+                expect(concurrentCall).toBe(false)
+                expect(stopPairingCalls).toBe(1)
             })
 
 

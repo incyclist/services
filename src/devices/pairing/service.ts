@@ -918,7 +918,11 @@ export class DevicePairingService  extends IncyclistService{
                 if( devices.length>0)
                     await this.stopAdaptersWithCapability(capability)
 
-                this.stopPairing().catch( err=>{ this.logError(err, 'startDeviceSelection') })
+                // awaited: run() below checks isPairing() itself and triggers its own stopPairing()
+                // if this one hasn't finished yet - two concurrent cancellations of the same device
+                // can leave run() stuck awaiting a cancellation that never settles, so the list opens
+                // but never actually scans
+                await this.stopPairing().catch( err=>{ this.logError(err, 'startDeviceSelection') })
                 this.emitStateChange({capabilities:this.state.capabilities})
 
                 if( devices.length>0)
