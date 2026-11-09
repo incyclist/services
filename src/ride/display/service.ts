@@ -1267,6 +1267,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         devices.off( 'start-update', h.deviceStartUpdateHandler)
         devices.off( 'start-error',   h.deviceStartNOKHandler)
         devices.off( 'cycling-mode-toggle', h.toggleCyclingModeHandler)
+        devices.off( 'key-pressed', h.deviceKeyPressedHandler)
 
         delete this.startDeviceHandlers        
     }
