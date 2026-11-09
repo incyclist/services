@@ -276,6 +276,32 @@ export class PairingGuidance {
             this.moveTo('unavailable', 'rider')
     }
 
+    /**
+     * What switching off the Resistance tile means right now. While the configured trainer is still
+     * connecting or can't be reached, the rider is saying it isn't available today, so the helper opens
+     * and nothing is switched off. Otherwise Resistance is switched off.
+     */
+    getResistanceUnselectAction(): 'open-helper' | 'unselect' {
+        const { trainerPhase } = this.getState()
+        const waitingForTrainer = trainerPhase === 'connecting' || trainerPhase === 'unavailable'
+        return this.visitOpen && !this.fallback && waitingForTrainer ? 'open-helper' : 'unselect'
+    }
+
+    /**
+     * The rider said the trainer isn't available today: a trainer that is still connecting is
+     * unavailable from now on, and the helper opens (or stays open) with that answer picked.
+     *
+     * @param trigger what the rider used: the Resistance tile's switch, or the status line's link
+     */
+    openHelperForUnavailableTrainer(trigger: PairingHelperTrigger): void {
+        if (!this.visitOpen)
+            return
+        this.onTrainerUnavailable()
+        if (this.helperPhase !== 'open')
+            this.showHelper(trigger)
+        this.preselectReason('trainer_unavailable')
+    }
+
     /** The current guidance state. */
     getState(): PairingGuidanceState {
         // while the ride falls back to another device, the trainer is excluded, but still the one the page waits for
@@ -534,6 +560,15 @@ export class PairingGuidance {
             connectedCapabilities: this.connectedCapabilities,
             interfaceStates: this.interfaceStates,
         }))
+    }
+
+    // an answer the rider gave elsewhere on the page, not by tapping it in the helper: picked, but not
+    // logged as a selection
+    protected preselectReason(reason: PairingHelperReason): void {
+        if (!this.getHelper().reasons.includes(reason))
+            return
+        this.selectedReason = reason
+        this.lastReason = reason
     }
 
     /**

@@ -390,10 +390,28 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected onCapabilityUnselect(cap:IncyclistCapability) {
         this.logEvent( {message:'capability unselect clicked', capability:cap, eventSource:'user'})
 
+        // while the trainer connects or can't be reached, switching Resistance off means "my trainer
+        // isn't available today": the helper opens, and the trainer stays the rider's trainer
+        if (cap===IncyclistCapability.Control && this.getResistanceUnselectAction()==='open-helper') {
+            this.withGuidance( g=>g.openHelperForUnavailableTrainer('tile_unselect'), 'onCapabilityUnselect')
+            this.updatePage()
+            return
+        }
+
         this.getDevicePairing().unselectDevices(cap)
             .catch( err=>{ this.logError(err,'onCapabilityUnselect') })
 
         this.updatePage()
+    }
+
+    protected getResistanceUnselectAction():'open-helper'|'unselect' {
+        try {
+            return this.guidance.getResistanceUnselectAction()
+        }
+        catch(err) {
+            this.logError(err,'getResistanceUnselectAction')
+            return 'unselect'
+        }
     }
 
     // turns a switched-off capability (T16) back on, restoring its remembered device with no scan
@@ -752,8 +770,19 @@ export abstract class PairingPageService extends IncyclistPageService {
         }
     }
 
+    // the status line's link: while the trainer can't be reached it's "not available today?"
     protected onHelperOpen():void {
+        if (this.getTrainerPhase()==='unavailable') {
+            this.onTrainerUnavailable()
+            return
+        }
         this.withGuidance( g=>g.openHelper(), 'onHelperOpen')
+        this.updatePage()
+    }
+
+    /** The status line's "not available today?" link: the helper opens with that answer picked. */
+    protected onTrainerUnavailable():void {
+        this.withGuidance( g=>g.openHelperForUnavailableTrainer('trainer_unavailable_link'), 'onTrainerUnavailable')
         this.updatePage()
     }
 
