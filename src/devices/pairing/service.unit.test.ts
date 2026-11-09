@@ -410,7 +410,7 @@ describe('PairingService',()=>{
                 })
 
                 expect(logCapabilities).toHaveBeenCalled()
-                
+
                 expect(logEvent).toHaveBeenNthCalledWith( 1,expect.objectContaining( {message:'Stopping Adapters'}))
                 expect(logEvent).toHaveBeenNthCalledWith( 2,expect.objectContaining( {message:'Start Scanning'}))
                 expect(logEvent).toHaveBeenCalledWith( expect.objectContaining( {message:'device detected', device:{deviceID:1234, interface:'ant', profile:'FE'}}))
@@ -933,16 +933,13 @@ describe('PairingService',()=>{
 
             })
 
-            test('an empty capability is only opened once stopping the running pairing attempt has actually finished', async ()=>{
+            test('stopping a running pairing attempt to open an empty capability only cancels it once', async ()=>{
                 // a background pairing attempt is active (e.g. the configured trainer is unreachable
                 // and retrying) when the rider opens an empty capability's device list. startScan()
                 // used to call stopPairing() without awaiting it, then call run() right after - run()
                 // (not mocked here, unlike this describe's other tests, so its own stopPairing()-via-
                 // _stop() call is exercised for real) sees pairing as still active and triggers its own,
-                // overlapping stopPairing() call. Both calls end up cancelling the same device
-                // concurrently - confirmed against real app logs showing two concurrent 'Stop Pairing'/
-                // 'cancel start of device' entries for the same device in the broken case, one in the
-                // working case (no background attempt to race with).
+                // redundant, overlapping stopPairing() call, cancelling the same device twice
                 svc.useRealRun()
                 access.scan = jest.fn().mockResolvedValue([])
 

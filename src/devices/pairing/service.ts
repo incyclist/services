@@ -918,10 +918,8 @@ export class DevicePairingService  extends IncyclistService{
                 if( devices.length>0)
                     await this.stopAdaptersWithCapability(capability)
 
-                // awaited: run() below checks isPairing() itself and triggers its own stopPairing()
-                // if this one hasn't finished yet - two concurrent cancellations of the same device
-                // can leave run() stuck awaiting a cancellation that never settles, so the list opens
-                // but never actually scans
+                // awaited: run() below checks isPairing() itself and would otherwise trigger its own,
+                // redundant concurrent stopPairing() call for the same device
                 await this.stopPairing().catch( err=>{ this.logError(err, 'startDeviceSelection') })
                 this.emitStateChange({capabilities:this.state.capabilities})
 
@@ -2544,7 +2542,7 @@ export class DevicePairingService  extends IncyclistService{
     async startScanning(adapters: AdapterInfo[], props: PairingProps) {
         this.state.interfaces = this.access.enrichWithAccessState(this.state.interfaces);
 
-        
+
         let interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
                             .map(i=>i.name)
 
@@ -2564,7 +2562,7 @@ export class DevicePairingService  extends IncyclistService{
 
         const preparing = DevicePairingService.scanCounter++
         this.state.scan={preparing,adapters:[]}   // will cause that next call to isPairing() will be true
-                    
+
 
         if (interfaces.length===0) {
             this.scheduleScanRetryWhenNoInterfaces(preparing)
