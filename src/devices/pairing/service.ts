@@ -4,6 +4,7 @@ import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectSta
 import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
+import { getPairingStartTimeout } from "../ride/timeouts";
 import clone from "../../utils/clone";
 import { IncyclistService } from "../../base/service";
 import { EnrichedInterfaceSetting } from "../access";
@@ -90,6 +91,11 @@ export class DevicePairingService  extends IncyclistService{
     protected static readonly STALLED_AFTER_MS = 30*1000
     protected stalledTimer?: ReturnType<typeof setTimeout>
     protected stalledLogged = false
+
+    // an attempt that hasn't settled once its slowest device's own pairing timeout has passed by
+    // this margin is dropped, so the loop never waits on a hung device start. Logged once per visit.
+    protected static readonly ATTEMPT_HUNG_MARGIN_MS = 15*1000
+    protected attemptHungLogged = false
 
     // whether a Pairing page visit is open - see setVisitOpen()
     protected visitOpen = false
@@ -320,8 +326,10 @@ export class DevicePairingService  extends IncyclistService{
                 this.visitOpenedAt ??= Date.now()
                 this.getDeviceConfiguration().clearExclusions({scope:'until-next-pairing'})
                 // a new visit gets its own automatic search; opening an already open visit again doesn't
-                if (!this.visitOpen)
+                if (!this.visitOpen) {
                     this.resetSearch()
+                    this.attemptHungLogged = false
+                }
             }
             else {
                 delete this.visitOpenedAt
@@ -2405,13 +2413,15 @@ export class DevicePairingService  extends IncyclistService{
         this.setRequestedCapabilties(selectedAdapters)
 
         this.onPairingStarted();
+        const attemptStartedAt = Date.now()
         const promise = this.rideService.startAdapters(selectedAdapters, 'pair');
         this.state.check={promise}
 
 
         this.logEvent({ message: 'Start Pairing', adapters, props });
+        let settled = true
         try {
-            await this.state.check.promise;
+            settled = await this.waitForAttempt(promise, target)
         }
         catch(err) {
             // a start that crashed is handled like a failed one, so the next attempt can follow
@@ -2422,19 +2432,67 @@ export class DevicePairingService  extends IncyclistService{
         if (this.usage!=='page' && this.isScanning())
             return;
 
-        this.completeAttempt()
+        if (!settled)
+            this.dropHungAttempt(target, attemptStartedAt)
 
-        if (!this.isPairingSettled()) {
-            this.logEvent({ message: 'Pairing done', adapters, props });
+        await this.finishAttempt(target, adapters, props, settled)
+    }
 
-            // only stop the devices of this attempt that didn't connect, never one that is connected
-            const failed = target.filter( ai=> !ai.adapter.isStarted()).map( ai=> ai.udid)
-            await this.rideService.stopDevices(failed)
+    // resolves false if the attempt hasn't settled in time. A late result is then ignored.
+    protected async waitForAttempt(promise:Promise<boolean>, target:AdapterInfo[]):Promise<boolean> {
+        let watchdog: ReturnType<typeof setTimeout>|undefined
+        const expired = new Promise<boolean>( done=>{
+            watchdog = setTimeout( ()=>{ done(false) }, this.getAttemptTimeout(target))
+        })
 
-            await this.retryUnsettledPairing()
+        try {
+            return await Promise.race([ promise.then( ()=>true), expired ])
+        }
+        finally {
+            clearTimeout(watchdog)
+        }
+    }
+
+    // always later than the slowest device's own pairing timeout, so a device that is just slow isn't cut off
+    protected getAttemptTimeout(target:AdapterInfo[]):number {
+        const slowest = Math.max( ...target.map( ai=>getPairingStartTimeout(ai.adapter)))
+        return slowest + DevicePairingService.ATTEMPT_HUNG_MARGIN_MS
+    }
+
+    // stops tracking the attempt; the devices that didn't connect are stopped without waiting for them
+    protected dropHungAttempt(target:AdapterInfo[], attemptStartedAt:number):void {
+        if (!this.attemptHungLogged) {
+            this.attemptHungLogged = true
+            const hung = target.filter( ai=> !ai.adapter.isStarted())
+                .map( ai=> ai.adapter.getSettings?.()?.interface)
+                .filter( name=> name!==undefined)
+            this.logEvent({
+                message: 'pairing attempt hung',
+                hungInterfaces: [...new Set(hung)].join(','),
+                attemptMs: Date.now()-attemptStartedAt,
+                platform: this.getPlatform(),
+            })
         }
 
+        this.rideService.dropPendingStart()
+    }
 
+    protected async finishAttempt(target:AdapterInfo[], adapters:AdapterInfo[], props:PairingProps, settled:boolean) {
+        this.completeAttempt()
+
+        if (this.isPairingSettled())
+            return
+
+        this.logEvent({ message: 'Pairing done', adapters, props });
+
+        // only stop the devices of this attempt that didn't connect, never one that is connected.
+        // A dropped attempt has already fired the stops of its devices: waiting for them could hang as well
+        if (settled) {
+            const failed = target.filter( ai=> !ai.adapter.isStarted()).map( ai=> ai.udid)
+            await this.rideService.stopDevices(failed)
+        }
+
+        await this.retryUnsettledPairing()
     }
 
     // the selected devices that still need to be started: not started yet, or started for fewer
@@ -3095,6 +3153,7 @@ export class DevicePairingService  extends IncyclistService{
         this.removeScanningCallbacks()
         this.visitOpen = false
         delete this.visitOpenedAt
+        this.attemptHungLogged = false
         this.pendingConflicts = []
         this.resetSearch()
     }

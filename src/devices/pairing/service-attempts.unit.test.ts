@@ -45,6 +45,7 @@ class FakeRide extends EventEmitter {
     stopDevices = jest.fn(async (udids: string[]) => { udids.forEach(udid => this.started.delete(udid)) })
     getStartedCapabilities = jest.fn((udid: string) => this.started.get(udid))
     cancelStart = jest.fn().mockResolvedValue(true)
+    dropPendingStart = jest.fn()
     lazyInit = jest.fn().mockResolvedValue(true)
     waitForPreviousStartToFinish = jest.fn().mockResolvedValue(true)
     onData = jest.fn()
@@ -215,6 +216,128 @@ describe.each<Mode>(['direct', 'page'])('DevicePairingService attempts, usage:%s
 
             expect(env.ride.stop).not.toHaveBeenCalled()
             expect(env.ride.stopDevices).toHaveBeenCalledWith([hrm])
+        })
+    })
+
+    describe('an attempt that never settles', () => {
+
+        const HUNG = 'pairing attempt hung'
+        const never = () => new Promise<boolean>(() => { /* never settles */ })
+
+        // the time of the latest connection attempt, so the tests can step to just before / after its limit
+        let attemptAt: number | undefined
+        const hangAttempts = (times?: number) => {
+            attemptAt = undefined
+            const impl = () => { attemptAt = Date.now(); return never() }
+            if (times === undefined)
+                env.ride.startAdapters.mockImplementation(impl)
+            else for (let i = 0; i < times; i++)
+                env.ride.startAdapters.mockImplementationOnce(impl)
+        }
+        const advanceTo = async (msAfterAttempt: number) => {
+            // the first attempt may not have started yet
+            for (let i = 0; i < 100 && attemptAt === undefined; i++)
+                await jest.advanceTimersByTimeAsync(100)
+            await jest.advanceTimersByTimeAsync(Math.max(0, (attemptAt ?? 0) + msAfterAttempt - Date.now()))
+        }
+
+        test('a BLE attempt is dropped 45 s after it started, and the next attempt connects the trainer', async () => {
+            const trainer = configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            env.ride.awake.add(trainer)
+            hangAttempts(1)
+
+            await env.start()
+            await advanceTo(44_999)
+            expect(env.logged(HUNG)).toHaveLength(0)
+            expect(env.ride.dropPendingStart).not.toHaveBeenCalled()
+
+            await advanceTo(45_000)
+            expect(env.logged(HUNG)).toHaveLength(1)
+            expect(env.ride.dropPendingStart).toHaveBeenCalledTimes(1)
+
+            await jest.advanceTimersByTimeAsync(8_000)
+            expect(env.attemptsFor(trainer)).toBeGreaterThanOrEqual(2)
+            expect(env.ride.started.has(trainer)).toBe(true)
+            expect(env.pairing.isPairingSettled()).toBe(true)
+        })
+
+        test('an attempt with no BLE device is dropped 25 s after it started', async () => {
+            configuration.settings.interfaces.push({ name: 'ant', enabled: true })
+            const trainer = configuration.add({ interface: 'ant', deviceID: '2606', profile: 'FE' } as any)
+            env = setup(mode, configuration)
+            env.ride.awake.add(trainer)
+            hangAttempts(1)
+
+            await env.start()
+            await advanceTo(24_999)
+            expect(env.logged(HUNG)).toHaveLength(0)
+
+            await advanceTo(25_000)
+            expect(env.logged(HUNG)).toHaveLength(1)
+            expect(env.ride.dropPendingStart).toHaveBeenCalledTimes(1)
+        })
+
+        test('is logged with the interfaces that did not connect, the attempt duration and the platform', async () => {
+            configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            hangAttempts(1)
+
+            await env.start()
+            await advanceTo(45_000)
+
+            const event: any = env.logged(HUNG)[0][0]
+            // 'ts' is added by the logger itself
+            expect(Object.keys(event).sort()).toEqual(['attemptMs', 'hungInterfaces', 'message', 'platform', 'ts'])
+            expect(event.hungInterfaces).toBe('ble')
+            expect(event.attemptMs).toBe(45_000)
+            expect(event.platform).toBe(mode === 'page' ? 'mobile' : 'desktop')
+        })
+
+        test('is logged once per visit, however often attempts hang in it', async () => {
+            configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            env.pairing.setVisitOpen(true)
+            hangAttempts()
+
+            await env.start()
+            await advanceTo(45_000)
+            // the page is opened again while its visit is still open
+            env.pairing.setVisitOpen(true)
+            await jest.advanceTimersByTimeAsync(10_000)
+            await advanceTo(45_000)
+
+            expect(env.ride.dropPendingStart).toHaveBeenCalledTimes(2)
+            expect(env.logged(HUNG)).toHaveLength(1)
+
+            // a new visit logs it again
+            env.pairing.setVisitOpen(false)
+            env.pairing.setVisitOpen(true)
+            await jest.advanceTimersByTimeAsync(10_000)
+            await advanceTo(45_000)
+
+            expect(env.logged(HUNG)).toHaveLength(2)
+        })
+
+        test('a dropped attempt that settles later does not end the attempt that followed it', async () => {
+            configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            let settleDropped: (ok: boolean) => void = () => { }
+            env.ride.startAdapters.mockImplementationOnce(() => new Promise<boolean>(done => { settleDropped = done }))
+            hangAttempts()
+
+            await env.start()
+            await jest.advanceTimersByTimeAsync(45_000 + 10_000)
+            const attempts = env.ride.startAdapters.mock.calls.length
+            expect(attempts).toBe(2)
+
+            settleDropped(false)
+            await jest.advanceTimersByTimeAsync(10_000)
+
+            // still the second attempt: no new one was started, and it wasn't stopped
+            expect(env.ride.startAdapters.mock.calls.length).toBe(attempts)
+            expect((env.pairing as any).isPairing()).toBe(true)
+            expect(env.ride.stopDevices).not.toHaveBeenCalled()
         })
     })
 })
