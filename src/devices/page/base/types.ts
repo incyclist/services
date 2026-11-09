@@ -1,5 +1,8 @@
 import type { DevicePairingStatus } from "../../pairing/model"
 import type { PairingStatusDisplayProps } from "../../pairing/status"
+import type { PairingTrainerRole } from "../../pairing/guidance"
+import type { PairingHelperReason } from "../../pairing/helper"
+import type { PairingCase, PairingHelperPhase, TrainerPhase } from "./guidance/types"
 
 export type PageState    =  'Idle' | 'Scanning' | 'Pairing' | 'Done' | 'Closed' 
 export type SelectState  =  'Closed' | 'Waiting' | 'Active' 
@@ -22,6 +25,46 @@ export type PairingDisplayProps = {
     showExit?: boolean,
     onExit?:()=>void
 
+    /** no trainer configured, or where the configured trainer's connection attempt stands */
+    pairingCase?: PairingCase
+    /** where the configured trainer's connection attempt stands; not set without a trainer */
+    trainerPhase?: TrainerPhase
+    /** the "can't find your trainer" helper; set while a visit is open. Not yet rendered by any consumer. */
+    helper?: PairingHelperDisplayProps
+}
+
+/** One answer in the helper. */
+export type PairingHelperReasonProps = {
+    id: PairingHelperReason
+    label: string
+    selected: boolean
+    onSelect: ()=>void
+}
+
+/** The action under a tip. A prop of its own, so a UI can pin it apart from the tip text. */
+export type PairingHelperActionProps = {
+    label: string
+    /** a line shown above the button */
+    note?: string
+    onClick: ()=>void
+}
+
+export type PairingHelperDisplayProps = {
+    phase: PairingHelperPhase
+    title: string
+    /** shown until an answer is picked */
+    subline?: string
+    reasons: Array<PairingHelperReasonProps>
+    /** the picked answer's tip; `shortText` is the phone copy */
+    tip?: { text: string, shortText: string }
+    action?: PairingHelperActionProps
+    /** the line at the bottom of the panel (desktop and tablet) */
+    footer: string
+    /** set while `phase` is `resolved` */
+    resolvedText?: string
+    /** opens the helper on the rider's request, e.g. from the status line's link */
+    onOpen: ()=>void
+    onDismiss: ()=>void
 }
 
 export type DeviceSelectionProps = {
@@ -62,6 +105,14 @@ export type CapabilityDisplayProps = {
      * ('Found'): show this instead of the connect state. Not set otherwise.
      */
     stateText?: string
+    /** How the tile relates to the configured trainer. Only set while the trainer can't be reached. */
+    trainerRole?: PairingTrainerRole
+    /** A content line that says how the tile relates to the trainer, e.g. "Your trainer". */
+    roleLabel?: string
+    /** When set, shown as the footer instead of `stateText`, `connectState` or `emptyFooter`. */
+    footerText?: { full: string, short: string }
+    /** The page is waiting for this tile: show the amber outline. */
+    awaited: boolean
     onClick: (item:CapabilityDisplayProps)=>void
     /** Turns the capability off. Only set on a tile with a selected, enabled device. */
     onUnselect?: ()=>void
@@ -144,6 +195,9 @@ export interface PairingVisitStore {
     get(): PairingVisitRecord | undefined
     set(record: PairingVisitRecord): void
 }
+
+/** Extra `pairing page left` fields from the open page: strings, numbers and booleans only, never identifiers. */
+export type PairingVisitExitFieldsProvider = () => Record<string, string | number | boolean>
 
 export interface PairingVisitTrackerDeps {
     store: PairingVisitStore

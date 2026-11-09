@@ -29,6 +29,7 @@ describe('DevicesPageService - callbacks arriving after the page was closed', ()
     const tracker = {
         openVisit: jest.fn(),
         closeVisit: jest.fn(),
+        setExitFields: jest.fn(),
         onBackground: jest.fn(),
         onForeground: jest.fn(),
     }

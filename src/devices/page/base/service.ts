@@ -1,18 +1,28 @@
 import { EventLogger } from 'gd-eventlog'
 import { Injectable } from '../../../base/decorators'
 import { IncyclistPageService } from '../../../base/pages'
-import { useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText } from '../../pairing'
+import {
+    useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText,
+    getPairingRowLabelId, getPairingStatusDisplay, getPairingTileState, isCapabilityActive,
+    getPairingHelperFooter, getPairingHelperReasonLabel, getPairingHelperTip, getPairingHelperTitle, hasContinueWithoutDeviceAction,
+    PAIRING_HELPER_RESOLVED_TEXT, PAIRING_HELPER_SUBLINE
+} from '../../pairing'
 
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
-import type { CapabilityData, DevicePairingData, InternalPairingState, SearchStatus } from '../../pairing'
+import type {
+    CapabilityData, ContinueWithoutDeviceTarget, DevicePairingData, InternalPairingState, PairingHelperReason, PairingInterfaceState,
+    PairingPlatform, PairingRole, PairingStatusDisplayProps, PairingStatusSource, PairingStatusTrainerPhase, PairingTileState, SearchStatus,
+    PairingState
+} from '../../pairing'
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../../configuration'
 import { usePairingVisitTracker } from './visit-log-factory'
 import type { PairingVisitTracker } from './visit-log'
-import type { PairingExitVia } from './types'
+import type { PairingExitVia, PairingHelperDisplayProps } from './types'
 import type { DesktopPairingDisplayProps } from '../desktop/types'
 import type { PairingOrchestrator } from './orchestrator'
+import { PairingGuidance } from './guidance'
 
 /**
  * Pairing page logic shared by all platforms: page lifecycle, device list, tile and button props,
@@ -26,7 +36,7 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected promiseOpen:Promise<void>|undefined
     protected stateMachine: PairingOrchestrator
     protected logObserver:PageLogObserver
-    protected openedCapability: IncyclistCapability|undefined
+    protected _openedCapability: IncyclistCapability|undefined
     protected isPairingForRide: boolean = false
     protected isVisitOpen: boolean = false
 
@@ -37,10 +47,28 @@ export abstract class PairingPageService extends IncyclistPageService {
     // never set it - only a confirmed real device should.
     protected handingOffToRide: boolean = false
 
+    protected guidance: PairingGuidance
+    protected onPairingStateHandler = this.onPairingState.bind(this)
+
     constructor() {
         super('pairing')
         this.stateMachine = this.createOrchestrator()
         this.logObserver = new PageLogObserver('Pairing')
+        this.guidance = new PairingGuidance({
+            log: (message, fields)=>{ this.logEvent({message, ...fields}) },
+            onChange: ()=>{ this.updatePage() },
+        })
+    }
+
+    // the capability whose device list is open. The guidance hears about every change, from either
+    // platform's list handling, so the helper waits while a list is open.
+    protected get openedCapability(): IncyclistCapability|undefined {
+        return this._openedCapability
+    }
+
+    protected set openedCapability(cap: IncyclistCapability|undefined) {
+        this._openedCapability = cap
+        this.guidance?.setDeviceListOpen(cap!==undefined)
     }
 
     /** The orchestrator that drives the pairing lifecycle for this platform. */
@@ -57,12 +85,16 @@ export abstract class PairingPageService extends IncyclistPageService {
      */
     protected abstract getUsageMode(): 'page' | 'direct'
 
+    /** Which platform's status line rules and copy apply. */
+    protected abstract getPlatform(): PairingPlatform
+
     openPage(forRide?:boolean):IObserver {
         try {
             this.logEvent({message:'page shown', page:'Pairing', forRide})
             this.isPairingForRide = forRide??false
             this.handingOffToRide = false
             this.openVisit()
+            this.listenToPairingState(true)
 
             EventLogger.setGlobalConfig('page','Pairing')
             super.openPage()
@@ -113,6 +145,9 @@ export abstract class PairingPageService extends IncyclistPageService {
             this.logEvent({message:'page closed', page:'Pairing'})
             this.isVisitOpen = false
             this.setPairingVisitOpen(false)
+            this.listenToPairingState(false)
+            this.trackVisit( t=>t.setExitFields(undefined), 'closePage')
+            this.withGuidance( g=>g.closeVisit(), 'closeVisit')
             EventLogger.setGlobalConfig('page',null)
             this.isPairingForRide =false
 
@@ -140,6 +175,7 @@ export abstract class PairingPageService extends IncyclistPageService {
     async pausePage() {
         try {
             this.trackVisit( t=>t.onBackground({canStartRide:this.canStartRide()}), 'onBackground')
+            this.withGuidance( g=>g.pauseVisit(), 'pauseVisit')
             await this.stateMachine.pause()
             this.logEvent({message:'page paused', page:'Pairing'})
         }
@@ -151,6 +187,7 @@ export abstract class PairingPageService extends IncyclistPageService {
     async resumePage() {
         try {
             this.trackVisit( t=>t.onForeground(), 'onForeground')
+            this.withGuidance( g=>g.resumeVisit(), 'resumeVisit')
             this.stateMachine.resume()
 
             if (this.promiseOpen!==undefined)
@@ -211,9 +248,31 @@ export abstract class PairingPageService extends IncyclistPageService {
         return {
             title, capability,deviceName, disabled:false, connectState,value:value?.toString(),unit,interface:ifName,
             role, helpText, emptyFooter, stateText,
+            ...this.getTileState(data, role, noSearch),
             onClick, onUnselect
         }
 
+    }
+
+    // how the tile relates to the configured trainer, and whether the page is waiting for it
+    protected getTileState(data:CapabilityData, role:CapabilityDisplayProps['role'], noSearch:boolean):PairingTileState {
+        try {
+            const control = (this.state.capabilities??[]).find( c=>c.capability===IncyclistCapability.Control)
+            const { trainerPhase } = this.guidance.getState()
+            const { selectedReason, separateSensor } = this.guidance.getHelper()
+
+            return getPairingTileState({
+                capability: data.capability, role, disabled: data.disabled, selected: data.selected, connectState: data.connectState,
+                noSearch, canStartRide: this.canStartRide(),
+                trainerPhase, trainerUdid: control?.selected,
+                trainerUnavailablePicked: selectedReason==='trainer_unavailable',
+                separateSensor: separateSensor!==undefined,
+            })
+        }
+        catch(err) {
+            this.logError(err,'getTileState')
+            return { awaited:false }
+        }
     }
 
     protected getDisabledCapabilityDisplayProps(data:CapabilityData, common:{title:TDisplayCapability,capability:TIncyclistCapability,role:CapabilityDisplayProps['role'],helpText:CapabilityDisplayProps['helpText'],onClick:()=>void}):CapabilityDisplayProps {
@@ -226,7 +285,9 @@ export abstract class PairingPageService extends IncyclistPageService {
             deviceName: hasRememberedDevice ? deviceName : undefined,
             disabled: true,
             role, helpText,
-            emptyFooter: hasRememberedDevice ? 'Not used' : 'Not used · tap to search',
+            emptyFooter: hasRememberedDevice ? 'Not used' : 'Tap to search',
+            // the page never waits for a capability the rider switched off
+            awaited: false,
             onClick,
             onUse: hasRememberedDevice ? ()=> { this.onCapabilityUse(cap) } : undefined,
         }
@@ -454,14 +515,202 @@ export abstract class PairingPageService extends IncyclistPageService {
 
         if (this.isVisitOpen)
             return
-        this.trackVisit( t=>t.openVisit({forRide:this.isPairingForRide}), 'openVisit')
+        let visitId:string|undefined
+        this.trackVisit( t=>{ visitId = t.openVisit({forRide:this.isPairingForRide})?.visitId }, 'openVisit')
+        this.withGuidance( g=>{
+            g.openVisit({visitId, platform:this.getPlatform(), forRide:this.isPairingForRide})
+            g.setDeviceListOpen(this.openedCapability!==undefined)
+        }, 'openVisit')
+        // whichever way the visit ends - also by app exit - its exit event carries the guidance fields
+        this.trackVisit( t=>t.setExitFields( ()=>({...this.guidance.getExitFields()}) ), 'openVisit')
         this.isVisitOpen = true
     }
 
     protected closeVisit(via:PairingExitVia):void {
         this.trackVisit( t=>t.closeVisit(via,{canStartRide:this.canStartRide()}), 'closeVisit')
+        this.trackVisit( t=>t.setExitFields(undefined), 'closeVisit')
+        this.withGuidance( g=>g.closeVisit(), 'closeVisit')
         this.isVisitOpen = false
         this.setPairingVisitOpen(false)
+    }
+
+    protected withGuidance( fn:(guidance:PairingGuidance)=>void, name:string):void {
+        try {
+            fn(this.guidance)
+        }
+        catch(err) {
+            this.logError(err,name)
+        }
+    }
+
+    // observes the pairing state alongside the orchestrator, which keeps the onStateChanged callback
+    protected listenToPairingState(listen:boolean):void {
+        try {
+            const pairing = this.getDevicePairing()
+            pairing.off?.('pairing-state', this.onPairingStateHandler)
+            if (listen)
+                pairing.on?.('pairing-state', this.onPairingStateHandler)
+        }
+        catch(err) {
+            this.logError(err,'listenToPairingState')
+        }
+    }
+
+    protected onPairingState(state:PairingState):void {
+        this.withGuidance( g=>g.onPairingState(state), 'onPairingState')
+    }
+
+    /**
+     * The status line, from the page's current state and the guidance it tracks.
+     *
+     * @param interfaces the interface states the status line considers (each platform decides which)
+     */
+    protected getStatusDisplayProps(interfaces:ReadonlyArray<PairingInterfaceState>):PairingStatusDisplayProps {
+        const src:PairingStatusSource = {
+            platform: this.getPlatform(),
+            interfaces,
+            capabilities: this.state.capabilities??[],
+            canStartRide: this.canStartRide(),
+            loading: this.promiseOpen!==undefined,
+            rideMode: this.isPairingForRide,
+            ...this.getSearchStatusSource(),
+        }
+        try {
+            return this.guidance.getStatus(src)
+        }
+        catch(err) {
+            // without the guidance, the status line still follows the pairing state
+            this.logError(err,'getStatusDisplayProps')
+            return getPairingStatusDisplay(src)
+        }
+    }
+
+    /**
+     * The tiles in their rows - required first, then optional, in tile order - and the row labels.
+     *
+     * @param noSearch nothing can search (the status line says so), so tiles don't claim to be searching
+     */
+    protected getCapabilityRowsDisplayProps(noSearch:boolean):NonNullable<PairingDisplayProps['capabilities']> {
+        const caps = this.state.capabilities??[]
+        const capProps = caps.map( c=>this.getCapabilityDisplayProps(c, noSearch))
+
+        const row = (role:PairingRole) => PAIRING_CAPABILITY_ROLES
+            .filter( r=>r.role===role)
+            .map( r=>capProps.find( c=>c.capability===this.getTCapability(r.capability)))
+            .filter( c=>c!==undefined)
+
+        const trainerSelected = isCapabilityActive(caps.find( c=>c.capability===IncyclistCapability.Control))
+        return {
+            top: row('required'),
+            bottom: row('optional'),
+            rowLabels: {
+                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking(), this.getTrainerPhase())),
+                bottom: getPairingGuidanceText('row-optional'),
+            },
+        }
+    }
+
+    // the configured trainer's connection phase; unknown if the guidance can't tell
+    protected getTrainerPhase():PairingStatusTrainerPhase|undefined {
+        try {
+            return this.guidance.getState().trainerPhase
+        }
+        catch(err) {
+            this.logError(err,'getTrainerPhase')
+            return undefined
+        }
+    }
+
+    /** The guidance part of the display props. Not yet rendered by any consumer. */
+    protected getGuidanceDisplayProps():Pick<PairingDisplayProps,'pairingCase'|'trainerPhase'|'helper'> {
+        try {
+            const {pairingCase, trainerPhase} = this.guidance.getState()
+            return {pairingCase, trainerPhase, helper:this.getHelperDisplayProps()}
+        }
+        catch(err) {
+            this.logError(err,'getGuidanceDisplayProps')
+            return {}
+        }
+    }
+
+    protected getHelperDisplayProps():PairingHelperDisplayProps|undefined {
+        if (!this.isVisitOpen)
+            return undefined
+
+        const helper = this.guidance.getHelper()
+        const {platform, selectedReason, separateSensor} = helper
+        const trainerConfigured = helper.trainerPhase!==undefined
+
+        const props:PairingHelperDisplayProps = {
+            phase: helper.phase,
+            title: getPairingHelperTitle(trainerConfigured),
+            reasons: helper.reasons.map( id=>({
+                id,
+                label: getPairingHelperReasonLabel(id, platform),
+                selected: id===selectedReason,
+                onSelect: ()=>{ this.onHelperReasonSelected(id) },
+            })),
+            footer: getPairingHelperFooter(trainerConfigured),
+            onOpen: ()=>{ this.onHelperOpen() },
+            onDismiss: ()=>{ this.onHelperDismissed() },
+        }
+
+        if (helper.phase==='resolved')
+            props.resolvedText = PAIRING_HELPER_RESOLVED_TEXT
+
+        if (!selectedReason) {
+            props.subline = PAIRING_HELPER_SUBLINE
+            return props
+        }
+
+        props.tip = getPairingHelperTip(selectedReason, {platform, separateSensor})
+        if (hasContinueWithoutDeviceAction(selectedReason, separateSensor)) {
+            const {label, note} = this.guidance.getContinueWithoutDeviceAction()
+            props.action = { label, onClick: ()=>{ this.onContinueWithoutDevice() } }
+            if (note)
+                props.action.note = note
+        }
+        return props
+    }
+
+    protected onHelperOpen():void {
+        this.withGuidance( g=>g.openHelper(), 'onHelperOpen')
+        this.updatePage()
+    }
+
+    protected onHelperDismissed():void {
+        this.withGuidance( g=>g.dismissHelper(), 'onHelperDismissed')
+        this.updatePage()
+    }
+
+    protected onHelperReasonSelected(reason:PairingHelperReason):void {
+        this.withGuidance( g=>g.selectReason(reason), 'onHelperReasonSelected')
+        this.updatePage()
+    }
+
+    /**
+     * The helper's no-device action. It runs this page's own Simulate, Skip or Cancel, so a
+     * platform's override of those applies here too.
+     */
+    protected onContinueWithoutDevice():void {
+        const target = this.getContinueWithoutDeviceTarget()
+        if (target==='simulate')
+            this.onSimulate()
+        else if (target==='cancel')
+            this.onCancel()
+        else
+            this.onSkip()
+    }
+
+    protected getContinueWithoutDeviceTarget():ContinueWithoutDeviceTarget {
+        try {
+            return this.guidance.continueWithoutDevice()
+        }
+        catch(err) {
+            // the rider still gets away from the page
+            this.logError(err,'onContinueWithoutDevice')
+            return this.isPairingForRide ? 'cancel' : 'skip'
+        }
     }
 
     protected setPairingVisitOpen(open:boolean):void {

@@ -45,6 +45,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
     const tracker = {
         openVisit: jest.fn(),
         closeVisit: jest.fn(),
+        setExitFields: jest.fn(),
         onBackground: jest.fn(),
         onForeground: jest.fn(),
     }
@@ -222,7 +223,7 @@ describe('DevicesPageService - characterization of current pairing page behaviou
 
             expect(tile.deviceName).toBeUndefined()
             expect(tile.disabled).toBe(true)
-            expect(tile.emptyFooter).toBe('Not used · tap to search')
+            expect(tile.emptyFooter).toBe('Tap to search')
             expect(tile.onUse).toBeUndefined()
         })
 

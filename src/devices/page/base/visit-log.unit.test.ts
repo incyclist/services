@@ -79,6 +79,53 @@ describe('PairingVisitTracker', () => {
             })
         })
 
+        it('adds the fields the page provides for the visit, also on app exit', () => {
+            const h = new Harness()
+            const t = h.tracker()
+            t.onAppLaunch(false)
+            t.openVisit({ forRide: false })
+            t.setExitFields(() => ({ pairingCase: 'trainer-unavailable', switchedOffRequired: false }))
+            t.onAppExit(false)
+
+            const [event] = h.eventsNamed(PAGE_LEFT_EVENT)
+            expect(event.fields).toMatchObject({ via: 'app_exit', pairingCase: 'trainer-unavailable', switchedOffRequired: false })
+        })
+
+        it('logs the exit without the page fields once the page withdrew them', () => {
+            const h = new Harness()
+            const t = h.tracker()
+            t.onAppLaunch(false)
+            t.openVisit({ forRide: false })
+            t.setExitFields(() => ({ pairingCase: 'no-trainer' }))
+            t.setExitFields(undefined)
+            t.closeVisit('skip', { canStartRide: false })
+
+            expect(h.eventsNamed(PAGE_LEFT_EVENT)[0].fields).not.toHaveProperty('pairingCase')
+        })
+
+        it('a failing page field provider never stops the exit from being logged', () => {
+            const h = new Harness()
+            const t = h.tracker()
+            t.onAppLaunch(false)
+            t.openVisit({ forRide: false })
+            t.setExitFields(() => { throw new Error('boom') })
+            t.closeVisit('ok', { canStartRide: true })
+
+            expect(h.eventsNamed(PAGE_LEFT_EVENT)).toHaveLength(1)
+            expect(h.record?.last?.closed).toBe(true)
+        })
+
+        it('the page fields never override the tracker\'s own fields', () => {
+            const h = new Harness()
+            const t = h.tracker()
+            t.onAppLaunch(false)
+            t.openVisit({ forRide: false })
+            t.setExitFields(() => ({ via: 'nonsense', pairingCase: 'no-trainer' }))
+            t.closeVisit('skip', { canStartRide: false })
+
+            expect(h.eventsNamed(PAGE_LEFT_EVENT)[0].fields).toMatchObject({ via: 'skip', pairingCase: 'no-trainer' })
+        })
+
         it('emits exactly one terminal event when app exit is followed by close and unmount', () => {
             const h = new Harness()
             const t = h.tracker()

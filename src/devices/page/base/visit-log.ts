@@ -1,5 +1,6 @@
 import type {
     PairingExitVia,
+    PairingVisitExitFieldsProvider,
     PairingVisitLast,
     PairingVisitTrackerDeps,
     PreviousVisitOutcome
@@ -29,7 +30,29 @@ export const getPreviousVisitOutcome = (last: PairingVisitLast | undefined): Pre
 }
 
 export class PairingVisitTracker {
+    private exitFields?: PairingVisitExitFieldsProvider
+
     constructor(private readonly deps: PairingVisitTrackerDeps) {}
+
+    /**
+     * Lets the open page add its own fields to the visit's `pairing page left` event, whichever way
+     * the visit ends (including app exit). The tracker's own fields always win over them.
+     *
+     * @param provider called once when the visit is closed; `undefined` withdraws it
+     */
+    setExitFields(provider: PairingVisitExitFieldsProvider | undefined): void {
+        this.exitFields = provider
+    }
+
+    private getExitFields(): Record<string, unknown> {
+        try {
+            return this.exitFields?.() ?? {}
+        }
+        catch {
+            // the page's fields are extras: the exit itself is always logged
+            return {}
+        }
+    }
 
     onAppLaunch(isNewUser: boolean): void {
         const record = this.deps.store.get()
@@ -119,6 +142,7 @@ export class PairingVisitTracker {
         const backgroundMs = last.backgroundMs + (last.backgroundedAt !== undefined ? now - last.backgroundedAt : 0)
 
         this.deps.log(PAGE_LEFT_EVENT, {
+            ...this.getExitFields(),
             visitId: last.visitId,
             via,
             dwellMs: now - last.openedAt,
