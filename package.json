@@ -5,7 +5,7 @@
     "gd-eventlog": "^0.1.27"
   },
   "dependencies": {
-    "@garmin/fitsdk": "^21.218.0",
+    "@garmin/fitsdk": "^21.221.0",
     "axios": "^1.21.0",
     "incyclist-devices": "^3.0.43",
     "promise.any": "^2.0.6",
