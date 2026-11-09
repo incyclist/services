@@ -1,4 +1,5 @@
 
+import { EventEmitter } from 'node:events'
 import { Device } from 'tcx-builder'
 import { Inject } from '../../base/decorators'
 import { Workout } from '../../workouts'
@@ -818,6 +819,41 @@ describe('RideDisplayService', () => {
             tracker.onRideStarted.mockImplementationOnce(() => { throw new Error('X') })
             service.start(false)
             expect(service.startRide).toHaveBeenCalled()
+        })
+    })
+
+    describe('device handler lifecycle across rides', () => {
+        let service: any
+        let devices: EventEmitter
+
+        beforeEach(() => {
+            devices = new EventEmitter()
+            service = new RideDisplayService()
+            service.getDeviceRide = jest.fn().mockReturnValue(devices)
+        })
+
+        const startAndStopRide = () => {
+            service.initDeviceHandlers()
+            service.resetDeviceHandlers()
+        }
+
+        test('a ride leaves no listeners on the device service after it was stopped', () => {
+            startAndStopRide()
+
+            for (const event of devices.eventNames())
+                expect({ event, count: devices.listenerCount(event) }).toEqual({ event, count: 0 })
+        })
+
+        test('a controller key press is handled once, no matter how many rides were started before', () => {
+            service.onDeviceKeyPressed = jest.fn()
+
+            startAndStopRide()
+            startAndStopRide()
+            service.initDeviceHandlers()
+
+            devices.emit('key-pressed', { key: 'ShiftUp' }, 'udid')
+
+            expect(service.onDeviceKeyPressed).toHaveBeenCalledTimes(1)
         })
     })
 
