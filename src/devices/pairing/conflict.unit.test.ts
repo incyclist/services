@@ -1,0 +1,38 @@
+import { getCapabilityTitle, getConflictKeepLabel, getConflictQueuedText, getConflictReplaceLabel, getConflictStepSubline, getConflictStepTitle } from './conflict'
+
+describe('conflict step copy', () => {
+
+    test('the title names the device that can measure more', () => {
+        expect(getConflictStepTitle('Tacx Neo 2T')).toBe('Tacx Neo 2T can also measure more')
+    })
+
+    test.each([
+        ['control', 'Resistance'], ['power', 'Power'], ['speed', 'Speed'], ['cadence', 'Cadence'], ['heartrate', 'Heartrate'], ['app_control', 'Controller'],
+    ])('%s is called %s', (capability, title) => {
+        expect(getCapabilityTitle(capability)).toBe(title)
+    })
+
+    test.each<[string[], { full: string, short: string }]>([
+        [['speed', 'cadence'], { full: 'Speed and Cadence were free and now use it. Choose for the rest; nothing changes until you do.', short: 'Nothing changes until you choose.' }],
+        [['control'], { full: 'Resistance was free and now uses it. Choose for the rest; nothing changes until you do.', short: 'Nothing changes until you choose.' }],
+        [[], { full: 'Nothing changes until you choose.', short: 'Nothing changes until you choose.' }],
+    ])('the card of a found device, free slots %p', (filled, expected) => {
+        expect(getConflictStepSubline('detection', 'Tacx Neo 2T', filled)).toEqual(expected)
+    })
+
+    test.each<[string[], string]>([
+        [['speed', 'cadence'], 'Choose which device to use for each. Speed and Cadence were free and now use Tacx Neo 2T.'],
+        [[], 'Choose which device to use for each.'],
+    ])('the step of a pick in the list, free slots %p', (filled, full) => {
+        expect(getConflictStepSubline('manual', 'Tacx Neo 2T', filled)).toEqual({ full, short: 'Choose which device to use for each.' })
+    })
+
+    test('the choices name the devices', () => {
+        expect(getConflictKeepLabel('Stages Power')).toBe('Keep Stages Power')
+        expect(getConflictReplaceLabel('Tacx Neo 2T')).toBe('Use Tacx Neo 2T')
+    })
+
+    test.each<[number, string | undefined]>([[0, undefined], [1, '1 more'], [3, '3 more']])('%i waiting behind the card: %p', (queued, text) => {
+        expect(getConflictQueuedText(queued)).toBe(text)
+    })
+})

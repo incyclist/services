@@ -46,7 +46,8 @@ export const DESKTOP_MATRIX: Array<DesktopMatrixRow> = [
     // tiles and the device list
     { area:'tiles', name:'Tile ✕ unselects the capability', given:'a selected tile', expected:'devicePairing.unselectDevices(capability)' },
     { area:'device-list', name:'Opening a tile opens its device list', given:'tile clicked', expected:'DeviceSelector opens for that capability' },
-    { area:'device-list', name:'Select with changeForAll default for Resistance', given:'capability=control, device clicked', expected:'selectDevice(control, udid, true); the dialog closes' },
+    { area:'device-list', name:'Select for Resistance', given:'capability=control, device clicked without a "for all" value', expected:'free slots are filled; slots held by another device are asked about in the list (conflictStep) before selectDevice(control, udid, {others:"fill-empty", replace}); the dialog closes once answered' },
+    { area:'device-list', name:'Select for Resistance with the deprecated "for all" value', given:'capability=control, device clicked with addAll', expected:'selectDevice(control, udid, addAll); the dialog closes' },
     { area:'device-list', name:'Select with changeForAll default for other capabilities', given:'capability!=control, device clicked', expected:'selectDevice(capability, udid, false); the dialog closes' },
     { area:'device-list', name:'Select-all is offered for Resistance only', given:'capability=control', expected:'canSelectAll true; other capabilities false' },
     { area:'device-list', name:'Delete a device in the list', given:'delete clicked on a device', expected:'devicePairing.deleteDevice(capability, udid); the list stays open' },

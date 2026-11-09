@@ -166,6 +166,12 @@ export interface SelectionConflict {
 /** How a conflict ended without being answered: the rider dismissed it, or left the page. */
 export type ConflictDismissal = 'dismissed' | 'left_page'
 
+/**
+ * How a conflict ended, as logged: answered (`done`), not answered (see {@link ConflictDismissal}),
+ * or `superseded` - a selection the rider changed elsewhere already settled every row of it.
+ */
+export type ConflictResolution = 'done' | ConflictDismissal | 'superseded'
+
 
 
 export interface PairingSettings {

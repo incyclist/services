@@ -14,7 +14,7 @@ import { EnrichedInterfaceSetting, useDeviceAccess } from '../../access'
 import { toPairingInterfaceStates } from '../../pairing'
 import type { PairingPlatform } from '../../pairing'
 import type { IncyclistDeviceSettings, InterfaceSetting } from '../../configuration/model'
-import type { DevicePairingData, DeviceSelectState } from '../../pairing/model'
+import type { DeviceSelectState } from '../../pairing/model'
 
 /**
  * Pairing page for desktop (web-ui/Electron). Desktop uses the direct orchestrator (today's
@@ -78,6 +78,7 @@ export class DesktopPairingPageService extends PairingPageService {
                 buttons: this.getButtonsDisplayProps(noSearch),
                 showInterfaceSettings: this.getInterfaceSettingsDisplayProps(),
                 ...this.getGuidanceDisplayProps(),
+                pendingConflict: this.getPendingConflictDisplayProps(),
             }
         }
         catch(err) {
@@ -107,24 +108,12 @@ export class DesktopPairingPageService extends PairingPageService {
         this.updatePage()
     }
 
-    protected onDeviceSelected (d:DevicePairingData,addAll?:boolean) {
-        const capability = this.openedCapability
-        this.logEvent( {message:'device selected', capability, device:d.name})
-
-        // matches today's DeviceSelector/wrapper.jsx: "change for all" defaults on for Resistance,
-        // off for every other capability, unless the caller (the list's checkbox) overrides it
-        const changeForAll = addAll ?? (capability===IncyclistCapability.Control)
-
-        this.closeDeviceSelection()
-        this.getDevicePairing().selectDevice( capability, d.udid, changeForAll)
-            .catch( err=>{ this.logError(err,'onDeviceSelected') })
-
-        this.updatePage()
-    }
-
     // closing the list never unselects: unselecting is done from the tile
     protected closeDeviceSelection() {
         this.logEvent( {message:'capability closed', capability:this.openedCapability})
+
+        // closing the list during its second step (Esc, a click outside) applies the choices made so far
+        this.commitConflictStep('dismissed')
 
         this.getDevicePairing().stopDeviceSelection()
             .catch( err=>{ this.logError(err,'closeDeviceSelection') })
@@ -152,7 +141,7 @@ export class DesktopPairingPageService extends PairingPageService {
         const disabled = devices.length>0 && !devices.some( d=> d.isSelected)
         const canSelectAll = this.openedCapability===IncyclistCapability.Control
 
-        return {
+        return this.withConflictStep({
             capability: this.openedCapability,
             devices,
             isScanning: Boolean(this.deviceSelectState?.isScanning),
@@ -160,7 +149,7 @@ export class DesktopPairingPageService extends PairingPageService {
             canSelectAll,
             disabled,
             onClose: ()=>{ this.closeDeviceSelection()},
-        }
+        })
     }
 
     // interfaces: desktop shows every interface (ANT+, BLE, serial, TCP/IP, WiFi) with its raw

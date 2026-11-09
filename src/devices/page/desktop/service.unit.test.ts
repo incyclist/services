@@ -354,11 +354,20 @@ describe('DesktopPairingPageService - desktop behaviour matrix', ()=> {
             expect(list.devices).toHaveLength(1)
         })
 
-        test('selecting a device for Resistance defaults "change for all" to true', ()=> {
+        test('selecting a device for Resistance fills the free slots and replaces nothing without asking', ()=> {
             ;(service as any).openedCapability = IncyclistCapability.Control
             const d = device({ selected:false })
 
             ;(service as any).onDeviceSelected(d)
+
+            expect(pairing.selectDevice).toHaveBeenCalledWith(IncyclistCapability.Control, d.udid, {others:'fill-empty', replace:[]})
+        })
+
+        test('selecting a device for Resistance with the deprecated "change for all" value passes it through', ()=> {
+            ;(service as any).openedCapability = IncyclistCapability.Control
+            const d = device({ selected:false })
+
+            ;(service as any).onDeviceSelected(d, true)
 
             expect(pairing.selectDevice).toHaveBeenCalledWith(IncyclistCapability.Control, d.udid, true)
         })

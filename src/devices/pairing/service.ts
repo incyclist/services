@@ -1,6 +1,6 @@
 import { DeviceAccessService, useDeviceAccess } from "../access/service";
 import { AddDeviceResult, AdapterInfo, CapabilityExclusion, CapabilityInformation, DeviceConfigurationInfo, DeviceConfigurationService, IncyclistDeviceSettings, InterfaceSetting, useDeviceConfiguration} from "../configuration";
-import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact, SelectionConflict, ConflictDismissal, SearchEndReason, SearchStatus  } from "./model";
+import { CapabilityData, DevicePairingData, DevicePairingStatus, DeviceSelectState,  InternalPairingState,  PairingProps, PairingSettings, PairingState, SelectDeviceMode, SelectionImpact, SelectionConflict, ConflictDismissal, ConflictResolution, SearchEndReason, SearchStatus  } from "./model";
 import { isCapabilityActive } from "./capability";
 import {  DeviceData,  DeviceSettings,  IncyclistCapability, IncyclistDeviceAdapter } from "incyclist-devices";
 import { AdapterStateInfo, DeviceRideService, useDeviceRide } from "../ride";
@@ -109,6 +109,8 @@ export class DevicePairingService  extends IncyclistService{
     // selection conflicts raised during the open visit, oldest first, one per device
     protected pendingConflicts: Array<{udid:string, conflict:SelectionConflict}> = []
     protected static conflictCounter = 0
+    // the conflict steps of picks in a device list that the rider hasn't closed yet
+    protected manualConflicts = new Map<string, {udid:string, capability:IncyclistCapability, conflict:SelectionConflict}>()
 
     // the Pairing page's search for devices, while a visit is open - see getSearchStatus()
     protected static readonly SEARCH_DURATION_MS = { desktop: 60*1000, mobile: 30*1000 }
@@ -677,9 +679,7 @@ export class DevicePairingService  extends IncyclistService{
                 return
 
             const {udid, conflict} = entry
-            const asked = conflict.conflicts.map( c=>c.capability)
-            const stillConflicting = new Set(this.computeSelectionImpact(udid, asked).conflicts.map( c=>c.capability))
-            const toReplace = (replace??[]).filter( c=> stillConflicting.has(c))
+            const toReplace = this.getReplaceableRows(udid, conflict, replace)
 
             if (toReplace.length>0) {
                 const [first,...rest] = toReplace
@@ -707,6 +707,108 @@ export class DevicePairingService  extends IncyclistService{
         catch(err) {
             this.logError(err,'dismissConflict')
         }
+    }
+
+    /**
+     * Checks the pending conflicts again after the rider changed a selection somewhere other than in
+     * the conflict itself (a pick in a device list, a switch, a delete). A row whose slot no longer
+     * holds a different device - it now holds the conflicting device, is empty, or is switched off -
+     * drops out. A conflict with no rows left is removed and logged as `superseded`. Rows are never
+     * added and no conflict is raised here; the rest of the queue keeps its order.
+     *
+     * @param changed the capabilities whose selection changed; every pending conflict is checked if not given
+     */
+    reevaluatePendingConflicts(changed?:IncyclistCapability[]):void {
+        try {
+            this.pendingConflicts = this.pendingConflicts.filter( entry=> this.reevaluateConflict(entry, changed))
+        }
+        catch(err) {
+            this.logError(err,'reevaluatePendingConflicts')
+        }
+    }
+
+    // whether the entry is still pending; its rows are narrowed to the ones that still conflict
+    protected reevaluateConflict(entry:{udid:string, conflict:SelectionConflict}, changed?:IncyclistCapability[]):boolean {
+        const {udid, conflict} = entry
+        const asked = conflict.conflicts.map( c=>c.capability)
+        if (changed && !asked.some( c=>changed.includes(c)))
+            return true
+
+        const current = this.computeSelectionImpact(udid, asked).conflicts
+        if (current.length===0) {
+            this.logConflictResolved(conflict, 'superseded', 0)
+            return false
+        }
+        conflict.conflicts = current
+        return true
+    }
+
+    /**
+     * Starts the conflict step of a pick in a device list: what picking `udid` for `capability` would
+     * take from slots that hold a different device. Nothing changes yet; the step ends with
+     * {@link commitManualConflict}.
+     *
+     * @param capability the capability whose list the device was picked in
+     * @param udid the picked device
+     * @returns the conflict to ask about, or `undefined` if the pick takes nothing from another device
+     */
+    startManualConflict(capability:IncyclistCapability, udid:string):SelectionConflict|undefined {
+        try {
+            const {filled, conflicts} = this.previewSelectDevice(capability, udid)
+            if (conflicts.length===0)
+                return undefined
+
+            const deviceName = this.getCapabilityDevice(capability,udid)?.name
+                ?? this.getDeviceConfiguration().getAdapter(udid)?.getUniqueName() ?? ''
+            const conflict:SelectionConflict = {id:this.nextConflictId(udid), origin:'manual', deviceName, filled, conflicts}
+            this.manualConflicts.set(conflict.id, {udid, capability, conflict})
+            this.logConflictShown(conflict, conflicts.length, 0)
+            return clone(conflict)
+        }
+        catch(err) {
+            this.logError(err,'startManualConflict')
+            return undefined
+        }
+    }
+
+    /**
+     * Ends the conflict step of a pick in a device list: the device is selected for the capability it
+     * was picked for, fills every slot that is empty now, and replaces the current device only in the
+     * `replace` rows. A row whose slot changed since the step started is left alone.
+     *
+     * @param id the conflict's `id`
+     * @param replace the capabilities in which the picked device should replace the current one
+     * @param via `done` when the rider confirmed the choices; otherwise how the step was closed - the
+     * choices made so far apply either way
+     */
+    async commitManualConflict(id:string, replace:IncyclistCapability[], via:'done'|ConflictDismissal='done'):Promise<void> {
+        try {
+            const entry = this.manualConflicts.get(id)
+            if (!entry)
+                return
+            this.manualConflicts.delete(id)
+
+            const {udid, capability, conflict} = entry
+            const toReplace = this.getReplaceableRows(udid, conflict, replace)
+            await this.selectDevice(capability, udid, {others:'fill-empty', replace:toReplace})
+            this.logConflictResolved(conflict, via, toReplace.length)
+        }
+        catch(err) {
+            this.logError(err,'commitManualConflict')
+        }
+    }
+
+    // the rows to replace that still conflict at commit time; rows whose slot changed since the
+    // conflict was raised are left alone, and logged as stale
+    protected getReplaceableRows(udid:string, conflict:SelectionConflict, replace:IncyclistCapability[]):IncyclistCapability[] {
+        const asked = conflict.conflicts.map( c=>c.capability)
+        const stillConflicting = new Set(this.computeSelectionImpact(udid, asked).conflicts.map( c=>c.capability))
+
+        const stale = asked.filter( c=> !stillConflicting.has(c)).length
+        if (stale>0)
+            this.logEvent({message:'device select conflict stale', origin:conflict.origin, conflictCount:stale})
+
+        return (replace??[]).filter( c=> stillConflicting.has(c))
     }
 
     protected dismissPendingConflicts(via:ConflictDismissal):void {
@@ -798,7 +900,7 @@ export class DevicePairingService  extends IncyclistService{
         })
     }
 
-    protected logConflictResolved(conflict:SelectionConflict, resolution:'done'|ConflictDismissal, replacedCount:number):void {
+    protected logConflictResolved(conflict:SelectionConflict, resolution:ConflictResolution, replacedCount:number):void {
         this.logEvent({
             message:'device select conflict resolved',
             origin: conflict.origin,
@@ -3222,6 +3324,7 @@ export class DevicePairingService  extends IncyclistService{
         delete this.visitOpenedAt
         this.attemptHungLogged = false
         this.pendingConflicts = []
+        this.manualConflicts.clear()
         this.resetSearch()
     }
 
