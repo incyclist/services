@@ -221,7 +221,8 @@ export interface PairingGuidanceParams {
 export type PairingTileTextId = 'tile-role-trainer' | 'tile-role-via-trainer' | 'tile-trainer-waiting' | 'tile-waiting-for-trainer'
     | 'tile-optional-for-now' | 'tile-tap-to-add'
 
-export type PairingGuidanceId = PairingStatusId | PairingTileTextId | 'row-required' | 'row-required-trainer' | 'row-ready' | 'row-optional'
+export type PairingGuidanceId = PairingStatusId | PairingTileTextId | 'row-required' | 'row-required-trainer' | 'row-required-trainer-waiting'
+    | 'row-ready' | 'row-optional'
     | 'row-searching-trainer' | 'row-searching-found'
 
 export interface PairingGuidanceText {
@@ -363,6 +364,8 @@ const getRowLabelText = (id: PairingGuidanceId): PairingGuidanceText | undefined
             return { text: 'TO RIDE', subtext: 'connect any one' }
         case 'row-required-trainer':
             return { text: 'TO RIDE', subtext: 'connecting to your trainer' }
+        case 'row-required-trainer-waiting':
+            return { text: 'TO RIDE', subtext: 'waiting for your trainer' }
         case 'row-ready':
             return { text: '✓ READY TO RIDE' }
         case 'row-optional':
@@ -446,12 +449,25 @@ export const getPairingGuidanceText = (
 
 /**
  * The label of the ride row. While a search is still looking for more devices (`stillLooking`), it
- * says whether the trainer has been found; otherwise it follows whether a trainer is selected.
+ * says whether the trainer has been found; otherwise it follows whether a trainer is selected and,
+ * if so, whether that trainer can't be reached right now.
+ *
+ * @param trainerSelected a trainer is configured on the Resistance tile
+ * @param stillLooking a search is still looking for more devices
+ * @param trainerPhase the configured trainer's connection phase, if known
  */
-export const getPairingRowLabelId = (trainerSelected: boolean, stillLooking: boolean = false): PairingGuidanceId => {
+export const getPairingRowLabelId = (
+    trainerSelected: boolean,
+    stillLooking: boolean = false,
+    trainerPhase?: PairingStatusTrainerPhase
+): PairingGuidanceId => {
     if (stillLooking)
         return trainerSelected ? 'row-searching-found' : 'row-searching-trainer'
-    return trainerSelected ? 'row-required-trainer' : 'row-required'
+    if (!trainerSelected)
+        return 'row-required'
+    // "connecting" would contradict the status line while the trainer can't be reached.
+    // Once riding without the trainer (a fallback) is possible, an active fallback must suppress this label too.
+    return trainerPhase === 'unavailable' ? 'row-required-trainer-waiting' : 'row-required-trainer'
 }
 
 export const getCapabilityHelpText = (capability: string, variant: PairingTextVariant = 'full'): string | undefined => {

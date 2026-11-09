@@ -11,7 +11,7 @@ import {
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
 import type {
     CapabilityData, ContinueWithoutDeviceTarget, DevicePairingData, InternalPairingState, PairingHelperReason, PairingInterfaceState,
-    PairingPlatform, PairingRole, PairingStatusDisplayProps, PairingStatusSource, PairingTileState, SearchStatus
+    PairingPlatform, PairingRole, PairingStatusDisplayProps, PairingStatusSource, PairingStatusTrainerPhase, PairingTileState, SearchStatus
 } from '../../pairing'
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
@@ -604,9 +604,20 @@ export abstract class PairingPageService extends IncyclistPageService {
             top: row('required'),
             bottom: row('optional'),
             rowLabels: {
-                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking())),
+                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking(), this.getTrainerPhase())),
                 bottom: getPairingGuidanceText('row-optional'),
             },
+        }
+    }
+
+    // the configured trainer's connection phase; unknown if the guidance can't tell
+    protected getTrainerPhase():PairingStatusTrainerPhase|undefined {
+        try {
+            return this.guidance.getState().trainerPhase
+        }
+        catch(err) {
+            this.logError(err,'getTrainerPhase')
+            return undefined
         }
     }
 

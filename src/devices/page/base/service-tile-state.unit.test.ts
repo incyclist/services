@@ -175,6 +175,14 @@ describe.each([
             expect(tileOf('power')).toMatchObject({ trainerRole:'separate', awaited:false })
         })
 
+        test('the ride row says it is waiting for the trainer, not connecting to it', async ()=> {
+            await openReady()
+            makeUnavailable(trainerOnSeveralTiles())
+
+            expect(props().trainerPhase).toBe('unavailable')
+            expect(props().capabilities!.rowLabels.top).toEqual({ text:'TO RIDE', subtext:'waiting for your trainer' })
+        })
+
         test('the trainer connecting ends it', async ()=> {
             await openReady()
             makeUnavailable(trainerOnSeveralTiles())
@@ -238,6 +246,14 @@ describe.each([
                 expect(t.trainerRole).toBeUndefined()
                 expect(t.footerText).toBeUndefined()
             }
+        })
+
+        test('while the trainer connects, the ride row says it is connecting to the trainer', async ()=> {
+            await openReady()
+            emit(trainerOnSeveralTiles())
+
+            expect(props().trainerPhase).toBe('connecting')
+            expect(props().capabilities!.rowLabels.top).toEqual({ text:'TO RIDE', subtext:'connecting to your trainer' })
         })
 
         test('without a trainer, empty required tiles are waited for until the row is ready', async ()=> {

@@ -1,6 +1,6 @@
 import { IncyclistCapability } from "incyclist-devices"
 import {
-    PAIRING_CAPABILITY_ROLES, PARTIAL_OUTAGE_DEBOUNCE_MS, PairingInterfaceState, PairingStatusId, PairingStatusInput, PairingTileStateInput,
+    PAIRING_CAPABILITY_ROLES, PARTIAL_OUTAGE_DEBOUNCE_MS, PairingInterfaceState, PairingStatusId, PairingStatusInput, PairingStatusTrainerPhase, PairingTileStateInput,
     canScanWithInterfaces, derivePairingStatus, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText, getPairingHint, getPairingRowLabelId,
     getPairingTileState, getUnavailableInterfaces
 } from "./guidance"
@@ -254,6 +254,7 @@ describe('getPairingGuidanceText', () => {
     it('row labels carry title and subtext separately', () => {
         expect(getPairingGuidanceText('row-required')).toEqual({ text: 'TO RIDE', subtext: 'connect any one' })
         expect(getPairingGuidanceText('row-required-trainer')).toEqual({ text: 'TO RIDE', subtext: 'connecting to your trainer' })
+        expect(getPairingGuidanceText('row-required-trainer-waiting')).toEqual({ text: 'TO RIDE', subtext: 'waiting for your trainer' })
         expect(getPairingGuidanceText('row-ready')).toEqual({ text: '✓ READY TO RIDE' })
         expect(getPairingGuidanceText('row-optional')).toEqual({ text: 'OPTIONAL', subtext: 'extras, not needed' })
     })
@@ -543,5 +544,19 @@ describe('getPairingRowLabelId', () => {
 
     it('uses the trainer label when a trainer is selected', () => {
         expect(getPairingRowLabelId(true)).toBe('row-required-trainer')
+    })
+
+    it.each<[PairingStatusTrainerPhase | undefined]>([['connecting'], ['connected'], [undefined]])('keeps the connecting-to-your-trainer label while the trainer is %s', (phase) => {
+        expect(getPairingRowLabelId(true, false, phase)).toBe('row-required-trainer')
+        expect(getPairingGuidanceText(getPairingRowLabelId(true, false, phase))).toEqual({ text: 'TO RIDE', subtext: 'connecting to your trainer' })
+    })
+
+    it('says it is waiting for the trainer while the trainer cannot be reached', () => {
+        expect(getPairingRowLabelId(true, false, 'unavailable')).toBe('row-required-trainer-waiting')
+        expect(getPairingGuidanceText(getPairingRowLabelId(true, false, 'unavailable'))).toEqual({ text: 'TO RIDE', subtext: 'waiting for your trainer' })
+    })
+
+    it('ignores the trainer phase when no trainer is selected', () => {
+        expect(getPairingRowLabelId(false, false, 'unavailable')).toBe('row-required')
     })
 })
