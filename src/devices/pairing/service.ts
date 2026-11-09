@@ -97,6 +97,11 @@ export class DevicePairingService  extends IncyclistService{
     protected static readonly ATTEMPT_HUNG_MARGIN_MS = 15*1000
     protected attemptHungLogged = false
 
+    // direct mode: the loop's wait before its next attempt, which a reconnect request cuts short
+    protected retryDelay?: { skip: ()=>void }
+    // an attempt has ended, and the devices it didn't connect are still being stopped
+    protected windingDownAttempt = false
+
     // whether a Pairing page visit is open - see setVisitOpen()
     protected visitOpen = false
     protected visitOpenedAt?: number
@@ -410,6 +415,48 @@ export class DevicePairingService  extends IncyclistService{
         catch(err) {
             this.logError(err,'searchAgain')
         }
+    }
+
+    /**
+     * Asks for the next connection attempt now. An attempt that is already running, or still
+     * stopping the devices it didn't connect, is joined: nothing is cancelled and nothing else is
+     * started, and the loop's own next attempt follows as usual. Between attempts, the next one
+     * starts at once, exactly as the pairing loop would start it, so it tries the same devices and
+     * leaves connected ones alone. Does nothing once pairing has nothing left to do.
+     *
+     * @returns the capabilities the attempt covers: the selected, switched-on ones that aren't connected
+     */
+    reconnectNow():IncyclistCapability[] {
+        try {
+            if (this.isPairingSettled())
+                return []
+            const capabilities = this.getReconnectCapabilities()
+            if (!this.isPairing() && !this.windingDownAttempt)
+                this.startNextAttempt()
+            return capabilities
+        }
+        catch(err) {
+            this.logError(err,'reconnectNow')
+            return []
+        }
+    }
+
+    protected getReconnectCapabilities():IncyclistCapability[] {
+        return (this.state.capabilities??[])
+            .filter( c=> isCapabilityActive(c) && c.connectState!=='connected')
+            .map( c=> c.capability)
+    }
+
+    // page mode: the state machine's own retry; direct mode: the loop's pending retry, now
+    protected startNextAttempt():void {
+        if (this.usage==='page') {
+            this.emit('retry')
+            return
+        }
+        if (this.retryDelay)
+            this.retryDelay.skip()
+        else
+            this.run().catch( err=>{ this.logError(err,'reconnectNow') })
     }
 
     /**
@@ -2489,7 +2536,13 @@ export class DevicePairingService  extends IncyclistService{
         // A dropped attempt has already fired the stops of its devices: waiting for them could hang as well
         if (settled) {
             const failed = target.filter( ai=> !ai.adapter.isStarted()).map( ai=> ai.udid)
-            await this.rideService.stopDevices(failed)
+            this.windingDownAttempt = true
+            try {
+                await this.rideService.stopDevices(failed)
+            }
+            finally {
+                this.windingDownAttempt = false
+            }
         }
 
         await this.retryUnsettledPairing()
@@ -2530,9 +2583,23 @@ export class DevicePairingService  extends IncyclistService{
         if (this.usage==='page' || this.isPairingSettled())
             return;
 
-        await sleep(this.getPairingRetryDelay());
+        await this.waitForRetry(this.getPairingRetryDelay());
         if (!this.state.scan)
             this.run().catch( err=>{ this.logError(err,'startPairing') })
+    }
+
+    protected waitForRetry(ms:number):Promise<void> {
+        return new Promise<void>( done=>{
+            const delay = { skip: ()=>{ finish() } }
+            const finish = ()=>{
+                clearTimeout(timer)
+                if (this.retryDelay===delay)
+                    delete this.retryDelay
+                done()
+            }
+            const timer = setTimeout(finish, ms)
+            this.retryDelay = delay
+        })
     }
 
     protected setRequestedCapabilties(selectedAdapters: AdapterInfo[]) {

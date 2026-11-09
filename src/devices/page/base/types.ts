@@ -113,6 +113,12 @@ export type CapabilityDisplayProps = {
     footerText?: { full: string, short: string }
     /** The page is waiting for this tile: show the amber outline. */
     awaited: boolean
+    /**
+     * A device is there but deliberately not used right now, because the ride falls back to another
+     * device while the trainer isn't available: show the tile dimmed, without a switch. On the
+     * Resistance tile, `onClick` then takes the trainer back into use instead of opening the list.
+     */
+    dimmed?: boolean
     onClick: (item:CapabilityDisplayProps)=>void
     /** Turns the capability off. Only set on a tile with a selected, enabled device. */
     onUnselect?: ()=>void

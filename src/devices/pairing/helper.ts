@@ -73,6 +73,15 @@ export const hasContinueWithoutDeviceAction = (reason: PairingHelperReason | und
 const SENSOR_LABELS: Record<'power' | 'speed', string> = { power: 'power meter', speed: 'speed sensor' }
 
 /**
+ * The label of the action that rides on a separate power meter or speed sensor while the trainer
+ * isn't available.
+ *
+ * @param capability what the ride falls back to
+ */
+export const getFallbackActionLabel = (capability: 'power' | 'speed'): string =>
+    `Ride with ${SENSOR_LABELS[capability]} only`
+
+/**
  * The helper's title.
  *
  * @param trainerConfigured a trainer is configured: it is known, it just can't be reached

@@ -4,7 +4,7 @@ import { IncyclistPageService } from '../../../base/pages'
 import {
     useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText,
     getPairingRowLabelId, getPairingStatusDisplay, getPairingTileState, isCapabilityActive,
-    getPairingHelperFooter, getPairingHelperReasonLabel, getPairingHelperTip, getPairingHelperTitle, hasContinueWithoutDeviceAction,
+    getFallbackActionLabel, getPairingHelperFooter, getPairingHelperReasonLabel, getPairingHelperTip, getPairingHelperTitle, hasContinueWithoutDeviceAction,
     PAIRING_HELPER_RESOLVED_TEXT, PAIRING_HELPER_SUBLINE
 } from '../../pairing'
 
@@ -19,7 +19,8 @@ import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../../configuration'
 import { usePairingVisitTracker } from './visit-log-factory'
 import type { PairingVisitTracker } from './visit-log'
-import type { PairingExitVia, PairingHelperDisplayProps } from './types'
+import type { PairingExitVia, PairingHelperActionProps, PairingHelperDisplayProps } from './types'
+import type { PairingHelperState } from './guidance/types'
 import type { DesktopPairingDisplayProps } from '../desktop/types'
 import type { PairingOrchestrator } from './orchestrator'
 import { PairingGuidance } from './guidance'
@@ -49,6 +50,7 @@ export abstract class PairingPageService extends IncyclistPageService {
 
     protected guidance: PairingGuidance
     protected onPairingStateHandler = this.onPairingState.bind(this)
+    protected onExclusionRevertedHandler = this.onExclusionReverted.bind(this)
 
     constructor() {
         super('pairing')
@@ -57,6 +59,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.guidance = new PairingGuidance({
             log: (message, fields)=>{ this.logEvent({message, ...fields}) },
             onChange: ()=>{ this.updatePage() },
+            configuration: ()=>this.getDeviceConfiguration(),
         })
     }
 
@@ -217,7 +220,7 @@ export abstract class PairingPageService extends IncyclistPageService {
 
         const capability = this.getTCapability(cap)
         const title = this.getDisplayCapability(cap)
-        const onClick = ()=> { this.openDeviceSelection(cap)}
+        const openList = ()=> { this.openDeviceSelection(cap)}
 
         const role = PAIRING_CAPABILITY_ROLES.find( r=>r.capability===cap)?.role
         const helpText = {
@@ -231,14 +234,18 @@ export abstract class PairingPageService extends IncyclistPageService {
         // with a toggle that turns it straight back on, no new scan needed. T16b: nothing is
         // remembered (e.g. its device was deleted), shown as a plain tile inviting a fresh search.
         if (disabled) {
-            return this.getDisabledCapabilityDisplayProps(data, {title,capability,role,helpText,onClick})
+            return this.getDisabledCapabilityDisplayProps(data, {title,capability,role,helpText,onClick:openList})
         }
 
         const adapaters = this.state.adapters??[]
         const adapter = adapaters.find( ai=>data.selected && ai.udid===data.selected)
         const ifName = adapter?.adapter?.getInterface()
 
-        const onUnselect = data.selected ? ()=> { this.onCapabilityUnselect(cap) } : undefined
+        const tileState = this.getTileState(data, role, noSearch)
+        // a tile dimmed for the fallback has no switch; the Resistance tile's tap takes the trainer back
+        const onUnselect = data.selected && !tileState.dimmed ? ()=> { this.onCapabilityUnselect(cap) } : undefined
+        const useTrainerAgain = tileState.dimmed && cap===IncyclistCapability.Control
+        const onClick = useTrainerAgain ? ()=> { this.onUseTrainerAgain() } : openList
         const emptyFooter = this.getActiveCapabilityEmptyFooter(cap, role, noSearch)
 
         // during a search, a device that was only seen and hasn't been started yet is "found", not connected
@@ -248,7 +255,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         return {
             title, capability,deviceName, disabled:false, connectState,value:value?.toString(),unit,interface:ifName,
             role, helpText, emptyFooter, stateText,
-            ...this.getTileState(data, role, noSearch),
+            ...tileState,
             onClick, onUnselect
         }
 
@@ -258,15 +265,16 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected getTileState(data:CapabilityData, role:CapabilityDisplayProps['role'], noSearch:boolean):PairingTileState {
         try {
             const control = (this.state.capabilities??[]).find( c=>c.capability===IncyclistCapability.Control)
-            const { trainerPhase } = this.guidance.getState()
+            const { trainerPhase, trainerRetry, fallback } = this.guidance.getState()
             const { selectedReason, separateSensor } = this.guidance.getHelper()
 
             return getPairingTileState({
                 capability: data.capability, role, disabled: data.disabled, selected: data.selected, connectState: data.connectState,
                 noSearch, canStartRide: this.canStartRide(),
-                trainerPhase, trainerUdid: control?.selected,
+                trainerPhase, trainerRetry, trainerUdid: control?.selected,
                 trainerUnavailablePicked: selectedReason==='trainer_unavailable',
                 separateSensor: separateSensor!==undefined,
+                fallbackActive: fallback!==undefined,
             })
         }
         catch(err) {
@@ -548,8 +556,11 @@ export abstract class PairingPageService extends IncyclistPageService {
         try {
             const pairing = this.getDevicePairing()
             pairing.off?.('pairing-state', this.onPairingStateHandler)
-            if (listen)
+            pairing.off?.('exclusion-reverted', this.onExclusionRevertedHandler)
+            if (listen) {
                 pairing.on?.('pairing-state', this.onPairingStateHandler)
+                pairing.on?.('exclusion-reverted', this.onExclusionRevertedHandler)
+            }
         }
         catch(err) {
             this.logError(err,'listenToPairingState')
@@ -558,6 +569,12 @@ export abstract class PairingPageService extends IncyclistPageService {
 
     protected onPairingState(state:PairingState):void {
         this.withGuidance( g=>g.onPairingState(state), 'onPairingState')
+    }
+
+    // a device excluded as not available connected while the page is open, and is in use again
+    protected onExclusionReverted(event:{udid:string}):void {
+        this.withGuidance( g=>g.onFallbackReverted(event?.udid), 'onExclusionReverted')
+        this.updatePage()
     }
 
     /**
@@ -600,13 +617,25 @@ export abstract class PairingPageService extends IncyclistPageService {
             .filter( c=>c!==undefined)
 
         const trainerSelected = isCapabilityActive(caps.find( c=>c.capability===IncyclistCapability.Control))
+        const fallbackReady = this.isFallbackActive() && this.canStartRide()
         return {
             top: row('required'),
             bottom: row('optional'),
             rowLabels: {
-                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking(), this.getTrainerPhase())),
+                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking(), this.getTrainerPhase(), fallbackReady)),
                 bottom: getPairingGuidanceText('row-optional'),
             },
+        }
+    }
+
+    // the ride falls back to another device because the trainer isn't available
+    protected isFallbackActive():boolean {
+        try {
+            return this.guidance.getState().fallback!==undefined
+        }
+        catch(err) {
+            this.logError(err,'isFallbackActive')
+            return false
         }
     }
 
@@ -664,13 +693,63 @@ export abstract class PairingPageService extends IncyclistPageService {
         }
 
         props.tip = getPairingHelperTip(selectedReason, {platform, separateSensor})
-        if (hasContinueWithoutDeviceAction(selectedReason, separateSensor)) {
-            const {label, note} = this.guidance.getContinueWithoutDeviceAction()
-            props.action = { label, onClick: ()=>{ this.onContinueWithoutDevice() } }
-            if (note)
-                props.action.note = note
-        }
+        const action = this.getHelperActionProps(selectedReason, helper)
+        if (action)
+            props.action = action
         return props
+    }
+
+    // under "not available today": riding on the separate device if there is one, otherwise the no-device action
+    protected getHelperActionProps(reason:PairingHelperReason, helper:PairingHelperState):PairingHelperActionProps|undefined {
+        const {fallbackCandidate, separateSensor} = helper
+        if (reason==='trainer_unavailable' && fallbackCandidate)
+            return { label: getFallbackActionLabel(fallbackCandidate), onClick: ()=>{ this.onChooseFallback() } }
+
+        if (!hasContinueWithoutDeviceAction(reason, separateSensor))
+            return undefined
+
+        const {label, note} = this.guidance.getContinueWithoutDeviceAction()
+        const action:PairingHelperActionProps = { label, onClick: ()=>{ this.onContinueWithoutDevice() } }
+        if (note)
+            action.note = note
+        return action
+    }
+
+    /** The rider chose to ride on the separate power meter or speed sensor while the trainer isn't available. */
+    protected onChooseFallback():void {
+        this.withGuidance( g=>{ g.chooseFallback() }, 'onChooseFallback')
+        this.updatePage()
+    }
+
+    /**
+     * The rider tapped the dimmed Resistance tile while the ride falls back to another device: the
+     * trainer is taken back into use, and a connection attempt starts right away, so the page goes
+     * straight to trying to reach it instead of waiting for the next automatic attempt.
+     */
+    protected onUseTrainerAgain():void {
+        this.logEvent( {message:'use trainer again clicked', eventSource:'user'})
+
+        let started = false
+        this.withGuidance( g=>{
+            g.cancelFallback()
+            started = g.startRiderRetry({trigger:'tile'})
+        }, 'onUseTrainerAgain')
+
+        const covered = this.reconnectNow()
+        if (started)
+            this.withGuidance( g=>g.logRiderRetry(covered), 'onUseTrainerAgain')
+
+        this.updatePage()
+    }
+
+    protected reconnectNow():IncyclistCapability[] {
+        try {
+            return this.getDevicePairing().reconnectNow() ?? []
+        }
+        catch(err) {
+            this.logError(err,'reconnectNow')
+            return []
+        }
     }
 
     protected onHelperOpen():void {

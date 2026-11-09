@@ -26,9 +26,14 @@ const wait = (ms: number) => new Promise(done => setTimeout(done, ms))
 class FakeRide extends EventEmitter {
     awake = new Set<string>()
     started = new Map<string, string[]>()
+    // attempts running at the same time, and the most there ever were
+    inFlight = 0
+    maxInFlight = 0
 
     startAdapters = jest.fn(async (adapters: Array<{ udid: string, capabilities: string[] }>) => {
-        await wait(1000)
+        this.inFlight++
+        this.maxInFlight = Math.max(this.maxInFlight, this.inFlight)
+        await wait(1000).finally(() => { this.inFlight-- })
         adapters.forEach(ai => {
             if (this.awake.has(ai.udid)) {
                 this.started.set(ai.udid, [...ai.capabilities])
@@ -453,5 +458,219 @@ describe.each<Mode>(['direct', 'page'])('DevicePairingService with a stored devi
         expect(env.ride.stop).not.toHaveBeenCalled()
         if (mode === 'page')
             expect(env.sm?.state).toBe('Done')
+    })
+})
+
+// The rider asks for the next attempt now. It joins an attempt in flight and never cancels one.
+describe.each<Mode>(['direct', 'page'])('DevicePairingService reconnecting on request, usage:%s', (mode) => {
+
+    let env: ReturnType<typeof setup>
+    let configuration: DeviceConfigurationService
+
+    // the first attempt starts at once and settles after 1 s; the next one follows after the retry delay
+    const DURING_FIRST_ATTEMPT = 500
+    const BETWEEN_ATTEMPTS = 1500
+
+    beforeEach(() => {
+        jest.useFakeTimers()
+        SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue({})
+        configuration = createConfiguration()
+    })
+
+    afterEach(async () => {
+        await env?.teardown()
+        jest.clearAllTimers()
+        jest.useRealTimers()
+        AdapterFactory.reset()
+        jest.clearAllMocks()
+    })
+
+    afterAll(() => {
+        (SerialPortProvider as any)._instance = undefined
+    })
+
+    const startVisit = async () => {
+        env.pairing.setVisitOpen(true)
+        await env.start()
+    }
+
+    // the udids each attempt tried, in the order they were tried
+    const attemptTargets = () => env.ride.startAdapters.mock.calls.map(([adapters]) => adapters.map((ai: any) => ai.udid).sort())
+
+    describe('reconnectNow', () => {
+
+        test('between attempts, it starts the next one at once', async () => {
+            const trainer = configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            await startVisit()
+            await jest.advanceTimersByTimeAsync(BETWEEN_ATTEMPTS)
+            expect(env.attemptsFor(trainer)).toBe(1)
+
+            env.pairing.reconnectNow()
+            await jest.advanceTimersByTimeAsync(10)
+
+            expect(env.attemptsFor(trainer)).toBe(2)
+        })
+
+        test('it returns the capabilities the attempt covers', async () => {
+            configuration.add(Trainer('1'))
+            configuration.add(HeartRate('3'))
+            env = setup(mode, configuration)
+            await startVisit()
+            await jest.advanceTimersByTimeAsync(BETWEEN_ATTEMPTS)
+
+            expect(env.pairing.reconnectNow()).toEqual(expect.arrayContaining([IncyclistCapability.Control, IncyclistCapability.HeartRate]))
+        })
+
+        test('during an attempt, it starts none and cancels none', async () => {
+            const trainer = configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            await startVisit()
+            await jest.advanceTimersByTimeAsync(DURING_FIRST_ATTEMPT)
+
+            expect(env.pairing.reconnectNow()).toContain(IncyclistCapability.Control)
+            await jest.advanceTimersByTimeAsync(10)
+
+            expect(env.attemptsFor(trainer)).toBe(1)
+            expect(env.ride.cancelStart).not.toHaveBeenCalled()
+            expect(env.ride.stop).not.toHaveBeenCalled()
+            expect(env.ride.stopDevices).not.toHaveBeenCalled()
+            expect((env.pairing as any).isPairing()).toBe(true)
+        })
+
+        test('the joined attempt still connects the trainer', async () => {
+            const trainer = configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            env.ride.awake.add(trainer)
+            await startVisit()
+            await jest.advanceTimersByTimeAsync(DURING_FIRST_ATTEMPT)
+
+            env.pairing.reconnectNow()
+            await jest.advanceTimersByTimeAsync(3000)
+
+            expect(env.attemptsFor(trainer)).toBe(1)
+            expect(env.pairing.isPairingSettled()).toBe(true)
+        })
+
+        test('attempts never overlap, and the loop goes on at its usual pace afterwards', async () => {
+            const trainer = configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            await startVisit()
+
+            // requests between attempts, during them, and twice in a row
+            for (const at of [BETWEEN_ATTEMPTS, DURING_FIRST_ATTEMPT, 1200, 10, 10]) {
+                await jest.advanceTimersByTimeAsync(at)
+                env.pairing.reconnectNow()
+            }
+            const afterRequests = env.attemptsFor(trainer)
+            await jest.advanceTimersByTimeAsync(20_000)
+            const withoutRequests = env.attemptsFor(trainer) - afterRequests
+
+            // the same 20 s without any request
+            await env.teardown()
+            configuration = createConfiguration()
+            configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            await startVisit()
+            await jest.advanceTimersByTimeAsync(3230)
+            const before = env.ride.startAdapters.mock.calls.length
+            await jest.advanceTimersByTimeAsync(20_000)
+            const reference = env.ride.startAdapters.mock.calls.length - before
+
+            expect(env.ride.maxInFlight).toBe(1)
+            expect(Math.abs(withoutRequests - reference)).toBeLessThanOrEqual(1)
+        })
+
+        test('while the last attempt still stops its failed devices, it joins, and the loop goes on', async () => {
+            const trainer = configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            env.ride.stopDevices.mockImplementation(async (udids: string[]) => {
+                await wait(500)
+                udids.forEach(udid => env.ride.started.delete(udid))
+            })
+            await startVisit()
+            // the first attempt settled at 1 s, its failed trainer is being stopped until 1.5 s
+            await jest.advanceTimersByTimeAsync(1200)
+
+            env.pairing.reconnectNow()
+            await jest.advanceTimersByTimeAsync(10)
+            expect(env.attemptsFor(trainer)).toBe(1)
+
+            await jest.advanceTimersByTimeAsync(15_000)
+            expect(env.attemptsFor(trainer)).toBeGreaterThanOrEqual(4)
+            expect(env.ride.maxInFlight).toBe(1)
+        })
+
+        test('a connected separate device is never stopped or started again', async () => {
+            const trainer = configuration.add(Trainer('1'))
+            const powerMeter = configuration.add(PowerMeter('2'))
+            configuration.select(powerMeter, IncyclistCapability.Power)
+            env = setup(mode, configuration)
+            env.ride.awake.add(powerMeter)
+            await startVisit()
+
+            for (const at of [BETWEEN_ATTEMPTS, DURING_FIRST_ATTEMPT, 2000, 2000]) {
+                await jest.advanceTimersByTimeAsync(at)
+                env.pairing.reconnectNow()
+            }
+            await jest.advanceTimersByTimeAsync(10_000)
+
+            expect(env.attemptsFor(trainer)).toBeGreaterThanOrEqual(3)
+            expect(env.attemptsFor(powerMeter)).toBe(1)
+            expect(env.stopsOf(powerMeter)).toBe(0)
+            expect(env.ride.started.has(powerMeter)).toBe(true)
+        })
+
+        test('once nothing is left to connect, it does nothing', async () => {
+            const trainer = configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            env.ride.awake.add(trainer)
+            await startVisit()
+            await jest.advanceTimersByTimeAsync(3000)
+            const attempts = env.ride.startAdapters.mock.calls.length
+
+            expect(env.pairing.reconnectNow()).toEqual([])
+            await jest.advanceTimersByTimeAsync(5000)
+
+            expect(env.ride.startAdapters.mock.calls.length).toBe(attempts)
+        })
+
+        test('never throws: a failure is logged and nothing is covered', async () => {
+            configuration.add(Trainer('1'))
+            env = setup(mode, configuration)
+            await startVisit()
+            const logError = jest.spyOn(env.pairing as any, 'logError')
+            jest.spyOn(env.pairing, 'isPairingSettled').mockImplementation(() => { throw new Error('broken') })
+
+            expect(env.pairing.reconnectNow()).toEqual([])
+            expect(logError).toHaveBeenCalledWith(expect.any(Error), 'reconnectNow')
+        })
+
+        test('an attempt it starts tries exactly what the automatic loop tries', async () => {
+            // trainer excluded for the fallback, a connected power meter on Power, a heart rate monitor switched off
+            const trainer = configuration.add(Trainer('1'))
+            const powerMeter = configuration.add(PowerMeter('2'))
+            const hrm = configuration.add(HeartRate('3'))
+            configuration.select(powerMeter, IncyclistCapability.Power)
+            configuration.disableCapability(IncyclistCapability.HeartRate)
+            env = setup(mode, configuration)
+            env.pairing.setVisitOpen(true)
+            configuration.excludeDevice(trainer, FALLBACK)
+            env.ride.awake.add(powerMeter)
+
+            await env.start()
+            await jest.advanceTimersByTimeAsync(BETWEEN_ATTEMPTS)
+            const automatic = attemptTargets()
+
+            env.pairing.reconnectNow()
+            await jest.advanceTimersByTimeAsync(10)
+            const requested = attemptTargets().slice(automatic.length)
+
+            expect(requested).toEqual([[trainer, hrm].sort()])
+            await jest.advanceTimersByTimeAsync(10_000)
+            const following = attemptTargets().slice(automatic.length + 1)
+            expect(following.length).toBeGreaterThanOrEqual(2)
+            following.forEach(udids => expect(udids).toEqual(requested[0]))
+        })
     })
 })

@@ -411,7 +411,7 @@ describe.each([
             expect(typeof provider).toBe('function')
             expect(tracker.setExitFields).toHaveBeenLastCalledWith(undefined)
             // the fields as they stood when the tracker closed the visit
-            expect(exitFieldsAtClose).toEqual({ pairingCase:'trainer-unavailable', trainerPhase:'unavailable', partialOutageShown:false, switchedOffRequired:false, helperShown:false })
+            expect(exitFieldsAtClose).toEqual({ pairingCase:'trainer-unavailable', trainerPhase:'unavailable', partialOutageShown:false, switchedOffRequired:false, helperShown:false, fallbackActive:false, trainerRetries:0 })
         })
 
         let exitFieldsAtClose:any
