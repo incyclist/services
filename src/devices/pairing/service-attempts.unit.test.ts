@@ -402,7 +402,7 @@ describe.each<Mode>(['direct', 'page'])('DevicePairingService with a stored devi
         const stored: Record<string, any> = {
             devices: [
                 { udid: TRAINER, settings: Trainer('1') },
-                { udid: CONTROLLER, settings: { interface: 'wifi', protocol: 'openbikecontrol', name: 'BikeControl', address: '10.0.0.2' } },
+                { udid: CONTROLLER, settings: { interface: 'wifi', protocol: 'no-such-protocol', name: 'BikeControl', address: '10.0.0.2' } },
             ],
             capabilities: [
                 { capability: IncyclistCapability.Control, selected: TRAINER, devices: [TRAINER] },
