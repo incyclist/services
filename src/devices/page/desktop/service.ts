@@ -11,7 +11,8 @@ import type { DeviceSelectionItemProps, DeviceSelectionProps, PairingExitVia, TC
 import type { DesktopInterfaceDisplayProps, DesktopInterfaceSettingsDisplayProps, DesktopPairingDisplayProps } from './types'
 
 import { EnrichedInterfaceSetting, useDeviceAccess } from '../../access'
-import { getPairingGuidanceText, getPairingRowLabelId, getPairingStatusDisplay, isCapabilityActive, toPairingInterfaceStates } from '../../pairing'
+import { toPairingInterfaceStates } from '../../pairing'
+import type { PairingPlatform } from '../../pairing'
 import type { IncyclistDeviceSettings, InterfaceSetting } from '../../configuration/model'
 import type { DevicePairingData, DeviceSelectState } from '../../pairing/model'
 
@@ -39,6 +40,10 @@ export class DesktopPairingPageService extends PairingPageService {
         return 'direct'
     }
 
+    protected getPlatform(): PairingPlatform {
+        return 'desktop'
+    }
+
     openPage(forRide?:boolean, source?:string):IObserver {
         this.source = source
         return super.openPage(forRide)
@@ -49,7 +54,6 @@ export class DesktopPairingPageService extends PairingPageService {
         const title = 'Devices'
 
         try {
-            const caps = this.state.capabilities??[]
             const allIfs = this.state.interfaces??[]
             // `invisible` (set by DeviceConfigurationService for wifi on non-Windows, where it's
             // implicitly always on) is stripped before the tiles are built - the rider never sees a
@@ -61,47 +65,19 @@ export class DesktopPairingPageService extends PairingPageService {
 
             const interfaces = ifs.map( i=>this.getInterfaceDisplayProps(i))
 
-            const status = getPairingStatusDisplay({
-                platform: 'desktop',
-                interfaces: toPairingInterfaceStates(allIfs),
-                capabilities: caps,
-                canStartRide: this.canStartRide(),
-                loading: this.promiseOpen!==undefined,
-                rideMode: this.isPairingForRide,
-                ...this.getSearchStatusSource(),
-            })
-            const capProps = caps.map( c=>this.getCapabilityDisplayProps(c, status.id==='S1'))
-
-            const CP = (cap:IncyclistCapability) => capProps.find( c=>c.capability===cap)
-
-            const top = [
-                CP(IncyclistCapability.Control),
-                CP(IncyclistCapability.Power),
-                CP(IncyclistCapability.Speed)
-            ].filter( c=>c!==null && c!==undefined)
-            const bottom = [
-                CP(IncyclistCapability.HeartRate),
-                CP(IncyclistCapability.Cadence),
-                CP(IncyclistCapability.AppControl)
-            ].filter( c=>c!==null && c!==undefined)
-
-            const trainerSelected = isCapabilityActive(caps.find( c=>c.capability===IncyclistCapability.Control))
-            const rowLabels = {
-                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking())),
-                bottom: getPairingGuidanceText('row-optional'),
-            }
-
-            const buttons = this.getButtonsDisplayProps(status.id==='S1')
+            const status = this.getStatusDisplayProps(toPairingInterfaceStates(allIfs))
+            const noSearch = status.id==='S1'
 
             return {
                 title,
                 readyToStart: this.canStartRide(),
                 status,
-                capabilities: { top, bottom, rowLabels },
+                capabilities: this.getCapabilityRowsDisplayProps(noSearch),
                 interfaces,
                 deviceSelection: this.getDeviceListDisplayProps(),
-                buttons,
+                buttons: this.getButtonsDisplayProps(noSearch),
                 showInterfaceSettings: this.getInterfaceSettingsDisplayProps(),
+                ...this.getGuidanceDisplayProps(),
             }
         }
         catch(err) {

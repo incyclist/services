@@ -62,7 +62,9 @@ export const canScanWithInterfaces = (interfaces: ReadonlyArray<PairingInterface
 export const getUnavailableInterfaces = (interfaces: ReadonlyArray<PairingInterfaceState>, platform: PairingPlatform): PairingInterfaceId[] =>
     namedInterfaces(interfaces, platform).filter(i => i.enabled && !i.available).map(i => i.id)
 
-export type PairingHint = 'bluetooth-permission' | 'bluetooth-off' | 'wifi-off' | 'ant'
+// a Wi-Fi-off hint on mobile is left out until it's confirmed on a device that the mobile Wi-Fi
+// interface really reports itself unavailable while Wi-Fi is off
+export type PairingHint = 'bluetooth-permission' | 'bluetooth-off' | 'ant'
 
 export interface PairingHintInput {
     platform: PairingPlatform
@@ -83,7 +85,6 @@ export const getPairingHint = (input: PairingHintInput): PairingHint | undefined
     if (input.platform === 'mobile') {
         const ble = isBrokenInterface(input.interfaces, 'ble')
         if (ble) return ble.permissionDenied ? 'bluetooth-permission' : 'bluetooth-off'
-        if (isBrokenInterface(input.interfaces, 'wifi')) return 'wifi-off'
         return undefined
     }
 
@@ -91,7 +92,23 @@ export const getPairingHint = (input: PairingHintInput): PairingHint | undefined
     return undefined
 }
 
-export type PairingStatusId = 'S1' | 'S1b' | 'S2' | 'S2e' | 'S2w' | 'S3' | 'S4' | 'S5' | 'S9'
+/**
+ * The status line's states:
+ * - S1 nothing can search, S1b a partial outage on first use;
+ * - S2 ready, with its variants S2b (riding on the fallback), S2c (the trainer came back while on the
+ *   fallback), S2d (ready while Resistance is switched off), S2e (ready, search found no trainer) and
+ *   S2w (found something, the search is still looking for more);
+ * - S3 connecting, S4 getting ready, S5 searching, S6 still searching after the help threshold;
+ * - S7 the configured trainer can't be reached, S8 every required capability is switched off;
+ * - S9 the search finished and found nothing.
+ */
+export type PairingStatusId = 'S1' | 'S1b' | 'S2' | 'S2b' | 'S2c' | 'S2d' | 'S2e' | 'S2w' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7' | 'S8' | 'S9'
+
+/** How long a partial outage has to hold, after the page has finished getting ready, before S1b shows. */
+export const PARTIAL_OUTAGE_DEBOUNCE_MS = 2000
+
+/** Where the configured trainer's connection attempt stands (see the Pairing page guidance). */
+export type PairingStatusTrainerPhase = 'connecting' | 'connected' | 'unavailable'
 
 export interface PairingStatusInput extends PairingHintInput {
     initialising: boolean
@@ -106,23 +123,74 @@ export interface PairingStatusInput extends PairingHintInput {
     stillLooking?: boolean
     /** the page's search has ended without a trainer (the ready text then says so) */
     searchEndedWithoutTrainer?: boolean
+    /** only set while a trainer is configured */
+    trainerPhase?: PairingStatusTrainerPhase
+    /** the configured trainer's name, for display only */
+    trainerName?: string
+    /** Resistance, Power and Speed are all switched off */
+    allRequiredSwitchedOff?: boolean
+    /** Resistance is switched off with its trainer still remembered */
+    resistanceSwitchedOff?: boolean
+    /** the ride falls back to a power meter or speed sensor because the trainer isn't available */
+    fallbackActive?: boolean
+    /** the trainer connected while the fallback was active, and the page says so for a moment */
+    fallbackReverted?: boolean
+    /** the page has been searching for longer than the help threshold */
+    helperThresholdReached?: boolean
+    /** when the partial-outage condition started to hold, once the page had finished getting ready */
+    partialOutageSince?: number
+    /** the current time, for the partial-outage hold; defaults to now */
+    now?: number
+}
+
+const getReadyStatus = (input: PairingStatusInput): PairingStatusId => {
+    if (input.fallbackReverted) return 'S2c'
+    if (input.fallbackActive) return 'S2b'
+    if (input.resistanceSwitchedOff) return 'S2d'
+    if (input.searchEndedWithoutTrainer) return 'S2e'
+    return 'S2'
+}
+
+const isPartialOutageShown = (input: PairingStatusInput): boolean => {
+    if (input.partialOutageSince === undefined || !getPairingHint(input))
+        return false
+    const now = input.now ?? Date.now()
+    return now - input.partialOutageSince >= PARTIAL_OUTAGE_DEBOUNCE_MS
+}
+
+// the trainer's own states: S3 while its attempt runs, S7 once it can't be reached. While it can't be
+// reached, nothing connecting - the trainer's own retries or any other device - brings S3 back.
+const getTrainerStatus = (input: PairingStatusInput): PairingStatusId | undefined => {
+    if (input.trainerPhase === 'connecting') return 'S3'
+    if (input.trainerPhase === 'unavailable') return 'S7'
+    if (input.connectingDeviceName) return 'S3'
+    return undefined
+}
+
+const getSearchingStatus = (input: PairingStatusInput): PairingStatusId => {
+    if (input.initialising) return 'S4'
+    if (input.searchEndedWithNothing) return 'S9'
+    return input.helperThresholdReached ? 'S6' : 'S5'
 }
 
 /**
- * Priority: S1 > S2w > S2/S2e > S3 > S4 > S9 > S1b > S5. S2w (found something, still looking) holds
- * while a search runs; S2e is the ready text after a search that found no trainer. S9 (search finished, nothing found) replaces the
- * searching text once nothing is searching any more. S4 sits above S1b so the first-use hint never shows
- * while the page is initialising. The 2 s hold after S4 is applied by the caller.
+ * Priority: S1 > S2w > S2 (S2c > S2b > S2d > S2e > S2) > S8 > S3/S7 > S1b > S4 > S9 > S6/S5.
+ * - S3 shows while the configured trainer is still connecting, or for any connecting device without a
+ *   configured trainer; once the trainer can't be reached, S7 holds instead.
+ * - S1b needs the partial outage to have held for {@link PARTIAL_OUTAGE_DEBOUNCE_MS}; the caller
+ *   keeps `partialOutageSince` and re-evaluates once that time has passed.
  */
 export const derivePairingStatus = (input: PairingStatusInput): PairingStatusId => {
     if (!canScanWithInterfaces(input.interfaces, input.platform)) return 'S1'
     if (input.stillLooking) return 'S2w'
-    if (input.canStartRide) return input.searchEndedWithoutTrainer ? 'S2e' : 'S2'
-    if (input.connectingDeviceName) return 'S3'
-    if (input.initialising) return 'S4'
-    if (input.searchEndedWithNothing) return 'S9'
-    if (getPairingHint(input)) return 'S1b'
-    return 'S5'
+    if (input.canStartRide) return getReadyStatus(input)
+    if (input.allRequiredSwitchedOff) return 'S8'
+
+    const trainerStatus = getTrainerStatus(input)
+    if (trainerStatus) return trainerStatus
+
+    if (isPartialOutageShown(input)) return 'S1b'
+    return getSearchingStatus(input)
 }
 
 export type PairingTextVariant = 'full' | 'short'
@@ -137,15 +205,37 @@ export interface PairingGuidanceParams {
     isTrainer?: boolean
     /** S2w: the capabilities the search is still looking for, in tile order */
     missing?: ReadonlyArray<string>
+    /** S3 for the configured trainer, S7: the trainer's name */
+    trainerName?: string
+    /** S8: at least one of the switched-off capabilities still remembers its device, so it has a switch */
+    switchedOffCanToggle?: boolean
+    /** S2b: what the ride falls back to */
+    fallbackCapability?: 'power' | 'speed'
 }
 
-export type PairingGuidanceId = PairingStatusId | 'row-required' | 'row-required-trainer' | 'row-ready' | 'row-optional'
+/**
+ * Tile copy while the configured trainer can't be reached: the role lines, and the footers of the
+ * Resistance tile, of tiles holding the trainer, of a separate connected power meter or speed sensor,
+ * and of an empty power or speed tile before and after the rider said the trainer isn't available.
+ */
+export type PairingTileTextId = 'tile-role-trainer' | 'tile-role-via-trainer' | 'tile-trainer-waiting' | 'tile-waiting-for-trainer'
+    | 'tile-optional-for-now' | 'tile-tap-to-add'
+
+export type PairingGuidanceId = PairingStatusId | PairingTileTextId | 'row-required' | 'row-required-trainer' | 'row-required-trainer-waiting'
+    | 'row-ready' | 'row-optional'
     | 'row-searching-trainer' | 'row-searching-found'
 
 export interface PairingGuidanceText {
     text: string
     link?: string
     subtext?: string
+    /**
+     * `text` without a tip that only makes sense with no other guidance nearby (e.g. a "pedal to
+     * wake it" aside) - for when the helper panel is open beside this text and already covers that
+     * ground. Only set where `text` actually has something to drop; otherwise callers fall back to
+     * `text` itself.
+     */
+    stateOnlyText?: string
 }
 
 const formatList = (names: string[]): string => {
@@ -209,10 +299,6 @@ const getHintText = (hint: PairingHint, isShort: boolean): PairingGuidanceText =
             return isShort
                 ? { text: 'Bluetooth is off.', link: 'Settings' }
                 : { text: "Bluetooth is off, so most trainers won't show up.", link: 'Bluetooth settings' }
-        case 'wifi-off':
-            return isShort
-                ? { text: 'Wi-Fi is off · needed for Wi-Fi trainers' }
-                : { text: 'Wi-Fi is off. If your trainer connects over Wi-Fi, turn Wi-Fi on.' }
         case 'ant':
             return { text: 'ANT+ stick not found. If you use one, plug it in, try another USB port, or close other apps that use it.' }
     }
@@ -235,6 +321,44 @@ const getConnectingText = (device: string, isTrainer: boolean | undefined, isSho
     return { text: `Connecting to ${device}…` }
 }
 
+const getReadyWithoutResistanceText = (device: string, isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: `Ready with ${device}. No resistance control.` }
+        : { text: `Ready to ride with ${device}, without resistance control (Resistance is switched off).` }
+
+const getFallbackText = (capability: PairingGuidanceParams['fallbackCapability'], isShort: boolean): PairingGuidanceText => {
+    const sensor = capability === 'speed' ? SENSOR_NAMES.speed : SENSOR_NAMES.power
+    return isShort
+        ? { text: `Ready with ${sensor}. No resistance control.` }
+        : { text: `Ready to ride with your ${sensor}, without resistance control, until you next open Devices.` }
+}
+
+const getFallbackRevertedText = (isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: 'Trainer connected. Resistance control is on.' }
+        : { text: 'Your trainer connected. Resistance control is back on.' }
+
+const getTrainerUnreachableText = (trainer: string, isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: `Can't reach ${trainer}. Pedal to wake it`, link: 'Not available?', stateOnlyText: `Can't reach ${trainer}.` }
+        : {
+            text: `Can't reach your trainer ${trainer}. Pedal a few strokes to wake it up.`,
+            link: 'Not available today?',
+            stateOnlyText: `Can't reach your trainer ${trainer}.`,
+        }
+
+const getAllSwitchedOffText = (canToggle: boolean | undefined, isShort: boolean): PairingGuidanceText => {
+    if (isShort)
+        return { text: canToggle ? 'To ride: all switched off. Switch one on.' : 'To ride: all switched off. Tap one to choose.' }
+    const remedy = canToggle ? 'Switch one back on to ride.' : 'Tap one to choose a device.'
+    return { text: `Resistance, Power and Speed are all switched off. ${remedy}` }
+}
+
+const getStillSearchingText = (isShort: boolean): PairingGuidanceText =>
+    isShort
+        ? { text: 'Still searching', link: 'Need help?' }
+        : { text: 'Still searching…', link: "Can't find your trainer?" }
+
 const getSearchingText = (isShort: boolean): PairingGuidanceText =>
     isShort
         ? { text: 'Searching… Pedal to wake your trainer.' }
@@ -251,6 +375,8 @@ const getRowLabelText = (id: PairingGuidanceId): PairingGuidanceText | undefined
             return { text: 'TO RIDE', subtext: 'connect any one' }
         case 'row-required-trainer':
             return { text: 'TO RIDE', subtext: 'connecting to your trainer' }
+        case 'row-required-trainer-waiting':
+            return { text: 'TO RIDE', subtext: 'waiting for your trainer' }
         case 'row-ready':
             return { text: '✓ READY TO RIDE' }
         case 'row-optional':
@@ -259,6 +385,26 @@ const getRowLabelText = (id: PairingGuidanceId): PairingGuidanceText | undefined
             return { text: 'TO RIDE', subtext: 'still looking for a trainer' }
         case 'row-searching-found':
             return { text: 'TO RIDE', subtext: 'trainer found' }
+        default:
+            return undefined
+    }
+}
+
+const getTileText = (id: PairingGuidanceId, isShort: boolean): PairingGuidanceText | undefined => {
+    switch (id) {
+        case 'tile-role-trainer':
+            return { text: 'Your trainer' }
+        case 'tile-role-via-trainer':
+            return { text: 'via your trainer' }
+        case 'tile-trainer-waiting':
+            return { text: isShort ? 'Waiting…' : 'Waiting to connect' }
+        case 'tile-waiting-for-trainer':
+            // the short footer says the state only: the role line above it already says "via your trainer"
+            return { text: isShort ? 'Waiting…' : 'Waiting for trainer' }
+        case 'tile-optional-for-now':
+            return { text: 'Optional for now' }
+        case 'tile-tap-to-add':
+            return { text: 'Tap to add' }
         default:
             return undefined
     }
@@ -273,6 +419,9 @@ export const getPairingGuidanceText = (
     if (rowLabel) return rowLabel
 
     const isShort = variant === 'short'
+    const tileText = getTileText(id, isShort)
+    if (tileText) return tileText
+
     const device = params.deviceName ?? ''
 
     switch (id as PairingStatusId) {
@@ -282,6 +431,12 @@ export const getPairingGuidanceText = (
             return getHintText(params.hint!, isShort)
         case 'S2':
             return getReadyText(device, params.rideMode, isShort)
+        case 'S2b':
+            return getFallbackText(params.fallbackCapability, isShort)
+        case 'S2c':
+            return getFallbackRevertedText(isShort)
+        case 'S2d':
+            return getReadyWithoutResistanceText(device, isShort)
         case 'S2e':
             return getReadyWithoutTrainerText(device, isShort)
         case 'S2w':
@@ -292,6 +447,12 @@ export const getPairingGuidanceText = (
             return { text: 'Getting ready to search…' }
         case 'S5':
             return getSearchingText(isShort)
+        case 'S6':
+            return getStillSearchingText(isShort)
+        case 'S7':
+            return getTrainerUnreachableText(params.trainerName ?? '', isShort)
+        case 'S8':
+            return getAllSwitchedOffText(params.switchedOffCanToggle, isShort)
         case 'S9':
             return getSearchEndedText(isShort)
     }
@@ -299,12 +460,25 @@ export const getPairingGuidanceText = (
 
 /**
  * The label of the ride row. While a search is still looking for more devices (`stillLooking`), it
- * says whether the trainer has been found; otherwise it follows whether a trainer is selected.
+ * says whether the trainer has been found; otherwise it follows whether a trainer is selected and,
+ * if so, whether that trainer can't be reached right now.
+ *
+ * @param trainerSelected a trainer is configured on the Resistance tile
+ * @param stillLooking a search is still looking for more devices
+ * @param trainerPhase the configured trainer's connection phase, if known
  */
-export const getPairingRowLabelId = (trainerSelected: boolean, stillLooking: boolean = false): PairingGuidanceId => {
+export const getPairingRowLabelId = (
+    trainerSelected: boolean,
+    stillLooking: boolean = false,
+    trainerPhase?: PairingStatusTrainerPhase
+): PairingGuidanceId => {
     if (stillLooking)
         return trainerSelected ? 'row-searching-found' : 'row-searching-trainer'
-    return trainerSelected ? 'row-required-trainer' : 'row-required'
+    if (!trainerSelected)
+        return 'row-required'
+    // "connecting" would contradict the status line while the trainer can't be reached.
+    // Once riding without the trainer (a fallback) is possible, an active fallback must suppress this label too.
+    return trainerPhase === 'unavailable' ? 'row-required-trainer-waiting' : 'row-required-trainer'
 }
 
 export const getCapabilityHelpText = (capability: string, variant: PairingTextVariant = 'full'): string | undefined => {
@@ -322,3 +496,113 @@ export const getCapabilityHelpText = (capability: string, variant: PairingTextVa
 
 export const getEmptyTileFooterText = (role: PairingRole): string =>
     role === 'required' ? 'Searching…' : 'Optional'
+
+/**
+ * A tile's part while the configured trainer can't be reached: `trainer` is the Resistance tile,
+ * `via-trainer` any other tile holding the trainer, `separate` a power meter or speed sensor that is
+ * a different device and connected.
+ */
+export type PairingTrainerRole = 'trainer' | 'via-trainer' | 'separate'
+
+export interface PairingTileStateInput {
+    capability: string
+    role?: PairingRole
+    /** the rider switched the capability off */
+    disabled?: boolean
+    /** the selected device's udid */
+    selected?: string
+    connectState?: string
+    /** nothing can search */
+    noSearch?: boolean
+    /** the row is ready to ride */
+    canStartRide?: boolean
+    /** only set while a trainer is configured */
+    trainerPhase?: PairingStatusTrainerPhase
+    /** the configured trainer's udid */
+    trainerUdid?: string
+    /** the rider said in the helper that the trainer isn't available today */
+    trainerUnavailablePicked?: boolean
+    /** a power meter or speed sensor other than the trainer is connected */
+    separateSensor?: boolean
+}
+
+export interface PairingTileState {
+    trainerRole?: PairingTrainerRole
+    /** the line under the title that says how the tile relates to the trainer */
+    roleLabel?: string
+    /** when set, shown as the footer instead of the state text, the connect state or the empty-tile footer */
+    footerText?: { full: string, short: string }
+    /** the page is waiting for this tile: it gets the amber outline */
+    awaited: boolean
+}
+
+// the tiles that can stand in for the trainer when it isn't available
+const TRAINER_REPLACEMENTS = new Set(['power', 'speed'])
+
+const ACTIVE_TRAINER_PHASES = new Set<PairingStatusTrainerPhase>(['connecting', 'unavailable'])
+
+const tileFooter = (id: PairingTileTextId): { full: string, short: string } => ({
+    full: getPairingGuidanceText(id).text,
+    short: getPairingGuidanceText(id, {}, 'short').text,
+})
+
+const tileRoleLabel = (id: PairingTileTextId): string => getPairingGuidanceText(id).text
+
+// the trainer can't be reached: the Resistance tile, tiles holding the trainer, and the power and
+// speed tiles that could stand in for it. Any other tile keeps its usual state.
+const getUnavailableTrainerTileState = (input: PairingTileStateInput): PairingTileState | undefined => {
+    const { capability, selected, trainerUdid } = input
+
+    if (capability === 'control')
+        return { trainerRole: 'trainer', roleLabel: tileRoleLabel('tile-role-trainer'), footerText: tileFooter('tile-trainer-waiting'), awaited: true }
+
+    const canReplace = TRAINER_REPLACEMENTS.has(capability)
+    // the rider said the trainer isn't available, and nothing that could replace it is connected yet
+    const needsReplacement = canReplace && input.trainerUnavailablePicked === true && !input.separateSensor
+
+    if (selected !== undefined && selected === trainerUdid)
+        return {
+            trainerRole: 'via-trainer',
+            roleLabel: tileRoleLabel('tile-role-via-trainer'),
+            footerText: tileFooter(needsReplacement ? 'tile-tap-to-add' : 'tile-waiting-for-trainer'),
+            awaited: needsReplacement,
+        }
+
+    if (!canReplace)
+        return undefined
+    if (!selected)
+        return { footerText: tileFooter(needsReplacement ? 'tile-tap-to-add' : 'tile-optional-for-now'), awaited: needsReplacement }
+    if (input.connectState === 'connected')
+        // no footer override: a separate meter that's already connected looks exactly like any
+        // other connected tile (T5) - the way to ride without the trainer lives in the status
+        // line and helper, not as an action implied by this tile's footer
+        return { trainerRole: 'separate', awaited: false }
+    return undefined
+}
+
+// outside the trainer's own states: an empty required tile, and the Resistance tile while its trainer
+// connects or can't be reached
+const isAwaitedByDefault = (input: PairingTileStateInput): boolean => {
+    if (!input.selected)
+        return input.role === 'required'
+    return input.capability === 'control' && input.trainerPhase !== undefined && ACTIVE_TRAINER_PHASES.has(input.trainerPhase)
+}
+
+/**
+ * How a tile relates to the configured trainer, its footer when that overrides the usual one, and
+ * whether the page is waiting for it (the amber outline).
+ *
+ * A switched-off tile and every tile while nothing can search have neither, and aren't waited for.
+ * Otherwise, while the trainer can't be reached, the Resistance tile, tiles holding the trainer and
+ * the power and speed tiles say how they relate to it. Nothing is waited for once the row is ready.
+ *
+ * @param input the tile, the trainer and what the rider said in the helper
+ */
+export const getPairingTileState = (input: PairingTileStateInput): PairingTileState => {
+    if (input.disabled || input.noSearch)
+        return { awaited: false }
+
+    const trainerState = input.trainerPhase === 'unavailable' ? getUnavailableTrainerTileState(input) : undefined
+    const state = trainerState ?? { awaited: isAwaitedByDefault(input) }
+    return input.canStartRide ? { ...state, awaited: false } : state
+}

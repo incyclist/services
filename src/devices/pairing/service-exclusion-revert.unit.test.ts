@@ -41,6 +41,8 @@ class FakeRide extends EventEmitter {
         return true
     })
     stop = jest.fn().mockResolvedValue(true)
+    stopDevices = jest.fn().mockResolvedValue(undefined)
+    getStartedCapabilities = jest.fn().mockReturnValue(undefined)
     cancelStart = jest.fn().mockResolvedValue(true)
     lazyInit = jest.fn().mockResolvedValue(true)
     waitForPreviousStartToFinish = jest.fn().mockResolvedValue(true)

@@ -1,7 +1,7 @@
 import { AdapterFactory, IncyclistCapability, IncyclistDeviceAdapter,CyclingMode, useFeatureToggle, InterfaceFactory, BleDeviceSettings } from "incyclist-devices"
 import { useUserSettings } from "../../settings"
 import { AddDeviceResult, AdapterInfo, AutoSelectRule, CapabilityExclusion, CapabilityInformation, CapabilitySetting, DeviceConfigurationInfo, DeviceConfigurationSettings, DeviceListEntry, DeviceModeInfo, ExclusionFilter, ExclusionOptions, ExtendedIncyclistCapability, IncyclistDeviceSettings, InterfaceSetting,
-         LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings } from "./model"
+         LegacyDeviceConnectionSettings, LegacyDeviceSelectionSettings, LegacyModeSettings, LegacySettings, UnbuildableDevice } from "./model"
 import { v4 as generateUdid } from 'uuid';
 import { merge } from "../../utils/merge";
 import clone from "../../utils/clone";
@@ -104,6 +104,7 @@ export class DeviceConfigurationService  extends IncyclistService{
                 this.settings.devices = []
     
             let updated = false
+            const unbuildable:UnbuildableDevice[] = []
             this.settings.devices.forEach( d=> {
                 if (!d?.udid ) {
                     if (d?.settings.interface==='wifi') {
@@ -112,18 +113,17 @@ export class DeviceConfigurationService  extends IncyclistService{
                     }
                     return;
                 }
-                
-                try {
-                    this.adapters[d.udid] = this.getAdapterFromSetting(d.settings)
-                }
-                catch(err) {
-                    this.logEvent({message:'error',fn:'init()->Adapterfactory.create()',error:err.message,udid:d.udid, settings:d.settings,  devices:this.settings.devices, stack:err.stack,})
-                }
+
+                const failure = this.loadAdapter(d.udid, d.settings)
+                if (failure)
+                    unbuildable.push(failure)
             })
             if (updated) {
                 this.getUserSettings().set('devices',this.settings.devices)
             }
-    
+
+            unbuildable.forEach( u => this.removeUnbuildableDevice(u))
+
             this.initWifiInterface()
     
             this.verifyCapabilitySettings()
@@ -140,6 +140,42 @@ export class DeviceConfigurationService  extends IncyclistService{
 
         }
 
+    }
+
+    // creates and stores the adapter of a stored device; returns what went wrong if none could be built
+    protected loadAdapter(udid:string, settings:IncyclistDeviceSettings):UnbuildableDevice|undefined {
+        try {
+            const adapter = this.getAdapterFromSetting(settings)
+            if (!adapter)
+                return {udid, settings, reason:'no-adapter'}
+            this.adapters[udid] = adapter
+        }
+        catch(err) {
+            return {udid, settings, reason:'create-failed', error:err?.message ?? String(err)}
+        }
+    }
+
+    // removes a stored device this build can't construct an adapter for, the same way a rider's own
+    // delete does: unselect it wherever it's selected (leaving the slot empty), then delete it everywhere
+    protected removeUnbuildableDevice(device:UnbuildableDevice):void {
+        const {udid, settings, reason, error} = device
+
+        const selectedFor = (this.settings.capabilities??[])
+            .filter( c => c.capability!=='bike' && c.selected===udid)
+            .map( c => c.capability)
+
+        selectedFor.forEach( capability => { this.unselect(capability,false) })
+        this.delete(udid)
+
+        const stored = settings as {interface?:string, protocol?:string, profile?:string}
+        this.logEvent({
+            message:'unsupported device removed',
+            interface: stored?.interface ?? '',
+            protocol: stored?.protocol ?? stored?.profile ?? '',
+            reason,
+            selectedFor: selectedFor.join(','),
+            ...(error===undefined ? {} : {error})
+        })
     }
 
     setFeature( name:string, enabled:boolean) {
@@ -740,7 +776,10 @@ export class DeviceConfigurationService  extends IncyclistService{
             return []
 
         udids.forEach( udid => {
-            adapters.push( {udid, adapter:this.adapters[udid], capabilities:this.adapters[udid].getCapabilities()})
+            const adapter = this.adapters[udid]
+            if (!adapter)
+                return
+            adapters.push( {udid, adapter, capabilities:adapter.getCapabilities()})
         })
         return adapters;
 
@@ -769,9 +808,9 @@ export class DeviceConfigurationService  extends IncyclistService{
 
 
     getSelectedDevices(capability?:IncyclistCapability): Array<{capability:IncyclistCapability,selected?:string }>{
-        let capabilites = this.settings?.capabilities
+        let capabilites = this.settings?.capabilities ?? []
         if (capability) {
-            capabilites = this.settings?.capabilities.filter(c=>c.capability===capability)
+            capabilites = capabilites.filter(c=>c.capability===capability)
         }
 
         return capabilites.filter( c=>c.capability!=='bike' && c.disabled!==true && c.selected && !this.isExcluded(c.capability)).map( c => {

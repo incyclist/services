@@ -918,7 +918,9 @@ export class DevicePairingService  extends IncyclistService{
                 if( devices.length>0)
                     await this.stopAdaptersWithCapability(capability)
 
-                this.stopPairing().catch( err=>{ this.logError(err, 'startDeviceSelection') })
+                // awaited: run() below checks isPairing() itself and would otherwise trigger its own,
+                // redundant concurrent stopPairing() call for the same device
+                await this.stopPairing().catch( err=>{ this.logError(err, 'startDeviceSelection') })
                 this.emitStateChange({capabilities:this.state.capabilities})
 
                 if( devices.length>0)
@@ -1458,11 +1460,29 @@ export class DevicePairingService  extends IncyclistService{
         
 
         if (onStateChanged && typeof onStateChanged ==='function') {
-            onStateChanged( {...state}) 
+            onStateChanged( {...state})
         }
+        this.emitPairingState()
 
         if (onDeviceSelectStateChanged && typeof onDeviceSelectStateChanged==='function')
             onDeviceSelectStateChanged( this.getDeviceSelectionState() )
+    }
+
+    /**
+     * Tells any number of listeners about the current pairing state ('pairing-state', with the full
+     * external state), in both usage modes. Unlike the single `onStateChanged` callback, which
+     * belongs to whoever drives pairing, this is for readers that only observe. A listener that
+     * throws is logged and never interrupts pairing.
+     */
+    protected emitPairingState() {
+        try {
+            if (this.listenerCount('pairing-state')===0)
+                return
+            this.emit('pairing-state', this.getExternaState())
+        }
+        catch(err) {
+            this.logError(err,'emitPairingState')
+        }
     }
 
     protected checkPairingStalled() {
@@ -1522,8 +1542,9 @@ export class DevicePairingService  extends IncyclistService{
 
 
         if (onStateChanged && typeof onStateChanged ==='function') {
-            onStateChanged( {canStartRide}) 
+            onStateChanged( {canStartRide})
         }
+        this.emitPairingState()
 
     }
 
@@ -1835,6 +1856,10 @@ export class DevicePairingService  extends IncyclistService{
                 this.settings.onStateChanged({capabilities})
             }
         }
+        // connect-state changes don't go through emitStateChange(): without this, an observer
+        // would never see e.g. a pairing error that the next retry overwrites right away
+        if (changed)
+            this.emitPairingState()
 
         if (this.usage==='page') {
             this.emit('state-update')
@@ -2362,12 +2387,17 @@ export class DevicePairingService  extends IncyclistService{
         
         this.emitStateChange({capabilities:this.state.capabilities})
 
-        const selected = this.state.capabilities.map( c=>c.selected)
-
-        const target = adapters.filter(ai => /*!ai.adapter.isStarted() &&*/ selected.includes(ai.udid));
+        const target = this.getPairingTarget(adapters)
 
         if ( this.usage!=='page' && this.isPairing() && this.state.check.preparing!==preparing) {
             return;
+        }
+
+        // every selected device is already connected for what it's requested for: nothing to start
+        if (target.length===0) {
+            this.completeAttempt()
+            await this.retryUnsettledPairing()
+            return
         }
 
         this.initPairingCallbacks();
@@ -2380,33 +2410,71 @@ export class DevicePairingService  extends IncyclistService{
 
 
         this.logEvent({ message: 'Start Pairing', adapters, props });
-        await this.state.check.promise;
+        try {
+            await this.state.check.promise;
+        }
+        catch(err) {
+            // a start that crashed is handled like a failed one, so the next attempt can follow
+            this.logError(err,'startPairing')
+        }
 
         // if pairing was interrupted and a scan was started we don't need to continue here
         if (this.usage!=='page' && this.isScanning())
             return;
 
+        this.completeAttempt()
+
+        if (!this.isPairingSettled()) {
+            this.logEvent({ message: 'Pairing done', adapters, props });
+
+            // only stop the devices of this attempt that didn't connect, never one that is connected
+            const failed = target.filter( ai=> !ai.adapter.isStarted()).map( ai=> ai.udid)
+            await this.rideService.stopDevices(failed)
+
+            await this.retryUnsettledPairing()
+        }
+
+
+    }
+
+    // the selected devices that still need to be started: not started yet, or started for fewer
+    // capabilities than they are now requested for
+    protected getPairingTarget(adapters: AdapterInfo[]): AdapterInfo[] {
+        const selected = this.state.capabilities.map( c=>c.selected)
+
+        return adapters.filter(ai => selected.includes(ai.udid) && this.needsPairingStart(ai))
+    }
+
+    protected needsPairingStart(ai: AdapterInfo): boolean {
+        if (!ai.adapter.isStarted())
+            return true
+
+        // started outside of a tracked start: we can't tell what for, so start it again
+        const started = this.rideService.getStartedCapabilities(ai.udid)
+        if (!started)
+            return true
+
+        const requested = this.state.capabilities.filter( c=> c.selected===ai.udid).map(c=>c.capability)
+        return requested.some( c=> !started.includes(c))
+    }
+
+    protected completeAttempt() {
         this.checkCanStart()
 
-        //targetResume.forEach( ai=> {ai.adapter.resume()})
         if (this.state.check)
             delete this.state.check
 
         this.emit('pairing-done');
+    }
 
-        if (!this.isPairingSettled()) {
-            this.logEvent({ message: 'Pairing done', adapters, props });
-                await this.rideService.stop()
-
-            if (this.usage==='page')
+    // page mode: the page's state machine schedules the next attempt
+    protected async retryUnsettledPairing() {
+        if (this.usage==='page' || this.isPairingSettled())
             return;
 
-            await sleep(this.getPairingRetryDelay());
-            if (!this.state.scan)
-                this.run().catch( err=>{ this.logError(err,'startPairing') })
-        }
-
-
+        await sleep(this.getPairingRetryDelay());
+        if (!this.state.scan)
+            this.run().catch( err=>{ this.logError(err,'startPairing') })
     }
 
     protected setRequestedCapabilties(selectedAdapters: AdapterInfo[]) {
@@ -2474,7 +2542,7 @@ export class DevicePairingService  extends IncyclistService{
     async startScanning(adapters: AdapterInfo[], props: PairingProps) {
         this.state.interfaces = this.access.enrichWithAccessState(this.state.interfaces);
 
-        
+
         let interfaces = this.state.interfaces.filter( i => this.isInterfaceEnabled(i) && i.state==='connected' )
                             .map(i=>i.name)
 
@@ -2494,7 +2562,7 @@ export class DevicePairingService  extends IncyclistService{
 
         const preparing = DevicePairingService.scanCounter++
         this.state.scan={preparing,adapters:[]}   // will cause that next call to isPairing() will be true
-                    
+
 
         if (interfaces.length===0) {
             this.scheduleScanRetryWhenNoInterfaces(preparing)
