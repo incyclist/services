@@ -385,7 +385,8 @@ const getTileText = (id: PairingGuidanceId, isShort: boolean): PairingGuidanceTe
         case 'tile-trainer-waiting':
             return { text: isShort ? 'Waiting…' : 'Waiting to connect' }
         case 'tile-waiting-for-trainer':
-            return { text: isShort ? 'Via trainer' : 'Waiting for trainer' }
+            // the short footer says the state only: the role line above it already says "via your trainer"
+            return { text: isShort ? 'Waiting…' : 'Waiting for trainer' }
         case 'tile-optional-for-now':
             return { text: 'Optional for now' }
         case 'tile-tap-to-add':

@@ -442,7 +442,8 @@ describe('getPairingTileState', () => {
 
     const optionalForNow = { full: 'Optional for now', short: 'Optional for now' }
     const tapToAdd = { full: 'Tap to add', short: 'Tap to add' }
-    const waitingForTrainer = { full: 'Waiting for trainer', short: 'Via trainer' }
+    // the short footer must not repeat the role line ("via your trainer") right above it
+    const waitingForTrainer = { full: 'Waiting for trainer', short: 'Waiting…' }
     const trainerWaiting = { full: 'Waiting to connect', short: 'Waiting…' }
 
     // power and speed tiles: trainer phase × what the tile holds × whether the rider said the trainer isn't available today

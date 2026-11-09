@@ -116,7 +116,7 @@ describe.each([
             for (const capability of ['power','cadence'])
                 expect(tileOf(capability)).toMatchObject({
                     trainerRole:'via-trainer', roleLabel:'via your trainer',
-                    footerText:{ full:'Waiting for trainer', short:'Via trainer' }, awaited:false,
+                    footerText:{ full:'Waiting for trainer', short:'Waiting…' }, awaited:false,
                 })
         })
 
@@ -161,7 +161,7 @@ describe.each([
                 trainerRole:'via-trainer', roleLabel:'via your trainer', footerText:{ full:'Tap to add', short:'Tap to add' }, awaited:true,
             })
             expect(tileOf('speed')).toMatchObject({ footerText:{ full:'Tap to add', short:'Tap to add' }, awaited:true })
-            expect(tileOf('cadence')).toMatchObject({ footerText:{ full:'Waiting for trainer', short:'Via trainer' }, awaited:false })
+            expect(tileOf('cadence')).toMatchObject({ footerText:{ full:'Waiting for trainer', short:'Waiting…' }, awaited:false })
             expect(tileOf('control')).toMatchObject({ trainerRole:'trainer', awaited:true })
         })
 
