@@ -168,11 +168,23 @@ describe.each([
             expect(events('device select conflict resolved')).toEqual([expect.objectContaining({ origin: 'detection', resolution: 'done', replacedCount: 1 })])
         })
 
-        test('✕ keeps every current device', () => {
+        test('a tap outside the dialog (onDismiss) applies the choices made so far, same as Done', async () => {
+            detect(PowerMeter('1'))
+            const trainer = detect(Trainer('2'))
+
+            card()!.onChoice('power', 'replace')
+            card()!.onDismiss()
+            await new Promise(done => setImmediate(done))
+
+            expect(selectedOf(Power)).toBe(trainer)
+            expect(card()).toBeUndefined()
+            expect(events('device select conflict resolved')).toEqual([expect.objectContaining({ resolution: 'dismissed', replacedCount: 1 })])
+        })
+
+        test('onDismiss with no choice made keeps every current device', () => {
             const pwr = detect(PowerMeter('1'))
             detect(Trainer('2'))
 
-            card()!.onChoice('power', 'replace')
             card()!.onDismiss()
 
             expect(selectedOf(Power)).toBe(pwr)

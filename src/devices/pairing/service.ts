@@ -679,8 +679,10 @@ export class DevicePairingService  extends IncyclistService{
      *
      * @param id the conflict's `id`
      * @param replace the capabilities in which the device should replace the current one
+     * @param via `done` when the rider confirmed the choices; otherwise how it was closed - the
+     * choices made so far apply either way, the same as {@link commitManualConflict}
      */
-    async resolveConflict(id:string, replace:IncyclistCapability[]):Promise<void> {
+    async resolveConflict(id:string, replace:IncyclistCapability[], via:'done'|ConflictDismissal='done'):Promise<void> {
         try {
             const entry = this.takePendingConflict(id)
             if (!entry)
@@ -693,7 +695,7 @@ export class DevicePairingService  extends IncyclistService{
                 const [first,...rest] = toReplace
                 await this.selectDevice(first, udid, {others:'fill-empty', replace:rest})
             }
-            this.logConflictResolved(conflict, 'done', toReplace.length)
+            this.logConflictResolved(conflict, via, toReplace.length)
         }
         catch(err) {
             this.logError(err,'resolveConflict')

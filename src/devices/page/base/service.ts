@@ -451,15 +451,13 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.updatePage()
     }
 
-    // the card's ✕: every current device is kept
+    // a tap outside the dialog or Esc/back: applies the choices made so far, same as Done - there's
+    // no ✕ any more, so this is the only way to close it other than confirming
     protected onConflictCardDismissed(id:string):void {
+        const replace = this.getReplacedCapabilities(this.cardChoices?.choices ?? new Map())
         delete this.cardChoices
-        try {
-            this.getDevicePairing().dismissConflict(id, 'dismissed')
-        }
-        catch(err) {
-            this.logError(err,'onConflictCardDismissed')
-        }
+        this.getDevicePairing().resolveConflict(id, replace, 'dismissed')
+            .catch( err=>{ this.logError(err,'onConflictCardDismissed') })
         this.updatePage()
     }
 
