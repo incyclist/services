@@ -225,6 +225,13 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected getCapabilityDisplayProps(data:CapabilityData, noSearch:boolean=false):CapabilityDisplayProps {
         const {capability:cap,deviceName, connectState,value,unit,disabled} = data
 
+        // diagnostic (temporary): a tile showing a device name without a selected udid behind it is
+        // always a bug further upstream - the two should only ever change together. Logged here,
+        // at the one place that reads both, rather than guessed at from the symptom on screen.
+        if (!disabled && deviceName && !data.selected) {
+            this.logEvent({message:'capability display inconsistency', capability:cap, deviceName, selected:data.selected, connectState, value, devicesCount:data.devices?.length??0})
+        }
+
         const capability = this.getTCapability(cap)
         const title = this.getDisplayCapability(cap)
         const openList = ()=> { this.openDeviceSelection(cap)}
