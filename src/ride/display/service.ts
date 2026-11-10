@@ -1332,14 +1332,15 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         let request
         if (simMode==='Power') {
             const currentPowerTarget = mode.getSetting('power')
-            const targetPower = Number(currentPowerTarget)+powerInc
+            
+            const targetPower = Math.max(0,Number(currentPowerTarget)+powerInc)
             mode.setSetting('power', targetPower)
             request = {targetPower}
         }
         else {
             const currentSpeedTarget = mode.getSetting('speed')
             const speedInc = powerInc/5
-            const speed = Number(currentSpeedTarget)+speedInc
+            const speed = Math.max(0,Number(currentSpeedTarget)+speedInc,0)
             mode.setSetting('speed', speed)
             request = {speed}
         }

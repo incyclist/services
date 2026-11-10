@@ -489,7 +489,9 @@ export class ActivitiesRepository {
         if (this.isDirty && (this.tsLastWrite===undefined || Date.now()-this.tsLastWrite>=1000)) {
             this.isDirty = false;
             this.tsLastWrite = Date.now()
-            this.writeRepo().catch( err=>{ this.logError(err,'write') })
+            this.writeRepo().catch( err=>{ 
+                this.logWarning(err,'write') 
+            })
         }
 
         if (this.isDirty && Date.now()-this.tsLastWrite<1000) {
@@ -729,6 +731,10 @@ export class ActivitiesRepository {
     protected logError(err:Error, fn:string, logProps?) {
         const props = logProps??{}
         this.logger.logEvent({message:'error',fn,error: err.message,...props, stack:err.stack})
+    }
+    protected logWarning(err:Error, fn:string, logProps?) {
+        const props = logProps??{}
+        this.logger.logEvent({message:'warning',fn,error: err.message,...props})
     }
 
     protected getRepo() {
