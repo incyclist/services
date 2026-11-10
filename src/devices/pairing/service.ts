@@ -1793,11 +1793,18 @@ export class DevicePairingService  extends IncyclistService{
             keys.forEach( key => {
                 const capability = update[key]
                 const current = capabilities.find( c=>c.capability===key)
-                if (current)
-                    this.mergeState(current,this.mappedCapability(capability))
+                if (current) {
+                    const mapped = this.mappedCapability(capability)
+                    if (key==='heartrate') {
+                        // diagnostic (temporary): find the merge call that leaves deviceName and
+                        // selected disagreeing with each other, instead of guessing from the symptom
+                        this.logEvent({message:'heartrate merge', before:{selected:current.selected,deviceName:current.deviceName,devices:current.devices?.length??0}, incoming:{selected:mapped.selected,deviceName:mapped.deviceName,devices:mapped.devices?.length??0, rawDevices:(mapped.devices??[]).map(d=>({udid:d.udid,selected:d.selected}))}})
+                    }
+                    this.mergeState(current,mapped)
+                }
                 else {
                     console.log('# capability not found ',key)
-                } 
+                }
 
             })
             this.updateCapabilityConfig()
