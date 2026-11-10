@@ -375,7 +375,7 @@ export class PairingGuidance {
         // Resistance first, so a pairing state that follows each step already finds the trainer in use
         const isControl = (e: { capability: IncyclistCapability }) => Number(e.capability === IncyclistCapability.Control)
         excluded.sort((a, b) => isControl(b) - isControl(a))
-            .forEach(e => { configuration.includeCapability(e.capability) })
+        excluded.forEach(e => { configuration.includeCapability(e.capability) })
 
         const now = Date.now()
         this.safeLog(FALLBACK_CANCELLED_EVENT, { capability: fallback.capability, msSinceOpen: now - this.openedAt, msSinceFallback: now - fallback.since })
