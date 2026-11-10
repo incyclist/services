@@ -313,11 +313,11 @@ describe.each([
             const pwr4 = detect(PowerMeter('4'))
             const head = pairing.getPendingConflicts()[0].id
 
-            expect(card()).toMatchObject({ id: head, queued: 2, queuedText: '2 more' })
+            expect(card()).toMatchObject({ id: head, queued: 2, queuedText: { full: '2 more devices to check', short: '2 more to check' } })
 
             openList(Power)
             await pick(pwr3)
-            expect(card()).toMatchObject({ id: head, queued: 1, queuedText: '1 more' })
+            expect(card()).toMatchObject({ id: head, queued: 1, queuedText: { full: '1 more device to check', short: '1 more to check' } })
 
             openList(Power)
             await pick(pwr4)

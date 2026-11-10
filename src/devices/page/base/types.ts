@@ -70,14 +70,14 @@ export type ConflictStepProps = {
     rows: Array<ConflictStepRowProps>
     /** how many more conflicts wait behind this one */
     queued: number
-    /** what the header says about them, e.g. "1 more"; not set when none waits */
-    queuedText?: string
+    /** what to say about them, e.g. "2 more devices to check"; `short` is the phone copy; not set when none waits */
+    queuedText?: { full: string, short: string }
     onChoice: (capability: TIncyclistCapability, choice: ConflictChoice) => void
     /** applies the choices */
     onDone: () => void
     /**
-     * ✕ on the card: keeps every current device. Esc or a tap outside the list's step: applies the
-     * choices made so far, the same as Done.
+     * Dismissal (a tap outside the dialog, Esc or back): applies the choices made so far, the same as
+     * Done. There is no ✕.
      */
     onDismiss: () => void
 }

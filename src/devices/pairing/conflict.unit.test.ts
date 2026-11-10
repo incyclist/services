@@ -32,7 +32,11 @@ describe('conflict step copy', () => {
         expect(getConflictReplaceLabel('Tacx Neo 2T')).toBe('Use Tacx Neo 2T')
     })
 
-    test.each<[number, string | undefined]>([[0, undefined], [1, '1 more'], [3, '3 more']])('%i waiting behind the card: %p', (queued, text) => {
-        expect(getConflictQueuedText(queued)).toBe(text)
+    test.each<[number, { full: string, short: string } | undefined]>([
+        [0, undefined],
+        [1, { full: '1 more device to check', short: '1 more to check' }],
+        [3, { full: '3 more devices to check', short: '3 more to check' }],
+    ])('%i waiting behind the dialog: %p', (queued, text) => {
+        expect(getConflictQueuedText(queued)).toEqual(text)
     })
 })

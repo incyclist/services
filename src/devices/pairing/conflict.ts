@@ -63,9 +63,16 @@ export const getConflictKeepLabel = (currentName: string): string => `Keep ${cur
 export const getConflictReplaceLabel = (deviceName: string): string => `Use ${deviceName}`
 
 /**
- * What the conflict card's header says about the conflicts waiting behind it.
+ * What to say in the dialog's footer about the conflicts waiting behind the one shown, next to Done -
+ * not "{n} more" on its own, which under a title ending "...can also measure more" reads as "can
+ * measure {n} more things", not "{n} more questions are waiting".
  *
  * @param queued how many conflicts wait behind the one shown
- * @returns e.g. "1 more", or `undefined` when none waits
+ * @returns e.g. {full: "2 more devices to check", short: "2 more to check"}, or `undefined` when none waits
  */
-export const getConflictQueuedText = (queued: number): string | undefined => queued > 0 ? `${queued} more` : undefined
+export const getConflictQueuedText = (queued: number): { full: string, short: string } | undefined => {
+    if (queued<=0)
+        return undefined
+    const device = queued===1 ? 'device' : 'devices'
+    return { full: `${queued} more ${device} to check`, short: `${queued} more to check` }
+}
