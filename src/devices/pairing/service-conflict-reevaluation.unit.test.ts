@@ -276,6 +276,23 @@ describe('DevicePairingService - conflicts and later selection changes', () => {
             ])
         })
 
+        // the configuration service's own record was never in doubt (it's written synchronously,
+        // regardless of whether a change event fires); what this guards is the pairing service's own
+        // cached copy, which is what the page service reads to build tile props. A batched selection
+        // that never fires 'capability-changed' leaves this copy stale even though the configuration
+        // itself is correct, so the rider's tiles would keep showing the old device
+        test('the cached capability state the page reads from is refreshed for every row the rider replaced, not just the picked one', async () => {
+            const { trainer } = prepare()
+            const conflict = pairing.startManualConflict(Control, trainer)!
+
+            await pairing.commitManualConflict(conflict.id, [Power, Speed])
+
+            const state = pairing.getState()
+            expect(state.capabilities.find(c => c.capability === Control)?.selected).toBe(trainer)
+            expect(state.capabilities.find(c => c.capability === Power)?.selected).toBe(trainer)
+            expect(state.capabilities.find(c => c.capability === Speed)?.selected).toBe(trainer)
+        })
+
         test('closing the step another way still selects the device, with the choices made so far', async () => {
             const { pwr, trainer } = prepare()
             const conflict = pairing.startManualConflict(Control, trainer)!

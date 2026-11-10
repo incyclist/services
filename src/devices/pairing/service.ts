@@ -1242,22 +1242,28 @@ export class DevicePairingService  extends IncyclistService{
      * caller's earlier {@link previewSelectDevice}, so a slot filled in the meantime is kept.
      */
     protected selectDeviceObjectMode(capability:IncyclistCapability, udid:string, mode:{others:'fill-empty', replace:IncyclistCapability[]}):boolean {
-        let changed = this.selectCapabilityDevice(capability,udid,false)
-
         const adapter = this.getDeviceAdapter(udid)
-        const others = adapter.getCapabilities().filter( c=> c!==capability )
-
-        others.forEach( c => {
+        const toFill = adapter.getCapabilities().filter( c=> {
+            if (c===capability)
+                return false
             const current = this.getCapability(c)
             if (!current || current.disabled || this.isOnDeletedList(c,udid))
-                return
+                return false
 
             const isEmpty = !current.selected
             const shouldReplace = mode.replace.includes(c)
-            if (!isEmpty && !shouldReplace)
-                return
+            return isEmpty || shouldReplace
+        })
 
-            const wasChanged = this.selectCapabilityDevice(c,udid,false)
+        // only the last select of the batch emits: every earlier one would be overwritten anyway by
+        // the state refresh that emit triggers, and the config itself is already fully updated by
+        // the time it fires
+        const primaryIsLast = toFill.length===0
+        let changed = this.selectCapabilityDevice(capability,udid,primaryIsLast)
+
+        toFill.forEach( (c,idx) => {
+            const isLast = idx===toFill.length-1
+            const wasChanged = this.selectCapabilityDevice(c,udid,isLast)
             changed = changed || wasChanged
         })
 
