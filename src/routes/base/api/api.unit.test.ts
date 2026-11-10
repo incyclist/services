@@ -299,9 +299,24 @@ describe('IncyclistRoutesApi', () => {
             )
         })
 
-        test('error with an http response: still logged as error', async () => {
+        test('504 gateway timeout: logs a non-error event and returns undefined', async () => {
             api = new IncyclistRoutesApi()
             internalGet.mockRejectedValue(Object.assign(new Error('Request failed with status code 504'), { isAxiosError: true, response: { status: 504 } }))
+
+            const res = await api.getCountry({ lat: 1, lng: 2 })
+
+            expect(res).toBeUndefined()
+            expect(EventLogger.prototype.logEvent).not.toHaveBeenCalledWith(
+                expect.objectContaining({ message: 'Error' })
+            )
+            expect(EventLogger.prototype.logEvent).toHaveBeenCalledWith(
+                expect.objectContaining({ message: 'getCountry failed: no response from server', reason: 'Request failed with status code 504' })
+            )
+        })
+
+        test('error with another http response (500): still logged as error', async () => {
+            api = new IncyclistRoutesApi()
+            internalGet.mockRejectedValue(Object.assign(new Error('Request failed with status code 500'), { isAxiosError: true, response: { status: 500 } }))
 
             await api.getCountry({ lat: 1, lng: 2 })
 
