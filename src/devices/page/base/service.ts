@@ -4,22 +4,24 @@ import { IncyclistPageService } from '../../../base/pages'
 import {
     useDevicePairing, PAIRING_CAPABILITY_ROLES, getCapabilityHelpText, getEmptyTileFooterText, getPairingGuidanceText,
     getPairingRowLabelId, getPairingStatusDisplay, getPairingTileState, isCapabilityActive,
-    getPairingHelperFooter, getPairingHelperReasonLabel, getPairingHelperTip, getPairingHelperTitle, hasContinueWithoutDeviceAction,
-    PAIRING_HELPER_RESOLVED_TEXT, PAIRING_HELPER_SUBLINE
+    getFallbackActionLabel, getPairingHelperFooter, getPairingHelperReasonLabel, getPairingHelperTip, getPairingHelperTitle, hasContinueWithoutDeviceAction,
+    PAIRING_HELPER_RESOLVED_TEXT, PAIRING_HELPER_SUBLINE,
+    getCapabilityTitle, getConflictKeepLabel, getConflictQueuedText, getConflictReplaceLabel, getConflictStepSubline, getConflictStepTitle
 } from '../../pairing'
 
 import type { CapabilityDisplayProps, DeviceSelectionItemProps, DeviceSelectionProps, IObserver, PairingButtonProps, PairingDisplayProps, TConnectState, TDisplayCapability, TIncyclistCapability } from '../../../types'
 import type {
-    CapabilityData, ContinueWithoutDeviceTarget, DevicePairingData, InternalPairingState, PairingHelperReason, PairingInterfaceState,
+    CapabilityData, ConflictDismissal, ContinueWithoutDeviceTarget, DevicePairingData, InternalPairingState, PairingHelperReason, PairingInterfaceState,
     PairingPlatform, PairingRole, PairingStatusDisplayProps, PairingStatusSource, PairingStatusTrainerPhase, PairingTileState, SearchStatus,
-    PairingState
+    PairingState, SelectDeviceMode, SelectionConflict
 } from '../../pairing'
 import { PageLogObserver } from './logobserver'
 import { IncyclistCapability } from 'incyclist-devices'
 import { useDeviceConfiguration } from '../../configuration'
 import { usePairingVisitTracker } from './visit-log-factory'
 import type { PairingVisitTracker } from './visit-log'
-import type { PairingExitVia, PairingHelperDisplayProps } from './types'
+import type { ConflictChoice, ConflictStepProps, PairingExitVia, PairingHelperActionProps, PairingHelperDisplayProps } from './types'
+import type { PairingHelperState } from './guidance/types'
 import type { DesktopPairingDisplayProps } from '../desktop/types'
 import type { PairingOrchestrator } from './orchestrator'
 import { PairingGuidance } from './guidance'
@@ -49,6 +51,13 @@ export abstract class PairingPageService extends IncyclistPageService {
 
     protected guidance: PairingGuidance
     protected onPairingStateHandler = this.onPairingState.bind(this)
+    protected onExclusionRevertedHandler = this.onExclusionReverted.bind(this)
+    protected onSelectionConflictHandler = this.updatePage.bind(this)
+
+    // the second step of a pick in the Resistance list, while it's open, and the rider's choices in it
+    protected conflictStep?: { conflict: SelectionConflict, choices: Map<IncyclistCapability, ConflictChoice> }
+    // the rider's choices on the conflict card, for the conflict it shows
+    protected cardChoices?: { id: string, choices: Map<IncyclistCapability, ConflictChoice> }
 
     constructor() {
         super('pairing')
@@ -57,6 +66,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.guidance = new PairingGuidance({
             log: (message, fields)=>{ this.logEvent({message, ...fields}) },
             onChange: ()=>{ this.updatePage() },
+            configuration: ()=>this.getDeviceConfiguration(),
         })
     }
 
@@ -217,7 +227,7 @@ export abstract class PairingPageService extends IncyclistPageService {
 
         const capability = this.getTCapability(cap)
         const title = this.getDisplayCapability(cap)
-        const onClick = ()=> { this.openDeviceSelection(cap)}
+        const openList = ()=> { this.openDeviceSelection(cap)}
 
         const role = PAIRING_CAPABILITY_ROLES.find( r=>r.capability===cap)?.role
         const helpText = {
@@ -231,14 +241,18 @@ export abstract class PairingPageService extends IncyclistPageService {
         // with a toggle that turns it straight back on, no new scan needed. T16b: nothing is
         // remembered (e.g. its device was deleted), shown as a plain tile inviting a fresh search.
         if (disabled) {
-            return this.getDisabledCapabilityDisplayProps(data, {title,capability,role,helpText,onClick})
+            return this.getDisabledCapabilityDisplayProps(data, {title,capability,role,helpText,onClick:openList})
         }
 
         const adapaters = this.state.adapters??[]
         const adapter = adapaters.find( ai=>data.selected && ai.udid===data.selected)
         const ifName = adapter?.adapter?.getInterface()
 
-        const onUnselect = data.selected ? ()=> { this.onCapabilityUnselect(cap) } : undefined
+        const tileState = this.getTileState(data, role, noSearch)
+        // a tile dimmed for the fallback has no switch; the Resistance tile's tap takes the trainer back
+        const onUnselect = data.selected && !tileState.dimmed ? ()=> { this.onCapabilityUnselect(cap) } : undefined
+        const useTrainerAgain = tileState.dimmed && cap===IncyclistCapability.Control
+        const onClick = useTrainerAgain ? ()=> { this.onUseTrainerAgain() } : openList
         const emptyFooter = this.getActiveCapabilityEmptyFooter(cap, role, noSearch)
 
         // during a search, a device that was only seen and hasn't been started yet is "found", not connected
@@ -248,7 +262,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         return {
             title, capability,deviceName, disabled:false, connectState,value:value?.toString(),unit,interface:ifName,
             role, helpText, emptyFooter, stateText,
-            ...this.getTileState(data, role, noSearch),
+            ...tileState,
             onClick, onUnselect
         }
 
@@ -258,15 +272,16 @@ export abstract class PairingPageService extends IncyclistPageService {
     protected getTileState(data:CapabilityData, role:CapabilityDisplayProps['role'], noSearch:boolean):PairingTileState {
         try {
             const control = (this.state.capabilities??[]).find( c=>c.capability===IncyclistCapability.Control)
-            const { trainerPhase } = this.guidance.getState()
+            const { trainerPhase, trainerRetry, fallback } = this.guidance.getState()
             const { selectedReason, separateSensor } = this.guidance.getHelper()
 
             return getPairingTileState({
                 capability: data.capability, role, disabled: data.disabled, selected: data.selected, connectState: data.connectState,
                 noSearch, canStartRide: this.canStartRide(),
-                trainerPhase, trainerUdid: control?.selected,
+                trainerPhase, trainerRetry, trainerUdid: control?.selected,
                 trainerUnavailablePicked: selectedReason==='trainer_unavailable',
                 separateSensor: separateSensor!==undefined,
+                fallbackActive: fallback!==undefined,
             })
         }
         catch(err) {
@@ -319,14 +334,14 @@ export abstract class PairingPageService extends IncyclistPageService {
             value: d.value,
             interface: d.interface,
             isSelected: d.selected,
-            onClick: (addAll:boolean)=> {this.onDeviceSelected(d,addAll) },
+            onClick: (addAll?:boolean)=> {this.onDeviceSelected(d,addAll) },
             onDelete: ()=> {this.onDeviceDelete(d) }
 
         }))
 
         const disabled = devices.length>0 && !devices.some( d=> d.isSelected)
 
-        return {
+        const props:DeviceSelectionProps = {
             capability: this.openedCapability,
             devices,
             isScanning: this.stateMachine.selectState==='Active',
@@ -337,8 +352,128 @@ export abstract class PairingPageService extends IncyclistPageService {
             onClose: ()=>{ this.closeDeviceSelection()},
 
         }
+        return this.withConflictStep(props)
+    }
 
+    // the list's second step, while a pick in the Resistance list asks about slots held by another device
+    protected withConflictStep(props:DeviceSelectionProps):DeviceSelectionProps {
+        const step = this.conflictStep
+        if (step) {
+            props.conflictStep = this.getConflictStepProps(step.conflict, step.choices, 0, {
+                onDone: ()=>{ this.closeConflictStep('done') },
+                onDismiss: ()=>{ this.closeConflictStep('dismissed') },
+            })
+        }
+        return props
+    }
 
+    /**
+     * The card of the oldest conflict raised by the search, with the number of conflicts behind it.
+     * Not set while the panel it takes is busy - the helper is shown, or a device list is open - so the
+     * UI never checks that itself; the conflicts stay queued and the card comes back once both are closed.
+     */
+    protected getPendingConflictDisplayProps():ConflictStepProps|undefined {
+        try {
+            if (!this.isVisitOpen || this.isPanelSlotTaken())
+                return undefined
+
+            const pending = this.getDevicePairing().getPendingConflicts?.() ?? []
+            const [head] = pending
+            if (!head) {
+                delete this.cardChoices
+                return undefined
+            }
+            if (this.cardChoices?.id!==head.id)
+                this.cardChoices = { id:head.id, choices:new Map() }
+
+            return this.getConflictStepProps(head, this.cardChoices.choices, pending.length-1, {
+                onDone: ()=>{ this.onConflictCardDone(head.id) },
+                onDismiss: ()=>{ this.onConflictCardDismissed(head.id) },
+            })
+        }
+        catch(err) {
+            this.logError(err,'getPendingConflictDisplayProps')
+            return undefined
+        }
+    }
+
+    // the card shares its panel with the helper, also while the helper says the row is ready
+    protected isPanelSlotTaken():boolean {
+        if (this.openedCapability!==undefined)
+            return true
+        try {
+            return this.guidance.getHelper().phase!=='hidden'
+        }
+        catch(err) {
+            this.logError(err,'isPanelSlotTaken')
+            return false
+        }
+    }
+
+    protected getConflictStepProps(conflict:SelectionConflict, choices:Map<IncyclistCapability,ConflictChoice>, queued:number,
+            handlers:Pick<ConflictStepProps,'onDone'|'onDismiss'>):ConflictStepProps {
+        const {id, origin, deviceName, filled} = conflict
+        const props:ConflictStepProps = {
+            id, origin, deviceName,
+            title: getConflictStepTitle(deviceName),
+            subline: getConflictStepSubline(origin, deviceName, filled),
+            rows: conflict.conflicts.map( c=>({
+                capability: this.getTCapability(c.capability),
+                capabilityTitle: getCapabilityTitle(c.capability),
+                currentName: c.currentName,
+                choice: choices.get(c.capability) ?? 'keep',
+                keepLabel: getConflictKeepLabel(c.currentName),
+                replaceLabel: getConflictReplaceLabel(deviceName),
+            })),
+            queued,
+            onChoice: (capability, choice)=>{
+                choices.set(capability as IncyclistCapability, choice)
+                this.updatePage()
+            },
+            ...handlers,
+        }
+        const queuedText = getConflictQueuedText(queued)
+        if (queuedText)
+            props.queuedText = queuedText
+        return props
+    }
+
+    protected getReplacedCapabilities(choices:Map<IncyclistCapability,ConflictChoice>):IncyclistCapability[] {
+        return [...choices].filter( ([,choice])=>choice==='replace').map( ([capability])=>capability)
+    }
+
+    // the card's Done: the conflict itself is answered, so the other conflicts aren't checked again
+    protected onConflictCardDone(id:string):void {
+        const replace = this.getReplacedCapabilities(this.cardChoices?.choices ?? new Map())
+        delete this.cardChoices
+        this.getDevicePairing().resolveConflict(id, replace)
+            .catch( err=>{ this.logError(err,'onConflictCardDone') })
+        this.updatePage()
+    }
+
+    // a tap outside the dialog or Esc/back: applies the choices made so far, same as Done - there's
+    // no ✕ any more, so this is the only way to close it other than confirming
+    protected onConflictCardDismissed(id:string):void {
+        const replace = this.getReplacedCapabilities(this.cardChoices?.choices ?? new Map())
+        delete this.cardChoices
+        this.getDevicePairing().resolveConflict(id, replace, 'dismissed')
+            .catch( err=>{ this.logError(err,'onConflictCardDismissed') })
+        this.updatePage()
+    }
+
+    /**
+     * A selection changed somewhere other than in a conflict: the pending conflicts are checked again
+     * right away, so the next page update never shows a conflict this change already settled.
+     *
+     * @param changed the capabilities whose selection changed; all are checked if not given
+     */
+    protected reevaluateConflicts(changed?:IncyclistCapability[]):void {
+        try {
+            this.getDevicePairing().reevaluatePendingConflicts?.(changed)
+        }
+        catch(err) {
+            this.logError(err,'reevaluateConflicts')
+        }
     }
 
     /**
@@ -372,20 +507,95 @@ export abstract class PairingPageService extends IncyclistPageService {
         const capability = this.openedCapability
         this.logEvent( {message:'device selected', capability, device:d.name})
 
-        this.closeDeviceSelection()
-        this.getDevicePairing().selectDevice( capability, d.udid,addAll)
-            .catch( err=>{ this.logError(err,'onDeviceSelected') })
+        // a pick in the Resistance list without the deprecated "for all" switch: free slots are filled,
+        // and slots held by another device are asked about first
+        if (capability===IncyclistCapability.Control && addAll===undefined) {
+            this.onResistanceDevicePicked(d)
+            return
+        }
 
+        this.closeDeviceSelection()
+        this.selectDevice( capability, d.udid, addAll??false)
         this.updatePage()
+    }
+
+    protected onResistanceDevicePicked(d:DevicePairingData):void {
+        const conflict = this.startManualConflict(d.udid)
+        if (conflict) {
+            this.conflictStep = { conflict, choices:new Map() }
+            this.updatePage()
+            return
+        }
+
+        this.closeDeviceSelection()
+        this.selectDevice( IncyclistCapability.Control, d.udid, {others:'fill-empty', replace:[]})
+        this.updatePage()
+    }
+
+    protected startManualConflict(udid:string):SelectionConflict|undefined {
+        try {
+            return this.getDevicePairing().startManualConflict?.(IncyclistCapability.Control, udid)
+        }
+        catch(err) {
+            this.logError(err,'startManualConflict')
+            return undefined
+        }
+    }
+
+    // a pick in a device list; the pending conflicts are checked again before the page shows them
+    protected selectDevice(capability:IncyclistCapability, udid:string, mode:SelectDeviceMode):void {
+        this.getDevicePairing().selectDevice( capability, udid, mode)
+            .catch( err=>{ this.logError(err,'onDeviceSelected') })
+        this.reevaluateConflicts( mode===false ? [capability] : undefined)
+    }
+
+    // the list's second step closes: the pick is applied with the choices made in it
+    protected closeConflictStep(via:'done'|ConflictDismissal):void {
+        if (!this.commitConflictStep(via))
+            return
+        this.closeDeviceSelection()
+        this.updatePage()
+    }
+
+    /** @returns whether a step was open */
+    protected commitConflictStep(via:'done'|ConflictDismissal):boolean {
+        const step = this.conflictStep
+        if (!step)
+            return false
+        delete this.conflictStep
+
+        this.getDevicePairing().commitManualConflict(step.conflict.id, this.getReplacedCapabilities(step.choices), via)
+            .catch( err=>{ this.logError(err,'commitConflictStep') })
+        this.reevaluateConflicts()
+        return true
     }
 
     protected onCapabilityUnselect(cap:IncyclistCapability) {
         this.logEvent( {message:'capability unselect clicked', capability:cap, eventSource:'user'})
 
+        // while the trainer connects or can't be reached, switching Resistance off means "my trainer
+        // isn't available today": the helper opens, and the trainer stays the rider's trainer
+        if (cap===IncyclistCapability.Control && this.getResistanceUnselectAction()==='open-helper') {
+            this.withGuidance( g=>g.openHelperForUnavailableTrainer('tile_unselect'), 'onCapabilityUnselect')
+            this.updatePage()
+            return
+        }
+
         this.getDevicePairing().unselectDevices(cap)
             .catch( err=>{ this.logError(err,'onCapabilityUnselect') })
+        this.reevaluateConflicts([cap])
 
         this.updatePage()
+    }
+
+    protected getResistanceUnselectAction():'open-helper'|'unselect' {
+        try {
+            return this.guidance.getResistanceUnselectAction()
+        }
+        catch(err) {
+            this.logError(err,'getResistanceUnselectAction')
+            return 'unselect'
+        }
     }
 
     // turns a switched-off capability (T16) back on, restoring its remembered device with no scan
@@ -393,6 +603,7 @@ export abstract class PairingPageService extends IncyclistPageService {
         this.logEvent( {message:'capability use clicked', capability:cap, eventSource:'user'})
 
         this.getDevicePairing().useCapability(cap)
+        this.reevaluateConflicts([cap])
 
         this.updatePage()
     }
@@ -403,6 +614,7 @@ export abstract class PairingPageService extends IncyclistPageService {
 
         this.getDevicePairing().deleteDevice( capability, d.udid)
             .catch( err=>{ this.logError(err,'onDeviceDelete') })
+        this.reevaluateConflicts([capability])
 
         this.updatePage()
     }
@@ -415,6 +627,9 @@ export abstract class PairingPageService extends IncyclistPageService {
         // confirmed from static analysis alone, so capture the call stack to identify it
         // the next time this is captured in production.
         this.logEvent( {message:'capability closed', capability:this.openedCapability, caller:new Error().stack})
+
+        // closing the list during its second step (Esc, a tap outside) applies the choices made so far
+        this.commitConflictStep('dismissed')
 
         this.openedCapability = undefined
         Promise.resolve(this.stateMachine.onDeviceSelectionClosed())
@@ -527,6 +742,9 @@ export abstract class PairingPageService extends IncyclistPageService {
     }
 
     protected closeVisit(via:PairingExitVia):void {
+        // a pick in the Resistance list still asking about slots is applied with the choices made so far
+        this.commitConflictStep('left_page')
+        delete this.cardChoices
         this.trackVisit( t=>t.closeVisit(via,{canStartRide:this.canStartRide()}), 'closeVisit')
         this.trackVisit( t=>t.setExitFields(undefined), 'closeVisit')
         this.withGuidance( g=>g.closeVisit(), 'closeVisit')
@@ -548,8 +766,13 @@ export abstract class PairingPageService extends IncyclistPageService {
         try {
             const pairing = this.getDevicePairing()
             pairing.off?.('pairing-state', this.onPairingStateHandler)
-            if (listen)
+            pairing.off?.('exclusion-reverted', this.onExclusionRevertedHandler)
+            pairing.off?.('selection-conflict', this.onSelectionConflictHandler)
+            if (listen) {
                 pairing.on?.('pairing-state', this.onPairingStateHandler)
+                pairing.on?.('exclusion-reverted', this.onExclusionRevertedHandler)
+                pairing.on?.('selection-conflict', this.onSelectionConflictHandler)
+            }
         }
         catch(err) {
             this.logError(err,'listenToPairingState')
@@ -558,6 +781,12 @@ export abstract class PairingPageService extends IncyclistPageService {
 
     protected onPairingState(state:PairingState):void {
         this.withGuidance( g=>g.onPairingState(state), 'onPairingState')
+    }
+
+    // a device excluded as not available connected while the page is open, and is in use again
+    protected onExclusionReverted(event:{udid:string}):void {
+        this.withGuidance( g=>g.onFallbackReverted(event?.udid), 'onExclusionReverted')
+        this.updatePage()
     }
 
     /**
@@ -600,13 +829,25 @@ export abstract class PairingPageService extends IncyclistPageService {
             .filter( c=>c!==undefined)
 
         const trainerSelected = isCapabilityActive(caps.find( c=>c.capability===IncyclistCapability.Control))
+        const fallbackReady = this.isFallbackActive() && this.canStartRide()
         return {
             top: row('required'),
             bottom: row('optional'),
             rowLabels: {
-                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking(), this.getTrainerPhase())),
+                top: getPairingGuidanceText(getPairingRowLabelId(trainerSelected, this.isStillLooking(), this.getTrainerPhase(), fallbackReady)),
                 bottom: getPairingGuidanceText('row-optional'),
             },
+        }
+    }
+
+    // the ride falls back to another device because the trainer isn't available
+    protected isFallbackActive():boolean {
+        try {
+            return this.guidance.getState().fallback!==undefined
+        }
+        catch(err) {
+            this.logError(err,'isFallbackActive')
+            return false
         }
     }
 
@@ -664,17 +905,78 @@ export abstract class PairingPageService extends IncyclistPageService {
         }
 
         props.tip = getPairingHelperTip(selectedReason, {platform, separateSensor})
-        if (hasContinueWithoutDeviceAction(selectedReason, separateSensor)) {
-            const {label, note} = this.guidance.getContinueWithoutDeviceAction()
-            props.action = { label, onClick: ()=>{ this.onContinueWithoutDevice() } }
-            if (note)
-                props.action.note = note
-        }
+        const action = this.getHelperActionProps(selectedReason, helper)
+        if (action)
+            props.action = action
         return props
     }
 
+    // under "not available today": riding on the separate device if there is one, otherwise the no-device action
+    protected getHelperActionProps(reason:PairingHelperReason, helper:PairingHelperState):PairingHelperActionProps|undefined {
+        const {fallbackCandidate, separateSensor} = helper
+        if (reason==='trainer_unavailable' && fallbackCandidate)
+            return { label: getFallbackActionLabel(fallbackCandidate), onClick: ()=>{ this.onChooseFallback() } }
+
+        if (!hasContinueWithoutDeviceAction(reason, separateSensor))
+            return undefined
+
+        const {label, note} = this.guidance.getContinueWithoutDeviceAction()
+        const action:PairingHelperActionProps = { label, onClick: ()=>{ this.onContinueWithoutDevice() } }
+        if (note)
+            action.note = note
+        return action
+    }
+
+    /** The rider chose to ride on the separate power meter or speed sensor while the trainer isn't available. */
+    protected onChooseFallback():void {
+        this.withGuidance( g=>{ g.chooseFallback() }, 'onChooseFallback')
+        this.updatePage()
+    }
+
+    /**
+     * The rider tapped the dimmed Resistance tile while the ride falls back to another device: the
+     * trainer is taken back into use, and a connection attempt starts right away, so the page goes
+     * straight to trying to reach it instead of waiting for the next automatic attempt.
+     */
+    protected onUseTrainerAgain():void {
+        this.logEvent( {message:'use trainer again clicked', eventSource:'user'})
+
+        let started = false
+        this.withGuidance( g=>{
+            g.cancelFallback()
+            started = g.startRiderRetry({trigger:'tile'})
+        }, 'onUseTrainerAgain')
+
+        const covered = this.reconnectNow()
+        if (started)
+            this.withGuidance( g=>g.logRiderRetry(covered), 'onUseTrainerAgain')
+
+        this.updatePage()
+    }
+
+    protected reconnectNow():IncyclistCapability[] {
+        try {
+            return this.getDevicePairing().reconnectNow() ?? []
+        }
+        catch(err) {
+            this.logError(err,'reconnectNow')
+            return []
+        }
+    }
+
+    // the status line's link: while the trainer can't be reached it's "not available today?"
     protected onHelperOpen():void {
+        if (this.getTrainerPhase()==='unavailable') {
+            this.onTrainerUnavailable()
+            return
+        }
         this.withGuidance( g=>g.openHelper(), 'onHelperOpen')
+        this.updatePage()
+    }
+
+    /** The status line's "not available today?" link: the helper opens with that answer picked. */
+    protected onTrainerUnavailable():void {
+        this.withGuidance( g=>g.openHelperForUnavailableTrainer('trainer_unavailable_link'), 'onTrainerUnavailable')
         this.updatePage()
     }
 

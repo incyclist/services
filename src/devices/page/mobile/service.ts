@@ -73,6 +73,7 @@ export class MobilePairingPageService extends PairingPageService {
                 buttons: this.getButtonsDisplayProps(noSearch),
                 onExit,
                 ...this.getGuidanceDisplayProps(),
+                pendingConflict: this.getPendingConflictDisplayProps(),
             }
 
         }

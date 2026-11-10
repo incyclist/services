@@ -561,4 +561,72 @@ describe('getPairingRowLabelId', () => {
     it('ignores the trainer phase when no trainer is selected', () => {
         expect(getPairingRowLabelId(false, false, 'unavailable')).toBe('row-required')
     })
+
+    // while the ride falls back to another device, the trainer is excluded: it no longer counts as selected
+    it.each<[boolean, PairingStatusTrainerPhase | undefined]>([[false, 'unavailable'], [true, 'unavailable'], [false, undefined]])(
+        'a ride ready on the fallback says so instead of waiting for the trainer (trainer selected: %s, phase: %s)', (trainerSelected, phase) => {
+            expect(getPairingRowLabelId(trainerSelected, false, phase, true)).toBe('row-ready-without-resistance')
+            expect(getPairingGuidanceText(getPairingRowLabelId(trainerSelected, false, phase, true)))
+                .toEqual({ text: '✓ READY TO RIDE', subtext: 'without resistance control' })
+        })
+
+    it('without the fallback, an unreachable trainer is still waited for', () => {
+        expect(getPairingRowLabelId(true, false, 'unavailable', false)).toBe('row-required-trainer-waiting')
+    })
+})
+
+describe('getPairingTileState - riding without the trainer, and the rider\'s own attempt', () => {
+    const TRAINER = 'trainer-1'
+    const onFallback = (capability: string, selected?: string, connectState?: string): PairingTileStateInput => ({
+        capability, role: PAIRING_CAPABILITY_ROLES.find(r => r.capability === capability)?.role,
+        selected, connectState, trainerPhase: 'unavailable', trainerUdid: TRAINER, fallbackActive: true, canStartRide: true,
+    })
+
+    it('the Resistance tile is dimmed and a tap takes the trainer back into use', () => {
+        expect(getPairingTileState(onFallback('control', TRAINER, 'waiting'))).toEqual({
+            trainerRole: 'trainer', roleLabel: 'Your trainer', footerText: { full: 'Tap to use again', short: 'Tap to use again' }, awaited: false, dimmed: true,
+        })
+    })
+
+    it.each(['speed', 'cadence', 'heartrate'])('another %s tile holding the trainer is dimmed and not used', (capability) => {
+        expect(getPairingTileState(onFallback(capability, TRAINER, 'waiting'))).toEqual({
+            trainerRole: 'via-trainer', footerText: { full: 'Not used', short: 'Not used' }, awaited: false, dimmed: true,
+        })
+    })
+
+    it('the device the ride falls back to looks like any connected tile', () => {
+        expect(getPairingTileState(onFallback('power', 'pm-1', 'connected'))).toEqual({ awaited: false })
+    })
+
+    it('while the rider\'s own attempt runs, the Resistance tile says it is connecting', () => {
+        const input: PairingTileStateInput = { capability: 'control', role: 'required', selected: TRAINER, connectState: 'connecting', trainerPhase: 'unavailable', trainerUdid: TRAINER, trainerRetry: 'running' }
+        expect(getPairingTileState(input)).toEqual({ trainerRole: 'trainer', roleLabel: 'Your trainer', footerText: { full: 'Connecting…', short: 'Connecting…' }, awaited: true })
+        expect(getPairingTileState({ ...input, trainerRetry: 'failed' }).footerText).toEqual({ full: 'Waiting to connect', short: 'Waiting…' })
+    })
+})
+
+describe('derivePairingStatus - the rider\'s own attempt to reach the trainer', () => {
+    const base = { platform: 'desktop' as const, interfaces: [{ id: 'ble' as const, enabled: true, available: true }], anyDeviceSelected: true, initialising: false, searching: false, canStartRide: false }
+
+    it.each<[PairingStatusTrainerPhase | undefined, 'running' | 'failed', string]>([
+        ['unavailable', 'running', 'S7a'],
+        ['unavailable', 'failed', 'S7b'],
+        ['connecting', 'running', 'S3'],
+        ['connected', 'failed', 'S5'],
+        [undefined, 'running', 'S5'],
+    ])('trainer %s, attempt %s: %s', (trainerPhase, trainerRetry, expected) => {
+        expect(derivePairingStatus({ ...base, trainerPhase, trainerRetry })).toBe(expected)
+    })
+
+    it('a ready ride wins over it', () => {
+        expect(derivePairingStatus({ ...base, canStartRide: true, trainerPhase: 'unavailable', trainerRetry: 'running' })).toBe('S2')
+    })
+
+    it.each<['S7a' | 'S7b', string, string]>([
+        ['S7a', 'Trying to reach your trainer Tacx Flux…', 'Trying to reach Tacx Flux…'],
+        ['S7b', "Still can't reach your trainer Tacx Flux. Check it's switched on and not connected to another app.", "Still can't reach Tacx Flux"],
+    ])('%s keeps the "not available" link', (id, full, short) => {
+        expect(getPairingGuidanceText(id, { trainerName: 'Tacx Flux' })).toMatchObject({ text: full, link: 'Not available today?' })
+        expect(getPairingGuidanceText(id, { trainerName: 'Tacx Flux' }, 'short')).toMatchObject({ text: short, link: 'Not available?' })
+    })
 })

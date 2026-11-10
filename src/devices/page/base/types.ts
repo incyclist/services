@@ -31,6 +31,55 @@ export type PairingDisplayProps = {
     trainerPhase?: TrainerPhase
     /** the "can't find your trainer" helper; set while a visit is open. Not yet rendered by any consumer. */
     helper?: PairingHelperDisplayProps
+    /**
+     * A device found by the search wants slots that already hold a different device: render it as a
+     * card exactly as given. It's left out while the helper is open or a device list is open (the
+     * conflict stays queued and comes back once both are closed), so the UI never needs to check that.
+     */
+    pendingConflict?: ConflictStepProps
+}
+
+/** What the rider chose for one slot of a conflict: keep its current device, or give it to the new one. */
+export type ConflictChoice = 'keep' | 'replace'
+
+/** One slot of a conflict. */
+export type ConflictStepRowProps = {
+    capability: TIncyclistCapability
+    /** the slot's tile title, e.g. "Power" */
+    capabilityTitle: string
+    /** the device the slot holds now */
+    currentName: string
+    /** 'keep' until the rider picks otherwise */
+    choice: ConflictChoice
+    keepLabel: string
+    replaceLabel: string
+}
+
+/**
+ * A device that wants slots already held by a different device: the same rows both as the card of a
+ * device found by the search and as the second step of a pick in the Resistance list.
+ */
+export type ConflictStepProps = {
+    /** stable for this conflict, opaque to the UI */
+    id: string
+    origin: 'detection' | 'manual'
+    deviceName: string
+    title: string
+    /** the free slots the device fills, and that nothing changes until the rider chooses; `short` is the phone copy */
+    subline: { full: string, short: string }
+    rows: Array<ConflictStepRowProps>
+    /** how many more conflicts wait behind this one */
+    queued: number
+    /** what to say about them, e.g. "2 more devices to check"; `short` is the phone copy; not set when none waits */
+    queuedText?: { full: string, short: string }
+    onChoice: (capability: TIncyclistCapability, choice: ConflictChoice) => void
+    /** applies the choices */
+    onDone: () => void
+    /**
+     * Dismissal (a tap outside the dialog, Esc or back): applies the choices made so far, the same as
+     * Done. There is no ✕.
+     */
+    onDismiss: () => void
 }
 
 /** One answer in the helper. */
@@ -72,8 +121,18 @@ export type DeviceSelectionProps = {
     devices: Array<DeviceSelectionItemProps>
     disabled: boolean,
     isScanning: boolean
+    /**
+     * @deprecated A pick in the Resistance list no longer needs a "for all" switch: call the item's
+     * `onClick()` without an argument, and conflicts come as `conflictStep`. Kept until the UIs have
+     * migrated.
+     */
     changeForAll: boolean
+    /**
+     * @deprecated See `changeForAll`. Kept until the UIs have migrated.
+     */
     canSelectAll: boolean
+    /** set after a pick in the Resistance list that takes slots held by a different device */
+    conflictStep?: ConflictStepProps
     onClose: ()=>void
 }
 
@@ -84,6 +143,11 @@ export type DeviceSelectionItemProps = {
     deviceName: string
     value: number,
     interface: string,
+    /**
+     * Picks the device. In the Resistance list, without `addAll` the pick fills the free slots the
+     * device supports and asks about the ones held by another device (`conflictStep`); a boolean
+     * keeps the deprecated "for all" behaviour.
+     */
     onClick?: (addAll?:boolean)=>void
     onDelete?: ()=>void
 }
@@ -113,6 +177,12 @@ export type CapabilityDisplayProps = {
     footerText?: { full: string, short: string }
     /** The page is waiting for this tile: show the amber outline. */
     awaited: boolean
+    /**
+     * A device is there but deliberately not used right now, because the ride falls back to another
+     * device while the trainer isn't available: show the tile dimmed, without a switch. On the
+     * Resistance tile, `onClick` then takes the trainer back into use instead of opening the list.
+     */
+    dimmed?: boolean
     onClick: (item:CapabilityDisplayProps)=>void
     /** Turns the capability off. Only set on a tile with a selected, enabled device. */
     onUnselect?: ()=>void

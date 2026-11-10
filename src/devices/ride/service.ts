@@ -13,6 +13,7 @@ import { Route } from "../../routes/base/model/route";
 import { useGoogleMaps } from "../../apps";
 import { RouteApiDetail } from "../../routes/base/api/types";
 import { DaumEppProgramEntry, RoutePoint } from "../../routes/base/types";
+import { getPairingStartTimeout } from "./timeouts";
 
 
 const NO_DATA_THRESHOLD = 10000
@@ -689,8 +690,10 @@ export class DeviceRideService  extends IncyclistService{
             return allOK;
         }
         finally {
-            // also on a rejected start, so no stale start is left for the next one to wait for
-            this.startPromises = null;
+            // also on a rejected start, so no stale start is left for the next one to wait for.
+            // A start that was dropped and settles late must not clear the start that followed it.
+            if (this.startPromises===startPromises)
+                this.startPromises = null;
         }
 
     }
@@ -784,9 +787,7 @@ export class DeviceRideService  extends IncyclistService{
     }
 
     private initForPairing(startProps: any, ai: AdapterRideInfo) {
-        startProps.timeout = 10000;
-        if (ai.adapter.getSettings().interface === 'ble')
-            startProps.timeout = 30000;
+        startProps.timeout = getPairingStartTimeout(ai.adapter)
     }
 
     private initCyclingMode(ai: AdapterRideInfo, forceErgMode: any) {
@@ -1324,6 +1325,35 @@ export class DeviceRideService  extends IncyclistService{
         delete this.rideAdapters
 
         return true;
+    }
+
+    /**
+     * Drops a pending start without waiting for it.
+     *
+     * Every device that hasn't started yet is stopped, but the stops are only fired: a stop that
+     * never settles can't block the caller. Devices that are already started are left as they are.
+     * Unlike {@link cancelStart}, the pending start is cleared right away, so the next start doesn't
+     * wait for it.
+     */
+    dropPendingStart():void {
+        if (!this.startPromises)
+            return
+
+        this.logEvent({message:'drop pending start'})
+
+        const adapters = this.getRideAdapters()
+        adapters?.forEach(ai=> {
+            const d = ai.adapter
+            if (d.isStarted())
+                return
+
+            this.unsubscribeDeviceEvents(d)
+            this.logEvent({message:'drop pending start of device',udid:ai.udid})
+            d.stop().catch( err=>{ this.logError(err,'dropPendingStart') })
+        })
+
+        this.startPromises = null
+        delete this.rideAdapters
     }
 
      

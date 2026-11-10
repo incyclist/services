@@ -39,8 +39,14 @@ describe('DevicePairingService - devices found by a scan', () => {
     let pairing: DevicePairingService
     let logEvent: jest.SpyInstance
 
+    // a detection-triggered conflict settles (becomes visible) ~2s after the last one arrives;
+    // advancing past that here keeps every existing test's assertions synchronous, the same as
+    // before the settle delay existed. Tests of the settle/burst behaviour itself detect without
+    // this helper, calling onDeviceDetected and advancing explicitly.
+    const CONFLICT_SETTLE_MS = 2000
     const detect = (settings: Record<string, unknown>): string => {
         (pairing as any).onDeviceDetected(settings)
+        jest.advanceTimersByTime(CONFLICT_SETTLE_MS)
         return configuration.getUdid(settings as any) as string
     }
 
@@ -48,6 +54,7 @@ describe('DevicePairingService - devices found by a scan', () => {
     const selectedOf = (capability: IncyclistCapability) => configuration.getConfiguredSelection(capability)
 
     beforeEach(async () => {
+        jest.useFakeTimers()
         SerialPortProvider.getInstance().getBinding = jest.fn().mockReturnValue({})
 
         configuration = new DeviceConfigurationService()
@@ -77,6 +84,7 @@ describe('DevicePairingService - devices found by a scan', () => {
         Inject('DeviceConfiguration', null)
         AdapterFactory.reset()
         jest.clearAllMocks()
+        jest.useRealTimers()
     })
 
     afterAll(() => {
@@ -121,6 +129,39 @@ describe('DevicePairingService - devices found by a scan', () => {
     })
 
     describe('conflicts', () => {
+
+        describe('the settle delay', () => {
+
+            test('is not visible until it elapses', () => {
+                (pairing as any).onDeviceDetected(PowerMeter('1'))
+                const pwr = configuration.getUdid(PowerMeter('1') as any)
+                ;(pairing as any).onDeviceDetected(Trainer('2'))
+
+                expect(pairing.getPendingConflicts()).toEqual([])
+                jest.advanceTimersByTime(CONFLICT_SETTLE_MS - 1)
+                expect(pairing.getPendingConflicts()).toEqual([])
+
+                jest.advanceTimersByTime(1)
+                expect(pairing.getPendingConflicts()).toHaveLength(1)
+                // nothing is replaced while it's only pending
+                expect(selectedOf(IncyclistCapability.Power)).toBe(pwr)
+            })
+
+            test('a second conflict arriving just before the window closes resets it, so a burst opens together', () => {
+                detect(PowerMeter('1'))
+                ;(pairing as any).onDeviceDetected(Trainer('2'))
+                jest.advanceTimersByTime(CONFLICT_SETTLE_MS - 1)
+                expect(pairing.getPendingConflicts()).toEqual([])
+
+                // a second conflicting device arrives just before the window would have closed
+                ;(pairing as any).onDeviceDetected(PowerMeter('3'))
+                jest.advanceTimersByTime(CONFLICT_SETTLE_MS - 1)
+                expect(pairing.getPendingConflicts()).toEqual([])
+
+                jest.advanceTimersByTime(1)
+                expect(pairing.getPendingConflicts()).toHaveLength(2)
+            })
+        })
 
         test('a newly detected trainer meeting a power meter in Power/Speed/Cadence raises a conflict and replaces nothing', () => {
             const pwr = detect(PowerMeter('1'))

@@ -9,7 +9,8 @@ import {
     PairingHint,
     PairingPlatform,
     PairingStatusId,
-    PairingStatusTrainerPhase
+    PairingStatusTrainerPhase,
+    PairingTrainerRetry
 } from './guidance'
 import { ActivatableCapability, isCapabilityActive } from './capability'
 
@@ -56,6 +57,8 @@ export interface PairingStatusSource {
     searchEndedWithoutTrainer?: boolean
     /** where the configured trainer's connection attempt stands; only set while a trainer is configured */
     trainerPhase?: PairingStatusTrainerPhase
+    /** the rider's own attempt to reach the trainer (S7a/S7b), only shown while it can't be reached */
+    trainerRetry?: PairingTrainerRetry
     /** when the first-use partial outage started to hold, once the page had finished getting ready */
     partialOutageSince?: number
     /** the current time, for the partial-outage hold; defaults to now */
@@ -166,6 +169,7 @@ export const getPairingStatusDisplay = (src: PairingStatusSource): PairingStatus
         stillLooking: src.stillLooking,
         searchEndedWithoutTrainer: src.searchEndedWithoutTrainer,
         trainerPhase: src.trainerPhase,
+        trainerRetry: src.trainerRetry,
         trainerName: caps.trainer?.deviceName,
         allRequiredSwitchedOff: caps.allRequiredSwitchedOff,
         resistanceSwitchedOff: isSwitchedOffWithDevice(caps.trainer),

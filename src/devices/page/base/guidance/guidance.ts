@@ -5,12 +5,13 @@ import { PARTIAL_OUTAGE_DEBOUNCE_MS } from '../../../pairing/guidance'
 import { getPairingStatusDisplay, getPartialOutageHint } from '../../../pairing/status'
 import { getContinueWithoutDeviceAction, getPairingHelperReasons } from '../../../pairing/helper'
 import type { CapabilityData, PairingState } from '../../../pairing/model'
-import type { PairingHint, PairingInterfaceId, PairingInterfaceState, PairingPlatform, PairingStatusId } from '../../../pairing/guidance'
+import type { PairingHint, PairingInterfaceId, PairingInterfaceState, PairingPlatform, PairingStatusId, PairingTrainerRetry } from '../../../pairing/guidance'
 import type { PairingStatusCapability, PairingStatusDisplayProps, PairingStatusSource } from '../../../pairing/status'
 import type { ContinueWithoutDeviceAction, ContinueWithoutDeviceTarget, PairingHelperReason } from '../../../pairing/helper'
 import type {
-    PairingCase, PairingGuidanceDeps, PairingGuidanceExitFields, PairingGuidanceState, PairingGuidanceVisitProps, PairingHelperCloseVia,
-    PairingHelperPhase, PairingHelperState, PairingHelperTrigger, PartialOutage, TrainerPhase, TrainerPhaseCause
+    PairingCase, PairingFallbackCapability, PairingGuidanceDeps, PairingGuidanceExitFields, PairingGuidanceState, PairingGuidanceVisitProps,
+    PairingHelperCloseVia, PairingHelperPhase, PairingHelperState, PairingHelperTrigger, PartialOutage, RiderRetryResult, RiderRetryTrigger,
+    TrainerPhase, TrainerPhaseCause
 } from './types'
 
 /** Logged on every trainer phase change, with `fromPhase`, `toPhase`, `cause`, `attemptMs` and `interface`. */
@@ -33,6 +34,26 @@ export const HELPER_RESOLVED_EVENT = 'pairing helper resolved'
 
 /** Logged on every other way the helper closes. */
 export const HELPER_CLOSED_EVENT = 'pairing helper closed'
+
+/** Logged when the rider chooses to ride on another device while the trainer isn't available, with `capability` and `msSinceOpen`. */
+export const FALLBACK_CHOSEN_EVENT = 'pairing fallback chosen'
+
+/** Logged when the rider takes the trainer back into use, with `capability`, `msSinceOpen` and `msSinceFallback`. */
+export const FALLBACK_CANCELLED_EVENT = 'pairing fallback cancelled'
+
+/**
+ * Logged when the rider starts a connection attempt of their own, with `retryCapabilities`, `trigger`,
+ * `retryIndex`, `msSinceUnavailable`, `separateDeviceConnected`, `helperOpen`, `pairingCase` and `platform`.
+ */
+export const RIDER_RETRY_EVENT = 'pairing trainer retry'
+
+/** Logged when the rider's attempt ends, with `retryResult`, `durationMs`, `retryIndex`, `pairingCase` and `platform`. */
+export const RIDER_RETRY_ENDED_EVENT = 'pairing trainer retry ended'
+
+/** How long the page says resistance control is back on, after the trainer connected while the ride was on another device. */
+export const FALLBACK_REVERTED_DISPLAY_MS = 3000
+
+const NOT_AVAILABLE = { reason: 'not-available', scope: 'until-next-pairing' } as const
 
 /**
  * How long the page waits before it offers the helper by itself, per platform: after most successful
@@ -113,6 +134,25 @@ export class PairingGuidance {
     protected attemptElapsedMs = 0
     protected attemptResumedAt?: number
     protected attemptTimer?: ReturnType<typeof setTimeout>
+    protected unavailableSince?: number
+
+    // the attempt the rider started while the trainer can't be reached: its state, how many there
+    // were this visit, and its own timer
+    protected trainerRetry?: PairingTrainerRetry
+    protected retryIndex = 0
+    protected retryCase?: PairingCase
+    protected retrySawConnecting = false
+    protected retryStartFields?: Record<string, unknown>
+    protected retryTimeoutMs?: number
+    protected retryElapsedMs = 0
+    protected retryResumedAt?: number
+    protected retryTimer?: ReturnType<typeof setTimeout>
+
+    // the ride falls back to another device: to what, instead of which trainer, and since when
+    protected fallback?: { capability: PairingFallbackCapability, trainerUdid: string, since: number }
+    // the trainer connected while the fallback was active; said for a moment
+    protected fallbackReverted = false
+    protected fallbackRevertedTimer?: ReturnType<typeof setTimeout>
 
     protected visitId?: string
     protected openedAt = 0
@@ -179,6 +219,8 @@ export class PairingGuidance {
     closeVisit(): void {
         if (this.visitOpen && this.helperPhase === 'open')
             this.logHelperClosed('page_left')
+        if (this.visitOpen && this.trainerRetry === 'running')
+            this.endRiderRetry('left_page')
         this.reset()
     }
 
@@ -189,6 +231,8 @@ export class PairingGuidance {
         this.paused = true
         this.stopAttemptClock()
         this.clearAttemptTimer()
+        this.stopRetryClock()
+        this.clearRetryTimer()
         this.stopHelperClock()
         this.clearHelperTimer()
         if (this.helperPhase === 'resolved')
@@ -205,6 +249,9 @@ export class PairingGuidance {
         if (this.attemptTimeoutMs !== undefined)
             this.attemptResumedAt = Date.now()
         this.armAttemptTimer()
+        if (this.retryTimeoutMs !== undefined)
+            this.retryResumedAt = Date.now()
+        this.armRetryTimer()
         this.helperResumedAt = Date.now()
         this.armHelperTimer()
     }
@@ -218,20 +265,9 @@ export class PairingGuidance {
         if (!this.visitOpen || this.paused)
             return
 
-        const control = state?.capabilities?.find(c => c.capability === IncyclistCapability.Control)
-        this.trainerConfigured = isCapabilityActive(control)
-        if (!this.trainerConfigured) {
-            this.endTrainer()
-            return
-        }
-
-        if (this.phase === undefined || control.selected !== this.trainerUdid) {
-            this.startTrainer(control)
-            return
-        }
-
-        this.trainerInterface = control.interface ?? this.trainerInterface
-        this.onTrainerConnectState(control.connectState)
+        const previousConnectState = this.lastConnectState
+        this.followTrainer(state)
+        this.followRiderRetry(previousConnectState)
     }
 
     /** The rider says the trainer isn't available: while it's still connecting, that's the outcome. */
@@ -240,11 +276,172 @@ export class PairingGuidance {
             this.moveTo('unavailable', 'rider')
     }
 
+    /**
+     * What switching off the Resistance tile means right now. While the configured trainer is still
+     * connecting or can't be reached, the rider is saying it isn't available today, so the helper opens
+     * and nothing is switched off. Otherwise Resistance is switched off.
+     */
+    getResistanceUnselectAction(): 'open-helper' | 'unselect' {
+        const { trainerPhase } = this.getState()
+        const waitingForTrainer = trainerPhase === 'connecting' || trainerPhase === 'unavailable'
+        return this.visitOpen && !this.fallback && waitingForTrainer ? 'open-helper' : 'unselect'
+    }
+
+    /**
+     * The rider said the trainer isn't available today: a trainer that is still connecting is
+     * unavailable from now on, and the helper opens (or stays open) with that answer picked.
+     *
+     * @param trigger what the rider used: the Resistance tile's switch, or the status line's link
+     */
+    openHelperForUnavailableTrainer(trigger: PairingHelperTrigger): void {
+        if (!this.visitOpen)
+            return
+        this.onTrainerUnavailable()
+        if (this.helperPhase !== 'open')
+            this.showHelper(trigger)
+        this.preselectReason('trainer_unavailable')
+    }
+
     /** The current guidance state. */
     getState(): PairingGuidanceState {
-        const trainerPhase = this.trainerConfigured ? this.phase : undefined
+        // while the ride falls back to another device, the trainer is excluded, but still the one the page waits for
+        const trainerPhase = this.trainerConfigured || this.fallback ? this.phase : undefined
         const pairingCase: PairingCase = trainerPhase ? CASE_BY_PHASE[trainerPhase] : 'no-trainer'
-        return { trainerConfigured: this.trainerConfigured, trainerPhase, pairingCase }
+        const state: PairingGuidanceState = { trainerConfigured: this.trainerConfigured, trainerPhase, pairingCase }
+        if (this.trainerRetry)
+            state.trainerRetry = this.trainerRetry
+        if (this.fallback)
+            state.fallback = { capability: this.fallback.capability }
+        return state
+    }
+
+    /**
+     * What the ride could fall back to right now: a separate power meter or speed sensor that is
+     * connected, while the trainer can't be reached and no fallback is active yet.
+     */
+    getFallbackCandidate(): PairingFallbackCapability | undefined {
+        if (!this.visitOpen || this.fallback || this.getState().trainerPhase !== 'unavailable')
+            return undefined
+        return this.separateSensor
+    }
+
+    /**
+     * The rider chooses to ride on the fallback candidate: the trainer is excluded from every capability
+     * it is selected for, until the Pairing page is next opened. An open helper closes at once.
+     *
+     * @returns whether the fallback was taken; never without a candidate or a configuration to exclude it in
+     */
+    chooseFallback(): boolean {
+        const capability = this.getFallbackCandidate()
+        const configuration = this.deps.configuration?.()
+        const trainerUdid = this.trainerUdid
+        if (!capability || !configuration || !trainerUdid)
+            return false
+
+        const now = Date.now()
+        // set before the exclusion, so the pairing state it triggers already finds the fallback
+        this.fallback = { capability, trainerUdid, since: now }
+        try {
+            configuration.excludeDevice(trainerUdid, NOT_AVAILABLE)
+        }
+        catch {
+            delete this.fallback
+            return false
+        }
+
+        this.closeHelperForFallback(capability)
+        this.safeLog(FALLBACK_CHOSEN_EVENT, { capability, msSinceOpen: now - this.openedAt })
+        return true
+    }
+
+    /**
+     * The rider takes the trainer back into use while the fallback is active. The trainer still can't be
+     * reached, so the page waits for it again.
+     *
+     * @returns whether there was a fallback to cancel
+     */
+    cancelFallback(): boolean {
+        const fallback = this.fallback
+        const configuration = this.deps.configuration?.()
+        if (!this.visitOpen || !fallback || !configuration)
+            return false
+
+        delete this.fallback
+        // the trainer is back in use; the next pairing state confirms it
+        this.trainerConfigured = true
+
+        const excluded = configuration.getExclusions()
+            .filter(e => e.reason === NOT_AVAILABLE.reason && e.udid === fallback.trainerUdid)
+        // Resistance first, so a pairing state that follows each step already finds the trainer in use
+        const isControl = (e: { capability: IncyclistCapability }) => Number(e.capability === IncyclistCapability.Control)
+        excluded.sort((a, b) => isControl(b) - isControl(a))
+        excluded.forEach(e => { configuration.includeCapability(e.capability) })
+
+        const now = Date.now()
+        this.safeLog(FALLBACK_CANCELLED_EVENT, { capability: fallback.capability, msSinceOpen: now - this.openedAt, msSinceFallback: now - fallback.since })
+        return true
+    }
+
+    /**
+     * A device excluded as not available connected while the visit is open, and was taken back into use.
+     * If it is the trainer, the page says resistance control is back on for a moment.
+     *
+     * @param udid the device that was taken back into use
+     */
+    onFallbackReverted(udid: string): void {
+        const trainerUdid = this.fallback?.trainerUdid ?? this.trainerUdid
+        if (!this.visitOpen || udid !== trainerUdid)
+            return
+        delete this.fallback
+        this.fallbackReverted = true
+        this.clearFallbackRevertedTimer()
+        this.fallbackRevertedTimer = setTimeout(() => { this.onFallbackRevertedShown() }, FALLBACK_REVERTED_DISPLAY_MS)
+    }
+
+    /**
+     * The rider started a connection attempt of their own while the trainer can't be reached. The
+     * attempt that is about to run (or already runs) becomes the rider's, with its own full timer from
+     * now. It ends when the trainer connects, when the trainer fails after it was seen connecting since
+     * the tap (a failure left over from an attempt that was already running doesn't count), or when its
+     * timer expires. A failure or timeout then holds until the rider starts another one. The trainer
+     * phase itself is never changed by it.
+     *
+     * @param props what the rider used
+     * @returns whether the attempt started: only while the trainer can't be reached, no fallback is
+     * active and no other attempt of the rider runs
+     */
+    startRiderRetry({ trigger }: { trigger: RiderRetryTrigger }): boolean {
+        if (!this.visitOpen || this.paused || this.fallback || this.trainerRetry === 'running')
+            return false
+
+        const { pairingCase, trainerPhase } = this.getState()
+        if (trainerPhase !== 'unavailable')
+            return false
+
+        this.retryIndex++
+        this.trainerRetry = 'running'
+        this.retryCase = pairingCase
+        this.retrySawConnecting = false
+        this.retryStartFields = this.getRiderRetryStartFields(trigger)
+
+        this.retryTimeoutMs = this.getAttemptTimeoutMs()
+        this.retryElapsedMs = 0
+        this.retryResumedAt = Date.now()
+        this.armRetryTimer()
+        return true
+    }
+
+    /**
+     * Logs the rider's attempt that {@link startRiderRetry} just started, once.
+     *
+     * @param retryCapabilities the capabilities the attempt covers
+     */
+    logRiderRetry(retryCapabilities: ReadonlyArray<string>): void {
+        if (!this.retryStartFields)
+            return
+        const fields = { retryCapabilities: retryCapabilities.join(','), ...this.retryStartFields }
+        delete this.retryStartFields
+        this.safeLog(RIDER_RETRY_EVENT, fields)
     }
 
     /**
@@ -259,9 +456,14 @@ export class PairingGuidance {
         const hint = this.visitOpen && !this.paused ? getPartialOutageHint(src) : undefined
         this.trackPartialOutage(hint)
 
+        const { trainerPhase, trainerRetry } = this.getState()
         const status = getPairingStatusDisplay({
             ...src,
-            trainerPhase: this.getState().trainerPhase,
+            trainerPhase,
+            trainerRetry,
+            fallbackActive: this.fallback !== undefined,
+            fallbackCapability: this.fallback?.capability,
+            fallbackReverted: this.fallbackReverted,
             partialOutageSince: this.partialOutageSince,
             helperThresholdReached: this.visitOpen && this.thresholdReached,
             now: Date.now(),
@@ -285,6 +487,8 @@ export class PairingGuidance {
             partialOutageShown: this.partialOutageShown !== undefined,
             switchedOffRequired: this.lastStatusId === 'S8',
             helperShown: this.helperShown,
+            fallbackActive: this.fallback !== undefined,
+            trainerRetries: this.retryIndex,
         }
         if (trainerPhase)
             fields.trainerPhase = trainerPhase
@@ -308,6 +512,7 @@ export class PairingGuidance {
             reasons,
             selectedReason,
             separateSensor: trainerPhase ? this.separateSensor : undefined,
+            fallbackCandidate: this.getFallbackCandidate(),
             continueTarget: this.getContinueWithoutDeviceAction().target,
             platform: this.platform,
             forRide: this.forRide,
@@ -355,6 +560,15 @@ export class PairingGuidance {
             connectedCapabilities: this.connectedCapabilities,
             interfaceStates: this.interfaceStates,
         }))
+    }
+
+    // an answer the rider gave elsewhere on the page, not by tapping it in the helper: picked, but not
+    // logged as a selection
+    protected preselectReason(reason: PairingHelperReason): void {
+        if (!this.getHelper().reasons.includes(reason))
+            return
+        this.selectedReason = reason
+        this.lastReason = reason
     }
 
     /**
@@ -610,8 +824,162 @@ export class PairingGuidance {
         }
     }
 
+    protected followTrainer(state: PairingState): void {
+        const control = state?.capabilities?.find(c => c.capability === IncyclistCapability.Control)
+        this.trainerConfigured = isCapabilityActive(control)
+        if (this.fallback && !this.isOnFallback(control))
+            delete this.fallback
+
+        if (!this.trainerConfigured) {
+            // on the fallback, the trainer is excluded but keeps its phase: the page still waits for it
+            if (!this.fallback)
+                this.endTrainer()
+            return
+        }
+
+        if (this.phase === undefined || control.selected !== this.trainerUdid) {
+            this.startTrainer(control)
+            return
+        }
+
+        this.trainerInterface = control.interface ?? this.trainerInterface
+        this.onTrainerConnectState(control.connectState)
+    }
+
+    // the trainer the fallback replaces is still selected, and still excluded as not available
+    protected isOnFallback(control: CapabilityData | undefined): boolean {
+        return control?.selected === this.fallback?.trainerUdid && control?.excluded?.reason === NOT_AVAILABLE.reason && !control?.disabled
+    }
+
+    protected closeHelperForFallback(capability: PairingFallbackCapability): void {
+        if (this.helperPhase !== 'open') {
+            this.hideHelper()
+            return
+        }
+        const fields: Record<string, unknown> = { action: 'fallback_without_trainer' }
+        if (this.selectedReason)
+            fields.reason = this.selectedReason
+        fields.fallbackCapability = capability
+        this.safeLog(HELPER_ACTION_EVENT, this.getHelperEventFields(fields))
+        this.logHelperClosed('fallback')
+        this.hideHelper()
+    }
+
+    protected onFallbackRevertedShown(): void {
+        delete this.fallbackRevertedTimer
+        try {
+            this.fallbackReverted = false
+            this.deps.onChange()
+        }
+        catch {
+            // a failing page update must not leave the timer callback throwing
+        }
+    }
+
+    protected clearFallbackRevertedTimer(): void {
+        if (this.fallbackRevertedTimer)
+            clearTimeout(this.fallbackRevertedTimer)
+        delete this.fallbackRevertedTimer
+    }
+
+    // ends the rider's attempt once it has an outcome; see startRiderRetry()
+    protected followRiderRetry(previousConnectState: string | undefined): void {
+        if (this.trainerRetry !== 'running')
+            return
+
+        if (this.phase === 'connected') {
+            this.endRiderRetry('connected')
+            return
+        }
+
+        const connectState = this.lastConnectState
+        if (connectState === 'connecting' && previousConnectState !== 'connecting')
+            this.retrySawConnecting = true
+        else if (connectState === 'failed' && previousConnectState !== 'failed' && this.retrySawConnecting)
+            this.endRiderRetry('failed')
+    }
+
+    protected endRiderRetry(retryResult: RiderRetryResult): void {
+        const durationMs = this.getRetryElapsedMs()
+        const lasting = retryResult === 'failed' || retryResult === 'timeout'
+        this.clearRiderRetry()
+        if (lasting)
+            this.trainerRetry = 'failed'
+
+        // strings, numbers and booleans only, never a device id or name
+        this.safeLog(RIDER_RETRY_ENDED_EVENT, {
+            retryResult,
+            durationMs,
+            retryIndex: this.retryIndex,
+            pairingCase: this.retryCase,
+            platform: this.platform,
+        })
+    }
+
+    // the attempt and its timer go, without an outcome
+    protected clearRiderRetry(): void {
+        this.clearRetryTimer()
+        delete this.trainerRetry
+        delete this.retryTimeoutMs
+        delete this.retryResumedAt
+        delete this.retryStartFields
+        this.retryElapsedMs = 0
+        this.retrySawConnecting = false
+    }
+
+    // what the page showed at the tap; strings, numbers and booleans only, never a device id or name
+    protected getRiderRetryStartFields(trigger: RiderRetryTrigger): Record<string, unknown> {
+        const fields: Record<string, unknown> = { trigger, retryIndex: this.retryIndex }
+        if (this.unavailableSince !== undefined)
+            fields.msSinceUnavailable = Date.now() - this.unavailableSince
+        fields.separateDeviceConnected = this.separateSensor !== undefined
+        fields.helperOpen = this.helperPhase === 'open'
+        fields.pairingCase = this.retryCase
+        fields.platform = this.platform
+        return fields
+    }
+
+    protected getRetryElapsedMs(): number {
+        const running = this.retryResumedAt === undefined ? 0 : Date.now() - this.retryResumedAt
+        return this.retryElapsedMs + running
+    }
+
+    protected stopRetryClock(): void {
+        this.retryElapsedMs = this.getRetryElapsedMs()
+        delete this.retryResumedAt
+    }
+
+    protected armRetryTimer(): void {
+        this.clearRetryTimer()
+        if (this.paused || this.trainerRetry !== 'running' || this.retryTimeoutMs === undefined)
+            return
+        const remaining = Math.max(0, this.retryTimeoutMs - this.getRetryElapsedMs())
+        this.retryTimer = setTimeout(() => { this.onRetryTimeout() }, remaining)
+    }
+
+    protected clearRetryTimer(): void {
+        if (this.retryTimer)
+            clearTimeout(this.retryTimer)
+        delete this.retryTimer
+    }
+
+    protected onRetryTimeout(): void {
+        delete this.retryTimer
+        try {
+            if (this.trainerRetry !== 'running')
+                return
+            this.endRiderRetry('timeout')
+            this.deps.onChange()
+        }
+        catch {
+            // a failing page update must not leave the timer callback throwing
+        }
+    }
+
     protected startTrainer(control: CapabilityData): void {
         this.stopAttempt()
+        this.clearRiderRetry()
+        delete this.unavailableSince
         this.trainerUdid = control.selected
         this.trainerInterface = control.interface
         this.lastConnectState = control.connectState
@@ -626,6 +994,9 @@ export class PairingGuidance {
 
     protected endTrainer(): void {
         this.stopAttempt()
+        // the attempt was about this trainer: with the trainer gone, it has nothing left to follow
+        this.clearRiderRetry()
+        delete this.unavailableSince
         delete this.phase
         delete this.trainerUdid
         delete this.trainerInterface
@@ -658,6 +1029,14 @@ export class PairingGuidance {
         const attemptMs = this.attemptTimeoutMs === undefined ? undefined : this.getAttemptElapsedMs()
 
         this.phase = toPhase
+        if (toPhase === 'unavailable')
+            this.unavailableSince = Date.now()
+        else
+            delete this.unavailableSince
+        // a connected trainer ends whatever a failed attempt of the rider said
+        if (toPhase === 'connected' && this.trainerRetry === 'failed')
+            this.clearRiderRetry()
+
         if (toPhase === 'connected')
             this.stopAttempt()
         else if (toPhase === 'connecting')
@@ -735,6 +1114,11 @@ export class PairingGuidance {
 
     protected reset(): void {
         this.endTrainer()
+        this.retryIndex = 0
+        delete this.retryCase
+        delete this.fallback
+        this.fallbackReverted = false
+        this.clearFallbackRevertedTimer()
         this.clearPartialOutage()
         this.resetHelper()
         this.visitOpen = false

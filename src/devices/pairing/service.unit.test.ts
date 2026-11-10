@@ -1273,8 +1273,10 @@ describe('PairingService',()=>{
 
                 await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[]})
 
+                // only the last select of the batch emits, so the page's cached state is refreshed
+                // once, after every slot in the batch has already been written
                 expect(configuration.select).toHaveBeenCalledWith('4','control',{emit:false})
-                expect(configuration.select).toHaveBeenCalledWith('4','power',{emit:false})
+                expect(configuration.select).toHaveBeenCalledWith('4','power',{emit:true})
                 expect(configuration.select).not.toHaveBeenCalledWith('4','cadence',expect.anything())
             })
 
@@ -1284,7 +1286,7 @@ describe('PairingService',()=>{
 
                 await svc.selectDevice( IncyclistCapability.Control,'4', {others:'fill-empty', replace:[IncyclistCapability.Cadence]})
 
-                expect(configuration.select).toHaveBeenCalledWith('4','cadence',{emit:false})
+                expect(configuration.select).toHaveBeenCalledWith('4','cadence',{emit:true})
             })
 
             test('a disabled capability is skipped even when it is named in replace',async ()=>{

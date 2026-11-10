@@ -1,5 +1,16 @@
-import type { PairingPlatform, PairingStatusTrainerPhase } from '../../../pairing/guidance'
+import type { IncyclistCapability } from 'incyclist-devices'
+import type { PairingPlatform, PairingStatusTrainerPhase, PairingTrainerRetry } from '../../../pairing/guidance'
 import type { ContinueWithoutDeviceTarget, PairingHelperReason } from '../../../pairing/helper'
+import type { CapabilityExclusion, ExclusionOptions } from '../../../configuration/model/exclusion'
+
+/** What started the rider's own connection attempt: a tap on the tile that takes the trainer back into use. */
+export type RiderRetryTrigger = 'tile'
+
+/** How the rider's own connection attempt ended, as logged. */
+export type RiderRetryResult = 'connected' | 'failed' | 'timeout' | 'left_page'
+
+/** What the ride falls back to while the trainer isn't available. */
+export type PairingFallbackCapability = 'power' | 'speed'
 
 /**
  * Where the configured trainer is in its connection attempt during a Pairing page visit.
@@ -23,6 +34,10 @@ export interface PairingGuidanceState {
     /** only set while a trainer is configured and a visit is open */
     trainerPhase?: TrainerPhase
     pairingCase: PairingCase
+    /** the attempt the rider started: `running`, or `failed` once it failed or timed out. Not set otherwise. */
+    trainerRetry?: PairingTrainerRetry
+    /** set while the ride falls back to another device because the trainer isn't available */
+    fallback?: { capability: PairingFallbackCapability }
 }
 
 /** Why an interface counts as a partial outage, as logged. */
@@ -47,6 +62,10 @@ export interface PairingGuidanceExitFields {
     helperShown: boolean
     /** the last answer the rider picked in the helper, if any */
     lastReason?: PairingHelperReason
+    /** the ride falls back to another device because the trainer isn't available */
+    fallbackActive: boolean
+    /** how many connection attempts the rider started in this visit */
+    trainerRetries: number
 }
 
 /** What a visit needs to know when it starts. */
@@ -69,7 +88,7 @@ export type PairingHelperPhase = 'hidden' | 'open' | 'resolved'
 export type PairingHelperTrigger = 'timer' | 'link' | 'trainer_unavailable_link' | 'tile_unselect'
 
 /** How the helper was closed, other than by a device making the row ready. */
-export type PairingHelperCloseVia = 'dismiss' | 'continue_without_device' | 'page_left'
+export type PairingHelperCloseVia = 'dismiss' | 'continue_without_device' | 'fallback' | 'page_left'
 
 /** The helper's current state. */
 export interface PairingHelperState {
@@ -82,10 +101,19 @@ export interface PairingHelperState {
     selectedReason?: PairingHelperReason
     /** a power meter or speed sensor other than the trainer is connected */
     separateSensor?: 'power' | 'speed'
+    /** what the ride could fall back to right now, if the rider chooses to ride without the trainer */
+    fallbackCandidate?: PairingFallbackCapability
     /** what the no-device action does right now */
     continueTarget: ContinueWithoutDeviceTarget
     platform: PairingPlatform
     forRide: boolean
+}
+
+/** The part of the device configuration the guidance needs to let the ride fall back to another device. */
+export interface PairingGuidanceConfiguration {
+    excludeDevice(udid: string, opts: ExclusionOptions): void
+    includeCapability(capability: IncyclistCapability): void
+    getExclusions(): CapabilityExclusion[]
 }
 
 export interface PairingGuidanceDeps {
@@ -93,4 +121,6 @@ export interface PairingGuidanceDeps {
     log: (message: string, fields: Record<string, unknown>) => void
     /** called whenever the guidance state changed on its own, e.g. when a timer expired */
     onChange: () => void
+    /** the device configuration, for the fallback; without it, no fallback can be chosen */
+    configuration?: () => PairingGuidanceConfiguration
 }
