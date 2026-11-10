@@ -184,7 +184,10 @@ export class DevicePairingService  extends IncyclistService{
         if (this.state.stopped) {
             // cleanup on 2nd launch
             this.state.stopped = false;
-            this.state.deleted = []
+            // `deleted` is not cleared here: a rider's per-capability delete is a saved choice (it's
+            // written to settings), and its guard against auto-reselection is meant to last the whole
+            // app session - not just until the Pairing page is next closed and reopened, which is what
+            // `stopped` actually tracks (stop() sets it on every ordinary page close, not only on exit).
         }
 
         
@@ -1069,7 +1072,9 @@ export class DevicePairingService  extends IncyclistService{
 
             this.settings = Object.assign( this.settings||{}, {onDeviceSelectStateChanged,capabilityForScan:capability})
             const devices = capabilityData?.devices||[]
-            const available = devices.filter( d=> this.isInterfaceEnabled(d.interface)).filter( d=> !this.isOnDeletedList(capability,d.udid))
+            // a device deleted from this capability still shows here - deleting only stops it from
+            // being picked automatically again, never from being picked deliberately
+            const available = devices.filter( d=> this.isInterfaceEnabled(d.interface))
 
             const startScan = async () => {
                 if( devices.length>0)
@@ -1221,14 +1226,21 @@ export class DevicePairingService  extends IncyclistService{
 
         candidateCapabilities.forEach( capability => {
             const c = this.getCapability(capability)
-            if (!c || c.disabled || this.isOnDeletedList(capability,udid))
+            if (!c || c.disabled)
                 return
 
             if (c.selected===udid)
                 unchanged.push(capability)
-            else if (!c.selected)
-                filled.push(capability)
+            else if (!c.selected) {
+                // an empty slot only auto-fills; a capability the device was deleted from stays
+                // empty here, but can still be reached directly (a tile, its own device list)
+                if (!this.isOnDeletedList(capability,udid))
+                    filled.push(capability)
+            }
             else
+                // occupied by a different device: always offered as a row the rider can choose to
+                // use, even if this device was deleted from the capability before - the explicit
+                // "Use" choice below is never blocked by an earlier delete
                 conflicts.push({capability, currentName:c.deviceName})
         })
 
@@ -1247,12 +1259,16 @@ export class DevicePairingService  extends IncyclistService{
             if (c===capability)
                 return false
             const current = this.getCapability(c)
-            if (!current || current.disabled || this.isOnDeletedList(c,udid))
+            if (!current || current.disabled)
                 return false
 
             const isEmpty = !current.selected
             const shouldReplace = mode.replace.includes(c)
-            return isEmpty || shouldReplace
+            // the rider explicitly chose "Use" for this row - a deliberate pick, never blocked by an
+            // earlier delete. Filling an empty slot along the way is still auto-fill, and stays gated.
+            if (shouldReplace)
+                return true
+            return isEmpty && !this.isOnDeletedList(c,udid)
         })
 
         // only the last select of the batch emits: every earlier one would be overwritten anyway by
@@ -1521,12 +1537,14 @@ export class DevicePairingService  extends IncyclistService{
         return capabilities.find( c=>c.capability===target)       
     }
 
+    // used only by manual/explicit selection paths (a tile, a device list, the legacy "for all" pick):
+    // a capability the device was deleted from is still a valid target for a deliberate re-pick, so
+    // this never consults the deleted list - only the auto-fill paths do
     protected wouldChangeCapability(capability:IncyclistCapability|CapabilityData, udid:string) {
         const c = this.getCapability(capability)
         if (!c) return false;
 
-        const wouldChange= c.selected!==udid && !this.isOnDeletedList(capability,udid)
-        return wouldChange
+        return c.selected!==udid
     }
 
     protected getCapabilityDevice(capability:IncyclistCapability|CapabilityData,udid?:string):DevicePairingData {
@@ -1793,15 +1811,8 @@ export class DevicePairingService  extends IncyclistService{
             keys.forEach( key => {
                 const capability = update[key]
                 const current = capabilities.find( c=>c.capability===key)
-                if (current) {
-                    const mapped = this.mappedCapability(capability)
-                    if (key==='heartrate') {
-                        // diagnostic (temporary): find the merge call that leaves deviceName and
-                        // selected disagreeing with each other, instead of guessing from the symptom
-                        this.logEvent({message:'heartrate merge', before:{selected:current.selected,deviceName:current.deviceName,devices:current.devices?.length??0}, incoming:{selected:mapped.selected,deviceName:mapped.deviceName,devices:mapped.devices?.length??0, rawDevices:(mapped.devices??[]).map(d=>({udid:d.udid,selected:d.selected}))}})
-                    }
-                    this.mergeState(current,mapped)
-                }
+                if (current)
+                    this.mergeState(current,this.mappedCapability(capability))
                 else {
                     console.log('# capability not found ',key)
                 }
@@ -3198,13 +3209,16 @@ export class DevicePairingService  extends IncyclistService{
 
     }
 
-    protected selectCapabilityDevice(capability:IncyclistCapability,udid:string, emitUpdate:boolean=true):boolean { 
-       
+    protected selectCapabilityDevice(capability:IncyclistCapability,udid:string, emitUpdate:boolean=true):boolean {
+
         if (!this.wouldChangeCapability(capability,udid))
             return;
 
+        // a deliberate (re-)pick overrides an earlier delete, so later redetections stop fighting it
+        this.removeFromDeletedList(capability,udid)
+
         const c = this.getCapability(capability)
-        const device = this.getCapabilityDevice(capability,udid)        
+        const device = this.getCapabilityDevice(capability,udid)
         c.value = device?.value
         this.getDeviceConfiguration().select(udid,capability,{emit:emitUpdate})
 
@@ -3286,6 +3300,16 @@ export class DevicePairingService  extends IncyclistService{
         this.state.deleted.push( { capability:c.capability,udid,settings })
     }
 
+    // a rider picking the device again - a tile, a device list, or a conflict step's "Use" - is a
+    // deliberate choice that overrides an earlier delete; it stops a later redetection from quietly
+    // retracting that choice again
+    protected removeFromDeletedList(capability:IncyclistCapability|CapabilityData,udid:string ):void {
+        const c = this.getCapability(capability)
+        if (!c || !this.state.deleted?.length)
+            return
+        this.state.deleted = this.state.deleted.filter( e=> !(e.capability===c.capability && e.udid===udid))
+    }
+
     protected isOnDeletedList(c:IncyclistCapability|CapabilityData,udid:string ):boolean {
         const capability = this.getCapability(c)
 
@@ -3298,12 +3322,14 @@ export class DevicePairingService  extends IncyclistService{
     
         const mapped = {...c} as unknown  as CapabilityData
     
+        // deviceName/interface must agree with selected - all three describe the same device, so
+        // they have to come from the same (deleted-filtered) list, never a mix of the two
         const available = devices.filter( d=> !this.isOnDeletedList(c.capability as IncyclistCapability,d.udid))
 
         mapped.deviceNames = available.map(d=>d.name).join(';')
         mapped.selected = available.find( d => d.selected)?.udid
-        mapped.deviceName = devices.find( d => d.selected)?.name
-        mapped.interface = devices.find( d => d.selected)?.interface
+        mapped.deviceName = available.find( d => d.selected)?.name
+        mapped.interface = available.find( d => d.selected)?.interface
         mapped.devices = devices as Array<DevicePairingData>
     
         return mapped
