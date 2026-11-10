@@ -47,10 +47,12 @@ export const getConflictStepSubline = (origin: SelectionConflict['origin'], devi
         return { full, short: 'Choose which device to use for each.' }
     }
 
-    const short = 'Nothing changes until you choose.'
+    // the rider didn't ask for this one, so it says why it appeared. The filled-slots line follows
+    // on the full copy only - on phone those tiles already show the device, so it's dropped there.
+    const short = `Just found ${deviceName}. Nothing changes until you choose.`
     const full = names.length > 0
-        ? `${freed} it. Choose for the rest; nothing changes until you do.`
-        : short
+        ? `We just found your ${deviceName}. Nothing changes until you choose. ${freed} ${deviceName}.`
+        : `We just found your ${deviceName}. Nothing changes until you choose.`
     return { full, short }
 }
 

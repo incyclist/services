@@ -49,8 +49,16 @@ describe.each([
     let page: DevicesPageService | DesktopPairingPageService
     let logEvent: jest.SpyInstance
 
+    // a detection-triggered conflict settles (becomes visible) ~2s after the last one arrives.
+    // Toggling fake timers just for that advance - rather than for the whole suite - keeps every
+    // other real-timer-based helper here (pick()'s setImmediate flush, the helper's own timers)
+    // unaffected.
+    const CONFLICT_SETTLE_MS = 2000
     const detect = (settings: Record<string, unknown>): string => {
-        (pairing as any).onDeviceDetected(settings)
+        jest.useFakeTimers()
+        ;(pairing as any).onDeviceDetected(settings)
+        jest.advanceTimersByTime(CONFLICT_SETTLE_MS)
+        jest.useRealTimers()
         return configuration.getUdid(settings as any) as string
     }
     const events = (message: string) => logEvent.mock.calls.map(([e]) => e).filter((e: any) => e?.message === message)
@@ -136,7 +144,7 @@ describe.each([
             expect(shown).toMatchObject({
                 id: pairing.getPendingConflicts()[0].id, origin: 'detection', deviceName: expect.any(String), queued: 0,
                 title: `${shown.deviceName} can also measure more`,
-                subline: { full: 'Resistance was free and now uses it. Choose for the rest; nothing changes until you do.', short: 'Nothing changes until you choose.' },
+                subline: { full: `We just found your ${shown.deviceName}. Nothing changes until you choose. Resistance was free and now uses ${shown.deviceName}.`, short: `Just found ${shown.deviceName}. Nothing changes until you choose.` },
             })
             expect(shown.queuedText).toBeUndefined()
             expect(rowsOf(shown)).toEqual([Cadence, Power, Speed].sort())
@@ -193,10 +201,15 @@ describe.each([
         test('while the helper says the row is ready, the card still waits, and shows once the helper has gone', () => {
             jest.useFakeTimers()
             try {
-                detect(PowerMeter('1'))
+                // bypasses the shared detect() helper, which settles (and briefly uses real timers)
+                // on its own - this test manages the fake clock itself, since the helper's own
+                // resolved-to-hidden transition shares the same ~2s window
+                const rawDetect = (settings: Record<string, unknown>) => { (pairing as any).onDeviceDetected(settings) }
+
+                rawDetect(PowerMeter('1'))
                 props().helper!.onOpen()
                 expect(props().helper!.phase).toBe('resolved')
-                detect(Trainer('2'))
+                rawDetect(Trainer('2'))
 
                 expect(card()).toBeUndefined()
                 jest.advanceTimersByTime(2000)

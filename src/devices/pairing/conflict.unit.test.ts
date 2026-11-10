@@ -13,10 +13,10 @@ describe('conflict step copy', () => {
     })
 
     test.each<[string[], { full: string, short: string }]>([
-        [['speed', 'cadence'], { full: 'Speed and Cadence were free and now use it. Choose for the rest; nothing changes until you do.', short: 'Nothing changes until you choose.' }],
-        [['control'], { full: 'Resistance was free and now uses it. Choose for the rest; nothing changes until you do.', short: 'Nothing changes until you choose.' }],
-        [[], { full: 'Nothing changes until you choose.', short: 'Nothing changes until you choose.' }],
-    ])('the card of a found device, free slots %p', (filled, expected) => {
+        [['speed', 'cadence'], { full: 'We just found your Tacx Neo 2T. Nothing changes until you choose. Speed and Cadence were free and now use Tacx Neo 2T.', short: 'Just found Tacx Neo 2T. Nothing changes until you choose.' }],
+        [['control'], { full: 'We just found your Tacx Neo 2T. Nothing changes until you choose. Resistance was free and now uses Tacx Neo 2T.', short: 'Just found Tacx Neo 2T. Nothing changes until you choose.' }],
+        [[], { full: 'We just found your Tacx Neo 2T. Nothing changes until you choose.', short: 'Just found Tacx Neo 2T. Nothing changes until you choose.' }],
+    ])('the dialog of a found device, free slots %p', (filled, expected) => {
         expect(getConflictStepSubline('detection', 'Tacx Neo 2T', filled)).toEqual(expected)
     })
 

@@ -111,6 +111,11 @@ export class DevicePairingService  extends IncyclistService{
     protected static conflictCounter = 0
     // the conflict steps of picks in a device list that the rider hasn't closed yet
     protected manualConflicts = new Map<string, {udid:string, capability:IncyclistCapability, conflict:SelectionConflict}>()
+    // detection-triggered conflicts not yet shown: held back until none has arrived for a short
+    // while, so a burst of detections opens one dialog, not a quick series of them
+    protected settlingConflicts: Array<{udid:string, conflict:SelectionConflict}> = []
+    protected conflictSettleTimer?: ReturnType<typeof setTimeout>
+    protected static readonly CONFLICT_SETTLE_MS = 2000
 
     // the Pairing page's search for devices, while a visit is open - see getSearchStatus()
     protected static readonly SEARCH_DURATION_MS = { desktop: 60*1000, mobile: 30*1000 }
@@ -818,6 +823,8 @@ export class DevicePairingService  extends IncyclistService{
         const pending = this.pendingConflicts
         this.pendingConflicts = []
         pending.forEach( e=> { this.logConflictResolved(e.conflict, via, 0) })
+        // anything still settling was never shown, so there's nothing to log - just drop it
+        this.clearConflictSettleTimer()
     }
 
     protected takePendingConflict(id:string):{udid:string, conflict:SelectionConflict}|undefined {
@@ -869,17 +876,41 @@ export class DevicePairingService  extends IncyclistService{
             return
         }
 
-        const conflict = this.addPendingConflict(udid, deviceName, filled, conflicts)
-        this.logConflictShown(conflict, conflicts.length, this.pendingConflicts.length-1)
-        this.emit('selection-conflict', clone(conflict))
+        // held back until none has arrived for a short while: a burst (typically only on the first
+        // visit a rider's devices are all seen) opens one dialog, not a quick series of them
+        this.mergeIntoConflictList(this.settlingConflicts, udid, deviceName, filled, conflicts)
+        if (this.conflictSettleTimer)
+            clearTimeout(this.conflictSettleTimer)
+        this.conflictSettleTimer = setTimeout( ()=> { this.settleDetectionConflicts() }, DevicePairingService.CONFLICT_SETTLE_MS)
+        this.conflictSettleTimer.unref?.()
+    }
+
+    // moves every conflict that settled into the visible queue, oldest first, and shows the first one
+    protected settleDetectionConflicts():void {
+        delete this.conflictSettleTimer
+        const settled = this.settlingConflicts
+        this.settlingConflicts = []
+
+        settled.forEach( ({udid, conflict}) => {
+            const merged = this.mergeIntoConflictList(this.pendingConflicts, udid, conflict.deviceName, conflict.filled, conflict.conflicts)
+            this.logConflictShown(merged, merged.conflicts.length, this.pendingConflicts.length-1)
+            this.emit('selection-conflict', clone(merged))
+        })
+    }
+
+    protected clearConflictSettleTimer():void {
+        if (this.conflictSettleTimer)
+            clearTimeout(this.conflictSettleTimer)
+        delete this.conflictSettleTimer
+        this.settlingConflicts = []
     }
 
     // one entry per device: a device that raises another conflict in the same visit gets its rows added to its entry
-    protected addPendingConflict(udid:string, deviceName:string, filled:IncyclistCapability[], conflicts:SelectionConflict['conflicts']):SelectionConflict {
-        const existing = this.pendingConflicts.find( e=>e.udid===udid)?.conflict
+    protected mergeIntoConflictList(list:Array<{udid:string, conflict:SelectionConflict}>, udid:string, deviceName:string, filled:IncyclistCapability[], conflicts:SelectionConflict['conflicts']):SelectionConflict {
+        const existing = list.find( e=>e.udid===udid)?.conflict
         if (!existing) {
             const conflict:SelectionConflict = {id:this.nextConflictId(udid), origin:'detection', deviceName, filled, conflicts}
-            this.pendingConflicts.push({udid, conflict})
+            list.push({udid, conflict})
             return conflict
         }
 
@@ -3364,6 +3395,7 @@ export class DevicePairingService  extends IncyclistService{
         this.attemptHungLogged = false
         this.pendingConflicts = []
         this.manualConflicts.clear()
+        this.clearConflictSettleTimer()
         this.resetSearch()
     }
 

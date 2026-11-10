@@ -40,8 +40,14 @@ describe('DevicePairingService - conflicts and later selection changes', () => {
     let pairing: DevicePairingService
     let logEvent: jest.SpyInstance
 
+    // a detection-triggered conflict settles (becomes visible) ~2s after the last one arrives;
+    // toggling fake timers just for that advance keeps this helper self-contained
+    const CONFLICT_SETTLE_MS = 2000
     const detect = (settings: Record<string, unknown>): string => {
-        (pairing as any).onDeviceDetected(settings)
+        jest.useFakeTimers()
+        ;(pairing as any).onDeviceDetected(settings)
+        jest.advanceTimersByTime(CONFLICT_SETTLE_MS)
+        jest.useRealTimers()
         return configuration.getUdid(settings as any) as string
     }
 
