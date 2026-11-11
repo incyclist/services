@@ -1,5 +1,5 @@
 export * from './activity'
-import { ActivityDetails, ActivitySummary, DEFAULT_ACTIVITY_TITLE, DEFAULT_SPORT_ACTIVITY_TITLE } from "../model"
+import { ActivityAppLinks, ActivityDetails, ActivitySummary, DEFAULT_ACTIVITY_TITLE, DEFAULT_SPORT_ACTIVITY_TITLE, UploadInfo } from "../model"
 
 export const buildSummary = (activity:ActivityDetails,proposedName?:string):ActivitySummary =>{
     const {id, route,screenshots,startTime: startTimeUTC,time: rideTime,distance,startPos,endPos, realityFactor=100,smoothingLevel,links,laps,fileName} = activity
@@ -22,19 +22,21 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
             title = activity.route.name??title
     }
 
-    if (name===undefined && fileName!==undefined) {
-        const parts = fileName.split(/[/\\]/)
-
-        const last = parts.at(-1)
-        if (last?.endsWith('.json'))
-            name = last.slice(0, -5)
-
-    }
+    name = verifyName(name, fileName)
 
     let startTime:number
     if (startTimeUTC)
         startTime = (new Date(startTimeUTC)).getTime()
 
+    const uploadStatus= buildUploadStatus(links)
+
+
+    return {
+        id,title,name, routeId, routeHash, previewImage,startTime,rideTime,distance,totalElevation, startPos,endPos,realityFactor,smoothingLevel,uploadStatus,laps
+    }
+}
+
+export const buildUploadStatus = (links?:ActivityAppLinks ):UploadInfo[] =>  {
     const uploadStatus=[]
 
     if (links) {
@@ -47,14 +49,23 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
 
                 uploadStatus.push( {service,status: status.error ? 'failed' : 'success'})
             }
-
         }
-
     }
 
-    return {
-        id,title,name, routeId, routeHash, previewImage,startTime,rideTime,distance,totalElevation, startPos,endPos,realityFactor,smoothingLevel,uploadStatus,laps
+    return uploadStatus
+}
+
+const verifyName = (name:string, fileName:string) => {
+    if (name===undefined && fileName!==undefined) {
+        const parts = fileName.split(/[/\\]/)
+
+        const last = parts.at(-1)
+        if (last?.endsWith('.json'))
+            name = last.slice(0, -5)
+
     }
+    return name
+
 }
 
 
