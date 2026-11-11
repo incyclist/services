@@ -2,7 +2,6 @@ import { EventLogger } from 'gd-eventlog';
 import { valid } from '../../../../utils/valid';
 import { AppApiBase } from '../base';
 import { KomootAuthConfig, KomootCoordinate, KomootGetTourRequestFilters, KomootGetTourRequestParams, KomootLoginResponse, KomootSportType, KomootTourSummary, KomootUploadFormat } from './types';
-import { Form, getBindings } from '../../../../api';
 
 
 const API_BASE_URL = 'https://api.komoot.de/v007'

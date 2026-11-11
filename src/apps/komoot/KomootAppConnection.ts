@@ -16,7 +16,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
         super('KomootAppConnection','komoot')
 
         this.api = new KomootApi()
-        this.iniAuth()
+        
     }
 
     async connect( credentials:KomootCredentials):Promise<boolean> {
@@ -89,7 +89,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
         return this.api
     }
 
-    protected iniAuth():boolean { 
+    protected initAuth():boolean { 
         const api = this.getApi()
         if (this.credentials) {
             api.setAuth(this.credentials)
@@ -133,7 +133,10 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
 
         this.setupEventListeners()
 
-        this.credentials = {...credentials}
+        if (isInitialized) {
+            this.credentials = {...credentials}
+            this.initAuth()
+        }
    
         return isInitialized
 

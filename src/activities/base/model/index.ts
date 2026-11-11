@@ -60,11 +60,7 @@ export interface ActivityAppLink  {
 }
 
 
-export type ActivityAppLinks = {
-    strava? : ActivityAppLink
-    velohero?: ActivityAppLink
-    intervals?: ActivityAppLink
-}
+export type ActivityAppLinks = Record<string,ActivityAppLink>
 
 
 
