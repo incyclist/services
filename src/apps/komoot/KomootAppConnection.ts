@@ -3,6 +3,7 @@ import { Injectable, Singleton } from "../../base/decorators";
 import { valid } from "../../utils/valid";
 import { KomootApi } from "../base/api";
 import { ConnectedAppService } from "../base/app";
+import { AppsOperation } from "../types";
 import { KomootAuth, KomootCredentials } from "./types";
 
 const CRYPT_ALGO = 'aes256'
@@ -88,6 +89,14 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
     getApi() {        
         return this.api
     }
+
+    getSupportedOperations():AppsOperation [] {
+        return ['ActivityUpload','RouteDownload']
+    }
+    getDefaultOperations():AppsOperation [] {
+        return ['RouteDownload']
+    }
+
 
     protected initAuth():boolean { 
         const api = this.getApi()

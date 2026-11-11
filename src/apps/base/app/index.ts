@@ -1,7 +1,7 @@
 import { Injectable } from "../../../base/decorators";
 import { IncyclistService } from "../../../base/service";
 import { useUserSettings } from "../../../settings";
-import { IConnectedApp } from "../../types";
+import { AppsOperation, IConnectedApp } from "../../types";
 import { AppCredentials } from "../types";
 
 let instanceCnt = 0
@@ -87,6 +87,13 @@ export class ConnectedAppService<C extends AppCredentials> extends IncyclistServ
         if (!this.isInitialized)
             this.init()
         return this.isInitialized
+    }
+
+    getSupportedOperations():AppsOperation [] {
+        return []
+    }
+    getDefaultOperations():AppsOperation [] {
+        return []
     }
 
 

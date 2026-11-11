@@ -3,6 +3,7 @@ import { Injectable, Singleton } from "../../base/decorators";
 import { valid } from "../../utils/valid";
 import { IntervalsApi, IntervalsConfig } from "../base/api";
 import { ConnectedAppService } from "../base/app";
+import { AppsOperation } from "../types";
 import { IntervalsCredentials } from "./types";
 
 @Singleton
@@ -102,6 +103,14 @@ export class IntervalsAppConnection extends ConnectedAppService<IntervalsCredent
             this.api = new IntervalsApi()
         return this.api
     }
+
+    getSupportedOperations():AppsOperation [] {
+        return ['ActivityUpload','WorkoutDownload']
+    }
+    getDefaultOperations():AppsOperation [] {
+        return ['ActivityUpload','WorkoutDownload']
+    }
+    
 
 
     protected initAuth():boolean {

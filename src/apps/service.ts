@@ -7,18 +7,10 @@ import { StravaAppConnection } from "./base";
 import { AppCredentials } from "./base/types";
 import { IntervalsAppConnection } from "./intervals/IntervalsAppConnection";
 import { KomootAppConnection } from "./komoot";
-import { AppDefinition, AppsIntergationSpec, AppsOperation } from "./types";
+import { AppDefinition, AppsOperation, IConnectedApp } from "./types";
 
 @Singleton
 export class AppsService extends IncyclistService   {
-
-    protected readonly services:AppsIntergationSpec = {
-        ActivityUpload: ['strava', 'intervals','komoot'],
-        WorkoutUpload: [],
-        WorkoutDownload: ['intervals'],
-        ActivityDownload: [/*'strava','komoot'   */ ],
-        RouteDownload: [/*'strava' ,*/'komoot']
-    }
 
     protected readonly serviceMap: Array<AppDefinition> = [
         { name:'Strava', key:'strava', iconUrl: 'https://static.cdnlogo.com/logos/s/42/strava-wordmark.svg', connection: new StravaAppConnection()},
@@ -28,8 +20,6 @@ export class AppsService extends IncyclistService   {
 
     constructor() {
         super('AppsService')
-
-
     }
 
     openSettings() {
@@ -56,6 +46,9 @@ export class AppsService extends IncyclistService   {
             return false
 
         const success = await entry.connection.connect(credentials)
+        if (!this.hasSettings(app))
+            this.storeInitialSettings(app)
+
         this.emit('connected',app,success)
         return success
         
@@ -92,20 +85,26 @@ export class AppsService extends IncyclistService   {
         if (!this.isConnected(app))
             return false;
 
+        if (!this.hasSettings(app))
+            this.storeInitialSettings(app)
+
+
         const supported = this.getAppOperationSettings(app)
         const config = supported.find( oc=> oc.operation===operation)
         return config?.enabled
     }
 
     getAppOperationSettings(app:string) {
-        const serviceIds = Object.keys(this.services)
+        const connectedApp = this.getAppConnection(app)
+        if (!connectedApp) return []
+
+        const supported = connectedApp.getSupportedOperations()
+        const defaults = connectedApp.getDefaultOperations()
         const operations = []
 
-        serviceIds.forEach( operation=> {
-            if (this.services[operation].includes(app)) {
-                const enabled = this.getSettings(`preferences.${app}.${operation}.enabled`,true)
-                operations.push( {operation, enabled})
-            }
+        supported.forEach( operation=> {
+            const enabled = this.getSettings(`preferences.${app}.${operation}.enabled`,defaults.includes(operation))
+            operations.push( {operation, enabled})
         })
         return operations
     }
@@ -132,7 +131,14 @@ export class AppsService extends IncyclistService   {
     }
 
     getAvailableServices(operation:AppsOperation):Array<string> {
-        return this.services[operation]        
+        const serviceIds  = this.getServiceIDs()
+        const supported = []
+        serviceIds.forEach( serviceKey => {
+            if ( this.getAppConnection(serviceKey)?.getSupportedOperations().includes(operation)) {
+                supported.push(serviceKey)
+            }
+        })
+        return supported
     }
 
     getName( key:string ) {
@@ -144,7 +150,38 @@ export class AppsService extends IncyclistService   {
         return found ? found.key : name
     }
 
+    protected hasSettings(app:string) {         
+        const settings = this.getUserSettings().getValue(`preferences.${app}`,null)
+        return settings!==null
+    }
 
+    protected storeInitialSettings(app:string) {
+        if (this.hasSettings(app))
+            return
+
+        const connection = this.getAppConnection(app)
+        if (!connection)
+            return
+
+        const supported = connection.getSupportedOperations()
+        const defaults = connection.getDefaultOperations()
+
+        for (const operation of supported) {
+            const isDefault = defaults.includes(operation)
+            this.getUserSettings().set(`preferences.${app}.${operation}.enabled`,isDefault)
+        }
+    }
+
+
+    protected getServiceIDs():Array<string> {
+        return this.serviceMap.map( m=>m.key)
+    }
+    protected getAppConnections():Array<IConnectedApp> {
+        return this.serviceMap.map( m=>m.connection)
+    }
+    protected getAppConnection(serviceKey:string):IConnectedApp|undefined {
+        return this.serviceMap.find( m=> serviceKey===m.key)?.connection
+    }
 
     protected getAppDisplayProps( key:string) {
         const entry = this.serviceMap.find( e=>e.key===key)

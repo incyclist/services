@@ -3,6 +3,7 @@ import { Injectable, Singleton } from "../../base/decorators";
 import { valid } from "../../utils/valid";
 import { StravaApi, StravaConfig } from "../base/api";
 import { ConnectedAppService } from "../base/app";
+import { AppsOperation } from "../types";
 import { StravaCredentials } from "./types";
 
 @Singleton
@@ -94,6 +95,15 @@ export class StravaAppConnection extends ConnectedAppService<StravaCredentials> 
             this.api = new StravaApi()
         return this.api
     }
+
+
+    getSupportedOperations():AppsOperation [] {
+        return ['ActivityUpload']
+    }
+    getDefaultOperations():AppsOperation [] {
+        return ['ActivityUpload']
+    }
+
 
 
     protected initAuth():boolean {
