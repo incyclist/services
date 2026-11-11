@@ -257,5 +257,121 @@ describe('Komoot API',()=>{
         
     })
 
+    describe('uploadTour',()=>{
 
+        let api: KomootApi
+        let request = jest.fn()
+        const fitData = new Uint8Array([0x0E, 0x10, 0x00, 0x00])
+        const auth = {username:'username@example.com',password:'password'}
+
+        beforeEach( ()=>{
+            request.mockReset()
+            api = new KomootApi()
+            setupMocks(api,{
+                getApi: jest.fn().mockReturnValue({request}),
+                getBaseUrl: jest.fn().mockReturnValue('https://api.komoot.de/v007'),
+                userid:'123',
+                username: 'username@example.com',
+                password: 'password'
+            })
+        })
+
+        test('success uploading fit file',async ()=>{
+            request.mockResolvedValue({
+                data: {id:1234, name:'Morning Ride', type:'tour_recorded'},
+                status:200
+            })
+
+            const res = await api.uploadTour(fitData,'fit','racebike','Morning Ride')
+
+            expect(request).toHaveBeenCalledTimes(1)
+            const args = request.mock.calls[0][0]
+            const url = new URL(args.url)
+
+            expect(args.method).toBe('post')
+            expect(url.origin+url.pathname).toBe('https://api.komoot.de/v007/tours/')
+            expect(url.searchParams.get('data_type')).toBe('fit')
+            expect(url.searchParams.get('sport')).toBe('racebike')
+            expect(url.searchParams.get('name')).toBe('Morning Ride')
+            expect(args.headers).toEqual({'Content-Type':'application/octet-stream'})
+            expect(args.auth).toEqual(auth)
+            expect(args.data).toBe(fitData)
+
+            expect(res).toEqual({id:1234, name:'Morning Ride', type:'tour_recorded'})
+        })
+
+        test('success uploading gpx file',async ()=>{
+            request.mockResolvedValue({ data: {id:5678}, status:200 })
+
+            const gpx = new TextEncoder().encode('<gpx></gpx>')
+            await api.uploadTour(gpx,'gpx','mtb','Trail')
+
+            const args = request.mock.calls[0][0]
+            expect(new URL(args.url).searchParams.get('data_type')).toBe('gpx')
+            expect(args.headers).toEqual({'Content-Type':'application/gpx+xml'})
+            expect(args.data).toBe(gpx)
+        })
+
+        test('accepts Buffer and ArrayBuffer',async ()=>{
+            request.mockResolvedValue({ data: {id:1}, status:200 })
+
+            const buffer = Buffer.from([1,2,3])
+            await api.uploadTour(buffer,'fit','racebike','A')
+            expect(request.mock.calls[0][0].data).toBe(buffer)
+
+            const arrayBuffer = new Uint8Array([4,5,6]).buffer
+            await api.uploadTour(arrayBuffer,'fit','racebike','B')
+            expect(request.mock.calls[1][0].data).toBe(arrayBuffer)
+        })
+
+        test('encodes special characters in name',async ()=>{
+            request.mockResolvedValue({ data: {id:1}, status:200 })
+
+            const name = 'Ride & Run? 50% #1 ü'
+            await api.uploadTour(fitData,'fit','racebike',name)
+
+            const url = new URL(request.mock.calls[0][0].url)
+            expect(url.searchParams.get('name')).toBe(name)
+            expect(url.searchParams.get('sport')).toBe('racebike')
+            expect(url.searchParams.get('data_type')).toBe('fit')
+        })
+
+        test('does not reject on error status in axios (validateStatus)',async ()=>{
+            request.mockResolvedValue({ data: {id:1}, status:200 })
+
+            await api.uploadTour(fitData,'fit','racebike','A')
+
+            const {validateStatus} = request.mock.calls[0][0]
+            expect(validateStatus(200)).toBe(true)
+            expect(validateStatus(500)).toBe(true)
+        })
+
+        test('not authenticated (no userid)',async ()=>{
+            setupMocks(api,{ userid: undefined })
+
+            await expect( api.uploadTour(fitData,'fit','racebike','A') ).rejects.toThrow('invalid credentials')
+            expect(request).not.toHaveBeenCalled()
+        })
+
+        test('4xx response code',async ()=>{
+            request.mockResolvedValue({ status:403, data:{message:'forbidden'} })
+
+            await expect( api.uploadTour(fitData,'fit','racebike','A') )
+                .rejects.toThrow('HTTP 403: {"message":"forbidden"}')
+        })
+
+        test('5xx response code includes response body in error',async ()=>{
+            request.mockResolvedValue({ status:500, data:{error:'Internal Server Error'} })
+
+            await expect( api.uploadTour(fitData,'fit','racebike','A') )
+                .rejects.toThrow('HTTP 500: {"error":"Internal Server Error"}')
+        })
+
+        test('komoot rejects',async ()=>{
+            request.mockRejectedValue(new Error('X'))
+
+            await expect( api.uploadTour(fitData,'fit','racebike','A') ).rejects.toThrow('X')
+        })
+
+    })
 })

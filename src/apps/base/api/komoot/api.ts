@@ -1,7 +1,8 @@
 import { EventLogger } from 'gd-eventlog';
 import { valid } from '../../../../utils/valid';
 import { AppApiBase } from '../base';
-import { KomootAuthConfig, KomootCoordinate, KomootGetTourRequestFilters, KomootGetTourRequestParams, KomootLoginResponse, KomootTourSummary } from './types';
+import { KomootAuthConfig, KomootCoordinate, KomootGetTourRequestFilters, KomootGetTourRequestParams, KomootLoginResponse, KomootSportType, KomootTourSummary, KomootUploadFormat } from './types';
+import { Form, getBindings } from '../../../../api';
 
 
 const API_BASE_URL = 'https://api.komoot.de/v007'
@@ -185,6 +186,73 @@ export class KomootApi  extends AppApiBase{
         }
 
     }
+
+
+    /**
+     * Uploads a completed activity (FIT or GPX) to the user's Komoot account.
+     *
+     * The file content is sent as the raw request body (not multipart form data), with the
+     * format passed as the `data_type` query parameter. The data must already be loaded into
+     * memory, so the method works in a browser as well as in Node.
+     *
+     * @example
+     * const data = new Uint8Array(await file.arrayBuffer())
+     * const tour = await api.uploadTour(data, 'fit', 'racebike', 'Morning Ride')
+     * console.log(`Tour created, id is: ${tour.id}`)
+     *
+     * @param {Buffer | ArrayBuffer | Uint8Array} data - The binary content of the activity file.
+     * @param {KomootUploadFormat} format - The file format of `data`: `'fit'` or `'gpx'`.
+     * @param {KomootSportType} sport - The Komoot sport identifier (e.g. `'racebike'`, `'touringbicycle'`, `'mtb'`).
+     * @param {string} name - The visible title of the uploaded tour.
+     * @returns {Promise<KomootTourSummary>} A summary of the newly created tour.
+     * @throws {Error} `'invalid credentials'` if the user is not authenticated, or an
+     * `HTTP <status>: <body>` error if Komoot rejects the upload.
+     */
+    async uploadTour(
+        data: Buffer | ArrayBuffer | Uint8Array,
+        format: KomootUploadFormat,
+        sport: KomootSportType,
+        name: string
+    ): Promise<KomootTourSummary> {
+        const tsStart = Date.now()
+        try {
+            const auth = this.getBasicAuthCredentials()
+            if (!this.userid) {
+                this.logger.logEvent({ message: 'uploadTour failed', reason: 'invalid credentials' })
+                throw new Error('invalid credentials')
+            }
+
+            const contentType = format === 'gpx' ? 'application/gpx+xml' : 'application/octet-stream'
+            const params = new URLSearchParams({ data_type: format, sport, name })
+
+            const response = await this.getApi().request({
+                method: 'post',
+                url: `${this.getBaseUrl()}/tours/?${params.toString()}`,
+                auth,
+                headers: { 'Content-Type': contentType },
+                data,
+                validateStatus: () => true   // lets us inspect the body of a 4xx/5xx
+            })
+
+            if (response.status >= 400) {
+                this.logger.logEvent({
+                    message: 'uploadTour failed',
+                    status: response.status,
+                    body: JSON.stringify(response.data),
+                    duration: Date.now() - tsStart
+                })
+                throw new Error(`HTTP ${response.status}: ${JSON.stringify(response.data)}`)
+            }
+
+            this.logger.logEvent({ message: 'uploadTour success', id: response.data?.id, duration: Date.now() - tsStart })
+            return response.data
+        }
+        catch (err) {
+            this.logger.logEvent({ message: 'uploadTour failed', reason: err.message, duration: Date.now() - tsStart })
+            throw err
+        }
+    }
+
 
     protected applyFilter(tours:Array<KomootTourSummary>, filters?:KomootGetTourRequestFilters) {
         if (!filters)
