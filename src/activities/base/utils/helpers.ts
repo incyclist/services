@@ -36,8 +36,20 @@ export const buildSummary = (activity:ActivityDetails,proposedName?:string):Acti
         startTime = (new Date(startTimeUTC)).getTime()
 
     const uploadStatus=[]
-    if (links?.strava) {
-        uploadStatus.push( {service:'strava',status: 'success'})
+
+    if (links) {
+        const services = Object.keys(links)
+        for (const service of services) {
+
+            if (links[service]) {
+                const status =   links[service]
+                
+
+                uploadStatus.push( {service,status: status.error ? 'failed' : 'success'})
+            }
+
+        }
+
     }
 
     return {
