@@ -92,7 +92,7 @@ export class KomootUpload extends IncyclistService implements IActivityUpload {
             }
             const data = await this.readFile(fileName)
             if (!data) {
-                throw new Error(`file could not be read ${fileName}`)
+                throw new Error(`file could not be read: ${fileName}`)
             }
            
 

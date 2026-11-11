@@ -249,7 +249,7 @@ describe('KomootUpload', () => {
             const success = await service.upload(activity as ActivityDetails, 'fit')
 
             expect(success).toBe(false)
-            expect(activity.links).toMatchObject({ komoot: { error: 'file could not be read' } })
+            expect(activity.links).toMatchObject({ komoot: { error: 'file could not be read: missing.fit' } })
             expect(api.uploadTour).not.toHaveBeenCalled()
         })
 
@@ -264,7 +264,7 @@ describe('KomootUpload', () => {
             const success = await service.upload(activity as ActivityDetails, 'fit')
 
             expect(success).toBe(false)
-            expect(activity.links).toMatchObject({ komoot: { error: 'file could not be read' } })
+            expect(activity.links).toMatchObject({ komoot: { error: 'file could not be read: test.fit' } })
             expect(api.uploadTour).not.toHaveBeenCalled()
         })
 
@@ -277,7 +277,7 @@ describe('KomootUpload', () => {
             const activity: Partial<ActivityDetails> = { fitFileName: 'test.fit', title: 'test' }
 
             expect(await service.upload(activity as ActivityDetails, 'fit')).toBe(false)
-            expect(activity.links).toMatchObject({ komoot: { error: 'file could not be read' } })
+            expect(activity.links).toMatchObject({ komoot: { error: 'file could not be read: test.fit' } })
         })
 
         test('unsupported format', async () => {

@@ -91,7 +91,7 @@ export class KomootAppConnection extends ConnectedAppService<KomootCredentials> 
 
     protected initAuth():boolean { 
         const api = this.getApi()
-        if (this.credentials) {
+        if (this.credentials && api) {
             api.setAuth(this.credentials)
             return true
         }
