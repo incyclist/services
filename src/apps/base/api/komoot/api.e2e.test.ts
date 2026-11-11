@@ -122,4 +122,38 @@ describe('KommotApi',()=>{
         })
 
     })
+
+
+    describe('uploadTour', () => {
+
+        const canRun = () => {
+            if (!username || !password || !userid) {
+                console.log('skipping test uploadTour');
+                return false;
+            }
+            return true;
+        };
+
+        let api;
+
+        beforeEach(() => {
+            api = new KomootApi();
+            api.getFormBinding = jest.fn(() => new AxiosFormPost());
+            api.username = username;
+            api.password = password;
+            api.userid = userid;
+        });
+
+        test('success uploading fit file', async () => {
+            if (!canRun()) return;
+
+            const fitFilePath = path.join(__dirname, '../../../../../__tests__/data/activities/test.fit');
+            const data = await fs.readFile(fitFilePath);   // Buffer
+
+            const result = await api.uploadTour(data, 'fit', 'racebike', 'E2E Upload Test Activity');
+
+            expect(result?.id).toBeDefined();
+        });        
+    });
+
 })

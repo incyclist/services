@@ -13,7 +13,7 @@ import { AppDefinition, AppsIntergationSpec, AppsOperation } from "./types";
 export class AppsService extends IncyclistService   {
 
     protected readonly services:AppsIntergationSpec = {
-        ActivityUpload: ['strava', 'intervals'],
+        ActivityUpload: ['strava', 'intervals','komoot'],
         WorkoutUpload: [],
         WorkoutDownload: ['intervals'],
         ActivityDownload: [/*'strava','komoot'   */ ],
