@@ -153,7 +153,7 @@ export class KomootUpload extends IncyclistService implements IActivityUpload {
             if (!exists)
                 return null
 
-            const content = fs.readFile(fileName)
+            const content = await fs.readFile(fileName)
             return content||null
         }
         catch(err) {
