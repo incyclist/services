@@ -12,3 +12,8 @@ export interface IRouteSyncProvider {
     loadDetails(route:Route):Promise<Route>
 }
 
+export interface RouteSyncSummary {
+    id: string,
+    lastUpdate: string // ISO DATE
+    creation: string // ISO DATE
+}

@@ -5,6 +5,7 @@ import { EventLogger} from 'gd-eventlog'
 import { AxiosResponse } from "axios"
 import { IntervalsAthlete, IntervalsCalendarEvent, IntervalsCalendarRequest, IntervalsConfig, IntervalsUploadProps, IntervalsUploadRequest, IntervalsUploadResponse, IntervalsUploadResult } from "./types"
 import { formatDateTime } from "../../../../utils"
+import { IExternalAppApi } from "../types"
 
 const API_BASE_URL = 'https://intervals.icu/api/v1'
 
@@ -42,7 +43,7 @@ const API_BASE_URL = 'https://intervals.icu/api/v1'
  * @public
  */
 
-export class IntervalsApi extends AppApiBase{
+export class IntervalsApi extends AppApiBase implements IExternalAppApi{
 
     protected config : IntervalsConfig
     protected logger: EventLogger

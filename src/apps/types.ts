@@ -16,6 +16,7 @@ export interface IConnectedApp {
     init():boolean
     getSupportedOperations():AppsOperation []
     getDefaultOperations():AppsOperation []
+    getAppKey():string
 
 }
 

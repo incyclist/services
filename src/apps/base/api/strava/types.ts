@@ -102,6 +102,18 @@ export type getLoggedInAthleteActivitiesProps = {
     per_page?: number    /** Number of items per page. Defaults to 30. */
 }
 
+export type GetRoutesByAthleteIdProps = {
+    page?: number,       /** Page number. Defaults to 1. */
+    per_page?: number    /** Number of items per page. Defaults to 30. */
+}
+
+export type StravaRoutesFilters = {
+    sport?:string,
+    after?:Date,
+    lastUpdateAfter?:Date
+}
+
+
 export interface SummaryActivity  {
     id: number,
     external_id: number,
@@ -215,3 +227,157 @@ export type StravaAthleteResponse = {
     bikes,
     shoes
 }
+
+export type StravaApiErrorResponse<T> = {
+    props:T,
+    error:string
+
+}
+
+/** [latitude, longitude] */
+export type StravaLatLng = [number, number];
+
+/** 1 = meta, 2 = summary, 3 = detail */
+export type StravaResourceState = 1 | 2 | 3;
+
+/** 1 = Ride, 2 = Run, 3 = Walk, 4 = Hike, 5 = Trail Run, 6 = Gravel Ride, 7 = Mountain Bike Ride */
+export type StravaRouteType = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** 1 = road, 2 = mountain bike, 3 = cross, 4 = trail, 5 = mixed */
+export type StravaRouteSubType = 1 | 2 | 3 | 4 | 5;
+
+export interface StravaRoute {
+  athlete?: StravaSummaryAthlete;
+  /** The description of the route */
+  description?: string;
+  /** The route's distance, in meters */
+  distance?: number;
+  /** The route's elevation gain, in meters */
+  elevation_gain?: number;
+  /** The unique identifier of this route (may exceed Number.MAX_SAFE_INTEGER; prefer id_str) */
+  id?: number;
+  /** The unique identifier of the route in string format */
+  id_str?: string;
+  map?: StravaPolylineMap;
+  /** The name of this route */
+  name?: string;
+  /** Whether this route is private */
+  private?: boolean;
+  /** Whether this route is starred by the logged-in athlete */
+  starred?: boolean;
+  /** Epoch timestamp of when the route was created */
+  timestamp?: number;
+  /** This route's type (1 for ride, 2 for run) */
+  type?: StravaRouteType;
+  /** This route's sub-type */
+  sub_type?: StravaRouteSubType;
+  /** ISO 8601 date-time the route was created */
+  created_at?: string;
+  /** ISO 8601 date-time the route was last updated */
+  updated_at?: string;
+  /** Estimated time in seconds for the authenticated athlete to complete the route */
+  estimated_moving_time?: number;
+  /** The segments traversed by this route */
+  segments?: StravaSummarySegment[];
+  /** The custom waypoints along this route */
+  waypoints?: StravaWaypoint[];
+}
+
+export interface StravaWaypoint {
+  /** Location along the route that the waypoint is closest to */
+  latlng?: StravaLatLng;
+  /** Location off-route that the waypoint is referencing */
+  target_latlng?: StravaLatLng;
+  /** Categories that the waypoint belongs to */
+  categories?: string[];
+  /** A title for the waypoint */
+  title?: string;
+  /** A description for the waypoint (optional) */
+  description?: string;
+  /** Distance along the route that the waypoint is the closest, in meters */
+  distance_into_route?: number;
+}
+
+export interface StravaPolylineMap {
+  /** The identifier of the map */
+  id?: string;
+  /** The polyline of the map; only returned for detailed representation */
+  polyline?: string;
+  /** The summary polyline of the map */
+  summary_polyline?: string;
+}
+
+export interface StravaSummaryAthlete {
+  id?: number;
+  resource_state?: StravaResourceState;
+  firstname?: string;
+  lastname?: string;
+  /** URL to a 62x62 pixel profile picture */
+  profile_medium?: string;
+  /** URL to a 124x124 pixel profile picture */
+  profile?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  /** The athlete's sex */
+  sex?: 'M' | 'F';
+  /** @deprecated Use `summit` instead */
+  premium?: boolean;
+  /** Whether the athlete has any Summit subscription */
+  summit?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export type StravaSegmentActivityType = 'Ride' | 'Run' | 'Swim';
+
+export interface StravaSummarySegment {
+  id?: number;
+  name?: string;
+  activity_type?: StravaSegmentActivityType;
+  /** In meters */
+  distance?: number;
+  /** Percent */
+  average_grade?: number;
+  /** Percent */
+  maximum_grade?: number;
+  /** In meters */
+  elevation_high?: number;
+  /** In meters */
+  elevation_low?: number;
+  start_latlng?: StravaLatLng;
+  end_latlng?: StravaLatLng;
+  /** 0 = uncategorized … 5 = hors catégorie */
+  climb_category?: 0 | 1 | 2 | 3 | 4 | 5;
+  city?: string;
+  state?: string;
+  country?: string;
+  private?: boolean;
+  athlete_pr_effort?: StravaSummaryPRSegmentEffort;
+  athlete_segment_stats?: StravaSummarySegmentEffort;
+}
+
+export interface StravaSummaryPRSegmentEffort {
+  /** ID of the activity that set the PR */
+  pr_activity_id?: number;
+  /** In seconds */
+  pr_elapsed_time?: number;
+  /** ISO 8601 date the PR was set */
+  pr_date?: string;
+  /** Number of efforts by the athlete on this segment */
+  effort_count?: number;
+}
+
+export interface StravaSummarySegmentEffort {
+  id?: number;
+  activity_id?: number;
+  /** In seconds */
+  elapsed_time?: number;
+  start_date?: string;
+  start_date_local?: string;
+  /** In meters */
+  distance?: number;
+  /** Whether this effort is the current best on the leaderboard */
+  is_kom?: boolean;
+}
+

@@ -76,6 +76,10 @@ export class ConnectedAppService<C extends AppCredentials> extends IncyclistServ
         throw new Error('method not implemented')        
     }
 
+    getAppKey() {
+        return this.appKey
+    }
+
     protected initAuth():boolean {
         throw new Error('method not implemented')
     }

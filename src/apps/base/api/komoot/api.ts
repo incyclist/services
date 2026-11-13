@@ -2,6 +2,7 @@ import { EventLogger } from 'gd-eventlog';
 import { valid } from '../../../../utils/valid';
 import { AppApiBase } from '../base';
 import { KomootAuthConfig, KomootCoordinate, KomootGetTourRequestFilters, KomootGetTourRequestParams, KomootLoginResponse, KomootSportType, KomootTourSummary, KomootUploadFormat } from './types';
+import { IExternalAppApi } from '../types';
 
 
 const API_BASE_URL = 'https://api.komoot.de/v007'
@@ -31,7 +32,7 @@ const API_BASE_URL = 'https://api.komoot.de/v007'
  * @class
  * @public
  */
-export class KomootApi  extends AppApiBase{
+export class KomootApi  extends AppApiBase implements IExternalAppApi{
 
     protected username: string
     protected password: string

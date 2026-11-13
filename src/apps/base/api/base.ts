@@ -63,9 +63,9 @@ export class AppApiBase {
     
 
     // istanbul ignore next
-    protected getApi():AxiosInstance {
+    protected getApi(enableLogging:boolean=false):AxiosInstance {
         if (!this.api) {
-            this.api = RestApiClient.getClient()
+            this.api = RestApiClient.getClient(enableLogging)
             return this.api
         }
         return this.api

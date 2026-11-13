@@ -36,11 +36,11 @@ describe( 'Komoot Route Sync Provider ',()=>{
             getAllAppRoutes: jest.fn().mockReturnValue( props?.routes??[])
         })
 
-        if (mocks.connection)
-            Inject( 'KomootAppConnection',mocks.connection)
-
         if (mocks.api) {
-            Inject('KomootApi',mocks.api)
+            sp.getApi = jest.fn().mockReturnValue(mocks.api)
+        }
+        if (mocks.connection) {
+            sp.getConnection = jest.fn().mockReturnValue(mocks.connection)
         }
     }
 
@@ -49,6 +49,7 @@ describe( 'Komoot Route Sync Provider ',()=>{
         Inject('UserSettings', null)
         Inject('AppsService',null)    
         Inject('RouteListService',null)  
+    
         jest.clearAllMocks()  
     }
 
@@ -74,7 +75,8 @@ describe( 'Komoot Route Sync Provider ',()=>{
                         isAuthenticated: jest.fn().mockReturnValue(true)
                     },
                     connection: {
-                        isConnected:jest.fn().mockReturnValue(true)
+                        isConnected:jest.fn().mockReturnValue(true),
+                        getAppKey:jest.fn().mockReturnValue('komoot')
                     }                
                 }
             )
@@ -102,7 +104,8 @@ describe( 'Komoot Route Sync Provider ',()=>{
                         isAuthenticated: jest.fn().mockReturnValue(true)
                     },
                     connection: {
-                        isConnected:jest.fn().mockReturnValue(true)
+                        isConnected:jest.fn().mockReturnValue(true),
+                        getAppKey:jest.fn().mockReturnValue('komoot')
                     }                
                 }, {enabled:false}
             )
@@ -137,7 +140,8 @@ describe( 'Komoot Route Sync Provider ',()=>{
                         isAuthenticated: jest.fn().mockReturnValue(true)
                     },
                     connection: {
-                        isConnected:jest.fn().mockReturnValue(true)
+                        isConnected:jest.fn().mockReturnValue(true),
+                        getAppKey:jest.fn().mockReturnValue('komoot')
                     }                
 
                 } 

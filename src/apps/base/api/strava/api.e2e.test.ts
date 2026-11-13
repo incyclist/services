@@ -9,6 +9,8 @@ const clientId = process.env.STRAVA_CLIENT_ID
 const clientSecret = process.env.STRAVA_CLIENT_SECRET
 const accessToken = process.env.STRAVA_ACCESS_TOKEN
 const refreshToken = process.env.STRAVA_REFRESH_TOKEN
+const firstname = process.env.STRAVA_FIRST_NAME
+const lastname = process.env.STRAVA_LAST_NAME
 
 
 describe ('Strava API',()=> {
@@ -77,7 +79,8 @@ describe ('Strava API',()=> {
 
         test('normal use',async ()=>{
             const res = await api.getLoggedInAthlete()
-            expect(res).toMatchObject({firstname:'Try', lastname:'Incyclist.com'})
+            console.log( JSON.stringify(res) )            
+            expect(res).toMatchObject({firstname, lastname})
         })
     })
 
@@ -159,6 +162,81 @@ describe ('Strava API',()=> {
             console.log( JSON.stringify(res) )
             
         })
+    })
+
+    describe ('getRoutesByAthleteId',()=>{
+        let api;
+        let refresh
+
+        beforeEach( ()=>{
+            api = new StravaApi()           
+            api.init( { clientId,clientSecret,accessToken, refreshToken})
+        })
+
+        test('normal use',async ()=>{
+            const id = process.env.STRAVA_ATHLETE_ID
+            const res = await api.getRoutesByAthleteId(id)
+            
+            console.log( JSON.stringify(res) )
+            
+        })
+        test('pagination',async ()=>{
+            const id = process.env.STRAVA_ATHLETE_ID
+            const res = api.getRoutesByAthleteId(id,{page:0,per_page:50})
+            
+            console.log( JSON.stringify(res) )            
+        })
+
+    })
+
+    describe ('getLoggedInAthleteRoutes',()=>{
+        let api;
+
+        beforeEach( ()=>{
+            api = new StravaApi()           
+            api.init( { clientId,clientSecret,accessToken, refreshToken})
+        })
+
+        test('normal use',async ()=>{
+            const res = await api.getLoggedInAthleteRoutes()
+            
+            console.log( JSON.stringify(res) )            
+        })
+        test('pagination',async ()=>{
+            const res = await api.getLoggedInAthleteRoutes({page:1,per_page:50})
+            if (Array.isArray(res)) {
+            
+                console.log( JSON.stringify(res.map(r=> ({
+                    id:r.id_str,
+                    type:r.type,
+                    name:r.name,
+                    created_at: r.created_at,
+                    updated_at:r.updated_at
+                }))) )            
+            }
+            else {
+                console.log(res)
+            }
+        })
+    })
+
+
+    describe ('getRouteAsGPX',()=>{
+        let api;
+
+        beforeEach( ()=>{
+            api = new StravaApi()           
+            api.init( { clientId,clientSecret,accessToken, refreshToken})
+        })
+
+        test('normal use',async ()=>{
+            const id = '3555905160195943372'
+            const res = await api.getRouteAsGPX(id)
+            
+            console.log( JSON.stringify(res) )
+            
+        })
+
     })
 
 })
