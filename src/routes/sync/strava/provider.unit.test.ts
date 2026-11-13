@@ -30,7 +30,7 @@ describe('Strava Route Sync Provider', () => {
         set: userSettingsSet
     })
 
-    const setupMocks = (sp: StravaSyncProvider, mocks: { api?: any, connection?: any }, props: { enabled?: boolean, routes?: Array<unknown> } = {}) => {
+    const setupMocks = (sp , mocks: { api?: any, connection?: any }, props: { enabled?: boolean, routes?: Array<unknown> } = {}) => {
         Inject('Countries', { getIsoFromLatLng })
         Inject('UserSettings', UserSettingsMock())
         Inject('AppsService', {
