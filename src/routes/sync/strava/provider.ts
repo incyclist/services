@@ -1,4 +1,4 @@
-import { StravaApi, StravaAppConnection, StravaRoute } from "../../../apps";
+import { StravaApi, StravaApiErrorResponse, StravaAppConnection, StravaRoute } from "../../../apps";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../types";
 import { BaseSyncProvider } from "../base/provider";
@@ -29,13 +29,19 @@ export class StravaSyncProvider
 
             const gpxContent = await this.getApi().getRouteAsGPX(id)
 
-            if (typeof gpxContent!=='string') {
-                throw new Error( gpxContent.error)
+            
+
+            if (typeof gpxContent=='string') {
+                await this.addRouteDetails(route,gpxContent)
+
+                return route
+
+            }
+            else {
+                const error = gpxContent.error
+                throw new Error( error)
             }
             
-            await this.addRouteDetails(route,gpxContent)
-
-            return route
         }
         catch(err) {
             this.logError(err,'loadDetails',{id:route?.description?.id, title:route?.description?.title})
@@ -54,6 +60,7 @@ export class StravaSyncProvider
         while (!done && !this.stopRequested) {
             try {
                 const filters = {sport:this.getSportFilter()}
+                 // NOSONAR - sequential on purpose: pagination depends on previous page, and requests are rate-limited
                 const pageRoutes = await api.getLoggedInAthleteRoutes({page,per_page:PAGE_LIMIT},filters)
                 if (Array.isArray(pageRoutes) && pageRoutes.length>0) {
                     routes.push(...pageRoutes)
@@ -63,6 +70,7 @@ export class StravaSyncProvider
                     done = true
                 }
 
+                 // NOSONAR - sequential on purpose: pagination depends on previous page, and requests are rate-limited
                 await sleep(100)
 
             }

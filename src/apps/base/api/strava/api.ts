@@ -1,7 +1,7 @@
 import { Observer } from "../../../../base/types/observer"
 import { valid } from "../../../../utils/valid"
 import { AppApiBase } from "../base"
-import { ActivityStreamEntry, DetailedActivity, DuplicateError, getLoggedInAthleteActivitiesProps, GetRoutesByAthleteIdProps, StravaApiErrorResponse, StravaAthleteResponse, StravaConfig, StravaRefreshTokenResponse, StravaRoute, StravaRoutesFilters, StravaRouteSubType, StravaRouteType, StravaStreamType, StravaUploadProps, StravaUploadRequest, StravaUploadResponse, StravaUploadResult, SummaryActivity } from "./types"
+import { ActivityStreamEntry, DetailedActivity, DuplicateError, getLoggedInAthleteActivitiesProps, GetRoutesByAthleteIdProps, StravaApiErrorResponse, StravaAthleteResponse, StravaConfig, StravaRefreshTokenResponse, StravaRoute, StravaRoutesFilters, StravaRouteType, StravaStreamType, StravaUploadProps, StravaUploadRequest, StravaUploadResponse, StravaUploadResult, SummaryActivity } from "./types"
 import { EventLogger} from 'gd-eventlog'
 import { AxiosInstance, AxiosResponse } from "axios"
 import { sleep } from "../../../../utils/sleep"
