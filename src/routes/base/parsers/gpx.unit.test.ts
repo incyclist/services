@@ -3,6 +3,7 @@ import { expectToMatchFixture } from '../../../../__tests__/utils/fixture'
 import { FileInfo, getBindings } from '../../../api'
 import { parseXml } from '../../../utils'
 import { GPXParser } from './gpx'
+import { readFile } from "node:fs/promises";
 
 
 describe('GPXParser',()=>{
@@ -87,6 +88,27 @@ describe('GPXParser',()=>{
 
         },100000)
        
+        })
+
+        describe( 'parseFromString', ()=>{
+            beforeEach( ()=>{
+                parser = new GPXParser()
+
+
+                
+            })
+            test('valid gpx',async ()=>{
+                const file = './__tests__/data/routes/Etzelbergrennen.gpx'
+                const gpx = await readFile(file,'utf8')
+                const route = await parser.parseFromString(gpx)
+
+                expect(route.details.points).toHaveLength(161)
+                delete route.details.points
+              
+                
+                
+            })
+
         })
 
         describe('supportsContent',()=> {
