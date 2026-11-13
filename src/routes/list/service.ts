@@ -1086,7 +1086,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 this.logEvent({message:'route added', route:route.description.title, source: route.description.source})
             }
 
-            if (!route.description.country) {
+            if (!route.description.country && route.points?.length>0) {
                 this.logEvent({message:'route update required (country)',route:route.title})
                 route.updateCountryFromPoints()
                     .then( (updated)=> {
