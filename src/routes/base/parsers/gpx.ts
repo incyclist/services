@@ -95,6 +95,12 @@ export class GPXParser extends XMLParser {
         return extension.toLowerCase() === 'gpx';
     }
 
+    async parseFromString(gpx:string) {
+        const xmljson = await parseXml(gpx)
+        xmljson.expectScheme('gpx')
+        return await this.parse( {} as FileInfo, xmljson)
+    }
+
     protected async loadDescription(context:XmlParserContext) {
         const data = context.data
 

@@ -36,8 +36,11 @@ export class RestApiClient {
      *
      * @returns client object
      */
-    static getClient(): AxiosInstance {
-        return this.api().client();
+    static getClient(enableLogging:boolean): AxiosInstance {
+        const api = this.api()
+        if (enableLogging)
+            api.enableLogging()
+        return api.client();
     }
 
     protected static api()  {

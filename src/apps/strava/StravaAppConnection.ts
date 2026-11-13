@@ -98,10 +98,10 @@ export class StravaAppConnection extends ConnectedAppService<StravaCredentials> 
 
 
     getSupportedOperations():AppsOperation [] {
-        return ['ActivityUpload']
+        return ['ActivityUpload','RouteDownload']
     }
     getDefaultOperations():AppsOperation [] {
-        return ['ActivityUpload']
+        return ['ActivityUpload','RouteDownload']
     }
 
 

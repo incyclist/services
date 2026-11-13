@@ -13,8 +13,13 @@ export class ApiClient {
         ts: number;
     }>;
 
+    private requestInterceptorId?: number;
+    private responseInterceptorId?: number;
 
-
+    constructor() {
+        this.logger = new EventLogger('API');        
+        this.requests = [];
+    }
     /**
      * Initialises the Api Client instance
      *
@@ -46,12 +51,37 @@ export class ApiClient {
         this.axios = axios.create({ headers });
 
         if (requestLog) {
-            this.logger = new EventLogger('API');
-            this.requests = [];
-            this.axios.interceptors.request.use((req) => this.onRequest(req));
-            this.axios.interceptors.response.use((res) => this.onResponse(res));
+            this.enableLogging()
         }
 
+    }
+
+    enableLogging() {
+
+        const client = this.client()
+
+        // guard against registering twice        
+        if (this.requestInterceptorId !== undefined) return;
+
+        this.requestInterceptorId = client.interceptors.request.use(
+            (req) => this.onRequest(req)
+        );
+        this.responseInterceptorId = client.interceptors.response.use(
+            (res) => this.onResponse(res)
+        );
+    }
+
+    disableLogging() {
+        const client = this.client()
+
+        if (this.requestInterceptorId !== undefined) {
+            client.interceptors.request.eject(this.requestInterceptorId);
+            this.requestInterceptorId = undefined;
+        }
+        if (this.responseInterceptorId !== undefined) {
+            client.interceptors.response.eject(this.responseInterceptorId);
+            this.responseInterceptorId = undefined;
+        }
     }
 
     /**

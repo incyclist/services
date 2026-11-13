@@ -730,8 +730,8 @@ export class RLVDisplayService extends RouteDisplayService {
     }
 
     protected getVideoUrl(video:VideoState): string {
-        return video?.route?.details?.video?.url
-                ??video?.route?.description?.videoUrl
+        return video?.route?.description?.videoUrl
+                ??video?.route?.details?.video?.url
                 ??video?.route?.details?.video?.file
     }
 

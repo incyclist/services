@@ -1,10 +1,12 @@
 import { Observer } from "../../../../base/types/observer"
 import { valid } from "../../../../utils/valid"
 import { AppApiBase } from "../base"
-import { ActivityStreamEntry, DetailedActivity, DuplicateError, getLoggedInAthleteActivitiesProps, StravaConfig, StravaRefreshTokenResponse, StravaStreamType, StravaUploadProps, StravaUploadRequest, StravaUploadResponse, StravaUploadResult, SummaryActivity } from "./types"
+import { ActivityStreamEntry, DetailedActivity, DuplicateError, getLoggedInAthleteActivitiesProps, GetRoutesByAthleteIdProps, StravaApiErrorResponse, StravaAthleteResponse, StravaConfig, StravaRefreshTokenResponse, StravaRoute, StravaRoutesFilters, StravaRouteType, StravaStreamType, StravaUploadProps, StravaUploadRequest, StravaUploadResponse, StravaUploadResult, SummaryActivity } from "./types"
 import { EventLogger} from 'gd-eventlog'
-import { AxiosResponse } from "axios"
+import { AxiosInstance, AxiosResponse } from "axios"
 import { sleep } from "../../../../utils/sleep"
+import { StringToStravaRouteType } from "./consts"
+import { IExternalAppApi } from "../types"
 
 const API_BASE_URL = 'https://www.strava.com/api/v3'
 const OAUTH_URL = 'https://www.strava.com/oauth'
@@ -48,7 +50,7 @@ const AUTH_SERVER_URL = 'https://auth.incyclist.com'
  * @public
  */
 
-export class StravaApi extends AppApiBase{
+export class StravaApi extends AppApiBase implements IExternalAppApi{
 
     protected config : StravaConfig
     protected logger: EventLogger
@@ -62,6 +64,7 @@ export class StravaApi extends AppApiBase{
 
     init( config:StravaConfig):Observer {
         this.config  = config
+        this.observer = this.observer??new Observer()
         return this.observer
     }
 
@@ -108,6 +111,18 @@ export class StravaApi extends AppApiBase{
         return await this.waitForUploadResponse(response)
     }
 
+    async getLoggedInAthlete():Promise<StravaAthleteResponse|StravaApiErrorResponse<any>> {
+        await this.verifyAuthentication()
+
+        try {
+            const response =  await this.get( '/athlete' )
+            return response.data as StravaAthleteResponse
+        }
+        catch(err) {
+            return {props:{}, error:'getLoggedInAthlete failed: '+err.message}
+        }
+
+    }
 
     async getLoggedInAthleteActivities(props:getLoggedInAthleteActivitiesProps={}) {
         await this.verifyAuthentication()
@@ -122,7 +137,41 @@ export class StravaApi extends AppApiBase{
         }
     }
 
-    async getActivityById(id:number, include_all_efforts=false) {
+    async getLoggedInAthleteRoutes(props:GetRoutesByAthleteIdProps={}, filters?:StravaRoutesFilters):Promise<Array<StravaRoute>|StravaApiErrorResponse<GetRoutesByAthleteIdProps>> {
+        await this.verifyAuthentication()
+
+        try {
+            const hasParams = Object.keys(props).length>0
+            const params = Object.keys(props).map( k => `${k}=${props[k]}`).join('&')
+
+            const url = `/athlete/routes${hasParams?'?'+params:''}` 
+            const response =  await this.get( url)
+            const all:Array<StravaRoute> = response.data as Array<StravaRoute>            
+            
+            this.logger.logEvent({message:'getLoggedInAthleteRoutes success', routes:all.length})
+            return this.applyFilter(all,filters)
+           
+        }
+        catch(err) {
+            return {props, error:'getLoggedInAthleteRoutes failed: '+err.message}
+        }
+    }
+
+    async getRouteAsGPX(id:string):Promise<string|StravaApiErrorResponse<any>> {
+        await this.verifyAuthentication()
+
+        try {
+            const response =  await this.get( `/routes/${id}/export_gpx` )
+            return response.data as string
+        }
+        catch(err) {
+            return {props:{id}, error:'getRouteAsGPX failed: '+err.message}
+        }
+
+    }
+
+
+    async getActivityById(id:string, include_all_efforts=false) {
         await this.verifyAuthentication()
 
         try {
@@ -134,7 +183,7 @@ export class StravaApi extends AppApiBase{
         }
     }
 
-    async getActivityStream(id:number, keys:Array<StravaStreamType>=[]) {
+    async getActivityStream(id:string, keys:Array<StravaStreamType>=[]) {
         await this.verifyAuthentication()
 
         try {
@@ -147,12 +196,26 @@ export class StravaApi extends AppApiBase{
         }
     }
 
+    async getRoutesByAthleteId(id:string,props:GetRoutesByAthleteIdProps={}, filters?:StravaRoutesFilters):Promise<Array<StravaRoute>|StravaApiErrorResponse<GetRoutesByAthleteIdProps>> {
+        await this.verifyAuthentication()
 
-    async getLoggedInAthlete() {
-        const response =  await this.get( '/athlete')
-        return response.data
+        try {
+            const hasParams = Object.keys(props).length>0
+            const params = Object.keys(props).map( k => `${k}=${props[k]}`).join('&')
 
+            const url = `/athletes/${id}/routes${hasParams?'?'+params:''}` 
+            const response =  await this.get( url)
+            const all:Array<StravaRoute> = response.data as Array<StravaRoute>            
+
+            return this.applyFilter(all,filters)
+            
+        }
+        catch(err) {
+            return {props, error:'getRoutesByAthleteId failed: '+err.message}
+        }
     }
+
+
 
 
     protected async verifyToken() {
@@ -299,6 +362,44 @@ export class StravaApi extends AppApiBase{
         }
     }
 
+
+    protected applyFilter(routes:Array<StravaRoute>, filters?:StravaRoutesFilters) {
+        if (!filters)
+            return routes;
+
+        const sportTypeFilter = this.getSportTypeFilter(filters?.sport)
+
+        return routes.filter( route => {
+            let valid = true
+            if (sportTypeFilter.length>0)
+                valid = valid && (sportTypeFilter.includes(route.type))
+            if (filters?.after)
+                valid = valid && (new Date(route.created_at).valueOf()>filters.after.valueOf())
+            if (filters?.lastUpdateAfter)
+                valid = valid && (new Date(route.updated_at).valueOf()>filters.lastUpdateAfter.valueOf())
+
+            return valid                
+        })
+
+    }
+
+    protected getSportTypeFilter(filterStr:string):Array<StravaRouteType> {
+        if (!filterStr)
+            return []
+
+        const sportTypeFilter = filterStr?.split(',')??[]
+
+        const transformed: Array<StravaRouteType> = []
+        for (const sport of sportTypeFilter) {
+            const stravaType = StringToStravaRouteType[sport]
+            if (stravaType) {
+                transformed.push(stravaType)
+            }
+        }
+        return transformed
+    }
+
+
     protected async get(url:string, config?:object):Promise<AxiosResponse> {
         await this.verifyToken()
 
@@ -342,6 +443,10 @@ export class StravaApi extends AppApiBase{
         catch {
             return API_BASE_URL
         }
+    }
+
+    protected getApi():AxiosInstance {
+        return super.getApi(true)
     }
 
 
