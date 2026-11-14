@@ -1,12 +1,3 @@
-import { AppCredentials } from "../base/types";
+import { OAuthAppCredentials } from "../base/types";
 
-export interface IntervalsCredentials extends AppCredentials {
-    /** access token */
-    accesstoken:string,  
-
-    /** refresh token */
-    refreshtoken:string
-
-    expiration?: string
-
-}
+export type IntervalsCredentials = OAuthAppCredentials

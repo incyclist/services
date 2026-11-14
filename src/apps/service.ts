@@ -7,15 +7,16 @@ import { StravaAppConnection } from "./base";
 import { AppCredentials } from "./base/types";
 import { IntervalsAppConnection } from "./intervals/IntervalsAppConnection";
 import { KomootAppConnection } from "./komoot";
+import { TrainingPeaksAppConnection } from "./trainingpeaks";
 import { AppDefinition, AppsOperation, IConnectedApp } from "./types";
 
 @Singleton
 export class AppsService extends IncyclistService   {
 
     protected readonly serviceMap: Array<AppDefinition> = [
-        { name:'Strava', key:'strava', iconUrl: 'https://static.cdnlogo.com/logos/s/42/strava-wordmark.svg', connection: new StravaAppConnection()},
-        { name:'Komoot', key:'komoot', iconUrl:'https://www.komoot.com/assets/4d8ae313eec53e6e.svg', connection: new KomootAppConnection() },
-        { name:'Intervals.icu', key:'intervals',iconUrl: 'images/intervals.png', connection:new IntervalsAppConnection() },
+        { name:'Strava', key:'strava', connection: new StravaAppConnection()},
+        { name:'Komoot', key:'komoot', connection: new KomootAppConnection() },
+        { name:'Intervals.icu', key:'intervals', connection:new IntervalsAppConnection() },
     ]
 
     constructor() {
@@ -23,8 +24,21 @@ export class AppsService extends IncyclistService   {
     }
 
     openSettings() {
+
+        if (this.getUserSettings().getValue('TP_INTEGRATION',false) && !this.serviceMap.find( i=>i.key==='trainingpeaks')) {
+
+            this.logEvent({message:'[debug] add trainingpeaks support'})
+            this.serviceMap.push(
+                { name:'TrainingPeaks', key:'trainingpeaks', connection:new TrainingPeaksAppConnection() }
+            );
+        }
+
+
         try {
             const apps = this.serviceMap.map( as=> this.getAppDisplayProps(as.key))
+
+            this.logEvent({message:'[debug] openSettings returned', apps:JSON.stringify(apps,null,2)})
+
             return apps
         }
         catch (err) {
@@ -186,10 +200,10 @@ export class AppsService extends IncyclistService   {
     protected getAppDisplayProps( key:string) {
         const entry = this.serviceMap.find( e=>e.key===key)
 
-        const {name,iconUrl} = entry
+        const {name} = entry
         const isConnected = this.isConnected(key)
 
-        return { name, key, iconUrl, isConnected}
+        return { name, key, isConnected}
 
     }
 
