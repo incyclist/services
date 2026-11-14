@@ -7,7 +7,6 @@ export type AppsIntergationSpec = Map<AppsOperation,Array<string>>
 export type AppDefinition = {
     name: string
     key:string
-    iconUrl?: string
     connection?: ConnectedAppService<any>
 }
 
@@ -23,3 +22,4 @@ export interface IConnectedApp {
 export type * from './strava/types'
 export type * from './komoot/types'
 export type * from './intervals/types'
+export type * from './trainingpeaks/types'

@@ -3,6 +3,7 @@ import { Injectable, Singleton } from "../../base/decorators";
 import { valid } from "../../utils/valid";
 import { StravaApi, StravaConfig } from "../base/api";
 import { ConnectedAppService } from "../base/app";
+import { parseExpiration } from "../base/utils";
 import { AppsOperation } from "../types";
 import { StravaCredentials } from "./types";
 
@@ -31,8 +32,10 @@ export class StravaAppConnection extends ConnectedAppService<StravaCredentials> 
             }
             else {
                 this.initApi(config)
-                this.saveCredentials(config)
             }
+
+            // also persist when re-connecting, as the refresh token of a previous connection is no longer valid
+            this.saveCredentials(config)
 
             this.logEvent({message:'Connect with Strava success'})           
             return true
@@ -178,7 +181,7 @@ export class StravaAppConnection extends ConnectedAppService<StravaCredentials> 
             clientSecret: this.getSecret('STRAVA_CLIENT_SECRET'),
             accessToken: credentials?.accesstoken,
             refreshToken: credentials?.refreshtoken,
-            expiration: credentials?.expiration ? new Date(credentials.expiration) : undefined
+            expiration: parseExpiration(credentials?.expiration)
         };
     }
 
