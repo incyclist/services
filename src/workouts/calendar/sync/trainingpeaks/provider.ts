@@ -170,7 +170,8 @@ export class TrainingPeaksCalendarSyncProvider extends IncyclistService implemen
         const existing = idx === -1 ? undefined : this.workouts[idx]
 
         // nothing to do (and nothing to download) if the workout was not modified since the last sync
-        if (updated && existing?.updated?.valueOf() === updated.valueOf())
+        const lastUpdate = existing?.updated?.valueOf()
+        if (lastUpdate !== undefined && lastUpdate === updated?.valueOf())
             return
 
         if (!this.shouldLoadFile(workout))
