@@ -244,30 +244,30 @@ export class TrainingPeaksApi extends AppApiBase implements IExternalAppApi {
 
         // the status url is delivered in the Location header: .../v3/status/{trackingId}
         const location: string = response.headers?.location ?? response.headers?.Location
-        const trackingId = location?.split('?')[0].split('/').filter(part => part.length > 0).at(-1)
+        const trackingId = location?.split('?')[0].split('/').findLast(part => part.length > 0)
         if (!trackingId)
             throw new Error('Upload failed, reason: no status url received')
 
         return trackingId
     }
 
-    protected async waitForUploadResult(trackingId: string): Promise<string> {
-        const maxAttempts = Math.ceil(UPLOAD_TIMEOUT / UPLOAD_POLL_INTERVAL)
+    /** polls the status of the upload until the processing is completed (the status is requested one after the other, not in parallel) */
+    protected async waitForUploadResult(trackingId: string, attempt = 0): Promise<string> {
+        if (attempt >= Math.ceil(UPLOAD_TIMEOUT / UPLOAD_POLL_INTERVAL))
+            throw new Error('Upload failed, reason: timeout')
 
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            const response = await this.get(`/v3/status/${trackingId}`)
-            const status = response.data as TrainingPeaksFileStatus
+        const response = await this.get(`/v3/status/${trackingId}`)
+        const status = response.data as TrainingPeaksFileStatus
 
-            if (status?.Completed) {
-                const id = status.WorkoutIds?.[0]
-                if (id === undefined)
-                    throw new Error('Upload failed, reason: ' + (status.Status ?? 'unknown'))
-                return String(id)
-            }
-
-            await this.waitForReady()
+        if (status?.Completed) {
+            const id = status.WorkoutIds?.[0]
+            if (id === undefined)
+                throw new Error('Upload failed, reason: ' + (status.Status ?? 'unknown'))
+            return String(id)
         }
-        throw new Error('Upload failed, reason: timeout')
+
+        await this.waitForReady()
+        return await this.waitForUploadResult(trackingId, attempt + 1)
     }
 
     protected async waitForReady() {
@@ -298,7 +298,7 @@ export class TrainingPeaksApi extends AppApiBase implements IExternalAppApi {
 
     /** @returns the size (in bytes) of the content of a base64 encoded string */
     protected getBase64Size(base64: string): number {
-        const padding = base64.endsWith('==') ? 2 : (base64.endsWith('=') ? 1 : 0)
+        const padding = base64.endsWith('==') ? 2 : Number(base64.endsWith('='))
         return Math.floor(base64.length * 3 / 4) - padding
     }
 

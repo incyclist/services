@@ -1,5 +1,8 @@
 import { trimXmlTextNodes } from './utils'
 
+// the implementation that was replaced by a loop (a regular expression with a non-linear runtime for some inputs)
+const reference = (xml: string) => xml.replaceAll(/>([^<]+)</g, (_match, text: string) => `>${text.trim()}<`)
+
 describe('trimXmlTextNodes', () => {
 
     test('removes line breaks and padding around the value of an element', () => {
@@ -40,5 +43,46 @@ describe('trimXmlTextNodes', () => {
 
         expect(Date.now() - start).toBeLessThan(1000)
         expect(result).toContain('<Time>2026-11-15T06:00:01.000Z</Time>')
+    })
+
+    test.each([
+        '',
+        'text only',
+        '<a>',
+        '</a>',
+        '<a>x',
+        'x<a>',
+        '<a>  x  </a>',
+        '<a>\n  x  \n</a><b>  y </b>',
+        '<a><b></b><c/> </a>',
+        '<a> x > y </a>',
+        '>>> a >>> <b> c </b> >>>',
+        '<?xml version="1.0"?>\n<a x="1 > 0">\n  <b>  1  </b>\n</a>\n',
+        '<a>   </a>',
+        '<a>\t\r\n</a>',
+        '  <a>1</a>  ',
+        '<a>1</a>trailing   ',
+        '<<a>>  1  <<b>>',
+    ])('gives the same result as the implementation that was replaced: %j', (xml) => {
+        expect(trimXmlTextNodes(xml)).toBe(reference(xml))
+    })
+
+    test('gives the same result for a generated document', () => {
+        const xml = Array.from({ length: 300 }, (_v, i) => `<e${i}>\n    value ${i}  \n  </e${i}> `).join('\n')
+
+        expect(trimXmlTextNodes(xml)).toBe(reference(xml))
+    })
+
+    // the regular expression needed a time that grows with the square of the length for input like this
+    test.each([
+        ['many closing brackets without any tag', '>'.repeat(200_000)],
+        ['many closing brackets and one tag at the end', '>'.repeat(200_000) + '<a>'],
+    ])('runtime is linear: %s', (_name, xml) => {
+        const start = Date.now()
+
+        const result = trimXmlTextNodes(xml)
+
+        expect(Date.now() - start).toBeLessThan(500)
+        expect(result.length).toBeGreaterThan(0)
     })
 })

@@ -9,7 +9,7 @@ import { ActivityDetails } from "../base";
 import { ActivityUploadFactory } from "./factory";
 import { IActivityUpload } from "./types";
 
-const SUPPORTED_FORMATS = ['tcx', 'fit']
+const SUPPORTED_FORMATS = new Set(['tcx', 'fit'])
 
 /**
  * If an activity exists already in TrainingPeaks, but the workout can not be found, the activity is still seen as uploaded.
@@ -144,7 +144,7 @@ export class TrainingPeaksUpload extends IncyclistService implements IActivityUp
     }
 
     protected getActivityFile(activity: ActivityDetails, format: string): string {
-        if (!SUPPORTED_FORMATS.includes(format))
+        if (!SUPPORTED_FORMATS.has(format))
             throw new Error(`format ${format.toUpperCase()} is not supported by TrainingPeaks`)
 
         const fileName = activity[`${format}FileName`]

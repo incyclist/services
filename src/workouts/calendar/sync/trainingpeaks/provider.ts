@@ -16,7 +16,7 @@ const SERVICE = 'trainingpeaks'
 const SYNC_DAYS = 30
 
 /** HTTP status codes that tell that there is no (usable) file for the workout. Any other error might be temporary (rate limit, network, token) */
-const NO_FILE_STATUS = [400, 404, 410, 415, 422]
+const NO_FILE_STATUS = new Set([400, 404, 410, 415, 422])
 
 /**
  * Synchronizes the planned (structured) cycling workouts of the TrainingPeaks calendar
@@ -138,7 +138,7 @@ export class TrainingPeaksCalendarSyncProvider extends IncyclistService implemen
         if (planned.every(value => value === undefined))
             return true
 
-        return planned.some(value => Boolean(value))
+        return planned.some(Boolean)
     }
 
     protected removeDeletedWorkouts(current: Array<TrainingPeaksWorkout>) {
@@ -154,13 +154,13 @@ export class TrainingPeaksCalendarSyncProvider extends IncyclistService implemen
         this.workouts = this.workouts.filter(w => !deleted.includes(w))
     }
 
-    protected async updateWorkouts(current: Array<TrainingPeaksWorkout>) {
+    protected async updateWorkouts(current: Array<TrainingPeaksWorkout>, idx = 0): Promise<void> {
         // the files are downloaded one after the other to stay below the rate limits of TrainingPeaks
-        for (const workout of current) {
-            if (this.stopRequested)
-                break
-            await this.updateWorkout(workout)
-        }
+        if (idx >= current.length || this.stopRequested)
+            return
+
+        await this.updateWorkout(current[idx])
+        await this.updateWorkouts(current, idx + 1)
     }
 
     protected async updateWorkout(workout: TrainingPeaksWorkout) {
@@ -170,7 +170,7 @@ export class TrainingPeaksCalendarSyncProvider extends IncyclistService implemen
         const existing = idx === -1 ? undefined : this.workouts[idx]
 
         // nothing to do (and nothing to download) if the workout was not modified since the last sync
-        if (existing && updated && existing.updated?.valueOf() === updated.valueOf())
+        if (updated && existing?.updated?.valueOf() === updated.valueOf())
             return
 
         if (!this.shouldLoadFile(workout))
@@ -240,7 +240,7 @@ export class TrainingPeaksCalendarSyncProvider extends IncyclistService implemen
         catch (err) {
             const status = err.response?.status
             this.logEvent({ message: 'error loading workout', externalApp: SERVICE, status, error: err.message, workout: workout.Title })
-            if (NO_FILE_STATUS.includes(status))
+            if (NO_FILE_STATUS.has(status))
                 this.withoutFile.set(String(workout.Id), workout.LastModifiedDate)
             return undefined
         }
