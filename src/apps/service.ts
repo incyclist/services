@@ -7,15 +7,16 @@ import { StravaAppConnection } from "./base";
 import { AppCredentials } from "./base/types";
 import { IntervalsAppConnection } from "./intervals/IntervalsAppConnection";
 import { KomootAppConnection } from "./komoot";
+import { TrainingPeaksAppConnection } from "./trainingpeaks";
 import { AppDefinition, AppsOperation, IConnectedApp } from "./types";
 
 @Singleton
 export class AppsService extends IncyclistService   {
 
     protected readonly serviceMap: Array<AppDefinition> = [
-        { name:'Strava', key:'strava', iconUrl: 'https://static.cdnlogo.com/logos/s/42/strava-wordmark.svg', connection: new StravaAppConnection()},
-        { name:'Komoot', key:'komoot', iconUrl:'https://www.komoot.com/assets/4d8ae313eec53e6e.svg', connection: new KomootAppConnection() },
-        { name:'Intervals.icu', key:'intervals',iconUrl: 'images/intervals.png', connection:new IntervalsAppConnection() },
+        { name:'Strava', key:'strava', connection: new StravaAppConnection()},
+        { name:'Komoot', key:'komoot', connection: new KomootAppConnection() },
+        { name:'Intervals.icu', key:'intervals', connection:new IntervalsAppConnection() },
     ]
 
     constructor() {
@@ -24,7 +25,7 @@ export class AppsService extends IncyclistService   {
 
     openSettings() {
         try {
-            const apps = this.serviceMap.map( as=> this.getAppDisplayProps(as.key))
+            const apps = this.getServiceMap().map( as=> this.getAppDisplayProps(as.key))
             return apps
         }
         catch (err) {
@@ -41,7 +42,7 @@ export class AppsService extends IncyclistService   {
     }
 
     async connect(app:string, credentials:AppCredentials):Promise<boolean> {
-        const entry = this.serviceMap.find( e=>e.key===app)
+        const entry = this.getServiceMap().find( e=>e.key===app)
         if (!entry?.connection)
             return false
 
@@ -55,14 +56,14 @@ export class AppsService extends IncyclistService   {
     }
 
     isConnected(app:string):boolean {
-        const entry = this.serviceMap.find( e=>e.key===app)
+        const entry = this.getServiceMap().find( e=>e.key===app)
         if (!entry?.connection)
             return false
         return entry.connection.isConnected()
     }
 
     disconnect(app:string):void {
-        const entry = this.serviceMap.find( e=>e.key===app)
+        const entry = this.getServiceMap().find( e=>e.key===app)
         if (!entry?.connection)
             return
         entry.connection.disconnect()
@@ -121,10 +122,10 @@ export class AppsService extends IncyclistService   {
             const enabled = connected    
                 .filter( s => factory.isUploadEnabled(s.key))
 
-            return this.serviceMap.filter( s => enabled.find( c => c.key===s.key))
+            return this.getServiceMap().filter( s => enabled.find( c => c.key===s.key))
         }
         else if (operation === 'WorkoutDownload') {
-            return this.serviceMap.filter( s => available.includes(s.key) && s.connection.isConnected())
+            return this.getServiceMap().filter( s => available.includes(s.key) && s.connection.isConnected())
 
         }
         return []
@@ -142,12 +143,42 @@ export class AppsService extends IncyclistService   {
     }
 
     getName( key:string ) {
-        const found = this.serviceMap.find( r=>r.key===key )
+        const found = this.getServiceMap().find( r=>r.key===key )
         return found ? found.name : key
     }
     getKey( name:string ) {
-        const found = this.serviceMap.find( r=>r.name===name )
+        const found = this.getServiceMap().find( r=>r.name===name )
         return found ? found.key : name
+    }
+
+    /**
+     * Provides the list of the apps.
+     *
+     * Apps that are not released yet are only part of the list if they are enabled in the user settings.
+     * As the user settings are not initialized yet when this service is created, this is checked whenever the list is needed
+     * (and not only when the apps settings are opened), otherwise such an app would be unknown to all other services, e.g. the activity upload
+     */
+    protected getServiceMap():Array<AppDefinition> {
+        this.addOptionalApps()
+        return this.serviceMap
+    }
+
+    protected addOptionalApps() {
+        const isAdded = this.serviceMap.some( a=> a.key==='trainingpeaks')
+        if (isAdded || !this.isEnabledInSettings('TP_INTEGRATION'))
+            return
+
+        this.serviceMap.push( { name:'TrainingPeaks', key:'trainingpeaks', connection:new TrainingPeaksAppConnection() } )
+    }
+
+    protected isEnabledInSettings(key:string):boolean {
+        try {
+            const settings = this.getUserSettings()
+            return settings.isInitialized && Boolean(settings.getValue(key,false))
+        }
+        catch {
+            return false
+        }
     }
 
     protected hasSettings(app:string) {         
@@ -174,22 +205,22 @@ export class AppsService extends IncyclistService   {
 
 
     protected getServiceIDs():Array<string> {
-        return this.serviceMap.map( m=>m.key)
+        return this.getServiceMap().map( m=>m.key)
     }
     protected getAppConnections():Array<IConnectedApp> {
-        return this.serviceMap.map( m=>m.connection)
+        return this.getServiceMap().map( m=>m.connection)
     }
     protected getAppConnection(serviceKey:string):IConnectedApp|undefined {
-        return this.serviceMap.find( m=> serviceKey===m.key)?.connection
+        return this.getServiceMap().find( m=> serviceKey===m.key)?.connection
     }
 
     protected getAppDisplayProps( key:string) {
-        const entry = this.serviceMap.find( e=>e.key===key)
+        const entry = this.getServiceMap().find( e=>e.key===key)
 
-        const {name,iconUrl} = entry
+        const {name} = entry
         const isConnected = this.isConnected(key)
 
-        return { name, key, iconUrl, isConnected}
+        return { name, key, isConnected}
 
     }
 

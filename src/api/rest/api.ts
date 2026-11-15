@@ -67,7 +67,8 @@ export class ApiClient {
             (req) => this.onRequest(req)
         );
         this.responseInterceptorId = client.interceptors.response.use(
-            (res) => this.onResponse(res)
+            (res) => this.onResponse(res),
+            (err) => this.onError(err)
         );
     }
 
@@ -140,6 +141,34 @@ export class ApiClient {
         }
 
         return res;
+    }
+
+    /**
+     * Logs requests that failed (HTTP status outside of the range accepted by `validateStatus`, or no response at all).
+     * Only the status and the error message are logged, never the response body, as it might contain personal data.
+     * The error is passed on unchanged.
+     */
+    protected onError(err) {
+        try {
+            const { config, response } = err ?? {};
+            const { headers = {}, url, method, params } = config ?? {};
+            const tid = headers['x-transaction-id'];
+
+            const idx = tid ? this.requests.findIndex(r => r.tid === tid) : -1;
+            if (idx !== -1) {
+                const tsStart = this.requests[idx].ts;
+                this.requests.splice(idx, 1);
+                this.logger.logEvent({
+                    message: 'api call', method, url, tid, status: response?.status ?? 'no response',
+                    duration: Date.now() - tsStart, params, error: err.message
+                });
+            }
+        }
+        catch (e) {
+            this.logger.logEvent({ message: 'error', fn: 'onError', error: e.message, stack: e.stack });
+        }
+
+        return Promise.reject(err);
     }
 
 }

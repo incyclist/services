@@ -75,5 +75,89 @@ describe ('AppService',()=>{
 
 
     })
-    
+
+    describe('TrainingPeaks (enabled by the user setting TP_INTEGRATION)',()=>{
+        let service:AppsService
+
+        const settingsMock = (initialized:boolean, enabled:boolean) => ({
+            isInitialized: initialized,
+            getValue: jest.fn( (key:string, defValue:unknown) => key==='TP_INTEGRATION' ? enabled : defValue)
+        })
+
+        const uploadFactoryMock = (connected:string[]) => ({
+            get: jest.fn( (key:string) => ({ isConnected: jest.fn().mockReturnValue(connected.includes(key)) })),
+            isUploadEnabled: jest.fn( (key:string) => connected.includes(key))
+        })
+
+        beforeEach(()=>{
+            service = new AppsService()
+        })
+
+        afterEach(()=>{
+            service.inject('UserSettings',null)
+            service.inject('ActivityUploadFactory',null)
+            service.reset()
+        })
+
+        test('not enabled: the app is not available',()=>{
+            service.inject('UserSettings', settingsMock(true,false))
+
+            expect(service.getAvailableServices('ActivityUpload')).not.toContain('trainingpeaks')
+            expect(service.openSettings().map(a=>a.key)).toEqual(['strava','komoot','intervals'])
+        })
+
+        // regression: the app was only added when the settings of the apps were opened. Until then the activity upload did not know it
+        // (e.g. the upload status of an activity was not shown after the start of the app)
+        test('enabled: the app is known without opening the settings of the apps',()=>{
+            service.inject('UserSettings', settingsMock(true,true))
+            service.inject('ActivityUploadFactory', uploadFactoryMock(['trainingpeaks']))
+
+            expect(service.getAvailableServices('ActivityUpload')).toContain('trainingpeaks')
+            expect(service.getAvailableServices('WorkoutDownload')).toContain('trainingpeaks')
+            expect(service.getConnectedServices('ActivityUpload')).toEqual([OC({name:'TrainingPeaks', key:'trainingpeaks'})])
+            expect(service.getName('trainingpeaks')).toBe('TrainingPeaks')
+            expect(service.getKey('TrainingPeaks')).toBe('trainingpeaks')
+        })
+
+        test('enabled: the app is part of the apps settings',()=>{
+            service.inject('UserSettings', settingsMock(true,true))
+
+            expect(service.openSettings()).toEqual([
+                OC({key:'strava'}), OC({key:'komoot'}), OC({key:'intervals'}), {name:'TrainingPeaks', key:'trainingpeaks', isConnected:false}
+            ])
+        })
+
+        test('enabled: the app is only added once',()=>{
+            service.inject('UserSettings', settingsMock(true,true))
+
+            service.openSettings()
+            service.getAvailableServices('ActivityUpload')
+            const apps = service.openSettings()
+
+            expect(apps.filter(a=>a.key==='trainingpeaks')).toHaveLength(1)
+        })
+
+        test('user settings are not initialized yet when the service is used: the app is added as soon as they are',()=>{
+            service.inject('UserSettings', settingsMock(false,true))
+            expect(service.getAvailableServices('ActivityUpload')).not.toContain('trainingpeaks')
+
+            service.inject('UserSettings', settingsMock(true,true))
+            expect(service.getAvailableServices('ActivityUpload')).toContain('trainingpeaks')
+        })
+
+        test('user settings can not be read: the app is not available, nothing fails',()=>{
+            service.inject('UserSettings', { isInitialized:true, getValue: jest.fn( ()=>{ throw new Error('ERROR')}) })
+
+            expect(()=>service.getAvailableServices('ActivityUpload')).not.toThrow()
+            expect(service.getAvailableServices('ActivityUpload')).not.toContain('trainingpeaks')
+        })
+
+        test('enabled: other apps are not affected',()=>{
+            service.inject('UserSettings', settingsMock(true,true))
+            service.inject('ActivityUploadFactory', uploadFactoryMock(['strava','intervals']))
+
+            expect(service.getConnectedServices('ActivityUpload')).toEqual([OC({key:'strava'}),OC({key:'intervals'})])
+        })
+    })
+
 })

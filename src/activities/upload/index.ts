@@ -1,8 +1,6 @@
 export * from './strava'
 export * from './intervals'
 export * from './komoot'
+export * from './trainingpeaks'
 export * from './types'
 export * from './factory'
-
-
-
