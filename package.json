@@ -9,7 +9,7 @@
     "axios": "^1.21.1",
     "incyclist-devices": "^3.0.46",
     "promise.any": "^2.0.6",
-    "semver": "^7.7.4",
+    "semver": "^7.8.6",
     "tcx-builder": "^1.1.1",
     "uuid": "^14.0.3",
     "xml2js": "^0.6.2"
