@@ -7,11 +7,14 @@ import type {
     WorkoutCreateProps,
     WorkoutImportProps
 } from "../../list/cards/types";
+import type { DisplayType } from "../../../routes/list/types";
 import type { WorkoutDetailsProps } from "../base/types";
 
 export type DesktopWorkoutListDisplayProps = {
     loading: boolean                        // workoutList.isStillLoading() || lists===null
-    lists: DesktopWorkoutListProps[]        // [] while loading
+    lists: DesktopWorkoutListProps[]        // regular category lists (no 'scheduled'); [] while loading
+    upcoming: DesktopUpcomingProps | null   // scheduled workouts; null if none or while loading
+    displayType: DisplayType                // preferences.workoutListDisplayType (default 'tiles')
     detailWorkoutId: string | null          // details dialog open for this id
     createInfo: DesktopCreateInfoProps | null   // "how to create a workout" overlay
 }
@@ -21,6 +24,10 @@ export type DesktopWorkoutListProps = {
     title: string                           // CardList.getTitle()
     observer: IObserver                     // stable per list id; emits 'update' with DesktopWorkoutCardProps[]
     cards: DesktopWorkoutCardProps[]
+}
+
+export type DesktopUpcomingProps = DesktopWorkoutListProps & {
+    todayId: string | null                  // id of today's scheduled card
 }
 
 export type DesktopWorkoutCardProps = {

@@ -78,7 +78,7 @@ describe('DesktopWorkoutListPageService - display props', () => {
             MockWorkoutList.isStillLoading.mockReturnValue(true)
             MockWorkoutList.getLists.mockReturnValue(null)
 
-            expect(service.getPageDisplayProps()).toEqual({ loading: true, lists: [], detailWorkoutId: null, createInfo: null })
+            expect(service.getPageDisplayProps()).toEqual({ loading: true, lists: [], upcoming: null, displayType: 'tiles', detailWorkoutId: null, createInfo: null })
         })
 
         test('loading when the lists are null', () => {
@@ -126,9 +126,48 @@ describe('DesktopWorkoutListPageService - display props', () => {
             MockWorkoutCalendar.getScheduledToday.mockReturnValue({ id: 'src:1', workoutId: '1', workout: { id: '1' } })
             MockWorkoutList.getLists.mockReturnValue([makeList('scheduled', 'Scheduled Workouts', [today, other])])
 
-            const cards = service.getPageDisplayProps().lists[0].cards
+            const props = service.getPageDisplayProps()
+            const cards = props.upcoming.cards
             expect((cards[0].props as any).isToday).toBe(true)
             expect((cards[1].props as any).isToday).toBe(false)
+            expect(props.upcoming.todayId).toBe('1')
+        })
+
+        test('upcoming is split from the regular lists', () => {
+            const sched = makeList('scheduled', 'Scheduled Workouts', [makeCard('1', 'ScheduledWorkout', {})])
+            const mine = makeList('myWorkouts', 'My Workouts', [workoutCard('2')])
+            MockWorkoutList.getLists.mockReturnValue([sched, mine])
+
+            const props = service.getPageDisplayProps()
+
+            expect(props.lists.map(l => l.id)).toEqual(['myWorkouts'])
+            expect(props.upcoming).toMatchObject({ id: 'scheduled', title: 'Scheduled Workouts', todayId: null })
+            expect(props.upcoming.observer).toBeDefined()
+            expect(props.upcoming.cards.map(c => c.id)).toEqual(['1'])
+        })
+
+        test('upcoming is null without scheduled workouts', () => {
+            MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts', 'My', [])])
+            expect(service.getPageDisplayProps().upcoming).toBeNull()
+
+            MockWorkoutList.getLists.mockReturnValue([makeList('scheduled', 'S', []), makeList('myWorkouts', 'My', [])])
+            expect(service.getPageDisplayProps().upcoming).toBeNull()
+        })
+
+        test('upcoming is null while loading', () => {
+            MockWorkoutList.isStillLoading.mockReturnValue(true)
+            MockWorkoutList.getLists.mockReturnValue([makeList('scheduled', 'S', [makeCard('1', 'ScheduledWorkout', {})])])
+            expect(service.getPageDisplayProps().upcoming).toBeNull()
+        })
+
+        test('snapshot still resolves scheduled cards', () => {
+            MockWorkoutList.getLists.mockReturnValue([makeList('scheduled', 'S', [makeCard('1', 'ScheduledWorkout', {})])])
+            service.getPageDisplayProps()
+            const openDetails = jest.spyOn(service, 'onOpenDetails').mockImplementation(() => undefined)
+
+            service.onCardOK('1')
+
+            expect(openDetails).toHaveBeenCalledWith('1')
         })
 
         test('observers are stable per list id across calls', () => {
@@ -148,6 +187,60 @@ describe('DesktopWorkoutListPageService - display props', () => {
             MockWorkoutList.getLists.mockImplementation(() => { throw new Error('boom') })
             expect(service.getPageDisplayProps().loading).toBe(true)
             expect(s.logError).toHaveBeenCalled()
+        })
+    })
+
+    describe('display type', () => {
+        let pageObserver, emitSpy
+
+        beforeEach(() => {
+            pageObserver = service.openPage()
+            emitSpy = jest.spyOn(pageObserver, 'emit')
+        })
+
+        test('defaults to tiles and is part of the display props', () => {
+            expect(service.getDisplayType()).toBe('tiles')
+            expect(MockUserSettings.get).toHaveBeenCalledWith('preferences.workoutListDisplayType', 'tiles')
+            expect(service.getPageDisplayProps().displayType).toBe('tiles')
+        })
+
+        test('reads the persisted value', () => {
+            MockUserSettings.get.mockReturnValue('list')
+            expect(service.getDisplayType()).toBe('list')
+            expect(service.getPageDisplayProps().displayType).toBe('list')
+        })
+
+        test('an invalid persisted value falls back to tiles', () => {
+            MockUserSettings.get.mockReturnValue('grid')
+            expect(service.getDisplayType()).toBe('tiles')
+        })
+
+        test('persists a valid selection, logs and emits page-update', () => {
+            s.logEvent = jest.fn()
+            service.onDisplayTypeSelected('list')
+
+            expect(MockUserSettings.set).toHaveBeenCalledWith('preferences.workoutListDisplayType', 'list')
+            expect(s.logEvent).toHaveBeenCalledWith({ message: 'display type changed', displayType: 'list' })
+            expect(emitSpy).toHaveBeenCalledWith('page-update')
+        })
+
+        test('ignores invalid input', () => {
+            emitSpy.mockClear()
+            service.onDisplayTypeSelected('grid')
+            service.onDisplayTypeSelected(undefined)
+
+            expect(MockUserSettings.set).not.toHaveBeenCalled()
+            expect(emitSpy).not.toHaveBeenCalled()
+        })
+
+        test('errors are logged, not thrown', () => {
+            MockUserSettings.set.mockImplementation(() => { throw new Error('boom') })
+            expect(() => service.onDisplayTypeSelected('list')).not.toThrow()
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'onDisplayTypeSelected')
+
+            MockUserSettings.get.mockImplementation(() => { throw new Error('boom') })
+            expect(service.getDisplayType()).toBe('tiles')
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'getDisplayType')
         })
     })
 
@@ -205,7 +298,7 @@ describe('DesktopWorkoutListPageService - display props', () => {
             MockWorkoutList.getLists.mockReturnValue([sched])
             const props = service.getPageDisplayProps()
             const received = jest.fn()
-            props.lists[0].observer.on('update', received)
+            props.upcoming.observer.on('update', received)
 
             const updated = makeList('scheduled', 'Scheduled Workouts', [makeCard('1', 'ScheduledWorkout', {}), makeCard('2', 'ScheduledWorkout', {})], domainObserver)
             domainObserver.emit('update', updated)
@@ -216,11 +309,11 @@ describe('DesktopWorkoutListPageService - display props', () => {
 
         test('the domain subscription is added once, even if getPageDisplayProps is called repeatedly', () => {
             const domainObserver = new Observer()
-            MockWorkoutList.getLists.mockImplementation(() => [makeList('scheduled', 'S', [], domainObserver)])
+            MockWorkoutList.getLists.mockImplementation(() => [makeList('scheduled', 'S', [makeCard('1', 'ScheduledWorkout', {})], domainObserver)])
             service.getPageDisplayProps()
             service.getPageDisplayProps()
             const received = jest.fn()
-            service.getPageDisplayProps().lists[0].observer.on('update', received)
+            service.getPageDisplayProps().upcoming.observer.on('update', received)
 
             domainObserver.emit('update', makeList('scheduled', 'S', []))
             expect(received).toHaveBeenCalledTimes(1)
@@ -228,10 +321,10 @@ describe('DesktopWorkoutListPageService - display props', () => {
 
         test('closePage removes all subscriptions and resets the list observers', () => {
             const domainObserver = new Observer()
-            MockWorkoutList.getLists.mockReturnValue([makeList('scheduled', 'S', [], domainObserver)])
+            MockWorkoutList.getLists.mockReturnValue([makeList('scheduled', 'S', [makeCard('1', 'ScheduledWorkout', {})], domainObserver)])
             const props = service.getPageDisplayProps()
             const received = jest.fn()
-            props.lists[0].observer.on('update', received)
+            props.upcoming.observer.on('update', received)
 
             service.closePage()
             domainObserver.emit('update', makeList('scheduled', 'S', []))

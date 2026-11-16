@@ -6,6 +6,7 @@ import { IObserver } from "../../../types";
 import type { ActiveImportCard } from "../../list/cards/ActiveImportCard";
 import type { WorkoutCreateCard } from "../../list/cards/WorkoutCreateCard";
 import type { WP } from "../../list/types";
+import type { DisplayType } from "../../../routes/list/types";
 import { WorkoutListPageService } from "../base/service";
 import {
     DesktopCreateInfoProps,
@@ -13,12 +14,16 @@ import {
     DesktopWorkoutCardProps,
     DesktopWorkoutDetailsProps,
     DesktopWorkoutListDisplayProps,
-    DesktopWorkoutListProps
+    DesktopWorkoutListProps,
+    DesktopUpcomingProps
 } from "./types";
 
 const STEP_CHANGE_AUDIO_KEY = 'preferences.workouts.stepChangeAudioSignal'
 const CREATE_OVERLAY = 'Create Workout Info'
 const SURFACE = 'workout-details'
+const DISPLAY_TYPE_KEY = 'preferences.workoutListDisplayType'
+const DEFAULT_DISPLAY_TYPE: DisplayType = 'tiles'
+const SCHEDULED_ID = 'scheduled'
 
 type DomainSubscription = { observer: IObserver, handler: (list: CardList<WP>) => void }
 
@@ -79,11 +84,41 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
 
             const todayId = this.getScheduledTodayWorkoutId()
             this.updateSnapshot(lists)
-            return this.getDisplayProps(false, lists.map(l => this.mapList(l, todayId)))
+
+            const scheduled = lists.find(l => l.getId() === SCHEDULED_ID)
+            const upcoming = this.mapUpcoming(scheduled, todayId)
+            const regular = lists.filter(l => l.getId() !== SCHEDULED_ID).map(l => this.mapList(l, todayId))
+            return this.getDisplayProps(false, regular, upcoming)
         }
         catch (err) {
             this.logError(err, 'getPageDisplayProps')
             return this.getDisplayProps(true, [])
+        }
+    }
+
+    getDisplayType(): DisplayType {
+        try {
+            const value = this.getUserSettings().get(DISPLAY_TYPE_KEY, DEFAULT_DISPLAY_TYPE)
+            return this.isDisplayType(value) ? value : DEFAULT_DISPLAY_TYPE
+        }
+        catch (err) {
+            this.logError(err, 'getDisplayType')
+            return DEFAULT_DISPLAY_TYPE
+        }
+    }
+
+    /** switches between list and tile layout (persisted in the user settings) */
+    onDisplayTypeSelected(type: DisplayType): void {
+        try {
+            if (!this.isDisplayType(type))
+                return
+
+            this.getUserSettings().set(DISPLAY_TYPE_KEY, type)
+            this.logEvent({ message: 'display type changed', displayType: type })
+            this.emitPageUpdate()
+        }
+        catch (err) {
+            this.logError(err, 'onDisplayTypeSelected')
         }
     }
 
@@ -326,8 +361,23 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
 
     // ---- internals --------------------------------------------------------------
 
-    protected getDisplayProps(loading: boolean, lists: DesktopWorkoutListProps[]): DesktopWorkoutListDisplayProps {
-        return { loading, lists, detailWorkoutId: this.detailWorkoutId, createInfo: this.createInfo }
+    protected getDisplayProps(loading: boolean, lists: DesktopWorkoutListProps[], upcoming: DesktopUpcomingProps | null = null): DesktopWorkoutListDisplayProps {
+        return {
+            loading, lists, upcoming,
+            displayType: this.getDisplayType(),
+            detailWorkoutId: this.detailWorkoutId,
+            createInfo: this.createInfo
+        }
+    }
+
+    protected isDisplayType(value: unknown): value is DisplayType {
+        return value === 'list' || value === 'tiles'
+    }
+
+    protected mapUpcoming(list: CardList<WP> | undefined, todayId: string | null): DesktopUpcomingProps | null {
+        if (!list || !(list.getCards()?.length))
+            return null
+        return { ...this.mapList(list, todayId), todayId }
     }
 
     protected onListEvent(lists?: CardList<WP>[], hash?: string): void {
