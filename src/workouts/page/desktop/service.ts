@@ -375,7 +375,7 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
     }
 
     protected mapUpcoming(list: CardList<WP> | undefined, todayId: string | null): DesktopUpcomingProps | null {
-        if (!list || !(list.getCards()?.length))
+        if (!list?.getCards()?.length)
             return null
         return { ...this.mapList(list, todayId), todayId }
     }
