@@ -1342,7 +1342,7 @@ describe('WorkoutListService',()=>{
         })
     })
 
-    describe ('getScheduledWorkouts (RC-5 - highlight-only auto-select gating)',()=>{
+    describe ('getScheduledWorkouts (highlight-only, never auto-selects)',()=>{
         let s,service
         let scheduledEntries
 
@@ -1371,29 +1371,15 @@ describe('WorkoutListService',()=>{
             Inject('Bindings', null)
         })
 
-        test('non-mobile (default): still auto-selects the workout matching scheduledToday',()=>{
-            injectChannel('desktop')
-
-            s.getScheduledWorkouts(scheduledEntries)
-            expect(s.selectedWorkout?.id).toBe('1')
-        })
-
-        test('channel not (yet) known: preserves legacy auto-select default',()=>{
-            injectChannel(undefined)
-
-            s.getScheduledWorkouts(scheduledEntries)
-            expect(s.selectedWorkout?.id).toBe('1')
-        })
-
-        test('mobile: highlight only, does not auto-select (case-4 leak fix)',()=>{
-            injectChannel('mobile')
+        test.each(['desktop','web','mobile',undefined])('channel %s: does not auto-select the workout matching scheduledToday',(channel)=>{
+            injectChannel(channel)
 
             s.getScheduledWorkouts(scheduledEntries)
             expect(s.selectedWorkout).toBeUndefined()
         })
     })
 
-    describe ('preload - RC-7 launch-time redirect gating',()=>{
+    describe ('preload - scheduled workout handling',()=>{
         let s,service
         let scheduledHandler
         let MockCalendarLocal
@@ -1436,19 +1422,8 @@ describe('WorkoutListService',()=>{
             MockAppState.getState.mockReset()
         })
 
-        test('non-mobile: keeps scheduledToday and redirects to the workouts page',()=>{
-            injectChannel('desktop')
-            service.preload()
-
-            const workout = new Workout({type:'workout',id:'1',name:'today'})
-            scheduledHandler({workout, day:new Date(), updated:new Date()})
-
-            expect(MockAppState.setState).toHaveBeenCalledWith('scheduledToday','1')
-            expect(MockAppState.setPersistedState).toHaveBeenCalledWith('page','workouts')
-        })
-
-        test('mobile: keeps scheduledToday but does not hijack the landing page',()=>{
-            injectChannel('mobile')
+        test.each(['desktop','web','mobile',undefined])('channel %s: keeps scheduledToday but does not write the persisted page',(channel)=>{
+            injectChannel(channel)
             service.preload()
 
             const workout = new Workout({type:'workout',id:'1',name:'today'})

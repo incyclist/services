@@ -404,11 +404,6 @@ export class WorkoutListService extends IncyclistService  implements IListServic
                     this.scheduledToday = event
                     this.getAppState().setState('scheduledToday',event.workout.id)
 
-                    // mobile shows a post-pairing prompt instead of hijacking the landing page (RC-7)
-                    if (!this.isMobile()) {
-                        this.getAppState().setPersistedState('page','workouts')
-                    }
-
                 })
                 this.getWorkoutCalendar().init().catch( err=>{ this.logError(err,'preload') })
 
@@ -565,19 +560,6 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     protected getScheduledWorkouts(scheduled: ScheduledWorkout[]) {
         const schedList = new CardList<WP>('scheduled', 'Scheduled Workouts');
         scheduled.forEach(w => schedList.add(new ScheduledWorkoutCard(w)));
-
-        // Highlight-only on mobile (case-4 leak fix): viewing the list must never auto-select
-        // a workout for the next ride. Desktop/web keep the legacy auto-select behaviour.
-        if (!this.isMobile()) {
-            const today = this.getAppState().getState('scheduledToday');
-            if (today) {
-                schedList.getCards().forEach(c => {
-                    if (c.getId() === today) {
-                        c.select();
-                    }
-                });
-            }
-        }
 
         const newList = (this.scheduledList===undefined || this.scheduledList===null)
         if (newList) {
@@ -1080,10 +1062,6 @@ export class WorkoutListService extends IncyclistService  implements IListServic
     @Injectable
     protected getAppState() {
         return useAppState()
-    }
-
-    protected isMobile():boolean {
-        return this.getBindings()?.appInfo?.getChannel()==='mobile'
     }
 
     @Injectable
