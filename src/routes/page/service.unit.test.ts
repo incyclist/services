@@ -2,7 +2,7 @@ import { Inject } from '../../base/decorators'
 import { RoutesPageService } from './service'
 import { RouteCard } from '../list/cards/RouteCard'
 import { Route } from '../base/model/route'
-import { WorkoutListPageService } from '../../workouts/page/service'
+import { MobileWorkoutListPageService } from '../../workouts/page/mobile/service'
 
 // Session 2.2 (workout-combo-service-design.md §3.5, §3.8) - RoutesPageService's cross-visibility
 // side-channel. RouteCard.openSettings() is deliberately not touched - see the regression guard
@@ -146,7 +146,7 @@ describe('RoutesPageService',()=>{
             Inject('WorkoutList', MockWorkoutListShared)
             Inject('RouteList', MockRouteListShared)
 
-            workoutPageService = new WorkoutListPageService()
+            workoutPageService = new MobileWorkoutListPageService()
             workoutPageService.logError = jest.fn()
             routesPageService = new RoutesPageService()
             routesPageService.logError = jest.fn()
