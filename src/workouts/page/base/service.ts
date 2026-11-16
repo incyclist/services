@@ -326,6 +326,18 @@ export abstract class WorkoutListPageService extends IncyclistPageService {
         return undefined
     }
 
+    /** Content id of the workout scheduled for today (if any) */
+    protected getScheduledTodayWorkoutId(): string | null {
+        try {
+            const today = this.getWorkoutCalendar().getScheduledToday()
+            return today?.workout?.id ?? today?.workoutId ?? null
+        }
+        catch (err) {
+            this.logError(err, 'getScheduledTodayWorkoutId')
+            return null
+        }
+    }
+
     protected formatDuration(duration: number): string {
         if (duration===undefined || duration===null)
             return ''
