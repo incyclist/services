@@ -6,10 +6,10 @@
   },
   "dependencies": {
     "@garmin/fitsdk": "^21.221.0",
-    "axios": "^1.21.0",
+    "axios": "^1.21.1",
     "incyclist-devices": "^3.0.46",
     "promise.any": "^2.0.6",
-    "semver": "^7.7.4",
+    "semver": "^7.8.6",
     "tcx-builder": "^1.1.1",
     "uuid": "^14.0.3",
     "xml2js": "^0.6.2"
@@ -21,7 +21,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.6",
     "@typescript-eslint/eslint-plugin": "^8.72.1",
-    "@typescript-eslint/parser": "^8.71.0",
+    "@typescript-eslint/parser": "^8.72.2",
     "dotenv": "^17.4.2",
     "eslint": "^10.14.0",
     "formdata-node": "^6.0.3",
@@ -33,7 +33,7 @@
     "typedoc-plugin-markdown": "^4.14.1",
     "typedoc-plugin-no-inherit": "^1.6.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.72.1"
+    "typescript-eslint": "^8.72.2"
   },
   "scripts": {
     "lint": "eslint . --quiet",
