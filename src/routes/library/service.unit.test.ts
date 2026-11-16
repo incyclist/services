@@ -208,7 +208,7 @@ describe('RouteLibraryScannerService', () => {
 
             const errorCalls = logEventSpy.mock.calls
                 .map(call => call[0])
-                .filter(event => event.message === 'Error' && event.fn === 'scanFolder')
+                .filter(event => event.message === 'scanFolder failed' )
 
             expect(errorCalls).toHaveLength(1)
             expect(errorCalls[0]).not.toHaveProperty('uri')

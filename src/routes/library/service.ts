@@ -671,9 +671,9 @@ export class RouteLibraryScannerService extends IncyclistService {
         return undefined
     }
 
-    private countFailedFolder(ctx: ScanContext, err: unknown, folderName: string): void {
+    private countFailedFolder(ctx: ScanContext, err: any, folderName: string): void {
         ctx.progress.failedFolders++
-        this.logError(err as Error, 'scanFolder', { folderName })
+        this.logEvent({message: 'scanFolder failed',  folderName, reason:err.message })
         this.emitScanProgress(ctx)
     }
 
