@@ -1,5 +1,6 @@
 export type * from './page/types'
 export type * from './list/types'
+export type * from './prompt/types'
 export type * from './base/graph/types'
 // The Workout*-prefixed ride-page display types (WorkoutGraphPlan, WorkoutRidePageDisplayProps,
 // etc.) used to live at './ride/page/types' and be re-exported here. They now live at

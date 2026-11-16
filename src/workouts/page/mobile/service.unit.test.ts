@@ -1,9 +1,9 @@
-import { Inject } from '../../base/decorators'
-import { Observer } from '../../base/types/observer'
-import { Workout } from '../base/model/Workout'
-import { WorkoutListPageService } from './service'
-import { WorkoutListService } from '../list/service'
-import { getBindings } from '../../api'
+import { Inject } from '../../../base/decorators'
+import { Observer } from '../../../base/types/observer'
+import { Workout } from '../../base/model/Workout'
+import { MobileWorkoutListPageService } from '../index'
+import { WorkoutListService } from '../../list/service'
+import { getBindings } from '../../../api'
 
 describe('WorkoutListPageService', ()=>{
 
@@ -113,7 +113,7 @@ describe('WorkoutListPageService', ()=>{
 
         beforeEach( ()=>{
             setupMocks()
-            s = service = new WorkoutListPageService()
+            s = service = new MobileWorkoutListPageService()
             s.logError = jest.fn()
         })
 
@@ -235,7 +235,7 @@ describe('WorkoutListPageService', ()=>{
 
         beforeEach( ()=>{
             setupMocks()
-            s = service = new WorkoutListPageService()
+            s = service = new MobileWorkoutListPageService()
             s.logError = jest.fn()
         })
 
@@ -335,7 +335,7 @@ describe('WorkoutListPageService', ()=>{
 
         beforeEach( ()=>{
             setupMocks()
-            s = service = new WorkoutListPageService()
+            s = service = new MobileWorkoutListPageService()
             s.logError = jest.fn()
 
             card = makeCard({id:'1', title:'Alpha', workout:makeWorkout('1','Alpha')})
@@ -402,7 +402,7 @@ describe('WorkoutListPageService', ()=>{
 
         beforeEach( ()=>{
             setupMocks()
-            s = service = new WorkoutListPageService()
+            s = service = new MobileWorkoutListPageService()
             s.logError = jest.fn()
             MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts','My Workouts',[])])
         })
@@ -428,7 +428,7 @@ describe('WorkoutListPageService', ()=>{
 
         beforeEach( ()=>{
             setupMocks()
-            s = service = new WorkoutListPageService()
+            s = service = new MobileWorkoutListPageService()
             s.logError = jest.fn()
         })
 
@@ -470,7 +470,7 @@ describe('WorkoutListPageService', ()=>{
 
         beforeEach( ()=>{
             setupMocks()
-            s = service = new WorkoutListPageService()
+            s = service = new MobileWorkoutListPageService()
             s.logError = jest.fn()
             service.openPage()
         })
@@ -576,7 +576,7 @@ describe('WorkoutListPageService', ()=>{
 
         beforeEach( ()=>{
             setupMocks()
-            s = service = new WorkoutListPageService()
+            s = service = new MobileWorkoutListPageService()
             s.logError = jest.fn()
             service.openPage()
 
@@ -650,7 +650,7 @@ describe('WorkoutListPageService', ()=>{
 
         beforeEach( ()=>{
             setupMocks()
-            s = service = new WorkoutListPageService()
+            s = service = new MobileWorkoutListPageService()
             s.logError = jest.fn()
             service.openPage()
 
@@ -1007,7 +1007,7 @@ describe('WorkoutListPageService', ()=>{
             const workoutList = new WorkoutListService()
             ;(workoutList as any).initialized = true
 
-            s = service = new WorkoutListPageService()
+            s = service = new MobileWorkoutListPageService()
             s.logError = jest.fn()
             ;(service as any).pageObserver = new Observer()
 
