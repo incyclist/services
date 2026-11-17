@@ -1,6 +1,5 @@
-import { FileInfo, IObserver } from "../../../types";
 import { Workout } from "../../base/model";
-import { WorkoutDetailsCallbacks, WorkoutDetailsProps } from "../base/types";
+import { WorkoutDetailsCallbacks, WorkoutDetailsProps, WorkoutImportCallbacks, WorkoutImportDisplayProps } from "../base/types";
 
 // ---- top-level page props --------------------------------------------------
 
@@ -56,27 +55,11 @@ export interface WorkoutListItemProps {
     workout:   Workout              // source object for WorkoutGraph `strip` mode
 }
 
-// ---- Import dialog (single-file, Phase 1) ----------------------------------
-
-export interface WorkoutImportDisplayProps {
-    phase:       'landing' | 'importing' | 'result' | 'error'
-    knownGroups: string[]           // existing groups, for the GroupPicker shown on the 'result' phase
-    importing?:  { fileName: string }              // present during 'importing'
-    result?:     { id: string; workoutName: string; group: string }  // present on 'result';
-                                     // group is a suggestion (last-used ?? 'My Workouts'), NOT yet applied
-    error?:      string             // present on 'error'
-}
-
 // ---- Callbacks & service contract ------------------------------------------
 
-export interface WorkoutListPageCallbacks extends WorkoutDetailsCallbacks {
+export interface WorkoutListPageCallbacks extends WorkoutDetailsCallbacks, WorkoutImportCallbacks {
     // list screen
     onSelectGroup:    (group: string | null) => void   // filter chips
-    // import dialog
-    onImportOpen:         () => void
-    onImportFile:         (file: FileInfo) => IObserver   // returns observer: 'success' | 'error'
-    onImportSetGroup:     (id: string, group: string) => void   // result-phase only
-    onImportClose:        () => void
 }
 
 export interface IWorkoutListPageService extends WorkoutListPageCallbacks {
