@@ -24,7 +24,7 @@ const SURFACE = 'workout-details'
 const DISPLAY_TYPE_KEY = 'preferences.workoutListDisplayType'
 const DEFAULT_DISPLAY_TYPE: DisplayType = 'tiles'
 const SCHEDULED_ID = 'scheduled'
-const HIDDEN_CARD_TYPES = ['WorkoutImport', 'ActiveWorkoutImport']
+const HIDDEN_CARD_TYPES = new Set(['WorkoutImport', 'ActiveWorkoutImport'])
 const MSG_MULTIPLE_FILES = 'Only one workout file at a time'
 const MSG_UNSUPPORTED_TYPE = 'Unsupported file type - please choose a ZWO or JSON file'
 
@@ -487,7 +487,7 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
     }
 
     protected isHiddenCard(card: Card<WP>): boolean {
-        return HIDDEN_CARD_TYPES.includes(card.getCardType())
+        return HIDDEN_CARD_TYPES.has(card.getCardType())
     }
 
     /**
