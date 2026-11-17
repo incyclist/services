@@ -1,13 +1,11 @@
 import { Singleton } from "../../../base/types";
 import { Observer } from "../../../base/types/observer";
 import { Card, CardList } from "../../../base/cardlist";
-import { FileInfo } from "../../../api";
-import { IObserver } from "../../../types";
-import type { ActiveImportCard } from "../../list/cards/ActiveImportCard";
+import { FileInfo, IObserver } from "../../../types";
 import type { WorkoutCreateCard } from "../../list/cards/WorkoutCreateCard";
 import type { WP } from "../../list/types";
 import type { DisplayType } from "../../../routes/list/types";
-import { WorkoutListPageService } from "../base/service";
+import { IMPORT_FILE_EXTENSIONS, WorkoutListPageService } from "../base/service";
 import {
     DesktopCreateInfoProps,
     DesktopWorkoutCardContent,
@@ -15,7 +13,9 @@ import {
     DesktopWorkoutDetailsProps,
     DesktopWorkoutListDisplayProps,
     DesktopWorkoutListProps,
-    DesktopUpcomingProps
+    DesktopUpcomingProps,
+    WorkoutImportFile,
+    WorkoutImportSource
 } from "./types";
 
 const STEP_CHANGE_AUDIO_KEY = 'preferences.workouts.stepChangeAudioSignal'
@@ -24,6 +24,9 @@ const SURFACE = 'workout-details'
 const DISPLAY_TYPE_KEY = 'preferences.workoutListDisplayType'
 const DEFAULT_DISPLAY_TYPE: DisplayType = 'tiles'
 const SCHEDULED_ID = 'scheduled'
+const HIDDEN_CARD_TYPES = ['WorkoutImport', 'ActiveWorkoutImport']
+const MSG_MULTIPLE_FILES = 'Only one workout file at a time'
+const MSG_UNSUPPORTED_TYPE = 'Unsupported file type - please choose a ZWO or JSON file'
 
 type DomainSubscription = { observer: IObserver, handler: (list: CardList<WP>) => void }
 
@@ -155,9 +158,8 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
      * The user clicked the OK/primary action of a card
      *
      * @param id        id of the card
-     * @param settings  files to be imported (only for the Import card)
      */
-    onCardOK(id: string, settings?: FileInfo | FileInfo[]): void {
+    onCardOK(id: string): void {
         try {
             const card = this.findSnapshotCard(id)
             if (!card) {
@@ -166,9 +168,6 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
             }
 
             switch (card.getCardType()) {
-                case 'WorkoutImport':
-                    this.importFiles(settings)
-                    break
                 case 'WorkoutCreate':
                     this.onCreateCardOK(card as unknown as WorkoutCreateCard)
                     break
@@ -212,16 +211,12 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
     }
 
     /**
-     * Deletes a workout (from the details dialog or the card) or an (failed) import card
+     * Deletes a workout (from the details dialog or the card)
      *
      * @returns true if the delete was successful
      */
     async onDelete(id: string): Promise<boolean> {
         try {
-            const card = this.findSnapshotCard(id)
-            if (card?.getCardType() === 'ActiveWorkoutImport')
-                return await this.deleteImportCard(card)
-
             const surface = this.detailWorkoutId === id ? 'details' : 'card'
             const success = await super.onDelete(id)
             this.logEvent({ message: 'workout deleted', workoutId: id, success, surface })
@@ -233,18 +228,48 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
         }
     }
 
-    /** retries the import of a failed import card */
-    onRetry(id: string): void {
+    // ---- import ------------------------------------------------------------------
+
+    /**
+     * Imports a workout file that was dropped on the page or in the import dialog.
+     * Only a single file of a supported type (ZWO, JSON) is accepted; anything else results in the
+     * `error` phase of the import dialog (see `getImportDisplayProps()`).
+     *
+     * @param files   the dropped/selected file(s), as delivered by the Dropzone
+     * @param source  where the files came from
+     */
+    onImportFiles(files: WorkoutImportFile | WorkoutImportFile[], source: WorkoutImportSource): void {
         try {
-            const card = this.findSnapshotCard(id)
-            if (card?.getCardType() !== 'ActiveWorkoutImport') {
-                this.logError(new Error(`import card not found: ${id}`), 'onRetry')
+            const list = Array.isArray(files) ? files : [files]
+            const fileCount = list.length
+            this.logEvent({ message: 'workout import requested', source, fileCount })
+
+            if (fileCount === 0) {
+                this.logEvent({ message: 'workout import rejected', reason: 'no-file', fileCount })
                 return
             }
-            (card as unknown as ActiveImportCard).retry()
+
+            delete this.importResult
+            delete this.importError
+
+            if (fileCount > 1) {
+                this.rejectImport(MSG_MULTIPLE_FILES, { reason: 'multiple-files', fileCount })
+                return
+            }
+
+            const ext = this.getImportExtension(list[0])
+            if (!IMPORT_FILE_EXTENSIONS.includes(ext)) {
+                this.rejectImport(MSG_UNSUPPORTED_TYPE, { reason: 'unsupported-type', fileCount, ext })
+                return
+            }
+
+            // the observer wraps an EventEmitter, which throws on 'error' without a listener
+            const observer = this.onImportFile(list[0] as FileInfo)
+            observer.on('success', () => { /* state is reported via 'import-update' */ })
+            observer.on('error', () => { /* state is reported via 'import-update' */ })
         }
         catch (err) {
-            this.logError(err, 'onRetry')
+            this.logError(err, 'onImportFiles')
         }
     }
 
@@ -337,7 +362,7 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
                 this.logError(new Error(`list not found: ${listId}`), 'onCarouselInitialized')
                 return
             }
-            this.getWorkoutList().onCarouselInitialized(list, item, itemsInSlide)
+            this.getWorkoutList().onCarouselInitialized(list, this.toDomainIndex(list, item), itemsInSlide)
         }
         catch (err) {
             this.logError(err, 'onCarouselInitialized')
@@ -352,7 +377,7 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
                 this.logError(new Error(`list not found: ${listId}`), 'onCarouselUpdated')
                 return
             }
-            this.getWorkoutList().onCarouselUpdated(list, item, itemsInSlide)
+            this.getWorkoutList().onCarouselUpdated(list, this.toDomainIndex(list, item), itemsInSlide)
         }
         catch (err) {
             this.logError(err, 'onCarouselUpdated')
@@ -458,7 +483,44 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
     }
 
     protected mapCards(list: CardList<WP>, todayId: string | null): DesktopWorkoutCardProps[] {
-        return (list.getCards() ?? []).map(c => this.mapCard(c, todayId))
+        return (list.getCards() ?? []).filter(c => !this.isHiddenCard(c)).map(c => this.mapCard(c, todayId))
+    }
+
+    protected isHiddenCard(card: Card<WP>): boolean {
+        return HIDDEN_CARD_TYPES.includes(card.getCardType())
+    }
+
+    /**
+     * Translates an index into the cards handed out to the UI (without the hidden Import cards)
+     * into the index of the same card in the domain list
+     */
+    protected toDomainIndex(list: CardList<WP>, item: number): number {
+        const cards = list.getCards() ?? []
+        let visibleIdx = 0
+        for (let idx = 0; idx < cards.length; idx++) {
+            if (this.isHiddenCard(cards[idx]))
+                continue
+            if (visibleIdx === item)
+                return idx
+            visibleIdx++
+        }
+        // beyond the last card: keep the offset relative to the end of the list
+        return cards.length + (item - visibleIdx)
+    }
+
+    protected getImportExtension(info: WorkoutImportFile): string {
+        const direct = info?.ext ?? info?.file?.ext
+        const name = info?.name ?? info?.file?.name
+        const ext = direct ?? (name?.includes('.') ? name.slice(name.lastIndexOf('.')) : '')
+        return ext.replace(/^\./, '').toLowerCase()
+    }
+
+    protected rejectImport(message: string, details: { reason: string, fileCount: number, ext?: string }): void {
+        this.importGeneration = Date.now()
+        this.importPhase = 'error'
+        this.importError = message
+        this.emitImportUpdate()
+        this.logEvent({ message: 'workout import rejected', ...details })
     }
 
     protected mapCard(card: Card<WP>, todayId: string | null): DesktopWorkoutCardProps {
@@ -468,9 +530,7 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
         const { observer, selected, ...rest } = card.getDisplayProperties() ?? {}
 
         let props: DesktopWorkoutCardContent = rest
-        if (cardType === 'ActiveWorkoutImport')
-            props = { ...rest, canDelete: !!rest.error }
-        else if (cardType === 'ScheduledWorkout')
+        if (cardType === 'ScheduledWorkout')
             props = { ...rest, isToday: id === todayId }
 
         return { id, cardType, props, observer }
@@ -483,13 +543,6 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
                 return card
         }
         return undefined
-    }
-
-    protected importFiles(files?: FileInfo | FileInfo[]): void {
-        if (!files)
-            return
-        this.getWorkoutList().import(files, { showImportCards: true })
-            .catch(err => { this.logError(err, 'onCardOK') })
     }
 
     protected onCreateCardOK(card: WorkoutCreateCard): void {
@@ -507,11 +560,5 @@ export class DesktopWorkoutListPageService extends WorkoutListPageService {
         const link = card?.getDisplayProperties()?.link
         if (link)
             this.getUIBinding().openBrowserWindow(link)
-    }
-
-    protected async deleteImportCard(card: Card<WP>): Promise<boolean> {
-        const deleted = await card.delete().wait()
-        this.emitPageUpdate()
-        return !!deleted
     }
 }

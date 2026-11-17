@@ -1,11 +1,9 @@
-import type { IObserver } from "../../../types";
+import type { FileInfo, IObserver } from "../../../types";
 import type {
-    ActiveImportProps,
     ScheduledWorkoutCardDisplayProperties,
     WorkoutCardDisplayProperties,
     WorkoutCardType,
-    WorkoutCreateProps,
-    WorkoutImportProps
+    WorkoutCreateProps
 } from "../../list/cards/types";
 import type { DisplayType } from "../../../routes/list/types";
 import type { WorkoutDetailsProps } from "../base/types";
@@ -37,14 +35,11 @@ export type DesktopWorkoutCardProps = {
     observer?: IObserver                    // the domain card's own observer (Workout, ScheduledWorkout, ActiveWorkoutImport)
 }
 
-export type DesktopActiveImportCardContent = Omit<ActiveImportProps, 'observer'> & { canDelete: boolean }
 export type DesktopWorkoutCardContentBase = Omit<WorkoutCardDisplayProperties, 'observer' | 'selected'>
 export type DesktopScheduledCardContent = Omit<ScheduledWorkoutCardDisplayProperties, 'observer' | 'selected'> & { isToday: boolean }
 
 export type DesktopWorkoutCardContent =
-    | WorkoutImportProps
     | WorkoutCreateProps
-    | DesktopActiveImportCardContent
     | DesktopWorkoutCardContentBase
     | DesktopScheduledCardContent
 
@@ -55,4 +50,16 @@ export type DesktopCreateInfoProps = {
 export type DesktopWorkoutDetailsProps = WorkoutDetailsProps & {
     stepChangeAudioSignal: boolean          // preferences.workouts.stepChangeAudioSignal (default true)
     canAddRoute: boolean                    // !attachedRoute
+}
+
+/** where the files to import came from: dropped on the page or picked/dropped in the import dialog */
+export type WorkoutImportSource = 'page-drop' | 'dialog'
+
+/**
+ * A file as delivered by the web Dropzone: `{type:'url', ext, ...}` (Electron) or
+ * `{type:'file', file}` (plain browser, where name and extension are on the nested file)
+ */
+export type WorkoutImportFile = Partial<Omit<FileInfo, 'type'>> & {
+    type?: FileInfo['type']
+    file?: { name?: string, ext?: string }
 }

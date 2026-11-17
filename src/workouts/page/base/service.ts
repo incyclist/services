@@ -12,7 +12,7 @@ import { useDevicePairing } from "../../../devices";
 import { useRouteList } from "../../../routes";
 
 const DEFAULT_IMPORT_GROUP = 'My Workouts'
-const IMPORT_FILE_EXTENSIONS = ['zwo','json']
+export const IMPORT_FILE_EXTENSIONS = ['zwo','json']
 
 /**
  * Everything the workout list page does the same way on every platform: list lifecycle, the

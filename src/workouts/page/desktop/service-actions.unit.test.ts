@@ -87,21 +87,6 @@ describe('DesktopWorkoutListPageService - actions', () => {
 
     describe('onCardOK', () => {
 
-        test('Import card imports the files inline with import cards', () => {
-            load([makeList('myWorkouts', 'My', [makeCard('Import', 'WorkoutImport')])])
-            const files = [{ type: 'file', name: 'a.zwo' }]
-
-            service.onCardOK('Import', files)
-
-            expect(MockWorkoutList.import).toHaveBeenCalledWith(files, { showImportCards: true })
-        })
-
-        test('Import card without files does nothing', () => {
-            load([makeList('myWorkouts', 'My', [makeCard('Import', 'WorkoutImport')])])
-            service.onCardOK('Import')
-            expect(MockWorkoutList.import).not.toHaveBeenCalled()
-        })
-
         test('Workout and Scheduled cards open the details', () => {
             load([makeList('scheduled', 'S', [makeCard('1', 'ScheduledWorkout')]), makeList('myWorkouts', 'My', [makeCard('2', 'Workout')])])
 
@@ -171,17 +156,6 @@ describe('DesktopWorkoutListPageService - actions', () => {
 
     describe('onDelete', () => {
 
-        test('ActiveImport card is deleted via the snapshot card', async () => {
-            const card = makeCard('a.zwo', 'ActiveWorkoutImport', { name: 'a.zwo' }, { delete: jest.fn().mockReturnValue(PromiseObserver.alwaysReturning(true)) })
-            load([makeList('myWorkouts', 'My', [card])])
-
-            const res = await service.onDelete('a.zwo')
-
-            expect(res).toBe(true)
-            expect(card.delete).toHaveBeenCalled()
-            expect(MockWorkoutList.deleteWorkout).not.toHaveBeenCalled()
-        })
-
         test('regular workouts are deleted through the domain and logged (card)', async () => {
             load([makeList('myWorkouts', 'My', [makeCard('1', 'Workout')])])
             MockWorkoutList.deleteWorkout.mockReturnValue(PromiseObserver.alwaysReturning(true))
@@ -207,24 +181,6 @@ describe('DesktopWorkoutListPageService - actions', () => {
         test('errors resolve to false', async () => {
             MockWorkoutList.deleteWorkout.mockImplementation(() => { throw new Error('boom') })
             expect(await service.onDelete('1')).toBe(false)
-        })
-    })
-
-    describe('onRetry', () => {
-
-        test('retries the ActiveImport card from the snapshot', () => {
-            const card = makeCard('a.zwo', 'ActiveWorkoutImport', {}, { retry: jest.fn() })
-            load([makeList('myWorkouts', 'My', [card])])
-
-            service.onRetry('a.zwo')
-            expect(card.retry).toHaveBeenCalled()
-        })
-
-        test('other or unknown cards: logged no-op', () => {
-            load([makeList('myWorkouts', 'My', [makeCard('1', 'Workout')])])
-            service.onRetry('1')
-            service.onRetry('nope')
-            expect(s.logError).toHaveBeenCalledTimes(2)
         })
     })
 

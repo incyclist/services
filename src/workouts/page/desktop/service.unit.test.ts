@@ -98,11 +98,9 @@ describe('DesktopWorkoutListPageService - display props', () => {
             const list = props.lists[0]
             expect(list).toMatchObject({ id: 'myWorkouts', title: 'My Workouts' })
             expect(list.observer).toBeDefined()
-            expect(list.cards.map(c => c.id)).toEqual(['Import', '1'])
-            expect(list.cards[0]).toMatchObject({ cardType: 'WorkoutImport', props: { title: 'Import Workout' } })
-            expect(list.cards[0].observer).toBeUndefined()
+            expect(list.cards.map(c => c.id)).toEqual(['1'])
 
-            const c = list.cards[1]
+            const c = list.cards[0]
             expect(c.cardType).toBe('Workout')
             expect(c.props).not.toHaveProperty('selected')
             expect(c.props).not.toHaveProperty('observer')
@@ -110,14 +108,12 @@ describe('DesktopWorkoutListPageService - display props', () => {
             expect(c.observer).toBe(card.observer)
         })
 
-        test('ActiveImport cards: canDelete is true only with an error', () => {
+        test('Import and ActiveImport cards are not part of the display props', () => {
             const failed = makeCard('a.zwo', 'ActiveWorkoutImport', { name: 'a.zwo', error: new Error('x') })
-            const running = makeCard('b.zwo', 'ActiveWorkoutImport', { name: 'b.zwo' })
-            MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts', 'My Workouts', [failed, running])])
+            const importCard = makeCard('Import', 'WorkoutImport', {})
+            MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts', 'My Workouts', [importCard, failed, workoutCard('1')])])
 
-            const cards = service.getPageDisplayProps().lists[0].cards
-            expect((cards[0].props as any).canDelete).toBe(true)
-            expect((cards[1].props as any).canDelete).toBe(false)
+            expect(service.getPageDisplayProps().lists[0].cards.map(c => c.id)).toEqual(['1'])
         })
 
         test('scheduled cards: isToday set from the scheduled-today workout', () => {
@@ -307,6 +303,17 @@ describe('DesktopWorkoutListPageService - display props', () => {
             expect(received.mock.calls[0][0].map(c => c.id)).toEqual(['1', '2'])
         })
 
+        test('Import cards are filtered from the cards re-emitted on a list "update"', () => {
+            const domainObserver = new Observer()
+            MockWorkoutList.getLists.mockReturnValue([makeList('myWorkouts', 'My', [workoutCard('1')], domainObserver)])
+            const received = jest.fn()
+            service.getPageDisplayProps().lists[0].observer.on('update', received)
+
+            domainObserver.emit('update', makeList('myWorkouts', 'My', [makeCard('Import', 'WorkoutImport'), makeCard('a.zwo', 'ActiveWorkoutImport'), workoutCard('1')]))
+
+            expect(received.mock.calls[0][0].map(c => c.id)).toEqual(['1'])
+        })
+
         test('the domain subscription is added once, even if getPageDisplayProps is called repeatedly', () => {
             const domainObserver = new Observer()
             MockWorkoutList.getLists.mockImplementation(() => [makeList('scheduled', 'S', [makeCard('1', 'ScheduledWorkout', {})], domainObserver)])
@@ -363,6 +370,18 @@ describe('DesktopWorkoutListPageService - display props', () => {
 
             expect(MockWorkoutList.onCarouselInitialized).toHaveBeenCalledWith(first, 0, 2)
             firstCards.forEach(c => expect(c.setVisible).toHaveBeenCalledWith(true))
+        })
+
+        test('carousel indexes are translated to the domain list, which still holds the Import card', () => {
+            const list = makeList('myWorkouts', 'My', [makeCard('Import', 'WorkoutImport'), makeCard('Create', 'WorkoutCreate'), workoutCard('1'), workoutCard('2')])
+            MockWorkoutList.getLists.mockReturnValue([list])
+            service.getPageDisplayProps()
+
+            service.onCarouselInitialized('myWorkouts', 1, 1)
+            service.onCarouselUpdated('myWorkouts', 0, 2)
+
+            expect(MockWorkoutList.onCarouselInitialized).toHaveBeenCalledWith(list, 2, 1)
+            expect(MockWorkoutList.onCarouselUpdated).toHaveBeenCalledWith(list, 1, 2)
         })
 
         test('onCarouselUpdated resolves the list via the snapshot', () => {
