@@ -128,6 +128,43 @@ describe('DesktopWorkoutListPageService - import', () => {
         })
     })
 
+    describe('result carries workout and ftp', () => {
+        const workout = { id: 'w1', name: 'My Workout', steps: [] }
+
+        test('result phase includes workout and start-settings ftp', async () => {
+            const card = { ...makeImported(), getData: jest.fn().mockReturnValue(workout), openSettings: jest.fn().mockReturnValue({ settings: { ftp: 250 } }) }
+            MockWorkoutList.import.mockResolvedValue([card])
+
+            service.onImportFiles(urlFile('zwo'), 'dialog')
+            await flush()
+
+            expect(service.getImportDisplayProps().result).toMatchObject({ id: 'w1', workout, ftp: 250 })
+        })
+
+        test('ftp is undefined when the card has no start settings', async () => {
+            const card = { ...makeImported(), getData: jest.fn().mockReturnValue(workout), openSettings: jest.fn().mockReturnValue({}) }
+            MockWorkoutList.import.mockResolvedValue([card])
+
+            service.onImportFiles(urlFile('zwo'), 'dialog')
+            await flush()
+
+            const result = service.getImportDisplayProps().result
+            expect(result.workout).toBe(workout)
+            expect(result.ftp).toBeUndefined()
+        })
+
+        test('workout and ftp survive onImportSetGroup', async () => {
+            const card = { ...makeImported(), getData: jest.fn().mockReturnValue(workout), openSettings: jest.fn().mockReturnValue({ settings: { ftp: 250 } }) }
+            MockWorkoutList.import.mockResolvedValue([card])
+            service.onImportFiles(urlFile('zwo'), 'dialog')
+            await flush()
+
+            service.onImportSetGroup('w1', 'Other')
+
+            expect(service.getImportDisplayProps().result).toMatchObject({ group: 'Other', workout, ftp: 250 })
+        })
+    })
+
     describe('onImportOpen', () => {
         test('after an error returns to the landing phase', () => {
             service.onImportFiles(urlFile('gpx'), 'dialog')

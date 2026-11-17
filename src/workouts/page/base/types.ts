@@ -60,8 +60,9 @@ export interface WorkoutImportDisplayProps {
     phase:       'landing' | 'importing' | 'result' | 'error'
     knownGroups: string[]           // existing groups, for the GroupPicker shown on the 'result' phase
     importing?:  { fileName: string }              // present during 'importing'
-    result?:     { id: string; workoutName: string; group: string }  // present on 'result';
-                                     // group is a suggestion (last-used ?? 'My Workouts'), NOT yet applied
+    result?:     { id: string; workoutName: string; group: string; workout?: Workout; ftp?: number }  // present on 'result';
+                                     // group is the group the card was placed in (last-used ?? 'My Workouts');
+                                     // workout/ftp let the UI render a preview graph (ftp = start-settings FTP, if known)
     error?:      string             // present on 'error'
 }
 

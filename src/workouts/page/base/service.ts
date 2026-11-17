@@ -25,7 +25,7 @@ export abstract class WorkoutListPageService extends IncyclistPageService {
 
     protected importPhase: 'landing' | 'importing' | 'result' | 'error' | undefined
     protected importingFileName: string
-    protected importResult: { id: string; workoutName: string; group: string }
+    protected importResult: WorkoutImportDisplayProps['result']
     protected importError: string
     // Refreshed (to Date.now()) whenever the dialog stops caring about a specific
     // onImportFile() call (see onImportClose()). onImportFile()'s single-file import chain has
@@ -299,7 +299,13 @@ export abstract class WorkoutListPageService extends IncyclistPageService {
                         card.move(group)
 
                     this.importPhase = 'result'
-                    this.importResult = { id: card.getId(), workoutName: card.getTitle(), group }
+                    this.importResult = {
+                        id: card.getId(),
+                        workoutName: card.getTitle(),
+                        group,
+                        workout: card.getData?.(),
+                        ftp: card.openSettings?.()?.settings?.ftp
+                    }
                     this.emitImportUpdate()
                 })
                 .catch( (err:Error) => {
