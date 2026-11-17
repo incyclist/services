@@ -1,3 +1,4 @@
+import { FileInfo, IObserver } from "../../../types";
 import { Workout } from "../../base/model";
 
 // ---- Details dialog (overlay, not a navigated screen) ----------------------
@@ -51,4 +52,23 @@ export interface WorkoutDetailsCallbacks {
     onClearSelection: () => void             // explicit unselect
     onClearRouteSelection: () => void        // '[x]' on the "Route: <name>" row (Phase 2, §3.4.3) - clears
                                               // only the route side of the attachment
+}
+
+// ---- Import dialog (single-file) -------------------------------------------
+
+export interface WorkoutImportDisplayProps {
+    phase:       'landing' | 'importing' | 'result' | 'error'
+    knownGroups: string[]           // existing groups, for the GroupPicker shown on the 'result' phase
+    importing?:  { fileName: string }              // present during 'importing'
+    result?:     { id: string; workoutName: string; group: string; workout?: Workout; ftp?: number }  // present on 'result';
+                                     // group is the group the card was placed in (last-used ?? 'My Workouts');
+                                     // workout/ftp let the UI render a preview graph (ftp = start-settings FTP, if known)
+    error?:      string             // present on 'error'
+}
+
+export interface WorkoutImportCallbacks {
+    onImportOpen:         () => void
+    onImportFile:         (file: FileInfo) => IObserver   // returns observer: 'success' | 'error'
+    onImportSetGroup:     (id: string, group: string) => void   // result-phase only
+    onImportClose:        () => void
 }
