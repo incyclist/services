@@ -17,6 +17,7 @@ import { Observer } from "../../base/types/observer"
 import { DeviceRideService } from "../../devices"
 import { Inject } from "../../base/decorators"
 import { Workout } from "../../workouts"
+import * as api from "../../api"
 
 
 describe('ActivityRideService',()=>{
@@ -1295,6 +1296,171 @@ describe('ActivityRideService',()=>{
             expect((service as any).getTotalDistance()).toBe(0)
             expect((service as any).getTotalElevation()).toBe(0)
             expect(logError).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('donation line',()=>{
+        const DAY = 24*60*60*1000
+        let service:ActivityRideService
+        let settings: Record<string,number>
+        let set: jest.Mock
+        let logEvent: jest.Mock
+        let repoActivities: Array<unknown>
+        let platform: string|undefined
+
+        const recent = (n:number) => Array.from({length:n},()=>({summary:{startTime:Date.now()-DAY, distance:5000}}))
+
+        const checkLogs = () => logEvent.mock.calls.map(c=>c[0]).filter(e=>e.message==='donate check')
+
+        beforeEach( ()=>{
+            service = new ActivityRideService()
+            settings = {}
+            set = jest.fn((key:string,value:number)=>{ settings[key]=value })
+            logEvent = jest.fn()
+            repoActivities = recent(12)
+            platform = 'linux'
+            const s = service as any
+            s.getUserSettings = jest.fn(()=>({
+                getValue: jest.fn((key:string,def:unknown)=> settings[key]??def),
+                get: jest.fn((_key:string,def:unknown)=>def),
+                set
+            }))
+            s.getRepo = jest.fn(()=>({ getAll: jest.fn(()=>repoActivities) }))
+            s.getRouteList = jest.fn(()=>({ getSelected: jest.fn(), getStartSettings: jest.fn() }))
+            s.getUnitConverter = jest.fn(()=>({ getDefaultUnits: jest.fn().mockReturnValue({}) }))
+            s.logEvent = logEvent
+            s.activity = { time: 900, distance: 5000, logs:[] }
+            s.isSaveDone = true
+            ;(api.getBindings() as any).appInfo = { getOS: ()=>({platform}) }
+        })
+
+        afterEach( ()=>{
+            resetSingleton(service)
+            ;(api.getBindings() as any).reset?.()
+            jest.restoreAllMocks()
+        })
+
+        const props = () => service.getActivitySummaryDisplayProperties()
+
+        test('shown when all conditions are met',()=>{
+            const p = props()
+            expect(p.donation).toBeDefined()
+            expect(p.donation.links.map(l=>l.id)).toEqual(['paypal','github-sponsors'])
+            expect(p.donation.hideLabel).toBe('Hide')
+            expect(p.showDonate).toBe(true)
+            expect(settings['state.donateShown']).toBeDefined()
+            expect(checkLogs()).toEqual([{message:'donate check', showDonate:true, mode:'direct', activities:12}])
+            expect(logEvent).toHaveBeenCalledWith({message:'donate shown', mode:'direct', activities:12})
+        })
+
+        test('website mode (ios): never',()=>{
+            platform = 'ios'
+            const p = props()
+            expect(p.donation).toBeUndefined()
+            expect(p.showDonate).toBe(false)
+            expect(checkLogs()).toEqual([{message:'donate check', showDonate:false, mode:'website', reason:'website-mode'}])
+        })
+
+        test('saving in progress: no donation, not decided, not logged',()=>{
+            (service as any).isSaveDone = false
+            expect(props().donation).toBeUndefined()
+            expect(checkLogs()).toHaveLength(0)
+            expect(set).not.toHaveBeenCalled()
+
+            ;(service as any).isSaveDone = true
+            expect(props().donation).toBeDefined()
+        })
+
+        test('hidden',()=>{
+            settings['state.donateHidden'] = Date.now()-400*DAY
+            expect(props().donation).toBeUndefined()
+            expect(checkLogs()[0].reason).toBe('hidden')
+        })
+
+        test('clicked less than a year ago',()=>{
+            settings['state.donateClicked'] = Date.now()-364*DAY
+            expect(props().donation).toBeUndefined()
+            expect(checkLogs()[0].reason).toBe('clicked')
+        })
+
+        test('clicked more than a year ago',()=>{
+            settings['state.donateClicked'] = Date.now()-366*DAY
+            expect(props().donation).toBeDefined()
+        })
+
+        test('shown 29 days ago: blocked',()=>{
+            settings['state.donateShown'] = Date.now()-29*DAY
+            expect(props().donation).toBeUndefined()
+            expect(checkLogs()[0].reason).toBe('recently-shown')
+        })
+
+        test('shown 31 days ago: allowed',()=>{
+            settings['state.donateShown'] = Date.now()-31*DAY
+            expect(props().donation).toBeDefined()
+        })
+
+        test.each([
+            ['too short in time', {time:599,distance:5000}],
+            ['too short in distance', {time:900,distance:1999}],
+        ])('short ride: %s',(_name,a)=>{
+            (service as any).activity = {...a, logs:[]}
+            expect(props().donation).toBeUndefined()
+            expect(checkLogs()[0].reason).toBe('short-ride')
+        })
+
+        test('not enough rides in the last 12 months',()=>{
+            repoActivities = [...recent(9), {summary:{startTime:Date.now()-400*DAY, distance:5000}}, {summary:{startTime:Date.now()-DAY, distance:1000}}]
+            expect(props().donation).toBeUndefined()
+            expect(checkLogs()[0]).toMatchObject({reason:'usage', activities:9})
+        })
+
+        test('is evaluated once per ride',()=>{
+            props()
+            props()
+            props()
+            expect(set.mock.calls.filter(c=>c[0]==='state.donateShown')).toHaveLength(1)
+            expect(checkLogs()).toHaveLength(1)
+        })
+
+        test('hide removes the line and stores the timestamp',()=>{
+            expect(props().donation).toBeDefined()
+            service.onDonateHidden()
+            const p = props()
+            expect(p.donation).toBeUndefined()
+            expect(p.showDonate).toBe(false)
+            expect(typeof settings['state.donateHidden']).toBe('number')
+            expect(logEvent).toHaveBeenCalledWith({message:'donate hidden', source:'summary'})
+        })
+
+        test('click logs the channel and keeps the line for this summary',()=>{
+            props()
+            service.onDonateClicked('github-sponsors')
+            expect(settings['state.donateClicked']).toBeDefined()
+            expect(logEvent).toHaveBeenCalledWith({message:'donate clicked', donationChannel:'github-sponsors', source:'summary'})
+            expect(props().donation).toBeDefined()
+        })
+
+        test('decision is reset when a new ride starts',()=>{
+            expect(props().donation).toBeDefined()
+            expect(checkLogs()).toHaveLength(1)
+
+            const s = service as any
+            s.observer = {}
+            s.state = 'idle'
+            s.current = {}
+            s._save = jest.fn().mockResolvedValue(undefined)
+            s.startWorker = jest.fn()
+            s.enableDeviceHealthCheck = jest.fn()
+            s.emit = jest.fn()
+
+            service.start()
+
+            // the decision was reset, so it is evaluated again: the line was just shown, so it is now blocked
+            expect(s.donateDecision).toBeUndefined()
+            s.isSaveDone = true
+            expect(props().donation).toBeUndefined()
+            expect(checkLogs()).toHaveLength(2)
+            expect(checkLogs()[1]).toMatchObject({reason:'recently-shown'})
         })
     })
 

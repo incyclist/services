@@ -11,7 +11,10 @@ import { FreeRideStartSettings, RouteStartSettings } from "../../routes/list/typ
 import { RouteSettings } from "../../routes/list/cards/types";
 import { v4 as generateUUID } from 'uuid';
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
-import { ActivityDashboardDataItem, ActivityState, ActivitySummaryDisplayProperties, ActivityWorkoutSummaryGraph } from "./types";
+import { ActivityDashboardDataItem, ActivityState, ActivitySummaryDisplayProperties, ActivitySummaryDonation, ActivityWorkoutSummaryGraph } from "./types";
+import { COPY } from "../../settings/support/copy";
+import { getDonationChannels, getDonationMode } from "../../settings/support/donation";
+import type { DonationChannelId } from "../../settings/support/types";
 import { getWorkoutGraphSeries } from "../../workouts";
 import type { WorkoutGraphActuals, WorkoutGraphPlan } from "../../ride/page";
 import { addDetails, checkIsLoop, getElevationGainAt, getNextPosition, getPosition, getRouteHash, validateRoute } from "../../routes/base/utils/route";
@@ -31,6 +34,13 @@ import { createUIActivityDetails } from "../list/utils";
 import { sleep } from "../../utils/sleep";
 
 const SAVE_INTERVAL = 5000;
+
+const DAY = 24 * 60 * 60 * 1000
+const DONATE_CLICKED_PAUSE = 365 * DAY
+const DONATE_SHOWN_PAUSE = 30 * DAY
+const DONATE_MIN_TIME = 600         // moving time in s
+const DONATE_MIN_DISTANCE = 2000    // in m
+const DONATE_MIN_ACTIVITIES = 10    // rides over the min. distance within the last 12 months
 
 /**
  * This service is used by the Front-End to manage the state of on ongoing ride (activity),
@@ -115,7 +125,8 @@ export class ActivityRideService extends IncyclistService {
     protected prevEmit: { distance:number, routeDistance:number, speed:number}
     protected saveObserver: PromiseObserver<boolean>
     protected isSaveDone: boolean
-    protected isDonateShown: boolean
+    /** decision whether the donation line is shown for this ride (undefined: not decided yet) */
+    protected donateDecision: boolean|undefined
     protected isSummaryShown: boolean
     protected stopPromise: Promise<void>
 
@@ -243,7 +254,7 @@ export class ActivityRideService extends IncyclistService {
             this.tsStart = Date.now()
             this.tsPauseStart = undefined
             this.isSaveDone = false
-            this.isDonateShown = false
+            this.donateDecision = undefined
             this.isSummaryShown = false
     
             this.logEvent({message:'activity started', sport:this.activity.sport??'cycling' })
@@ -612,6 +623,8 @@ export class ActivityRideService extends IncyclistService {
 
             this.isSummaryShown = true
 
+            const donation = this.buildDonation()
+
             const props = {
                 activity: createUIActivityDetails(this.activity),
 
@@ -621,7 +634,8 @@ export class ActivityRideService extends IncyclistService {
                 showMap,
                 showWorkoutSummary,
                 workoutGraph,
-                showDonate:this.canShowDonate(),
+                donation,
+                showDonate: !!donation,
                 preview,
                 units: this.getUnitConverter().getDefaultUnits()
 
@@ -679,76 +693,92 @@ export class ActivityRideService extends IncyclistService {
     }
 
 
-    protected canShowDonate() {
+    /**
+     * Decides (once per ride) whether the donation line is shown on the summary.
+     * Returns undefined as long as the decision can't be made yet (activity not saved).
+     */
+    protected canShowDonate(): boolean | undefined {
         try {
-            if (this.isDonateShown ) {                
-                return true
-            }
+            if (this.donateDecision !== undefined)
+                return this.donateDecision
 
-            const trialGroup: string  = 'A';
-            // if (this.activity.user.uuid.startsWith('1') || this.activity.user.uuid.startsWith('a')) {
-            //     trialGroup = 'A'
-            // }
-            // else if (this.activity.user.uuid.startsWith('2') || this.activity.user.uuid.startsWith('b')) {
-            //     trialGroup = 'B'
-            // }
-            // if (!trialGroup) {
-            //     if (this.saveObserver)
-            //         this.logEvent({message:'donate check ', showDonate:false, reason:'user not in trial'})
-            //     return false
-            // }
+            const mode = getDonationMode()
+            if (mode === 'website')
+                return this.setDonateDecision(false, { mode, reason: 'website-mode' })
 
-            // Trial Group A only sees the donation text, when saving
-            // Trial Group B always sees the donation text  
-            // in  both cases, the donation text is only shown once every two weeks and not before one year after clicking on donate
+            if (!this.isSaveDone)
+                return undefined
 
-            if (this.saveObserver || this.isSaveDone || trialGroup==='B') {
+            const { reason, activities } = this.getDonateBlockReason()
+            if (reason)
+                return this.setDonateDecision(false, { mode, reason, activities })
 
-                const lastClicked = this.getUserSettings().getValue('state.donateClicked',0)
-                // only check once a year
-                if (Date.now()-lastClicked<1000*60*60*24*365) {
-                    if (this.saveObserver)
-                        this.logEvent({message:'donate check ', showDonate:false, lastClicked: new Date(lastClicked).toISOString()})
-                    return false
-                }
-
-                const lastShown = this.getUserSettings().getValue('state.donateShown',0)
-                // only check once every two weeks
-                if (Date.now()-lastShown<1000*60*60*24*14) {
-                    if (this.saveObserver)
-                        this.logEvent({message:'donate check ', showDonate:false, lastClicked: new Date(lastShown).toISOString()})
-                    return false
-                }
-                
-
-                // get number of activities
-                const activities = this.getRepo().getAll()
-                // filter activities within last 12 months that are longer than 2km
-
-                const lastYear = new Date()
-                lastYear.setFullYear(lastYear.getFullYear()-1)           
-                const activitiesLastYear = activities.filter( a => a.summary?.startTime > lastYear.getTime() && a.summary?.distance>2000)
-
-                if (this.saveObserver)
-                    this.logEvent({message:'donate check ',  trialGroup, showDonate:activitiesLastYear?.length>=10, activities:activitiesLastYear?.length})
-                if (activitiesLastYear.length<10)
-                    return false
-                            
-                this.getUserSettings().set('state.donateShown',Date.now())
-                this.isDonateShown = true
-                return true
-            }
-
-
+            this.getUserSettings().set('state.donateShown', Date.now())
+            this.logEvent({ message: 'donate shown', mode, activities })
+            return this.setDonateDecision(true, { mode, activities })
         }
-        catch(err) {
+        catch (err) {
             this.logError(err, 'canShowDonate')
         }
         return false
     }
 
-    onDonateClicked() {
-        this.getUserSettings().set('state.donateClicked',Date.now())
+    protected setDonateDecision(showDonate: boolean, info: { mode: string, reason?: string, activities?: number }): boolean {
+        this.donateDecision = showDonate
+        const event: Record<string, unknown> = { message: 'donate check', showDonate, mode: info.mode }
+        if (info.reason !== undefined)
+            event.reason = info.reason
+        if (info.activities !== undefined)
+            event.activities = info.activities
+        this.logEvent(event)
+        return showDonate
+    }
+
+    /** returns the reason why the donation line must not be shown, or undefined if all conditions are met */
+    protected getDonateBlockReason(): { reason?: string, activities?: number } {
+        const settings = this.getUserSettings()
+        const now = Date.now()
+
+        if (settings.getValue('state.donateHidden', 0))
+            return { reason: 'hidden' }
+        if (now - settings.getValue('state.donateClicked', 0) < DONATE_CLICKED_PAUSE)
+            return { reason: 'clicked' }
+        if (now - settings.getValue('state.donateShown', 0) < DONATE_SHOWN_PAUSE)
+            return { reason: 'recently-shown' }
+        if ((this.activity?.time ?? 0) < DONATE_MIN_TIME || (this.activity?.distance ?? 0) < DONATE_MIN_DISTANCE)
+            return { reason: 'short-ride' }
+
+        const lastYear = new Date()
+        lastYear.setFullYear(lastYear.getFullYear() - 1)
+        const activities = this.getRepo().getAll()
+            .filter(a => a.summary?.startTime > lastYear.getTime() && a.summary?.distance > DONATE_MIN_DISTANCE).length
+        if (activities < DONATE_MIN_ACTIVITIES)
+            return { reason: 'usage', activities }
+
+        return { activities }
+    }
+
+    protected buildDonation(): ActivitySummaryDonation | undefined {
+        if (this.canShowDonate() !== true)
+            return undefined
+
+        return {
+            text: COPY.summaryText,
+            shortText: COPY.summaryShortText,
+            links: getDonationChannels().map(c => ({ id: c.id, label: c.label, url: c.url })),
+            hideLabel: COPY.hideLabel,
+        }
+    }
+
+    onDonateClicked(channelId?: DonationChannelId) {
+        this.getUserSettings().set('state.donateClicked', Date.now())
+        this.logEvent({ message: 'donate clicked', donationChannel: channelId ?? 'unknown', source: 'summary' })
+    }
+
+    onDonateHidden() {
+        this.getUserSettings().set('state.donateHidden', Date.now())
+        this.donateDecision = false
+        this.logEvent({ message: 'donate hidden', source: 'summary' })
     }
 
     getActivity():ActivityDetails {

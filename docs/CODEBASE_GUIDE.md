@@ -165,6 +165,13 @@ renders whatever it returns.
   only the differences, using the variant-folder layout above. `src/devices/page/` is the
   reference example.
 
+## Dialog front-end services
+
+The classes in `src/settings/display/*` (support, user, ride) are the front-end services for
+dialogs shown over a page. They expose display props and callbacks (`open()` / `close()` /
+`getDisplayProps()`) and never touch page state. Full pages use page services instead.
+Platform differences are derived inside the service from `getBindings().appInfo.getChannel()`.
+
 ## Bindings (platform abstraction)
 
 This library runs on Electron, in the browser and on React Native. **It never calls platform

@@ -3,6 +3,7 @@ import { Dimension, Unit } from "../../i18n"
 import { RoutePoint } from "../../types"
 import { ActivityDetailsUI } from "../base"
 import type { WorkoutGraphActuals, WorkoutGraphPlan } from "../../ride/page"
+import type { DonationChannelId } from "../../settings/support/types"
 
 export type ActivityState = 'ininitalized' | 'active' | 'paused' | 'completed' | 'idle'
 
@@ -11,8 +12,19 @@ export type ActivityWorkoutSummaryGraph = {
     actuals: WorkoutGraphActuals
 }
 
+export type ActivitySummaryDonation = {
+    text: string
+    shortText: string
+    links: { id: DonationChannelId; label: string; url: string }[]
+    hideLabel: string
+}
+
 export type ActivitySummaryDisplayProperties = {
     activity?: ActivityDetailsUI
+    /** deprecated: kept for older UI bundles, mirrors `donation` */
+    showDonate?: boolean
+    /** present only when the donation line should be shown */
+    donation?: ActivitySummaryDonation
     showSave?: boolean
     showContinue?: boolean
     showMap?: boolean
