@@ -745,7 +745,7 @@ export class ActivityRideService extends IncyclistService {
             return { reason: 'clicked' }
         if (now - settings.getValue('state.donateShown', 0) < DONATE_SHOWN_PAUSE)
             return { reason: 'recently-shown' }
-        if (!(this.activity?.time >= DONATE_MIN_TIME) || !(this.activity?.distance >= DONATE_MIN_DISTANCE))
+        if ((this.activity?.time ?? 0) < DONATE_MIN_TIME || (this.activity?.distance ?? 0) < DONATE_MIN_DISTANCE)
             return { reason: 'short-ride' }
 
         const lastYear = new Date()
