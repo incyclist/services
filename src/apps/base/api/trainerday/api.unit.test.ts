@@ -1,4 +1,5 @@
 import { TrainerDayApi } from './api'
+import { toBase64, fromBase64, utf8Encode, utf8Decode } from './utils'
 import { TrainerDayConfig, TrainerDayDuplicateError } from './types'
 
 describe('TrainerDay API', () => {
@@ -299,6 +300,69 @@ describe('TrainerDay API', () => {
 
             expect(restClient.request.mock.calls[0][0].data.data).toBe('AQID')
             expect(restClient.request.mock.calls[0][0].data.dataType).toBe('fit')
+        })
+
+        describe('XML normalisation', () => {
+            const PADDED_TCX = '<?xml version="1.0" encoding="utf-8"?>\n<TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">\n      <Activities>\n      <Activity Sport="Biking">\n      <Id>\n      2024-03-10T18:36:06.114Z\n    </Id><Lap StartTime="2024-03-10T18:36:06.114Z">\n      <TotalTimeSeconds>\n      19.899\n    </TotalTimeSeconds><Notes>\n      Tour K\u00F6ln \u20AC \uD83D\uDEB4\n    </Notes>\n    </Lap>\n    </Activity>\n    </Activities>\n    </TrainingCenterDatabase>'
+            const TRIMMED_TCX = '<?xml version="1.0" encoding="utf-8"?><TrainingCenterDatabase xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"><Activities><Activity Sport="Biking"><Id>2024-03-10T18:36:06.114Z</Id><Lap StartTime="2024-03-10T18:36:06.114Z"><TotalTimeSeconds>19.899</TotalTimeSeconds><Notes>Tour K\u00F6ln \u20AC \uD83D\uDEB4</Notes></Lap></Activity></Activities></TrainingCenterDatabase>'
+            const PADDED_GPX = '<?xml version="1.0"?>\n<gpx version="1.1">\n      <trk>\n      <name>\n      Morning ride\n    </name>\n    </trk>\n    </gpx>'
+            const TRIMMED_GPX = '<?xml version="1.0"?><gpx version="1.1"><trk><name>Morning ride</name></trk></gpx>'
+
+            const b64 = (text: string) => Buffer.from(text, 'utf-8').toString('base64')
+            const sentData = () => restClient.request.mock.calls[0][0].data.data
+
+            beforeEach(() => {
+                restClient.request.mockResolvedValue({ status: 200, data: { activityId: 'abc' } })
+            })
+
+            test('padded TCX (base64 string) is trimmed', async () => {
+                await api.uploadActivity({ name: 'ride', dataType: 'tcx', data: b64(PADDED_TCX) })
+
+                expect(sentData()).toBe(b64(TRIMMED_TCX))
+            })
+
+            test('padded TCX (bytes) is trimmed', async () => {
+                await api.uploadActivity({ name: 'ride', dataType: 'tcx', data: new Uint8Array(Buffer.from(PADDED_TCX, 'utf-8')) })
+
+                expect(sentData()).toBe(b64(TRIMMED_TCX))
+            })
+
+            test('padded GPX is trimmed (string and bytes)', async () => {
+                await api.uploadActivity({ name: 'ride', dataType: 'gpx', data: b64(PADDED_GPX) })
+                await api.uploadActivity({ name: 'ride', dataType: 'gpx', data: new Uint8Array(Buffer.from(PADDED_GPX, 'utf-8')) })
+
+                expect(restClient.request.mock.calls[0][0].data.data).toBe(b64(TRIMMED_GPX))
+                expect(restClient.request.mock.calls[1][0].data.data).toBe(b64(TRIMMED_GPX))
+            })
+
+            test('already trimmed TCX is unchanged', async () => {
+                await api.uploadActivity({ name: 'ride', dataType: 'tcx', data: b64(TRIMMED_TCX) })
+
+                expect(sentData()).toBe(b64(TRIMMED_TCX))
+            })
+
+            test('the trimmed content decodes to valid UTF-8 text', async () => {
+                await api.uploadActivity({ name: 'ride', dataType: 'tcx', data: b64(PADDED_TCX) })
+
+                expect(utf8Decode(fromBase64(sentData()))).toBe(TRIMMED_TCX)
+                expect(toBase64(utf8Encode(TRIMMED_TCX))).toBe(sentData())
+            })
+
+            test('FIT bytes are passed through byte-identical', async () => {
+                const bytes = new Uint8Array(512).map((_, i) => (i * 31 + 7) % 256)
+
+                await api.uploadActivity({ name: 'ride', dataType: 'fit', data: bytes })
+
+                expect(sentData()).toBe(Buffer.from(bytes).toString('base64'))
+            })
+
+            test('FIT base64 is passed through unchanged, even if it looks like padded XML', async () => {
+                const data = b64(PADDED_TCX)
+
+                await api.uploadActivity({ name: 'ride', dataType: 'fit', data })
+
+                expect(sentData()).toBe(data)
+            })
         })
 
         test('rejection: reports the status and the explanation of TrainerDay', async () => {

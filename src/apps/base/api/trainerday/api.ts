@@ -4,7 +4,8 @@ import { Observer } from '../../../../base/types/observer'
 import { valid } from '../../../../utils/valid'
 import { AppApiBase } from '../base'
 import { IExternalAppApi } from '../types'
-import { getErrorDetail, formatDay, toBase64 } from './utils'
+import { trimXmlTextNodes } from '../../../../utils/xml'
+import { getErrorDetail, formatDay, toBase64, fromBase64, utf8Encode, utf8Decode } from './utils'
 import {
     TrainerDayCalendarWorkout, TrainerDayConfig, TrainerDayRefreshTokenResponse, TrainerDayUploadProps, TrainerDayUploadResult
 } from './types'
@@ -92,7 +93,7 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
      */
     async uploadActivity(props: TrainerDayUploadProps): Promise<TrainerDayUploadResult> {
         const { name, dataType, externalId, sportType } = props
-        const data = typeof props.data === 'string' ? props.data : toBase64(props.data)
+        const data = this.prepareData(props)
 
         this.logger.logEvent({ message: 'TrainerDay upload', format: dataType, bytes: Math.floor(data.length * 3 / 4) })
 
@@ -106,6 +107,23 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
             throw this.mapUploadError(err)
         }
         return { activityId: response.data?.activityId }
+    }
+
+    /**
+     * Returns the file content as base64.
+     *
+     * TrainerDay silently drops TCX/GPX activities with padded text values (the upload is accepted with HTTP 200 and an activityId,
+     * but the activity never shows up), so the padding that the TCX exporter writes is removed from XML files. FIT files are sent as they are.
+     */
+    protected prepareData(props: TrainerDayUploadProps): string {
+        const isXml = props.dataType === 'tcx' || props.dataType === 'gpx'
+        const bytes = typeof props.data === 'string' ? undefined : props.data
+
+        if (!isXml)
+            return bytes ? toBase64(bytes) : props.data as string
+
+        const xml = utf8Decode(bytes ?? fromBase64(props.data as string))
+        return toBase64(utf8Encode(trimXmlTextNodes(xml)))
     }
 
     /**

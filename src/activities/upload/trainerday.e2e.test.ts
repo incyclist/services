@@ -11,6 +11,9 @@ import { TrainerDayUpload } from './trainerday'
  * E2E test of the TrainerDay activity upload: the real provider uploads a real file through the real API client.
  *
  * NOTE: TrainerDay does not detect duplicates, so every run creates a NEW activity on the account.
+ * NOTE: TrainerDay silently drops a TCX whose text values are padded with line breaks/spaces (as written by the TCX exporter):
+ * it answers with HTTP 200 and an activityId, but the activity never appears in the account. The API client therefore trims
+ * the padding of TCX/GPX files before the upload.
  *
  * Only executed on purpose (`npm run test:e2e`). Configure in the (git-ignored) `.env` file:
  *

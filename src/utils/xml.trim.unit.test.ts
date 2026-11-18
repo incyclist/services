@@ -1,4 +1,4 @@
-import { trimXmlTextNodes } from './utils'
+import { trimXmlTextNodes } from './xml'
 
 // the implementation that was replaced by a loop (a regular expression with a non-linear runtime for some inputs)
 const reference = (xml: string) => xml.replaceAll(/>([^<]+)</g, (_match, text: string) => `>${text.trim()}<`)

@@ -5,7 +5,8 @@ import { valid } from '../../../../utils/valid'
 import { AppApiBase } from '../base'
 import { IExternalAppApi } from '../types'
 import { sleep } from '../../../../utils/sleep'
-import { isBase64, trimXmlTextNodes } from './utils'
+import { trimXmlTextNodes } from '../../../../utils/xml'
+import { isBase64 } from './utils'
 import {
     TrainingPeaksConfig, TrainingPeaksDuplicateError, TrainingPeaksFileFormat, TrainingPeaksFileStatus, TrainingPeaksRefreshTokenResponse,
     TrainingPeaksUploadProps, TrainingPeaksUploadRequest, TrainingPeaksUploadResult, TrainingPeaksWorkout
