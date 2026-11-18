@@ -1,14 +1,10 @@
-import { useAppsService } from "../../../../apps"
 import { TrainingPeaksWorkout } from "../../../../apps/base/api/trainingpeaks"
 import { TrainingPeaksAppConnection } from "../../../../apps/trainingpeaks/TrainingPeaksAppConnection"
 import { Injectable } from "../../../../base/decorators"
-import { IncyclistService } from "../../../../base/service"
-import { Observer } from "../../../../base/types"
-import { getFirstDayOfCurrentWeek, waitNextTick } from "../../../../utils"
 import { ZwoParser } from "../../../base/parsers/zwo/zwo"
 import { WorkoutCalendarEntry } from "../../types"
+import { BaseCalendarSyncProvider } from "../base/provider"
 import { WorkoutSyncFactory } from "../factory"
-import { IWorkoutSyncProvider } from "../types"
 
 const SERVICE = 'trainingpeaks'
 
@@ -25,101 +21,46 @@ const NO_FILE_STATUS = new Set([400, 404, 410, 415, 422])
  * The list of workouts of a date range does not always tell the available file formats, so the file is requested
  * unless the formats are known and do not contain ZWO. Workouts that turned out to have no file are not requested again
  * until they are modified.
- * The first sync emits `loaded`, all following syncs emit `added`, `updated` and `deleted` events
- * for the changes and `done` when finished.
  */
-export class TrainingPeaksCalendarSyncProvider extends IncyclistService implements IWorkoutSyncProvider {
-    protected lastSyncTS: number
-    protected observer: Observer
-    protected stopRequested: boolean
-    protected workouts: Array<WorkoutCalendarEntry>
+export class TrainingPeaksCalendarSyncProvider extends BaseCalendarSyncProvider<TrainingPeaksWorkout> {
 
     /** workouts without usable file (id -> last modification at that time) */
     protected withoutFile: Map<string, string | undefined>
 
     constructor() {
-        super('TrainingPeaksCalendarSync')
-        this.lastSyncTS = 0
-        this.workouts = []
+        super('TrainingPeaksCalendarSync', SERVICE, SYNC_DAYS)
         this.withoutFile = new Map()
     }
 
-    sync(): Observer {
-        // already syncing, ... return observer and don't start a new one
-        if (this.observer)
-            return this.observer
-
-        this.observer = new Observer()
-
-        const onDone = () => {
-            waitNextTick().then(() => {
-                this.stopRequested = false
-                delete this.observer
-            }).catch(err => { this.logError(err, 'sync') })
-        }
-
-        this.observer.once('done', onDone)
-        this.observer.once('loaded', onDone)
-        this.observer.once('stop', () => { this.stopRequested = true })
-
-        this.loadWorkouts().catch(err => { this.logError(err, 'sync') })
-        return this.observer
-    }
-
-    isConnected(): boolean {
-        try {
-            return this.getTrainingPeaksAppConnection().isConnected()
-        }
-        catch {
-            return false
-        }
-    }
-
     reset() {
-        this.lastSyncTS = 0
-        this.workouts = []
+        super.reset()
         this.withoutFile = new Map()
     }
 
     // ------  PROTECTED MEMBERS ----------
 
-    protected async loadWorkouts(): Promise<Array<WorkoutCalendarEntry>> {
-        const event = this.lastSyncTS === 0 ? 'loaded' : 'done'
+    protected getConnection() {
+        return this.getTrainingPeaksAppConnection()
+    }
 
-        // make sure that the caller was able to subscribe to the observer
-        await waitNextTick()
+    protected async fetchWorkouts(start: Date, end: Date) {
+        return await this.getApi().getWorkouts(start, end)
+    }
 
-        try {
-            if (!this.isConnected() || !this.getAppsService().isEnabled(SERVICE, 'WorkoutDownload')) {
-                this.observer.emit(event, [], SERVICE)
-                return []
-            }
+    protected selectWorkouts(all: Array<TrainingPeaksWorkout>, start: Date): Array<TrainingPeaksWorkout> {
+        const cyclingWorkouts = all.filter(w => this.isCycling(w))
+        const cycling = cyclingWorkouts.filter(w => this.isPlanned(w))
 
-            const start = getFirstDayOfCurrentWeek()
-            const end = new Date(start)
-            end.setDate(end.getDate() + SYNC_DAYS)
+        this.logEvent({
+            message: 'workout sync', externalApp: SERVICE,
+            oldest: start.toLocaleDateString(), cntTotal: all.length, cntCycling: cyclingWorkouts.length, cntPlanned: cycling.length
+        })
+        return cycling
+    }
 
-            const all = await this.getApi().getWorkouts(start, end) ?? []
-            const cyclingWorkouts = all.filter(w => this.isCycling(w))
-            const cycling = cyclingWorkouts.filter(w => this.isPlanned(w))
-
-            this.logEvent({
-                message: 'workout sync', externalApp: SERVICE,
-                oldest: start.toLocaleDateString(), cntTotal: all.length, cntCycling: cyclingWorkouts.length, cntPlanned: cycling.length
-            })
-
-            this.removeDeletedWorkouts(cycling)
-            await this.updateWorkouts(cycling)
-
-            this.observer.emit(event, this.workouts, SERVICE)
-            this.lastSyncTS = Date.now()
-            return this.workouts
-        }
-        catch (err) {
-            this.logEvent({ message: 'workout sync failed', externalApp: SERVICE, error: err.message })
-            this.observer.emit(event, [], SERVICE)
-            return []
-        }
+    protected async applyChanges(cycling: Array<TrainingPeaksWorkout>) {
+        this.removeDeletedWorkouts(cycling.map(c => String(c.Id)))
+        await this.updateWorkouts(cycling)
     }
 
     protected isCycling(workout: TrainingPeaksWorkout): boolean {
@@ -141,19 +82,6 @@ export class TrainingPeaksCalendarSyncProvider extends IncyclistService implemen
         return planned.some(Boolean)
     }
 
-    protected removeDeletedWorkouts(current: Array<TrainingPeaksWorkout>) {
-        // nothing to compare to on the first sync
-        if (this.lastSyncTS === 0)
-            return
-
-        const deleted = this.workouts.filter(w => !current.some(c => String(c.Id) === w.workoutId))
-        deleted.forEach(w => {
-            this.observer.emit('deleted', w, SERVICE)
-            this.logEvent({ message: 'workout deleted', externalApp: SERVICE, workout: w.workout?.name })
-        })
-        this.workouts = this.workouts.filter(w => !deleted.includes(w))
-    }
-
     protected async updateWorkouts(current: Array<TrainingPeaksWorkout>, idx = 0): Promise<void> {
         // the files are downloaded one after the other to stay below the rate limits of TrainingPeaks
         if (idx >= current.length || this.stopRequested)
@@ -166,8 +94,8 @@ export class TrainingPeaksCalendarSyncProvider extends IncyclistService implemen
     protected async updateWorkout(workout: TrainingPeaksWorkout) {
         const workoutId = String(workout.Id)
         const updated = this.parseDate(workout.LastModifiedDate)
-        const idx = this.workouts.findIndex(w => w.workoutId === workoutId)
-        const existing = idx === -1 ? undefined : this.workouts[idx]
+        const idx = this.findEntryIndex(workoutId)
+        const existing = this.workouts[idx]
 
         // nothing to do (and nothing to download) if the workout was not modified since the last sync
         const lastUpdate = existing?.updated?.valueOf()
@@ -181,21 +109,7 @@ export class TrainingPeaksCalendarSyncProvider extends IncyclistService implemen
         if (!entry)
             return
 
-        const emit = this.lastSyncTS > 0
-        if (existing) {
-            this.workouts[idx] = entry
-            if (emit) {
-                this.observer.emit('updated', entry, SERVICE)
-                this.logEvent({ message: 'workout updated', externalApp: SERVICE, workout: entry.workout?.name })
-            }
-        }
-        else {
-            this.workouts.push(entry)
-            if (emit) {
-                this.observer.emit('added', entry, SERVICE)
-                this.logEvent({ message: 'workout added', externalApp: SERVICE, workout: entry.workout?.name })
-            }
-        }
+        this.storeEntry(entry, idx)
     }
 
     /**
@@ -281,11 +195,6 @@ export class TrainingPeaksCalendarSyncProvider extends IncyclistService implemen
 
     protected getApi() {
         return this.getTrainingPeaksAppConnection().getApi()
-    }
-
-    @Injectable
-    protected getAppsService() {
-        return useAppsService()
     }
 }
 
