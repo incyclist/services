@@ -73,8 +73,10 @@ describe('TrainerDay activity upload', () => {
 
     test('uploads a tcx file and links the activity', async () => {
         const activity = {
-            id: 'incyclist-e2e-test',
-            title: 'Incyclist E2E test',
+            // TrainerDay seems to reject an upload that it has seen before (answering "TCX parsing error"),
+            // the fixture is always the same, so the id (sent as externalId) has to be unique for every run
+            id: `incyclist-e2e-${Date.now()}`,
+            title: `Incyclist E2E test ${Date.now()}`,
             startTime: new Date().toISOString(),
             tcxFileName: '__tests__/data/activities/test.tcx'
         } as ActivityDetails
