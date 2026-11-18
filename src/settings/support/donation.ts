@@ -1,6 +1,6 @@
 import { getBindings } from '../../api'
 import type { IncyclistBindings } from '../../api'
-import type { DonationChannel, DonationMode } from '../page/support/base/types'
+import type { DonationChannel, DonationMode } from './types'
 import { COPY } from './copy'
 import { getDonationUrl, getSponsorUrl } from './urls'
 

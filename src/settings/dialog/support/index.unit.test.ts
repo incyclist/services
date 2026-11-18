@@ -1,8 +1,8 @@
 import { Inject } from '../../../base/decorators'
-import { getSupportSettingsPageService, DesktopSupportSettingsPageService, MobileSupportSettingsPageService } from '.'
+import { getSupportSettingsDialogService, DesktopSupportSettingsDialogService, MobileSupportSettingsDialogService } from '.'
 import * as api from '../../../api'
 
-describe('getSupportSettingsPageService', () => {
+describe('getSupportSettingsDialogService', () => {
     const mockChannel = (channel: string) => {
         (api.getBindings() as any).appInfo = { getChannel: () => channel }
     }
@@ -14,20 +14,20 @@ describe('getSupportSettingsPageService', () => {
 
     test.each(['desktop', 'web'])('%s uses the desktop variant', (channel) => {
         mockChannel(channel)
-        expect(getSupportSettingsPageService().constructor.name).toBe("DesktopSupportSettingsPageService")
+        expect(getSupportSettingsDialogService().constructor.name).toBe("DesktopSupportSettingsDialogService")
     })
 
     test.each(['mobile', 'tv'])('%s uses the mobile variant', (channel) => {
         mockChannel(channel)
-        expect(getSupportSettingsPageService().constructor.name).toBe("MobileSupportSettingsPageService")
+        expect(getSupportSettingsDialogService().constructor.name).toBe("MobileSupportSettingsDialogService")
     })
 
     test('copy labels differ', () => {
         Inject('Bindings', { appInfo: { getAppVersion: () => '1', getUIVersion: () => '2', getOS: () => ({ platform: 'linux' }) } })
         Inject('UserSettings', { get: () => 'u' })
-        const label = (s: DesktopSupportSettingsPageService | MobileSupportSettingsPageService) => s.getPageDisplayProps().helpLinks[2].email.copyLabel
-        expect(label(new DesktopSupportSettingsPageService())).toBe('Copy details')
-        expect(label(new MobileSupportSettingsPageService())).toBe('Share details')
+        const label = (s: DesktopSupportSettingsDialogService | MobileSupportSettingsDialogService) => s.getDialogDisplayProps().helpLinks[2].email.copyLabel
+        expect(label(new DesktopSupportSettingsDialogService())).toBe('Copy details')
+        expect(label(new MobileSupportSettingsDialogService())).toBe('Share details')
         Inject('UserSettings', null)
     })
 })

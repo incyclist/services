@@ -1,10 +1,10 @@
 import { Singleton } from '../../../../base/decorators'
 import { COPY, copiedMessage } from '../../../support/copy'
-import { SupportSettingsPageService } from '../base/service'
+import { SupportSettingsDialogService } from '../base/service'
 
-/** Support page for desktop (web-ui): details are copied to the clipboard */
+/** Support dialog for desktop (web-ui): details are copied to the clipboard */
 @Singleton
-export class DesktopSupportSettingsPageService extends SupportSettingsPageService {
+export class DesktopSupportSettingsDialogService extends SupportSettingsDialogService {
     protected getCopyLabel(): string {
         return COPY.copyDetailsLabel
     }

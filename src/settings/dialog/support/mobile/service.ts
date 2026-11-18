@@ -1,10 +1,10 @@
 import { Singleton } from '../../../../base/decorators'
 import { COPY } from '../../../support/copy'
-import { SupportSettingsPageService } from '../base/service'
+import { SupportSettingsDialogService } from '../base/service'
 
-/** Support page for mobile: details are shared via the share sheet, which confirms by itself */
+/** Support dialog for mobile: details are shared via the share sheet, which confirms by itself */
 @Singleton
-export class MobileSupportSettingsPageService extends SupportSettingsPageService {
+export class MobileSupportSettingsDialogService extends SupportSettingsDialogService {
     protected getCopyLabel(): string {
         return COPY.shareDetailsLabel
     }

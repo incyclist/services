@@ -1,8 +1,8 @@
-export type DonationChannelId = 'paypal' | 'github-sponsors'
-export type DonationMode = 'direct' | 'website'
+import type { DonationChannel, DonationChannelId, DonationMode } from '../../../support/types'
+
+export type { DonationChannel, DonationChannelId, DonationMode }
 export type SupportHelpLinkId = 'strava' | 'slack' | 'email'
 
-export type DonationChannel = { id: DonationChannelId; label: string; subLabel: string; url: string; primary: boolean }
 export type SupportLink = { label: string; url: string }
 export type SupportOtherHelpLink = SupportLink & { id: 'strava' | 'github' }
 
@@ -62,7 +62,7 @@ export type SupportHelpLink = {
     email?: SupportEmailDetails
 }
 
-export type SupportSettingsPageDisplayProps = {
+export type SupportSettingsDialogDisplayProps = {
     appInfo: SupportAppInfoDisplayProps
     helpTitle: string
     /** order: strava, slack, email */

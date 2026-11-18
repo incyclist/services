@@ -1,10 +1,10 @@
 import { Inject } from '../../../../base/decorators'
 import { IncyclistPageService } from '../../../../base/pages/service'
-import { DesktopSupportSettingsPageService } from '../desktop/service'
-import { MobileSupportSettingsPageService } from '../mobile/service'
+import { DesktopSupportSettingsDialogService } from '../desktop/service'
+import { MobileSupportSettingsDialogService } from '../mobile/service'
 
-describe('SupportSettingsPageService', () => {
-    let service: DesktopSupportSettingsPageService
+describe('SupportSettingsDialogService', () => {
+    let service: DesktopSupportSettingsDialogService
     let logEvent: jest.SpyInstance
     let platform: string
 
@@ -23,7 +23,7 @@ describe('SupportSettingsPageService', () => {
         platform = 'linux'
         Inject('Bindings', bindings())
         Inject('UserSettings', { get: jest.fn((k: string, d: unknown) => k === 'uuid' ? 'abc-123' : d) })
-        service = new DesktopSupportSettingsPageService()
+        service = new DesktopSupportSettingsDialogService()
         logEvent = jest.spyOn(service as unknown as { logEvent: (e: unknown) => void }, 'logEvent').mockImplementation(() => undefined)
     })
 
@@ -35,9 +35,9 @@ describe('SupportSettingsPageService', () => {
         ;(service as never as { reset: () => void }).reset?.()
     })
 
-    describe('getPageDisplayProps', () => {
+    describe('getDialogDisplayProps', () => {
         test('direct mode', () => {
-            const props = service.getPageDisplayProps()
+            const props = service.getDialogDisplayProps()
 
             expect(props.appInfo).toMatchObject({
                 title: 'App info', appVersion: '1.2.3', uiVersion: '26.10.1', uuid: 'abc-123',
@@ -62,7 +62,7 @@ describe('SupportSettingsPageService', () => {
 
         test('website mode', () => {
             platform = 'ios'
-            const d = service.getPageDisplayProps().donation
+            const d = service.getDialogDisplayProps().donation
 
             expect(d.mode).toBe('website')
             expect(d.channels).toEqual([])
@@ -71,7 +71,7 @@ describe('SupportSettingsPageService', () => {
         })
 
         test('email link has prefilled details and desktop copy texts', () => {
-            const email = service.getPageDisplayProps().helpLinks[2]
+            const email = service.getDialogDisplayProps().helpLinks[2]
             expect(email.url.startsWith('mailto:support@incyclist.com?subject=')).toBe(true)
             expect(email.email.body).toContain('uuid: abc-123')
             expect(email.email.copyLabel).toBe('Copy details')
@@ -84,35 +84,35 @@ describe('SupportSettingsPageService', () => {
             process.env.SPONSOR_URL = 'https://sponsor.test'
             process.env.SUPPORT_PAGE_URL = 'https://site.test/support'
 
-            let props = service.getPageDisplayProps()
+            let props = service.getDialogDisplayProps()
             expect(props.helpLinks[0].url).toBe('https://strava.test')
             expect(props.helpLinks[1].url).toBe('https://slack.test')
             expect(props.donation.channels[1].url).toBe('https://sponsor.test')
 
             platform = 'ios'
-            props = service.getPageDisplayProps()
+            props = service.getDialogDisplayProps()
             expect(props.donation.websiteLink).toMatchObject({ url: 'https://site.test/support', host: 'site.test' })
         })
 
         test('PRIVACY_URL does not leak into Slack and Strava', () => {
             process.env.PRIVACY_URL = 'https://privacy.test'
-            const props = service.getPageDisplayProps()
+            const props = service.getDialogDisplayProps()
             expect(props.appInfo.privacyUrl).toBe('https://privacy.test')
             expect(props.helpLinks[0].url).not.toBe('https://privacy.test')
             expect(props.helpLinks[1].url).not.toBe('https://privacy.test')
         })
 
         test('mobile variant shares instead of copies', () => {
-            const mobile = new MobileSupportSettingsPageService()
-            const email = mobile.getPageDisplayProps().helpLinks[2].email
+            const mobile = new MobileSupportSettingsDialogService()
+            const email = mobile.getDialogDisplayProps().helpLinks[2].email
             expect(email.copyLabel).toBe('Share details')
             expect(email.copiedMessage).toBeUndefined()
-            expect(mobile.getPageDisplayProps().appInfo.uuidActionLabel).toBe('Share')
+            expect(mobile.getDialogDisplayProps().appInfo.uuidActionLabel).toBe('Share')
             ;(mobile as never as { reset: () => void }).reset?.()
         })
     })
 
-    describe('openPage / closePage', () => {
+    describe('openDialog / closeDialog', () => {
         test('does not touch the current page or the page app state', () => {
             const setState = jest.fn()
             const appState = { setState, getPersistedState: jest.fn() }
@@ -120,25 +120,37 @@ describe('SupportSettingsPageService', () => {
             const other = { closePage: jest.fn() } as unknown as typeof IncyclistPageService.currentPage
             IncyclistPageService.currentPage = other
 
-            const observer = service.openPage()
+            const observer = service.openDialog()
             expect(observer).toBeDefined()
-            expect(service.getPageObserver()).toBe(observer)
-            service.closePage()
+            expect(service.getDialogObserver()).toBe(observer)
+            service.closeDialog()
 
-            expect(service.getPageObserver()).toBeUndefined()
+            expect(service.getDialogObserver()).toBeUndefined()
             expect(IncyclistPageService.currentPage).toBe(other)
             expect(setState).not.toHaveBeenCalled()
+            expect(setState).not.toHaveBeenCalledWith('currentPage', expect.anything())
+            expect(setState).not.toHaveBeenCalledWith('prevPage', expect.anything())
 
             delete IncyclistPageService.currentPage
         })
 
+        test('logs support settings opened with the mode', () => {
+            service.openDialog()
+            expect(logEvent).toHaveBeenCalledWith({ message: 'support settings opened', mode: 'direct' })
+
+            platform = 'ios'
+            service.openDialog()
+            expect(logEvent).toHaveBeenLastCalledWith({ message: 'support settings opened', mode: 'website' })
+            service.closeDialog()
+        })
+
         test('reopening stops the previous observer', () => {
-            const first = service.openPage()
+            const first = service.openDialog()
             const stop = jest.spyOn(first, 'stop')
-            const second = service.openPage()
+            const second = service.openDialog()
             expect(stop).toHaveBeenCalled()
             expect(second).not.toBe(first)
-            service.closePage()
+            service.closeDialog()
         })
     })
 

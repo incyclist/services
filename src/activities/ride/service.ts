@@ -14,7 +14,7 @@ import { RouteInfo, RoutePoint } from "../../routes/base/types";
 import { ActivityDashboardDataItem, ActivityState, ActivitySummaryDisplayProperties, ActivitySummaryDonation, ActivityWorkoutSummaryGraph } from "./types";
 import { COPY } from "../../settings/support/copy";
 import { getDonationChannels, getDonationMode } from "../../settings/support/donation";
-import type { DonationChannelId } from "../../settings/page/support/types";
+import type { DonationChannelId } from "../../settings/support/types";
 import { getWorkoutGraphSeries } from "../../workouts";
 import type { WorkoutGraphActuals, WorkoutGraphPlan } from "../../ride/page";
 import { addDetails, checkIsLoop, getElevationGainAt, getNextPosition, getPosition, getRouteHash, validateRoute } from "../../routes/base/utils/route";

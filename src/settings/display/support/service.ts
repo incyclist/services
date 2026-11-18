@@ -8,6 +8,7 @@ import { useUserSettings } from "../../service";
 import { getDonationUrl, getGitHubUrl, getPrivacyUrl, getSlackUrl, getStravaUrl, getSupportEmail } from "../../support/urls";
 import { SupportSettingsDisplayProps } from "./types";
 
+/** @deprecated Use getSupportSettingsDialogService() instead */
 @Singleton
 export class SupportSettingsDisplayService extends IncyclistService {
     protected initialized: false
@@ -66,4 +67,5 @@ export class SupportSettingsDisplayService extends IncyclistService {
 
 }
 
+/** @deprecated Use getSupportSettingsDialogService() instead */
 export const useSupportSettingsDisplay =() => new SupportSettingsDisplayService()

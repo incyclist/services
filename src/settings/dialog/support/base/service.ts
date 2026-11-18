@@ -1,7 +1,7 @@
-import { IncyclistPageService } from '../../../../base/pages/service'
+import { IncyclistDialogService } from '../../../../base/dialogs/service'
 import { Injectable } from '../../../../base/decorators'
-import { Observer } from '../../../../base/types'
 import type { IObserver } from '../../../../base/typedefs'
+import { getBindings } from '../../../../api'
 import { useUserSettings } from '../../../service'
 import { COPY, compactVersionText } from '../../../support/copy'
 import { getDonationChannels, getDonationMode } from '../../../support/donation'
@@ -9,39 +9,23 @@ import { buildSupportEmail } from '../../../support/mailto'
 import { getGitHubUrl, getPrivacyUrl, getSlackUrl, getStravaUrl, getSupportEmail, getSupportPageUrl } from '../../../support/urls'
 import type {
     DonationClickId, SupportAppInfoDisplayProps, SupportDonationDisplayProps, SupportHelpLink,
-    SupportLinkClickId, SupportSettingsPageDisplayProps
+    SupportLinkClickId, SupportSettingsDialogDisplayProps
 } from './types'
 
 /**
- * Shared logic of the Settings > Support page. Platform subclasses only provide the
+ * Shared logic of the Settings > Support dialog. Platform subclasses only provide the
  * copy label and the "copied" message. The action handlers only log, they never throw.
  */
-export abstract class SupportSettingsPageService extends IncyclistPageService {
-
-    /**
-     * The Support page is a dialog shown over a content page. It must not take over the page
-     * bookkeeping of IncyclistPageService (currentPage, currentPage/prevPage app state), otherwise
-     * the content page underneath would be treated as closed. Therefore it only owns its observer.
-     */
-    protected dialogObserver: Observer | undefined
+export abstract class SupportSettingsDialogService extends IncyclistDialogService<SupportSettingsDialogDisplayProps> {
 
     constructor() {
-        super('supportSettings')
+        super('SupportSettingsDialog')
     }
 
-    openPage(): IObserver {
-        this.dialogObserver?.stop()
-        this.dialogObserver = new Observer()
-        return this.dialogObserver
-    }
-
-    closePage(): void {
-        this.dialogObserver?.stop()
-        delete this.dialogObserver
-    }
-
-    getPageObserver(): IObserver {
-        return this.dialogObserver
+    openDialog(): IObserver {
+        const observer = super.openDialog()
+        this.safeLog({ message: 'support settings opened', mode: getDonationMode(this.getBindings()) })
+        return observer
     }
 
     protected abstract getCopyLabel(): string
@@ -49,7 +33,7 @@ export abstract class SupportSettingsPageService extends IncyclistPageService {
     protected abstract getCopiedMessage(address: string): string | undefined
 
     /** Builds the display props from scratch, so version changes after a hot update are always current */
-    getPageDisplayProps(): SupportSettingsPageDisplayProps {
+    getDialogDisplayProps(): SupportSettingsDialogDisplayProps {
         return {
             appInfo: this.buildAppInfo(),
             helpTitle: COPY.helpTitle,
@@ -163,6 +147,11 @@ export abstract class SupportSettingsPageService extends IncyclistPageService {
         catch {
             return url
         }
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 
     @Injectable

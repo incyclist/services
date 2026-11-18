@@ -3,7 +3,7 @@ import { Dimension, Unit } from "../../i18n"
 import { RoutePoint } from "../../types"
 import { ActivityDetailsUI } from "../base"
 import type { WorkoutGraphActuals, WorkoutGraphPlan } from "../../ride/page"
-import type { DonationChannelId } from "../../settings/page/support/types"
+import type { DonationChannelId } from "../../settings/support/types"
 
 export type ActivityState = 'ininitalized' | 'active' | 'paused' | 'completed' | 'idle'
 
