@@ -23,6 +23,9 @@ export type ActivityUploadResult = {
     error?: string    
 }
 
+/** The file formats that can be uploaded to TrainerDay */
+export type TrainerDayFormat = 'tcx' | 'fit'
+
 export interface IActivityUpload {
     init():boolean;
     isConnected():boolean

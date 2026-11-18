@@ -1,33 +1,10 @@
-export type TrainingPeaksConfig = {
-    /** TrainingPeaks athlete id */
-    id?: string
+import type { OAuthAppConfig, OAuthRefreshTokenResponse } from '../types'
 
-    /** access token */
-    accessToken: string
-
-    /** refresh token */
-    refreshToken: string
-
-    /** point in time when the access token expires */
-    expiration?: Date
-}
+/** Credentials of the TrainingPeaks athlete */
+export type TrainingPeaksConfig = OAuthAppConfig
 
 /** Response of the auth-server's `POST /trainingpeaks/refresh` */
-export type TrainingPeaksRefreshTokenResponse = {
-    /** The short-lived access token */
-    access_token: string
-
-    /** The refresh token to be used for the next refresh. It can change with every refresh */
-    refresh_token: string
-
-    /** Seconds until the access token expires */
-    expires_in: number
-
-    token_type?: string
-
-    /** Expiration of the access token as epoch milliseconds (string), as calculated by the auth-server */
-    expiration?: string
-}
+export type TrainingPeaksRefreshTokenResponse = OAuthRefreshTokenResponse
 
 /** Formats of a structured workout file that can be downloaded (as listed in `WorkoutFileFormats` of a workout) */
 export type TrainingPeaksFileFormat = 'zwo' | 'erg' | 'mrc' | 'fit' | 'json'

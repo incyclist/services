@@ -4,7 +4,7 @@ import { Injectable } from "../../base/decorators/Injection";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { TrainingPeaksDuplicateError } from "../../apps/base/api/trainingpeaks";
-import { isBase64 } from "../../apps/base/api/trainingpeaks/utils";
+import { isBase64 } from "../../utils/base64";
 import { ActivityDetails } from "../base";
 import { ActivityUploadFactory } from "./factory";
 import { IActivityUpload } from "./types";
