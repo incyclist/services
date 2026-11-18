@@ -1,0 +1,1826 @@
+[
+ {
+  "eventId": "6afdb080aed3d47c1b0e3d05",
+  "workoutId": 36560,
+  "date": "2026-11-20",
+  "title": "VO2 Max (8x4min@120%)",
+  "durationMinutes": 75,
+  "bikeStress": 118,
+  "intensity": 0.97,
+  "timeInZones": {
+   "z1": 35,
+   "z2": 5,
+   "z3": 2,
+   "z4": 1,
+   "z5": 33,
+   "z6": 0
+  },
+  "workoutType": "bike",
+  "intensityMetric": "percentOfFtp",
+  "workoutBlocks": [
+   {
+    "start": 0,
+    "end": 60,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 40,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 60,
+    "end": 120,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 50,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 120,
+    "end": 180,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 180,
+    "end": 240,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 70,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 240,
+    "end": 300,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 80,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 300,
+    "end": 360,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 90,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 360,
+    "end": 420,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 100,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 420,
+    "end": 480,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 40,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 480,
+    "end": 510,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 30,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 120,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 510,
+    "end": 660,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 150,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": null,
+    "type": "segment"
+   },
+   {
+    "start": 660,
+    "end": 4500,
+    "segments": [
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": null,
+      "durationType": "second",
+      "durationValue": 240,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 120,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     },
+     {
+      "name": "",
+      "controlMode": null,
+      "segmentType": "rest",
+      "durationType": "second",
+      "durationValue": 240,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 40,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ],
+    "reps": 8,
+    "type": "repetition"
+   }
+  ],
+  "lengthUnit": "duration",
+  "intensityUnit": "percentOfFtp"
+ },
+ {
+  "eventId": "6afdb06baed3d47c1b0e3c50",
+  "workoutId": -66766883858434,
+  "date": "2026-12-13",
+  "title": "Kerfuffle 105 + CAD",
+  "durationMinutes": 105,
+  "bikeStress": 61,
+  "intensity": 0.59,
+  "timeInZones": {
+   "z1": 19,
+   "z2": 86,
+   "z3": 0,
+   "z4": 0,
+   "z5": 0,
+   "z6": 0
+  },
+  "workoutType": "bike",
+  "intensityMetric": "percentOfFtp",
+  "workoutBlocks": [
+   {
+    "start": 0,
+    "end": 420,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "warm-up",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 420,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 40,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 420,
+    "end": 600,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "warm-up",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 180,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 600,
+    "end": 780,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 180,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": null,
+        "type": "primary"
+       },
+       {
+        "min": 93,
+        "max": 103,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 780,
+    "end": 900,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 51,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 900,
+    "end": 1680,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 780,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 58,
+        "max": null,
+        "type": "primary"
+       },
+       {
+        "min": 93,
+        "max": 103,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 1680,
+    "end": 2460,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 780,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 64,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 2460,
+    "end": 3240,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 780,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 62,
+        "max": null,
+        "type": "primary"
+       },
+       {
+        "min": 93,
+        "max": 103,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 3240,
+    "end": 3960,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 720,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 58,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 3960,
+    "end": 4140,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 180,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": null,
+        "type": "primary"
+       },
+       {
+        "min": 93,
+        "max": 103,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 4140,
+    "end": 4260,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 51,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 4260,
+    "end": 5040,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 780,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 58,
+        "max": null,
+        "type": "primary"
+       },
+       {
+        "min": 93,
+        "max": 103,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 5040,
+    "end": 5820,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 780,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 64,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 5820,
+    "end": 6000,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 180,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 50,
+        "max": null,
+        "type": "primary"
+       },
+       {
+        "min": 93,
+        "max": 103,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 6000,
+    "end": 6300,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "cooldown",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 300,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 40,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   }
+  ],
+  "lengthUnit": "duration",
+  "intensityUnit": "percentOfFtp"
+ },
+ {
+  "eventId": "6afdb06baed3d47c1b0e3c43",
+  "workoutId": -66766883858416,
+  "date": "2026-11-25",
+  "title": "Collywobbles 75 + CAD",
+  "durationMinutes": 75,
+  "bikeStress": 42,
+  "intensity": 0.58,
+  "timeInZones": {
+   "z1": 26,
+   "z2": 49,
+   "z3": 0,
+   "z4": 0,
+   "z5": 0,
+   "z6": 0
+  },
+  "workoutType": "bike",
+  "intensityMetric": "percentOfFtp",
+  "workoutBlocks": [
+   {
+    "start": 0,
+    "end": 420,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "warm-up",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 420,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 40,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 420,
+    "end": 600,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "warm-up",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 180,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 600,
+    "end": 660,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 46,
+        "max": null,
+        "type": "primary"
+       },
+       {
+        "min": 91,
+        "max": 101,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 660,
+    "end": 690,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 30,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 55,
+        "max": 60,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 690,
+    "end": 720,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 30,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 55,
+        "max": 60,
+        "type": "primary"
+       },
+       {
+        "min": 91,
+        "max": 101,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 720,
+    "end": 1320,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 600,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 62,
+        "max": 64,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 1320,
+    "end": 1620,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 300,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": 62,
+        "type": "primary"
+       },
+       {
+        "min": 91,
+        "max": 101,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 1620,
+    "end": 2220,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 600,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 64,
+        "max": 66,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 2220,
+    "end": 2520,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 300,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": 62,
+        "type": "primary"
+       },
+       {
+        "min": 91,
+        "max": 101,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 2520,
+    "end": 2580,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 46,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 2580,
+    "end": 3780,
+    "type": "repetition",
+    "reps": 5,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 63,
+        "max": null,
+        "type": "primary"
+       },
+       {
+        "min": 91,
+        "max": 101,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     },
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 51,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 3780,
+    "end": 4080,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 300,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 62,
+        "max": null,
+        "type": "primary"
+       },
+       {
+        "min": 91,
+        "max": 101,
+        "type": "cadence"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 4080,
+    "end": 4200,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 50,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 4200,
+    "end": 4500,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "cooldown",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 300,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 40,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   }
+  ],
+  "lengthUnit": "duration",
+  "intensityUnit": "percentOfFtp"
+ },
+ {
+  "eventId": "6afdb06baed3d47c1b0e3c48",
+  "workoutId": -66766883858423,
+  "date": "2026-12-02",
+  "title": "Collywobbles 75 + Sprints",
+  "durationMinutes": 75,
+  "bikeStress": 52,
+  "intensity": 0.64,
+  "timeInZones": {
+   "z1": 25,
+   "z2": 49,
+   "z3": 0,
+   "z4": 0,
+   "z5": 0,
+   "z6": 1
+  },
+  "workoutType": "bike",
+  "intensityMetric": "percentOfFtp",
+  "workoutBlocks": [
+   {
+    "start": 0,
+    "end": 420,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "warm-up",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 420,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 40,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 420,
+    "end": 600,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "warm-up",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 180,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 600,
+    "end": 660,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 46,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 660,
+    "end": 720,
+    "type": "repetition",
+    "reps": 2,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 30,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 55,
+        "max": 60,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 720,
+    "end": 1320,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 600,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 64,
+        "max": 69,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 1320,
+    "end": 1620,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 300,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": 64,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 1620,
+    "end": 2220,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 600,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 69,
+        "max": 74,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 2220,
+    "end": 2225,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 5,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 100,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": [
+       {
+        "timeOffset": 0,
+        "text": "sprint 5s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "start": 2225,
+    "end": 2240,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 15,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 150,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": [
+       {
+        "timeOffset": 0,
+        "text": "sprint 15s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "start": 2240,
+    "end": 2540,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 300,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 60,
+        "max": 64,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 2540,
+    "end": 2600,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 60,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 46,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 2600,
+    "end": 2720,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 66,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 2720,
+    "end": 2840,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 51,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 2840,
+    "end": 2845,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 5,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 100,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": [
+       {
+        "timeOffset": 0,
+        "text": "sprint 5s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "start": 2845,
+    "end": 2860,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 15,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 150,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": [
+       {
+        "timeOffset": 0,
+        "text": "sprint 15s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "start": 2860,
+    "end": 3340,
+    "type": "repetition",
+    "reps": 2,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 66,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     },
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 51,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 3340,
+    "end": 3460,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 66,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 3460,
+    "end": 3465,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 5,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 100,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": [
+       {
+        "timeOffset": 0,
+        "text": "sprint 5s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "start": 3465,
+    "end": 3480,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 15,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 150,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": [
+       {
+        "timeOffset": 0,
+        "text": "sprint 15s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "start": 3480,
+    "end": 3600,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 51,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 3600,
+    "end": 3720,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 66,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 3720,
+    "end": 3840,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 120,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 51,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 3840,
+    "end": 4140,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 300,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 64,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 4140,
+    "end": 4145,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 5,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 100,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": [
+       {
+        "timeOffset": 0,
+        "text": "sprint 5s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "start": 4145,
+    "end": 4160,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 15,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 150,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": [
+       {
+        "timeOffset": 0,
+        "text": "sprint 15s"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "start": 4160,
+    "end": 4201,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "-",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 41,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 50,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   },
+   {
+    "start": 4201,
+    "end": 4501,
+    "type": "segment",
+    "reps": null,
+    "segments": [
+     {
+      "name": "",
+      "segmentType": "cooldown",
+      "controlMode": null,
+      "durationType": "second",
+      "durationValue": 300,
+      "pressLapButton": false,
+      "targets": [
+       {
+        "min": 40,
+        "max": null,
+        "type": "primary"
+       }
+      ],
+      "notes": []
+     }
+    ]
+   }
+  ],
+  "lengthUnit": "duration",
+  "intensityUnit": "percentOfFtp"
+ }
+]
