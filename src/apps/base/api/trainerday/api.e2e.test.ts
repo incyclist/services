@@ -6,6 +6,11 @@ import { TrainerDayRawResponse } from './types'
 /**
  * E2E tests against the TrainerDay API. They also serve as the API spike: they log what TrainerDay really delivers
  * (keys, types, status codes), never tokens or private content.
+ *
+ * The Incyclist client of TrainerDay only has the scopes `calendar:read` and `activities:write`. Endpoints that need other
+ * scopes (athlete:read, activities:read) are not available and therefore not covered. The tests cover the calendar,
+ * the upload (tcx and fit, each uploaded twice) and the opt-in token refresh.
+ *
  * They are only executed on purpose (`npm run test:e2e`, or "Run" in VS Code) and fail if no access token is provided.
  *
  * Configure them in the (git-ignored) `.env` file:
@@ -104,15 +109,6 @@ describe('TrainerDay API', () => {
         api = createApi({ expiration: parseExpiration(process.env.TD_EXPIRATION) })
     })
 
-    describe('getAthlete', () => {
-        test('returns the profile of the athlete', async () => {
-            const athlete = await callAndLog('getAthlete', () => api.getAthlete())
-
-            console.log('athlete keys:', athlete && typeof athlete === 'object' ? Object.keys(athlete).join(', ') : typeof athlete)
-            expect(athlete).toBeDefined()
-        })
-    })
-
     describe('getCalendar', () => {
         test('the current week and the 28 days after', async () => {
             const start = monday()
@@ -132,20 +128,6 @@ describe('TrainerDay API', () => {
                 console.log(`calendar item ${idx}: ${JSON.stringify({ title, name, date, startDate })}`)
             })
             expect(calendar).toBeDefined()
-        })
-    })
-
-    describe('getActivities', () => {
-        test('lists the activities', async () => {
-            const activities = await callAndLog('getActivities', () => api.getActivities())
-
-            const items = asArray(activities)
-            console.log('activities body type:', Array.isArray(activities) ? 'array' : typeof activities,
-                activities && typeof activities === 'object' && !Array.isArray(activities) ? 'keys: ' + Object.keys(activities).join(', ') : '')
-            console.log('activities items:', items?.length)
-            if (items?.[0])
-                console.log('first activity fields:', describeFields(items[0]))
-            expect(activities).toBeDefined()
         })
     })
 
@@ -202,9 +184,9 @@ describe('TrainerDay API', () => {
             const onUpdate = jest.fn()
             expired.init({ accessToken: 'expired', refreshToken, expiration: expiredAt }).on('token.updated', onUpdate)
 
-            const athlete = await callAndLog('refresh and getAthlete', () => expired.getAthlete())
+            const calendar = await callAndLog('refresh and getCalendar', () => expired.getCalendar(monday(), new Date()))
 
-            expect(athlete).toBeDefined()
+            expect(calendar).toBeDefined()
             expect(onUpdate).toHaveBeenCalledTimes(1)
             console.log('token refreshed. The refresh token in .env is probably no longer valid, please connect again to get a new one')
         })

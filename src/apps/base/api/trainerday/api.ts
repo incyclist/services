@@ -63,15 +63,6 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
     }
 
     /**
-     * Retrieves the profile of the athlete (`GET /api/v1/athlete`, scope `athlete:read`)
-     * @returns the parsed response body (structure not verified yet)
-     */
-    async getAthlete(): Promise<TrainerDayRawResponse> {
-        const response = await this.get('/api/v1/athlete')
-        return response.data
-    }
-
-    /**
      * Retrieves the planned workouts of a range of days (`GET /api/v1/calendar`, scope `calendar:read`)
      *
      * @param startDate first day (`YYYY-MM-DD`) or a Date (local day)
@@ -81,15 +72,6 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
     async getCalendar(startDate: string | Date, endDate: string | Date): Promise<TrainerDayRawResponse> {
         const params = { startDate: formatDay(startDate), endDate: formatDay(endDate) }
         const response = await this.get('/api/v1/calendar', { params })
-        return response.data
-    }
-
-    /**
-     * Retrieves the completed activities of the athlete (`GET /api/v1/activities`, scope `activities:read`)
-     * @returns the parsed response body (structure not verified yet)
-     */
-    async getActivities(): Promise<TrainerDayRawResponse> {
-        const response = await this.get('/api/v1/activities')
         return response.data
     }
 

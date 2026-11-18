@@ -74,7 +74,7 @@ describe('TrainerDay API', () => {
 
     describe('request', () => {
         test('throws if not authenticated', async () => {
-            await expect(api.getAthlete()).rejects.toThrow('not authenticated')
+            await expect(api.getCalendar('2026-01-05', '2026-02-01')).rejects.toThrow('not authenticated')
             expect(restClient.request).not.toHaveBeenCalled()
         })
 
@@ -82,12 +82,12 @@ describe('TrainerDay API', () => {
             api.init({ ...initialConfig })
             restClient.request.mockResolvedValue({ data: { ok: true } })
 
-            await api.getAthlete()
+            await api.getCalendar('2026-01-05', '2026-02-01')
 
             expect(restClient.request).toHaveBeenCalledTimes(1)
             expect(restClient.request).toHaveBeenCalledWith(expect.objectContaining({
                 method: 'get',
-                url: API + '/api/v1/athlete',
+                url: API + '/api/v1/calendar',
                 headers: { Authorization: 'Bearer old-access-token' }
             }))
         })
@@ -96,7 +96,7 @@ describe('TrainerDay API', () => {
             api.init({ ...initialConfig })
             restClient.request.mockResolvedValue({ data: [] })
 
-            await api.getAthlete()
+            await api.getCalendar('2026-01-05', '2026-02-01')
 
             const { validateStatus } = restClient.request.mock.calls[0][0]
             expect(validateStatus(200)).toBe(true)
@@ -110,9 +110,9 @@ describe('TrainerDay API', () => {
             api.init({ ...initialConfig })
             restClient.request.mockResolvedValue({ data: {} })
 
-            await api.getAthlete()
+            await api.getCalendar('2026-01-05', '2026-02-01')
 
-            expect(restClient.request.mock.calls[0][0].url).toBe('https://api.sandbox.trainerday.test/api/v1/athlete')
+            expect(restClient.request.mock.calls[0][0].url).toBe('https://api.sandbox.trainerday.test/api/v1/calendar')
         })
 
         test('refreshes an expired token first and uses the new one', async () => {
@@ -121,7 +121,7 @@ describe('TrainerDay API', () => {
                 .mockResolvedValueOnce({ data: { access_token: 'new-access-token', refresh_token: 'new-refresh-token', expires_in: 21600 } })
                 .mockResolvedValueOnce({ data: {} })
 
-            await api.getAthlete()
+            await api.getCalendar('2026-01-05', '2026-02-01')
 
             expect(restClient.request).toHaveBeenCalledTimes(2)
             expect(restClient.request.mock.calls[0][0].url).toBe('https://auth.incyclist.com/trainerday/refresh')
@@ -132,7 +132,7 @@ describe('TrainerDay API', () => {
             api.init({ ...initialConfig, expiration: undefined })
             restClient.request.mockResolvedValue({ data: { access_token: 'a', refresh_token: 'b', expires_in: 600 } })
 
-            await api.getAthlete()
+            await api.getCalendar('2026-01-05', '2026-02-01')
 
             expect(restClient.request.mock.calls[0][0].url).toContain('/trainerday/refresh')
         })
@@ -141,7 +141,7 @@ describe('TrainerDay API', () => {
             api.init({ ...initialConfig, expiration: new Date(NOW - 1000) })
             restClient.request.mockRejectedValue({ response: { status: 401, statusText: 'Unauthorized' } })
 
-            await expect(api.getAthlete()).rejects.toThrow('token refresh failed')
+            await expect(api.getCalendar('2026-01-05', '2026-02-01')).rejects.toThrow('token refresh failed')
             expect(restClient.request).toHaveBeenCalledTimes(1)
         })
     })
@@ -238,15 +238,6 @@ describe('TrainerDay API', () => {
         })
     })
 
-    describe('getAthlete', () => {
-        test('returns the body of the response', async () => {
-            api.init({ ...initialConfig })
-            restClient.request.mockResolvedValue({ data: { id: 1 } })
-
-            expect(await api.getAthlete()).toEqual({ id: 1 })
-        })
-    })
-
     describe('getCalendar', () => {
         beforeEach(() => {
             api.init({ ...initialConfig })
@@ -270,16 +261,6 @@ describe('TrainerDay API', () => {
             await api.getCalendar(new Date(2026, 0, 5), new Date(2026, 1, 3))
 
             expect(restClient.request.mock.calls[0][0].params).toEqual({ startDate: '2026-01-05', endDate: '2026-02-03' })
-        })
-    })
-
-    describe('getActivities', () => {
-        test('returns the body of the response', async () => {
-            api.init({ ...initialConfig })
-            restClient.request.mockResolvedValue({ data: [] })
-
-            expect(await api.getActivities()).toEqual([])
-            expect(restClient.request.mock.calls[0][0].url).toBe(API + '/api/v1/activities')
         })
     })
 
