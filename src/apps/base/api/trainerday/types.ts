@@ -1,33 +1,10 @@
-export type TrainerDayConfig = {
-    /** TrainerDay athlete id */
-    id?: string
+import type { OAuthAppConfig, OAuthRefreshTokenResponse } from '../types'
 
-    /** access token */
-    accessToken: string
+/** Credentials of the TrainerDay athlete */
+export type TrainerDayConfig = OAuthAppConfig
 
-    /** refresh token */
-    refreshToken: string
-
-    /** point in time when the access token expires */
-    expiration?: Date
-}
-
-/** Response of the auth-server's `POST /trainerday/refresh` */
-export type TrainerDayRefreshTokenResponse = {
-    /** The access token (valid for 6 hours) */
-    access_token: string
-
-    /** The refresh token to be used for the next refresh. It can change with every refresh */
-    refresh_token: string
-
-    /** Seconds until the access token expires */
-    expires_in: number
-
-    token_type?: string
-
-    /** Expiration of the access token as epoch milliseconds (string), as calculated by the auth-server */
-    expiration?: string
-}
+/** Response of the auth-server's `POST /trainerday/refresh` (the access token is valid for 6 hours) */
+export type TrainerDayRefreshTokenResponse = OAuthRefreshTokenResponse
 
 export type TrainerDayTargetType = 'primary' | 'cadence' | 'slope' | 'heart_rate'
 

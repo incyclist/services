@@ -1,6 +1,6 @@
 import { parseExpiration } from '../../utils'
 
-const MAX_ERROR_DETAIL = 500
+export { getErrorDetail, formatDay } from '../../utils'
 
 /** TrainerDay access tokens are valid for 6 hours */
 export const DEFAULT_TOKEN_LIFETIME_MS = 6 * 60 * 60 * 1000
@@ -35,18 +35,6 @@ export const getTokenExpiration = (data?: { expires_in?: unknown, expiration?: u
  */
 export const ensureExpiration = (expiration?: Date | null): Date =>
     isValidDate(expiration) ? expiration : new Date(Date.now() + DEFAULT_TOKEN_LIFETIME_MS)
-
-/**
- * Converts the body of an error response into a short text that explains why a request was rejected
- * @returns the text (at most 500 characters, longer texts end with `...`) or `undefined` if there is no body
- */
-export const getErrorDetail = (data: unknown): string | undefined => {
-    if (data === undefined || data === null || data === '')
-        return undefined
-
-    const text = typeof data === 'string' ? data : JSON.stringify(data)
-    return text.length > MAX_ERROR_DETAIL ? text.substring(0, MAX_ERROR_DETAIL) + '...' : text
-}
 
 const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
@@ -180,17 +168,4 @@ export const utf8Decode = (bytes: Uint8Array): string => {
     return typeof globalThis.TextDecoder === 'function'
         ? new globalThis.TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes)
         : utf8DecodeFallback(bytes)
-}
-
-/**
- * Formats a day as `YYYY-MM-DD`
- * @param day a Date (local day) or a string that is already formatted
- */
-export const formatDay = (day: string | Date): string => {
-    if (typeof day === 'string')
-        return day
-
-    const month = String(day.getMonth() + 1).padStart(2, '0')
-    const date = String(day.getDate()).padStart(2, '0')
-    return `${day.getFullYear()}-${month}-${date}`
 }

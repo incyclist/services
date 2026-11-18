@@ -1,19 +1,14 @@
-import { AxiosInstance, AxiosResponse } from 'axios'
-import { EventLogger } from 'gd-eventlog'
-import { Observer } from '../../../../base/types/observer'
-import { valid } from '../../../../utils/valid'
-import { AppApiBase } from '../base'
-import { IExternalAppApi } from '../types'
+import { AxiosResponse } from 'axios'
 import { sleep } from '../../../../utils/sleep'
 import { trimXmlTextNodes } from '../../../../utils/xml'
+import { formatDay } from '../../utils'
+import { OAuthAppApiBase } from '../oauth'
 import { isBase64 } from './utils'
 import {
     TrainingPeaksConfig, TrainingPeaksDuplicateError, TrainingPeaksFileFormat, TrainingPeaksFileStatus, TrainingPeaksRefreshTokenResponse,
     TrainingPeaksUploadProps, TrainingPeaksUploadRequest, TrainingPeaksUploadResult, TrainingPeaksWorkout
 } from './types'
 
-const API_BASE_URL = 'https://api.trainingpeaks.com'
-const AUTH_SERVER_URL = 'https://auth.incyclist.com'
 const APP_URL = 'https://app.trainingpeaks.com'
 const SANDBOX_APP_URL = 'https://app.sandbox.trainingpeaks.com'
 const UPLOAD_CLIENT = 'Incyclist'
@@ -22,7 +17,6 @@ const UPLOAD_CLIENT = 'Incyclist'
 const MAX_WORKOUT_RANGE_DAYS = 45
 const UPLOAD_POLL_INTERVAL = 2000
 const UPLOAD_TIMEOUT = 60000
-const MAX_ERROR_DETAIL = 500
 
 // The start of a workout is delivered in the time zone of the athlete's profile, without a time zone information.
 // Time zone offsets are multiples of 15 minutes, so a workout is the same activity if its start differs by such an offset
@@ -34,51 +28,18 @@ const MATCH_TOLERANCE_MS = 1000
 /**
  * Client for the subset of the TrainingPeaks API that is required by Incyclist.
  *
- * TrainingPeaks access tokens are short-lived (~10 minutes). Before every request the token
- * is verified and, if required, refreshed through the auth-server, so that the client
- * secret never has to be known by the app. Whenever a refresh happened, a `token.updated`
- * event is emitted on the Observer returned by `init()`, so that the owner can persist the new tokens.
+ * TrainingPeaks access tokens are short-lived (~10 minutes), see `OAuthAppApiBase` for the token handling.
  */
-export class TrainingPeaksApi extends AppApiBase implements IExternalAppApi {
-
-    protected config: TrainingPeaksConfig
-    protected logger: EventLogger
-    protected observer: Observer
+export class TrainingPeaksApi extends OAuthAppApiBase<TrainingPeaksConfig, TrainingPeaksRefreshTokenResponse> {
 
     constructor() {
-        super()
-        this.logger = new EventLogger('TrainingPeaksApi')
-        this.observer = new Observer()
-    }
-
-    /**
-     * Initializes the API with the credentials of the user
-     * @param config the credentials
-     * @returns an Observer that emits `token.updated` after every token refresh
-     */
-    init(config: TrainingPeaksConfig): Observer {
-        this.config = config
-        this.observer = this.observer ?? new Observer()
-        return this.observer
-    }
-
-    /**
-     * Updates the credentials
-     * @throws if the API was not initialized before
-     */
-    update(config: Partial<TrainingPeaksConfig>) {
-        if (!this.config)
-            throw new Error('update not allowed before init')
-
-        this.config = { ...this.config, ...config }
-    }
-
-    /**
-     * Checks if the user is authenticated.
-     * @returns {boolean} Indicates if the user is authenticated.
-     */
-    isAuthenticated(): boolean {
-        return valid(this.config?.accessToken)
+        super('TrainingPeaksApi', {
+            name: 'TrainingPeaks',
+            refreshPath: '/trainingpeaks/refresh',
+            defaultApiUrl: 'https://api.trainingpeaks.com',
+            apiUrlSetting: 'TP_API',
+            authUrlSetting: 'TP_AUTH_SERVER_URL'
+        })
     }
 
     /**
@@ -102,7 +63,7 @@ export class TrainingPeaksApi extends AppApiBase implements IExternalAppApi {
         if (days < 0 || days > MAX_WORKOUT_RANGE_DAYS)
             throw new Error(`invalid range: start and end must not be more than ${MAX_WORKOUT_RANGE_DAYS} days apart`)
 
-        const response = await this.get(`/v2/workouts/${this.formatDay(start)}/${this.formatDay(end)}`)
+        const response = await this.get(`/v2/workouts/${formatDay(start)}/${formatDay(end)}`)
         return (response.data ?? []) as Array<TrainingPeaksWorkout>
     }
 
@@ -209,30 +170,6 @@ export class TrainingPeaksApi extends AppApiBase implements IExternalAppApi {
         return Buffer.from(trimXmlTextNodes(xml), 'utf-8').toString('base64')
     }
 
-    /**
-     * Performs an authenticated request, refreshing the access token first if required
-     * @throws if not authenticated, the token could not be refreshed or the request failed
-     */
-    protected async request(method: 'get' | 'post', url: string, data?: object, config?: object): Promise<AxiosResponse> {
-        await this.verifyAuthentication()
-
-        const request = {
-            method,
-            url: this.getBaseUrl() + url,
-            data,
-            headers: {
-                Authorization: 'Bearer ' + this.config.accessToken
-            },
-            validateStatus: (status: number) => status >= 200 && status < 300,
-            ...config
-        }
-        return await this.getApi().request(request)
-    }
-
-    protected async get(url: string, config?: object): Promise<AxiosResponse> {
-        return await this.request('get', url, undefined, config)
-    }
-
     /** @returns the tracking id of the upload (used to poll the status) */
     protected async createUpload(request: TrainingPeaksUploadRequest): Promise<string> {
         let response: AxiosResponse
@@ -281,95 +218,13 @@ export class TrainingPeaksApi extends AppApiBase implements IExternalAppApi {
             return new TrainingPeaksDuplicateError()
         if (status === 415)
             return new Error('File format is not supported by TrainingPeaks')
-        if (status) {
-            // the response of TrainingPeaks explains why the request was rejected (e.g. which field is not valid)
-            const detail = this.getErrorDetail(err.response.data)
-            return new Error(`Upload rejected by TrainingPeaks (HTTP ${status})${detail ? ': ' + detail : ''}`)
-        }
-        return err
-    }
-
-    protected getErrorDetail(data: unknown): string | undefined {
-        if (data === undefined || data === null || data === '')
-            return undefined
-
-        const text = typeof data === 'string' ? data : JSON.stringify(data)
-        return text.length > MAX_ERROR_DETAIL ? text.substring(0, MAX_ERROR_DETAIL) + '...' : text
+        return this.mapUploadRejection(err)
     }
 
     /** @returns the size (in bytes) of the content of a base64 encoded string */
     protected getBase64Size(base64: string): number {
         const padding = base64.endsWith('==') ? 2 : Number(base64.endsWith('='))
         return Math.floor(base64.length * 3 / 4) - padding
-    }
-
-    protected formatDay(date: Date): string {
-        const month = String(date.getMonth() + 1).padStart(2, '0')
-        const day = String(date.getDate()).padStart(2, '0')
-        return `${date.getFullYear()}-${month}-${day}`
-    }
-
-    protected async verifyAuthentication() {
-        if (!this.isAuthenticated())
-            throw new Error('not authenticated')
-
-        await this.verifyToken()
-    }
-
-    protected async verifyToken() {
-        if (this.isTokenStillValid())
-            return
-
-        try {
-            await this.refreshToken()
-        }
-        catch {
-            throw new Error('token refresh failed')
-        }
-    }
-
-    protected isTokenStillValid(): boolean {
-        const expiration = this.config?.expiration
-        if (!expiration)
-            return false
-
-        return Date.now() < expiration.valueOf()
-    }
-
-    /**
-     * Refreshes the access token.
-     *
-     * The refresh is performed server-side by `auth-server`'s `POST /trainingpeaks/refresh`
-     * endpoint, which holds the client secret. The client only sends the refresh token it
-     * already has and receives a fresh access/refresh token pair. As the refresh token
-     * can change with every refresh, the new pair must always be persisted (see `token.updated`).
-     */
-    protected async refreshToken(): Promise<void> {
-        this.logger.logEvent({ message: 'TrainingPeaks refresh token start' })
-
-        const url = this.getAuthServerUrl() + '/trainingpeaks/refresh'
-
-        try {
-            const response = await this.getApi().request({
-                method: 'post',
-                url,
-                data: { refresh_token: this.config.refreshToken }
-            })
-
-            const data = response.data as TrainingPeaksRefreshTokenResponse
-
-            this.config.accessToken = data.access_token
-            this.config.refreshToken = data.refresh_token
-            this.config.expiration = this.getExpiration(data)
-
-            this.logger.logEvent({ message: 'TrainingPeaks refresh token result', status: 'success' })
-            this.observer.emit('token.updated', this.config)
-        }
-        catch (err) {
-            const error = err.response ? `HTTP error ${err.response.status}: ${err.response.statusText}, url:${url}` : err.message
-            this.logger.logEvent({ message: 'TrainingPeaks refresh token result', status: 'error', error })
-            throw err
-        }
     }
 
     protected getExpiration(data: TrainingPeaksRefreshTokenResponse): Date {
@@ -379,30 +234,5 @@ export class TrainingPeaksApi extends AppApiBase implements IExternalAppApi {
 
         // fall back to the value calculated by the auth-server (epoch milliseconds)
         return new Date(Number(data.expiration))
-    }
-
-    protected getAuthServerUrl(): string {
-        try {
-            const TP_AUTH_SERVER_URL= this.getUserSettings().get('TP_AUTH_SERVER_URL', null)
-            const oauthUrl= this.getUserSettings().get('oauthUrl', null)
-            return TP_AUTH_SERVER_URL??oauthUrl??AUTH_SERVER_URL
-
-        }
-        catch {
-            return AUTH_SERVER_URL
-        }
-    }
-
-    protected getBaseUrl(): string {
-        try {
-            return this.getUserSettings().get('TP_API', API_BASE_URL)
-        }
-        catch {
-            return API_BASE_URL
-        }
-    }
-
-    protected getApi(): AxiosInstance {
-        return super.getApi(true)
     }
 }
