@@ -125,14 +125,3 @@ export type TrainerDayUploadProps = {
 export type TrainerDayUploadResult = {
     activityId: string
 }
-
-/**
- * Signals that the activity was already uploaded to TrainerDay.
- * Currently not thrown by the API client: how TrainerDay reports a duplicate is not verified yet.
- */
-export class TrainerDayDuplicateError extends Error {
-    constructor(message = 'Activity already exists in TrainerDay') {
-        super(message)
-        this.name = 'TrainerDayDuplicateError'
-    }
-}

@@ -1,6 +1,6 @@
 import { TrainerDayApi } from './api'
 import { toBase64, fromBase64, utf8Encode, utf8Decode } from './utils'
-import { TrainerDayConfig, TrainerDayDuplicateError } from './types'
+import { TrainerDayConfig } from './types'
 
 describe('TrainerDay API', () => {
     let api
@@ -149,6 +149,63 @@ describe('TrainerDay API', () => {
         })
     })
 
+    describe('concurrent requests with an expired token', () => {
+        const REFRESH_URL = 'https://auth.incyclist.com/trainerday/refresh'
+        const refreshCalls = () => restClient.request.mock.calls.filter(c => c[0].url === REFRESH_URL)
+
+        beforeEach(() => {
+            api.init({ ...initialConfig, expiration: new Date(NOW - 1000) })
+        })
+
+        test('trigger only one refresh and all succeed with the new token', async () => {
+            let resolveRefresh
+            restClient.request.mockImplementation((req) => {
+                if (req.url === REFRESH_URL)
+                    return new Promise(resolve => { resolveRefresh = () => resolve({ data: { access_token: 'new-at', refresh_token: 'new-rt', expires_in: 600 } }) })
+                return Promise.resolve({ data: [] })
+            })
+            const tokenUpdated = jest.fn()
+            api.observer.on('token.updated', tokenUpdated)
+
+            const first = api.getCalendar('2026-01-05', '2026-02-01')
+            const second = api.getCalendar('2026-01-05', '2026-02-01')
+            await Promise.resolve()
+            resolveRefresh()
+
+            await expect(Promise.all([first, second])).resolves.toEqual([[], []])
+
+            expect(refreshCalls()).toHaveLength(1)
+            expect(tokenUpdated).toHaveBeenCalledTimes(1)
+            const calls = restClient.request.mock.calls.filter(c => c[0].url !== REFRESH_URL)
+            expect(calls).toHaveLength(2)
+            calls.forEach(c => expect(c[0].headers).toEqual({ Authorization: 'Bearer new-at' }))
+        })
+
+        test('failure: all reject with "token refresh failed" and a later request can refresh again', async () => {
+            let fail = true
+            restClient.request.mockImplementation((req) => {
+                if (req.url !== REFRESH_URL)
+                    return Promise.resolve({ data: [] })
+                return fail
+                    ? Promise.reject({ response: { status: 400, statusText: 'invalid_grant' } })
+                    : Promise.resolve({ data: { access_token: 'new-at', refresh_token: 'new-rt', expires_in: 600 } })
+            })
+
+            const results = await Promise.allSettled([
+                api.getCalendar('2026-01-05', '2026-02-01'),
+                api.getCalendar('2026-01-05', '2026-02-01')
+            ])
+
+            expect(results.map(r => r.status)).toEqual(['rejected', 'rejected'])
+            results.forEach(r => expect((r as PromiseRejectedResult).reason.message).toBe('token refresh failed'))
+            expect(refreshCalls()).toHaveLength(1)
+
+            fail = false
+            await expect(api.getCalendar('2026-01-05', '2026-02-01')).resolves.toEqual([])
+            expect(refreshCalls()).toHaveLength(2)
+        })
+    })
+
     describe('refreshToken', () => {
         beforeEach(() => {
             api.init({ ...initialConfig })
@@ -187,6 +244,28 @@ describe('TrainerDay API', () => {
             await api.refreshToken()
 
             expect(api.config.expiration).toEqual(new Date(NOW + 123_000))
+        })
+
+        test.each([
+            ['no expires_in and no expiration', {}],
+            ['expires_in null', { expires_in: null }],
+            ['expires_in not a number', { expires_in: 'soon' }],
+            ['expiration not a date', { expiration: 'garbage' }],
+            ['expiration null', { expires_in: null, expiration: null }],
+        ])('falls back to 6 hours if the expiration is unusable: %s', async (_name, extra) => {
+            restClient.request.mockResolvedValue({ data: { access_token: 'a', refresh_token: 'b', ...extra } })
+
+            await api.refreshToken()
+
+            expect(api.config.expiration).toEqual(new Date(NOW + 6 * 3600 * 1000))
+        })
+
+        test('expires_in null does not mean "expires immediately"', async () => {
+            restClient.request.mockResolvedValue({ data: { access_token: 'a', refresh_token: 'b', expires_in: null } })
+
+            await api.refreshToken()
+
+            expect(api.isTokenStillValid()).toBe(true)
         })
 
         test('uses the TRAINERDAY_AUTH_SERVER_URL from the user settings', async () => {
@@ -398,28 +477,11 @@ describe('TrainerDay API', () => {
             await expect(api.uploadActivity(props)).rejects.toThrow('ECONNRESET')
         })
 
-        test('the duplicate error is not thrown yet (the behaviour of TrainerDay is not verified)', async () => {
-            restClient.request.mockRejectedValueOnce({ response: { status: 409, data: 'duplicate' } })
-
-            const error = await api.uploadActivity(props).catch(e => e)
-
-            expect(error).not.toBeInstanceOf(TrainerDayDuplicateError)
-        })
-
         test('is not possible if not authenticated', async () => {
             api.init(undefined)
 
             await expect(api.uploadActivity(props)).rejects.toThrow('not authenticated')
             expect(restClient.request).not.toHaveBeenCalled()
-        })
-    })
-
-    describe('TrainerDayDuplicateError', () => {
-        test('is a typed error', () => {
-            const error = new TrainerDayDuplicateError()
-            expect(error).toBeInstanceOf(Error)
-            expect(error.name).toBe('TrainerDayDuplicateError')
-            expect(error.message).toBe('Activity already exists in TrainerDay')
         })
     })
 })

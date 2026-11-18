@@ -5,7 +5,7 @@ import { valid } from '../../../../utils/valid'
 import { AppApiBase } from '../base'
 import { IExternalAppApi } from '../types'
 import { trimXmlTextNodes } from '../../../../utils/xml'
-import { getErrorDetail, formatDay, toBase64, fromBase64, utf8Encode, utf8Decode } from './utils'
+import { getErrorDetail, formatDay, toBase64, fromBase64, utf8Encode, utf8Decode, getTokenExpiration } from './utils'
 import {
     TrainerDayCalendarWorkout, TrainerDayConfig, TrainerDayRefreshTokenResponse, TrainerDayUploadProps, TrainerDayUploadResult
 } from './types'
@@ -27,6 +27,9 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
     protected logger: EventLogger
     protected observer: Observer
 
+    /** the refresh that is currently running (refresh tokens rotate, so concurrent requests must share one refresh) */
+    protected refreshPromise?: Promise<void>
+
     constructor() {
         super()
         this.logger = new EventLogger('TrainerDayApi')
@@ -40,7 +43,6 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
      */
     init(config: TrainerDayConfig): Observer {
         this.config = config
-        this.observer = this.observer ?? new Observer()
         return this.observer
     }
 
@@ -172,11 +174,20 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
             return
 
         try {
-            await this.refreshToken()
+            await this.refreshTokenOnce()
         }
         catch {
             throw new Error('token refresh failed')
         }
+    }
+
+    /**
+     * Refreshes the token, making sure that only one refresh runs at a time: the refresh token is rotated by every refresh,
+     * so a second refresh with the old token would be rejected (invalid_grant). Concurrent callers wait for the same refresh.
+     */
+    protected refreshTokenOnce(): Promise<void> {
+        this.refreshPromise ??= this.refreshToken().finally(() => { this.refreshPromise = undefined })
+        return this.refreshPromise
     }
 
     protected isTokenStillValid(): boolean {
@@ -224,12 +235,7 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
     }
 
     protected getExpiration(data: TrainerDayRefreshTokenResponse): Date {
-        const expiresIn = Number(data.expires_in)
-        if (Number.isFinite(expiresIn))
-            return new Date(Date.now() + expiresIn * 1000)
-
-        // fall back to the value calculated by the auth-server (epoch milliseconds)
-        return new Date(Number(data.expiration))
+        return getTokenExpiration(data)
     }
 
     /** reads a user setting, falling back to the default if the settings are not available (yet) */

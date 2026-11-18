@@ -1,4 +1,5 @@
 import { TrainerDayBlockSegment, TrainerDayCalendarWorkout, TrainerDayWorkoutBlock } from '../../../../apps/base/api/trainerday/types'
+import { getBindings } from '../../../../api'
 import { Segment } from '../../model/Segment'
 import { Step } from '../../model/Step'
 import { convertTrainerDayWorkout, getTrainerDayWorkoutHash, UnsupportedTrainerDayWorkoutError } from './converter'
@@ -295,6 +296,50 @@ describe('convertTrainerDayWorkout', () => {
 
 describe('getTrainerDayWorkoutHash', () => {
     const base = () => workout([block([seg(60, 50)])])
+
+    describe('without crypto binding', () => {
+        let bindings
+        let saved
+
+        beforeEach(() => {
+            bindings = getBindings()
+            saved = bindings.crypto
+            bindings.crypto = undefined
+        })
+        afterEach(() => {
+            bindings.crypto = saved
+        })
+
+        test('yields a stable hash instead of failing', () => {
+            const hash = getTrainerDayWorkoutHash(base())
+            expect(hash).toMatch(/^[0-9a-f]{14}$/)
+            expect(getTrainerDayWorkoutHash(base())).toBe(hash)
+        })
+
+        test('changed content yields a different hash', () => {
+            expect(getTrainerDayWorkoutHash({ ...base(), title: 'Other' })).not.toBe(getTrainerDayWorkoutHash(base()))
+            expect(getTrainerDayWorkoutHash({ ...base(), workoutBlocks: [block([seg(60, 55)])] })).not.toBe(getTrainerDayWorkoutHash(base()))
+        })
+
+        test('ignores fields that are no content', () => {
+            expect(getTrainerDayWorkoutHash({ ...base(), eventId: 'x', bikeStress: 99 })).toBe(getTrainerDayWorkoutHash(base()))
+        })
+    })
+
+    test('uses the crypto binding if available', () => {
+        const bindings = getBindings()
+        const saved = bindings.crypto
+        const digest = jest.fn().mockReturnValue('abc')
+        const update = jest.fn().mockReturnValue({ digest })
+        bindings.crypto = { createHash: jest.fn().mockReturnValue({ update }) } as never
+        try {
+            expect(getTrainerDayWorkoutHash(base())).toBe('abc')
+            expect(bindings.crypto.createHash).toHaveBeenCalledWith('md5')
+        }
+        finally {
+            bindings.crypto = saved
+        }
+    })
 
     test('is stable for equal content', () => {
         expect(getTrainerDayWorkoutHash(base())).toBe(getTrainerDayWorkoutHash(base()))

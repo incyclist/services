@@ -5,15 +5,14 @@ import { IncyclistService } from '../../base/service'
 import { Singleton } from '../../base/types'
 import { ActivityDetails } from '../base'
 import { ActivityUploadFactory } from './factory'
-import { IActivityUpload } from './types'
+import { fromBase64, utf8Decode } from '../../apps/base/api/trainerday/utils'
+import { IActivityUpload, TrainerDayFormat } from './types'
 
 /**
  * Base URL that is used to link an uploaded activity: `<base>/<id>`, where the id is the one returned by the upload
  * (the web app resolves it to the activity)
  */
 export const TRAINERDAY_ACTIVITY_URL = 'https://app.trainerday.com/activities'
-
-type TrainerDayFormat = 'tcx' | 'fit'
 
 const SUPPORTED_FORMATS = new Set<string>(['tcx', 'fit'])
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/
@@ -220,9 +219,9 @@ export class TrainerDayUpload extends IncyclistService implements IActivityUploa
     protected isXml(data: string | Uint8Array): boolean {
         // 88 characters = the first 66 bytes (a multiple of 4 characters is required to decode a part)
         const head = typeof data === 'string'
-            ? Buffer.from(data.substring(0, 88), 'base64')
+            ? fromBase64(data.substring(0, 88))
             : data.subarray(0, 66)
-        return new TextDecoder('utf-8').decode(head).replace(/^\u{FEFF}/u, '').trimStart().startsWith('<')
+        return utf8Decode(head).replace(/^\u{FEFF}/u, '').trimStart().startsWith('<')
     }
 
     protected setLink(activity: ActivityDetails, link: { activity_id?: string, url?: string, error?: string }) {

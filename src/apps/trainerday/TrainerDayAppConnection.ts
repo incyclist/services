@@ -1,5 +1,6 @@
 import { Singleton } from '../../base/decorators'
 import { TrainerDayApi, TrainerDayConfig } from '../base/api'
+import { ensureExpiration } from '../base/api/trainerday/utils'
 import { OAuthAppConnection } from '../base/app'
 import { parseExpiration } from '../base/utils'
 import { AppsOperation } from '../types'
@@ -49,7 +50,7 @@ export class TrainerDayAppConnection extends OAuthAppConnection<TrainerDayCreden
             id: config.id,
             accesstoken: config.accessToken,
             refreshtoken: config.refreshToken,
-            expiration: config.expiration?.toISOString()
+            expiration: ensureExpiration(config.expiration).toISOString()
         }
     }
 }

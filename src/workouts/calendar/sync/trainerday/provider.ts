@@ -147,7 +147,8 @@ export class TrainerDayCalendarSyncProvider extends IncyclistService implements 
 
             return {
                 day: this.parseDay(w.date),
-                // no modification time available: the (stable) hash of the content is used as marker
+                // no modification time available: the (stable) hash of the content is mapped to a Date. This is NOT a real
+                // timestamp, it is only compared with the previous value to detect changes (nothing else reads `updated`)
                 updated: new Date(Number.parseInt(hash.slice(0, 10), 16)),
                 workoutId: w.eventId,
                 workout,

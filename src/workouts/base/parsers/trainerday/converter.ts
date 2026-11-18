@@ -5,6 +5,7 @@ import {
 } from '../../../../apps/base/api/trainerday/types'
 import { Workout } from '../../model/Workout'
 import { Limit, PowerLimit, SegmentDefinition, StepDefinition } from '../../model/types'
+import { PowerResult } from './types'
 
 const logger = new EventLogger('TrainerDayWorkoutConverter')
 
@@ -76,8 +77,30 @@ export const convertTrainerDayWorkout = (workout: TrainerDayCalendarWorkout): Wo
  */
 export const getTrainerDayWorkoutHash = (workout: TrainerDayCalendarWorkout): string => {
     const { title, date, description, workoutType, intensityMetric, workoutBlocks } = workout
-    const crypto = getBindings().crypto ?? require('node:crypto')
-    return crypto.createHash('md5').update(JSON.stringify({ title, date, description, workoutType, intensityMetric, workoutBlocks })).digest('hex')
+    const content = JSON.stringify({ title, date, description, workoutType, intensityMetric, workoutBlocks })
+
+    const crypto = getBindings()?.crypto
+    return crypto ? crypto.createHash('md5').update(content).digest('hex') : getStableHash(content)
+}
+
+/**
+ * Pure JS hash (cyrb53, 53 bit) that is used if the platform does not provide a crypto binding.
+ * It is not cryptographic, it only has to be stable and to change whenever the content changes
+ *
+ * @returns the hash as hex string (14 characters)
+ */
+const getStableHash = (content: string): string => {
+    let h1 = 0xdeadbeef
+    let h2 = 0x41c6ce57
+    for (let i = 0; i < content.length; i++) {
+        const ch = content.codePointAt(i) ?? 0
+        h1 = Math.imul(h1 ^ ch, 2654435761)
+        h2 = Math.imul(h2 ^ ch, 1597334677)
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+    const hash = 4294967296 * (2097151 & h2) + (h1 >>> 0)
+    return hash.toString(16).padStart(14, '0')
 }
 
 const unsupported = (reason: string): never => {
@@ -141,8 +164,6 @@ const convertSegment = (segment: TrainerDayBlockSegment, title?: string): StepDe
 
     return { duration: segment.durationValue, power, cadence, text, work, steady: !ramp, cooldown }
 }
-
-type PowerResult = { power?: PowerLimit, ramp: false | 'up' | 'down' }
 
 const convertPower = (targets: TrainerDaySegmentTarget[], segmentType?: string | null): PowerResult => {
     const primary = targets.find(t => t.type === 'primary')

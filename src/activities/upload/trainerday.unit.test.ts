@@ -315,6 +315,25 @@ describe('TrainerDayUpload', () => {
             expect(sentData(api)).toBe(base64)
         })
 
+        test('does not rely on Buffer (not available on React Native)', async () => {
+            const api = ApiMock()
+            const base64 = bytes.toString('base64')
+            setupMocks({ api, raw: true, files: { 'a.tcx': base64 } })
+            const original = globalThis.Buffer
+            Object.defineProperty(globalThis, 'Buffer', { value: undefined, configurable: true, writable: true })
+
+            let success: boolean
+            try {
+                success = await service.upload({ tcxFileName: 'a.tcx', title: 't' } as ActivityDetails, 'tcx')
+            }
+            finally {
+                Object.defineProperty(globalThis, 'Buffer', { value: original, configurable: true, writable: true })
+            }
+
+            expect(success).toBe(true)
+            expect(sentData(api)).toBe(base64)
+        })
+
         test('logs the type and the size of the content, never the content', async () => {
             const api = ApiMock()
             setupMocks({ api, files: { 'a.tcx': tcx } })

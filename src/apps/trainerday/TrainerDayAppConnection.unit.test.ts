@@ -214,13 +214,31 @@ describe('TrainerDayAppConnection', () => {
             }))
         })
 
-        test('unparsable expiration is treated as expired', async () => {
+        test.each([['unparsable', 'garbage'], ['missing', undefined]])('%s expiration: the api treats the token as expired, 6 hours are persisted', async (_name, expiration) => {
+            const now = new Date('2026-01-01T10:00:00Z').valueOf()
+            jest.spyOn(Date, 'now').mockReturnValue(now)
             const mocks: MockDefinition = { userSettings: UserSettingsMock(true, null), api: ApiMock({}) }
             setupMocks(mocks)
 
-            await service.connect({ accesstoken: 'a', refreshtoken: 'r', expiration: 'garbage' })
+            await service.connect({ accesstoken: 'a', refreshtoken: 'r', expiration })
 
-            expect(mocks.userSettings?.set).toHaveBeenCalledWith(SETTINGS_KEY, expect.objectContaining({ expiration: undefined }))
+            expect(mocks.api?.init).toHaveBeenCalledWith(expect.objectContaining({ expiration: undefined }))
+            expect(mocks.userSettings?.set).toHaveBeenCalledWith(SETTINGS_KEY, expect.objectContaining({ expiration: '2026-01-01T16:00:00.000Z' }))
+            jest.restoreAllMocks()
+        })
+
+        test('an invalid Date in the config (e.g. after a refresh) does not throw when persisting', async () => {
+            const now = new Date('2026-01-01T10:00:00Z').valueOf()
+            jest.spyOn(Date, 'now').mockReturnValue(now)
+            const refresh: TrainerDayConfig = { id: '42', accessToken: 'at', refreshToken: 'rt', expiration: new Date('invalid') }
+            const userSettings = UserSettingsMock(true, validCredentials())
+            setupMocks({ userSettings, api: ApiMock({ tokenUpdate: refresh }) })
+
+            service.init()
+            await waitNextTick()
+
+            expect(userSettings.set).toHaveBeenCalledWith(SETTINGS_KEY, expect.objectContaining({ expiration: '2026-01-01T16:00:00.000Z' }))
+            jest.restoreAllMocks()
         })
 
         test('already connected: updates the api and persists the new credentials', async () => {

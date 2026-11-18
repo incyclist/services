@@ -1,4 +1,40 @@
+import { parseExpiration } from '../../utils'
+
 const MAX_ERROR_DETAIL = 500
+
+/** TrainerDay access tokens are valid for 6 hours */
+export const DEFAULT_TOKEN_LIFETIME_MS = 6 * 60 * 60 * 1000
+
+const isValidDate = (date: unknown): date is Date => date instanceof Date && !Number.isNaN(date.valueOf())
+
+/** `Number(null)` is 0, which must not be mistaken for "expires now" */
+const toFiniteNumber = (value: unknown): number | undefined => {
+    if (value === undefined || value === null || value === '')
+        return undefined
+    const num = Number(value)
+    return Number.isFinite(num) ? num : undefined
+}
+
+/**
+ * Returns the point in time when the access token expires, as delivered by the refresh endpoint of the auth-server:
+ * `expires_in` (seconds from now) is preferred, then `expiration` (calculated by the auth-server).
+ * If none of them is usable, the default lifetime of a TrainerDay token (6 hours) is assumed. Never returns an invalid Date.
+ */
+export const getTokenExpiration = (data?: { expires_in?: unknown, expiration?: unknown }): Date => {
+    const expiresIn = toFiniteNumber(data?.expires_in)
+    if (expiresIn !== undefined)
+        return new Date(Date.now() + expiresIn * 1000)
+
+    const expiration = parseExpiration(data?.expiration as string | number | null | undefined)
+    return expiration ?? new Date(Date.now() + DEFAULT_TOKEN_LIFETIME_MS)
+}
+
+/**
+ * Makes sure that an expiration can be used (and persisted): an invalid or missing date is replaced by the default
+ * lifetime of a TrainerDay token (6 hours from now)
+ */
+export const ensureExpiration = (expiration?: Date | null): Date =>
+    isValidDate(expiration) ? expiration : new Date(Date.now() + DEFAULT_TOKEN_LIFETIME_MS)
 
 /**
  * Converts the body of an error response into a short text that explains why a request was rejected
@@ -64,9 +100,10 @@ export const fromBase64 = (base64: string): Uint8Array => {
 }
 
 /**
- * Encodes text as UTF-8 (portable: does not rely on `TextEncoder` or `Buffer`)
+ * Encodes text as UTF-8 without relying on `TextEncoder` or `Buffer` (fallback for platforms that do not provide `TextEncoder`).
+ * Slow for large texts, as every character is handled separately
  */
-export const utf8Encode = (text: string): Uint8Array => {
+export const utf8EncodeFallback = (text: string): Uint8Array => {
     const bytes: number[] = []
     for (const char of text) {
         const cp = char.codePointAt(0)
@@ -92,10 +129,10 @@ const getUtf8Extra = (lead: number): number => {
 }
 
 /**
- * Decodes UTF-8 bytes to text (portable: does not rely on `TextDecoder` or `Buffer`).
+ * Decodes UTF-8 bytes to text without relying on `TextDecoder` or `Buffer` (fallback for platforms that do not provide `TextDecoder`).
  * Invalid sequences are replaced by U+FFFD.
  */
-export const utf8Decode = (bytes: Uint8Array): string => {
+export const utf8DecodeFallback = (bytes: Uint8Array): string => {
     const parts: string[] = []
     let i = 0
 
@@ -120,6 +157,25 @@ export const utf8Decode = (bytes: Uint8Array): string => {
         }
     }
     return parts.join('')
+}
+
+/**
+ * Encodes text as UTF-8 (portable: uses `TextEncoder` if the platform provides it, otherwise a hand-written encoder)
+ */
+export const utf8Encode = (text: string): Uint8Array => {
+    return typeof globalThis.TextEncoder === 'function'
+        ? new globalThis.TextEncoder().encode(text)
+        : utf8EncodeFallback(text)
+}
+
+/**
+ * Decodes UTF-8 bytes to text (portable: uses `TextDecoder` if the platform provides it, otherwise a hand-written decoder).
+ * A byte order mark is kept, invalid sequences are replaced by U+FFFD.
+ */
+export const utf8Decode = (bytes: Uint8Array): string => {
+    return typeof globalThis.TextDecoder === 'function'
+        ? new globalThis.TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes)
+        : utf8DecodeFallback(bytes)
 }
 
 /**
