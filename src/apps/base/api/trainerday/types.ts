@@ -29,24 +29,101 @@ export type TrainerDayRefreshTokenResponse = {
     expiration?: string
 }
 
-/**
- * Raw body of a TrainerDay response. The structure of the responses is not verified yet,
- * so callers have to inspect the content before using it.
- */
-export type TrainerDayRawResponse = unknown
+export type TrainerDayTargetType = 'primary' | 'cadence' | 'slope' | 'heart_rate'
 
-export type TrainerDayUploadProps = {
-    /** name of the file, including the extension (`.tcx`, `.gpx` or `.fit`) */
-    fileName: string
+export type TrainerDaySegmentTarget = {
+    /** minimum target value */
+    min: number
 
-    /** binary content of the file */
-    data: Uint8Array
+    /** maximum target value (null for single-value targets) */
+    max?: number | null
+
+    type: TrainerDayTargetType
 }
 
-/** Result of an upload: the status and the body as delivered by TrainerDay (the structure is not verified yet) */
+export type TrainerDaySegmentNote = {
+    /** offset in seconds from the segment start */
+    timeOffset: number
+    text: string
+}
+
+export type TrainerDayControlMode = 'slope' | 'hr' | 'erg' | 'resistance'
+
+export type TrainerDaySegmentType =
+    'warm-up' | 'active' | 'cooldown' | 'interval' | 'rest' | 'free-ride' | 'open-ended' | 'sfr' | 'lap' | 'climb' | 'slope' | 'hr' | 'erg'
+
+export type TrainerDayBlockSegment = {
+    name?: string
+    controlMode?: TrainerDayControlMode | null
+    segmentType?: TrainerDaySegmentType | null
+
+    /** unit of the duration (default: second) */
+    durationType?: 'second' | 'meter'
+
+    /** duration in seconds or meters, depending on the durationType */
+    durationValue: number
+    pressLapButton?: boolean
+    targets?: TrainerDaySegmentTarget[]
+    notes?: TrainerDaySegmentNote[]
+}
+
+export type TrainerDayWorkoutBlock = {
+    /** cumulative block start position in seconds */
+    start?: number
+
+    /** cumulative block end position in seconds */
+    end?: number
+    segments: TrainerDayBlockSegment[]
+
+    /** number of repetitions (null or 1 for single-pass blocks) */
+    reps?: number | null
+    type: 'segment' | 'repetition' | 'set'
+}
+
+/** A workout of the TrainerDay calendar (Calendar_workout_v2 in the API spec) */
+export type TrainerDayCalendarWorkout = {
+    eventId?: string
+
+    /** can be negative */
+    workoutId?: number
+
+    /** day, formatted as YYYY-MM-DD */
+    date?: string
+    title?: string
+    description?: string
+    durationMinutes?: number
+    author?: string
+    bikeStress?: number
+    intensity?: number
+
+    /** time in zones, not modelled in detail */
+    timeInZones?: unknown
+    workoutBlocks?: TrainerDayWorkoutBlock[]
+    tags?: string[]
+    workoutType?: 'bike' | 'swim' | 'rowing' | 'run'
+    intensityMetric?: 'percentOfFtp' | 'percentOfHr'
+    lengthUnit?: string
+    intensityUnit?: string
+}
+
+export type TrainerDayUploadProps = {
+    /** name of the activity */
+    name: string
+
+    /** format of the file */
+    dataType: 'tcx' | 'gpx' | 'fit'
+
+    /** file content: a string is expected to be base64 encoded already, binary content is encoded by the client */
+    data: string | Uint8Array
+
+    /** internal id, will be included in the activity body at TrainerDay */
+    externalId?: string
+    sportType?: 'bike' | 'swim'
+}
+
+/** Result of an upload */
 export type TrainerDayUploadResult = {
-    status: number
-    body: TrainerDayRawResponse
+    activityId: string
 }
 
 /**

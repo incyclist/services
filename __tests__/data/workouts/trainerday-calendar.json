@@ -1,0 +1,145 @@
+[
+    {
+        "eventId": "synthetic-event-1",
+        "workoutId": 900001,
+        "date": "2026-01-05",
+        "title": "Synthetic Intervals 3x(4+2)",
+        "description": "Synthetic test workout, not real TrainerDay data",
+        "durationMinutes": 38,
+        "author": "Synthetic Author",
+        "bikeStress": 45,
+        "intensity": 0.8,
+        "workoutBlocks": [
+            {
+                "start": 0,
+                "end": 600,
+                "type": "segment",
+                "reps": null,
+                "segments": [
+                    {
+                        "name": "Warm up",
+                        "segmentType": "warm-up",
+                        "durationType": "second",
+                        "durationValue": 600,
+                        "targets": [
+                            { "type": "primary", "min": 50, "max": 70 }
+                        ]
+                    }
+                ]
+            },
+            {
+                "start": 600,
+                "end": 1800,
+                "type": "repetition",
+                "reps": 3,
+                "segments": [
+                    {
+                        "name": "Hard",
+                        "segmentType": "active",
+                        "durationType": "second",
+                        "durationValue": 240,
+                        "targets": [
+                            { "type": "primary", "min": 105, "max": null },
+                            { "type": "cadence", "min": 90, "max": 100 }
+                        ],
+                        "notes": [
+                            { "timeOffset": 0, "text": "Synthetic note: go" }
+                        ]
+                    },
+                    {
+                        "name": "Easy",
+                        "segmentType": "rest",
+                        "durationType": "second",
+                        "durationValue": 120,
+                        "targets": [
+                            { "type": "primary", "min": 50, "max": null }
+                        ]
+                    }
+                ]
+            },
+            {
+                "start": 1800,
+                "end": 2280,
+                "type": "segment",
+                "segments": [
+                    {
+                        "name": "Cool down",
+                        "segmentType": "cooldown",
+                        "durationValue": 480,
+                        "targets": [
+                            { "type": "primary", "min": 60, "max": 40 }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "tags": ["synthetic", "intervals"],
+        "workoutType": "bike",
+        "intensityMetric": "percentOfFtp",
+        "lengthUnit": "duration",
+        "intensityUnit": "percentOfFtp"
+    },
+    {
+        "eventId": "synthetic-event-2",
+        "workoutId": 900002,
+        "date": "2026-01-06",
+        "title": "Synthetic Steady State",
+        "description": "Synthetic test workout, not real TrainerDay data",
+        "durationMinutes": 60,
+        "author": "Synthetic Author",
+        "bikeStress": 50,
+        "intensity": 0.65,
+        "workoutBlocks": [
+            {
+                "start": 0,
+                "end": 3600,
+                "type": "segment",
+                "segments": [
+                    {
+                        "name": "Steady",
+                        "segmentType": "active",
+                        "durationType": "second",
+                        "durationValue": 3600,
+                        "targets": [
+                            { "type": "primary", "min": 65 }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "tags": ["synthetic"],
+        "workoutType": "bike",
+        "intensityMetric": "percentOfFtp",
+        "lengthUnit": "duration",
+        "intensityUnit": "percentOfFtp"
+    },
+    {
+        "eventId": "synthetic-event-3",
+        "workoutId": -900003,
+        "date": "2026-01-07",
+        "title": "Synthetic Distance Based",
+        "description": "Synthetic test workout, not real TrainerDay data",
+        "durationMinutes": 30,
+        "author": "Synthetic Author",
+        "workoutBlocks": [
+            {
+                "type": "segment",
+                "segments": [
+                    {
+                        "name": "10 km tempo",
+                        "segmentType": "active",
+                        "durationType": "meter",
+                        "durationValue": 10000,
+                        "targets": [
+                            { "type": "primary", "min": 85, "max": 90 }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "workoutType": "bike",
+        "intensityMetric": "percentOfFtp",
+        "lengthUnit": "distance",
+        "intensityUnit": "percentOfFtp"
+    }
+]

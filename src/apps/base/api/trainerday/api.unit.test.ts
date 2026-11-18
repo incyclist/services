@@ -80,14 +80,14 @@ describe('TrainerDay API', () => {
 
         test('sends the bearer token without refreshing while the token is valid', async () => {
             api.init({ ...initialConfig })
-            restClient.request.mockResolvedValue({ data: { ok: true } })
+            restClient.request.mockResolvedValue({ data: [] })
 
             await api.getCalendar('2026-01-05', '2026-02-01')
 
             expect(restClient.request).toHaveBeenCalledTimes(1)
             expect(restClient.request).toHaveBeenCalledWith(expect.objectContaining({
                 method: 'get',
-                url: API + '/api/v1/calendar',
+                url: API + '/api/v2/calendar',
                 headers: { Authorization: 'Bearer old-access-token' }
             }))
         })
@@ -108,18 +108,18 @@ describe('TrainerDay API', () => {
         test('uses the API url from the user settings', async () => {
             settings = settingsWith({ TRAINERDAY_API: 'https://api.sandbox.trainerday.test' })
             api.init({ ...initialConfig })
-            restClient.request.mockResolvedValue({ data: {} })
+            restClient.request.mockResolvedValue({ data: [] })
 
             await api.getCalendar('2026-01-05', '2026-02-01')
 
-            expect(restClient.request.mock.calls[0][0].url).toBe('https://api.sandbox.trainerday.test/api/v1/calendar')
+            expect(restClient.request.mock.calls[0][0].url).toBe('https://api.sandbox.trainerday.test/api/v2/calendar')
         })
 
         test('refreshes an expired token first and uses the new one', async () => {
             api.init({ ...initialConfig, expiration: new Date(NOW - 1000) })
             restClient.request
                 .mockResolvedValueOnce({ data: { access_token: 'new-access-token', refresh_token: 'new-refresh-token', expires_in: 21600 } })
-                .mockResolvedValueOnce({ data: {} })
+                .mockResolvedValueOnce({ data: [] })
 
             await api.getCalendar('2026-01-05', '2026-02-01')
 
@@ -130,7 +130,9 @@ describe('TrainerDay API', () => {
 
         test('refreshes if there is no expiration', async () => {
             api.init({ ...initialConfig, expiration: undefined })
-            restClient.request.mockResolvedValue({ data: { access_token: 'a', refresh_token: 'b', expires_in: 600 } })
+            restClient.request
+                .mockResolvedValueOnce({ data: { access_token: 'a', refresh_token: 'b', expires_in: 600 } })
+                .mockResolvedValueOnce({ data: [] })
 
             await api.getCalendar('2026-01-05', '2026-02-01')
 
@@ -243,15 +245,15 @@ describe('TrainerDay API', () => {
             api.init({ ...initialConfig })
         })
 
-        test('requests the range and returns the raw body', async () => {
-            restClient.request.mockResolvedValue({ data: [{ anything: true }] })
+        test('requests the range and returns the workouts', async () => {
+            restClient.request.mockResolvedValue({ data: [{ workoutId: 1, title: 'Test' }] })
 
             const result = await api.getCalendar('2026-01-05', '2026-02-01')
 
-            expect(result).toEqual([{ anything: true }])
+            expect(result).toEqual([{ workoutId: 1, title: 'Test' }])
             const request = restClient.request.mock.calls[0][0]
             expect(request.method).toBe('get')
-            expect(request.url).toBe(API + '/api/v1/calendar')
+            expect(request.url).toBe(API + '/api/v2/calendar')
             expect(request.params).toEqual({ startDate: '2026-01-05', endDate: '2026-02-01' })
         })
 
@@ -262,35 +264,47 @@ describe('TrainerDay API', () => {
 
             expect(restClient.request.mock.calls[0][0].params).toEqual({ startDate: '2026-01-05', endDate: '2026-02-03' })
         })
+
+        test.each([{ workouts: [] }, 'text', null])('throws if the response is not an array (%p)', async (data) => {
+            restClient.request.mockResolvedValue({ data })
+
+            await expect(api.getCalendar('2026-01-05', '2026-02-01')).rejects.toThrow('expected an array')
+        })
     })
 
     describe('uploadActivity', () => {
-        const props = { fileName: 'ride.tcx', data: new Uint8Array([1, 2, 3]) }
+        const props = { name: 'ride', dataType: 'tcx', data: new Uint8Array([1, 2, 3]) }
 
         beforeEach(() => {
             api.init({ ...initialConfig })
         })
 
-        test('posts the file as multipart/form-data (field file) and returns status and body', async () => {
-            restClient.request.mockResolvedValue({ status: 201, data: { id: 'x' } })
+        test('posts a JSON body with base64 encoded data and returns the activity id', async () => {
+            restClient.request.mockResolvedValue({ status: 200, data: { activityId: 'abc' } })
 
-            const result = await api.uploadActivity(props)
+            const result = await api.uploadActivity({ ...props, externalId: '1234', sportType: 'bike' })
 
-            expect(result).toEqual({ status: 201, body: { id: 'x' } })
+            expect(result).toEqual({ activityId: 'abc' })
             const request = restClient.request.mock.calls[0][0]
             expect(request.method).toBe('post')
             expect(request.url).toBe(API + '/api/v1/activities/upload')
             expect(request.headers).toEqual({ Authorization: 'Bearer old-access-token' })
-            expect(request.data).toBeInstanceOf(FormData)
-            const file = request.data.get('file') as File
-            expect(file.name).toBe('ride.tcx')
-            expect(file.size).toBe(3)
+            expect(request.data).toEqual({ name: 'ride', dataType: 'tcx', data: 'AQID', externalId: '1234', sportType: 'bike' })
+        })
+
+        test('a string is expected to be base64 already and passed on as it is', async () => {
+            restClient.request.mockResolvedValue({ status: 200, data: { activityId: 'abc' } })
+
+            await api.uploadActivity({ ...props, dataType: 'fit', data: 'AQID' })
+
+            expect(restClient.request.mock.calls[0][0].data.data).toBe('AQID')
+            expect(restClient.request.mock.calls[0][0].data.dataType).toBe('fit')
         })
 
         test('rejection: reports the status and the explanation of TrainerDay', async () => {
-            restClient.request.mockRejectedValueOnce({ response: { status: 400, data: { message: 'bad file' } } })
+            restClient.request.mockRejectedValueOnce({ response: { status: 400, data: { msg: 'bad file' } } })
 
-            await expect(api.uploadActivity(props)).rejects.toThrow('Upload rejected by TrainerDay (HTTP 400): {"message":"bad file"}')
+            await expect(api.uploadActivity(props)).rejects.toThrow('Upload rejected by TrainerDay (HTTP 400): {"msg":"bad file"}')
         })
 
         test('a text explanation is reported as it is', async () => {

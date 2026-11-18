@@ -4,9 +4,9 @@ import { Observer } from '../../../../base/types/observer'
 import { valid } from '../../../../utils/valid'
 import { AppApiBase } from '../base'
 import { IExternalAppApi } from '../types'
-import { getErrorDetail, formatDay } from './utils'
+import { getErrorDetail, formatDay, toBase64 } from './utils'
 import {
-    TrainerDayConfig, TrainerDayRawResponse, TrainerDayRefreshTokenResponse, TrainerDayUploadProps, TrainerDayUploadResult
+    TrainerDayCalendarWorkout, TrainerDayConfig, TrainerDayRefreshTokenResponse, TrainerDayUploadProps, TrainerDayUploadResult
 } from './types'
 
 const API_BASE_URL = 'https://api.trainerday.com'
@@ -63,41 +63,49 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
     }
 
     /**
-     * Retrieves the planned workouts of a range of days (`GET /api/v1/calendar`, scope `calendar:read`)
+     * Retrieves the planned workouts of a range of days (`GET /api/v2/calendar`, scope `calendar:read`)
      *
      * @param startDate first day (`YYYY-MM-DD`) or a Date (local day)
      * @param endDate last day (`YYYY-MM-DD`) or a Date (local day)
-     * @returns the parsed response body (structure not verified yet)
+     * @returns the workouts of the calendar
+     * @throws if the response is not a list of workouts
      */
-    async getCalendar(startDate: string | Date, endDate: string | Date): Promise<TrainerDayRawResponse> {
+    async getCalendar(startDate: string | Date, endDate: string | Date): Promise<TrainerDayCalendarWorkout[]> {
         const params = { startDate: formatDay(startDate), endDate: formatDay(endDate) }
-        const response = await this.get('/api/v1/calendar', { params })
-        return response.data
+        const response = await this.get('/api/v2/calendar', { params })
+
+        if (!Array.isArray(response.data))
+            throw new Error('Unexpected response from TrainerDay calendar: expected an array')
+
+        return response.data as TrainerDayCalendarWorkout[]
     }
 
     /**
-     * Uploads a completed activity file (TCX, GPX or FIT) as multipart/form-data, field `file`
-     * (`POST /api/v1/activities/upload`, scope `activities:write`)
+     * Uploads a completed activity (`POST /api/v1/activities/upload`, scope `activities:write`) as JSON,
+     * with the file content base64 encoded.
      *
-     * @returns the HTTP status and the parsed body as delivered by TrainerDay
+     * The upload is asynchronous on the side of TrainerDay: the activity data may not be available for a couple of minutes
+     * after the upload.
+     *
+     * @returns the id of the activity
      * @throws if not authenticated or the upload was rejected: `Upload rejected by TrainerDay (HTTP <status>): <details>`
      */
     async uploadActivity(props: TrainerDayUploadProps): Promise<TrainerDayUploadResult> {
-        const form = new FormData()
-        form.append('file', new Blob([props.data as BlobPart]), props.fileName)
+        const { name, dataType, externalId, sportType } = props
+        const data = typeof props.data === 'string' ? props.data : toBase64(props.data)
 
-        this.logger.logEvent({
-            message: 'TrainerDay upload', format: props.fileName.split('.').at(-1)?.toLowerCase(), bytes: props.data.byteLength
-        })
+        this.logger.logEvent({ message: 'TrainerDay upload', format: dataType, bytes: Math.floor(data.length * 3 / 4) })
+
+        const body = { name, dataType, data, externalId, sportType }
 
         let response: AxiosResponse
         try {
-            response = await this.request('post', '/api/v1/activities/upload', form)
+            response = await this.request('post', '/api/v1/activities/upload', body)
         }
         catch (err) {
             throw this.mapUploadError(err)
         }
-        return { status: response.status, body: response.data }
+        return { activityId: response.data?.activityId }
     }
 
     /**

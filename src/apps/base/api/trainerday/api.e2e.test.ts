@@ -1,7 +1,6 @@
 import dotenv from 'dotenv'
 import fs from 'node:fs'
 import { TrainerDayApi } from './api'
-import { TrainerDayRawResponse } from './types'
 
 /**
  * E2E tests against the TrainerDay API. They also serve as the API spike: they log what TrainerDay really delivers
@@ -43,24 +42,9 @@ const parseExpiration = (value?: string): Date => {
 
 const readFile = (file: string) => new Uint8Array(fs.readFileSync(file))
 
-const trim = (text: string, max = 500) => text.length > max ? text.substring(0, max) + '...' : text
-const stringify = (data: unknown) => trim(typeof data === 'string' ? data : JSON.stringify(data) ?? '')
-
-const asArray = (data: TrainerDayRawResponse): unknown[] | undefined => {
-    if (Array.isArray(data))
-        return data
-    // the structure is not known yet: also look at the first property that holds an array
-    if (data && typeof data === 'object')
-        return Object.values(data).find(v => Array.isArray(v)) as unknown[] | undefined
-    return undefined
-}
-
-/** logs the keys of an object and the type of each field (not the values) */
-const describeFields = (item: unknown) => {
-    if (item === null || typeof item !== 'object')
-        return typeof item
-    return Object.entries(item).map(([k, v]) => `${k}:${v === null ? 'null' : typeof v}`).join(', ')
-}
+/** the keys of an object (not the values) */
+const keysOf = (item: unknown): string =>
+    item !== null && typeof item === 'object' ? Object.keys(item).join(', ') : typeof item
 
 const monday = (): Date => {
     const start = new Date()
@@ -117,56 +101,55 @@ describe('TrainerDay API', () => {
 
             const calendar = await callAndLog('getCalendar', () => api.getCalendar(start, end))
 
-            console.log('calendar body type:', Array.isArray(calendar) ? 'array' : typeof calendar,
-                calendar && typeof calendar === 'object' && !Array.isArray(calendar) ? 'keys: ' + Object.keys(calendar).join(', ') : '')
-            const items = asArray(calendar)
-            console.log('calendar items:', items?.length)
-            items?.slice(0, 3).forEach((item, idx) => {
-                console.log(`calendar item ${idx} fields: ${describeFields(item)}`)
-                // only title and date: everything else can be private
-                const { title, name, date, startDate } = (item ?? {}) as Record<string, unknown>
-                console.log(`calendar item ${idx}: ${JSON.stringify({ title, name, date, startDate })}`)
+            console.log('calendar items:', calendar.length)
+            calendar.slice(0, 3).forEach((item, idx) => {
+                // never print the description: it can be private
+                const { title, date, workoutId } = item
+                console.log(`calendar item ${idx}: ${JSON.stringify({ title, date, workoutId })}`)
+                console.log(`calendar item ${idx} keys: ${keysOf(item)}`)
+                const block = item.workoutBlocks?.[0]
+                console.log(`calendar item ${idx} first block keys: ${keysOf(block)}`)
+                console.log(`calendar item ${idx} first segment keys: ${keysOf(block?.segments?.[0])}`)
             })
-            expect(calendar).toBeDefined()
+            expect(Array.isArray(calendar)).toBe(true)
         })
     })
 
     describe('uploadActivity', () => {
 
-        // How TrainerDay handles a new file and a duplicate is not known yet: these tests log status and body of
-        // the responses. A new file is needed for every run, otherwise even the first upload is a duplicate.
+        // The upload is asynchronous on the side of TrainerDay. How a duplicate is reported is not known yet:
+        // the tests upload every file twice and log the outcome.
 
-        const uploadAndLog = async (fileName: string, file: string) => {
-            console.log(`uploading ${fileName} to ${apiUrl}`)
+        const uploadAndLog = async (dataType: 'tcx' | 'fit', file: string) => {
+            console.log(`uploading ${dataType} to ${apiUrl}`)
             try {
-                const res = await api.uploadActivity({ fileName, data: readFile(file) })
-                console.log(`upload ${fileName}: HTTP ${res.status}, body: ${stringify(res.body)}`)
+                const res = await api.uploadActivity({ name: 'Incyclist E2E test', dataType, data: readFile(file) })
+                console.log(`upload ${dataType}: activityId ${res.activityId}`)
                 return res
             }
             catch (err) {
-                console.log(`upload ${fileName} failed: ${err.message}`)
+                console.log(`upload ${dataType} failed: ${err.message}`)
                 throw err
             }
         }
 
-        test('tcx file, uploaded twice (second upload shows the duplicate response)', async () => {
+        test('tcx file, uploaded twice', async () => {
             const file = '__tests__/data/activities/test.tcx'
 
-            const first = await uploadAndLog('test.tcx', file).catch(e => e)
+            const first = await uploadAndLog('tcx', file).catch(e => e)
             expect(first).toBeDefined()
 
-            // the same file again: shows how TrainerDay reports a duplicate (status and body are logged)
-            const second = await uploadAndLog('test.tcx', file).catch(e => e)
+            const second = await uploadAndLog('tcx', file).catch(e => e)
             expect(second).toBeDefined()
         })
 
-        test('fit file, uploaded twice (second upload shows the duplicate response)', async () => {
+        test('fit file, uploaded twice', async () => {
             const file = '__tests__/data/activities/test.fit'
 
-            const first = await uploadAndLog('test.fit', file).catch(e => e)
+            const first = await uploadAndLog('fit', file).catch(e => e)
             expect(first).toBeDefined()
 
-            const second = await uploadAndLog('test.fit', file).catch(e => e)
+            const second = await uploadAndLog('fit', file).catch(e => e)
             expect(second).toBeDefined()
         })
     })
