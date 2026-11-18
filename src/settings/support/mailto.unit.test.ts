@@ -31,7 +31,8 @@ describe('buildSupportEmail', () => {
 
     test('invalid address falls back to the default address', () => {
         const res = buildSupportEmail({ ...input, address: 'bad address&x=1' })
-        expect(res.url).toBe('mailto:support@incyclist.com')
+        expect(res.url).toContain(encodeURIComponent(input.uuid))
+        expect(res.url.startsWith('mailto:support@incyclist.com?subject=Incyclist%20support%20request&body=')).toBe(true)
         expect(res.address).toBe('support@incyclist.com')
     })
 })

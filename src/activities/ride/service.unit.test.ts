@@ -1441,10 +1441,26 @@ describe('ActivityRideService',()=>{
         })
 
         test('decision is reset when a new ride starts',()=>{
-            props()
-            ;(service as any).donateDecision = undefined
-            settings['state.donateShown'] = Date.now()
+            expect(props().donation).toBeDefined()
+            expect(checkLogs()).toHaveLength(1)
+
+            const s = service as any
+            s.observer = {}
+            s.state = 'idle'
+            s.current = {}
+            s._save = jest.fn().mockResolvedValue(undefined)
+            s.startWorker = jest.fn()
+            s.enableDeviceHealthCheck = jest.fn()
+            s.emit = jest.fn()
+
+            service.start()
+
+            // the decision was reset, so it is evaluated again: the line was just shown, so it is now blocked
+            expect(s.donateDecision).toBeUndefined()
+            s.isSaveDone = true
             expect(props().donation).toBeUndefined()
+            expect(checkLogs()).toHaveLength(2)
+            expect(checkLogs()[1]).toMatchObject({reason:'recently-shown'})
         })
     })
 

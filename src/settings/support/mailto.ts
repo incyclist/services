@@ -38,8 +38,8 @@ const buildBody = ({ uuid, appVersion, uiVersion }: SupportEmailInput): string =
  * Builds the prefilled support email: subject, body (with the details block), the text used by
  * Copy/Share details and the encoded mailto URL.
  *
- * If the address is not a plain address, the default support address is used instead and the
- * URL is a plain `mailto:<default>`.
+ * If the address is not a plain address, the default support address is used instead
+ * (subject and body are kept).
  */
 export const buildSupportEmail = (input: SupportEmailInput): SupportEmail => {
     const valid = PLAIN_ADDRESS.test(input.address ?? '')
@@ -48,9 +48,7 @@ export const buildSupportEmail = (input: SupportEmailInput): SupportEmail => {
     const body = buildBody(input)
     const copyText = `To: ${address}${EOL}Subject: ${subject}${EOL}${EOL}${body}`
 
-    const url = valid
-        ? `mailto:${address}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-        : `mailto:${address}`
+    const url = `mailto:${address}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
 
     return { address, subject, body, copyText, url }
 }
