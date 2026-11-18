@@ -3,7 +3,7 @@ import { sleep } from '../../../../utils/sleep'
 import { trimXmlTextNodes } from '../../../../utils/xml'
 import { formatDay } from '../../utils'
 import { OAuthAppApiBase } from '../oauth'
-import { isBase64 } from './utils'
+import { base64Size, isBase64 } from '../../../../utils/base64'
 import {
     TrainingPeaksConfig, TrainingPeaksDuplicateError, TrainingPeaksFileFormat, TrainingPeaksFileStatus, TrainingPeaksRefreshTokenResponse,
     TrainingPeaksUploadProps, TrainingPeaksUploadRequest, TrainingPeaksUploadResult, TrainingPeaksWorkout
@@ -140,7 +140,7 @@ export class TrainingPeaksApi extends OAuthAppApiBase<TrainingPeaksConfig, Train
         // sizes in bytes: shows if the content of a TCX file was modified before it was sent
         this.logger.logEvent({
             message: 'TrainingPeaks upload', format: props.fileName.split('.').at(-1)?.toLowerCase(),
-            bytes: this.getBase64Size(props.data), bytesSent: this.getBase64Size(data)
+            bytes: base64Size(props.data), bytesSent: base64Size(data)
         })
 
         const request: TrainingPeaksUploadRequest = {
@@ -219,12 +219,6 @@ export class TrainingPeaksApi extends OAuthAppApiBase<TrainingPeaksConfig, Train
         if (status === 415)
             return new Error('File format is not supported by TrainingPeaks')
         return this.mapUploadRejection(err)
-    }
-
-    /** @returns the size (in bytes) of the content of a base64 encoded string */
-    protected getBase64Size(base64: string): number {
-        const padding = base64.endsWith('==') ? 2 : Number(base64.endsWith('='))
-        return Math.floor(base64.length * 3 / 4) - padding
     }
 
     protected getExpiration(data: TrainingPeaksRefreshTokenResponse): Date {

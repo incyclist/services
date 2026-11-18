@@ -1,9 +1,11 @@
 import { AxiosResponse } from 'axios'
 import { trimXmlTextNodes } from '../../../../utils/xml'
 import { OAuthAppApiBase } from '../oauth'
-import { formatDay, toBase64, fromBase64, utf8Encode, utf8Decode, getTokenExpiration } from './utils'
+import { base64Size, fromBase64, toBase64 } from '../../../../utils/base64'
+import { utf8Decode, utf8Encode } from '../../../../utils/utf8'
+import { formatDay, getTokenExpiration } from '../../utils'
 import {
-    TrainerDayCalendarWorkout, TrainerDayConfig, TrainerDayRefreshTokenResponse, TrainerDayUploadProps, TrainerDayUploadResult
+    DEFAULT_TOKEN_LIFETIME_MS, TrainerDayCalendarWorkout, TrainerDayConfig, TrainerDayRefreshTokenResponse, TrainerDayUploadProps, TrainerDayUploadResult
 } from './types'
 
 /**
@@ -55,7 +57,7 @@ export class TrainerDayApi extends OAuthAppApiBase<TrainerDayConfig, TrainerDayR
         const { name, dataType, externalId, sportType } = props
         const data = this.prepareData(props)
 
-        this.logger.logEvent({ message: 'TrainerDay upload', format: dataType, bytes: Math.floor(data.length * 3 / 4) })
+        this.logger.logEvent({ message: 'TrainerDay upload', format: dataType, bytes: base64Size(data) })
 
         const body = { name, dataType, data, externalId, sportType }
 
@@ -95,6 +97,6 @@ export class TrainerDayApi extends OAuthAppApiBase<TrainerDayConfig, TrainerDayR
     }
 
     protected getExpiration(data: TrainerDayRefreshTokenResponse): Date {
-        return getTokenExpiration(data)
+        return getTokenExpiration(data, DEFAULT_TOKEN_LIFETIME_MS)
     }
 }

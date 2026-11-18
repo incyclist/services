@@ -1,5 +1,6 @@
 import { TrainerDayApi } from './api'
-import { toBase64, fromBase64, utf8Encode, utf8Decode } from './utils'
+import { toBase64, fromBase64 } from '../../../../utils/base64'
+import { utf8Encode, utf8Decode } from '../../../../utils/utf8'
 import { TrainerDayConfig } from './types'
 
 describe('TrainerDay API', () => {

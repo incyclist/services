@@ -27,6 +27,42 @@ export const parseExpiration = (expiration?: string | number | null): Date | und
     return Number.isNaN(date.valueOf()) ? undefined : date
 }
 
+const isValidDate = (date: unknown): date is Date => date instanceof Date && !Number.isNaN(date.valueOf())
+
+/** `Number(null)` is 0, which must not be mistaken for "expires now" */
+const toFiniteNumber = (value: unknown): number | undefined => {
+    if (value === undefined || value === null || value === '')
+        return undefined
+    const num = Number(value)
+    return Number.isFinite(num) ? num : undefined
+}
+
+/**
+ * Returns the point in time when the access token expires, as delivered by the refresh endpoint of the auth-server:
+ * `expires_in` (seconds from now) is preferred, then `expiration` (calculated by the auth-server).
+ * If none of them is usable, the default lifetime is assumed. Never returns an invalid Date.
+ *
+ * @param data the response of the refresh endpoint
+ * @param defaultLifetimeMs lifetime (in milliseconds) of an access token of the app, used if the response has no usable value
+ */
+export const getTokenExpiration = (data: { expires_in?: unknown, expiration?: unknown } | undefined, defaultLifetimeMs: number): Date => {
+    const expiresIn = toFiniteNumber(data?.expires_in)
+    if (expiresIn !== undefined)
+        return new Date(Date.now() + expiresIn * 1000)
+
+    const expiration = parseExpiration(data?.expiration as string | number | null | undefined)
+    return expiration ?? new Date(Date.now() + defaultLifetimeMs)
+}
+
+/**
+ * Makes sure that an expiration can be used (and persisted): an invalid or missing date is replaced by the default lifetime
+ *
+ * @param expiration the expiration to be checked
+ * @param defaultLifetimeMs lifetime (in milliseconds) of an access token of the app, applied from now if the expiration is not valid
+ */
+export const ensureExpiration = (expiration: Date | null | undefined, defaultLifetimeMs: number): Date =>
+    isValidDate(expiration) ? expiration : new Date(Date.now() + defaultLifetimeMs)
+
 
 const MAX_ERROR_DETAIL = 500
 

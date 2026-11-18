@@ -5,7 +5,8 @@ import { IncyclistService } from '../../base/service'
 import { Singleton } from '../../base/types'
 import { ActivityDetails } from '../base'
 import { ActivityUploadFactory } from './factory'
-import { fromBase64, utf8Decode } from '../../apps/base/api/trainerday/utils'
+import { base64Size, fromBase64, isBase64 } from '../../utils/base64'
+import { utf8Decode } from '../../utils/utf8'
 import { IActivityUpload, TrainerDayFormat } from './types'
 
 /**
@@ -15,7 +16,6 @@ import { IActivityUpload, TrainerDayFormat } from './types'
 export const TRAINERDAY_ACTIVITY_URL = 'https://app.trainerday.com/activities'
 
 const SUPPORTED_FORMATS = new Set<string>(['tcx', 'fit'])
-const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/
 
 /**
  * Represents a service that can be used by Incyclist to upload an activity to TrainerDay
@@ -185,7 +185,7 @@ export class TrainerDayUpload extends IncyclistService implements IActivityUploa
     protected toData(content: unknown, format: TrainerDayFormat): string | Uint8Array {
         if (typeof content === 'string') {
             const compact = content.replaceAll(/\s/g, '')
-            if (compact.length % 4 === 0 && BASE64_PATTERN.test(compact))
+            if (compact.length % 4 === 0 && isBase64(compact))
                 return compact
 
             // text that was not encoded. A binary file can only be uploaded if the binding delivered it unmodified
@@ -213,7 +213,7 @@ export class TrainerDayUpload extends IncyclistService implements IActivityUploa
     }
 
     protected getSize(data: string | Uint8Array): number {
-        return typeof data === 'string' ? Math.floor(data.length * 3 / 4) : data.byteLength
+        return typeof data === 'string' ? base64Size(data) : data.byteLength
     }
 
     protected isXml(data: string | Uint8Array): boolean {

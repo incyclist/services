@@ -1,7 +1,10 @@
 import type { OAuthAppConfig, OAuthRefreshTokenResponse } from '../types'
 
 /** Credentials of the TrainerDay athlete */
-export type TrainerDayConfig = OAuthAppConfig
+/** TrainerDay access tokens are valid for 6 hours */
+export const DEFAULT_TOKEN_LIFETIME_MS = 6 * 60 * 60 * 1000
+
+export type TrainerDayConfig =OAuthAppConfig
 
 /** Response of the auth-server's `POST /trainerday/refresh` (the access token is valid for 6 hours) */
 export type TrainerDayRefreshTokenResponse = OAuthRefreshTokenResponse
