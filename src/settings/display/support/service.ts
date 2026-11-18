@@ -30,40 +30,55 @@ export class SupportSettingsDisplayService extends IncyclistService {
     }
 
     open():IObserver {
-        if (this.observer)
-            this.close()
+        try {
+            if (this.observer)
+                this.close()
 
-        this.observer =  new Observer()
-        this.safeLog({ message: 'support settings opened', mode: getDonationMode(this.getBindings()) })
-        return this.observer
+            this.observer =  new Observer()
+            this.safeLog({ message: 'support settings opened', mode: getDonationMode(this.getBindings()) })
+            return this.observer
+        }
+        catch(err) {
+            this.logError(err,'open')
+        }
     }
 
     close() {
-        if (!this.observer)
-            return
-        this.observer.stop()
-        delete this.observer
+        try {
+            if (!this.observer)
+                return
+            this.observer.stop()
+            delete this.observer
+        }
+        catch(err) {
+            this.logError(err,'close')
+        }
     }
 
     /** Builds the display props from scratch, so version changes after a hot update are always current */
     getDisplayProps():SupportSettingsDisplayProps {
-        return {
-            uuid: this.getUserSettings().get('uuid',null),
-            appVersion: this.getAppInfo().getAppVersion(),
-            uiVersion: this.getAppInfo().getUIVersion(),
-            privacyUrl: getPrivacyUrl(),
-            supportUrls: [
-                {label:'Slack',text:'Incyclist Slack Workspace', url:getSlackUrl() },
-                {label:'Strava',text:'Incyclist Strava Club', url:getStravaUrl() },
-                {label:'Email',text:getSupportEmail(), url:`mailto:${getSupportEmail()}` },
-            ],
-            gitHubUrl:getGitHubUrl(),
-            donationUrl:getDonationUrl(),
+        try {
+            return {
+                uuid: this.getUserSettings().get('uuid',null),
+                appVersion: this.getAppInfo().getAppVersion(),
+                uiVersion: this.getAppInfo().getUIVersion(),
+                privacyUrl: getPrivacyUrl(),
+                supportUrls: [
+                    {label:'Slack',text:'Incyclist Slack Workspace', url:getSlackUrl() },
+                    {label:'Strava',text:'Incyclist Strava Club', url:getStravaUrl() },
+                    {label:'Email',text:getSupportEmail(), url:`mailto:${getSupportEmail()}` },
+                ],
+                gitHubUrl:getGitHubUrl(),
+                donationUrl:getDonationUrl(),
 
-            appInfo: this.buildAppInfo(),
-            helpTitle: COPY.helpTitle,
-            helpLinks: this.buildHelpLinks(),
-            donation: this.buildDonation(),
+                appInfo: this.buildAppInfo(),
+                helpTitle: COPY.helpTitle,
+                helpLinks: this.buildHelpLinks(),
+                donation: this.buildDonation(),
+            }
+        }
+        catch(err) {
+            this.logError(err,'getDisplayProps')
         }
     }
 
