@@ -75,7 +75,11 @@ const BASE64_LOOKUP: Record<string, number> = Object.fromEntries([...BASE64_CHAR
  * @throws if the string contains characters that are not part of the base64 alphabet
  */
 export const fromBase64 = (base64: string): Uint8Array => {
-    const clean = base64.replaceAll(/\s/g, '').replace(/=+$/, '')
+    const compact = base64.replaceAll(/\s/g, '')
+    let end = compact.length
+    while (end > 0 && compact.charAt(end - 1) === '=')
+        end--
+    const clean = compact.slice(0, end)
     if (clean.length % 4 === 1)
         throw new Error('Invalid base64 length')
 
