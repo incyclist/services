@@ -100,7 +100,7 @@ describe('TrainerDayUpload', () => {
                 externalId: 'abc',
                 sportType: 'bike'
             })
-            expect(activity.links).toEqual({ trainerday: { activity_id: '777', url: TRAINERDAY_ACTIVITY_URL } })
+            expect(activity.links).toEqual({ trainerday: { activity_id: '777', url: `${TRAINERDAY_ACTIVITY_URL}/777` } })
         })
 
         test('uses TCX by default', async () => {
@@ -441,8 +441,8 @@ describe('TrainerDayUpload', () => {
     })
 
     describe('getUrl', () => {
-        test('returns the (unverified) TrainerDay url', () => {
-            expect(service.getUrl('123')).toBe(TRAINERDAY_ACTIVITY_URL)
+        test('returns the url of the activity on TrainerDay', () => {
+            expect(service.getUrl('6afdb6974061e464d38dcb3c')).toBe('https://app.trainerday.com/activities/6afdb6974061e464d38dcb3c')
         })
     })
 })

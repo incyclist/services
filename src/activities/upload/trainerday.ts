@@ -8,12 +8,10 @@ import { ActivityUploadFactory } from './factory'
 import { IActivityUpload } from './types'
 
 /**
- * Base URL that is used to link an uploaded activity.
- *
- * NOTE: the web URL of a TrainerDay activity is NOT verified yet. This is a best guess and has to be checked in a browser,
- * (adjust this constant and `getUrl()` if TrainerDay uses a different deep link)
+ * Base URL that is used to link an uploaded activity: `<base>/<id>`, where the id is the one returned by the upload
+ * (the web app resolves it to the activity)
  */
-export const TRAINERDAY_ACTIVITY_URL = 'https://app.trainerday.com'
+export const TRAINERDAY_ACTIVITY_URL = 'https://app.trainerday.com/activities'
 
 type TrainerDayFormat = 'tcx' | 'fit'
 
@@ -116,13 +114,11 @@ export class TrainerDayUpload extends IncyclistService implements IActivityUploa
     /**
      * Returns the URL that is used to link an uploaded activity.
      *
-     * NOTE: the deep link is not verified yet (see TRAINERDAY_ACTIVITY_URL), so it does not contain the id of the activity
-     *
-     * @param {string} _activityId - The id of the activity on TrainerDay.
-     * @returns {string} The URL on TrainerDay.
+     * @param {string} activityId - The id of the activity on TrainerDay, as returned by the upload.
+     * @returns {string} The URL of the activity on TrainerDay.
      */
-    getUrl(_activityId?: string): string {
-        return TRAINERDAY_ACTIVITY_URL
+    getUrl(activityId: string): string {
+        return `${TRAINERDAY_ACTIVITY_URL}/${activityId}`
     }
 
     protected getDataType(format: string): TrainerDayFormat {
