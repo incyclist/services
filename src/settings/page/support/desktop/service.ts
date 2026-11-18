@@ -9,6 +9,10 @@ export class DesktopSupportSettingsPageService extends SupportSettingsPageServic
         return COPY.copyDetailsLabel
     }
 
+    protected getUuidActionLabel(): string {
+        return COPY.uuidCopyAction
+    }
+
     protected getCopiedMessage(address: string): string | undefined {
         return copiedMessage(address)
     }

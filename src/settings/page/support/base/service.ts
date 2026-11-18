@@ -1,7 +1,9 @@
 import { IncyclistPageService } from '../../../../base/pages/service'
 import { Injectable } from '../../../../base/decorators'
+import { Observer } from '../../../../base/types'
+import type { IObserver } from '../../../../base/typedefs'
 import { useUserSettings } from '../../../service'
-import { COPY } from '../../../support/copy'
+import { COPY, compactVersionText } from '../../../support/copy'
 import { getDonationChannels, getDonationMode } from '../../../support/donation'
 import { buildSupportEmail } from '../../../support/mailto'
 import { getGitHubUrl, getPrivacyUrl, getSlackUrl, getStravaUrl, getSupportEmail, getSupportPageUrl } from '../../../support/urls'
@@ -16,11 +18,34 @@ import type {
  */
 export abstract class SupportSettingsPageService extends IncyclistPageService {
 
+    /**
+     * The Support page is a dialog shown over a content page. It must not take over the page
+     * bookkeeping of IncyclistPageService (currentPage, currentPage/prevPage app state), otherwise
+     * the content page underneath would be treated as closed. Therefore it only owns its observer.
+     */
+    protected dialogObserver: Observer | undefined
+
     constructor() {
         super('supportSettings')
     }
 
+    openPage(): IObserver {
+        this.dialogObserver?.stop()
+        this.dialogObserver = new Observer()
+        return this.dialogObserver
+    }
+
+    closePage(): void {
+        this.dialogObserver?.stop()
+        delete this.dialogObserver
+    }
+
+    getPageObserver(): IObserver {
+        return this.dialogObserver
+    }
+
     protected abstract getCopyLabel(): string
+    protected abstract getUuidActionLabel(): string
     protected abstract getCopiedMessage(address: string): string | undefined
 
     /** Builds the display props from scratch, so version changes after a hot update are always current */
@@ -45,15 +70,15 @@ export abstract class SupportSettingsPageService extends IncyclistPageService {
 
     /** Logs the outcome of opening the prefilled support email */
     onEmailOpenResult(result: 'opened' | 'failed', error?: string): void {
-        const event: Record<string, unknown> = { message: 'support email opened', result }
+        const event: Record<string, unknown> = { message: 'support email opened', openResult: result }
         if (result === 'failed' && error !== undefined)
-            event.error = String(error)
+            event.error = String(error).replace(/mailto:\S*/gi, 'mailto:<redacted>').slice(0, 200)
         this.safeLog(event)
     }
 
     /** Logs that the support details were copied or shared */
     onDetailsCopied(trigger: 'button' | 'fallback', result: 'success' | 'failed'): void {
-        this.safeLog({ message: 'support details copied', trigger, result })
+        this.safeLog({ message: 'support details copied', trigger, copyResult: result })
     }
 
     protected safeLog(event: Record<string, unknown>) {
@@ -65,12 +90,23 @@ export abstract class SupportSettingsPageService extends IncyclistPageService {
 
     protected buildAppInfo(): SupportAppInfoDisplayProps {
         const appInfo = this.getBindings().appInfo
+        const appVersion = appInfo.getAppVersion()
+        const uiVersion = appInfo.getUIVersion()
         return {
             title: COPY.appInfoTitle,
-            appVersion: appInfo.getAppVersion(),
-            uiVersion: appInfo.getUIVersion(),
+            appVersion,
+            uiVersion,
             uuid: this.getUserSettings().get('uuid', null),
             privacyUrl: getPrivacyUrl(),
+            labels: {
+                appVersion: COPY.appVersionLabel,
+                uiVersion: COPY.uiVersionLabel,
+                uuid: COPY.uuidLabel,
+                privacy: COPY.privacyLabel,
+                privacyLink: COPY.privacyLinkLabel,
+            },
+            compactVersionText: compactVersionText(appVersion, uiVersion),
+            uuidActionLabel: this.getUuidActionLabel(),
         }
     }
 
@@ -108,8 +144,8 @@ export abstract class SupportSettingsPageService extends IncyclistPageService {
             mode,
             note: COPY.note,
             otherHelpLinks: [
-                { label: COPY.stravaLabel, url: getStravaUrl() },
-                { label: COPY.gitHubLabel, url: getGitHubUrl() },
+                { id: 'strava' as const, label: COPY.stravaLabel, url: getStravaUrl() },
+                { id: 'github' as const, label: COPY.gitHubLabel, url: getGitHubUrl() },
             ],
         }
 

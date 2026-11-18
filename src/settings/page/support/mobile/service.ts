@@ -9,6 +9,10 @@ export class MobileSupportSettingsPageService extends SupportSettingsPageService
         return COPY.shareDetailsLabel
     }
 
+    protected getUuidActionLabel(): string {
+        return COPY.uuidShareAction
+    }
+
     protected getCopiedMessage(_address: string): string | undefined {
         return undefined
     }

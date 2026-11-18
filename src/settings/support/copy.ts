@@ -24,10 +24,20 @@ export const COPY = {
     copyDetailsLabel: 'Copy details',
     shareDetailsLabel: 'Share details',
 
+    appVersionLabel: 'App version',
+    uiVersionLabel: 'UI version',
+    uuidLabel: 'uuid',
+    privacyLabel: 'Privacy',
+    privacyLinkLabel: 'Privacy Statement',
+    uuidCopyAction: 'Copy',
+    uuidShareAction: 'Share',
+
     summaryText: "Incyclist is free and stays free. If you'd like to help with server and app-store costs:",
     summaryShortText: 'Incyclist is free and stays free. Like to help with costs?',
     hideLabel: 'Hide',
 } as const
+
+export const compactVersionText = (appVersion: string, uiVersion: string) => `Version: App ${appVersion} · UI ${uiVersion}`
 
 export const copiedMessage = (address: string) => `Copied. Paste it into an email to ${address}.`
 

@@ -1,4 +1,5 @@
 import { Inject } from '../../../../base/decorators'
+import { IncyclistPageService } from '../../../../base/pages/service'
 import { DesktopSupportSettingsPageService } from '../desktop/service'
 import { MobileSupportSettingsPageService } from '../mobile/service'
 
@@ -38,7 +39,12 @@ describe('SupportSettingsPageService', () => {
         test('direct mode', () => {
             const props = service.getPageDisplayProps()
 
-            expect(props.appInfo).toMatchObject({ title: 'App info', appVersion: '1.2.3', uiVersion: '26.10.1', uuid: 'abc-123' })
+            expect(props.appInfo).toMatchObject({
+                title: 'App info', appVersion: '1.2.3', uiVersion: '26.10.1', uuid: 'abc-123',
+                labels: { appVersion: 'App version', uiVersion: 'UI version', uuid: 'uuid', privacy: 'Privacy', privacyLink: 'Privacy Statement' },
+                compactVersionText: 'Version: App 1.2.3 · UI 26.10.1',
+                uuidActionLabel: 'Copy',
+            })
             expect(props.helpTitle).toBe('Need help?')
             expect(props.helpLinks.map(l => l.id)).toEqual(['strava', 'slack', 'email'])
 
@@ -51,6 +57,7 @@ describe('SupportSettingsPageService', () => {
             expect(d.channels[0]).toMatchObject({ id: 'paypal', primary: true, subLabel: 'one-time' })
             expect(d.channels[1]).toMatchObject({ id: 'github-sponsors', primary: false, subLabel: 'one-time or monthly' })
             expect(d.otherHelpLinks.map(l => l.label)).toEqual(['Incyclist Strava Club', 'GitHub'])
+            expect(d.otherHelpLinks.map(l => l.id)).toEqual(['strava', 'github'])
         })
 
         test('website mode', () => {
@@ -100,7 +107,38 @@ describe('SupportSettingsPageService', () => {
             const email = mobile.getPageDisplayProps().helpLinks[2].email
             expect(email.copyLabel).toBe('Share details')
             expect(email.copiedMessage).toBeUndefined()
+            expect(mobile.getPageDisplayProps().appInfo.uuidActionLabel).toBe('Share')
             ;(mobile as never as { reset: () => void }).reset?.()
+        })
+    })
+
+    describe('openPage / closePage', () => {
+        test('does not touch the current page or the page app state', () => {
+            const setState = jest.fn()
+            const appState = { setState, getPersistedState: jest.fn() }
+            ;(service as unknown as { getAppState: () => unknown }).getAppState = () => appState
+            const other = { closePage: jest.fn() } as unknown as typeof IncyclistPageService.currentPage
+            IncyclistPageService.currentPage = other
+
+            const observer = service.openPage()
+            expect(observer).toBeDefined()
+            expect(service.getPageObserver()).toBe(observer)
+            service.closePage()
+
+            expect(service.getPageObserver()).toBeUndefined()
+            expect(IncyclistPageService.currentPage).toBe(other)
+            expect(setState).not.toHaveBeenCalled()
+
+            delete IncyclistPageService.currentPage
+        })
+
+        test('reopening stops the previous observer', () => {
+            const first = service.openPage()
+            const stop = jest.spyOn(first, 'stop')
+            const second = service.openPage()
+            expect(stop).toHaveBeenCalled()
+            expect(second).not.toBe(first)
+            service.closePage()
         })
     })
 
@@ -123,14 +161,23 @@ describe('SupportSettingsPageService', () => {
 
         test('onEmailOpenResult', () => {
             service.onEmailOpenResult('opened')
-            expect(logEvent).toHaveBeenLastCalledWith({ message: 'support email opened', result: 'opened' })
+            expect(logEvent).toHaveBeenLastCalledWith({ message: 'support email opened', openResult: 'opened' })
             service.onEmailOpenResult('failed', 'no handler')
-            expect(logEvent).toHaveBeenLastCalledWith({ message: 'support email opened', result: 'failed', error: 'no handler' })
+            expect(logEvent).toHaveBeenLastCalledWith({ message: 'support email opened', openResult: 'failed', error: 'no handler' })
+        })
+
+        test('onEmailOpenResult redacts mailto URLs and truncates the error', () => {
+            service.onEmailOpenResult('failed', 'cannot open mailto:support@incyclist.com?body=secret%20uuid now')
+            expect(logEvent).toHaveBeenLastCalledWith({ message: 'support email opened', openResult: 'failed', error: 'cannot open mailto:<redacted> now' })
+
+            service.onEmailOpenResult('failed', 'x'.repeat(500))
+            const event = logEvent.mock.calls.at(-1)[0] as { error: string }
+            expect(event.error).toHaveLength(200)
         })
 
         test('onDetailsCopied', () => {
             service.onDetailsCopied('fallback', 'failed')
-            expect(logEvent).toHaveBeenCalledWith({ message: 'support details copied', trigger: 'fallback', result: 'failed' })
+            expect(logEvent).toHaveBeenCalledWith({ message: 'support details copied', trigger: 'fallback', copyResult: 'failed' })
         })
 
         test('never throws when logging fails', () => {

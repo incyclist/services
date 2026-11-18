@@ -4,6 +4,7 @@ export type SupportHelpLinkId = 'strava' | 'slack' | 'email'
 
 export type DonationChannel = { id: DonationChannelId; label: string; subLabel: string; url: string; primary: boolean }
 export type SupportLink = { label: string; url: string }
+export type SupportOtherHelpLink = SupportLink & { id: 'strava' | 'github' }
 
 export type SupportDonationDisplayProps = {
     title: string
@@ -17,7 +18,7 @@ export type SupportDonationDisplayProps = {
     websiteLink?: SupportLink & { host: string }
     note: string
     /** Strava club, GitHub */
-    otherHelpLinks: SupportLink[]
+    otherHelpLinks: SupportOtherHelpLink[]
 }
 
 export type SupportAppInfoDisplayProps = {
@@ -26,6 +27,17 @@ export type SupportAppInfoDisplayProps = {
     uiVersion: string
     uuid: string
     privacyUrl: string
+    labels: {
+        appVersion: string
+        uiVersion: string
+        uuid: string
+        privacy: string
+        privacyLink: string
+    }
+    /** 'Version: App <appVersion> · UI <uiVersion>' */
+    compactVersionText: string
+    /** desktop 'Copy' | mobile 'Share' */
+    uuidActionLabel: string
 }
 
 export type SupportEmailDetails = {
