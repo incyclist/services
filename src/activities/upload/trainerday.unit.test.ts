@@ -5,10 +5,10 @@ import { Inject } from '../../base/decorators/Injection'
 import { ActivityDetails } from '../base'
 import { TrainerDayUpload, TRAINERDAY_ACTIVITY_URL } from './trainerday'
 
-const ApiMock = (props: { activityId?: unknown, uploadError?: string } = {}): Partial<TrainerDayApi> => ({
+const ApiMock = (props: { activityId?: unknown, duplicate?: boolean, uploadError?: string } = {}): Partial<TrainerDayApi> => ({
     uploadActivity: props.uploadError
         ? jest.fn().mockRejectedValue(new Error(props.uploadError))
-        : jest.fn().mockResolvedValue({ activityId: 'activityId' in props ? props.activityId : 'td-1' })
+        : jest.fn().mockResolvedValue({ activityId: 'activityId' in props ? props.activityId : 'td-1', duplicate: props.duplicate })
 })
 
 const ConnectionMock = (initialized: boolean, connected: boolean, api?: Partial<TrainerDayApi>): Partial<TrainerDayAppConnection> => ({
@@ -101,6 +101,17 @@ describe('TrainerDayUpload', () => {
                 sportType: 'bike'
             })
             expect(activity.links).toEqual({ trainerday: { activity_id: '777', url: `${TRAINERDAY_ACTIVITY_URL}/777` } })
+        })
+
+        test('a duplicate counts as success and links the activity that already exists', async () => {
+            const api = ApiMock({ activityId: 'existing-1', duplicate: true })
+            setupMocks({ api, files: { '/data/ride.tcx': '<xml/>' } })
+
+            const activity: Partial<ActivityDetails> = { id: 'abc', tcxFileName: '/data/ride.tcx', title: 'Morning Ride' }
+            const success = await service.upload(activity as ActivityDetails, 'TCX')
+
+            expect(success).toBe(true)
+            expect(activity.links).toEqual({ trainerday: { activity_id: 'existing-1', url: `${TRAINERDAY_ACTIVITY_URL}/existing-1` } })
         })
 
         test('uses TCX by default', async () => {

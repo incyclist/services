@@ -123,5 +123,8 @@ export type TrainerDayUploadProps = {
 
 /** Result of an upload */
 export type TrainerDayUploadResult = {
+    /** id of the activity on TrainerDay. For a duplicate, this is the id of the activity that already exists */
     activityId: string
+    /** true if TrainerDay already had this activity (HTTP 200 with `{ duplicate: true, id }`) */
+    duplicate?: boolean
 }

@@ -108,6 +108,14 @@ export class TrainerDayApi extends AppApiBase implements IExternalAppApi {
         catch (err) {
             throw this.mapUploadError(err)
         }
+
+        // a duplicate is answered with HTTP 200 and `{ duplicate: true, id: <id of the existing activity> }`
+        if (response.data?.duplicate === true) {
+            const activityId = response.data.id ?? response.data.activityId
+            this.logger.logEvent({ message: 'TrainerDay upload duplicate', activityId })
+            return { activityId, duplicate: true }
+        }
+
         return { activityId: response.data?.activityId }
     }
 

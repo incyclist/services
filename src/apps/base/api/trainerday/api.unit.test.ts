@@ -372,6 +372,22 @@ describe('TrainerDay API', () => {
             expect(request.data).toEqual({ name: 'ride', dataType: 'tcx', data: 'AQID', externalId: '1234', sportType: 'bike' })
         })
 
+        test('a duplicate (HTTP 200 with duplicate: true) returns the id of the existing activity', async () => {
+            restClient.request.mockResolvedValue({ status: 200, data: { duplicate: true, id: 'existing-1' } })
+
+            const result = await api.uploadActivity(props as never)
+
+            expect(result).toEqual({ activityId: 'existing-1', duplicate: true })
+        })
+
+        test('a response with duplicate: false is a normal upload', async () => {
+            restClient.request.mockResolvedValue({ status: 200, data: { duplicate: false, activityId: 'new-1' } })
+
+            const result = await api.uploadActivity(props as never)
+
+            expect(result).toEqual({ activityId: 'new-1' })
+        })
+
         test('a string is expected to be base64 already and passed on as it is', async () => {
             restClient.request.mockResolvedValue({ status: 200, data: { activityId: 'abc' } })
 

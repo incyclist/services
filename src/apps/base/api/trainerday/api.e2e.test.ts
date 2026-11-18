@@ -124,7 +124,7 @@ describe('TrainerDay API', () => {
             console.log(`uploading ${dataType} to ${apiUrl}`)
             try {
                 const res = await api.uploadActivity({ name: 'Incyclist E2E test', dataType, data: readFile(file) })
-                console.log(`upload ${dataType}: activityId ${res.activityId}`)
+                console.log(`upload ${dataType}: activityId ${res.activityId}${res.duplicate ? ' (duplicate: already on TrainerDay)' : ''}`)
                 return res
             }
             catch (err) {
