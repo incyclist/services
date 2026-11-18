@@ -76,6 +76,33 @@ describe ('AppService',()=>{
 
     })
 
+    describe('TrainerDay (always registered)',()=>{
+        let service:AppsService
+
+        beforeEach(()=>{
+            service = new AppsService()
+        })
+
+        afterEach(()=>{
+            service.inject('UserSettings',null)
+            service.reset()
+        })
+
+        test('the app is known without opening the settings and without any user setting',()=>{
+            service.inject('UserSettings', { isInitialized: false, getValue: jest.fn() })
+
+            expect(service.getName('trainerday')).toBe('TrainerDay')
+            expect(service.getKey('TrainerDay')).toBe('trainerday')
+            expect(service.isConnected('trainerday')).toBe(false)
+        })
+
+        test('the app is part of the apps settings',()=>{
+            service.inject('UserSettings', { isInitialized: true, getValue: jest.fn( (_key:string, defValue:unknown) => defValue) })
+
+            expect(service.openSettings()).toContainEqual({name:'TrainerDay', key:'trainerday', isConnected:false})
+        })
+    })
+
     describe('TrainingPeaks (enabled by the user setting TP_INTEGRATION)',()=>{
         let service:AppsService
 
@@ -103,7 +130,7 @@ describe ('AppService',()=>{
             service.inject('UserSettings', settingsMock(true,false))
 
             expect(service.getAvailableServices('ActivityUpload')).not.toContain('trainingpeaks')
-            expect(service.openSettings().map(a=>a.key)).toEqual(['strava','komoot','intervals'])
+            expect(service.openSettings().map(a=>a.key)).toEqual(['strava','komoot','intervals','trainerday'])
         })
 
         // regression: the app was only added when the settings of the apps were opened. Until then the activity upload did not know it
@@ -123,7 +150,7 @@ describe ('AppService',()=>{
             service.inject('UserSettings', settingsMock(true,true))
 
             expect(service.openSettings()).toEqual([
-                OC({key:'strava'}), OC({key:'komoot'}), OC({key:'intervals'}), {name:'TrainingPeaks', key:'trainingpeaks', isConnected:false}
+                OC({key:'strava'}), OC({key:'komoot'}), OC({key:'intervals'}), OC({key:'trainerday'}), {name:'TrainingPeaks', key:'trainingpeaks', isConnected:false}
             ])
         })
 
