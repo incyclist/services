@@ -165,6 +165,32 @@ renders whatever it returns.
   only the differences, using the variant-folder layout above. `src/devices/page/` is the
   reference example.
 
+## Dialog services
+
+Anything shown over a page (settings tabs, prompts, summaries, pickers) is a dialog, not a page.
+It gets a dialog service (`IncyclistDialogService<P>`, in `src/base/dialogs/`, internal like
+`IncyclistPageService`; subclasses import it by path).
+
+| | Page service | Dialog service |
+|---|---|---|
+| For | a full page (routes, workouts, devices, activities, ride) | anything shown over a page |
+| Name | `<ObjectType><Action>PageService` | `<ObjectType><Action>DialogService` |
+| Base | `IncyclistPageService` | `IncyclistDialogService` |
+| Folder | `src/<module>/page/...` | `src/<module>/dialog/...` |
+| Lifecycle | `openPage()` / `closePage()` / `pausePage()` / `resumePage()` / `getPageObserver()` | `openDialog()` / `closeDialog()` / `getDialogObserver()` only |
+| Props | `getPageDisplayProps()`, event `page-update` | `getDialogDisplayProps()`, event `dialog-update` |
+| Page state | sets `currentPage`, `prevPage`, `IncyclistPageService.currentPage` | never touches any of them |
+| Navigation | may navigate (`moveTo`) | never navigates |
+| Factory | `get<ObjectType><Action>PageService()` | `get<ObjectType><Action>DialogService()` |
+
+- Platform variants use the same variant-folder layout (`Desktop...` / `Mobile...DialogService`).
+  `src/settings/dialog/support/` is the reference example.
+- `*DisplayService` is not a front-end layer name for new code. The existing
+  `src/settings/display/*` services are legacy and are being migrated; the ride-mode
+  `*DisplayService` classes in `src/ride/` are domain services and stay as they are.
+- Domain code must not import from a dialog folder. Shared domain types live next to the domain
+  logic (e.g. `src/settings/support/types.ts`) and the dialog folder re-exports them.
+
 ## Bindings (platform abstraction)
 
 This library runs on Electron, in the browser and on React Native. **It never calls platform
