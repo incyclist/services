@@ -50,7 +50,7 @@ export type TrainerDaySegmentNote = {
 export type TrainerDayControlMode = 'slope' | 'hr' | 'erg' | 'resistance'
 
 export type TrainerDaySegmentType =
-    'warm-up' | 'active' | 'cooldown' | 'interval' | 'rest' | 'free-ride' | 'open-ended' | 'sfr' | 'lap' | 'climb' | 'slope' | 'hr' | 'erg'
+    'warm-up' | 'active' | 'cooldown' | 'interval' | 'rest' | 'free-ride' | 'open-ended' | 'sfr' | 'lap' | 'climb' | 'slope' | 'hr' | 'erg' | '+' | '-'
 
 export type TrainerDayBlockSegment = {
     name?: string

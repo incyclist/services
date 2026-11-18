@@ -292,10 +292,10 @@ describe('TrainerDayAppConnection', () => {
     })
 
     describe('getSupportedOperations / getDefaultOperations', () => {
-        test('none until the providers for upload and sync are implemented', () => {
+        test('supports and enables activity upload and workout download', () => {
             service = new TrainerDayAppConnection()
-            expect(service.getSupportedOperations()).toEqual([])
-            expect(service.getDefaultOperations()).toEqual([])
+            expect(service.getSupportedOperations()).toEqual(['ActivityUpload', 'WorkoutDownload'])
+            expect(service.getDefaultOperations()).toEqual(['ActivityUpload', 'WorkoutDownload'])
             service.reset()
         })
 

@@ -20,11 +20,11 @@ export class TrainerDayAppConnection extends OAuthAppConnection<TrainerDayCreden
     }
 
     getSupportedOperations(): AppsOperation[] {
-        return []
+        return ['ActivityUpload', 'WorkoutDownload']
     }
 
     getDefaultOperations(): AppsOperation[] {
-        return []
+        return ['ActivityUpload', 'WorkoutDownload']
     }
 
     protected get appName(): string {
