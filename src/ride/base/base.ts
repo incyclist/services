@@ -341,6 +341,21 @@ export class RideModeService extends IncyclistService implements IRideModeServic
 
     }
 
+    // UI inputs may store booleans/integers as strings; ride events need stable types (Elasticsearch mapping)
+    protected normalizeLogPropTypes(logProps: Record<string, unknown>): void {
+        if (logProps.autoResistance !== undefined) {
+            const v = logProps.autoResistance
+            logProps.autoResistance = typeof v === 'string' ? v.trim().toLowerCase() === 'true' : Boolean(v)
+        }
+        if (logProps.maxSlope !== undefined) {
+            const n = Number(logProps.maxSlope)
+            if (Number.isNaN(n))
+                delete logProps.maxSlope
+            else
+                logProps.maxSlope = n
+        }
+    }
+
     protected getBikeLogProps(): object {
 
         const device = this.getDeviceRide().getControlAdapter()
@@ -356,6 +371,7 @@ export class RideModeService extends IncyclistService implements IRideModeServic
         const bikeMode = mode?.getName()
         const settings = mode?.getSettings()??{}
         const logProps = { bikeMode, ...settings}
+        this.normalizeLogPropTypes(logProps)
         this.updatePropsForForcedERG(mode, logProps)
 
         return {
