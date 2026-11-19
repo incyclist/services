@@ -7,6 +7,7 @@ import { StravaAppConnection } from "./base";
 import { AppCredentials } from "./base/types";
 import { IntervalsAppConnection } from "./intervals/IntervalsAppConnection";
 import { KomootAppConnection } from "./komoot";
+import { RideWithGpsAppConnection } from "./ridewithgps";
 import { TrainerDayAppConnection } from "./trainerday";
 import { TrainingPeaksAppConnection } from "./trainingpeaks";
 import { AppDefinition, AppsOperation, IConnectedApp } from "./types";
@@ -19,10 +20,12 @@ export class AppsService extends IncyclistService   {
         { name:'Komoot', key:'komoot', connection: new KomootAppConnection() },
         { name:'Intervals.icu', key:'intervals', connection:new IntervalsAppConnection() },
         { name:'TrainerDay', key:'trainerday', connection:new TrainerDayAppConnection() },
+        { name:'RideWithGPS', key:'ridewithgps', connection:new RideWithGpsAppConnection() },
     ]
 
     constructor() {
         super('AppsService')
+        this.serviceMap.forEach( entry => this.forwardAuthFailure(entry))
     }
 
     openSettings() {
@@ -170,7 +173,16 @@ export class AppsService extends IncyclistService   {
         if (isAdded || !this.isEnabledInSettings('TP_INTEGRATION'))
             return
 
-        this.serviceMap.push( { name:'TrainingPeaks', key:'trainingpeaks', connection:new TrainingPeaksAppConnection() } )
+        const entry = { name:'TrainingPeaks', key:'trainingpeaks', connection:new TrainingPeaksAppConnection() }
+        this.serviceMap.push( entry )
+        this.forwardAuthFailure(entry)
+    }
+
+    /** a connection that was removed because its access token was rejected has to be reported like a disconnect, so that the UI is updated */
+    protected forwardAuthFailure(entry:AppDefinition) {
+        const connection = entry.connection
+        connection.removeAllListeners('auth.failed')
+        connection.on('auth.failed', ()=> { this.emit('disconnected',entry.key) })
     }
 
     protected isEnabledInSettings(key:string):boolean {

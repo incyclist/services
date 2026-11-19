@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { IActivityUpload } from "../activities/upload"
 import { AppsService, useAppsService } from "./service"
 
@@ -103,6 +104,40 @@ describe ('AppService',()=>{
         })
     })
 
+    describe('RideWithGPS (always registered)',()=>{
+        let service:AppsService
+
+        beforeEach(()=>{
+            service = new AppsService()
+            service.inject('UserSettings', { isInitialized: false, getValue: jest.fn() })
+        })
+
+        afterEach(()=>{
+            service.inject('UserSettings',null)
+            service.reset()
+        })
+
+        // regression: a connection that was removed because its token was rejected was not reported to the UI
+        test('an authentication failure of the connection is reported as disconnected',()=>{
+            const onDisconnected = jest.fn()
+            service.on('disconnected', onDisconnected)
+
+            const connection = service['getAppConnection']('ridewithgps') as unknown as EventEmitter
+            connection.emit('auth.failed')
+
+            expect(onDisconnected).toHaveBeenCalledWith('ridewithgps')
+            expect(onDisconnected).toHaveBeenCalledTimes(1)
+        })
+
+        test('the app is known and supports upload and route download',()=>{
+            expect(service.getName('ridewithgps')).toBe('RideWithGPS')
+            expect(service.getKey('RideWithGPS')).toBe('ridewithgps')
+            expect(service.getAvailableServices('ActivityUpload')).toContain('ridewithgps')
+            expect(service.getAvailableServices('RouteDownload')).toContain('ridewithgps')
+            expect(service.getAvailableServices('WorkoutDownload')).not.toContain('ridewithgps')
+        })
+    })
+
     describe('TrainingPeaks (enabled by the user setting TP_INTEGRATION)',()=>{
         let service:AppsService
 
@@ -130,7 +165,7 @@ describe ('AppService',()=>{
             service.inject('UserSettings', settingsMock(true,false))
 
             expect(service.getAvailableServices('ActivityUpload')).not.toContain('trainingpeaks')
-            expect(service.openSettings().map(a=>a.key)).toEqual(['strava','komoot','intervals','trainerday'])
+            expect(service.openSettings().map(a=>a.key)).toEqual(['strava','komoot','intervals','trainerday','ridewithgps'])
         })
 
         // regression: the app was only added when the settings of the apps were opened. Until then the activity upload did not know it
@@ -150,7 +185,7 @@ describe ('AppService',()=>{
             service.inject('UserSettings', settingsMock(true,true))
 
             expect(service.openSettings()).toEqual([
-                OC({key:'strava'}), OC({key:'komoot'}), OC({key:'intervals'}), OC({key:'trainerday'}), {name:'TrainingPeaks', key:'trainingpeaks', isConnected:false}
+                OC({key:'strava'}), OC({key:'komoot'}), OC({key:'intervals'}), OC({key:'trainerday'}), OC({key:'ridewithgps'}), {name:'TrainingPeaks', key:'trainingpeaks', isConnected:false}
             ])
         })
 

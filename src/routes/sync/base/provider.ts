@@ -7,6 +7,8 @@ import { useUserSettings } from "../../../settings";
 import { IConnectedApp } from "../../../types";
 import { waitNextTick } from "../../../utils";
 import { Route } from "../../base/model/route";
+import { RoutePoint } from "../../base/types";
+import { calculateDistance } from "../../../utils/geo";
 import { IRouteList, RouteInfo } from "../../types";
 import { RouteSyncFactory } from "../factory";
 import { IRouteSyncProvider, RouteSyncSummary } from "../types";
@@ -32,17 +34,16 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
         
 
         this.observer = new Observer()
+        // the observer must be released immediately: if it was released later, a sync that is started
+        // right after 'done' would get the observer that is already finished and never receive 'done'
         this.observer.once('done',()=>{
-            waitNextTick().then( ()=>{
-                this.stopRequested = false
-                delete this.observer
-            }).catch( err=>{ this.logError(err,'sync') })
-
+            this.stopRequested = false
+            delete this.observer
         })
 
         this.observer.once('stop',()=>{this.stopSync() })
 
-        this.loadTours().catch( err=>{ this.logError(err,'sync') })
+        this.runSync(this.observer).catch( err=>{ this.logError(err,'sync') })
         return this.observer
 
     }
@@ -70,6 +71,21 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
 
     }
 
+    /** runs the sync. Whatever happens, the sync ends with 'done' and the observer is released */
+    protected async runSync(observer:Observer):Promise<void> {
+        try {
+            await this.loadTours()
+        }
+        catch (err) {
+            this.logError(err,'sync')
+        }
+        finally {
+            // a new sync might already have been started after 'done' (then this.observer is a different one)
+            if (this.observer===observer)
+                observer.emit('done')
+        }
+    }
+
     protected async loadTours(): Promise<Array<T>> { 
 
         const app = this.getConnection().getAppKey()
@@ -80,13 +96,16 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
         }
         this.logEvent({message:`start ${app} route sync`})
 
-        const {routes,done,error} = await this.loadRoutesFromApi()
+        const {routes,done,error,incomplete} = await this.loadRoutesFromApi()
 
         if (error) {
+            // nothing is reported (an incomplete list would mark routes as deleted), but the sync has to end
             this.logEvent({message:`${app} route sync failed`})
+            this.observer.emit('done')
+            return []
         }
         else if (done) {
-            const {added,updated,deleted} = this.checkTours(routes)
+            const {added,updated,deleted} = this.checkTours(routes,incomplete)
             this.updateLastSyncTime()
 
             this.observer.emit('done')
@@ -102,7 +121,11 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
     }
 
 
-    protected checkTours( candidates:Array<T> ): SyncModifications<T> {
+    /**
+     * @param candidates the routes that were found
+     * @param skipDeletions the list is incomplete: routes that are not part of it are not reported as deleted
+     */
+    protected checkTours( candidates:Array<T>, skipDeletions:boolean=false ): SyncModifications<T> {
 
         const app = this.getConnection().getAppKey()
         const routes = this.getRouteListService()?.getAllAppRoutes(app)??[]
@@ -139,12 +162,50 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
 
 
         const unmatched = matched.filter(r=>!r.matched)
-        const deleted = unmatched.map( r=> r.id)
+        const deleted = skipDeletions ? [] : unmatched.map( r=> r.id)
         this.emitUpdates(added, updated, deleted);
 
         return { added, updated,deleted }
     }
 
+
+    /**
+     * Adds the points of the track to a route: derives distance, elevation and loop flag, and (if missing) the country
+     * @param route the route (as created by the list of routes)
+     * @param points the points of the track
+     */
+    protected async applyRoutePoints(route:Route, points:Array<RoutePoint>):Promise<void> {
+        const last = points.at(-1);
+        const first = points[0];
+        const totalDistance = last.routeDistance;
+        const totalElevation = last.elevationGain;
+        const descr = route.description;
+
+        if (descr.distance !== totalDistance) descr.distance = totalDistance;
+        if (descr.elevation !== totalElevation) descr.elevation = totalElevation;
+        descr.isLoop =  (calculateDistance(first.lat, first.lng, last.lat, last.lng) < 50) ;
+
+        route.addDetails( {
+            id: descr.id,
+            title: descr.title,
+            points,
+            country: descr.country,
+            distance: descr.distance,
+            elevation: descr.elevation,
+            category: descr.category,
+        });
+
+        if (!descr.country && route.points?.length>0)   {
+            this.logEvent({message:'route update required (country)',route:route.title})
+            const updated = await route.updateCountryFromPoints();
+            if (updated) {
+                this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
+                // no need to save here. The route entry will be saved once it is completely initialized
+            }
+        }
+
+        descr.points = points
+    }
 
     protected stopSync() {
         this.stopRequested = true
@@ -232,7 +293,8 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
     protected abstract getApi():A
     protected abstract getConnection():C
     protected abstract getRouteSyncSummary(route:T): RouteSyncSummary
-    protected abstract loadRoutesFromApi(): Promise<{routes:Array<T>,done:boolean,error:boolean}>  
+    /** `incomplete`: the routes are reported, but not finding a route does not mean that it was deleted */
+    protected abstract loadRoutesFromApi(): Promise<{routes:Array<T>,done:boolean,error:boolean,incomplete?:boolean}>  
 
 
 }

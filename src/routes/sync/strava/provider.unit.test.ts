@@ -84,6 +84,9 @@ describe('Strava Route Sync Provider', () => {
             expect(res.description.distance).toBeGreaterThan(0)
             expect(res.description.elevation).toBeGreaterThanOrEqual(0)
             expect(typeof res.description.isLoop).toBe('boolean')
+            // the country is derived from the points (shared processing of the route sync providers)
+            expect(getIsoFromLatLng).toHaveBeenCalledTimes(1)
+            expect(res.description.country).toBe('DE')
         })
 
         test('does not call the API for routes from another app', async () => {

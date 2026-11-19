@@ -4,7 +4,6 @@ import { RouteInfo } from "../../types";
 import { BaseSyncProvider } from "../base/provider";
 import { IRouteSyncProvider, RouteSyncSummary } from "../types";
 import { GPXParser } from "../../base/parsers/gpx";
-import { calculateDistance } from "../../../utils/geo";
 import { RouteSyncFactory } from "../factory";
 import { sleep } from "../../../utils/sleep";
 
@@ -88,39 +87,7 @@ export class StravaSyncProvider
         const parsed = await parser.parseFromString(gpx)
         const points = parsed.details.points
 
-        const last = points.at(-1);
-        const first = points[0];
-        const totalDistance = last.routeDistance;
-        const totalElevation = last.elevationGain;
-        const descr = route.description;
-
-        if (descr.distance !== totalDistance) descr.distance = totalDistance;
-        if (descr.elevation !== totalElevation) descr.elevation = totalElevation;
-        descr.isLoop =  (calculateDistance(first.lat, first.lng, last.lat, last.lng) < 50) ;
-
-        route.addDetails( {
-            id: descr.id,
-            title: descr.title,
-            points,
-            country: descr.country,
-            distance: descr.distance,
-            elevation: descr.elevation,
-            category: descr.category,
-        });
-
-
-        if (!descr.country && route.points?.length>0)   {
-            this.logEvent({message:'route update required (country)',route:route.title})
-            const updated = await route.updateCountryFromPoints();
-            if (updated) {
-                this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
-                // no need to save here. The route entry will be saved once it is completely initialized
-            }
-        }
-
-        descr.points = points
-
-
+        await this.applyRoutePoints(route,points)
     }
 
     protected getSportFilter():string { 

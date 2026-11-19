@@ -7,7 +7,7 @@ import { ConnectedAppService } from './ConnectedAppService'
 /** Configuration of the API of an app that is connected via OAuth */
 export type OAuthAppConfig = {
     accessToken: string
-    refreshToken: string
+    refreshToken?: string
     expiration?: Date
 }
 
@@ -37,6 +37,9 @@ export abstract class OAuthAppConnection<
     protected declare config: Config
     protected declare api: Api
 
+    /** the listeners that were registered at the observer of the API (so that they are not registered twice after a reconnect) */
+    protected declare apiListeners?: { observer: Observer, onToken: (config: Config) => void, onFailed: () => void }
+
     /**
      * Connects with the credentials received from the auth-server.
      * If already connected, only the API configuration is updated.
@@ -49,6 +52,10 @@ export abstract class OAuthAppConnection<
 
         try {
             const config = this.createConfig(credentials)
+            if (!valid(config?.accessToken)) {
+                this.logEvent({ message: `Connect with ${this.appName} failed`, reason: 'no access token' })
+                return false
+            }
 
             if (this.isConnected()) {
                 this.getApi().update(config)
@@ -98,7 +105,7 @@ export abstract class OAuthAppConnection<
             this.init()
         }
 
-        return valid(this.config)
+        return valid(this.config) && valid(this.config.accessToken)
     }
 
     getCredentials(): Credentials {
@@ -136,8 +143,9 @@ export abstract class OAuthAppConnection<
             const auth = this.getCredentials()
 
             this.logEvent({ message: `${this.appName} init done`, hasCredentials: Boolean(auth) })
-            if (auth) {
-                this.config = this.createConfig(auth)
+            const config = auth ? this.createConfig(auth) : undefined
+            if (valid(config?.accessToken)) {
+                this.config = config
                 this.initApi(this.config)
             }
             return true
@@ -180,6 +188,20 @@ export abstract class OAuthAppConnection<
 
     protected initApi(config: Config) {
         const observer = this.getApi().init(config)
-        observer.on('token.updated', (updated: Config) => { this.updateConfig(updated) })
+
+        if (this.apiListeners) {
+            this.apiListeners.observer.off('token.updated', this.apiListeners.onToken)
+            this.apiListeners.observer.off('auth.failed', this.apiListeners.onFailed)
+        }
+
+        const onToken = (updated: Config) => { this.updateConfig(updated) }
+        const onFailed = () => {
+            this.logEvent({ message: `${this.appName} authentication failed, credentials removed (reconnect required)` })
+            this.disconnect()
+            this.emit('auth.failed')
+        }
+        observer.on('token.updated', onToken)
+        observer.on('auth.failed', onFailed)
+        this.apiListeners = { observer, onToken, onFailed }
     }
 }
