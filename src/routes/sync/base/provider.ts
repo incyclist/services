@@ -34,12 +34,11 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
         
 
         this.observer = new Observer()
+        // the observer must be released immediately: if it was released later, a sync that is started
+        // right after 'done' would get the observer that is already finished and never receive 'done'
         this.observer.once('done',()=>{
-            waitNextTick().then( ()=>{
-                this.stopRequested = false
-                delete this.observer
-            }).catch( err=>{ this.logError(err,'sync') })
-
+            this.stopRequested = false
+            delete this.observer
         })
 
         this.observer.once('stop',()=>{this.stopSync() })
@@ -85,7 +84,10 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
         const {routes,done,error} = await this.loadRoutesFromApi()
 
         if (error) {
+            // nothing is reported (an incomplete list would mark routes as deleted), but the sync has to end
             this.logEvent({message:`${app} route sync failed`})
+            this.observer.emit('done')
+            return []
         }
         else if (done) {
             const {added,updated,deleted} = this.checkTours(routes)
