@@ -7,7 +7,7 @@ import { ConnectedAppService } from './ConnectedAppService'
 /** Configuration of the API of an app that is connected via OAuth */
 export type OAuthAppConfig = {
     accessToken: string
-    refreshToken: string
+    refreshToken?: string
     expiration?: Date
 }
 
@@ -181,5 +181,9 @@ export abstract class OAuthAppConnection<
     protected initApi(config: Config) {
         const observer = this.getApi().init(config)
         observer.on('token.updated', (updated: Config) => { this.updateConfig(updated) })
+        observer.on('auth.failed', () => {
+            this.logEvent({ message: `${this.appName} authentication failed, credentials removed (reconnect required)` })
+            this.disconnect()
+        })
     }
 }

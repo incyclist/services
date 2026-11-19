@@ -10,8 +10,8 @@ export type OAuthAppConfig = {
     /** access token */
     accessToken: string
 
-    /** refresh token */
-    refreshToken: string
+    /** refresh token (not available for apps with non-expiring tokens) */
+    refreshToken?: string
 
     /** point in time when the access token expires */
     expiration?: Date
@@ -39,8 +39,11 @@ export type OAuthApiProps = {
     /** name of the app, used in log events and error messages (e.g. `TrainingPeaks`) */
     name: string
 
-    /** path of the refresh endpoint of the auth-server (e.g. `/trainingpeaks/refresh`) */
-    refreshPath: string
+    /**
+     * path of the refresh endpoint of the auth-server (e.g. `/trainingpeaks/refresh`).
+     * Omit it for apps whose access tokens never expire: the token is then always considered valid and never refreshed
+     */
+    refreshPath?: string
 
     /** url of the API of the app (default) */
     defaultApiUrl: string

@@ -15,7 +15,7 @@ export interface OAuthAppCredentials extends AppCredentials {
     accesstoken: string
 
     /** refresh token */
-    refreshtoken: string
+    refreshtoken?: string
 
     /**
      * Expiration of the access token. The following formats are supported:
