@@ -106,6 +106,37 @@ describe('RideWithGPS API', () => {
         })
     })
 
+    describe('getCollections', () => {
+        test('returns the collections', async () => {
+            const collections = [{ id: 1, user_id: 42, name: 'pinned', visibility: 'private' }, { id: 2, user_id: 42, name: '{{bucket_list}}' }]
+            restClient.request.mockResolvedValue({ data: { collections } })
+
+            expect(await api.getCollections()).toEqual(collections)
+            expect(restClient.request.mock.calls[0][0]).toMatchObject({ url: API + '/api/v1/collections.json', params: { page_size: 100 } })
+        })
+
+        test('unexpected response', async () => {
+            restClient.request.mockResolvedValue({ data: {} })
+            await expect(api.getCollections()).rejects.toThrow('expected a list of collections')
+        })
+    })
+
+    describe('getCollection', () => {
+        test('returns the collection with its routes', async () => {
+            restClient.request.mockResolvedValue({ data: { collection: { id: 1, name: 'pinned', routes: [{ id: 5, user_id: 7, archived: null, name: 'x' }], trips: [] } } })
+
+            const res = await api.getCollection(1)
+
+            expect(restClient.request.mock.calls[0][0].url).toBe(API + '/api/v1/collections/1.json')
+            expect(res.routes).toHaveLength(1)
+        })
+
+        test('collection missing', async () => {
+            restClient.request.mockResolvedValue({ data: {} })
+            await expect(api.getCollection(1)).rejects.toThrow('collection is missing')
+        })
+    })
+
     describe('getRoute', () => {
         test('returns the route', async () => {
             restClient.request.mockResolvedValue({ data: { route: { id: 123, name: 'x', track_points: [{ x: 1, y: 2, d: 0, e: 10 }] } } })

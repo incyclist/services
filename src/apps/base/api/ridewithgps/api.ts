@@ -1,7 +1,7 @@
 import { sleep } from '../../../../utils/sleep'
 import { OAuthAppApiBase } from '../oauth'
 import {
-    RideWithGpsConfig, RideWithGpsGetRoutesProps, RideWithGpsRouteDetail, RideWithGpsRoutesPage, RideWithGpsTask,
+    RideWithGpsCollection, RideWithGpsCollectionSummary, RideWithGpsConfig, RideWithGpsGetRoutesProps, RideWithGpsRouteDetail, RideWithGpsRoutesPage, RideWithGpsTask,
     RideWithGpsTripActivityType, RideWithGpsUploadProps, RideWithGpsUploadResult
 } from './types'
 import { getUploadResult } from './utils'
@@ -52,6 +52,32 @@ export class RideWithGpsApi extends OAuthAppApiBase<RideWithGpsConfig> {
             throw new Error('Unexpected response from RideWithGPS routes: expected a list of routes')
 
         return { routes: response.data.routes, pagination: response.data.meta?.pagination }
+    }
+
+    /**
+     * Retrieves the collections of the user (`GET /api/v1/collections.json`), the response is not paginated
+     * @throws if the response does not contain a list of collections
+     */
+    async getCollections(): Promise<Array<RideWithGpsCollectionSummary>> {
+        const response = await this.get('/api/v1/collections.json', { params: { page_size: 100 } })
+
+        if (!Array.isArray(response.data?.collections))
+            throw new Error('Unexpected response from RideWithGPS collections: expected a list of collections')
+
+        return response.data.collections
+    }
+
+    /**
+     * Retrieves a collection including its routes (`GET /api/v1/collections/{id}.json`)
+     * @throws if the collection is missing in the response
+     */
+    async getCollection(id: string | number): Promise<RideWithGpsCollection> {
+        const response = await this.get(`/api/v1/collections/${id}.json`)
+
+        if (!response.data?.collection)
+            throw new Error('Unexpected response from RideWithGPS collection: collection is missing')
+
+        return response.data.collection
     }
 
     /** Retrieves a route including its track points (`GET /api/v1/routes/{id}.json`) */

@@ -1,5 +1,5 @@
 import { RideWithGpsRoute, RideWithGpsTimeDataMissingError } from './types'
-import { getUploadResult, isOwnActiveRoute, isRoadCyclingRoute } from './utils'
+import { getUploadResult, isOwnActiveRoute, isRoadCyclingRoute, isSyncedCollection } from './utils'
 
 const route = (props: Partial<RideWithGpsRoute> = {}): RideWithGpsRoute => ({ id: 1, user_id: 42, name: 'Forest Park loop', archived: false, ...props })
 
@@ -42,6 +42,16 @@ describe('RideWithGPS utils', () => {
 
         test('the type wins over the surface', () => {
             expect(isRoadCyclingRoute(route({ activity_types: ['cycling:road'], unpaved_pct: 90 }))).toBe(true)
+        })
+    })
+
+    describe('isSyncedCollection', () => {
+        test.each(['pinned', 'Pinned', '{{bucket_list}}', 'bucket_list', 'Bucket List'])('%s: synced', name => {
+            expect(isSyncedCollection({ name })).toBe(true)
+        })
+
+        test.each(['Favorites', 'My pinned routes', '', undefined])('%s: not synced', name => {
+            expect(isSyncedCollection({ name })).toBe(false)
         })
     })
 

@@ -26,6 +26,17 @@ export const isRoadCyclingRoute = (route: RideWithGpsRoute): boolean => {
     return !(typeof route.unpaved_pct === 'number' && route.unpaved_pct >= UNPAVED_THRESHOLD_PCT)
 }
 
+const SYNCED_COLLECTIONS = new Set(['pinned', 'bucket list'])
+
+/**
+ * Checks if a collection is one of the system collections whose routes are synced (pinned routes and bucket list).
+ * The names are `pinned` and `{{bucket_list}}`, but are matched case insensitively and without the decoration
+ */
+export const isSyncedCollection = (collection: { name?: string }): boolean => {
+    const name = (collection.name ?? '').toLowerCase().replaceAll(/[{}_]/g, ' ').trim().replaceAll(/\s+/g, ' ')
+    return SYNCED_COLLECTIONS.has(name)
+}
+
 /**
  * Checks if a route is one of the (not archived) routes of the user.
  * `archived` is `null` for routes that are not owned by the user

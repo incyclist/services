@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 // the apps module has to be loaded first (it registers the uploaders/providers and depends on the factories)
 import '../../../apps'
 import { Inject } from '../../../base/decorators'
-import { RideWithGpsApi } from '../../../apps/base/api/ridewithgps'
+import { RideWithGpsApi, isSyncedCollection } from '../../../apps/base/api/ridewithgps'
 import { Route } from '../../base/model/route'
 import { RouteInfo } from '../../base/types'
 import { RideWithGpsSyncProvider } from './provider'
@@ -17,6 +17,7 @@ import { RideWithGpsSyncProvider } from './provider'
  *   RWGPS_USER_ID=...            optional: id of the user
  *   RWGPS_API=...                default: https://ridewithgps.com
  *
+ * The routes of the pinned routes and the bucket list are synced as well (counts of the sources are logged, never names).
  * The details (GPX) are loaded for the first 3 routes only.
  */
 
@@ -46,9 +47,11 @@ describe('RideWithGpsSyncProvider (real RideWithGPS)', () => {
             isInitialized: true,
             get: (key: string, defValue: unknown) => key === 'RWGPS_API' ? apiUrl : defValue
         }) as never
-        api.init({ id: userId, accessToken })
+        // the user id is only passed if set explicitly: a wrong id would filter out all own routes
+        api.init(userId ? { id: userId, accessToken } : { accessToken })
 
         jest.spyOn(api, 'getRoute')
+        jest.spyOn(api, 'getCollection')
         jest.spyOn(api, 'getRouteAsGPX')
 
         Inject('AppsService', { isEnabled: () => true })
@@ -58,6 +61,10 @@ describe('RideWithGpsSyncProvider (real RideWithGPS)', () => {
         Inject('RouteListService', { getAllAppRoutes: () => stored })
 
         provider = new RideWithGpsSyncProvider()
+        // make the (error) events of the provider visible: they never contain tokens
+        const logger = provider as unknown as { logEvent: (event: unknown) => void, logError: (err: Error, fn: string) => void }
+        jest.spyOn(logger, 'logEvent').mockImplementation(event => { console.log('provider event', JSON.stringify(event)) })
+        jest.spyOn(logger, 'logError').mockImplementation((err, fn) => { console.log('provider error', fn, err?.message) })
         provider['getConnection'] = jest.fn().mockReturnValue({ isConnected: () => true, getAppKey: () => 'ridewithgps', getApi: () => api }) as never
     })
 
@@ -104,9 +111,27 @@ describe('RideWithGpsSyncProvider (real RideWithGPS)', () => {
         }
     }
 
+    const countSources = async () => {
+        const own = new Set((await api.getRoutes({ pageSize: 200, archived: false })).routes.map(r => r.id))
+        const counts = { own: own.size, pinned: 0, bucketList: 0 }
+        const collections = await api.getCollections()
+        for (const collection of collections.filter(isSyncedCollection)) {
+            const routes = (await api.getCollection(collection.id)).routes ?? []
+            const count = routes.filter(r => !own.has(r.id)).length
+            if (collection.name.toLowerCase() === 'pinned') counts.pinned = count
+            else counts.bucketList = count
+        }
+        return counts
+    }
+
     test('the second sync does not report any change or request any detail again', async () => {
         const first = await syncOnce()
         console.log(`first sync: ${first.added.length} routes, getRoute calls: ${(api.getRoute as jest.Mock).mock.calls.length}`)
+        // counts only, never names
+        const collectionCalls = (api.getCollection as jest.Mock).mock.calls.length
+        console.log(`collections read: ${collectionCalls}`)
+        const sources = await countSources()
+        console.log(`routes by source: own ${sources.own}, pinned ${sources.pinned}, bucket list ${sources.bucketList}, in the sync result: ${first.added.length}`)
         first.added.forEach(info => stored.push({ id: info.id, tsLastChange: info.tsLastChange as number }))
 
         for (const info of first.added.slice(0, MAX_DETAILS))

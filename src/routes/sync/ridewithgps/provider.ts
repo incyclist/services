@@ -1,4 +1,4 @@
-import { RideWithGpsApi, RideWithGpsRoute, isOwnActiveRoute, isRoadCyclingRoute } from '../../../apps/base/api/ridewithgps'
+import { RideWithGpsApi, RideWithGpsRoute, isOwnActiveRoute, isRoadCyclingRoute, isSyncedCollection } from '../../../apps/base/api/ridewithgps'
 import { RideWithGpsAppConnection } from '../../../apps/ridewithgps'
 import { sleep } from '../../../utils/sleep'
 import { Route } from '../../base/model/route'
@@ -13,8 +13,8 @@ const PAGE_SIZE = 100
 /**
  * Syncs the routes of the user at RideWithGPS.
  *
- * Only the own routes that are not archived are synced, and only the ones that are relevant for Incyclist
- * (road cycling, see `isRoadCyclingRoute`). New, changed and deleted routes are detected by comparing the complete list of
+ * The own routes that are not archived are synced, plus the routes of the pinned routes and the bucket list (which can belong
+ * to other users). Only the ones that are relevant for Incyclist are synced (road cycling, see `isRoadCyclingRoute`). New, changed and deleted routes are detected by comparing the complete list of
  * routes with the routes that are known (the incremental sync endpoint of RideWithGPS does not deliver the data of the routes).
  */
 export class RideWithGpsSyncProvider
@@ -64,6 +64,20 @@ export class RideWithGpsSyncProvider
     }
 
     protected async loadRoutesFromApi(): Promise<{ routes: Array<RideWithGpsRoute>, done: boolean, error: boolean }> {
+        const own = await this.loadOwnRoutes()
+        if (!own.done || own.error)
+            return own
+
+        // an incomplete result (error) is never reported, otherwise the routes of the failed source would be marked as deleted
+        const shared = await this.loadSharedRoutes()
+        const routes = this.merge(own.routes, shared.routes)
+        if (shared.error)
+            return { routes, done: true, error: true }
+
+        return { routes: await this.filterBySport(routes), done: !this.stopRequested, error: false }
+    }
+
+    protected async loadOwnRoutes(): Promise<{ routes: Array<RideWithGpsRoute>, done: boolean, error: boolean }> {
         const api = this.getApi()
         const userId = api.getUserId()
         let page = 1
@@ -74,7 +88,7 @@ export class RideWithGpsSyncProvider
         while (!done && !this.stopRequested) {
             try {
                 const result = await api.getRoutes({ page, pageSize: PAGE_SIZE, archived: false })
-                routes.push(...result.routes.filter(r => isOwnActiveRoute(r, userId) && isRoadCyclingRoute(r)))
+                routes.push(...result.routes.filter(r => isOwnActiveRoute(r, userId)))
 
                 done = result.routes.length === 0 || !result.pagination?.next_page_url
                 page++
@@ -87,11 +101,48 @@ export class RideWithGpsSyncProvider
                 error = true
             }
         }
-
-        if (done && !error)
-            return { routes: await this.filterBySport(routes), done: !this.stopRequested, error }
-
         return { routes, done, error }
+    }
+
+    /**
+     * Loads the routes of the pinned routes and the bucket list, which can belong to other users.
+     * They are not subject to the ownership check, only archived routes are skipped.
+     */
+    protected async loadSharedRoutes(): Promise<{ routes: Array<RideWithGpsRoute>, error: boolean }> {
+        const api = this.getApi()
+        const routes: Array<RideWithGpsRoute> = []
+        let error = false
+
+        try {
+            const collections = (await api.getCollections()).filter(isSyncedCollection)
+
+            for (const collection of collections) {
+                if (this.stopRequested)
+                    break
+
+                try {
+                    const detail = await api.getCollection(collection.id)
+                    routes.push(...(detail.routes ?? []).filter(r => r.archived !== true))
+                    await sleep(100)
+                }
+                catch (err) {
+                    this.logEvent({ message: 'could not load collection', id: collection.id, reason: err.message })
+                    error = true
+                }
+            }
+        }
+        catch (err) {
+            this.logEvent({ message: 'could not load collections', reason: err.message })
+            error = true
+        }
+        return { routes, error }
+    }
+
+    /** removes duplicates: a route that is in the list of the user and in a collection is only synced once (the first one wins) */
+    protected merge(...lists: Array<Array<RideWithGpsRoute>>): Array<RideWithGpsRoute> {
+        const unique = new Map<number, RideWithGpsRoute>()
+        lists.flat().forEach(route => { if (!unique.has(route.id)) unique.set(route.id, route) })
+        return [...unique.values()]
     }
 
     /**

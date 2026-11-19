@@ -53,6 +53,22 @@ export type RideWithGpsRoute = {
     activity_types?: Array<RideWithGpsRouteActivityType | string>
 }
 
+/** A collection of the user (CollectionSummary in the API spec). `url` and `html_url` can contain privacy codes: never log them */
+export type RideWithGpsCollectionSummary = {
+    id: number
+    user_id?: number
+    visibility?: string
+
+    /** the system collections are called `pinned` and `{{bucket_list}}` */
+    name: string
+    created_at?: string
+    updated_at?: string
+}
+
+export type RideWithGpsCollection = RideWithGpsCollectionSummary & {
+    routes?: Array<RideWithGpsRoute>
+}
+
 export type RideWithGpsPagination = {
     record_count: number
     page_count: number
