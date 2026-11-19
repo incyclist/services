@@ -96,7 +96,7 @@ export class KomootUpload extends IncyclistService implements IActivityUpload {
             }
            
 
-            const res = await this.getApi().uploadTour(Buffer.from(data),uploadFormat,sport,activity.title)
+            const res = await this.getApi().uploadTour(typeof data === 'string' ? Buffer.from(data,'base64') : Buffer.from(data),uploadFormat,sport,activity.title)
             this.logEvent({message:'Komoot Upload success', activityId: res.id})
 
             activity.links.komoot = {
@@ -153,7 +153,7 @@ export class KomootUpload extends IncyclistService implements IActivityUpload {
             if (!exists)
                 return null
 
-            const content = await fs.readFile(fileName)
+            const content = await fs.readFile(fileName, 'base64')
             return content||null
         }
         catch(err) {
