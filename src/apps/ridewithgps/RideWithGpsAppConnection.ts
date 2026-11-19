@@ -36,7 +36,7 @@ export class RideWithGpsAppConnection extends OAuthAppConnection<RideWithGpsCred
 
     protected createConfig(credentials: RideWithGpsCredentials): RideWithGpsConfig {
         return {
-            id: credentials?.id === undefined ? undefined : String(credentials.id),
+            id: credentials?.id === undefined || credentials.id === null ? undefined : String(credentials.id),
             accessToken: credentials?.accesstoken
         }
     }

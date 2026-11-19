@@ -56,7 +56,7 @@ describe('RideWithGPS API', () => {
 
     beforeEach(() => {
         api = new RideWithGpsApi()
-        api.getFormBinding = jest.fn(() => new AxiosFormPost())
+        api['getFormBinding'] = jest.fn(() => new AxiosFormPost()) as never
         api['getUserSettings'] = jest.fn().mockReturnValue({
             isInitialized: true,
             get: (key: string, defValue: unknown) => key === 'RWGPS_API' ? apiUrl : defValue

@@ -2,6 +2,7 @@ import { Inject } from '../../base/decorators'
 import { Observer } from '../../base/types'
 import { RideWithGpsApi } from '../base/api'
 import { RideWithGpsAppConnection } from './RideWithGpsAppConnection'
+import { RideWithGpsCredentials } from './types'
 
 const KEY = 'user.auth.ridewithgps'
 
@@ -55,6 +56,25 @@ describe('RideWithGpsAppConnection', () => {
             expect(success).toBe(true)
             expect(service.isConnected()).toBe(true)
             expect(settings.set).toHaveBeenCalledWith(KEY, { id: '42', accesstoken: 'at' })
+        })
+
+        // the mobile app passes missing OAuth fields as null
+        test('null refresh token and expiration: no expiration, persists only the id and the access token', async () => {
+            setup()
+            const credentials = { id: 42, accesstoken: 'at', refreshtoken: null, expiration: null } as unknown as RideWithGpsCredentials
+
+            await service.connect(credentials)
+
+            expect(api.init).toHaveBeenCalledWith({ id: '42', accessToken: 'at' })
+            expect(settings.set).toHaveBeenCalledWith(KEY, { id: '42', accesstoken: 'at' })
+        })
+
+        test('null id is not converted to a string', async () => {
+            setup()
+
+            await service.connect({ id: null, accesstoken: 'at' } as unknown as RideWithGpsCredentials)
+
+            expect(settings.set).toHaveBeenCalledWith(KEY, { id: undefined, accesstoken: 'at' })
         })
 
         test('reconnect while connected: updates the api and persists the new token', async () => {

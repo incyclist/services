@@ -25,6 +25,10 @@ describe('RideWithGPS utils', () => {
             expect(isRoadCyclingRoute(route({ activity_types: types }))).toBe(false)
         })
 
+        test('unknown activity type: included', () => {
+            expect(isRoadCyclingRoute(route({ activity_types: ['hovercraft:generic'] }))).toBe(true)
+        })
+
         test('unknown type (missing or empty): included', () => {
             expect(isRoadCyclingRoute(route())).toBe(true)
             expect(isRoadCyclingRoute(route({ activity_types: [] }))).toBe(true)

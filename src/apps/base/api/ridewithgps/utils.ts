@@ -6,19 +6,22 @@ import {
 export const UNPAVED_THRESHOLD_PCT = 50
 
 const OFFROAD_TYPES = new Set(['cycling:gravel', 'cycling:mountain', 'cycling:cyclocross'])
+const OTHER_SPORTS = ['walking:', 'running:', 'driving:', 'motorcycling:', 'swimming:', 'snow:']
 
-const isRoadCyclingType = (type: string): boolean => type.startsWith('cycling:') && !OFFROAD_TYPES.has(type)
+const isClearlyNotRoad = (type: string): boolean => OFFROAD_TYPES.has(type) || OTHER_SPORTS.some(sport => type.startsWith(sport))
 
 /**
  * Checks if a route is relevant for Incyclist: any kind of road cycling.
  *
- * Routes are only excluded if they are clearly marked otherwise (other sports, mountain biking, gravel, mostly unpaved).
- * If the type or the surface is not known, the route is included.
+ * Routes are only excluded if they are clearly marked otherwise: all activity types are other sports, mountain biking or gravel
+ * (or, without activity types, the route is mostly unpaved). If the type or the surface is not known, the route is included.
+ *
+ * Note: the list of routes does not contain `activity_types`, only the detail of a route does
  */
 export const isRoadCyclingRoute = (route: RideWithGpsRoute): boolean => {
     const types = route.activity_types
     if (Array.isArray(types) && types.length > 0)
-        return types.some(isRoadCyclingType)
+        return !types.every(isClearlyNotRoad)
 
     return !(typeof route.unpaved_pct === 'number' && route.unpaved_pct >= UNPAVED_THRESHOLD_PCT)
 }

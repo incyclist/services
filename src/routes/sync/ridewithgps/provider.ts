@@ -21,8 +21,16 @@ export class RideWithGpsSyncProvider
     extends BaseSyncProvider<RideWithGpsRoute, RideWithGpsApi, RideWithGpsAppConnection>
     implements IRouteSyncProvider {
 
+    /** routes that are not relevant for Incyclist (id -> `updated_at` of the checked version), so that they are not checked again */
+    protected excluded = new Map<string, string>()
+
     constructor() {
         super('RideWithGpsSync')
+    }
+
+    reset() {
+        this.excluded.clear()
+        super.reset()
     }
 
     async loadDetails(route: Route): Promise<Route> {
@@ -79,7 +87,64 @@ export class RideWithGpsSyncProvider
                 error = true
             }
         }
+
+        if (done && !error)
+            return { routes: await this.filterBySport(routes), done: !this.stopRequested, error }
+
         return { routes, done, error }
+    }
+
+    /**
+     * The list of routes does not tell the sport. For routes that are new or changed, the detail is requested once
+     * to read the activity types, routes that are not relevant are remembered.
+     */
+    protected async filterBySport(candidates: Array<RideWithGpsRoute>): Promise<Array<RideWithGpsRoute>> {
+        const known = this.getKnownRoutes()
+        const relevant: Array<RideWithGpsRoute> = []
+
+        for (const route of candidates) {
+            if (this.stopRequested)
+                break
+
+            if (await this.isWanted(route, known))
+                relevant.push(route)
+        }
+        return relevant
+    }
+
+    protected async isWanted(route: RideWithGpsRoute, known: Map<string, number>): Promise<boolean> {
+        // already checked: either it is stored (and unchanged) or it was found to be not relevant
+        const storedTs = known.get('ridewithgps:' + route.id)
+        if (storedTs !== undefined && storedTs >= new Date(route.updated_at).valueOf())
+            return true
+        if (this.excluded.get(String(route.id)) === route.updated_at)
+            return false
+
+        return await this.isRelevant(route)
+    }
+
+    protected async isRelevant(route: RideWithGpsRoute): Promise<boolean> {
+        try {
+            const detail = await this.getApi().getRoute(route.id)
+            await sleep(100)
+
+            if (isRoadCyclingRoute(detail))
+                return true
+
+            this.logEvent({ message: 'route skipped', id: route.id, activityTypes: detail.activity_types })
+            this.excluded.set(String(route.id), route.updated_at)
+            return false
+        }
+        catch (err) {
+            // unknown sport: the route is included (and checked again with the next sync)
+            this.logEvent({ message: 'could not check the sport of the route', id: route.id, reason: err.message })
+            return true
+        }
+    }
+
+    protected getKnownRoutes(): Map<string, number> {
+        const routes = this.getRouteListService()?.getAllAppRoutes('ridewithgps') ?? []
+        return new Map(routes.map(r => [r.id, r.tsLastChange ?? 0]))
     }
 
     protected getRouteSyncSummary(route: RideWithGpsRoute): RouteSyncSummary {

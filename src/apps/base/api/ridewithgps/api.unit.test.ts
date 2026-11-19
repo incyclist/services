@@ -58,6 +58,16 @@ describe('RideWithGPS API', () => {
             }))
         })
 
+        test('null refresh token and expiration (as passed by the mobile app): no refresh, no invalid date', async () => {
+            api.init({ id: '42', accessToken: 'token', refreshToken: null, expiration: null })
+            restClient.request.mockResolvedValue({ data: { routes: [] } })
+
+            await api.getRoutes()
+
+            expect(restClient.request).toHaveBeenCalledTimes(1)
+            expect(restClient.request.mock.calls[0][0].url).toBe(API + '/api/v1/routes.json')
+        })
+
         test('API url from the user settings', async () => {
             settings.get = jest.fn((key: string, def: unknown) => key === 'RWGPS_API' ? 'https://sandbox.test' : def)
             restClient.request.mockResolvedValue({ data: { routes: [] } })
