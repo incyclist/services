@@ -2062,3 +2062,51 @@ describe('RLVDisplayService', () => {
     });
   });
 });
+
+describe('RLVDisplayService video diagnostics', () => {
+  let service: RLVDisplayService
+  let logSpy: jest.SpyInstance
+
+  beforeEach(() => {
+    service = new RLVDisplayService()
+    logSpy = jest.spyOn(service as any, 'logEvent').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  describe('cleanupUrl', () => {
+    test('logs stored and resolved url once when they differ', () => {
+      const res = (service as any).cleanupUrl('video:///mnt/nas/video.mp4', 'route1')
+
+      expect(res).toBe('file:///mnt/nas/video.mp4')
+      expect(logSpy).toHaveBeenCalledTimes(1)
+      expect(logSpy).toHaveBeenCalledWith({
+        message: 'video url resolved',
+        routeId: 'route1',
+        storedUrl: 'video:///mnt/nas/video.mp4',
+        resolvedUrl: 'file:///mnt/nas/video.mp4',
+      })
+    })
+
+    test('does not log when the url is unchanged', () => {
+      const res = (service as any).cleanupUrl('https://example.com/video.mp4', 'route1')
+
+      expect(res).toBe('https://example.com/video.mp4')
+      expect(logSpy).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('getSegmentProps', () => {
+    test('identifies route id, position and next segment for chained videos', () => {
+      const mk = (id: string, next?: any) => ({ route: { description: { id } }, next })
+      const b = mk('b')
+      const a = mk('a', b)
+      ;(service as any).videos = [a, b]
+
+      expect((service as any).getSegmentProps(a)).toEqual({ routeId: 'a', index: 0, count: 2, hasNext: true })
+      expect((service as any).getSegmentProps(b)).toEqual({ routeId: 'b', index: 1, count: 2, hasNext: false })
+    })
+  })
+})

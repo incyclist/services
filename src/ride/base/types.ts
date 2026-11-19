@@ -79,6 +79,14 @@ export interface InfotextDisplayProps {
     timeout?: number,
 }
 
+/** Position of a video within a chain of route segments (used for diagnostics) */
+export interface VideoSegmentProps {
+    routeId?: string
+    index: number
+    count: number
+    hasNext: boolean
+}
+
 export interface VideoDisplayProps  {
     src: any        // TODO
     playback: 'native' | 'converted',
@@ -89,6 +97,7 @@ export interface VideoDisplayProps  {
     observer: Observer,
     muted?: boolean
     autoConvert?: boolean,
+    segment?: VideoSegmentProps
     onPlaybackUpdate?: (time:number, rate:number,e) => void
     onLoaded?: (bufferedTime: number) => void
     onPlaybackError?: (error:MediaError) => void

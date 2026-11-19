@@ -10,7 +10,7 @@ import { Route } from "../../routes/base/model/route";
 import { RouteInfoText, RoutePoint } from "../../routes/base/types";
 import { distanceBetween } from "../../utils/geo";
 import { VideoConversion, VideoSyncHelper, isAudibleRate, resolvePlaybackUrl } from "../../video";
-import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, VideoDisplayProps } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, VideoDisplayProps, VideoSegmentProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 
 /**
@@ -236,6 +236,7 @@ export class RLVDisplayService extends RouteDisplayService {
                 loop: this.isLoopEnabled() ? true : undefined,
                 playback: this.currentVideo?.playback,
                 observer: this.currentVideo?.observer,
+                segment: this.getSegmentProps(this.currentVideo),
                 onLoaded: this.onVideoLoaded.bind(this),
                 onLoadError: this.onVideoLoadError.bind(this),
                 onPlaybackError: this.onVideoPlaybackError.bind(this),
@@ -268,6 +269,7 @@ export class RLVDisplayService extends RouteDisplayService {
                     muted: !(video.isCurrent && this.isVideoAudible(video)),
                     playback: video.playback,
                     observer: video.observer,
+                    segment: this.getSegmentProps(video),
                     onLoaded: (bufferedTime: number) => { this.onVideoLoaded(bufferedTime, video) },
                     onLoadError: (error:MediaError) => { this.onVideoLoadError(error,video)},
                     onPlaybackError: (error:MediaError) => { this.onVideoPlaybackError(error,video) },
@@ -696,7 +698,7 @@ export class RLVDisplayService extends RouteDisplayService {
     protected initMp4VideoSource(video:VideoState):void {
         const src = this.getVideoUrl(video)
         if (src) {
-            video.source = this.cleanupUrl(src) 
+            video.source = this.cleanupUrl(src, video.route?.description?.id)
             video.playback = 'native'
         }
     }
@@ -753,13 +755,29 @@ export class RLVDisplayService extends RouteDisplayService {
         }
   
         video.playback = 'converted'
-        video.source = new VideoConversion(this.cleanupUrl(src), video?.route )
+        video.source = new VideoConversion(this.cleanupUrl(src, video.route?.description?.id), video?.route )
         video.source.getObserver().on( 'convert-progress', this.onConvertUpdate.bind(this))
         video.source.getObserver().on( 'convert-error', (message:string) => this.onConvertError(message, video))
     }
 
-    protected cleanupUrl(url:string) {
-        return resolvePlaybackUrl(url)
+    // resolves the stored url to the url that is played. If both differ, they are logged (once per
+    // segment, as this is only called when the video source of a segment is initialized), so that
+    // a malformed url can be told apart from an undecodable file when playback fails
+    protected cleanupUrl(url:string, routeId?:string) {
+        const resolvedUrl = resolvePlaybackUrl(url)
+        if (resolvedUrl!==url) {
+            this.logEvent({message:'video url resolved', routeId, storedUrl:url, resolvedUrl})
+        }
+        return resolvedUrl
+    }
+
+    protected getSegmentProps(video:VideoState):VideoSegmentProps {
+        return {
+            routeId: video.route?.description?.id,
+            index: this.videos.indexOf(video),
+            count: this.videos.length,
+            hasNext: !!video.next
+        }
     }
 
     // sound is played if the user enabled it, the playback rate is in the audible range and the
