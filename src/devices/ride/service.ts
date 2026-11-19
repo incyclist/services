@@ -5,7 +5,7 @@ import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServ
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { getLegacyInterface } from "../../utils/logging";
-import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, ITrainer, SerialIncyclistDevice, Sport, UpdateRequest } from "incyclist-devices";
+import { AdapterFactory, CyclingMode, DeviceData, DeviceProperties, DeviceSettings, ICyclingMode, IncyclistCapability, IncyclistDeviceAdapter, IncyclistInterface, InterfaceFactory, ITrainer, ModeReplacedInfo, SerialIncyclistDevice, Sport, UpdateRequest } from "incyclist-devices";
 import { IncyclistService } from "../../base/service";
 import { Singleton } from "../../base/types";
 import { Injectable } from "../../base/decorators/Injection";
@@ -50,6 +50,8 @@ export class DeviceRideService  extends IncyclistService{
     protected originalMode: CyclingMode
     protected deviceDataHandler = this.onData.bind(this)
     protected deviceKeyHandler = this.onKeyPressed.bind(this)
+    // 'mode-replaced' listeners, one per subscribed adapter (the event payload does not identify the device)
+    protected modeReplacedHandlers = new WeakMap<IncyclistDeviceAdapter,(info:ModeReplacedInfo)=>void>()
     protected lazyInitDone: boolean
     protected lastDataInfo: Record<string,number> = {}
     protected reconnectBusy: boolean
@@ -739,6 +741,7 @@ export class DeviceRideService  extends IncyclistService{
         ai.isStarted = false
 
         this.logEvent( {message:`${startType} ${sType} request`,...logProps})
+        this.subscribeModeReplaced(ai.adapter)
         return ai.adapter.start(startProps)
             .then( async (success)=>{
                 if (success) {
@@ -1940,22 +1943,74 @@ export class DeviceRideService  extends IncyclistService{
 
     protected subscribeDeviceEvents(adapter:IncyclistDeviceAdapter) {
         try {
-            adapter.on('data', this.deviceDataHandler);            
+            adapter.on('data', this.deviceDataHandler);
             adapter.on('key-pressed', this.deviceKeyHandler);
         }
         catch (err) {
             this.logError(err,'subscribeDeviceEvents')
         }
+        this.subscribeModeReplaced(adapter)
     }
 
 
     protected unsubscribeDeviceEvents(adapter:IncyclistDeviceAdapter) {
         try {
-            adapter.off('data', this.deviceDataHandler);            
+            adapter.off('data', this.deviceDataHandler);
             adapter.off('key-pressed', this.deviceKeyHandler);
         }
         catch (err) {
             this.logError(err,'unsubscribeDeviceEvents')
+        }
+        this.unsubscribeModeReplaced(adapter)
+    }
+
+    // Must be active while the adapter is starting: the event is emitted once the device features have been read.
+    // Adapters of older devices versions never emit it, so this is a no-op for them.
+    protected subscribeModeReplaced(adapter:IncyclistDeviceAdapter) {
+        try {
+            this.unsubscribeModeReplaced(adapter)  // avoid duplicate subscriptions
+            const handler = (info:ModeReplacedInfo) => { this.onModeReplaced(adapter, info) }
+            this.modeReplacedHandlers.set(adapter, handler)
+            adapter.on('mode-replaced', handler)
+        }
+        catch (err) {
+            this.logError(err,'subscribeModeReplaced')
+        }
+    }
+
+    protected unsubscribeModeReplaced(adapter:IncyclistDeviceAdapter) {
+        try {
+            const handler = this.modeReplacedHandlers.get(adapter)
+            if (!handler)
+                return
+            adapter.off('mode-replaced', handler)
+            this.modeReplacedHandlers.delete(adapter)
+        }
+        catch (err) {
+            this.logError(err,'unsubscribeModeReplaced')
+        }
+    }
+
+    /**
+     * The adapter replaced the cycling mode (requested mode is not supported by the device).
+     * The adapter has already switched, but has no saved settings for the new mode: persist the new mode,
+     * which also emits 'mode-changed' on the device configuration
+     */
+    protected onModeReplaced(adapter:IncyclistDeviceAdapter, info:ModeReplacedInfo) {
+        try {
+            const {requestedMode,newMode} = info??{}
+            if (!newMode)
+                return
+
+            const udid = (this.rideAdapters?.find( ai=>ai.adapter===adapter) ?? this.getDeviceConfiguration().getAllAdapters()?.find( ai=>ai.adapter===adapter))?.udid
+            this.logEvent({message:'cycling mode replaced', device:adapter.getName(), udid, requestedMode, newMode})
+            if (!udid)
+                return
+
+            this.getDeviceConfiguration().setMode(udid,newMode)
+        }
+        catch(err) {
+            this.logError(err,'onModeReplaced')
         }
     }
 

@@ -491,6 +491,43 @@ describe('RideModeService', () => {
             expect(result.interface).toBe('ANT+');
             expect(result.bikeMode).toBe('ERG');
         });
+
+        test.each([
+            [{ autoResistance: 'true', maxSlope: '12' }, true, 12],
+            [{ autoResistance: 'false', maxSlope: '8' }, false, 8],
+            [{ autoResistance: false, maxSlope: 15 }, false, 15],
+            [{ autoResistance: true, maxSlope: 20 }, true, 20],
+        ])('Normalizes autoResistance/maxSlope types %j', (settings, auto, slope) => {
+            const mockMode = {
+                getName: jest.fn().mockReturnValue('Resistance'),
+                getSettings: jest.fn().mockReturnValue(settings),
+                getSetting: jest.fn().mockReturnValue(undefined),
+            } as unknown as CyclingMode;
+
+            mockDeviceRide.getControlAdapter.mockReturnValue({ adapter: { getDisplayName: jest.fn(), getInterface: jest.fn() } });
+            mockDeviceRide.getCyclingMode.mockReturnValue(mockMode);
+
+            const result = service['getBikeLogProps']() as any;
+
+            expect(result.autoResistance).toBe(auto);
+            expect(result.maxSlope).toBe(slope);
+        });
+
+        test('Drops maxSlope that is not a number and leaves absent props untouched', () => {
+            const mockMode = {
+                getName: jest.fn().mockReturnValue('Resistance'),
+                getSettings: jest.fn().mockReturnValue({ maxSlope: 'abc' }),
+                getSetting: jest.fn().mockReturnValue(undefined),
+            } as unknown as CyclingMode;
+
+            mockDeviceRide.getControlAdapter.mockReturnValue({ adapter: { getDisplayName: jest.fn(), getInterface: jest.fn() } });
+            mockDeviceRide.getCyclingMode.mockReturnValue(mockMode);
+
+            const result = service['getBikeLogProps']() as any;
+
+            expect('maxSlope' in result).toBe(false);
+            expect('autoResistance' in result).toBe(false);
+        });
     });
 
     describe('getDashboardColumns', () => {
