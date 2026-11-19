@@ -100,6 +100,46 @@ describe('RideWithGpsAppConnection', () => {
         })
     })
 
+    describe('listeners of the api', () => {
+        // regression: every connect after a disconnect registered the listeners again
+        test('are only registered once after reconnecting', async () => {
+            setup()
+            const authFailed = jest.fn()
+            service.on('auth.failed', authFailed)
+            await service.connect({ id: 42, accesstoken: 'at' })
+            service.disconnect()
+            await service.connect({ id: 42, accesstoken: 'at2' })
+            settings.set.mockClear()
+
+            observer.emit('token.updated', { id: '42', accessToken: 'new' })
+            observer.emit('auth.failed')
+
+            expect(settings.set.mock.calls.filter(c => c[1] !== null)).toHaveLength(1)
+            expect(authFailed).toHaveBeenCalledTimes(1)
+        })
+    })
+
+    describe('missing access token', () => {
+        test('connect: not connected', async () => {
+            setup()
+
+            expect(await service.connect({ id: 42 } as never)).toBe(false)
+
+            expect(service.isConnected()).toBe(false)
+            expect(api.init).not.toHaveBeenCalled()
+            expect(settings.set).not.toHaveBeenCalled()
+        })
+
+        test('stored credentials without access token: not connected', () => {
+            setup({ id: 42 })
+
+            service.init()
+
+            expect(service.isConnected()).toBe(false)
+            expect(api.init).not.toHaveBeenCalled()
+        })
+    })
+
     describe('disconnect', () => {
         test('removes the credentials', async () => {
             setup()

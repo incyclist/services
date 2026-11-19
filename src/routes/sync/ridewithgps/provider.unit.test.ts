@@ -211,32 +211,27 @@ describe('RideWithGPS Route Sync Provider', () => {
                 expect(res.deleted).toEqual(['ridewithgps:5'])
             })
 
-            test('a collection that can not be loaded: the run is incomplete, nothing is reported (no deletions)', async () => {
+            test('a collection that can not be loaded: the other routes are reported, but nothing is deleted', async () => {
                 const getCollection = jest.fn()
                     .mockRejectedValueOnce(new Error('HTTP 500'))
                     .mockResolvedValueOnce({ id: 11, name: 'x', routes: [foreign(3)] })
                 setup(getCollection, { known: [{ id: 'ridewithgps:5', tsLastChange: 1 }] })
-                const onChange = jest.fn()
-                const observer = syncProvider.sync()
-                observer.on('added', onChange)
-                observer.on('deleted', onChange)
-                const done = new Promise<void>(resolve => observer.once('done', () => resolve()))
 
-                await done
+                const res = await runSync()
 
                 expect(getCollection).toHaveBeenCalledTimes(2)
-                expect(onChange).not.toHaveBeenCalled()
-                expect(userSettingsSet).not.toHaveBeenCalled()
+                expect(res.added.map(r => r.id)).toEqual(['ridewithgps:1', 'ridewithgps:3'])
+                expect(res.deleted).toEqual([])
             })
 
-            test('the collections can not be loaded: the run is incomplete', async () => {
-                const onChange = jest.fn()
-                setupMocks({ getRoutes: jest.fn().mockResolvedValue({ routes: [own] }), getCollections: jest.fn().mockRejectedValue(new Error('HTTP 500')) })
-                const observer = syncProvider.sync()
-                observer.on('added', onChange)
-                await new Promise<void>(resolve => observer.once('done', () => resolve()))
+            test('the collections can not be loaded: own routes are reported, nothing is deleted', async () => {
+                setupMocks({ getRoutes: jest.fn().mockResolvedValue({ routes: [own] }), getCollections: jest.fn().mockRejectedValue(new Error('HTTP 500')), getRoute: jest.fn().mockResolvedValue(own) },
+                    { routes: [{ id: 'ridewithgps:5', tsLastChange: 1 }] })
 
-                expect(onChange).not.toHaveBeenCalled()
+                const res = await runSync()
+
+                expect(res.added.map(r => r.id)).toEqual(['ridewithgps:1'])
+                expect(res.deleted).toEqual([])
             })
         })
 
@@ -287,15 +282,30 @@ describe('RideWithGPS Route Sync Provider', () => {
                 expect(getRoute).toHaveBeenCalledTimes(2)
             })
 
-            test('a failing detail request does not abort the sync: the route is included', async () => {
+            // the route is checked again with the next sync: it is neither added nor excluded
+            test('a failing detail request skips the route for this run and does not abort the sync', async () => {
                 const getRoute = jest.fn()
                     .mockRejectedValueOnce(new Error('HTTP 500'))
-                    .mockResolvedValueOnce(rwgpsRoute(2, 'Run', { activity_types: ['cycling:road'] }))
+                    .mockResolvedValueOnce(rwgpsRoute(2, 'B', { activity_types: ['cycling:road'] }))
+                    .mockResolvedValue(rwgpsRoute(1, 'A', { activity_types: ['cycling:road'] }))
                 setupMocks({ getRoutes: jest.fn().mockResolvedValue(page([rwgpsRoute(1, 'A'), rwgpsRoute(2, 'B')])), getRoute })
+
+                const first = await runSync()
+                await new Promise(resolve => setTimeout(resolve, 10))
+                const second = await runSync()
+
+                expect(first.added.map(r => r.id)).toEqual(['ridewithgps:2'])
+                expect(second.added.map(r => r.id)).toEqual(['ridewithgps:1', 'ridewithgps:2'])
+                expect(getRoute).toHaveBeenCalledTimes(4)
+            })
+
+            test('a stored route that changed and can not be checked is not reported as deleted', async () => {
+                const known = [{ id: 'ridewithgps:1', tsLastChange: 1 }]
+                setupMocks({ getRoutes: jest.fn().mockResolvedValue(page([rwgpsRoute(1, 'A')])), getRoute: jest.fn().mockRejectedValue(new Error('HTTP 500')) }, { routes: known })
 
                 const res = await runSync()
 
-                expect(res.added.map(r => r.id)).toEqual(['ridewithgps:1', 'ridewithgps:2'])
+                expect(res).toEqual({ added: [], updated: [], deleted: [] })
             })
         })
 
@@ -308,6 +318,15 @@ describe('RideWithGPS Route Sync Provider', () => {
             expect(getRoutes).toHaveBeenCalledTimes(1)
             expect(res).toEqual({ added: [], updated: [], deleted: [] })
             expect(userSettingsSet).not.toHaveBeenCalled()
+        })
+
+        test('a full page without pagination info: the list might be incomplete, nothing is reported', async () => {
+            const routes = Array.from({ length: 100 }, (_v, idx) => rwgpsRoute(idx + 1, 'x'))
+            setupMocks({ getRoutes: jest.fn().mockResolvedValue({ routes }) }, { routes: [{ id: 'ridewithgps:500', tsLastChange: 1 }] })
+
+            const res = await runSync()
+
+            expect(res).toEqual({ added: [], updated: [], deleted: [] })
         })
 
         test('disabled operation: no request', async () => {

@@ -45,6 +45,12 @@ export type OAuthApiProps = {
      */
     refreshPath?: string
 
+    /**
+     * path of a request that succeeds for every valid access token (e.g. the current user).
+     * Only used for apps without refresh: a HTTP 401 only disconnects the app if this request is rejected with HTTP 401 as well
+     */
+    authCheckPath?: string
+
     /** url of the API of the app (default) */
     defaultApiUrl: string
 

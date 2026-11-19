@@ -43,7 +43,7 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
 
         this.observer.once('stop',()=>{this.stopSync() })
 
-        this.loadTours().catch( err=>{ this.logError(err,'sync') })
+        this.runSync(this.observer).catch( err=>{ this.logError(err,'sync') })
         return this.observer
 
     }
@@ -71,6 +71,21 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
 
     }
 
+    /** runs the sync. Whatever happens, the sync ends with 'done' and the observer is released */
+    protected async runSync(observer:Observer):Promise<void> {
+        try {
+            await this.loadTours()
+        }
+        catch (err) {
+            this.logError(err,'sync')
+        }
+        finally {
+            // a new sync might already have been started after 'done' (then this.observer is a different one)
+            if (this.observer===observer)
+                observer.emit('done')
+        }
+    }
+
     protected async loadTours(): Promise<Array<T>> { 
 
         const app = this.getConnection().getAppKey()
@@ -81,7 +96,7 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
         }
         this.logEvent({message:`start ${app} route sync`})
 
-        const {routes,done,error} = await this.loadRoutesFromApi()
+        const {routes,done,error,incomplete} = await this.loadRoutesFromApi()
 
         if (error) {
             // nothing is reported (an incomplete list would mark routes as deleted), but the sync has to end
@@ -90,7 +105,7 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
             return []
         }
         else if (done) {
-            const {added,updated,deleted} = this.checkTours(routes)
+            const {added,updated,deleted} = this.checkTours(routes,incomplete)
             this.updateLastSyncTime()
 
             this.observer.emit('done')
@@ -106,7 +121,11 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
     }
 
 
-    protected checkTours( candidates:Array<T> ): SyncModifications<T> {
+    /**
+     * @param candidates the routes that were found
+     * @param skipDeletions the list is incomplete: routes that are not part of it are not reported as deleted
+     */
+    protected checkTours( candidates:Array<T>, skipDeletions:boolean=false ): SyncModifications<T> {
 
         const app = this.getConnection().getAppKey()
         const routes = this.getRouteListService()?.getAllAppRoutes(app)??[]
@@ -143,7 +162,7 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
 
 
         const unmatched = matched.filter(r=>!r.matched)
-        const deleted = unmatched.map( r=> r.id)
+        const deleted = skipDeletions ? [] : unmatched.map( r=> r.id)
         this.emitUpdates(added, updated, deleted);
 
         return { added, updated,deleted }
@@ -274,7 +293,8 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
     protected abstract getApi():A
     protected abstract getConnection():C
     protected abstract getRouteSyncSummary(route:T): RouteSyncSummary
-    protected abstract loadRoutesFromApi(): Promise<{routes:Array<T>,done:boolean,error:boolean}>  
+    /** `incomplete`: the routes are reported, but not finding a route does not mean that it was deleted */
+    protected abstract loadRoutesFromApi(): Promise<{routes:Array<T>,done:boolean,error:boolean,incomplete?:boolean}>  
 
 
 }

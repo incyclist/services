@@ -2,9 +2,9 @@ import { sleep } from '../../../../utils/sleep'
 import { OAuthAppApiBase } from '../oauth'
 import {
     RideWithGpsCollection, RideWithGpsCollectionSummary, RideWithGpsConfig, RideWithGpsGetRoutesProps, RideWithGpsRouteDetail, RideWithGpsRoutesPage, RideWithGpsTask,
-    RideWithGpsTripActivityType, RideWithGpsUploadProps, RideWithGpsUploadResult
+    RideWithGpsAuthError, RideWithGpsTimeoutError, RideWithGpsTripActivityType, RideWithGpsUploadProps, RideWithGpsUploadResult
 } from './types'
-import { getUploadResult } from './utils'
+import { getTaskFailure, getUploadResult } from './utils'
 
 const POLL_INTERVAL_MS = 1000
 const MAX_POLLS = 60
@@ -24,6 +24,7 @@ export class RideWithGpsApi extends OAuthAppApiBase<RideWithGpsConfig> {
         super('RideWithGpsApi', {
             name: 'RideWithGPS',
             defaultApiUrl: 'https://ridewithgps.com',
+            authCheckPath: '/api/v1/users/current.json',
             apiUrlSetting: 'RWGPS_API',
             authUrlSetting: 'RWGPS_AUTH_SERVER_URL'
         })
@@ -111,8 +112,11 @@ export class RideWithGpsApi extends OAuthAppApiBase<RideWithGpsConfig> {
         await this.verifyAuthentication()
 
         const task = await this.createUpload(props)
-        const completed = await this.waitForTask(task)
-        const result = getUploadResult(completed)
+        const finished = await this.waitForTask(task)
+        if (finished.status !== 'completed')
+            throw getTaskFailure(finished)
+
+        const result = getUploadResult(finished)
 
         if (result.tripId && !result.duplicate && props.activityType)
             await this.setActivityType(result.tripId, props.activityType)
@@ -137,32 +141,53 @@ export class RideWithGpsApi extends OAuthAppApiBase<RideWithGpsConfig> {
             return response.data.task
         }
         catch (err) {
-            this.checkRevoked(err)
-            throw this.mapUploadRejection(err)
+            await this.checkRevoked(err)
+            throw this.toUploadError(err)
         }
     }
 
+    /** a rejection of the token is reported as RideWithGpsAuthError, so that the caller does not try other formats */
+    protected toUploadError(err): Error {
+        const mapped = this.mapUploadRejection(err)
+        return err?.response?.status === 401 ? new RideWithGpsAuthError(mapped.message) : mapped
+    }
+
     protected async getTask(id: number): Promise<RideWithGpsTask> {
-        const response = await this.get(`/api/v1/tasks/${id}.json`)
+        // a failing request must not disconnect: the upload might have been accepted already
+        const response = await this.request('get', `/api/v1/tasks/${id}.json`, undefined, undefined, { checkRevoked: false })
+
+        if (!response.data?.task)
+            throw new Error('Unexpected response from RideWithGPS task: task is missing')
         return response.data.task
     }
 
     protected async waitForTask(initial: RideWithGpsTask): Promise<RideWithGpsTask> {
         let task = initial
 
-        for (let polls = 0; task.status !== 'completed'; polls++) {
+        // `pending` until the task has run, every other status is final
+        for (let polls = 0; task.status === 'pending'; polls++) {
             if (polls >= MAX_POLLS)
-                throw new Error('RideWithGPS did not finish processing the upload in time')
+                throw new RideWithGpsTimeoutError()
 
             await sleep(POLL_INTERVAL_MS)
-            task = await this.getTask(task.id)
+            task = await this.pollTask(task.id)
         }
         return task
     }
 
+    /** if the status can not be read, it is unknown if the file was accepted: it must not be uploaded again */
+    protected async pollTask(id: number): Promise<RideWithGpsTask> {
+        try {
+            return await this.getTask(id)
+        }
+        catch (err) {
+            throw new RideWithGpsTimeoutError('Could not read the status of the RideWithGPS upload: ' + err.message)
+        }
+    }
+
     protected async setActivityType(tripId: string, activityType: RideWithGpsTripActivityType): Promise<void> {
         try {
-            await this.request('put', `/api/v1/trips/${tripId}.json`, { trip: { activity_type: activityType } })
+            await this.request('put', `/api/v1/trips/${tripId}.json`, { trip: { activity_type: activityType } }, undefined, { checkRevoked: false })
         }
         catch (err) {
             // the trip exists, the type is only a nice to have

@@ -170,3 +170,13 @@ export class RideWithGpsTimeDataMissingError extends Error {
         super(message ?? 'Upload rejected by RideWithGPS: the file has no time data')
     }
 }
+
+/** RideWithGPS did not finish processing the upload in time. The file might still be processed, so it must not be uploaded again */
+export class RideWithGpsTimeoutError extends Error {
+    constructor(message?: string) {
+        super(message ?? 'RideWithGPS did not finish processing the upload in time')
+    }
+}
+
+/** The upload was rejected because the access token is not accepted (HTTP 401) */
+export class RideWithGpsAuthError extends Error {}

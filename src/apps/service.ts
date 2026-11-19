@@ -25,6 +25,7 @@ export class AppsService extends IncyclistService   {
 
     constructor() {
         super('AppsService')
+        this.serviceMap.forEach( entry => this.forwardAuthFailure(entry))
     }
 
     openSettings() {
@@ -172,7 +173,16 @@ export class AppsService extends IncyclistService   {
         if (isAdded || !this.isEnabledInSettings('TP_INTEGRATION'))
             return
 
-        this.serviceMap.push( { name:'TrainingPeaks', key:'trainingpeaks', connection:new TrainingPeaksAppConnection() } )
+        const entry = { name:'TrainingPeaks', key:'trainingpeaks', connection:new TrainingPeaksAppConnection() }
+        this.serviceMap.push( entry )
+        this.forwardAuthFailure(entry)
+    }
+
+    /** a connection that was removed because its access token was rejected has to be reported like a disconnect, so that the UI is updated */
+    protected forwardAuthFailure(entry:AppDefinition) {
+        const connection = entry.connection
+        connection.removeAllListeners('auth.failed')
+        connection.on('auth.failed', ()=> { this.emit('disconnected',entry.key) })
     }
 
     protected isEnabledInSettings(key:string):boolean {

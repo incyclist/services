@@ -63,18 +63,17 @@ export class RideWithGpsSyncProvider
         return parsed.details.points
     }
 
-    protected async loadRoutesFromApi(): Promise<{ routes: Array<RideWithGpsRoute>, done: boolean, error: boolean }> {
+    protected async loadRoutesFromApi(): Promise<{ routes: Array<RideWithGpsRoute>, done: boolean, error: boolean, incomplete?: boolean }> {
         const own = await this.loadOwnRoutes()
         if (!own.done || own.error)
             return own
 
-        // an incomplete result (error) is never reported, otherwise the routes of the failed source would be marked as deleted
+        // if a collection could not be loaded, the routes that were found are reported, but routes that are missing are not deleted
         const shared = await this.loadSharedRoutes()
-        const routes = this.merge(own.routes, shared.routes)
-        if (shared.error)
-            return { routes, done: true, error: true }
+        const merged = this.merge(own.routes, shared.routes)
 
-        return { routes: await this.filterBySport(routes), done: !this.stopRequested, error: false }
+        const checked = await this.filterBySport(merged)
+        return { routes: checked.routes, done: !this.stopRequested, error: false, incomplete: shared.error || checked.incomplete }
     }
 
     protected async loadOwnRoutes(): Promise<{ routes: Array<RideWithGpsRoute>, done: boolean, error: boolean }> {
@@ -88,6 +87,10 @@ export class RideWithGpsSyncProvider
             try {
                 const result = await api.getRoutes({ page, pageSize: PAGE_SIZE, archived: false })
                 routes.push(...result.routes.filter(r => this.isActive(r, 'own')))
+
+                // without pagination info, a full page can not be distinguished from the last page: the list might be incomplete
+                if (!result.pagination && result.routes.length >= PAGE_SIZE)
+                    throw new Error('no pagination info for a full page of routes')
 
                 done = result.routes.length === 0 || !result.pagination?.next_page_url
                 page++
@@ -155,22 +158,29 @@ export class RideWithGpsSyncProvider
     /**
      * The list of routes does not tell the sport. For routes that are new or changed, the detail is requested once
      * to read the activity types, routes that are not relevant are remembered.
+     * Routes whose detail could not be read are skipped for this run (and checked again next time): the result is then incomplete,
+     * so that a stored route is not reported as deleted.
      */
-    protected async filterBySport(candidates: Array<RideWithGpsRoute>): Promise<Array<RideWithGpsRoute>> {
+    protected async filterBySport(candidates: Array<RideWithGpsRoute>): Promise<{ routes: Array<RideWithGpsRoute>, incomplete: boolean }> {
         const known = this.getKnownRoutes()
-        const relevant: Array<RideWithGpsRoute> = []
+        const routes: Array<RideWithGpsRoute> = []
+        let incomplete = false
 
         for (const route of candidates) {
             if (this.stopRequested)
                 break
 
-            if (await this.isWanted(route, known))
-                relevant.push(route)
+            const wanted = await this.isWanted(route, known)
+            if (wanted === undefined)
+                incomplete = true
+            else if (wanted)
+                routes.push(route)
         }
-        return relevant
+        return { routes, incomplete }
     }
 
-    protected async isWanted(route: RideWithGpsRoute, known: Map<string, number>): Promise<boolean> {
+    /** @returns undefined if it could not be decided */
+    protected async isWanted(route: RideWithGpsRoute, known: Map<string, number>): Promise<boolean | undefined> {
         // already checked: either it is stored (and unchanged) or it was found to be not relevant
         const storedTs = known.get('ridewithgps:' + route.id)
         if (storedTs !== undefined && storedTs >= new Date(route.updated_at).valueOf())
@@ -181,7 +191,7 @@ export class RideWithGpsSyncProvider
         return await this.isRelevant(route)
     }
 
-    protected async isRelevant(route: RideWithGpsRoute): Promise<boolean> {
+    protected async isRelevant(route: RideWithGpsRoute): Promise<boolean | undefined> {
         try {
             const detail = await this.getApi().getRoute(route.id)
             await sleep(100)
@@ -194,9 +204,9 @@ export class RideWithGpsSyncProvider
             return false
         }
         catch (err) {
-            // unknown sport: the route is included (and checked again with the next sync)
+            // not decided: the route is neither added nor excluded, it is checked again with the next sync
             this.logEvent({ message: 'could not check the sport of the route', id: route.id, reason: err.message })
-            return true
+            return undefined
         }
     }
 

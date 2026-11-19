@@ -1,6 +1,6 @@
 // the apps module has to be loaded first (it registers the uploaders and depends on the upload factory)
 import '../../apps'
-import { RideWithGpsApi, RideWithGpsAppConnection, RideWithGpsTimeDataMissingError } from '../../apps'
+import { RideWithGpsApi, RideWithGpsAppConnection, RideWithGpsAuthError, RideWithGpsTimeDataMissingError, RideWithGpsTimeoutError } from '../../apps'
 import { Inject } from '../../base/decorators/Injection'
 import { ActivityDetails } from '../base'
 import { RideWithGpsUpload } from './ridewithgps'
@@ -127,6 +127,25 @@ describe('RideWithGpsUpload', () => {
             expect(success).toBe(false)
             expect(api.uploadActivity).toHaveBeenCalledTimes(1)
             expect(act.links.ridewithgps.error).toContain('no time data')
+        })
+
+        test('rejected token: no fallback format, the error is linked', async () => {
+            setup()
+            api.uploadActivity.mockRejectedValue(new RideWithGpsAuthError('Upload rejected by RideWithGPS (HTTP 401)'))
+            const act = activity()
+
+            expect(await service.upload(act, 'tcx')).toBe(false)
+            expect(api.uploadActivity).toHaveBeenCalledTimes(1)
+            expect(act.links.ridewithgps.error).toContain('HTTP 401')
+        })
+
+        // the file might still be processed: another upload could create a second trip
+        test('timeout: no fallback format', async () => {
+            setup()
+            api.uploadActivity.mockRejectedValue(new RideWithGpsTimeoutError())
+
+            expect(await service.upload(activity(), 'tcx')).toBe(false)
+            expect(api.uploadActivity).toHaveBeenCalledTimes(1)
         })
 
         test('duplicate with the id of the existing trip counts as success', async () => {

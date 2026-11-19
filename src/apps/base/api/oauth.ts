@@ -24,6 +24,9 @@ export abstract class OAuthAppApiBase<
     protected logger: EventLogger
     protected observer: Observer
 
+    /** `auth.failed` was emitted for the current credentials (emitted at most once, until the credentials are set again) */
+    protected authFailed = false
+
     /** the refresh that is currently running (refresh tokens rotate, so concurrent requests must share one refresh) */
     protected refreshPromise?: Promise<void>
 
@@ -40,6 +43,8 @@ export abstract class OAuthAppApiBase<
      */
     init(config: TConfig): Observer {
         this.config = config
+        if (config)
+            this.authFailed = false
         return this.observer
     }
 
@@ -52,6 +57,7 @@ export abstract class OAuthAppApiBase<
             throw new Error('update not allowed before init')
 
         this.config = { ...this.config, ...config }
+        this.authFailed = false
     }
 
     /**
@@ -69,7 +75,7 @@ export abstract class OAuthAppApiBase<
      * Performs an authenticated request, refreshing the access token first if required
      * @throws if not authenticated, the token could not be refreshed or the request failed
      */
-    protected async request(method: 'get' | 'post' | 'put', url: string, data?: object, config?: object): Promise<AxiosResponse> {
+    protected async request(method: 'get' | 'post' | 'put', url: string, data?: object, config?: object, options: { checkRevoked?: boolean } = {}): Promise<AxiosResponse> {
         await this.verifyAuthentication()
 
         const request = {
@@ -84,21 +90,44 @@ export abstract class OAuthAppApiBase<
             return await this.getApi().request(request)
         }
         catch (err) {
-            this.checkRevoked(err)
+            if (options.checkRevoked !== false)
+                await this.checkRevoked(err)
             throw err
         }
     }
 
     /**
-     * An access token that cannot be refreshed and is rejected with HTTP 401 was revoked: nothing can be done but connecting again.
-     * Emits `auth.failed`, so that the owner can remove the credentials (which prevents further requests with the dead token).
+     * An access token that cannot be refreshed and is rejected with HTTP 401 might have been revoked.
+     * A single 401 is not proof (e.g. the resource of another user was requested), so the token is verified with a request
+     * that must succeed for every valid token (`props.authCheckPath`). Only if that is also rejected with 401, `auth.failed` is emitted
+     * (once), so that the owner can remove the credentials. Any other outcome of the verification does not disconnect.
      */
-    protected checkRevoked(err): void {
-        if (this.props.refreshPath || err?.response?.status !== 401)
+    protected async checkRevoked(err): Promise<void> {
+        const { refreshPath, authCheckPath, name } = this.props
+        if (refreshPath || !authCheckPath || this.authFailed || err?.response?.status !== 401)
             return
 
-        this.logger.logEvent({ message: `${this.props.name} access token rejected`, status: 'error', error: 'HTTP 401, reconnect required' })
-        this.observer.emit('auth.failed', this.props.name)
+        if (!(await this.isTokenRejected(authCheckPath)) || this.authFailed)
+            return
+
+        this.authFailed = true
+        this.logger.logEvent({ message: `${name} access token rejected`, status: 'error', error: 'HTTP 401, reconnect required' })
+        this.observer.emit('auth.failed', name)
+    }
+
+    protected async isTokenRejected(path: string): Promise<boolean> {
+        try {
+            await this.getApi().request({
+                method: 'get',
+                url: this.getBaseUrl() + path,
+                headers: this.getAuthHeaders(),
+                validateStatus: (status: number) => status >= 200 && status < 300
+            })
+            return false
+        }
+        catch (err) {
+            return err?.response?.status === 401
+        }
     }
 
     protected async get(url: string, config?: object): Promise<AxiosResponse> {
@@ -107,6 +136,8 @@ export abstract class OAuthAppApiBase<
 
     /** @returns the headers that authenticate a request (an app that does not use the bearer token can override this) */
     protected getAuthHeaders(): Record<string, string> {
+        if (!this.config?.accessToken)
+            throw new Error('not authenticated')
         return { Authorization: 'Bearer ' + this.config.accessToken }
     }
 

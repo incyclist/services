@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { IActivityUpload } from "../activities/upload"
 import { AppsService, useAppsService } from "./service"
 
@@ -114,6 +115,18 @@ describe ('AppService',()=>{
         afterEach(()=>{
             service.inject('UserSettings',null)
             service.reset()
+        })
+
+        // regression: a connection that was removed because its token was rejected was not reported to the UI
+        test('an authentication failure of the connection is reported as disconnected',()=>{
+            const onDisconnected = jest.fn()
+            service.on('disconnected', onDisconnected)
+
+            const connection = service['getAppConnection']('ridewithgps') as unknown as EventEmitter
+            connection.emit('auth.failed')
+
+            expect(onDisconnected).toHaveBeenCalledWith('ridewithgps')
+            expect(onDisconnected).toHaveBeenCalledTimes(1)
         })
 
         test('the app is known and supports upload and route download',()=>{

@@ -1,4 +1,4 @@
-import { RideWithGpsTimeDataMissingError, RideWithGpsTripActivityType, RideWithGpsUploadResult } from '../../apps/base/api/ridewithgps'
+import { RideWithGpsAuthError, RideWithGpsTimeDataMissingError, RideWithGpsTimeoutError, RideWithGpsTripActivityType, RideWithGpsUploadResult } from '../../apps/base/api/ridewithgps'
 import { RideWithGpsAppConnection } from '../../apps/ridewithgps/RideWithGpsAppConnection'
 import { Injectable } from '../../base/decorators/Injection'
 import { IncyclistService } from '../../base/service'
@@ -114,8 +114,7 @@ export class RideWithGpsUpload extends IncyclistService implements IActivityUplo
                 })
             }
             catch (err) {
-                // the content is the same in all formats: a missing time can not be fixed by another format
-                if (err instanceof RideWithGpsTimeDataMissingError)
+                if (this.isFinal(err))
                     throw err
 
                 this.logEvent({ message: 'RideWithGPS Upload not accepted', format: format.toUpperCase(), error: err.message })
@@ -123,6 +122,14 @@ export class RideWithGpsUpload extends IncyclistService implements IActivityUplo
             }
         }
         throw lastError
+    }
+
+    /**
+     * Errors that do not depend on the format: the content is the same in all formats (a missing time can not be fixed),
+     * a rejected token is rejected for every file, and after a timeout the file might still be processed (a second upload could create a second trip)
+     */
+    protected isFinal(err: Error): boolean {
+        return err instanceof RideWithGpsTimeDataMissingError || err instanceof RideWithGpsAuthError || err instanceof RideWithGpsTimeoutError
     }
 
     protected getActivityType(activity: ActivityDetails): RideWithGpsTripActivityType {

@@ -47,6 +47,10 @@ export const isOwnActiveRoute = (route: RideWithGpsRoute): boolean => route.arch
 const describeError = (error: RideWithGpsTaskError): string =>
     `Upload rejected by RideWithGPS: ${error.code}${error.message ? ' (' + error.message + ')' : ''}`
 
+/** @returns the error for a task that ended with another status than `completed` */
+export const getTaskFailure = (task: RideWithGpsTask): Error =>
+    task.errors?.length ? new Error(describeError(task.errors[0])) : new Error(`RideWithGPS upload ended with status ${task.status}`)
+
 /**
  * Evaluates a completed upload task
  *

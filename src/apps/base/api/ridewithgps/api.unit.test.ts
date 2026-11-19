@@ -1,5 +1,5 @@
 import { RideWithGpsApi } from './api'
-import { RideWithGpsConfig, RideWithGpsTimeDataMissingError } from './types'
+import { RideWithGpsAuthError, RideWithGpsConfig, RideWithGpsTimeDataMissingError, RideWithGpsTimeoutError } from './types'
 
 jest.mock('../../../../utils/sleep', () => ({ sleep: jest.fn().mockResolvedValue(undefined) }))
 
@@ -66,7 +66,7 @@ describe('RideWithGPS API', () => {
             expect(restClient.request.mock.calls[0][0].url).toBe('https://sandbox.test/api/v1/routes.json')
         })
 
-        test('a revoked token emits auth.failed', async () => {
+        test('a revoked token (confirmed by the check request) emits auth.failed', async () => {
             const onFailed = jest.fn()
             api.init({ ...config }).on('auth.failed', onFailed)
             restClient.request.mockRejectedValue({ response: { status: 401, data: { errors: ['Unauthorized'] } } })
@@ -221,7 +221,7 @@ describe('RideWithGPS API', () => {
         test('the task does not complete in time', async () => {
             restClient.request.mockResolvedValue({ data: { task: pending } })
 
-            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toThrow('did not finish processing')
+            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toBeInstanceOf(RideWithGpsTimeoutError)
             expect(restClient.request).toHaveBeenCalledTimes(60)
         })
 
@@ -235,9 +235,62 @@ describe('RideWithGPS API', () => {
             const onFailed = jest.fn()
             api.init({ ...config }).on('auth.failed', onFailed)
             formBinding.post.mockRejectedValue({ response: { status: 401, data: { errors: ['Unauthorized'] } } })
+            restClient.request.mockRejectedValue({ response: { status: 401 } })
 
-            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toThrow('HTTP 401')
+            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toBeInstanceOf(RideWithGpsAuthError)
             expect(onFailed).toHaveBeenCalledTimes(1)
+            expect(restClient.request.mock.calls[0][0].url).toBe(API + '/api/v1/users/current.json')
+        })
+
+        test('a 401 for the upload that is not confirmed does not disconnect', async () => {
+            const onFailed = jest.fn()
+            api.init({ ...config }).on('auth.failed', onFailed)
+            formBinding.post.mockRejectedValue({ response: { status: 401, data: {} } })
+            restClient.request.mockResolvedValue({ data: { user: { id: 42 } } })
+
+            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toBeInstanceOf(RideWithGpsAuthError)
+            expect(onFailed).not.toHaveBeenCalled()
+        })
+
+        // regression: a 401 while polling or setting the activity type wiped the credentials
+        test('a 401 while polling the task or setting the activity type does not check the token', async () => {
+            const onFailed = jest.fn()
+            api.init({ ...config }).on('auth.failed', onFailed)
+
+            restClient.request.mockRejectedValue({ response: { status: 401 } })
+            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toBeInstanceOf(RideWithGpsTimeoutError)
+            expect(restClient.request).toHaveBeenCalledTimes(1)
+
+            restClient.request.mockClear()
+            formBinding.post.mockResolvedValue({ data: { task: completed() } })
+            const res = await api.uploadActivity({ fileName: '/data/ride.tcx', activityType: 'cycling:virtual' })
+
+            expect(res.tripId).toBe('123')
+            expect(restClient.request).toHaveBeenCalledTimes(1)
+            expect(onFailed).not.toHaveBeenCalled()
+        })
+
+        test('polling: a response without task is an error', async () => {
+            restClient.request.mockResolvedValue({ data: {} })
+            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toThrow('task is missing')
+        })
+
+        test.each(['failed', 'error'])('polling stops at the status %s', async status => {
+            restClient.request.mockResolvedValue({ data: { task: { ...pending, status, errors: [{ code: 'failed_to_process', message: 'oops' }] } } })
+
+            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toThrow('failed_to_process')
+            expect(restClient.request).toHaveBeenCalledTimes(1)
+        })
+
+        test('final status without error details', async () => {
+            restClient.request.mockResolvedValue({ data: { task: { ...pending, status: 'failed', errors: [] } } })
+            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toThrow('ended with status failed')
+        })
+
+        test('disconnected while uploading: clear error', async () => {
+            formBinding.post.mockImplementation(async () => { api.init(undefined); return { data: { task: pending } } })
+
+            await expect(api.uploadActivity({ fileName: '/data/ride.tcx' })).rejects.toThrow('not authenticated')
         })
 
         test('response without task', async () => {
