@@ -4,6 +4,12 @@ import { VideoConversion } from './VideoConversion'
 
 describe('VideoConversion', () => {
 
+    describe('getUrl', () => {
+        test('returns the url of the converted file', () => {
+            expect(new VideoConversion('video:///route.avi').getUrl()).toBe('video:///route.avi')
+        })
+    })
+
     describe('convert', () => {
         let conversion: VideoConversion
         let platformConversion: EventEmitter & { next?: jest.Mock, stop?: jest.Mock }

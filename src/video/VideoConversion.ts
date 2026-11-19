@@ -27,6 +27,11 @@ export class VideoConversion extends IncyclistService {
         return this.observer
     }
 
+    /** @returns the url of the video file that is converted */
+    getUrl():string {
+        return this.url
+    }
+
     setStartPos(pos:number) {
         this.startPos = pos
     }
