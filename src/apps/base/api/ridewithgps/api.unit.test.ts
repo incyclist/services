@@ -35,17 +35,6 @@ describe('RideWithGPS API', () => {
         jest.clearAllMocks()
     })
 
-    describe('getUserId', () => {
-        test('id of the credentials', () => {
-            expect(api.getUserId()).toBe('42')
-        })
-
-        test('unknown', () => {
-            api.init({ accessToken: 'token' })
-            expect(api.getUserId()).toBeUndefined()
-        })
-    })
-
     describe('requests', () => {
         test('Bearer token, no refresh without expiration', async () => {
             restClient.request.mockResolvedValue({ data: { routes: [], meta: { pagination: { record_count: 0, page_count: 0, page_size: 20 } } } })

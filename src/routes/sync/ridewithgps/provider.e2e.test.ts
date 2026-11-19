@@ -112,11 +112,15 @@ describe('RideWithGpsSyncProvider (real RideWithGPS)', () => {
     }
 
     const countSources = async () => {
-        const own = new Set((await api.getRoutes({ pageSize: 200, archived: false })).routes.map(r => r.id))
+        const ownRoutes = (await api.getRoutes({ pageSize: 200, archived: false })).routes
+        const own = new Set(ownRoutes.map(r => r.id))
+        // ids only, never names
+        console.log(`own route ids (archived flag): ${ownRoutes.map(r => `${r.id}(${r.archived})`).join(', ')}`)
         const counts = { own: own.size, pinned: 0, bucketList: 0 }
         const collections = await api.getCollections()
         for (const collection of collections.filter(isSyncedCollection)) {
             const routes = (await api.getCollection(collection.id)).routes ?? []
+            console.log(`collection ${collection.id} route ids (archived flag): ${routes.map(r => `${r.id}(${r.archived})`).join(', ')}`)
             const count = routes.filter(r => !own.has(r.id)).length
             if (collection.name.toLowerCase() === 'pinned') counts.pinned = count
             else counts.bucketList = count
@@ -132,6 +136,7 @@ describe('RideWithGpsSyncProvider (real RideWithGPS)', () => {
         console.log(`collections read: ${collectionCalls}`)
         const sources = await countSources()
         console.log(`routes by source: own ${sources.own}, pinned ${sources.pinned}, bucket list ${sources.bucketList}, in the sync result: ${first.added.length}`)
+        console.log(`added route ids: ${first.added.map(r => r.id).join(', ')}`)
         first.added.forEach(info => stored.push({ id: info.id, tsLastChange: info.tsLastChange as number }))
 
         for (const info of first.added.slice(0, MAX_DETAILS))

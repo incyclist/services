@@ -38,7 +38,7 @@ describe('RideWithGPS Route Sync Provider', () => {
         Inject('AppsService', { isEnabled: jest.fn().mockReturnValue(props.enabled ?? true) })
         Inject('RouteListService', { getAllAppRoutes: jest.fn().mockReturnValue(props.routes ?? []) })
 
-        syncProvider['getApi'] = jest.fn().mockReturnValue({ getUserId: () => '42', getCollections: jest.fn().mockResolvedValue([]), ...api })
+        syncProvider['getApi'] = jest.fn().mockReturnValue({ getCollections: jest.fn().mockResolvedValue([]), ...api })
         syncProvider['getConnection'] = jest.fn().mockReturnValue(connectionMock) as never
     }
 
@@ -123,6 +123,16 @@ describe('RideWithGPS Route Sync Provider', () => {
                 category: 'external', source: 'ridewithgps', hasGpx: true, hasVideo: false
             })
             expect(userSettingsSet).toHaveBeenCalledWith('apps.ridewithgps.lastSync', expect.any(Number))
+        })
+
+        // regression: the owner of the routes of the list was compared with the user id of the credentials, a mismatch hid all routes
+        test('own routes are synced, no matter which user id is stored in the credentials', async () => {
+            const getRoute = jest.fn(async (id: number) => rwgpsRoute(id, 'x', { activity_types: ['cycling:road'] }))
+            setupMocks({ getRoutes: jest.fn().mockResolvedValue({ routes: [rwgpsRoute(1, 'Road', { user_id: 99 })] }), getRoute })
+
+            const res = await runSync()
+
+            expect(res.added.map(r => r.id)).toEqual(['ridewithgps:1'])
         })
 
         test('the activity types win over the surface: a pinned route that is half unpaved but marked as road is synced', async () => {

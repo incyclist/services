@@ -29,12 +29,6 @@ export class RideWithGpsApi extends OAuthAppApiBase<RideWithGpsConfig> {
         })
     }
 
-    /** @returns the id of the user at RideWithGPS (as delivered by the auth-server) */
-    getUserId(): string | undefined {
-        const id = this.config?.id
-        return id === undefined || id === null ? undefined : String(id)
-    }
-
     /**
      * Retrieves a page of the routes of the user (`GET /api/v1/routes.json`)
      *

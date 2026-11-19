@@ -56,22 +56,19 @@ describe('RideWithGPS utils', () => {
     })
 
     describe('isOwnActiveRoute', () => {
-        test('own route', () => {
-            expect(isOwnActiveRoute(route(), '42')).toBe(true)
-        })
-
-        test('user unknown or no owner in the list: included', () => {
+        test('active route', () => {
             expect(isOwnActiveRoute(route())).toBe(true)
-            expect(isOwnActiveRoute(route({ user_id: undefined, archived: undefined }), '42')).toBe(true)
+            expect(isOwnActiveRoute(route({ archived: undefined }))).toBe(true)
         })
 
         test('archived, or not owned (archived is null)', () => {
-            expect(isOwnActiveRoute(route({ archived: true }), '42')).toBe(false)
-            expect(isOwnActiveRoute(route({ archived: null }), '42')).toBe(false)
+            expect(isOwnActiveRoute(route({ archived: true }))).toBe(false)
+            expect(isOwnActiveRoute(route({ archived: null }))).toBe(false)
         })
 
-        test('owned by another user', () => {
-            expect(isOwnActiveRoute(route({ user_id: 7 }), '42')).toBe(false)
+        // regression: a user id that differs from the one of the list must not hide the routes of the user
+        test('the owner is not compared with the user id', () => {
+            expect(isOwnActiveRoute(route({ user_id: 7 }))).toBe(true)
         })
     })
 

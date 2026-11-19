@@ -38,18 +38,11 @@ export const isSyncedCollection = (collection: { name?: string }): boolean => {
 }
 
 /**
- * Checks if a route is one of the (not archived) routes of the user.
- * `archived` is `null` for routes that are not owned by the user
- *
- * @param route the route of the list
- * @param userId the id of the user (if known)
+ * Checks if a route of the list of routes of the user is active: not archived.
+ * (`archived` is `null` for routes that are not owned by the user. The list of the user only contains own routes, so the
+ * owner is deliberately not compared with the user id: a mismatch of ids would hide all routes)
  */
-export const isOwnActiveRoute = (route: RideWithGpsRoute, userId?: string): boolean => {
-    if (route.archived === true || route.archived === null)
-        return false
-
-    return !(userId && route.user_id !== undefined && String(route.user_id) !== userId)
-}
+export const isOwnActiveRoute = (route: RideWithGpsRoute): boolean => route.archived !== true && route.archived !== null
 
 const describeError = (error: RideWithGpsTaskError): string =>
     `Upload rejected by RideWithGPS: ${error.code}${error.message ? ' (' + error.message + ')' : ''}`

@@ -35,7 +35,7 @@ export class RideWithGpsSyncProvider
 
     async loadDetails(route: Route): Promise<Route> {
         try {
-            this.logEvent({ message: 'load route details', id: route?.description?.id, title: route?.description?.title })
+            this.logEvent({ message: 'load route details', id: route?.description?.id })
 
             const id = this.getOriginalId(route)
             if (!id) return
@@ -46,7 +46,7 @@ export class RideWithGpsSyncProvider
             return route
         }
         catch (err) {
-            this.logError(err, 'loadDetails', { id: route?.description?.id, title: route?.description?.title })
+            this.logError(err, 'loadDetails', { id: route?.description?.id })
         }
     }
 
@@ -79,7 +79,6 @@ export class RideWithGpsSyncProvider
 
     protected async loadOwnRoutes(): Promise<{ routes: Array<RideWithGpsRoute>, done: boolean, error: boolean }> {
         const api = this.getApi()
-        const userId = api.getUserId()
         let page = 1
         let done = false
         let error = false
@@ -88,7 +87,7 @@ export class RideWithGpsSyncProvider
         while (!done && !this.stopRequested) {
             try {
                 const result = await api.getRoutes({ page, pageSize: PAGE_SIZE, archived: false })
-                routes.push(...result.routes.filter(r => isOwnActiveRoute(r, userId)))
+                routes.push(...result.routes.filter(r => this.isActive(r, 'own')))
 
                 done = result.routes.length === 0 || !result.pagination?.next_page_url
                 page++
@@ -102,6 +101,14 @@ export class RideWithGpsSyncProvider
             }
         }
         return { routes, done, error }
+    }
+
+    /** archived routes (and routes without an owner in the list of the user) are skipped, the reason is logged */
+    protected isActive(route: RideWithGpsRoute, source: string): boolean {
+        const active = source === 'own' ? isOwnActiveRoute(route) : route.archived !== true
+        if (!active)
+            this.logEvent({ message: 'route filtered', id: route.id, source, reason: 'archived' + (route.archived === null ? ' or not owned' : '') })
+        return active
     }
 
     /**
@@ -122,7 +129,7 @@ export class RideWithGpsSyncProvider
 
                 try {
                     const detail = await api.getCollection(collection.id)
-                    routes.push(...(detail.routes ?? []).filter(r => r.archived !== true))
+                    routes.push(...(detail.routes ?? []).filter(r => this.isActive(r, 'collection')))
                     await sleep(100)
                 }
                 catch (err) {
