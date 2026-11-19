@@ -85,7 +85,7 @@ export class RideWithGpsSyncProvider
 
         while (!done && !this.stopRequested) {
             try {
-                const result = await api.getRoutes({ page, pageSize: PAGE_SIZE, archived: false })
+                const result = await api.getRoutes({ page, pageSize: PAGE_SIZE, archived: false }) // NOSONAR - sequential on purpose: one page after the other, without hammering the API
                 routes.push(...result.routes.filter(r => this.isActive(r, 'own')))
 
                 // without pagination info, a full page can not be distinguished from the last page: the list might be incomplete
@@ -95,7 +95,7 @@ export class RideWithGpsSyncProvider
                 done = result.routes.length === 0 || !result.pagination?.next_page_url
                 page++
 
-                await sleep(100)
+                await sleep(100) // NOSONAR
             }
             catch (err) {
                 this.logEvent({ message: 'could not load routes', reason: err.message })
@@ -131,9 +131,9 @@ export class RideWithGpsSyncProvider
                     break
 
                 try {
-                    const detail = await api.getCollection(collection.id)
+                    const detail = await api.getCollection(collection.id) // NOSONAR - sequential on purpose (rate limit)
                     routes.push(...(detail.routes ?? []).filter(r => this.isActive(r, 'collection')))
-                    await sleep(100)
+                    await sleep(100) // NOSONAR
                 }
                 catch (err) {
                     this.logEvent({ message: 'could not load collection', id: collection.id, reason: err.message })
@@ -170,7 +170,7 @@ export class RideWithGpsSyncProvider
             if (this.stopRequested)
                 break
 
-            const wanted = await this.isWanted(route, known)
+            const wanted = await this.isWanted(route, known) // NOSONAR - sequential on purpose (rate limit)
             if (wanted === undefined)
                 incomplete = true
             else if (wanted)

@@ -50,7 +50,8 @@ export type RideWithGpsRoute = {
     updated_at?: string
 
     /** only part of the detail response of a route (not of the list) according to the API spec */
-    activity_types?: Array<RideWithGpsRouteActivityType | string>
+    /** see RideWithGpsRouteActivityType for the known values */
+    activity_types?: Array<string>
 }
 
 /** A collection of the user (CollectionSummary in the API spec). `url` and `html_url` can contain privacy codes: never log them */
@@ -124,7 +125,8 @@ export type RideWithGpsTaskErrorCode =
     'duplicate' | 'time_data_missing' | 'no_tracks' | 'empty_file' | 'parse_failed' | 'failed_to_process' | 'weigh_in_failed' | 'build_failed' | 'error'
 
 export type RideWithGpsTaskError = {
-    code: RideWithGpsTaskErrorCode | string
+    /** see RideWithGpsTaskErrorCode for the known values */
+    code: string
     message?: string
 
     /** set if the error refers to an existing asset, as for a duplicate */

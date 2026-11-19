@@ -165,13 +165,17 @@ export class RideWithGpsApi extends OAuthAppApiBase<RideWithGpsConfig> {
         let task = initial
 
         // `pending` until the task has run, every other status is final
-        for (let polls = 0; task.status === 'pending'; polls++) {
-            if (polls >= MAX_POLLS)
-                throw new RideWithGpsTimeoutError()
+        for (let polls = 0; polls < MAX_POLLS; polls++) {
+            if (task.status !== 'pending')
+                return task
 
-            await sleep(POLL_INTERVAL_MS)
-            task = await this.pollTask(task.id)
+            // sequential on purpose: each status depends on the previous request, with a pause in between
+            await sleep(POLL_INTERVAL_MS) // NOSONAR
+            task = await this.pollTask(task.id) // NOSONAR
         }
+
+        if (task.status === 'pending')
+            throw new RideWithGpsTimeoutError()
         return task
     }
 

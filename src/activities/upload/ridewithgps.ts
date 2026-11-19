@@ -107,7 +107,8 @@ export class RideWithGpsUpload extends IncyclistService implements IActivityUplo
         for (const format of formats) {
             try {
                 this.logEvent({ message: 'RideWithGPS Upload', format: format.toUpperCase() })
-                return await this.getApi().uploadActivity({
+                // sequential on purpose: the next format is only tried if the previous one was not accepted
+                return await this.getApi().uploadActivity({ // NOSONAR
                     fileName: activity[`${format}FileName`],
                     name: activity.title?.trim() || undefined,
                     activityType: this.getActivityType(activity)
