@@ -35,11 +35,16 @@ const FsMock = (files: Record<string, Uint8Array | 'throw'> = {}, existsError?: 
             throw new Error('fs error')
         return fileName in files
     }),
-    readFile: jest.fn((fileName: string) => {
+    // mimics the mobile binding: binary content is only returned intact when requested as base64
+    readFile: jest.fn((fileName: string, encoding?: string) => {
         const content = files[fileName]
         if (content === 'throw')
             throw new Error('read error')
-        return content
+        if (content === undefined)
+            return content
+        if (encoding === 'base64')
+            return Buffer.from(content).toString('base64')
+        throw new Error('Invalid continuation byte')
     })
 })
 
@@ -122,6 +127,23 @@ describe('KomootUpload', () => {
     })
 
     describe('upload', () => {
+
+        test('reads binary file as base64 and uploads the decoded bytes', async () => {
+            const bytes = new Uint8Array([0xFF, 0xFE, 0x80])
+            const api = ApiMock({ uploadResponse: { id: 1 } })
+            setupMocks({ initialized: true, connected: true, api })
+            const fs = FsMock({ 'bin.fit': bytes })
+            setupFs(fs)
+            createService()
+
+            const activity: Partial<ActivityDetails> = { fitFileName: 'bin.fit', title: 'test' }
+            const success = await service.upload(activity as ActivityDetails, 'fit')
+
+            expect(success).toBe(true)
+            expect(fs.readFile).toHaveBeenCalledWith('bin.fit', 'base64')
+            const uploaded = (api.uploadTour as jest.Mock).mock.calls[0][0] as Buffer
+            expect(Buffer.from(uploaded).equals(Buffer.from(bytes))).toBe(true)
+        })
 
         test('successful fit upload', async () => {
             const api = ApiMock({ uploadResponse: { id: 12345 } })
