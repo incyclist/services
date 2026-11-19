@@ -157,16 +157,31 @@ export class Coach {
         const speed = getValue(speedEdit,'speed')
         
 
-        if ( settings.type.toLowerCase()==='power')  {
+        const previousName = this._settings?.name
+        const type = settings.type.toLowerCase()
+
+        if ( type==='power')  {
             this._settings = { name,type:'power', target:power, lead }
-            if (!name || name.length===0 && power!==undefined)
-                this._settings.name = `${power.toFixed(0)}W Coach`
+            this.applyDefaultName(previousName, power, 'W')
         }
-        else if ( settings.type.toLowerCase()==='speed')  {
+        else if ( type==='speed')  {
             this._settings = { name,type:'speed', target:speed, lead}
-            if (!name || name.length===0 && speed!==undefined)
-            this._settings.name = `${speed.toFixed(0)}km/h Coach`
+            this.applyDefaultName(previousName, speed, 'km/h')
         }
+    }
+
+    /**
+     * Ensures the coach has a name: an empty name is replaced by one derived from the target value.
+     * If there is no target value either, the previous name is kept.
+     */
+    protected applyDefaultName(previousName:string|undefined, target:number|undefined, unit:string) {
+        if (this._settings.name)
+            return
+
+        if (target!==undefined && target!==null)
+            this._settings.name = `${target.toFixed(0)}${unit} Coach`
+        else
+            this._settings.name = previousName
     }
 
     initSimulator(user:{weight:number},bikeType:string) {
