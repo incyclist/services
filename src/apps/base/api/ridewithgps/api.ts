@@ -109,7 +109,7 @@ export class RideWithGpsApi extends OAuthAppApiBase<RideWithGpsConfig> {
         this.logger.logEvent({ message: 'RideWithGPS upload' })
 
         try {
-            const form = await this.createForm('/api/v1/trips', fields, { headers: this.getAuthHeaders() })
+            const form = await this.createForm('/api/v1/trips.json', fields, { headers: this.getAuthHeaders() })
             const response = await this.postForm(form)
 
             if (!response.data?.task)

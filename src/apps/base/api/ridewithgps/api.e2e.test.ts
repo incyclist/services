@@ -1,5 +1,6 @@
 import dotenv from 'dotenv'
 import { RideWithGpsApi } from './api'
+import { AxiosFormPost } from '../../../../../__tests__/utils/formPost'
 
 /**
  * E2E tests against the RideWithGPS API. They also serve as the API spike: they log what RideWithGPS really delivers
@@ -55,6 +56,7 @@ describe('RideWithGPS API', () => {
 
     beforeEach(() => {
         api = new RideWithGpsApi()
+        api.getFormBinding = jest.fn(() => new AxiosFormPost())
         api['getUserSettings'] = jest.fn().mockReturnValue({
             isInitialized: true,
             get: (key: string, defValue: unknown) => key === 'RWGPS_API' ? apiUrl : defValue

@@ -138,7 +138,7 @@ describe('RideWithGPS API', () => {
 
             expect(res).toEqual({ tripId: '123' })
             expect(formBinding.createForm).toHaveBeenCalledWith(
-                { url: API + '/api/v1/trips', headers: { Authorization: 'Bearer token' } },
+                { url: API + '/api/v1/trips.json', headers: { Authorization: 'Bearer token' } },
                 { file: { type: 'file', fileName: '/data/ride.tcx' }, name: 'Morning Ride' }
             )
             expect(restClient.request.mock.calls[0][0]).toMatchObject({ method: 'get', url: API + '/api/v1/tasks/7.json' })
