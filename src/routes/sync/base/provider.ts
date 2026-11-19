@@ -7,6 +7,8 @@ import { useUserSettings } from "../../../settings";
 import { IConnectedApp } from "../../../types";
 import { waitNextTick } from "../../../utils";
 import { Route } from "../../base/model/route";
+import { RoutePoint } from "../../base/types";
+import { calculateDistance } from "../../../utils/geo";
 import { IRouteList, RouteInfo } from "../../types";
 import { RouteSyncFactory } from "../factory";
 import { IRouteSyncProvider, RouteSyncSummary } from "../types";
@@ -145,6 +147,44 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
         return { added, updated,deleted }
     }
 
+
+    /**
+     * Adds the points of the track to a route: derives distance, elevation and loop flag, and (if missing) the country
+     * @param route the route (as created by the list of routes)
+     * @param points the points of the track
+     */
+    protected async applyRoutePoints(route:Route, points:Array<RoutePoint>):Promise<void> {
+        const last = points.at(-1);
+        const first = points[0];
+        const totalDistance = last.routeDistance;
+        const totalElevation = last.elevationGain;
+        const descr = route.description;
+
+        if (descr.distance !== totalDistance) descr.distance = totalDistance;
+        if (descr.elevation !== totalElevation) descr.elevation = totalElevation;
+        descr.isLoop =  (calculateDistance(first.lat, first.lng, last.lat, last.lng) < 50) ;
+
+        route.addDetails( {
+            id: descr.id,
+            title: descr.title,
+            points,
+            country: descr.country,
+            distance: descr.distance,
+            elevation: descr.elevation,
+            category: descr.category,
+        });
+
+        if (!descr.country && route.points?.length>0)   {
+            this.logEvent({message:'route update required (country)',route:route.title})
+            const updated = await route.updateCountryFromPoints();
+            if (updated) {
+                this.logEvent({message:'route updated (country)',route:route.title,country:route.description?.country})
+                // no need to save here. The route entry will be saved once it is completely initialized
+            }
+        }
+
+        descr.points = points
+    }
 
     protected stopSync() {
         this.stopRequested = true
