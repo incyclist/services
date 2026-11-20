@@ -1,7 +1,9 @@
 import { EventLogger } from 'gd-eventlog'
-import IncyclistRoutesApi, { REDIRECT_NOT_ALLOWED } from '../base/api/api'
+import { REDIRECT_NOT_ALLOWED } from '../../api/rest/types'
+import IncyclistRoutesApi from '../base/api/api'
 import type { IIncyclistRoutesApi } from '../base/api/types'
 import { SERVER_MESSAGES as MSG } from './messages'
+import { isAllowedRedirectTarget } from './validator'
 import type { RouteServerProbeFailure, RouteServerProbeResult } from './types'
 
 export const PROBE_TIMEOUT_MS = 10000
@@ -18,7 +20,7 @@ const FAILURE_MESSAGES: Record<RouteServerProbeFailure, string> = {
 
 const createProbeApi: ProbeApiFactory = (url) => {
     const api = new IncyclistRoutesApi(url)
-    api.setRequestOptions({ timeout: PROBE_TIMEOUT_MS, enforceRedirectRules: true })
+    api.setRequestOptions({ timeout: PROBE_TIMEOUT_MS, redirectPolicy: isAllowedRedirectTarget })
     return api
 }
 

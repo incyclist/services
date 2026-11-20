@@ -1,6 +1,7 @@
 import { EventLogger } from 'gd-eventlog'
 import { Inject } from '../../../base/decorators'
 import IncyclistRoutesApi from './api'
+import { NO_CACHE } from './consts'
 
 const internalGet = jest.fn()
 const externalGet = jest.fn()
@@ -390,29 +391,42 @@ describe('IncyclistRoutesApi', () => {
             expect(externalGet).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ timeout: 10000, headers: expect.anything() }))
         })
 
-        test('redirect to a url that the address rules refuse: request fails', async () => {
+        test('redirect policy is added to the request config; the shared client enforces it', async () => {
+            const redirectPolicy = jest.fn()
             api = new IncyclistRoutesApi('https://custom.routes.api')
-            api.setRequestOptions({ enforceRedirectRules: true })
-            externalGet.mockResolvedValue({ data: [], request: { res: { responseUrl: 'http://custom.routes.api/?type=video' } } })
+            api.setRequestOptions({ redirectPolicy })
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(externalGet).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ redirectPolicy, headers: expect.anything() }))
+        })
+
+        test('the request error of the shared client is passed on', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            api.setRequestOptions({ redirectPolicy: () => false })
+            externalGet.mockRejectedValue(Object.assign(new Error('redirect not allowed'), { code: 'ERR_REDIRECT_NOT_ALLOWED' }))
 
             await expect(api.getRouteDescriptions({ type: 'video' }, true)).rejects.toMatchObject({ code: 'ERR_REDIRECT_NOT_ALLOWED' })
         })
 
-        test('redirect to a url that the address rules accept: request succeeds', async () => {
+        test('no request options: the config is passed on unchanged', async () => {
             api = new IncyclistRoutesApi('https://custom.routes.api')
-            api.setRequestOptions({ enforceRedirectRules: true })
-            externalGet.mockResolvedValue({ data: [{ id: '1' }], request: { responseURL: 'https://other.routes.api/?type=video' } })
+            externalGet.mockResolvedValue({ data: [] })
 
-            const res = await api.getRouteDescriptions({ type: 'video' }, true)
+            await api.getRouteDescriptions({ type: 'video' })
 
-            expect(res).toHaveLength(1)
+            expect(externalGet).toHaveBeenCalledWith(expect.any(String), NO_CACHE)
         })
 
-        test('redirects are not checked unless requested', async () => {
-            api = new IncyclistRoutesApi('https://custom.routes.api')
-            externalGet.mockResolvedValue({ data: [], request: { res: { responseUrl: 'http://custom.routes.api/?type=video' } } })
+        test('request options are not applied to the Incyclist api', async () => {
+            api = new IncyclistRoutesApi()
+            api.setRequestOptions({ timeout: 10 })
+            internalGet.mockResolvedValue({ data: [] })
 
-            await expect(api.getRouteDescriptions({ type: 'video' }, true)).resolves.toEqual([])
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(internalGet).toHaveBeenCalledWith(expect.any(String), NO_CACHE)
         })
     })
 })

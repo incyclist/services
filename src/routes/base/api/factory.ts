@@ -2,7 +2,11 @@ import IncyclistRoutesApi from "./api";
 import { Injectable, Singleton } from "../../../base/decorators";
 import { useUserSettings } from "../../../settings";
 import { IIncyclistRoutesApi } from "./types";
-import { validateRouteServerUrl } from "../../servers/validator";
+import { isAllowedRedirectTarget, validateRouteServerUrl } from "../../servers/validator";
+import { UnconfiguredRoutesApi } from "./unconfigured";
+
+/** requests to external route servers that take longer are given up (the server then counts as unreachable) */
+export const ROUTE_SERVER_REQUEST_TIMEOUT_MS = 30000
 
 @Singleton
 export class IncyclistRoutesApiFactory {
@@ -26,13 +30,19 @@ export class IncyclistRoutesApiFactory {
         }
         else {
             const baseUrl = this.getUserSettings().getValue(`routes.servers.${key}`,null)
-            const api = new IncyclistRoutesApi(baseUrl??key)
+
+            // a server that is not (or no longer) configured must never turn into a request, e.g. for the routes
+            // that are kept after the server was removed
+            if (!baseUrl)
+                return new UnconfiguredRoutesApi(key)
+
+            const api = new IncyclistRoutesApi(baseUrl)
             api.setSource(key)
 
             // servers added in the app have been checked against the address rules. For those, redirects must not
             // lead somewhere the rules would not have accepted. Servers written into the config file keep working as before.
-            if (validateRouteServerUrl(baseUrl??key,{allowsLocalHttp:true}).valid)
-                api.setRequestOptions({enforceRedirectRules:true})
+            const redirectPolicy = validateRouteServerUrl(baseUrl,{allowsLocalHttp:true}).valid ? isAllowedRedirectTarget : undefined
+            api.setRequestOptions({timeout:ROUTE_SERVER_REQUEST_TIMEOUT_MS, redirectPolicy})
 
             this.apis.set(key,api)
             return api
