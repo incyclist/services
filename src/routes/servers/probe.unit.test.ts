@@ -37,6 +37,14 @@ describe('route server probe', () => {
             expect(res).toMatchObject({ ok: false, code: 'not-a-server' })
         })
 
+        test('a failed probe logs the HTTP status as httpStatus, never as status', async () => {
+            await probeRouteServer('https://a.org/', apiReturning(async () => { throw { response: { status: 404 } } }))
+
+            const event = (EventLogger.prototype.logEvent as jest.Mock).mock.calls.map(c => c[0]).find(e => e.message === 'route server probe failed')
+            expect(event).toMatchObject({ result: 'not-a-server', httpStatus: 404 })
+            expect(event).not.toHaveProperty('status')
+        })
+
         test('5xx: server error', async () => {
             const res = await probeRouteServer('https://a.org/', apiReturning(async () => { throw { response: { status: 503 } } }))
             expect(res).toMatchObject({ ok: false, code: 'server-error', message: "The server didn't respond properly. Try again later, or ask its operator." })

@@ -71,7 +71,7 @@ export const probeRouteServer = async (url: string, createApi: ProbeApiFactory =
     }
     catch (err) {
         const code = mapProbeError(err)
-        logger.logEvent({ message: 'route server probe failed', result: code, reason: err?.message, status: err?.response?.status })
+        logger.logEvent({ message: 'route server probe failed', result: code, reason: err?.message, httpStatus: err?.response?.status })
         return failure(code, url)
     }
 }

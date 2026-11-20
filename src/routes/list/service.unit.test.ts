@@ -320,8 +320,8 @@ describe('RouteListService',()=>{
             expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','Alpha','Beta','Komoot','Zeta'])
         })
 
-        test('apps service without app list: does not throw',()=>{
-            Inject('AppsService', { getAvailableServices: jest.fn().mockReturnValue([]) })
+        test('no apps: sources of routes are still offered',()=>{
+            Inject('AppsService', { getAvailableServices: jest.fn().mockReturnValue([]), getApps: jest.fn().mockReturnValue([]) })
             stubRoutes([{source:'something'}])
 
             expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','Something'])
@@ -356,6 +356,40 @@ describe('RouteListService',()=>{
         test('a server name selects the routes of that server',()=>{
             const routes = [{source:'Alpine Videos'},{source:'strava'}]
             expect(service.applySourceFilter({routeSource:'AlpineVideos'},routes)).toEqual([{source:'Alpine Videos'}])
+        })
+    })
+
+    describe('normalizeSourceFilter',()=>{
+        let service
+        beforeEach(()=>{
+            service = prepareMock(null,{mockLoad:true})
+            Inject('AppsService', { getApps: jest.fn().mockReturnValue([{key:'intervals',name:'Intervals.icu'},{key:'strava',name:'Strava'}]) })
+        })
+        afterEach(()=>{
+            service.reset()
+            Inject('AppsService', null)
+        })
+
+        test.each([
+            ['Intervals','Intervals.icu'],
+            ['intervals','Intervals.icu'],
+            ['Intervals.icu','Intervals.icu'],
+            ['Strava','Strava'],
+            ['local','Local'],
+            ['Incyclist','Incyclist'],
+            ['Alpine Videos','AlpineVideos'],
+            ['AlpineVideos','AlpineVideos'],
+        ])('a saved value %s is shown as option %s',(saved,option)=>{
+            expect(service.normalizeSourceFilter(saved)).toBe(option)
+        })
+
+        test('several values',()=>{
+            expect(service.normalizeSourceFilter('Intervals|Strava')).toBe('Intervals.icu|Strava')
+        })
+
+        test('no value',()=>{
+            expect(service.normalizeSourceFilter(undefined)).toBeUndefined()
+            expect(service.normalizeSourceFilter('')).toBe('')
         })
     })
 
@@ -402,6 +436,14 @@ describe('RouteListService',()=>{
         })
 
         describe('addExternalApiProvider',()=>{
+            test('the log carries the origin and how the server was picked',()=>{
+                const logEvent = jest.spyOn(service,'logEvent')
+
+                service.addExternalApiProvider('Alpine Videos', 'alpine.example.com', {origin:'import',via:'known'})
+
+                expect(logEvent).toHaveBeenCalledWith(expect.objectContaining({message:'route server added', key:'Alpine Videos', origin:'import', via:'known'}))
+            })
+
             test('valid name and url: stored normalised, api cache invalidated',()=>{
                 const res = service.addExternalApiProvider('  Alpine   Videos ', 'alpine.example.com')
 

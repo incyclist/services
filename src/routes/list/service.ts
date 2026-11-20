@@ -1271,9 +1271,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * @param httpFallbackUrl  `http://` variant to try once if `url` could not be reached (home network, no scheme typed)
      */
     async probeExternalApiProvider(url:string, httpFallbackUrl?:string):Promise<RouteServerProbeResult> {
-        const result = await checkRouteServer(url, httpFallbackUrl)
-        this.logEvent({message:'route server probe', ok:result.ok, code:result.ok ? undefined:result.code, routeCount:result.ok ? result.routeCount:undefined, switchedToHttp:result.ok ? result.switchedToHttp:undefined})
-        return result
+        return await checkRouteServer(url, httpFallbackUrl)
     }
 
     /**
@@ -1283,10 +1281,12 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * The platform capability for home-network `http://` is deliberately not part of this check,
      * only the format and home-network rules are.
      *
+     * @param props.origin  where the user added it from (for the log)
+     * @param props.via     whether the address was picked from the list of known servers or typed (for the log)
      * @throws RouteServerValidationError if name or address are not valid
      * @returns the name and address as they were stored
      */
-    addExternalApiProvider(key:string, url: string):{name:string, url:string} {
+    addExternalApiProvider(key:string, url: string, props:{origin?:'settings'|'import', via?:'known'|'manual'}={}):{name:string, url:string} {
         const name = this.validateExternalApiProviderName(key)
         if (!name.valid)
             throw new RouteServerValidationError('name', name.code, name.message)
@@ -1296,16 +1296,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             throw new RouteServerValidationError('url', address.code, address.message)
 
         this.getUserSettings().set(`routes.servers.${name.name}`,address.url)
-        this.getIncyclistRoutesApi().invalidate?.(name.name)
-        this.logEvent({message:'route server added', name:name.name, host:address.host, isLocal:address.isLocal, isUnencrypted:address.isUnencrypted})
+        this.getIncyclistRoutesApi().invalidate(name.name)
+        this.logEvent({message:'route server added', key:name.name, host:address.host, isLocal:address.isLocal, isUnencrypted:address.isUnencrypted, origin:props.origin, via:props.via})
         return {name:name.name, url:address.url}
     }
 
     deleteExternalApiProvider(key:string) {
         this.getUserSettings().set(`routes.servers.${key}`,null)
-        this.getIncyclistRoutesApi().invalidate?.(key)
+        this.getIncyclistRoutesApi().invalidate(key)
         this.getRouteServerStatus().remove(key)
-        this.logEvent({message:'route server removed', name:key})
+        this.logEvent({message:'route server removed', key})
     }
 
     /**
@@ -1382,7 +1382,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     /** names that can not be used for a route server: Local, Incyclist and every app (key and display name), connected or not */
     protected getReservedSourceNames():Array<string> {
-        const apps = this.getAppsService().getApps?.() ?? []
+        const apps = this.getAppsService().getApps()
         return ['Local','Incyclist', ...apps.flatMap( a=>[a.key,a.name])]
     }
 
@@ -1796,6 +1796,28 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return [...fixed, ...sources]
     }
 
+    /**
+     * Maps a value of the Source filter that was saved earlier to the option that is offered now. Apps used to be
+     * offered by their key (`Intervals`) and are now offered by their display name (`Intervals.icu`), so a saved
+     * value would not show as selected any more. Several values are separated by `|`. The filter itself accepts both
+     * spellings, this is only needed to show the selection.
+     *
+     * @param routeSource the value as it was saved
+     * @returns the value as it is offered by getFilterOptions()
+     */
+    normalizeSourceFilter(routeSource?:string):string|undefined {
+        if (!routeSource)
+            return routeSource
+        return routeSource.split('|').map( v=>this.getSourceOptionLabel(v) ).join('|')
+    }
+
+    private getSourceOptionLabel(value:string):string {
+        const fixed = ['Local','Incyclist'].find( f=>toSourceKey(f)===toSourceKey(value) )
+        if (fixed)
+            return fixed
+        return this.getAppNamesByKey().get(this.resolveSourceKey(value)) ?? this.getSourceLabel(value)
+    }
+
     private getAllAppSources():Array<string> {
         const apps= this.getAppsService().getAvailableServices('RouteDownload')??[]
         return apps.map(pascalCase)
@@ -1810,13 +1832,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     /** display name of every app by its source key */
     private getAppNamesByKey():Map<string,string> {
-        const apps = this.getAppsService().getApps?.() ?? []
+        const apps = this.getAppsService().getApps()
         return new Map( apps.map( a=>[toSourceKey(a.key), a.name] ) )
     }
 
     /** the source filter offers apps by their display name, routes carry the app key */
     private resolveSourceKey(value:string):string {
-        const apps = this.getAppsService().getApps?.() ?? []
+        const apps = this.getAppsService().getApps()
         const key = toSourceKey(value)
         const app = apps.find( a=>toSourceKey(a.name)===key )
         return app ? toSourceKey(app.key) : key
