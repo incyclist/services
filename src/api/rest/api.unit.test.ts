@@ -180,6 +180,17 @@ describe('ApiClient redirect policy', () => {
         expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'redirect check skipped' }))
     })
 
+    test('final url not available: the message is logged once per client', async () => {
+        const policy = jest.fn().mockReturnValue(false)
+        mockServedFrom(undefined)
+
+        await api.client().get('https://example.com/a', { redirectPolicy: policy })
+        await api.client().get('https://example.com/b', { redirectPolicy: policy })
+
+        const skipped = logSpy.mock.calls.filter(c => c[0]?.message === 'redirect check skipped')
+        expect(skipped).toHaveLength(1)
+    })
+
     test('query parameters are part of the origin url', async () => {
         const policy = jest.fn().mockReturnValue(true)
         mockServedFrom('https://other.example.com/a')

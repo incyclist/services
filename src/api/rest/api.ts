@@ -40,6 +40,7 @@ export class ApiClient {
         ts: number;
     }>;
 
+    private redirectSkipLogged = false;
     private requestInterceptorId?: number;
     private responseInterceptorId?: number;
 
@@ -130,7 +131,10 @@ export class ApiClient {
         const origin = getRequestUrl(config)
         const finalUrl = getResponseUrl(res)
         if (!finalUrl) {
-            this.logger.logEvent({ message: 'redirect check skipped', reason: 'final url not available' })
+            if (!this.redirectSkipLogged) {
+                this.redirectSkipLogged = true
+                this.logger.logEvent({ message: 'redirect check skipped', reason: 'final url not available' })
+            }
             return res
         }
         if (finalUrl === origin)
