@@ -1,7 +1,7 @@
 import { pascalCase } from '../../utils/string'
 import { SERVER_MESSAGES as MSG } from './messages'
 import type {
-    RouteServerNameContext, RouteServerNameResult, RouteServerUrlContext, RouteServerUrlInfo, RouteServerUrlResult
+    RouteServerUrlErrorCode, RouteServerNameContext, RouteServerNameResult, RouteServerUrlContext, RouteServerUrlInfo, RouteServerUrlResult
 } from './types'
 
 const MAX_URL_LENGTH = 2048
@@ -11,6 +11,12 @@ const HIDDEN_CHARS = /[\s\p{Cc}\p{Cf}]/u
 const FORBIDDEN_RAW_CHARS = /["\\<>{}|^`]/
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i
 const LABEL_PATTERN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
+
+/**
+ * The identity of a source: `pascalCase(name)`, compared without regard to case.
+ * "alpine videos", "Alpine-Videos" and "AlpineVideos" are the same source.
+ */
+export const toSourceKey = (name: string): string => pascalCase(name)?.toLowerCase()
 
 /**
  * Checks and normalises a route server name (the name is the settings key and the source label).
@@ -30,15 +36,15 @@ export const validateRouteServerName = (input: string, context: RouteServerNameC
     if (!NAME_PATTERN.test(name))
         return { valid: false, name, code: 'format', message: MSG.nameFormat }
 
-    const key = pascalCase(name)
+    const key = toSourceKey(name)
     if (!key)
         return { valid: false, name, code: 'format', message: MSG.nameFormat }
 
-    const reserved = [...RESERVED_WORDS, ...(context.reservedNames ?? [])].map(pascalCase)
+    const reserved = [...RESERVED_WORDS, ...(context.reservedNames ?? [])].map(toSourceKey)
     if (reserved.includes(key))
         return { valid: false, name, code: 'reserved-source', message: MSG.nameReservedSource(name) }
 
-    const existing = (context.existingNames ?? []).find(n => pascalCase(n) === key)
+    const existing = (context.existingNames ?? []).find(n => toSourceKey(n) === key)
     if (existing !== undefined)
         return { valid: false, name, code: 'duplicate', message: MSG.nameDuplicate(existing) }
 
@@ -136,7 +142,7 @@ export const normalizeRouteServerUrl = (url: string): string => {
     }
 }
 
-type UrlFailure = { valid: false, code: Extract<RouteServerUrlResult, { valid: false }>['code'], message?: string }
+type UrlFailure = { valid: false, code: RouteServerUrlErrorCode, message?: string }
 
 const fail = (code: UrlFailure['code'], message?: string): UrlFailure => ({ valid: false, code, message })
 

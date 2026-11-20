@@ -22,6 +22,8 @@ import { useRouteLibraryScanner } from "../library/service";
 import { RouteListObserver } from "./RouteListObserver";
 
 import type { ParseResult } from "../types";
+import { RouteServerValidationError } from "../servers/errors";
+import * as probeModule from "../servers/probe";
 
 
 let cnt = 0
@@ -220,9 +222,15 @@ describe('RouteListService',()=>{
         let appsServiceMock
         let userSettingsMock
 
+        const APPS = [
+            {key:'strava',name:'Strava'},
+            {key:'komoot',name:'Komoot'},
+            {key:'intervals',name:'Intervals.icu'},
+        ]
+
         beforeEach(()=>{
             service = prepareMock(null,{mockLoad:true})
-            appsServiceMock = { getAvailableServices: jest.fn().mockReturnValue([]) }
+            appsServiceMock = { getAvailableServices: jest.fn().mockReturnValue([]), getApps: jest.fn().mockReturnValue(APPS) }
             userSettingsMock = { getValue: jest.fn().mockReturnValue(null) }
             Inject('AppsService', appsServiceMock)
             Inject('UserSettings', userSettingsMock)
@@ -247,8 +255,7 @@ describe('RouteListService',()=>{
             expect(sources).toEqual(['Local','Incyclist'])
         })
 
-        test('route source matches a registered app: is appended',()=>{
-            appsServiceMock.getAvailableServices.mockReturnValue(['Strava'])
+        test('route source of an app: is shown with the display name of the app',()=>{
             stubRoutes([{source:'Strava'}])
 
             const sources = service.getFilterRouteSources()
@@ -256,45 +263,68 @@ describe('RouteListService',()=>{
             expect(sources).toEqual(['Local','Incyclist','Strava'])
         })
 
-        test('route source matches a configured external route server: is appended',()=>{
-            userSettingsMock.getValue.mockReturnValue({myserver:'https://myserver.example.com'})
-            stubRoutes([{source:'Myserver'}])
+        test('app that is not connected (not offering route download): is still listed if routes exist',()=>{
+            appsServiceMock.getAvailableServices.mockReturnValue([])
+            stubRoutes([{source:'komoot'}])
 
-            const sources = service.getFilterRouteSources()
-
-            expect(sources).toEqual(['Local','Incyclist','Myserver'])
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','Komoot'])
         })
 
-        test('route has no source: is ignored',()=>{
-            stubRoutes([{source:undefined}])
+        test('app with a display name that differs from its key: display name is used',()=>{
+            stubRoutes([{source:'intervals'}])
 
-            const sources = service.getFilterRouteSources()
-
-            expect(sources).toEqual(['Local','Incyclist'])
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','Intervals.icu'])
         })
 
-        test('route source matches neither a registered app nor a configured external server: is ignored',()=>{
+        test('route server that is configured: is listed pascal-cased',()=>{
+            userSettingsMock.getValue.mockReturnValue({'Alpine Videos':'https://alpine.example.com'})
+            stubRoutes([{source:'AlpineVideos'}])
+
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','AlpineVideos'])
+        })
+
+        test('source of a server that is not configured (removed, or only known on another device): is listed',()=>{
+            userSettingsMock.getValue.mockReturnValue(null)
             stubRoutes([{source:'unknown'}])
 
-            const sources = service.getFilterRouteSources()
-
-            expect(sources).toEqual(['Local','Incyclist'])
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','Unknown'])
         })
 
-        test('no external route servers configured: does not throw',()=>{
-            userSettingsMock.getValue.mockReturnValue(null)
-            stubRoutes([{source:'anything'}])
+        test('route has no source or an empty source: is ignored',()=>{
+            stubRoutes([{source:undefined},{source:''},{source:null}])
 
-            expect(()=>service.getFilterRouteSources()).not.toThrow()
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist'])
         })
 
-        test('multiple routes sharing a matching source: source is appended once',()=>{
-            appsServiceMock.getAvailableServices.mockReturnValue(['Strava'])
+        test('Local and Incyclist are never added twice',()=>{
+            stubRoutes([{source:'local'},{source:'INCYCLIST'}])
+
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist'])
+        })
+
+        test('spellings that share one pascalCase: listed once',()=>{
+            stubRoutes([{source:'alpine videos'},{source:'Alpine-Videos'},{source:'ALPINE_VIDEOS'}])
+
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','AlpineVideos'])
+        })
+
+        test('multiple routes sharing a source: source is listed once',()=>{
             stubRoutes([{source:'Strava'},{source:'Strava'}])
 
-            const sources = service.getFilterRouteSources()
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','Strava'])
+        })
 
-            expect(sources).toEqual(['Local','Incyclist','Strava'])
+        test('everything after Local and Incyclist is sorted alphabetically, ignoring case',()=>{
+            stubRoutes([{source:'zeta'},{source:'komoot'},{source:'Beta'},{source:'alpha'}])
+
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','Alpha','Beta','Komoot','Zeta'])
+        })
+
+        test('apps service without app list: does not throw',()=>{
+            Inject('AppsService', { getAvailableServices: jest.fn().mockReturnValue([]) })
+            stubRoutes([{source:'something'}])
+
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','Something'])
         })
 
         test('passes the filters through to getRoutesForFilterOptions, excluding the routeSource dimension',()=>{
@@ -305,6 +335,295 @@ describe('RouteListService',()=>{
             expect(service['getRoutesForFilterOptions']).toHaveBeenCalledWith({contentType:'Video'},'routeSource')
         })
 
+    })
+
+    describe('applySourceFilter with app display names',()=>{
+        let service
+        beforeEach(()=>{
+            service = prepareMock(null,{mockLoad:true})
+            Inject('AppsService', { getApps: jest.fn().mockReturnValue([{key:'intervals',name:'Intervals.icu'}]) })
+        })
+        afterEach(()=>{
+            service.reset()
+            Inject('AppsService', null)
+        })
+
+        test('the display name of an app selects the routes carrying the app key',()=>{
+            const routes = [{source:'intervals'},{source:'strava'},{source:undefined,isLocal:true}]
+            expect(service.applySourceFilter({routeSource:'Intervals.icu'},routes)).toEqual([{source:'intervals'}])
+        })
+
+        test('a server name selects the routes of that server',()=>{
+            const routes = [{source:'Alpine Videos'},{source:'strava'}]
+            expect(service.applySourceFilter({routeSource:'AlpineVideos'},routes)).toEqual([{source:'Alpine Videos'}])
+        })
+    })
+
+    describe('route servers',()=>{
+        let service
+        let settings: Record<string,string>
+        let userSettingsMock
+        let factoryMock
+        let statusMock
+
+        const OK_URL = 'https://alpine.example.com/api'
+
+        const addRoute = (id:string, props:Record<string,unknown>={})=> {
+            const route = new Route({id,title:id,hasVideo:true,apiServer:'Alpine Videos',...props} as unknown as RouteInfo)
+            service.routes.push(route)
+            return route
+        }
+
+        beforeEach(()=>{
+            service = prepareMock(null,{mockLoad:true})
+            service.routes = []
+            settings = {}
+            userSettingsMock = {
+                getValue: jest.fn((key:string,def)=> key==='routes.servers' ? (Object.keys(settings).length ? {...settings}:def) : def),
+                set: jest.fn((key:string,value)=> {
+                    const name = key.replace('routes.servers.','')
+                    if (value===null) delete settings[name]; else settings[name]=value
+                })
+            }
+            factoryMock = { invalidate: jest.fn(), create: jest.fn() }
+            statusMock = { remove: jest.fn() }
+            Inject('UserSettings', userSettingsMock)
+            Inject('AppsService', { getApps: jest.fn().mockReturnValue([{key:'strava',name:'Strava'}]), getAvailableServices: jest.fn().mockReturnValue([]) })
+            Inject('IncyclistRoutesApi', factoryMock)
+            Inject('RouteServerStatus', statusMock)
+        })
+
+        afterEach(()=>{
+            service.reset()
+            Inject('UserSettings', null)
+            Inject('AppsService', null)
+            Inject('IncyclistRoutesApi', null)
+            Inject('RouteServerStatus', null)
+        })
+
+        describe('addExternalApiProvider',()=>{
+            test('valid name and url: stored normalised, api cache invalidated',()=>{
+                const res = service.addExternalApiProvider('  Alpine   Videos ', 'alpine.example.com')
+
+                expect(res).toEqual({name:'Alpine Videos', url:'https://alpine.example.com/'})
+                expect(userSettingsMock.set).toHaveBeenCalledWith('routes.servers.Alpine Videos','https://alpine.example.com/')
+                expect(factoryMock.invalidate).toHaveBeenCalledWith('Alpine Videos')
+            })
+
+            test('S1: invalid name throws and leaves the settings unchanged',()=>{
+                expect(()=>service.addExternalApiProvider('a"b',OK_URL)).toThrow(RouteServerValidationError)
+                expect(userSettingsMock.set).not.toHaveBeenCalled()
+                expect(factoryMock.invalidate).not.toHaveBeenCalled()
+            })
+
+            test.each(['a.b','constructor','strava','Local'])('name %s is refused',(name)=>{
+                expect(()=>service.addExternalApiProvider(name,OK_URL)).toThrow(RouteServerValidationError)
+                expect(userSettingsMock.set).not.toHaveBeenCalled()
+            })
+
+            test('invalid url throws and leaves the settings unchanged',()=>{
+                try {
+                    service.addExternalApiProvider('Alpine','http://evil.example.com')
+                    throw new Error('did not throw')
+                }
+                catch(err) {
+                    expect(err).toBeInstanceOf(RouteServerValidationError)
+                    expect(err).toMatchObject({field:'url',code:'http-internet'})
+                }
+                expect(userSettingsMock.set).not.toHaveBeenCalled()
+            })
+
+            test('home-network http is accepted (the platform flag is not part of the service rules)',()=>{
+                const res = service.addExternalApiProvider('Nas','http://nas:8080')
+                expect(res.url).toBe('http://nas:8080/')
+            })
+
+            test('name that already exists (same pascalCase): refused',()=>{
+                service.addExternalApiProvider('Alpine Videos',OK_URL)
+                expect(()=>service.addExternalApiProvider('alpine-videos','https://other.example.com')).toThrow(RouteServerValidationError)
+            })
+
+            test('url that already exists: refused',()=>{
+                service.addExternalApiProvider('Alpine Videos',OK_URL)
+                expect(()=>service.addExternalApiProvider('Other','HTTPS://Alpine.Example.com/api/')).toThrow(RouteServerValidationError)
+            })
+
+            test('url of the built-in server: refused',()=>{
+                expect(()=>service.addExternalApiProvider('Mine','https://dlws.incyclist.com/api/v1/routes')).toThrow(RouteServerValidationError)
+            })
+        })
+
+        describe('getExternalApiProviders',()=>{
+            test('none configured: null',()=>{
+                expect(service.getExternalApiProviders()).toBeNull()
+            })
+            test('configured: map of name to url',()=>{
+                service.addExternalApiProvider('Alpine Videos',OK_URL)
+                expect(Array.from(service.getExternalApiProviders().entries())).toEqual([['Alpine Videos',OK_URL]])
+            })
+        })
+
+        describe('deleteExternalApiProvider',()=>{
+            test('removes the setting, drops the cached api and the status',()=>{
+                service.addExternalApiProvider('Alpine Videos',OK_URL)
+                factoryMock.invalidate.mockClear()
+
+                service.deleteExternalApiProvider('Alpine Videos')
+
+                expect(settings).toEqual({})
+                expect(factoryMock.invalidate).toHaveBeenCalledWith('Alpine Videos')
+                expect(statusMock.remove).toHaveBeenCalledWith('Alpine Videos')
+            })
+
+            test('re-adding the same name with a new url uses the new url',()=>{
+                service.addExternalApiProvider('Alpine Videos',OK_URL)
+                service.deleteExternalApiProvider('Alpine Videos')
+                service.addExternalApiProvider('Alpine Videos','https://new.example.com/api')
+
+                expect(settings['Alpine Videos']).toBe('https://new.example.com/api')
+                expect(factoryMock.invalidate).toHaveBeenCalledTimes(3)
+            })
+        })
+
+        describe('validateExternalApiProviderName/Url',()=>{
+            test('reserved names are computed from the apps at check time',()=>{
+                expect(service.validateExternalApiProviderName('strava')).toMatchObject({valid:false,code:'reserved-source'})
+                Inject('AppsService', { getApps: jest.fn().mockReturnValue([{key:'strava',name:'Strava'},{key:'newapp',name:'New App'}]) })
+                expect(service.validateExternalApiProviderName('new app')).toMatchObject({valid:false,code:'reserved-source'})
+            })
+
+            test('the platform flag decides about home-network http',()=>{
+                expect(service.validateExternalApiProviderUrl('http://nas')).toMatchObject({valid:false,code:'http-not-supported'})
+                expect(service.validateExternalApiProviderUrl('http://nas',{allowsLocalHttp:true}).valid).toBe(true)
+            })
+
+            test('ROUTE_API override is treated as built-in server',()=>{
+                userSettingsMock.getValue.mockImplementation((key:string,def)=> key==='ROUTE_API' ? 'https://my.dev/routes' : def)
+                expect(service.validateExternalApiProviderUrl('https://my.dev/routes/')).toMatchObject({valid:false,code:'built-in'})
+            })
+        })
+
+        describe('probeExternalApiProvider',()=>{
+            test('returns the result of the check',async ()=>{
+                const probe = jest.spyOn(probeModule,'checkRouteServer').mockResolvedValue({ok:true,routeCount:3,url:OK_URL})
+
+                const res = await service.probeExternalApiProvider(OK_URL,'http://x')
+
+                expect(res).toEqual({ok:true,routeCount:3,url:OK_URL})
+                expect(probe).toHaveBeenCalledWith(OK_URL,'http://x')
+                probe.mockRestore()
+            })
+        })
+
+        describe('route count and delete',()=>{
+            test('counts the routes of one server, ignoring deleted routes and other servers',()=>{
+                addRoute('a1'); addRoute('a2'); addRoute('a3',{isDeleted:true}); addRoute('b1',{apiServer:'Other'}); addRoute('l1',{apiServer:undefined})
+
+                expect(service.getExternalApiProviderRouteCount('Alpine Videos')).toBe(2)
+                expect(service.getExternalApiProviderRouteCount('alpine-videos')).toBe(2)
+                expect(service.getExternalApiProviderRouteCount('Nope')).toBe(0)
+            })
+
+            test('download info: count and total size of downloaded videos',async ()=>{
+                addRoute('a1',{isDownloaded:true,videoUrl:'video:///videos/a1.mp4'})
+                addRoute('a2',{isDownloaded:true,videoUrl:'file:///videos/a2.mp4'})
+                addRoute('a3')
+                const stat = jest.fn(async (path:string)=>({size: path.endsWith('a1.mp4') ? 1000:500}))
+                getBindings().fs = {...getBindings().fs, stat} as unknown as IFileSystem
+
+                const info = await service.getExternalApiProviderDownloadInfo('Alpine Videos')
+
+                expect(info).toEqual({routeCount:3,downloadedCount:2,downloadedBytes:1500})
+                expect(stat).toHaveBeenCalledWith('videos/a1.mp4')
+            })
+
+            test('download info: size can not be determined',async ()=>{
+                addRoute('a1',{isDownloaded:true,videoUrl:'video:///videos/a1.mp4'})
+                getBindings().fs = {...getBindings().fs, stat:undefined} as unknown as IFileSystem
+                getBindings().fileAccess = undefined
+
+                const info = await service.getExternalApiProviderDownloadInfo('Alpine Videos')
+
+                expect(info).toEqual({routeCount:1,downloadedCount:1,downloadedBytes:undefined})
+            })
+
+            test('download info: nothing downloaded',async ()=>{
+                addRoute('a1')
+                expect(await service.getExternalApiProviderDownloadInfo('Alpine Videos')).toEqual({routeCount:1,downloadedCount:0,downloadedBytes:0})
+            })
+
+            test('deletes routes of the server (and their downloads) through their cards, nothing else',async ()=>{
+                const a1 = addRoute('a1',{isDownloaded:true,videoUrl:'video:///videos/a1.mp4'})
+                const a2 = addRoute('a2')
+                addRoute('b1',{apiServer:'Other'})
+
+                const calls: Array<string> = []
+                const cardFor = (id:string)=> ({
+                    deleteDownload: jest.fn(async ()=>{ calls.push(`download:${id}`) }),
+                    delete: jest.fn(()=>({ wait: async ()=>{ calls.push(`delete:${id}`) } }))
+                })
+                const cards = { a1:cardFor('a1'), a2:cardFor('a2') }
+                service.findCard = jest.fn((id:string)=>({card:cards[id]}))
+                service.emitLists = jest.fn()
+
+                const res = await service.deleteExternalApiProviderRoutes('Alpine Videos')
+
+                expect(res).toEqual({deleted:2,failed:0})
+                expect(calls).toEqual(['download:a1','delete:a1','delete:a2'])
+                expect(cards.a1.delete).toHaveBeenCalledWith({enforced:true,source:'user'})
+                expect(service.findCard).not.toHaveBeenCalledWith('b1')
+                expect([a1,a2]).toHaveLength(2)
+            })
+
+            test('a route that can not be deleted is counted, the others are still deleted',async ()=>{
+                addRoute('a1'); addRoute('a2')
+                service.findCard = jest.fn((id:string)=>({card:{
+                    deleteDownload: jest.fn(),
+                    delete: jest.fn(()=>({ wait: async ()=>{ if (id==='a1') throw new Error('disk') } }))
+                }}))
+                service.emitLists = jest.fn()
+
+                const res = await service.deleteExternalApiProviderRoutes('Alpine Videos')
+
+                expect(res).toEqual({deleted:1,failed:1})
+            })
+
+            test('route without a card: removed from the repository and the downloaded file is deleted',async ()=>{
+                addRoute('a1',{isDownloaded:true,videoUrl:'video:///videos/a1.mp4'})
+                const unlink = jest.fn().mockResolvedValue(undefined)
+                getBindings().fs = {...getBindings().fs, unlink} as unknown as IFileSystem
+                service.findCard = jest.fn().mockReturnValue(undefined)
+                service.db = { delete: jest.fn().mockResolvedValue(undefined) }
+                service.emitLists = jest.fn()
+
+                const res = await service.deleteExternalApiProviderRoutes('Alpine Videos')
+
+                expect(res).toEqual({deleted:1,failed:0})
+                expect(unlink).toHaveBeenCalledWith('videos/a1.mp4')
+                expect(service.db.delete).toHaveBeenCalled()
+                expect(service.getExternalApiProviderRouteCount('Alpine Videos')).toBe(0)
+            })
+        })
+
+        describe('loadExternalApiProvider',()=>{
+            test('loads the server through the loader and adds its routes to the list',async ()=>{
+                const observer = new Observer()
+                service.api = { loadServer: jest.fn().mockReturnValue(observer) }
+                service.addFromApi = jest.fn()
+                service.update = jest.fn()
+
+                const promise = service.loadExternalApiProvider('Alpine Videos')
+                const route = new Route({id:'a1',title:'a1'} as unknown as RouteInfo)
+                observer.emit('route.added',route)
+                observer.emit('route.updated',route)
+                observer.emit('done')
+                await promise
+
+                expect(service.api.loadServer).toHaveBeenCalledWith('Alpine Videos')
+                expect(service.addFromApi).toHaveBeenCalledWith(route)
+                expect(service.update).toHaveBeenCalledWith(route)
+            })
+        })
     })
 
 

@@ -13,9 +13,15 @@ export interface RouteServerNameContext {
     reservedNames?: Array<string>
 }
 
-export type RouteServerNameResult =
-    { valid: true, name: string } |
-    { valid: false, name: string, code: RouteServerNameErrorCode, message: string }
+// The results are flat interfaces (not unions), as the library is not compiled with strict null checks,
+// which discriminated unions on a boolean rely on.
+export interface RouteServerNameResult {
+    valid: boolean
+    name: string
+    /** only set if `valid` is false */
+    code?: RouteServerNameErrorCode
+    message?: string
+}
 
 export interface RouteServerUrlContext {
     /** whether `http://` is accepted for hosts on the home network (platform capability) */
@@ -37,15 +43,24 @@ export interface RouteServerUrlInfo {
     isUnencrypted: boolean
 }
 
-export type RouteServerUrlResult =
-    ({ valid: true } & RouteServerUrlInfo) |
-    { valid: false, code: RouteServerUrlErrorCode, message?: string }
+export interface RouteServerUrlResult extends Partial<RouteServerUrlInfo> {
+    valid: boolean
+    /** only set if `valid` is false. A missing message means: nothing to show (e.g. empty address) */
+    code?: RouteServerUrlErrorCode
+    message?: string
+}
 
 export type RouteServerProbeFailure = 'unreachable' | 'not-a-server' | 'server-error'
 
-export type RouteServerProbeResult =
-    { ok: true, routeCount: number, url: string, switchedToHttp?: boolean } |
-    { ok: false, code: RouteServerProbeFailure, message: string, url: string }
+export interface RouteServerProbeResult {
+    ok: boolean
+    url: string
+    routeCount?: number
+    switchedToHttp?: boolean
+    /** only set if `ok` is false */
+    code?: RouteServerProbeFailure
+    message?: string
+}
 
 export interface RouteServerLoadResult {
     status: Exclude<RouteServerStatus, 'loading' | 'unknown'>

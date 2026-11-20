@@ -14,6 +14,21 @@ describe ('AppService',()=>{
     const connectedApp = mock(true)
     const notConnectedApp = mock(false)
 
+    describe('getApps',()=>{
+        test('lists key and display name of every app',()=>{
+            const service = useAppsService()
+            service.inject('UserSettings', { isInitialized: false, getValue: jest.fn() })
+            try {
+                const apps = service.getApps()
+                expect(apps).toEqual(expect.arrayContaining([{key:'strava',name:'Strava'},{key:'intervals',name:'Intervals.icu'}]))
+                expect(Object.keys(apps[0]).sort()).toEqual(['key','name'])
+            }
+            finally {
+                service.inject('UserSettings',null)
+            }
+        })
+    })
+
     describe('getConnectedServices',()=>{
 
         let service:AppsService

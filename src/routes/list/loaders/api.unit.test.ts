@@ -5,6 +5,7 @@ import { RouteApiDescription, RouteApiDetail } from '../../base/api/types'
 import { RoutesApiLoader } from './api'
 import { LoadDetailsTargets } from './types'
 import { RouteInfo } from '../../types'
+import { useRouteServerStatus } from '../../servers/status'
 
 const waitTick = (ms = 5) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -392,6 +393,111 @@ describe('RoutesApiLoader', () => {
             const { added } = await waitDone(service.load())
 
             expect(added.some(r => r.description.id === 'g1')).toBe(true)
+        })
+    })
+
+    describe('route server status', () => {
+        const withExternal = (getRouteDescriptions: jest.Mock) => {
+            userSettingsMock.getValue.mockReturnValue({ myserver: 'https://myserver.example.com' })
+            const externalApi = { getRouteDescriptions, getRouteDetails: jest.fn().mockResolvedValue(detail({ id: 'ext1' })), setSource: jest.fn() }
+            const factory = { create: jest.fn((key?: string) => key ? externalApi : apiMock) }
+            Inject('IncyclistRoutesApi', factory)
+            service = new RoutesApiLoader();
+            (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+            return factory
+        }
+
+        afterEach(() => { useRouteServerStatus().reset() })
+
+        test('server returned routes: ok with the count', async () => {
+            withExternal(jest.fn().mockResolvedValue([descr({ id: 'ext1' }), descr({ id: 'ext2' })]))
+
+            await waitDone(service.load())
+
+            expect(useRouteServerStatus().getResult('myserver')).toEqual({ status: 'ok', routeCount: 2 })
+        })
+
+        test('server returned no routes: empty', async () => {
+            withExternal(jest.fn().mockResolvedValue([]))
+
+            await waitDone(service.load())
+
+            expect(useRouteServerStatus().getStatus('myserver')).toBe('empty')
+        })
+
+        test('server failed: unreachable', async () => {
+            withExternal(jest.fn().mockRejectedValue(new Error('down')))
+
+            await waitDone(service.load())
+
+            expect(useRouteServerStatus().getStatus('myserver')).toBe('unreachable')
+        })
+
+        test('server did not return a list: unreachable', async () => {
+            withExternal(jest.fn().mockResolvedValue('<html/>'))
+
+            await waitDone(service.load())
+
+            expect(useRouteServerStatus().getStatus('myserver')).toBe('unreachable')
+        })
+
+        test('status is loading while the request is open', () => {
+            withExternal(jest.fn().mockReturnValue(new Promise(() => { /* pending */ })))
+
+            service.load()
+
+            expect(useRouteServerStatus().getStatus('myserver')).toBe('loading')
+        })
+    })
+
+    describe('loadServer', () => {
+        test('loads only the requested server and emits its routes', async () => {
+            const externalApi = {
+                getRouteDescriptions: jest.fn().mockResolvedValue([descr({ id: 'ext1', apiServer: 'myserver' })]),
+                getRouteDetails: jest.fn().mockResolvedValue(detail({ id: 'ext1' })),
+                setSource: jest.fn(),
+            }
+            const factory = { create: jest.fn((key?: string) => key ? externalApi : apiMock) }
+            Inject('IncyclistRoutesApi', factory)
+            service = new RoutesApiLoader();
+            (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+            apiMock.getRouteDescriptions.mockClear()
+
+            const { added } = await waitDone(service.loadServer('myserver'))
+
+            expect(added.map(r => r.description.id)).toEqual(['ext1'])
+            expect(apiMock.getRouteDescriptions).not.toHaveBeenCalled()
+            expect(externalApi.getRouteDescriptions).toHaveBeenCalledWith({ type: 'video' }, true)
+            expect(useRouteServerStatus().getResult('myserver')).toEqual({ status: 'ok', routeCount: 1 })
+            useRouteServerStatus().reset()
+        })
+
+        test('server not reachable: done is still emitted and status is unreachable', async () => {
+            const externalApi = { getRouteDescriptions: jest.fn().mockRejectedValue(new Error('down')), getRouteDetails: jest.fn(), setSource: jest.fn() }
+            Inject('IncyclistRoutesApi', { create: jest.fn((key?: string) => key ? externalApi : apiMock) })
+            service = new RoutesApiLoader()
+
+            const { added } = await waitDone(service.loadServer('myserver'))
+
+            expect(added).toHaveLength(0)
+            expect(useRouteServerStatus().getStatus('myserver')).toBe('unreachable')
+            useRouteServerStatus().reset()
+        })
+
+        test('a load is running: starts when it is done', async () => {
+            const externalApi = { getRouteDescriptions: jest.fn().mockResolvedValue([]), getRouteDetails: jest.fn(), setSource: jest.fn() }
+            Inject('IncyclistRoutesApi', { create: jest.fn((key?: string) => key ? externalApi : apiMock) })
+            service = new RoutesApiLoader()
+
+            const running = waitDone(service.load())
+            const single = waitDone(service.loadServer('myserver'))
+            expect(externalApi.getRouteDescriptions).not.toHaveBeenCalled()
+
+            await running
+            await single
+
+            expect(externalApi.getRouteDescriptions).toHaveBeenCalledTimes(1)
+            useRouteServerStatus().reset()
         })
     })
 

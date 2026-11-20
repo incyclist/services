@@ -12,6 +12,7 @@ import { Injectable } from "../../../base/decorators";
 import { useIncyclistRoutesApi } from "../../base/api/factory";
 import { useUserSettings } from "../../../settings";
 import { pascalCase } from "../../../utils";
+import { useRouteServerStatus } from "../../servers/status";
 
 const ROUTE_DETAILS_CONCURRENCY = 4
 
@@ -80,13 +81,11 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         const promises = []
         if (external.length) {
             
-            for (const externalApi of external) {
+            for (const {key, api:externalApi} of external) {
                 // promises.push(
                 //     externalApi.getRouteDescriptions({type:'gpx'},true).then( v=> v.map(e=>enrichApi(e,'gpx'))).catch(error => {throw new ApiError(error,'gpx')}) 
                 // )
-                promises.push(
-                    externalApi.getRouteDescriptions({type:'video'},true).then( v=> v.map(e=>enrichApi(e,'video'))).catch(error => {throw new ApiError(error,'video')}) 
-                )
+                promises.push( this.loadVideoRoutesFromServer(key,externalApi,enrichApi) )
             }
 
             Promise.allSettled( promises).then (async res => {
@@ -101,7 +100,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         
     }
 
-    protected getExternalRouteServers():Array<IIncyclistRoutesApi> {
+    protected getExternalRouteServers():Array<{key:string, api:IIncyclistRoutesApi}> {
         const externalConfig:Record<string,string> = this.getUserSettings().getValue('routes.servers',null)
         
         const apis = []
@@ -114,14 +113,79 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             this.logger.logEvent({message:'adding external route server', key, url:baseUrl})
 
             const api = this.getIncyclistRoutesApi().create(key) 
-            apis.push(api)
+            apis.push({key,api})
         })
         return apis
 
 
     }
 
+    /**
+     * Loads the video route descriptions of one external route server and records the outcome (in memory only)
+     * so that the settings can show the status of each server.
+     */
+    protected async loadVideoRoutesFromServer(key:string, api:IIncyclistRoutesApi, enrichApi:(v:RouteApiDescription,type:string)=>RouteApiDescription):Promise<Array<RouteApiDescription>> {
+        const status = this.getRouteServerStatus()
+        status.setLoading(key)
+
+        try {
+            const descriptions = await api.getRouteDescriptions({type:'video'},true)
+            if (!Array.isArray(descriptions))
+                throw new TypeError('route server did not return a list')
+
+            status.setResult(key, { status: descriptions.length>0 ? 'ok':'empty', routeCount:descriptions.length })
+            return descriptions.map(e=>enrichApi(e,'video'))
+        }
+        catch(error) {
+            status.setResult(key, { status:'unreachable', routeCount:0 })
+            throw new ApiError(error,'video')
+        }
+    }
+
+    /**
+     * Loads the routes of a single external route server (e.g. right after it was added), without waiting for
+     * (or repeating) a full load. If a load is currently running, this load starts as soon as that one is done.
+     *
+     * The returned observer emits the same events as load()
+     */
+    loadServer(key:string):Observer {
+        const observer = new Observer()
+
+        const run = ()=> {
+            this.processed = []
+            this.loadObserver = observer
+
+            const enrichApi = (v:RouteApiDescription,type)=> ({type, ...v })
+            const api = this.getIncyclistRoutesApi().create(key)
+            const promises = [ this.loadVideoRoutesFromServer(key,api,enrichApi) ]
+            Promise.allSettled(promises).then( async res => {
+                await this.onLoadDone(undefined,res,true)
+            }).catch( err=>{ this.logger.logEvent({message:'could not process route server load', key, error:err.message}) });
+        }
+
+        if (this.loadObserver) {
+            const running = this.loadObserver
+            let started = false
+            const start = ()=> {
+                if (started)
+                    return
+                started = true
+                run()
+            }
+            running.once('done',start)
+            running.once('stopped',start)
+        }
+        else {
+            run()
+        }
+
+        return observer
+    }
+
     private async onLoadDone(api,res,isExternal=false) {
+
+        // another load (e.g. of a single server) might start while this one is finishing
+        const observer = this.loadObserver
 
         // join lists
         const loadDetailRequired: Array<{route:Route, added:boolean}> = []
@@ -142,17 +206,18 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             }
             
         }
-        this.loadObserver?.emit('loaded')
+        observer?.emit('loaded')
 
         if (loadDetailRequired.length>0) {            
             await this.loadDetails(loadDetailRequired,true)
         }
 
-        this.loadObserver?.emit('done')
+        observer?.emit('done')
 
         await sleep(1)        
-        this.loadObserver?.stop()
-        delete this.loadObserver        
+        observer?.stop()
+        if (this.loadObserver===observer)
+            delete this.loadObserver        
         
     }
 
@@ -382,6 +447,11 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     @Injectable
     protected getUserSettings() {
         return useUserSettings()
+    }
+
+    @Injectable
+    protected getRouteServerStatus() {
+        return useRouteServerStatus()
     }
 
 

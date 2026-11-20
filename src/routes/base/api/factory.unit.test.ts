@@ -124,7 +124,7 @@ describe('IncyclistRoutesApiFactory', () => {
 
             const api = factory.create('myserver')
 
-            expect(api.setRequestOptions).toHaveBeenCalledWith({ enforceRedirectRules: true })
+            expect((api as any).setRequestOptions).toHaveBeenCalledWith({ enforceRedirectRules: true })
         })
 
         test('server url from the config file that the address rules would refuse: redirects are not checked', () => {
@@ -132,7 +132,7 @@ describe('IncyclistRoutesApiFactory', () => {
 
             const api = factory.create('myserver')
 
-            expect(api.setRequestOptions).not.toHaveBeenCalled()
+            expect((api as any).setRequestOptions).not.toHaveBeenCalled()
         })
     })
 
