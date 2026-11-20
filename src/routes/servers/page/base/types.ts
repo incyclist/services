@@ -1,7 +1,41 @@
 import type { RouteServerStatus } from '../../types'
 
+/**
+ * Contract of the page service (RouteServersSettingsPageService)
+ *
+ * The observer that `open()` returns emits
+ *  - `page-update`: the display props changed, read them with `getPageDisplayProps()`
+ *  - `closed` with a `RouteServersClosedEvent`: the page is finished. The page service decides why (see
+ *    RouteServersCloseReason), the app only follows: it does not need to look at the display props to find out
+ *    whether to close the dialog or to go back.
+ *
+ * Actions (all synchronous, results show up as `page-update`): open, close, showAdd, showManualEntry, back,
+ * addKnown, retryKnown, setManualUrl, setManualName, checkAndAdd, check, add, confirmAddEmpty, cancelAddEmpty,
+ * requestRemove, setRemoveRoutes, confirmRemove, cancelRemove.
+ *
+ * Adding a server:
+ *  - origin 'settings': the page stays where it is. A server added manually shows its success for a moment and then
+ *    returns to the list (view 'list'). A known server that was added shows as 'added' in the Known section, the new
+ *    row is highlighted (`highlightKey`) and the view is not changed.
+ *  - origin 'import': a server that was added (manually or from the known list) shows its success for a moment, then
+ *    `closed` is emitted with reason 'done', so the app returns to the Import dialog.
+ */
+
 /** where the user came from: drives what Back and Close do */
 export type RouteServersOrigin = 'settings' | 'import'
+
+/**
+ * Why the page was closed:
+ *  - 'done':   a server was added from the Import dialog. The app closes the page and goes on with the import
+ *  - 'back':   the user went back from the first view of the page. The app returns to where it came from
+ *  - 'cancel': the page was closed without a result (close action, or the page was opened again)
+ */
+export type RouteServersCloseReason = 'done' | 'back' | 'cancel'
+
+/** payload of the `closed` event */
+export interface RouteServersClosedEvent {
+    reason: RouteServersCloseReason
+}
 
 export type RouteServersView = 'list' | 'add' | 'add-manual'   // 'add-manual' = phone second step
 
@@ -36,8 +70,10 @@ export interface KnownServerItem {
     description: string
     operator?: string
     state: 'available' | 'checking' | 'added' | 'error'
-    /** after a successful check */
+    /** number of routes of this server that are in the route list. Only set if the server was added and has routes */
     routeCount?: number
+    /** ready to render: 'Checking…' (checking), 'Added ✓ · 7 routes' (added; 'Added ✓' while no routes are known). Not set if available */
+    statusText?: string
     /** ready to render */
     error?: string
 }
@@ -55,7 +91,11 @@ export interface ManualEntryProps {
     resolvedUrl?: string
     /** "Local server — traffic isn't encrypted. Use this only on your home network." */
     localNote?: string
-    /** 'checked' = probe OK, waiting for Add (two-step entry, or after an http switch) */
+    /**
+     * 'checked' = probe OK, waiting for Add (two-step entry, or after an http switch).
+     * 'confirm-empty' = server works but has no routes: the app offers `confirmAddEmpty()` ("Add anyway") and
+     * `cancelAddEmpty()` (back to 'idle', address and name are kept).
+     */
     state: ManualEntryState
     urlError?: string
     nameError?: string

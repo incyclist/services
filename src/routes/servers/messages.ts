@@ -30,6 +30,7 @@ export const SERVER_MESSAGES = {
     statusNoRoutes: 'No routes yet',
     statusUnreachable: "Couldn't be reached last time. Routes you already have still work.",
     statusBuiltIn: 'Built in',
+    knownAdded: (count: number) => count > 0 ? `Added ✓ · ${count} ${count === 1 ? 'route' : 'routes'}` : 'Added ✓',
     found: (count: number) => `Found ${count} ${count === 1 ? 'route' : 'routes'}.`,
     routes: (count: number) => `${count} ${count === 1 ? 'route' : 'routes'}`,
 } as const

@@ -1,4 +1,4 @@
-const SECOND_LEVEL_DOMAINS = ['co', 'com', 'org', 'net', 'ac', 'gov', 'edu']
+const SECOND_LEVEL_DOMAINS = new Set(['co', 'com', 'org', 'net', 'ac', 'gov', 'edu'])
 
 const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1)
 
@@ -20,7 +20,7 @@ export const suggestServerName = (host: string): string | undefined => {
     const labels = hostname.split('.').filter(l => l.length > 0)
     if (labels.length > 1)
         labels.pop()                                   // top level domain
-    if (labels.length > 1 && SECOND_LEVEL_DOMAINS.includes(labels.at(-1)))
+    if (labels.length > 1 && SECOND_LEVEL_DOMAINS.has(labels.at(-1)))
         labels.pop()                                   // co.uk, com.au, ...
 
     const name = labels.at(-1)

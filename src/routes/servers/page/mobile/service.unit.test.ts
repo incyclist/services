@@ -1,5 +1,4 @@
 import { EventLogger } from 'gd-eventlog'
-import '../../../list'
 import { Inject } from '../../../../base/decorators'
 import { MobileRouteServersSettingsPageService } from './service'
 
@@ -34,11 +33,13 @@ describe('MobileRouteServersSettingsPageService', () => {
         expect(allowsLocalHttp()).toBe(true)
     })
 
-    test('platform unknown: allowed', () => {
+    test('platform unknown: not allowed', () => {
         setPlatform(undefined)
-        expect(allowsLocalHttp()).toBe(true)
+        expect(allowsLocalHttp()).toBe(false)
+        setPlatform('', true)
+        expect(allowsLocalHttp()).toBe(false)
         setPlatform(undefined, false)
-        expect(allowsLocalHttp()).toBe(true)
+        expect(allowsLocalHttp()).toBe(false)
     })
 
     test('hint for unreachable home-network addresses only', () => {

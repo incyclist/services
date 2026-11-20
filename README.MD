@@ -124,6 +124,7 @@ In the app, open **Settings › Routes** (or the **Import Routes** dialog) and c
 - The address must be `https://`. Plain `http://` is accepted only for servers on your home
   network (`localhost`, private IP addresses, `*.local` names and single-label names such as
   `nas`), and not on devices that don't allow it (currently Android).
+- The address is the plain base URL of the server: it must not contain a query string (`?...`).
 - The name (up to 24 letters, numbers, spaces or dashes) is the label shown in the route list.
   It must not clash with an existing source such as `Local`, `Incyclist` or a connected app.
 
@@ -171,7 +172,10 @@ requested from `<base-url>/<route-id>`, which must answer with a
 [`RouteApiDetail`](./src/routes/base/api/types.ts#L51). A reachable server that answers
 something else, such as an HTML page or a 404, is rejected as "not a route server". Redirects
 that would lead to a URL the app would not accept (for example from `https://` to `http://`)
-are rejected too.
+are rejected too: a server on the internet can never send the app to a host on the home network.
+Requests to a server are given up after 30 seconds. The server then counts as unreachable.
+A route can only be updated by the server it belongs to: a server that offers the id of an
+Incyclist route (or of a route of another server) does not replace it.
 
 GPX routes are optional. The app also requests `<base-url>?private=false` for them. A server
 that does not support this request is still loaded normally and keeps its video routes.

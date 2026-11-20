@@ -1,6 +1,4 @@
 import { EventLogger } from 'gd-eventlog'
-// loads the route module in its production order (the route list pulls in the barrel that exports this page service)
-import '../../../list'
 import { Inject } from '../../../../base/decorators'
 import { RouteServerValidationError } from '../../errors'
 import { RouteServerStatusStore, useRouteServerStatus } from '../../status'
@@ -107,12 +105,19 @@ describe('RouteServersSettingsPageService', () => {
             expect(props().manual.url).toBe('')
         })
 
-        test('close stops the observer and emits closed', () => {
+        test('close stops the observer and emits closed with the reason cancel', () => {
             const closed = jest.fn()
             observer.on('closed', closed)
             service.close()
-            expect(closed).toHaveBeenCalled()
+            expect(closed).toHaveBeenCalledWith({ reason: 'cancel' })
             expect(service.getPageObserver()).toBeUndefined()
+        })
+
+        test('opening the page again closes the previous one with the reason cancel', () => {
+            const closed = jest.fn()
+            observer.on('closed', closed)
+            service.open('import')
+            expect(closed).toHaveBeenCalledWith({ reason: 'cancel' })
         })
     })
 
@@ -210,19 +215,19 @@ describe('RouteServersSettingsPageService', () => {
             expect(props().view).toBe('list')
         })
 
-        test('back in the list closes', () => {
+        test('back in the list closes with the reason back', () => {
             const closed = jest.fn()
             observer.on('closed', closed)
             service.back()
-            expect(closed).toHaveBeenCalled()
+            expect(closed).toHaveBeenCalledWith({ reason: 'back' })
         })
 
-        test('import origin: back in the add view closes', () => {
+        test('import origin: back in the add view closes with the reason back', () => {
             const closed = jest.fn()
             observer = service.open('import')
             observer.on('closed', closed)
             service.back()
-            expect(closed).toHaveBeenCalled()
+            expect(closed).toHaveBeenCalledWith({ reason: 'back' })
         })
 
         test('phone: manual entry is the second step, back returns to the known list', () => {
@@ -267,7 +272,7 @@ describe('RouteServersSettingsPageService', () => {
             await flush()
 
             expect(list.probeExternalApiProvider).toHaveBeenCalledWith('https://alpine.example.org/api/v1/routes')
-            expect(list.addExternalApiProvider).toHaveBeenCalledWith('Alpine Videos', 'https://alpine.example.org/api/v1/routes')
+            expect(list.addExternalApiProvider).toHaveBeenCalledWith('Alpine Videos', 'https://alpine.example.org/api/v1/routes', { origin: 'settings', via: 'known' })
             expect(list.loadExternalApiProvider).toHaveBeenCalledWith('Alpine Videos')
             // the count of routes that were added is only known once they are in the list
             expect(props().known[0].state).toBe('added')
@@ -333,6 +338,80 @@ describe('RouteServersSettingsPageService', () => {
             expect(servers.size).toBe(0)
         })
 
+        test('statusText of known servers: ready to render', async () => {
+            service.addKnown('alpine')
+            expect(props().known[0].statusText).toBe('Checking…')
+            expect(props().known[1].statusText).toBeUndefined()
+            await flush()
+
+            expect(props().known[0].statusText).toBe('Added ✓')
+            counts['Alpine Videos'] = 7
+            expect(props().known[0].statusText).toBe('Added ✓ · 7 routes')
+            counts['Alpine Videos'] = 1
+            expect(props().known[0].statusText).toBe('Added ✓ · 1 route')
+        })
+
+        test('settings origin: the page stays where it is, the new row is highlighted', async () => {
+            jest.useFakeTimers()
+            const closed = jest.fn()
+            observer.on('closed', closed)
+            service.showAdd()
+            service.addKnown('alpine')
+            await flush()
+            jest.advanceTimersByTime(5000)
+
+            expect(closed).not.toHaveBeenCalled()
+            expect(props()).toMatchObject({ view: 'add', highlightKey: 'Alpine Videos' })
+        })
+
+        test('import origin: closes with done after the success was shown, like a manual add', async () => {
+            jest.useFakeTimers()
+            const closed = jest.fn()
+            observer = service.open('import')
+            observer.on('closed', closed)
+
+            service.addKnown('alpine')
+            await flush()
+
+            expect(props().known[0].state).toBe('added')
+            expect(list.addExternalApiProvider).toHaveBeenCalledWith('Alpine Videos', expect.any(String), { origin: 'import', via: 'known' })
+            expect(closed).not.toHaveBeenCalled()
+            jest.advanceTimersByTime(999)
+            expect(closed).not.toHaveBeenCalled()
+            jest.advanceTimersByTime(1)
+            expect(closed).toHaveBeenCalledTimes(1)
+            expect(closed).toHaveBeenCalledWith({ reason: 'done' })
+        })
+
+        test('import origin: going back before the confirmation ends does not close a second time', async () => {
+            jest.useFakeTimers()
+            const closed = jest.fn()
+            observer = service.open('import')
+            observer.on('closed', closed)
+            service.addKnown('alpine')
+            await flush()
+
+            service.back()
+            jest.advanceTimersByTime(2000)
+
+            expect(closed).toHaveBeenCalledTimes(1)
+            expect(closed).toHaveBeenCalledWith({ reason: 'back' })
+        })
+
+        test('import origin: a failing check does not close', async () => {
+            jest.useFakeTimers()
+            const closed = jest.fn()
+            observer = service.open('import')
+            observer.on('closed', closed)
+            list.probeExternalApiProvider.mockImplementation(probeFail('unreachable', 'nope'))
+
+            service.addKnown('alpine')
+            await flush()
+            jest.advanceTimersByTime(5000)
+
+            expect(closed).not.toHaveBeenCalled()
+        })
+
         test('a failing add (server side validation) shows the message', async () => {
             list.addExternalApiProvider.mockImplementation(() => { throw new RouteServerValidationError('url', 'duplicate', "You've already added this server as 'X'.") })
             service.addKnown('alpine')
@@ -390,6 +469,11 @@ describe('RouteServersSettingsPageService', () => {
             test('http on the internet: error while typing', () => {
                 service.setManualUrl('http://videos.example.org')
                 expect(props().manual.urlError).toContain('Plain http:// only works for servers on your home network')
+            })
+
+            test('a query string is reported', () => {
+                service.setManualUrl('https://videos.example.org/api?type=video')
+                expect(props().manual.urlError).toContain("can't contain a query string")
             })
 
             test('whitespace and credentials are reported', () => {
@@ -474,7 +558,7 @@ describe('RouteServersSettingsPageService', () => {
                 await flush()
 
                 expect(list.probeExternalApiProvider).toHaveBeenCalledWith('https://videos.alpine-club.org/', undefined)
-                expect(list.addExternalApiProvider).toHaveBeenCalledWith('Alpine Club', 'https://videos.alpine-club.org/')
+                expect(list.addExternalApiProvider).toHaveBeenCalledWith('Alpine Club', 'https://videos.alpine-club.org/', { origin: 'settings', via: 'manual' })
                 expect(props().manual).toMatchObject({ state: 'success', message: 'Found 3 routes.' })
                 expect(props().highlightKey).toBe('Alpine Club')
                 expect(list.loadExternalApiProvider).toHaveBeenCalledWith('Alpine Club')
@@ -497,7 +581,8 @@ describe('RouteServersSettingsPageService', () => {
                 await flush()
                 expect(closed).not.toHaveBeenCalled()
                 jest.advanceTimersByTime(1000)
-                expect(closed).toHaveBeenCalled()
+                expect(closed).toHaveBeenCalledTimes(1)
+                expect(closed).toHaveBeenCalledWith({ reason: 'done' })
             })
 
             test('name is checked before the address is probed', () => {
@@ -558,6 +643,51 @@ describe('RouteServersSettingsPageService', () => {
 
                 service.confirmAddEmpty()
                 expect(props().manual.state).toBe('success')
+                expect(servers.has('Alpine Club')).toBe(true)
+            })
+
+            test('0 routes: cancelAddEmpty returns to the entry, keeps address and name, leaves no probe state behind', async () => {
+                list.probeExternalApiProvider.mockImplementation(probeOk(0))
+                service.setManualUrl('http://192.168.1.20')
+                service.setManualName('My NAS')
+                service.checkAndAdd()
+                await flush()
+                expect(props().manual.state).toBe('confirm-empty')
+
+                service.cancelAddEmpty()
+
+                const manual = props().manual
+                expect(manual).toMatchObject({ state: 'idle', url: 'http://192.168.1.20', name: 'My NAS', nameTouched: true, canSubmit: true, canCheck: true })
+                expect(manual.message).toBeUndefined()
+                expect(manual.resolvedUrl).toBeUndefined()
+                expect(manual.urlError).toBeUndefined()
+                expect(manual.localNote).toBe("Local server — traffic isn't encrypted. Use this only on your home network.")
+                expect(servers.size).toBe(0)
+                expect(updates).toHaveBeenCalled()
+
+                // nothing is pending any more
+                service.confirmAddEmpty()
+                service.add()
+                expect(servers.size).toBe(0)
+            })
+
+            test('cancelAddEmpty outside of confirm-empty does nothing', () => {
+                service.setManualUrl('videos.alpine-club.org')
+                service.cancelAddEmpty()
+                expect(props().manual).toMatchObject({ state: 'idle', url: 'videos.alpine-club.org' })
+            })
+
+            test('cancelAddEmpty: the user can edit and check again', async () => {
+                list.probeExternalApiProvider.mockImplementation(probeOk(0))
+                service.setManualUrl('videos.alpine-club.org')
+                service.checkAndAdd()
+                await flush()
+                service.cancelAddEmpty()
+
+                list.probeExternalApiProvider.mockImplementation(probeOk(4))
+                service.checkAndAdd()
+                await flush()
+
                 expect(servers.has('Alpine Club')).toBe(true)
             })
 

@@ -6,20 +6,20 @@ import { useRouteList } from '../../../list/service'
 import { getKnownRouteServers } from '../../known'
 import { SERVER_MESSAGES as MSG } from '../../messages'
 import { useRouteServerStatus } from '../../status'
-import type { KnownRouteServer, RouteServerProbeResult } from '../../types'
+import type { KnownRouteServer, RouteServerProbeResult, RouteServerUrlResult } from '../../types'
 import { RouteServerValidationError } from '../../errors'
 import { normalizeRouteServerUrl, validateRouteServerUrl } from '../../validator'
 import { formatSize, suggestServerName } from './utils'
 import type {
     KnownServerItem, ManualEntryProps, ManualEntryState, RemoveServerDialogProps, RouteServerItem,
-    RouteServersOrigin, RouteServersSettingsDisplayProps, RouteServersView
+    RouteServersClosedEvent, RouteServersCloseReason, RouteServersOrigin, RouteServersSettingsDisplayProps, RouteServersView
 } from './types'
 
 const SUCCESS_DELAY_MS = 1000
 
 // codes that are worth showing while the user is still typing the address. Others ("not a web address",
 // ...) would only be noise for an incomplete address and are reported when the address is submitted.
-const LIVE_URL_ERRORS = ['whitespace', 'credentials', 'http-internet', 'http-not-supported', 'duplicate', 'built-in']
+const LIVE_URL_ERRORS = new Set(['whitespace', 'credentials', 'query', 'http-internet', 'http-not-supported', 'duplicate', 'built-in'])
 
 interface PendingServer {
     url: string
@@ -37,6 +37,10 @@ interface KnownState {
  *
  * The page service decides what is shown (display props, states, texts). The apps decide how it
  * is shown. Platform differences live in the overridable hooks.
+ *
+ * It extends IncyclistService and not IncyclistPageService on purpose: this page is a dialog shown over
+ * another page, and IncyclistPageService.openPage() would overwrite the current page of the app from inside it.
+ * The contract (display props and events) is documented in `types.ts`.
  */
 export abstract class RouteServersSettingsPageService extends IncyclistService {
 
@@ -97,7 +101,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
     open(origin: RouteServersOrigin = 'settings'): IObserver {
         try {
             if (this.observer)
-                this.close()
+                this.close('cancel')
 
             this.resetState()
             this.origin = origin
@@ -113,7 +117,12 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         }
     }
 
-    close() {
+    /**
+     * Closes the page. The observer emits `closed` with the reason.
+     *
+     * @param reason 'cancel' (default): closed without a result. The page service itself closes with 'back' and 'done'
+     */
+    close(reason: RouteServersCloseReason = 'cancel') {
         try {
             this.checkToken++
             this.viewToken++
@@ -122,7 +131,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
 
             const observer = this.observer
             delete this.observer
-            observer?.emit('closed')
+            observer?.emit('closed', { reason } satisfies RouteServersClosedEvent)
             observer?.stop()
             this.resetState()
         }
@@ -165,7 +174,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             this.view = 'list'
         }
         else {
-            this.close()
+            this.close('back')
             return
         }
         this.resetManual()
@@ -199,11 +208,11 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         this.manualUrl = url ?? ''
         this.resetManualResult()
 
-        const res = this.getRouteList().validateExternalApiProviderUrl(this.manualUrl, { allowsLocalHttp: this.allowsLocalHttp })
+        const res = this.validateManualUrl()
         if (res.valid) {
-            this.localNote = this.manualUrl.trim().toLowerCase().startsWith('http://') && res.isUnencrypted ? MSG.localNote : undefined
+            this.localNote = this.getLocalNote(res)
         }
-        else if (res.message && LIVE_URL_ERRORS.includes(res.code)) {
+        else if (res.message && LIVE_URL_ERRORS.has(res.code)) {
             this.urlError = res.message
         }
 
@@ -259,6 +268,17 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             return
         }
         this.saveManual()
+    }
+
+    /** the server works, but has no routes, and the user does not want it: back to the entry, address and name are kept */
+    cancelAddEmpty() {
+        if (this.manualState !== 'confirm-empty')
+            return
+
+        this.resetManualResult()
+        this.localNote = this.getLocalNote(this.validateManualUrl())
+        this.validateNameLive()
+        this.updatePage()
     }
 
     // ----- remove -----
@@ -379,6 +399,16 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         return item
     }
 
+    protected validateManualUrl() {
+        return this.getRouteList().validateExternalApiProviderUrl(this.manualUrl, { allowsLocalHttp: this.allowsLocalHttp })
+    }
+
+    /** the note for an address that was typed with `http://` */
+    protected getLocalNote(res: RouteServerUrlResult): string | undefined {
+        const isHttpTyped = this.manualUrl.trim().toLowerCase().startsWith('http://')
+        return res.valid && isHttpTyped && res.isUnencrypted ? MSG.localNote : undefined
+    }
+
     protected isNameAcceptable(name: string): boolean {
         const res = this.getRouteList().validateExternalApiProviderName(name)
         return res.valid || res.code === 'duplicate'
@@ -417,9 +447,12 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
                 const count = this.getRouteList().getExternalApiProviderRouteCount(added)
                 if (count > 0)
                     item.routeCount = count
+                item.statusText = MSG.knownAdded(count)
             }
             else if (state) {
                 item.state = state.state
+                if (state.state === 'checking')
+                    item.statusText = MSG.statusChecking
                 if (state.error)
                     item.error = state.error
             }
@@ -465,15 +498,20 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         }
 
         try {
-            const stored = list.addExternalApiProvider(name.name, address.url)
+            const stored = list.addExternalApiProvider(name.name, address.url, { origin: this.origin, via: 'known' })
             this.knownStates.delete(entry.id)
+            this.highlightKey = stored.name
             this.startLoading(stored.name)
-            this.logEvent({ message: 'known route server added', id: entry.id, routeCount: probe.routeCount })
         }
         catch (err) {
             this.setKnownError(entry.id, this.getErrorMessage(err))
             return
         }
+
+        // from the Import dialog the page is done once the server was added, like after a manual add.
+        // From the settings the page stays where it is, the new row is highlighted
+        if (this.origin === 'import')
+            this.scheduleReturn()
         this.updatePage()
     }
 
@@ -570,7 +608,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             return
 
         try {
-            const stored = this.getRouteList().addExternalApiProvider(this.manualName, pending.url)
+            const stored = this.getRouteList().addExternalApiProvider(this.manualName, pending.url, { origin: this.origin, via: 'manual' })
             this.manualState = 'success'
             this.message = MSG.found(pending.routeCount)
             this.highlightKey = stored.name
@@ -602,7 +640,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             if (token !== this.viewToken)
                 return
             if (this.origin === 'import') {
-                this.close()
+                this.close('done')
                 return
             }
             this.view = 'list'
@@ -685,11 +723,18 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         if (routeCount > 0) {
             dialog.text = `You have ${MSG.routes(routeCount)} from this server in your route list.`
             dialog.keepLabel = 'Keep these routes'
-            dialog.removeRoutesLabel = downloadedCount
-                ? `Remove these routes too, including ${downloadedCount} downloaded ${downloadedCount === 1 ? 'video' : 'videos'}${downloadedSize ? ` (${downloadedSize})` : ''}.`
-                : 'Remove these routes too'
+            dialog.removeRoutesLabel = this.getRemoveRoutesLabel(downloadedCount, downloadedSize)
         }
         return dialog
+    }
+
+    protected getRemoveRoutesLabel(downloadedCount?: number, downloadedSize?: string): string {
+        if (!downloadedCount)
+            return 'Remove these routes too'
+
+        const videos = downloadedCount === 1 ? 'video' : 'videos'
+        const size = downloadedSize ? ` (${downloadedSize})` : ''
+        return `Remove these routes too, including ${downloadedCount} downloaded ${videos}${size}.`
     }
 
     protected async loadDownloadInfo(key: string, routeCount: number): Promise<void> {
@@ -716,8 +761,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         this.updatePage()
 
         if (dialog.removeRoutes) {
-            const res = await list.deleteExternalApiProviderRoutes(dialog.key)
-            this.logEvent({ message: 'route server routes removed', key: dialog.key, deleted: res.deleted, failed: res.failed })
+            await list.deleteExternalApiProviderRoutes(dialog.key)
             this.updatePage()
         }
     }
