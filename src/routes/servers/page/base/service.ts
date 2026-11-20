@@ -60,7 +60,6 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
     protected reviewRequired = false
 
     protected knownStates: Map<string, KnownState> = new Map()
-    protected knownCounts: Map<string, number> = new Map()
     protected removeDialog?: RemoveServerDialogProps
     protected removeKey?: string
 
@@ -352,8 +351,9 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         const statusStore = this.getRouteServerStatus()
 
         const status = statusStore.getStatus(name)
-        const listed = list.getExternalApiProviderRouteCount(name)
-        const routeCount = listed > 0 ? listed : (statusStore.getResult(name)?.routeCount ?? 0)
+        // the number of routes of this server that are in the route list. Routes that the server also
+        // offers, but that are already known from another source, are not counted
+        const routeCount = list.getExternalApiProviderRouteCount(name)
 
         const item: RouteServerItem = {
             key: name, name, isBuiltIn: false, status, routeCount,
@@ -414,7 +414,9 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             const state = this.knownStates.get(entry.id)
             if (added) {
                 item.state = 'added'
-                item.routeCount = this.knownCounts.get(entry.id) ?? this.getRouteList().getExternalApiProviderRouteCount(added)
+                const count = this.getRouteList().getExternalApiProviderRouteCount(added)
+                if (count > 0)
+                    item.routeCount = count
             }
             else if (state) {
                 item.state = state.state
@@ -465,7 +467,6 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         try {
             const stored = list.addExternalApiProvider(name.name, address.url)
             this.knownStates.delete(entry.id)
-            this.knownCounts.set(entry.id, probe.routeCount)
             this.startLoading(stored.name)
             this.logEvent({ message: 'known route server added', id: entry.id, routeCount: probe.routeCount })
         }
@@ -767,7 +768,6 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         delete this.removeDialog
         delete this.removeKey
         this.knownStates.clear()
-        this.knownCounts.clear()
     }
 
     protected clearSuccessTimer() {

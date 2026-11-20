@@ -152,7 +152,8 @@ describe('RouteServersSettingsPageService', () => {
             servers.set('B', 'https://b.example.org/')
             servers.set('C', 'https://c.example.org/')
             servers.set('D', 'https://d.example.org/')
-            status.setResult('A', { status: 'ok', routeCount: 5 })
+            counts['A'] = 5
+            status.setResult('A', { status: 'ok', routeCount: 20 })
             status.setResult('B', { status: 'empty', routeCount: 0 })
             status.setResult('C', { status: 'unreachable', routeCount: 0 })
             status.setLoading('D')
@@ -268,8 +269,13 @@ describe('RouteServersSettingsPageService', () => {
             expect(list.probeExternalApiProvider).toHaveBeenCalledWith('https://alpine.example.org/api/v1/routes')
             expect(list.addExternalApiProvider).toHaveBeenCalledWith('Alpine Videos', 'https://alpine.example.org/api/v1/routes')
             expect(list.loadExternalApiProvider).toHaveBeenCalledWith('Alpine Videos')
-            expect(props().known[0]).toMatchObject({ state: 'added', routeCount: 3 })
+            // the count of routes that were added is only known once they are in the list
+            expect(props().known[0].state).toBe('added')
+            expect(props().known[0].routeCount).toBeUndefined()
             expect(status.getStatus('Alpine Videos')).toBe('loading')
+
+            counts['Alpine Videos'] = 3
+            expect(props().known[0]).toMatchObject({ state: 'added', routeCount: 3 })
         })
 
         test('addKnown with a failing check: inline error, retry works', async () => {
@@ -284,7 +290,18 @@ describe('RouteServersSettingsPageService', () => {
             service.retryKnown('alpine')
             await flush()
 
+            expect(props().known[0].state).toBe('added')
+        })
+
+        test('counts the routes in the list, not the routes the server offers (duplicates are skipped)', async () => {
+            list.probeExternalApiProvider.mockImplementation(probeOk(20))
+            service.addKnown('alpine')
+            await flush()
+
+            counts['Alpine Videos'] = 7
+            status.setResult('Alpine Videos', { status: 'ok', routeCount: 20 })
             expect(props().known[0]).toMatchObject({ state: 'added', routeCount: 7 })
+            expect(props().servers.find(s => s.name === 'Alpine Videos')).toMatchObject({ routeCount: 7, statusText: '7 routes' })
         })
 
         test('name already used by another server: error inline in the row', async () => {
