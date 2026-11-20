@@ -33,6 +33,11 @@ describe('MobileRouteServersSettingsPageService', () => {
         expect(allowsLocalHttp()).toBe(true)
     })
 
+    test.each(['linux', 'win32', 'darwin', 'web', 'ios-simulator'])('%s: not positively iOS, not allowed', (platform) => {
+        setPlatform(platform)
+        expect(allowsLocalHttp()).toBe(false)
+    })
+
     test('platform unknown: not allowed', () => {
         setPlatform(undefined)
         expect(allowsLocalHttp()).toBe(false)
