@@ -44,6 +44,8 @@ interface LoadJob {
     stopped: boolean
     /** address of every external server that this load requested, to detect a removal (or change) while the request was open */
     servers: Map<string,string>
+    /** set for the load of a single server */
+    serverKey?: string
 }
 
 /** the descriptions that one group of requests (built-in api, external servers) returned */
@@ -100,7 +102,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
      * The returned observer emits the same events as load()
      */
     loadServer(key:string):Observer {
-        const job = this.createJob()
+        const job = this.createJob(key)
         this.enqueue(job, ()=>this.startServerLoad(job,key))
         return job.observer
     }
@@ -114,8 +116,8 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         delete this.loadObserver
     }
 
-    protected createJob():LoadJob {
-        return { observer: new Observer(), stopped: false, servers: new Map() }
+    protected createJob(serverKey?:string):LoadJob {
+        return { observer: new Observer(), stopped: false, servers: new Map(), serverKey }
     }
 
     protected enqueue(job:LoadJob, start:()=>Array<LoadSource>) {
@@ -154,7 +156,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         if (external.length) {
             const promises = external.map( ({key,api:externalApi,url}) => {
                 job.servers.set(key,url)
-                return this.loadRoutesFromServer(key,externalApi,url)
+                return this.loadRoutesFromServer(job,key,externalApi,url)
             })
             sources.push( { results:Promise.allSettled(promises), isExternal:true } )
         }
@@ -170,7 +172,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
         job.servers.set(key,url)
         const api = this.getIncyclistRoutesApi().create(key)
-        return [ { results:Promise.allSettled([ this.loadRoutesFromServer(key,api,url) ]), isExternal:true } ]
+        return [ { results:Promise.allSettled([ this.loadRoutesFromServer(job,key,api,url) ]), isExternal:true } ]
     }
 
     protected getExternalRouteServers():Array<{key:string, api:IIncyclistRoutesApi, url:string}> {
@@ -218,7 +220,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
      * If the server was removed while the requests were open, nothing is recorded and no route is returned.
      * A server that does not answer in time (the timeout is set on its api) is "unreachable".
      */
-    protected async loadRoutesFromServer(key:string, api:IIncyclistRoutesApi, url?:string):Promise<Array<RouteApiDescription>> {
+    protected async loadRoutesFromServer(job:LoadJob, key:string, api:IIncyclistRoutesApi, url?:string):Promise<Array<RouteApiDescription>> {
         const status = this.getRouteServerStatus()
         const isCurrent = ()=> url===undefined || this.getConfiguredUrl(key)===url
 
@@ -236,7 +238,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
                 throw new TypeError('route server did not return a list')
 
             if (!isCurrent())
-                return this.dropRemovedServer(key)
+                return this.dropRemovedServer(job,key)
 
             // the server is the owner of what it returns, whatever the response claims
             const gpx = Array.isArray(gpxRoutes) ? gpxRoutes : []
@@ -250,17 +252,24 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         }
         catch(error) {
             if (!isCurrent())
-                return this.dropRemovedServer(key)
+                return this.dropRemovedServer(job,key)
 
             status.setResult(key, { status:'unreachable', routeCount:0 })
             throw new ApiError(error,'video')
         }
     }
 
-    protected dropRemovedServer(key:string):Array<RouteApiDescription> {
+    protected dropRemovedServer(job:LoadJob, key:string):Array<RouteApiDescription> {
         this.logger.logEvent({message:'route server was removed while loading, result dropped', key})
-        this.getRouteServerStatus().clearLoading(key)
+
+        // a load that is queued behind this one (the server was added again) owns the loading flag now
+        if (!this.hasNewerLoad(job,key))
+            this.getRouteServerStatus().clearLoading(key)
         return []
+    }
+
+    protected hasNewerLoad(job:LoadJob, key:string):boolean {
+        return Array.from(this.jobs).some( j => j!==job && !j.stopped && (j.serverKey===undefined || j.serverKey===key) )
     }
 
     /**
@@ -297,6 +306,10 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         catch(err) {
             this.logger.logEvent({message:'could not process route list load', error:err?.message})
         }
+
+        // a load that is requested from a `done` listener must start a new load, not get this (finishing) observer
+        if (this.fullLoad===job)
+            delete this.fullLoad
 
         if (!job.stopped)
             observer.emit('done')

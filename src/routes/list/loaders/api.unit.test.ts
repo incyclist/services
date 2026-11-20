@@ -97,6 +97,19 @@ describe('RoutesApiLoader', () => {
 
     describe('load', () => {
 
+        test('load() right after done starts a fresh load', async () => {
+            service = new RoutesApiLoader();
+            (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+            const first = service.load()
+            let second
+            first.on('done', () => { second = service.load() })
+            await waitDone(first)
+
+            expect(second).not.toBe(first)
+            await waitDone(second)
+            expect(apiMock.getRouteDescriptions).toHaveBeenCalledTimes(4)
+        })
+
         test('concurrent call returns the same (in-progress) observer', () => {
             service = new RoutesApiLoader()
             const o1 = service.load()
@@ -796,6 +809,25 @@ describe('RoutesApiLoader', () => {
                 const { added } = await result
 
                 expect(added).toHaveLength(0)
+            })
+
+            test('removed and added again under the same name while the old request is open: the loading flag of the new load is kept', async () => {
+                let release: (v: Array<RouteApiDescription>) => void
+                const slow = new Promise<Array<RouteApiDescription>>(resolve => { release = resolve })
+                setup({ myserver: { getRouteDescriptions: jest.fn(async (q) => q.type === 'video' ? slow : []) } })
+
+                const old = service.loadServer('myserver')
+                const oldDone = new Promise<string>(resolve => old.on('done', () => resolve(useRouteServerStatus().getStatus('myserver'))))
+
+                // removed and added again with another address: the new load is queued behind the old one
+                userSettingsMock.getValue.mockReturnValue({ myserver: 'https://moved.example.com' })
+                useRouteServerStatus().remove('myserver')
+                useRouteServerStatus().setLoading('myserver')
+                service.loadServer('myserver')
+
+                release([descr({ id: 'x1' })])
+
+                expect(await oldDone).toBe('loading')
             })
         })
     })
