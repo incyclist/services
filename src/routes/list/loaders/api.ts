@@ -140,9 +140,10 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         }
 
         // an idle loader starts right away (the requests are sent before this method returns)
-        const current = this.tail ? this.tail.then(execute) : execute()
+        const previous = this.tail
+        const current = previous===undefined ? execute() : previous.then(execute)
         this.tail = current
-        current.then( ()=>{ if (this.tail===current) delete this.tail })
+        void current.then( ()=>{ if (this.tail===current) delete this.tail })
     }
 
     protected startFullLoad(job:LoadJob):Array<LoadSource> {
@@ -288,10 +289,13 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             const sources = start()
             let loaded = false
 
-            for (const source of sources) {
+            // one source after the other (the built-in server first), so that 'loaded' is not delayed by a slow server
+            const processOne = async (source:LoadSource):Promise<void> => {
+                if (job.stopped)
+                    return
                 const res = await source.results
                 if (job.stopped)
-                    break
+                    return
 
                 const required = await this.processSource(job, res, source.isExternal)
                 if (!loaded) {
@@ -302,6 +306,12 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
                 if (required.length>0)
                     details.push( this.loadDetailsOfLoad(required) )
             }
+
+            const outcome = await settleWithLimit(sources, 1, processOne)
+            outcome.forEach( o => {
+                if (o.status==='rejected')
+                    this.logger.logEvent({message:'could not process route list load', error:o.reason?.message})
+            })
             await Promise.all(details)
         }
         catch(err) {
@@ -324,30 +334,34 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     protected async processSource(job:LoadJob, res:Array<PromiseSettledResult<Array<RouteApiDescription>>>, isExternal:boolean):Promise<LoadDetailsTargets> {
         const loadDetailRequired: LoadDetailsTargets = []
 
-        try {
-            // for loop as we have asyncs here
-            for ( const p of res) {
-                if (p.status!=='fulfilled') {                   
-                    this.logger.logEvent({message: 'could not load route list',reason:p.reason?.message, type:p.reason?.type})
-                    continue;
-                }
-
-                for (const descr of p.value) {
-                    if (job.stopped)
-                        return loadDetailRequired
-                    if (isExternal && !this.isServerCurrent(job,descr.apiServer))
-                        continue;
-                    if (isExternal && this.processed.includes(descr.id))
-                        continue;
-                    await this.processRouteFromApi(descr,loadDetailRequired)
-                }
+        const descriptions = res.flatMap( p => {
+            if (p.status!=='fulfilled') {
+                this.logger.logEvent({message: 'could not load route list',reason:p.reason?.message, type:p.reason?.type})
+                return []
             }
-        }
-        catch(err) {
-            // keep what was processed so far, the load must still end
-            this.logger.logEvent({message:'could not process route list load', error:err?.message})
-        }
+            return p.value
+        })
+
+        // one route after the other: the checks depend on what was processed before
+        const outcome = await settleWithLimit(descriptions, 1, async descr => {
+            if (job.stopped || !this.shouldProcess(job,descr,isExternal))
+                return
+            await this.processRouteFromApi(descr,loadDetailRequired)
+        })
+
+        // keep what was processed, the load must still end
+        outcome.forEach( o => {
+            if (o.status==='rejected')
+                this.logger.logEvent({message:'could not process route list load', error:o.reason?.message})
+        })
         return loadDetailRequired
+    }
+
+    /** Routes of an external server are skipped if the server was removed meanwhile, or if the route was already loaded */
+    protected shouldProcess(job:LoadJob, descr:RouteApiDescription, isExternal:boolean):boolean {
+        if (!isExternal)
+            return true
+        return this.isServerCurrent(job,descr.apiServer) && !this.processed.includes(descr.id)
     }
 
     protected async loadDetailsOfLoad(items:LoadDetailsTargets):Promise<void> {
