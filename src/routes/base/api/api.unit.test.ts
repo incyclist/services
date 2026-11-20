@@ -368,4 +368,51 @@ describe('IncyclistRoutesApi', () => {
             )
         })
     })
+
+    describe('external server request options', () => {
+
+        test('trailing slash of the base url is dropped', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api/v1/')
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api/v1/?type=video', expect.anything())
+        })
+
+        test('timeout is added to the request config', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            api.setRequestOptions({ timeout: 10000 })
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(externalGet).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ timeout: 10000, headers: expect.anything() }))
+        })
+
+        test('redirect to a url that the address rules refuse: request fails', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            api.setRequestOptions({ enforceRedirectRules: true })
+            externalGet.mockResolvedValue({ data: [], request: { res: { responseUrl: 'http://custom.routes.api/?type=video' } } })
+
+            await expect(api.getRouteDescriptions({ type: 'video' }, true)).rejects.toMatchObject({ code: 'ERR_REDIRECT_NOT_ALLOWED' })
+        })
+
+        test('redirect to a url that the address rules accept: request succeeds', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            api.setRequestOptions({ enforceRedirectRules: true })
+            externalGet.mockResolvedValue({ data: [{ id: '1' }], request: { responseURL: 'https://other.routes.api/?type=video' } })
+
+            const res = await api.getRouteDescriptions({ type: 'video' }, true)
+
+            expect(res).toHaveLength(1)
+        })
+
+        test('redirects are not checked unless requested', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            externalGet.mockResolvedValue({ data: [], request: { res: { responseUrl: 'http://custom.routes.api/?type=video' } } })
+
+            await expect(api.getRouteDescriptions({ type: 'video' }, true)).resolves.toEqual([])
+        })
+    })
 })

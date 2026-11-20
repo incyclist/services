@@ -7,9 +7,11 @@ jest.mock('./api', () => ({
     __esModule: true,
     default: class  {
         setSource: jest.Mock<any, any, any>
+        setRequestOptions: jest.Mock<any, any, any>
         constructor(...args) {
             IncyclistRoutesApiMock(...args)
             this.setSource = jest.fn()
+            this.setRequestOptions = jest.fn()
         }
     },
 }))
@@ -115,6 +117,43 @@ describe('IncyclistRoutesApiFactory', () => {
 
             expect(api2).not.toBe(api1)
             expect(IncyclistRoutesApiMock).toHaveBeenCalledTimes(2)
+        })
+
+        test('server url that follows the address rules: redirects are checked', () => {
+            userSettingsMock.getValue.mockImplementation((key: string) => key === 'routes.servers.myserver' ? 'https://myserver.example.com' : undefined)
+
+            const api = factory.create('myserver')
+
+            expect(api.setRequestOptions).toHaveBeenCalledWith({ enforceRedirectRules: true })
+        })
+
+        test('server url from the config file that the address rules would refuse: redirects are not checked', () => {
+            userSettingsMock.getValue.mockImplementation((key: string) => key === 'routes.servers.myserver' ? 'http://myserver.example.com' : undefined)
+
+            const api = factory.create('myserver')
+
+            expect(api.setRequestOptions).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('invalidate', () => {
+        test('the next create() reads the url again', () => {
+            userSettingsMock.getValue.mockReturnValue('https://one.example.com')
+            const api1 = factory.create('myserver')
+
+            userSettingsMock.getValue.mockReturnValue('https://two.example.com')
+            factory.invalidate('myserver')
+            const api2 = factory.create('myserver')
+
+            expect(api2).not.toBe(api1)
+            expect(IncyclistRoutesApiMock).toHaveBeenLastCalledWith('https://two.example.com')
+        })
+
+        test('other keys stay cached', () => {
+            userSettingsMock.getValue.mockReturnValue(null)
+            const other = factory.create('other')
+            factory.invalidate('myserver')
+            expect(factory.create('other')).toBe(other)
         })
     })
 })

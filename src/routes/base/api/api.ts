@@ -8,6 +8,7 @@ import { RoutePoint } from '../types';
 import { Injectable } from '../../../base/decorators';
 import { LatLng } from '../../../utils/geo';
 import { IncyclistExternalRestApiClient } from '../../../api/rest/external';
+import { isAllowedRedirectTarget } from '../../servers/validator';
 
 const fixMissingRouteDistances = (points:Array<RoutePoint>) => {
     let routeDistance = 0
@@ -39,6 +40,13 @@ const isNoResponseError = (err): boolean => {
         (err?.isAxiosError === true && !err.response)
 }
 
+/** the URL a response was finally served from (differs from the requested URL after a redirect) */
+const getResponseUrl = (res): string | undefined => {
+    return res?.request?.res?.responseUrl ?? res?.request?.responseURL
+}
+
+export const REDIRECT_NOT_ALLOWED = 'ERR_REDIRECT_NOT_ALLOWED'
+
 export default class IncyclistRoutesApi implements IIncyclistRoutesApi { 
 
     protected logger: EventLogger
@@ -46,6 +54,8 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
     protected baseUrl?: string
     protected isExternal: boolean
     protected source?:string
+    protected requestTimeout?:number
+    protected enforceRedirectRules:boolean = false
 
     constructor(baseUrl?:string) {
         this.logger = new EventLogger('RouteListApi')
@@ -57,6 +67,18 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
 
     setSource(source:string) {
         this.source = source
+    }
+
+    /**
+     * Optional request controls for external servers
+     *
+     * @param props.timeout  request timeout in ms
+     * @param props.enforceRedirectRules  if set, a response that was served from a URL that the route server
+     *   address rules would refuse (e.g. redirect from https to http on the internet) is treated as failed
+     */
+    setRequestOptions(props:{timeout?:number, enforceRedirectRules?:boolean}) {
+        this.requestTimeout = props.timeout
+        this.enforceRedirectRules = props.enforceRedirectRules ?? false
     }
 
     protected logError( err:Error, fn:string, logInfo?) {
@@ -77,7 +99,7 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
 
      protected getBaseUrl() {
         if (this.baseUrl)
-            return this.baseUrl
+            return this.baseUrl.replace(/\/+$/,'')
 
         const domain = this.getUserSettings().getValue('DOMAIN',DEFAULT_DOMAIN)
         const defaultUrl = `https://dlws.${domain}/api/v1/routes`
@@ -199,7 +221,29 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
     protected async _get(url:string, ...args) {
         const api = this.getApi()
         const baseUrl = this.getBaseUrl()
-        return await api.get( baseUrl+url, ...args )       
+        const requestUrl = baseUrl+url
+
+        if (this.requestTimeout!==undefined) {
+            args = [ {...(args[0]??{}), timeout:this.requestTimeout}, ...args.slice(1)]
+        }
+
+        const res = await api.get( requestUrl, ...args )
+        this.verifyRedirect(requestUrl, res)
+        return res
+    }
+
+    protected verifyRedirect(requestUrl:string, res) {
+        if (!this.isExternal || !this.enforceRedirectRules)
+            return
+
+        const finalUrl = getResponseUrl(res)
+        if (!finalUrl || finalUrl===requestUrl)
+            return
+
+        if (!isAllowedRedirectTarget(finalUrl)) {
+            this.logger.logEvent({message:'redirect refused', source:this.source})
+            throw Object.assign( new Error('redirect not allowed'), {code:REDIRECT_NOT_ALLOWED})
+        }
     }
 
 
