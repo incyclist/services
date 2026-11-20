@@ -82,10 +82,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         if (external.length) {
             
             for (const {key, api:externalApi} of external) {
-                // promises.push(
-                //     externalApi.getRouteDescriptions({type:'gpx'},true).then( v=> v.map(e=>enrichApi(e,'gpx'))).catch(error => {throw new ApiError(error,'gpx')}) 
-                // )
-                promises.push( this.loadVideoRoutesFromServer(key,externalApi,enrichApi) )
+                promises.push( this.loadRoutesFromServer(key,externalApi,enrichApi) )
             }
 
             Promise.allSettled( promises).then (async res => {
@@ -121,20 +118,35 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     }
 
     /**
-     * Loads the video route descriptions of one external route server and records the outcome (in memory only)
-     * so that the settings can show the status of each server.
+     * Loads the route descriptions (video and GPX) of one external route server and records the outcome
+     * (in memory only) so that the settings can show the status of each server.
+     *
+     * The video request decides whether the server counts as reachable. The GPX request is best effort:
+     * a server that only offers video routes might not support it, and that must not make it "unreachable".
      */
-    protected async loadVideoRoutesFromServer(key:string, api:IIncyclistRoutesApi, enrichApi:(v:RouteApiDescription,type:string)=>RouteApiDescription):Promise<Array<RouteApiDescription>> {
+    protected async loadRoutesFromServer(key:string, api:IIncyclistRoutesApi, enrichApi:(v:RouteApiDescription,type:string)=>RouteApiDescription):Promise<Array<RouteApiDescription>> {
         const status = this.getRouteServerStatus()
         status.setLoading(key)
 
         try {
-            const descriptions = await api.getRouteDescriptions({type:'video'},true)
-            if (!Array.isArray(descriptions))
+            const [videoRoutes, gpxRoutes] = await Promise.all([
+                api.getRouteDescriptions({type:'video'},true),
+                api.getRouteDescriptions({type:'gpx'},true).catch( error => {
+                    this.logger.logEvent({message:'could not load gpx routes of route server', key, reason:error?.message})
+                    return [] as Array<RouteApiDescription>
+                })
+            ])
+            if (!Array.isArray(videoRoutes))
                 throw new TypeError('route server did not return a list')
 
+            const gpx = Array.isArray(gpxRoutes) ? gpxRoutes : []
+            const descriptions = [
+                ...videoRoutes.map(e=>enrichApi(e,'video')),
+                ...gpx.map(e=>enrichApi(e,'gpx'))
+            ]
+
             status.setResult(key, { status: descriptions.length>0 ? 'ok':'empty', routeCount:descriptions.length })
-            return descriptions.map(e=>enrichApi(e,'video'))
+            return descriptions
         }
         catch(error) {
             status.setResult(key, { status:'unreachable', routeCount:0 })
@@ -157,7 +169,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
             const enrichApi = (v:RouteApiDescription,type)=> ({type, ...v })
             const api = this.getIncyclistRoutesApi().create(key)
-            const promises = [ this.loadVideoRoutesFromServer(key,api,enrichApi) ]
+            const promises = [ this.loadRoutesFromServer(key,api,enrichApi) ]
             Promise.allSettled(promises).then( async res => {
                 await this.onLoadDone(undefined,res,true)
             }).catch( err=>{ this.logger.logEvent({message:'could not process route server load', key, error:err.message}) });

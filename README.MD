@@ -171,7 +171,10 @@ requested from `<base-url>/<route-id>`, which must answer with a
 [`RouteApiDetail`](./src/routes/base/api/types.ts#L51). A reachable server that answers
 something else, such as an HTML page or a 404, is rejected as "not a route server". Redirects
 that would lead to a URL the app would not accept (for example from `https://` to `http://`)
-are rejected too. Servers loaded by the app currently provide video routes only.
+are rejected too.
+
+GPX routes are optional. The app also requests `<base-url>?private=false` for them. A server
+that does not support this request is still loaded normally and keeps its video routes.
 
 ## Using this library in your own app
 

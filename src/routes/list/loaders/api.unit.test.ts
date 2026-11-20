@@ -28,6 +28,10 @@ const descr = (props: Partial<RouteApiDescription> = {}): RouteApiDescription =>
     ...props,
 } as RouteApiDescription)
 
+/** an api mock that answers video and gpx queries differently */
+const byType = (video: Array<RouteApiDescription>, gpx: Array<RouteApiDescription>) =>
+    jest.fn(async (q: { type?: string }) => q.type === 'gpx' ? gpx : video)
+
 const detail = (props: Partial<RouteApiDetail> = {}): RouteApiDetail => ({
     id: 'r1',
     title: 'Route 1',
@@ -338,7 +342,7 @@ describe('RoutesApiLoader', () => {
         test('external route servers configured: queries each one for videos and tags routes with apiServer', async () => {
             userSettingsMock.getValue.mockReturnValue({ myserver: 'https://myserver.example.com' })
             const externalApi = {
-                getRouteDescriptions: jest.fn().mockResolvedValue([descr({ id: 'ext1', apiServer: 'myserver' })]),
+                getRouteDescriptions: byType([descr({ id: 'ext1', apiServer: 'myserver' })], []),
                 getRouteDetails: jest.fn().mockResolvedValue(detail({ id: 'ext1' })),
                 setSource: jest.fn(),
             }
@@ -350,11 +354,59 @@ describe('RoutesApiLoader', () => {
 
             const { added } = await waitDone(service.load())
 
+            await waitTick() // the external servers are processed independently of the default api
+
             expect(factory.create).toHaveBeenCalledWith('myserver')
             expect(externalApi.getRouteDescriptions).toHaveBeenCalledWith({ type: 'video' }, true)
             expect(added.some(r => r.description.apiServer === 'myserver')).toBe(true)
             expect(added.some(r => r.description.source === 'Myserver')).toBe(true)
 
+        })
+
+        test('external route servers configured: also loads their gpx routes', async () => {
+            userSettingsMock.getValue.mockReturnValue({ myserver: 'https://myserver.example.com' })
+            const externalApi = {
+                getRouteDescriptions: byType(
+                    [descr({ id: 'v1', apiServer: 'myserver' })],
+                    [descr({ id: 'g1', apiServer: 'myserver' })]),
+                getRouteDetails: jest.fn().mockResolvedValue(detail({ id: 'ext1' })),
+                setSource: jest.fn(),
+            }
+            Inject('IncyclistRoutesApi', { create: jest.fn((key?: string) => key ? externalApi : apiMock) })
+
+            service = new RoutesApiLoader();
+            (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+
+            const { added } = await waitDone(service.load())
+
+            await waitTick()
+
+            expect(externalApi.getRouteDescriptions).toHaveBeenCalledWith({ type: 'gpx' }, true)
+            expect(added.filter(r => r.description.apiServer === 'myserver').map(r => r.description.id).sort()).toEqual(['g1', 'v1'])
+        })
+
+        test('external server without gpx support: video routes still load and the server stays reachable', async () => {
+            userSettingsMock.getValue.mockReturnValue({ myserver: 'https://myserver.example.com' })
+            const externalApi = {
+                getRouteDescriptions: jest.fn(async (q) => {
+                    if (q.type === 'gpx') throw new Error('404')
+                    return [descr({ id: 'v1', apiServer: 'myserver' })]
+                }),
+                getRouteDetails: jest.fn().mockResolvedValue(detail({ id: 'v1' })),
+                setSource: jest.fn(),
+            }
+            Inject('IncyclistRoutesApi', { create: jest.fn((key?: string) => key ? externalApi : apiMock) })
+
+            service = new RoutesApiLoader();
+            (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+
+            const { added } = await waitDone(service.load())
+
+            await waitTick()
+
+            expect(added.some(r => r.description.id === 'v1')).toBe(true)
+            expect(useRouteServerStatus().getResult('myserver')).toEqual({ status: 'ok', routeCount: 1 })
+            useRouteServerStatus().reset()
         })
 
         test('external route already processed via the default api: is not added twice', async () => {
@@ -410,7 +462,7 @@ describe('RoutesApiLoader', () => {
         afterEach(() => { useRouteServerStatus().reset() })
 
         test('server returned routes: ok with the count', async () => {
-            withExternal(jest.fn().mockResolvedValue([descr({ id: 'ext1' }), descr({ id: 'ext2' })]))
+            withExternal(byType([descr({ id: 'ext1' }), descr({ id: 'ext2' })], []))
 
             await waitDone(service.load())
 
@@ -453,7 +505,7 @@ describe('RoutesApiLoader', () => {
     describe('loadServer', () => {
         test('loads only the requested server and emits its routes', async () => {
             const externalApi = {
-                getRouteDescriptions: jest.fn().mockResolvedValue([descr({ id: 'ext1', apiServer: 'myserver' })]),
+                getRouteDescriptions: byType([descr({ id: 'ext1', apiServer: 'myserver' })], []),
                 getRouteDetails: jest.fn().mockResolvedValue(detail({ id: 'ext1' })),
                 setSource: jest.fn(),
             }
@@ -496,7 +548,8 @@ describe('RoutesApiLoader', () => {
             await running
             await single
 
-            expect(externalApi.getRouteDescriptions).toHaveBeenCalledTimes(1)
+            // once for the videos and once for the gpx routes of the single load (and not again for the full load)
+            expect(externalApi.getRouteDescriptions).toHaveBeenCalledTimes(2)
             useRouteServerStatus().reset()
         })
     })
