@@ -1,4 +1,3 @@
-import '../../list'
 import { getBindings } from '../../../api'
 import { IAppInfo } from '../../../api/appInfo'
 import { DesktopRouteServersSettingsPageService, getRouteServersSettingsPageService, MobileRouteServersSettingsPageService, useRouteServersSettingsPageService } from './index'

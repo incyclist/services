@@ -1,4 +1,3 @@
-import '../../../list'
 import { DesktopRouteServersSettingsPageService } from './service'
 
 describe('DesktopRouteServersSettingsPageService', () => {
