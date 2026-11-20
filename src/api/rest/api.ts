@@ -1,7 +1,34 @@
-import axios, { AxiosInstance } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { EventLogger } from 'gd-eventlog';
 import { v4 } from 'uuid';
-import { ApiClientInitProps, ExternalApiClientInitProps } from './types';
+import { ApiClientInitProps, ExternalApiClientInitProps, REDIRECT_NOT_ALLOWED } from './types';
+
+/** the URL a response was finally served from (differs from the requested URL after a redirect) */
+const getResponseUrl = (res: AxiosResponse): string | undefined => {
+    return res?.request?.res?.responseUrl ?? res?.request?.responseURL
+}
+
+const getRequestUrl = (config: InternalAxiosRequestConfig): string => {
+    try {
+        return axios.getUri(config)
+    }
+    catch {
+        return config.url
+    }
+}
+
+/** the URL a redirect is about to be followed to (options of the `follow-redirects` library used by the Node adapter) */
+const getRedirectUrl = (options: Record<string, any>): string | undefined => {
+    if (typeof options?.href === 'string')
+        return options.href
+    if (!options?.protocol || !(options.host ?? options.hostname))
+        return undefined
+    return `${options.protocol}//${options.host ?? options.hostname}${options.path ?? ''}`
+}
+
+const redirectNotAllowed = (message: string, config: InternalAxiosRequestConfig, request?: unknown, response?: AxiosResponse) => {
+    return new AxiosError(message, REDIRECT_NOT_ALLOWED, config, request, response)
+}
 
 export class ApiClient {
 
@@ -49,11 +76,82 @@ export class ApiClient {
         }
 
         this.axios = axios.create({ headers });
+        this.registerRedirectPolicy(this.axios)
 
         if (requestLog) {
             this.enableLogging()
         }
 
+    }
+
+    /**
+     * Adds the handling of the per-request `redirectPolicy` option (see `RedirectPolicy`). Requests without
+     * that option are not touched.
+     *
+     * - Node (http adapter): the policy is checked in `beforeRedirect`, so a refused redirect is never followed
+     * - all adapters: the URL that the response was served from is checked once the response has arrived. This is
+     *   all that can be done where the transport follows redirects invisibly (XHR). If that URL is not available,
+     *   the request can not be verified and a message is logged.
+     */
+    protected registerRedirectPolicy(client: AxiosInstance) {
+        client.interceptors.request.use( (config) => this.onRedirectPolicyRequest(config) )
+        client.interceptors.response.use(
+            (res) => this.onRedirectPolicyResponse(res),
+            (err) => this.onRedirectPolicyError(err)
+        )
+    }
+
+    protected onRedirectPolicyRequest(config: InternalAxiosRequestConfig) {
+        const policy = config?.redirectPolicy
+        if (!policy)
+            return config
+
+        const origin = getRequestUrl(config)
+        const previous = config.beforeRedirect
+
+        config.beforeRedirect = (options, responseDetails, requestDetails) => {
+            previous?.(options, responseDetails, requestDetails)
+
+            const target = getRedirectUrl(options)
+            if (target && !policy(target, origin)) {
+                this.logger.logEvent({ message: 'redirect refused', stage: 'before redirect' })
+                throw redirectNotAllowed('redirect not allowed', config)
+            }
+        }
+        return config
+    }
+
+    protected onRedirectPolicyResponse(res: AxiosResponse) {
+        const config = res?.config
+        const policy = config?.redirectPolicy
+        if (!policy)
+            return res
+
+        const origin = getRequestUrl(config)
+        const finalUrl = getResponseUrl(res)
+        if (!finalUrl) {
+            this.logger.logEvent({ message: 'redirect check skipped', reason: 'final url not available' })
+            return res
+        }
+        if (finalUrl === origin)
+            return res
+
+        if (!policy(finalUrl, origin)) {
+            this.logger.logEvent({ message: 'redirect refused', stage: 'response' })
+            throw redirectNotAllowed('redirect not allowed', config, res.request, res)
+        }
+        return res
+    }
+
+    // the Node adapter wraps an error thrown in `beforeRedirect` (maybe more than once) as the cause of its own error
+    protected onRedirectPolicyError(err) {
+        let cause = err?.cause
+        for (let depth = 0; cause && depth < 5 && err?.code !== REDIRECT_NOT_ALLOWED; depth++) {
+            if (cause.code === REDIRECT_NOT_ALLOWED)
+                err.code = REDIRECT_NOT_ALLOWED
+            cause = cause.cause
+        }
+        return Promise.reject(err)
     }
 
     enableLogging() {
