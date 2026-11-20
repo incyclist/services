@@ -11,9 +11,8 @@ import { settleWithLimit } from "../../../utils/settleWithLimit";
 import { Injectable } from "../../../base/decorators";
 import { useIncyclistRoutesApi } from "../../base/api/factory";
 import { useUserSettings } from "../../../settings";
-import { pascalCase } from "../../../utils";
 import { useRouteServerStatus } from "../../servers/status";
-import { toSourceKey } from "../../servers/validator";
+import { toSourceKey, toSourceLabel } from "../../servers/validator";
 
 const ROUTE_DETAILS_CONCURRENCY = 4
 
@@ -561,7 +560,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         }
         if (apiServer) {
             data.apiServer = apiServer
-            data.source =  pascalCase(apiServer)
+            data.source =  toSourceLabel(apiServer)
         }
 
         return data;

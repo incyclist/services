@@ -44,7 +44,7 @@ import { useFreeRideService } from "../free-ride";
 import { RouteServerValidationError } from "../servers/errors";
 import { checkRouteServer } from "../servers/probe";
 import { useRouteServerStatus } from "../servers/status";
-import { toSourceKey, validateRouteServerName, validateRouteServerUrl } from "../servers/validator";
+import { toSourceKey, toSourceLabel, validateRouteServerName, validateRouteServerUrl } from "../servers/validator";
 import { ROUTE_API as ROUTE_API_KEY, DEFAULT_DOMAIN } from "../base/api/consts";
 import type { RouteServerDownloadInfo, RouteServerNameResult, RouteServerProbeResult, RouteServerUrlResult } from "../servers/types";
 
@@ -1789,45 +1789,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             if (!key || fixed.some( f=>toSourceKey(f)===key) || found.has(key))
                 return;
 
-            found.set(key, appNames.get(key) ?? this.getSourceLabel(r.source))
+            found.set(key, appNames.get(key) ?? toSourceLabel(r.source))
         })
 
         const sources = Array.from(found.values()).sort( (a,b)=> a.toLowerCase().localeCompare(b.toLowerCase()) )
         return [...fixed, ...sources]
     }
 
-    /**
-     * Maps a value of the Source filter that was saved earlier to the option that is offered now. Apps used to be
-     * offered by their key (`Intervals`) and are now offered by their display name (`Intervals.icu`), so a saved
-     * value would not show as selected any more. Several values are separated by `|`. The filter itself accepts both
-     * spellings, this is only needed to show the selection.
-     *
-     * @param routeSource the value as it was saved
-     * @returns the value as it is offered by getFilterOptions()
-     */
-    normalizeSourceFilter(routeSource?:string):string|undefined {
-        if (!routeSource)
-            return routeSource
-        return routeSource.split('|').map( v=>this.getSourceOptionLabel(v) ).join('|')
-    }
-
-    private getSourceOptionLabel(value:string):string {
-        const fixed = ['Local','Incyclist'].find( f=>toSourceKey(f)===toSourceKey(value) )
-        if (fixed)
-            return fixed
-        return this.getAppNamesByKey().get(this.resolveSourceKey(value)) ?? this.getSourceLabel(value)
-    }
-
     private getAllAppSources():Array<string> {
         const apps= this.getAppsService().getAvailableServices('RouteDownload')??[]
         return apps.map(pascalCase)
-    }
-
-    /** a source is shown in its pascal-cased form. The source of a route that was stored that way is kept as it is */
-    private getSourceLabel(source:string):string {
-        if (/[-_ ]/.test(source))
-            return pascalCase(source)
-        return source.charAt(0).toUpperCase()+source.slice(1)
     }
 
     /** display name of every app by its source key */

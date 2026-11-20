@@ -359,40 +359,6 @@ describe('RouteListService',()=>{
         })
     })
 
-    describe('normalizeSourceFilter',()=>{
-        let service
-        beforeEach(()=>{
-            service = prepareMock(null,{mockLoad:true})
-            Inject('AppsService', { getApps: jest.fn().mockReturnValue([{key:'intervals',name:'Intervals.icu'},{key:'strava',name:'Strava'}]) })
-        })
-        afterEach(()=>{
-            service.reset()
-            Inject('AppsService', null)
-        })
-
-        test.each([
-            ['Intervals','Intervals.icu'],
-            ['intervals','Intervals.icu'],
-            ['Intervals.icu','Intervals.icu'],
-            ['Strava','Strava'],
-            ['local','Local'],
-            ['Incyclist','Incyclist'],
-            ['Alpine Videos','AlpineVideos'],
-            ['AlpineVideos','AlpineVideos'],
-        ])('a saved value %s is shown as option %s',(saved,option)=>{
-            expect(service.normalizeSourceFilter(saved)).toBe(option)
-        })
-
-        test('several values',()=>{
-            expect(service.normalizeSourceFilter('Intervals|Strava')).toBe('Intervals.icu|Strava')
-        })
-
-        test('no value',()=>{
-            expect(service.normalizeSourceFilter(undefined)).toBeUndefined()
-            expect(service.normalizeSourceFilter('')).toBe('')
-        })
-    })
-
     describe('route servers',()=>{
         let service
         let settings: Record<string,string>

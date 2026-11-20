@@ -1,4 +1,4 @@
-import { isAllowedRedirectTarget, isHomeNetworkHost, normalizeRouteServerUrl, validateRouteServerName, validateRouteServerUrl } from './validator'
+import { isAllowedRedirectTarget, isHomeNetworkHost, normalizeRouteServerUrl, toSourceLabel, validateRouteServerName, validateRouteServerUrl } from './validator'
 
 describe('validateRouteServerName', () => {
     const ctx = { reservedNames: ['Strava', 'Komoot', 'Intervals.icu', 'intervals'], existingNames: ['Alpine Videos'] }
@@ -286,5 +286,19 @@ describe('isAllowedRedirectTarget', () => {
     test('a target that is not a valid address is not allowed', () => {
         expect(isAllowedRedirectTarget('ftp://nas/api', home)).toBe(false)
         expect(isAllowedRedirectTarget('nonsense', home)).toBe(false)
+    })
+})
+
+describe('toSourceLabel', () => {
+    test.each([
+        ['Ebeling Hoppe', 'EbelingHoppe'],
+        ['alpine-videos', 'AlpineVideos'],
+        ['AlpineVideos', 'AlpineVideos'],
+        ['strava', 'Strava'],
+    ])('%s is shown as %s', (name, label) => {
+        expect(toSourceLabel(name)).toBe(label)
+    })
+    test('empty', () => {
+        expect(toSourceLabel('')).toBe('')
     })
 })
