@@ -165,8 +165,10 @@ next bundle release.
 ### What a route server must provide
 
 A route server is a plain HTTPS service. Incyclist checks a server by requesting
-`<base-url>/?type=video`, which must answer with a JSON array of route descriptions. Route
-details are then requested from `<base-url>/<route-id>`. A reachable server that answers
+`<base-url>/?type=video`, which must answer with a JSON array of
+[`RouteApiDescription`](./src/routes/base/api/types.ts#L11) objects. Route details are then
+requested from `<base-url>/<route-id>`, which must answer with a
+[`RouteApiDetail`](./src/routes/base/api/types.ts#L51). A reachable server that answers
 something else, such as an HTML page or a 404, is rejected as "not a route server". Redirects
 that would lead to a URL the app would not accept (for example from `https://` to `http://`)
 are rejected too. Servers loaded by the app currently provide video routes only.
