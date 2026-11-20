@@ -570,17 +570,19 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         let contentTypes = []
         let routeTypes = []
         let routeSources = []
+        let routeSourceLabels = {}
 
         try {
             countries = this.getFilterCountries(filters);
             contentTypes = this.getFilterContentTypes(filters);
             routeTypes = this.getFilterRouteTypes(filters)
             routeSources = this.getFilterRouteSources(filters)
+            routeSourceLabels = this.getFilterRouteSourceLabels(filters)
         }
         catch (err) {
             this.logError(err,'getFilterOption')
         }
-        return {countries,contentTypes,routeTypes,routeSources}
+        return {countries,contentTypes,routeTypes,routeSources,routeSourceLabels}
     }
 
     onResize() {
@@ -1776,24 +1778,60 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      * Provides the options of the Source filter: `Local` and `Incyclist` first, then every source that is present
      * on the routes passing the other filters (apps, route servers - whether configured or not), sorted alphabetically.
      *
-     * Sources are identified by `pascalCase(source)`. Apps are shown with their display name, route servers
-     * with the pascal-cased name.
+     * The returned strings are the option values (what is passed as `routeSource` to the filter). Sources are
+     * identified by `pascalCase(source)`. To show an option, use the labels (see getFilterRouteSourceLabels()),
+     * which show a route server with the name that the user gave it.
      */
     protected getFilterRouteSources(filters:SearchFilter={}):Array<string> {
+        return this.getFilterRouteSourceOptions(filters).map(o=>o.value)
+    }
+
+    /**
+     * Provides the text to show for each option of the Source filter.
+     *
+     * Apps are shown with their display name. A route server is shown with the name that the user gave it
+     * (`Ebeling Hoppe`): the configured server whose name matches the source, or the server name that its routes carry.
+     * The value of the option (the key of the returned object) stays the same, so filters keep working.
+     *
+     * @returns the label for every option value that getFilterOptions() offers in `routeSources`
+     */
+    getFilterRouteSourceLabels(filters:SearchFilter={}):Record<string,string> {
+        const labels:Record<string,string> = {}
+        this.getFilterRouteSourceOptions(filters).forEach( o=> { labels[o.value] = o.label })
+        return labels
+    }
+
+    /**
+     * The text to show for the source of a route: the name the user gave the route server if the route comes from one,
+     * otherwise the source as it is stored on the route
+     */
+    getRouteSourceLabel(description:{source?:string, apiServer?:string}):string|undefined {
+        return description?.apiServer || description?.source
+    }
+
+    protected getFilterRouteSourceOptions(filters:SearchFilter={}):Array<{value:string,label:string}> {
         const fixed = ['Local','Incyclist']
         const appNames = this.getAppNamesByKey()
+        const configured = Array.from(this.getExternalApiProviders()?.keys() ?? [])
 
-        const found = new Map<string,string>()
+        const found = new Map<string,{value:string,label:string}>()
         this.getRoutesForFilterOptions(filters,'routeSource').forEach(r=> {
             const key = toSourceKey(r.source)
             if (!key || fixed.some( f=>toSourceKey(f)===key) || found.has(key))
                 return;
 
-            found.set(key, appNames.get(key) ?? toSourceLabel(r.source))
+            const appName = appNames.get(key)
+            if (appName) {
+                found.set(key, {value:appName, label:appName})
+                return
+            }
+            const value = toSourceLabel(r.source)
+            const server = configured.find( k=>toSourceKey(k)===key ) ?? r.apiServer
+            found.set(key, {value, label: server || value})
         })
 
-        const sources = Array.from(found.values()).sort( (a,b)=> a.toLowerCase().localeCompare(b.toLowerCase()) )
-        return [...fixed, ...sources]
+        const sources = Array.from(found.values()).sort( (a,b)=> a.value.toLowerCase().localeCompare(b.value.toLowerCase()) )
+        return [...fixed.map(f=>({value:f,label:f})), ...sources]
     }
 
     private getAllAppSources():Array<string> {

@@ -337,6 +337,77 @@ describe('RouteListService',()=>{
 
     })
 
+    describe('getFilterRouteSourceLabels',()=>{
+        let service
+        let userSettingsMock
+        beforeEach(()=>{
+            service = prepareMock(null,{mockLoad:true})
+            userSettingsMock = { getValue: jest.fn().mockReturnValue(null) }
+            Inject('UserSettings', userSettingsMock)
+            Inject('AppsService', { getAvailableServices: jest.fn().mockReturnValue([]), getApps: jest.fn().mockReturnValue([{key:'intervals',name:'Intervals.icu'}]) })
+        })
+        afterEach(()=>{
+            service.reset()
+            Inject('AppsService', null)
+            Inject('UserSettings', null)
+        })
+        const stubRoutes = (routes) => { service['getRoutesForFilterOptions'] = jest.fn().mockReturnValue(routes) }
+
+        test('configured server: shown with the name as typed, the value stays pascal-cased',()=>{
+            userSettingsMock.getValue.mockReturnValue({'Ebeling Hoppe':'https://x.example.com'})
+            stubRoutes([{source:'EbelingHoppe', apiServer:'Ebeling Hoppe'}])
+
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','EbelingHoppe'])
+            expect(service.getFilterRouteSourceLabels()).toEqual({Local:'Local',Incyclist:'Incyclist',EbelingHoppe:'Ebeling Hoppe'})
+        })
+
+        test('configured name wins over the apiServer of the routes (server was renamed by re-adding)',()=>{
+            userSettingsMock.getValue.mockReturnValue({'ebeling-hoppe':'https://x.example.com'})
+            stubRoutes([{source:'EbelingHoppe', apiServer:'Ebeling Hoppe'}])
+
+            expect(service.getFilterRouteSourceLabels().EbelingHoppe).toBe('ebeling-hoppe')
+        })
+
+        test('server that is not configured: apiServer of the routes is used',()=>{
+            stubRoutes([{source:'EbelingHoppe', apiServer:'Ebeling Hoppe'}])
+
+            expect(service.getFilterRouteSourceLabels().EbelingHoppe).toBe('Ebeling Hoppe')
+        })
+
+        test('neither configured nor apiServer: falls back to the pascal-cased source',()=>{
+            stubRoutes([{source:'unknown'}])
+
+            expect(service.getFilterRouteSourceLabels().Unknown).toBe('Unknown')
+        })
+
+        test('apps keep their display name',()=>{
+            stubRoutes([{source:'intervals'}])
+
+            expect(service.getFilterRouteSourceLabels()['Intervals.icu']).toBe('Intervals.icu')
+        })
+
+        test('getFilterOptions offers the labels',()=>{
+            stubRoutes([{source:'EbelingHoppe', apiServer:'Ebeling Hoppe'}])
+            service.getFilterCountries = jest.fn().mockReturnValue([])
+            service.getFilterContentTypes = jest.fn().mockReturnValue([])
+            service.getFilterRouteTypes = jest.fn().mockReturnValue([])
+
+            const options = service.getFilterOptions()
+
+            expect(options.routeSources).toContain('EbelingHoppe')
+            expect(options.routeSourceLabels.EbelingHoppe).toBe('Ebeling Hoppe')
+        })
+    })
+
+    describe('getRouteSourceLabel',()=>{
+        test('server routes show the name as typed, others their source',()=>{
+            const service = prepareMock(null,{mockLoad:true})
+            expect(service.getRouteSourceLabel({source:'EbelingHoppe',apiServer:'Ebeling Hoppe'})).toBe('Ebeling Hoppe')
+            expect(service.getRouteSourceLabel({source:'strava'})).toBe('strava')
+            expect(service.getRouteSourceLabel({})).toBeUndefined()
+        })
+    })
+
     describe('applySourceFilter with app display names',()=>{
         let service
         beforeEach(()=>{

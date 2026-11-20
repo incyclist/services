@@ -19,10 +19,9 @@ const LABEL_PATTERN = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
 export const toSourceKey = (name: string): string => pascalCase(name)?.toLowerCase()
 
 /**
- * The label of a source as it is shown to the user (Source filter, route items, route servers settings).
- * Names with a separator are pascal-cased ("Alpine Videos" -> "AlpineVideos"), anything else only gets a leading
- * capital. This keeps the label stable for a name that was formatted already (pascalCase alone would turn
- * "AlpineVideos" into "Alpinevideos"), so always compute it from the stored name.
+ * The value of a Source filter option for a source (internal, not meant to be shown for route servers: they are shown
+ * with the name the user typed). Names with a separator are pascal-cased ("Alpine Videos" -> "AlpineVideos"), anything
+ * else only gets a leading capital, so a value that was formatted already stays as it is.
  */
 export const toSourceLabel = (name: string): string => {
     if (!name?.length)

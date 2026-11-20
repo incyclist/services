@@ -94,7 +94,10 @@ export interface SearchFilterOptions {
     countries: Array<string>
     contentTypes: Array<string>
     routeTypes: Array<string>
+    /** option values of the Source filter (pass one as `routeSource`). Show `routeSourceLabels[value] ?? value` */
     routeSources: Array<string>
+    /** text to show for each value of `routeSources`: route servers appear with the name the user gave them */
+    routeSourceLabels?: Record<string,string>
     maxDistance?: FormattedNumber
     maxElevation?: FormattedNumber
 }

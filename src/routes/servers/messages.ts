@@ -1,3 +1,5 @@
+const routeWord = (count: number): string => count === 1 ? 'route' : 'routes'
+
 export const SERVER_MESSAGES = {
     nameEmpty: "Enter a name. It's shown in your route list.",
     nameFormat: 'Use up to 24 letters, numbers, spaces or dashes.',
@@ -30,7 +32,7 @@ export const SERVER_MESSAGES = {
     statusNoRoutes: 'No routes yet',
     statusUnreachable: "Couldn't be reached last time. Routes you already have still work.",
     statusBuiltIn: 'Built in',
-    knownAdded: (count: number) => count > 0 ? `Added ✓ · ${count} ${count === 1 ? 'route' : 'routes'}` : 'Added ✓',
-    found: (count: number) => `Found ${count} ${count === 1 ? 'route' : 'routes'}.`,
-    routes: (count: number) => `${count} ${count === 1 ? 'route' : 'routes'}`,
+    knownAdded: (count: number) => count > 0 ? `Added ✓ · ${count} ${routeWord(count)}` : 'Added ✓',
+    found: (count: number) => `Found ${count} ${routeWord(count)}.`,
+    routes: (count: number) => `${count} ${routeWord(count)}`,
 } as const

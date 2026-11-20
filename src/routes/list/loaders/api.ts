@@ -12,7 +12,8 @@ import { Injectable } from "../../../base/decorators";
 import { useIncyclistRoutesApi } from "../../base/api/factory";
 import { useUserSettings } from "../../../settings";
 import { useRouteServerStatus } from "../../servers/status";
-import { toSourceKey, toSourceLabel } from "../../servers/validator";
+import { pascalCase } from "../../../utils";
+import { toSourceKey } from "../../servers/validator";
 
 const ROUTE_DETAILS_CONCURRENCY = 4
 
@@ -573,7 +574,7 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
         }
         if (apiServer) {
             data.apiServer = apiServer
-            data.source =  toSourceLabel(apiServer)
+            data.source =  pascalCase(apiServer)
         }
 
         return data;
