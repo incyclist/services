@@ -167,7 +167,7 @@ next bundle release.
 ### What a route server must provide
 
 A route server is a plain HTTPS service. Incyclist checks a server by requesting
-`<base-url>/?type=video`, which must answer with a JSON array of
+`<base-url>?type=video`, which must answer with a JSON array of
 [`RouteApiDescription`](./src/routes/base/api/types.ts#L11) objects. Route details are then
 requested from `<base-url>/<route-id>`, which must answer with a
 [`RouteApiDetail`](./src/routes/base/api/types.ts#L51). A reachable server that answers
@@ -178,8 +178,9 @@ Requests to a server are given up after 30 seconds. The server then counts as un
 A route can only be updated by the server it belongs to: a server that offers the id of an
 Incyclist route (or of a route of another server) does not replace it.
 
-GPX routes are optional. The app also requests `<base-url>?private=false` for them. A server
-that does not support this request is still loaded normally and keeps its video routes.
+GPX routes are optional. The app also requests `<base-url>?type=route` for them, with the same
+kind of response. A server that does not support this request is still loaded normally and keeps
+its video routes.
 
 ## Using this library in your own app
 

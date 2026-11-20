@@ -103,7 +103,14 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
     async getRouteDescriptions(query:RouteDescriptionQuery, throws:boolean = false): Promise<Array<RouteApiDescription>> {
         const {type='gpx',category} = query;
 
-        let url  = (type === 'gpx' ) ? `?private=false` : `/?type=${type}`;
+        let url:string
+        if (this.isExternal) {
+            // route servers are asked for their video routes (?type=video) and their GPX routes (?type=route)
+            url = `?type=${type === 'gpx' ? 'route' : type}`
+        }
+        else {
+            url = (type === 'gpx' ) ? `?private=false` : `/?type=${type}`;
+        }
         if (category)
             url += `&category=${category}`
 

@@ -58,8 +58,26 @@ describe('IncyclistRoutesApi', () => {
 
             await api.getRouteDescriptions({ type: 'gpx' })
 
-            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api?private=false', expect.anything())
+            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api?type=route', expect.anything())
             expect(internalGet).not.toHaveBeenCalled()
+        })
+
+        test('external server: video routes are requested with ?type=video', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api?type=video', expect.anything())
+        })
+
+        test('external server: a category is appended to the query', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'gpx', category: 'demo' })
+
+            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api?type=route&category=demo', expect.anything())
         })
     })
 
@@ -378,7 +396,7 @@ describe('IncyclistRoutesApi', () => {
 
             await api.getRouteDescriptions({ type: 'video' })
 
-            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api/v1/?type=video', expect.anything())
+            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api/v1?type=video', expect.anything())
         })
 
         test('timeout is added to the request config', async () => {
