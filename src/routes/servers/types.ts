@@ -4,7 +4,7 @@ export type RouteServerNameErrorCode = 'empty' | 'reserved-word' | 'format' | 'r
 
 export type RouteServerUrlErrorCode =
     | 'empty' | 'whitespace' | 'credentials' | 'not-a-url' | 'http-internet'
-    | 'http-not-supported' | 'duplicate' | 'built-in'
+    | 'http-not-supported' | 'duplicate' | 'built-in' | 'query'
 
 export interface RouteServerNameContext {
     /** names of the servers that are already configured */

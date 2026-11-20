@@ -7,6 +7,7 @@ export const SERVER_MESSAGES = {
 
     urlWhitespace: "Addresses can't contain spaces or line breaks. Check you copied only the address.",
     urlCredentials: "Addresses with a user name or password can't be added.",
+    urlQuery: "Addresses can't contain a query string (everything after a ?). Use the plain address of the server.",
     urlNotAUrl: "This doesn't look like a web address. Check for typos.",
     urlHttpInternet: "Plain http:// only works for servers on your home network. For servers on the internet, use an https:// address.",
     urlHttpNotSupported: "This device can't use servers without https:// yet. Use an https:// address.",

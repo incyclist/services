@@ -1,4 +1,4 @@
-import { pascalCase } from '../../utils/string'
+import { pascalCase, trimTrailingSlashes } from '../../utils/string'
 import { SERVER_MESSAGES as MSG } from './messages'
 import type {
     RouteServerUrlErrorCode, RouteServerNameContext, RouteServerNameResult, RouteServerUrlContext, RouteServerUrlInfo, RouteServerUrlResult
@@ -134,11 +134,11 @@ export const isHomeNetworkHost = (rawHost: string, hostname: string): boolean =>
 export const normalizeRouteServerUrl = (url: string): string => {
     try {
         const u = new URL(url)
-        const path = u.pathname.replace(/\/+$/, '')
+        const path = trimTrailingSlashes(u.pathname)
         return `${u.protocol}//${u.host}${path}${u.search}`
     }
     catch {
-        return (url ?? '').trim().toLowerCase().replace(/\/+$/, '')
+        return trimTrailingSlashes((url ?? '').trim().toLowerCase())
     }
 }
 
@@ -155,6 +155,9 @@ const checkRawInput = (input: string): UrlFailure | undefined => {
         return fail('whitespace', MSG.urlWhitespace)
     if (FORBIDDEN_RAW_CHARS.test(input) || input.includes('#'))
         return fail('not-a-url', MSG.urlNotAUrl)
+    // the api appends its own query (`/?type=video`), so a query string in the address would break every request
+    if (input.includes('?'))
+        return fail('query', MSG.urlQuery)
     if (getRawAuthority(input).includes('@'))
         return fail('credentials', MSG.urlCredentials)
 }
@@ -213,6 +216,9 @@ export const validateRouteServerUrl = (input: string, context: RouteServerUrlCon
     if (schemeFailure)
         return schemeFailure
 
+    if (u.href.length > MAX_URL_LENGTH)
+        return fail('not-a-url', MSG.urlNotAUrl)
+
     const duplicate = findDuplicate(u.href, context)
     if (duplicate)
         return duplicate
@@ -230,11 +236,40 @@ export const validateRouteServerUrl = (input: string, context: RouteServerUrlCon
     return { valid: true, ...info }
 }
 
+/** the address without query string and fragment (the part of a request URL that the address rules apply to) */
+const withoutQuery = (url: string): string | undefined => {
+    try {
+        const u = new URL(url)
+        u.search = ''
+        u.hash = ''
+        return u.href
+    }
+    catch {
+        return undefined
+    }
+}
+
 /**
- * Whether a request to a route server may end up at `finalUrl` after redirects: only if the
- * address would pass the URL rules itself (no https to http downgrade on the internet, no hop
- * from the internet to a home-network http host, ...).
+ * Whether a request to a route server may end up at `finalUrl` after redirects. The target has to pass the URL
+ * rules itself (no https to http downgrade on the internet, ...). On top of that, the class of the origin counts:
+ * a home-network target is only acceptable if the origin was a home-network host as well. A server on the internet
+ * must not be able to send the app to a host on the home network.
+ *
+ * @param finalUrl  where the request is redirected to (query string is ignored)
+ * @param originUrl the address that was requested (query string is ignored)
  */
-export const isAllowedRedirectTarget = (finalUrl: string): boolean => {
-    return validateRouteServerUrl(finalUrl, { allowsLocalHttp: true }).valid
+export const isAllowedRedirectTarget = (finalUrl: string, originUrl: string): boolean => {
+    const target = withoutQuery(finalUrl)
+    if (!target)
+        return false
+
+    const targetInfo = validateRouteServerUrl(target, { allowsLocalHttp: true })
+    if (!targetInfo.valid)
+        return false
+    if (!targetInfo.isLocal)
+        return true
+
+    const origin = withoutQuery(originUrl)
+    const originInfo = origin ? validateRouteServerUrl(origin, { allowsLocalHttp: true }) : undefined
+    return originInfo?.valid === true && originInfo.isLocal === true
 }

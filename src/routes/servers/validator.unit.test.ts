@@ -103,6 +103,9 @@ describe('validateRouteServerUrl', () => {
         ['U10a', 'https://', 'not-a-url'],
         ['U10b', 'https:///path', 'not-a-url'],
         ['U12', `https://videos.example.org/${'a'.repeat(2040)}`, 'not-a-url'],
+        ['U13a', 'https://videos.example.org/api?type=video', 'query'],
+        ['U13b', 'https://videos.example.org?x=1', 'query'],
+        ['U13c', 'videos.example.org/?', 'query'],
         ['L5a', 'http://172.32.0.1', 'http-internet'],
         ['L5b', 'http://172.15.255.255', 'http-internet'],
         ['L11', 'http://192.168.1.1.evil.com', 'http-internet'],
@@ -209,6 +212,15 @@ describe('validateRouteServerUrl', () => {
         const res = validateRouteServerUrl('https://dlws.incyclist.com/api/v1/routes/', { builtInUrls: ['https://dlws.incyclist.com/api/v1/routes'] })
         expect(res).toMatchObject({ valid: false, code: 'built-in', message: "This is Incyclist's own server. It's already included." })
     })
+    test('the length limit also applies to the normalised address', () => {
+        // short as typed, longer once non-ASCII characters of the path are percent-encoded
+        const input = `https://videos.example.org/${'ü'.repeat(700)}`
+        expect(input.length).toBeLessThan(2048)
+        expect(validateRouteServerUrl(input)).toMatchObject({ valid: false, code: 'not-a-url' })
+    })
+    test('query string message', () => {
+        expect(validateRouteServerUrl('https://videos.example.org/?a=1').message).toContain("can't contain a query string")
+    })
     test('not a url', () => {
         expect(validateRouteServerUrl('https://exa mple')).toMatchObject({ valid: false, code: 'whitespace' })
         expect(validateRouteServerUrl('https://[bad')).toMatchObject({ valid: false, code: 'not-a-url' })
@@ -228,19 +240,51 @@ describe('normalizeRouteServerUrl', () => {
     test('keeps the path', () => {
         expect(normalizeRouteServerUrl('https://a.org/api/v1/routes/')).toBe('https://a.org/api/v1/routes')
     })
+    test('many trailing slashes are dropped', () => {
+        expect(normalizeRouteServerUrl(`https://a.org/api${'/'.repeat(5000)}`)).toBe('https://a.org/api')
+        expect(normalizeRouteServerUrl(`Not A Url${'/'.repeat(5000)}`)).toBe('not a url')
+    })
     test('unparsable input falls back to a lower case string', () => {
         expect(normalizeRouteServerUrl('Not A Url/')).toBe('not a url')
     })
 })
 
 describe('isAllowedRedirectTarget', () => {
+    const internet = 'https://videos.example.org/api/v1/routes/?type=video'
+    const home = 'http://nas:8080/api/?type=video'
+
     test('https to the internet is allowed', () => {
-        expect(isAllowedRedirectTarget('https://videos.example.org/api')).toBe(true)
+        expect(isAllowedRedirectTarget('https://other.example.org/api/?type=video', internet)).toBe(true)
     })
-    test('http on the internet is not allowed', () => {
-        expect(isAllowedRedirectTarget('http://videos.example.org/api')).toBe(false)
+    test('the query string of the target is ignored', () => {
+        expect(isAllowedRedirectTarget('https://other.example.org/api?type=video&x=1', internet)).toBe(true)
     })
-    test('http on the home network is allowed', () => {
-        expect(isAllowedRedirectTarget('http://nas:8080/api')).toBe(true)
+    test('https downgrade to http on the internet is not allowed', () => {
+        expect(isAllowedRedirectTarget('http://videos.example.org/api', internet)).toBe(false)
+    })
+    test('internet to home-network http is not allowed', () => {
+        expect(isAllowedRedirectTarget('http://192.168.1.20/api', internet)).toBe(false)
+    })
+    test('internet to home-network https is not allowed', () => {
+        expect(isAllowedRedirectTarget('https://192.168.1.20/api', internet)).toBe(false)
+        expect(isAllowedRedirectTarget('https://nas/api', internet)).toBe(false)
+        expect(isAllowedRedirectTarget('https://localhost/api', internet)).toBe(false)
+    })
+    test('home network to home network is allowed, also over http', () => {
+        expect(isAllowedRedirectTarget('http://nas:8080/other/', home)).toBe(true)
+        expect(isAllowedRedirectTarget('http://192.168.1.20/api', home)).toBe(true)
+    })
+    test('home network to https on the internet is allowed', () => {
+        expect(isAllowedRedirectTarget('https://videos.example.org/api', home)).toBe(true)
+    })
+    test('home network to http on the internet is not allowed', () => {
+        expect(isAllowedRedirectTarget('http://videos.example.org/api', home)).toBe(false)
+    })
+    test('an origin that is not a valid address counts as the internet', () => {
+        expect(isAllowedRedirectTarget('http://nas:8080/api', 'not a url')).toBe(false)
+    })
+    test('a target that is not a valid address is not allowed', () => {
+        expect(isAllowedRedirectTarget('ftp://nas/api', home)).toBe(false)
+        expect(isAllowedRedirectTarget('nonsense', home)).toBe(false)
     })
 })
