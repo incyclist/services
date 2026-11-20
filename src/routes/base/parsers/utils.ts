@@ -223,6 +223,27 @@ export const buildFileUrl = (normalizedPath: string): string => {
     return `file://${encodeURI(normalizedPath)}`;
 }
 
+/**
+ * Converts a local `file:///` or `video:///` URL to the path of the file, as expected by the fs binding:
+ * percent-encoding is decoded, an absolute POSIX path keeps its leading `/` and a Windows path has no leading `/`
+ * before its drive letter (`file:///C:/videos/a.mp4` -> `C:/videos/a.mp4`).
+ *
+ * @returns the path, or `undefined` if the URL is no local file URL
+ */
+export const fileUrlToPath = (url?: string): string | undefined => {
+    const scheme = ['file:///', 'video:///'].find(prefix => url?.startsWith(prefix))
+    if (!scheme)
+        return undefined
+
+    // the URL carries the path with its own leading '/'. An extra one (file:////) is a known malformation
+    let path = url.slice(scheme.length - 1)
+    while (path.startsWith('//'))
+        path = path.slice(1)
+
+    path = safeDecode(path)
+    return /^\/[A-Za-z]:[\\/]/.test(path) ? path.slice(1) : path
+}
+
 const buildUrlFromFile = (info:FileInfo, referenced:{ file?:string, url?:string}) => {
     if (referenced.url) {
         return referenced.url;

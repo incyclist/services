@@ -4,6 +4,7 @@ import { Observer, PromiseObserver } from "../../../base/types/observer";
 import { useUserSettings } from "../../../settings";
 import { sleep } from "../../../utils/sleep";
 import { RouteApiDetail } from "../../base/api/types";
+import { fileUrlToPath } from "../../base/parsers/utils";
 import { Route } from "../../base/model/route";
 import { RouteInfo, RoutePoint,AppStatus  } from "../../base/types";
 import { BaseCard } from "./base";
@@ -1069,11 +1070,8 @@ export class RouteCard extends BaseCard implements Card<Route> {
             const descr = this.getRouteDescription()
             const videoUrl = descr.videoUrl
 
-            if (videoUrl?.startsWith('video:///') || videoUrl?.startsWith('file:///')) {
-                const filePath = videoUrl.startsWith('video:///')
-                    ? videoUrl.replace('video:///', '')
-                    : videoUrl.replace('file:///', '')                
-
+            const filePath = fileUrlToPath(videoUrl)
+            if (filePath) {
                 const fs = getBindings().fs
                 if (fs) {
                     const exists = await this.fileExists(filePath)

@@ -534,7 +534,8 @@ describe('RouteListService',()=>{
                 const info = await service.getExternalApiProviderDownloadInfo('Alpine Videos')
 
                 expect(info).toEqual({routeCount:3,downloadedCount:2,downloadedBytes:1500})
-                expect(stat).toHaveBeenCalledWith('videos/a1.mp4')
+                expect(stat).toHaveBeenCalledWith('/videos/a1.mp4')
+                expect(stat).toHaveBeenCalledWith('/videos/a2.mp4')
             })
 
             test('download info: size can not be determined',async ()=>{
@@ -569,7 +570,9 @@ describe('RouteListService',()=>{
                 const res = await service.deleteExternalApiProviderRoutes('Alpine Videos')
 
                 expect(res).toEqual({deleted:2,failed:0})
-                expect(calls).toEqual(['download:a1','delete:a1','delete:a2'])
+                expect(calls.indexOf('download:a1')).toBeLessThan(calls.indexOf('delete:a1'))
+                expect(calls).toEqual(expect.arrayContaining(['download:a1','delete:a1','delete:a2']))
+                expect(calls).toHaveLength(3)
                 expect(cards.a1.delete).toHaveBeenCalledWith({enforced:true,source:'user'})
                 expect(service.findCard).not.toHaveBeenCalledWith('b1')
                 expect([a1,a2]).toHaveLength(2)
@@ -588,6 +591,18 @@ describe('RouteListService',()=>{
                 expect(res).toEqual({deleted:1,failed:1})
             })
 
+            test('percent-encoded and Windows video urls are converted to the path the binding expects',async ()=>{
+                addRoute('a1',{isDownloaded:true,videoUrl:'file:///C:/My%20Videos/a1.mp4'})
+                addRoute('a2',{isDownloaded:true,videoUrl:'file:///data/My%20Videos/a2.mp4'})
+                const stat = jest.fn(async ()=>({size:1}))
+                getBindings().fs = {...getBindings().fs, stat} as unknown as IFileSystem
+
+                await service.getExternalApiProviderDownloadInfo('Alpine Videos')
+
+                expect(stat).toHaveBeenCalledWith('C:/My Videos/a1.mp4')
+                expect(stat).toHaveBeenCalledWith('/data/My Videos/a2.mp4')
+            })
+
             test('route without a card: removed from the repository and the downloaded file is deleted',async ()=>{
                 addRoute('a1',{isDownloaded:true,videoUrl:'video:///videos/a1.mp4'})
                 const unlink = jest.fn().mockResolvedValue(undefined)
@@ -599,7 +614,7 @@ describe('RouteListService',()=>{
                 const res = await service.deleteExternalApiProviderRoutes('Alpine Videos')
 
                 expect(res).toEqual({deleted:1,failed:0})
-                expect(unlink).toHaveBeenCalledWith('videos/a1.mp4')
+                expect(unlink).toHaveBeenCalledWith('/videos/a1.mp4')
                 expect(service.db.delete).toHaveBeenCalled()
                 expect(service.getExternalApiProviderRouteCount('Alpine Videos')).toBe(0)
             })

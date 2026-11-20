@@ -4,6 +4,7 @@ import { IncyclistService } from "../../base/service";
 import { Observer, Singleton } from "../../base/types";
 import { PromiseObserver } from "../../base/types/observer";
 import { RouteApiDetail } from "../base/api/types";
+import { fileUrlToPath } from "../base/parsers/utils";
 import { Route } from "../base/model/route";
 import { RouteInfo } from "../base/types";
 import { analyseElevationNoise, applySmoothing, isSmoothingEligible } from "../base/utils/smoothing";
@@ -26,6 +27,7 @@ import { useUserSettings } from "../../settings";
 import { Injectable } from "../../base/decorators";
 import { RouteSyncFactory } from "../sync/factory";
 import { sleep } from "../../utils/sleep";
+import { settleWithLimit } from "../../utils/settleWithLimit";
 import { RouteDetailsQueue } from "./detailsQueue";
 import { useAppsService } from "../../apps";
 import { useAppState } from "../../appstate";
@@ -48,6 +50,8 @@ import type { RouteServerDownloadInfo, RouteServerNameResult, RouteServerProbeRe
 
 
 const SYNC_INTERVAL = 5* 60*1000
+// routes of a removed server that are deleted at the same time
+const DELETE_ROUTES_CONCURRENCY = 4
 
 /** keeps logged measurements readable - they are calibration input, not exact quantities */
 const round = (value:number, digits:number):number => {
@@ -1352,20 +1356,20 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      */
     async deleteExternalApiProviderRoutes(key:string):Promise<{deleted:number, failed:number}> {
         const routes = this.getRoutesOfServer(key)
+        const results = await settleWithLimit(routes, DELETE_ROUTES_CONCURRENCY, route => this.deleteRouteForServer(route))
+
         let deleted = 0
         let failed = 0
-
-        for (const route of routes) {
-            try {
-                await this.deleteRouteForServer(route)
+        results.forEach( (res,idx) => {
+            if (res.status==='fulfilled') {
                 deleted++
+                return
             }
-            catch (err) {
-                failed++
-                this.logError(err,'deleteExternalApiProviderRoutes',{server:key, id:route.description?.id})
-            }
-        }
-        this.logEvent({message:'route server routes removed', name:key, deleted, failed})
+            failed++
+            this.logError(res.reason,'deleteExternalApiProviderRoutes',{server:key, id:routes[idx].description?.id})
+        })
+
+        this.logEvent({message:'route server routes removed', key, deleted, failed})
         this.emitLists('updated',{log:true,source:'user'})
         return {deleted, failed}
     }
@@ -1397,12 +1401,9 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return (this.routes??[]).filter( r=> r.description?.apiServer && toSourceKey(r.description.apiServer)===id )
     }
 
+    /** the path of the local video file of a route, in the form that the fs binding expects (decoded, absolute POSIX paths keep their leading slash) */
     protected getVideoFilePath(route:Route):string|undefined {
-        const url = route.description?.videoUrl
-        if (url?.startsWith('video:///'))
-            return url.replace('video:///','')
-        if (url?.startsWith('file:///'))
-            return url.replace('file:///','')
+        return fileUrlToPath(route.description?.videoUrl)
     }
 
     protected async getVideoFileSize(route:Route):Promise<number|undefined> {
