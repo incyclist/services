@@ -13,6 +13,7 @@ import { useIncyclistRoutesApi } from "../../base/api/factory";
 import { useUserSettings } from "../../../settings";
 import { pascalCase } from "../../../utils";
 import { useRouteServerStatus } from "../../servers/status";
+import { toSourceKey } from "../../servers/validator";
 
 const ROUTE_DETAILS_CONCURRENCY = 4
 
@@ -38,6 +39,25 @@ const ExistingAndNotUpdated = (existing: RouteInfo, descr: RouteInfo) => {
         && (!isDeleted || (isDeleted && existing.isDownloaded));
 }
 
+/** one load of the route list: all of its requests and processing run inside one job, the jobs run one after the other */
+interface LoadJob {
+    observer: Observer
+    stopped: boolean
+    /** address of every external server that this load requested, to detect a removal (or change) while the request was open */
+    servers: Map<string,string>
+}
+
+/** the descriptions that one group of requests (built-in api, external servers) returned */
+interface LoadSource {
+    results: Promise<Array<PromiseSettledResult<Array<RouteApiDescription>>>>
+    isExternal: boolean
+}
+
+const enrichApi = (v:RouteApiDescription,type:string):RouteApiDescription => ({type, ...v }) as RouteApiDescription
+
+/** the source a route belongs to (undefined: Incyclist or local) */
+const getOwner = (route:{apiServer?:string}):string|undefined => route?.apiServer ? toSourceKey(route.apiServer) : undefined
+
 export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
     protected api: IIncyclistRoutesApi
@@ -45,59 +65,116 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
     protected logger: EventLogger
     protected processed: Array<string> = []
 
+    // Loads must not overlap: they share the observer and the list of processed ids. Every load is a job that
+    // starts when the previous one has finished completely (including the clean-up of its observer).
+    protected tail?: Promise<void>
+    protected jobs: Set<LoadJob> = new Set()
+    protected fullLoad?: LoadJob
+
     constructor () {
         super()
         this.api = this.getIncyclistRoutesApi().create() 
         this.logger = new EventLogger('RoutesApi')
     }
 
-
+    /**
+     * Loads the routes of the built-in server and of all configured external route servers.
+     *
+     * The returned observer emits `route.added`/`route.updated`, `loaded` (the routes of the built-in server
+     * have been processed) and `done` (everything has been processed, including the other servers).
+     */
     load():Observer {
-        this.processed = []
-
         // no concurrent loads
-        if (this.loadObserver)
-            return this.loadObserver
+        if (this.fullLoad)
+            return this.fullLoad.observer
 
+        const job = this.createJob()
+        this.fullLoad = job
+        this.enqueue(job, ()=>this.startFullLoad(job))
+        return job.observer
+    }
+
+    /**
+     * Loads the routes of a single external route server (e.g. right after it was added), without waiting for
+     * (or repeating) a full load. If a load is currently running, this load starts as soon as that one is done.
+     *
+     * The returned observer emits the same events as load()
+     */
+    loadServer(key:string):Observer {
+        const job = this.createJob()
+        this.enqueue(job, ()=>this.startServerLoad(job,key))
+        return job.observer
+    }
+
+    stopLoad() {
+        this.jobs.forEach( job => {
+            job.stopped = true
+            job.observer.stop()
+        })
+        delete this.fullLoad
+        delete this.loadObserver
+    }
+
+    protected createJob():LoadJob {
+        return { observer: new Observer(), stopped: false, servers: new Map() }
+    }
+
+    protected enqueue(job:LoadJob, start:()=>Array<LoadSource>) {
+        this.jobs.add(job)
+
+        const execute = async ():Promise<void> => {
+            try {
+                if (!job.stopped)
+                    await this.runLoad(job, start)
+            }
+            catch(err) {
+                this.logger.logEvent({message:'could not process route list load', error:err?.message})
+            }
+            finally {
+                this.jobs.delete(job)
+                if (this.fullLoad===job)
+                    delete this.fullLoad
+            }
+        }
+
+        // an idle loader starts right away (the requests are sent before this method returns)
+        const current = this.tail ? this.tail.then(execute) : execute()
+        this.tail = current
+        current.then( ()=>{ if (this.tail===current) delete this.tail })
+    }
+
+    protected startFullLoad(job:LoadJob):Array<LoadSource> {
         // run two async REST queries in parallel
-        const enrichApi = (v:RouteApiDescription,type)=> ({type, ...v })
-                
         const api = [
             this.api.getRouteDescriptions({type:'gpx'},true).then( v=> v.map(e=>enrichApi(e,'gpx'))).catch(error => {throw new ApiError(error,'gpx')}) ,
             this.api.getRouteDescriptions({type:'video'},true).then( v=> v.map(e=>enrichApi(e,'video'))).catch(error => {throw new ApiError(error,'video')}) ,
         ]
-
-
-        this.loadObserver = new Observer()
-
-        // When both queries have completed ( either successfully or failed) then process the result
-        // but ths method should return immediatly (not waiting for the result of the query)
-        Promise.allSettled( api).then (async res => {
-            await this.onLoadDone(api,res)
-        }).catch( err=>{ this.logger.logEvent({message:'could not process route list load', error:err.message}) });
-
+        const sources:Array<LoadSource> = [ { results:Promise.allSettled(api), isExternal:false } ]
 
         const external = this.getExternalRouteServers()
-        const promises = []
         if (external.length) {
-            
-            for (const {key, api:externalApi} of external) {
-                promises.push( this.loadRoutesFromServer(key,externalApi,enrichApi) )
-            }
-
-            Promise.allSettled( promises).then (async res => {
-                await this.onLoadDone(api,res,true)
-            }).catch( err=>{ this.logger.logEvent({message:'could not process route list load', error:err.message}) });
-
+            const promises = external.map( ({key,api:externalApi,url}) => {
+                job.servers.set(key,url)
+                return this.loadRoutesFromServer(key,externalApi,url)
+            })
+            sources.push( { results:Promise.allSettled(promises), isExternal:true } )
         }
-
-
-
-        return this.loadObserver
-        
+        return sources
     }
 
-    protected getExternalRouteServers():Array<{key:string, api:IIncyclistRoutesApi}> {
+    protected startServerLoad(job:LoadJob, key:string):Array<LoadSource> {
+        const url = this.getConfiguredUrl(key)
+        if (!url) {
+            this.logger.logEvent({message:'route server is not configured, load skipped', key})
+            return [ { results:Promise.resolve([]), isExternal:true } ]
+        }
+
+        job.servers.set(key,url)
+        const api = this.getIncyclistRoutesApi().create(key)
+        return [ { results:Promise.allSettled([ this.loadRoutesFromServer(key,api,url) ]), isExternal:true } ]
+    }
+
+    protected getExternalRouteServers():Array<{key:string, api:IIncyclistRoutesApi, url:string}> {
         const externalConfig:Record<string,string> = this.getUserSettings().getValue('routes.servers',null)
         
         const apis = []
@@ -105,16 +182,31 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             return apis
 
         Object.keys(externalConfig).forEach(key=> {
-            const baseUrl = externalConfig[key]
+            const url = externalConfig[key]
 
-            this.logger.logEvent({message:'adding external route server', key, url:baseUrl})
+            this.logger.logEvent({message:'adding external route server', key, url})
 
             const api = this.getIncyclistRoutesApi().create(key) 
-            apis.push({key,api})
+            apis.push({key,api,url})
         })
         return apis
 
 
+    }
+
+    /** the address of a route server, as long as it is configured */
+    protected getConfiguredUrl(key:string):string|undefined {
+        const config = this.getUserSettings().getValue('routes.servers',null)
+        if (!config || !Object.hasOwn(config,key))
+            return undefined
+        return config[key] || undefined
+    }
+
+    /** false if the server was removed (or got another address) after the load had requested it: its result must be dropped */
+    protected isServerCurrent(job:LoadJob, key:string):boolean {
+        if (!job.servers.has(key))
+            return true
+        return this.getConfiguredUrl(key)===job.servers.get(key)
     }
 
     /**
@@ -123,9 +215,14 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
      *
      * The video request decides whether the server counts as reachable. The GPX request is best effort:
      * a server that only offers video routes might not support it, and that must not make it "unreachable".
+     *
+     * If the server was removed while the requests were open, nothing is recorded and no route is returned.
+     * A server that does not answer in time (the timeout is set on its api) is "unreachable".
      */
-    protected async loadRoutesFromServer(key:string, api:IIncyclistRoutesApi, enrichApi:(v:RouteApiDescription,type:string)=>RouteApiDescription):Promise<Array<RouteApiDescription>> {
+    protected async loadRoutesFromServer(key:string, api:IIncyclistRoutesApi, url?:string):Promise<Array<RouteApiDescription>> {
         const status = this.getRouteServerStatus()
+        const isCurrent = ()=> url===undefined || this.getConfiguredUrl(key)===url
+
         status.setLoading(key)
 
         try {
@@ -139,98 +236,114 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             if (!Array.isArray(videoRoutes))
                 throw new TypeError('route server did not return a list')
 
+            if (!isCurrent())
+                return this.dropRemovedServer(key)
+
+            // the server is the owner of what it returns, whatever the response claims
             const gpx = Array.isArray(gpxRoutes) ? gpxRoutes : []
             const descriptions = [
-                ...videoRoutes.map(e=>enrichApi(e,'video')),
-                ...gpx.map(e=>enrichApi(e,'gpx'))
+                ...videoRoutes.map(e=>({...enrichApi(e,'video'), apiServer:key})),
+                ...gpx.map(e=>({...enrichApi(e,'gpx'), apiServer:key}))
             ]
 
             status.setResult(key, { status: descriptions.length>0 ? 'ok':'empty', routeCount:descriptions.length })
             return descriptions
         }
         catch(error) {
+            if (!isCurrent())
+                return this.dropRemovedServer(key)
+
             status.setResult(key, { status:'unreachable', routeCount:0 })
             throw new ApiError(error,'video')
         }
     }
 
-    /**
-     * Loads the routes of a single external route server (e.g. right after it was added), without waiting for
-     * (or repeating) a full load. If a load is currently running, this load starts as soon as that one is done.
-     *
-     * The returned observer emits the same events as load()
-     */
-    loadServer(key:string):Observer {
-        const observer = new Observer()
-
-        const run = ()=> {
-            this.processed = []
-            this.loadObserver = observer
-
-            const enrichApi = (v:RouteApiDescription,type)=> ({type, ...v })
-            const api = this.getIncyclistRoutesApi().create(key)
-            const promises = [ this.loadRoutesFromServer(key,api,enrichApi) ]
-            Promise.allSettled(promises).then( async res => {
-                await this.onLoadDone(undefined,res,true)
-            }).catch( err=>{ this.logger.logEvent({message:'could not process route server load', key, error:err.message}) });
-        }
-
-        if (this.loadObserver) {
-            const running = this.loadObserver
-            let started = false
-            const start = ()=> {
-                if (started)
-                    return
-                started = true
-                run()
-            }
-            running.once('done',start)
-            running.once('stopped',start)
-        }
-        else {
-            run()
-        }
-
-        return observer
+    protected dropRemovedServer(key:string):Array<RouteApiDescription> {
+        this.logger.logEvent({message:'route server was removed while loading, result dropped', key})
+        this.getRouteServerStatus().clearLoading(key)
+        return []
     }
 
-    private async onLoadDone(api,res,isExternal=false) {
+    /**
+     * Runs one load: the requests of all sources are sent at once, their descriptions are processed one source after
+     * the other (the built-in server first). The load is done when all sources and the loading of the missing
+     * details have finished. A problem in one source never prevents `done`.
+     */
+    protected async runLoad(job:LoadJob, start:()=>Array<LoadSource>):Promise<void> {
+        const observer = job.observer
+        this.loadObserver = observer
+        this.processed = []
 
-        // another load (e.g. of a single server) might start while this one is finishing
-        const observer = this.loadObserver
+        const details: Array<Promise<void>> = []
+        try {
+            const sources = start()
+            let loaded = false
 
-        // join lists
-        const loadDetailRequired: Array<{route:Route, added:boolean}> = []
+            for (const source of sources) {
+                const res = await source.results
+                if (job.stopped)
+                    break
 
-        // for loop as we have asyncs here
-        for ( let i=0; i<res.length;i++) {
-            const p = res[i]
+                const required = await this.processSource(job, res, source.isExternal)
+                if (!loaded) {
+                    loaded = true
+                    observer.emit('loaded')
+                }
 
-            if (p.status!=='fulfilled') {                   
-                this.logger.logEvent({message: 'could not load route list',reason:p.reason?.message, type:p.reason?.type})
-                continue;
+                if (required.length>0)
+                    details.push( this.loadDetailsOfLoad(required) )
             }
-
-            for (let j=0;j<p.value.length;j++) {
-                if (isExternal && this.processed.includes(p.value[j].id))
-                    continue;
-                await this.processRouteFromApi(p.value[j],loadDetailRequired)
-            }
-            
+            await Promise.all(details)
         }
-        observer?.emit('loaded')
-
-        if (loadDetailRequired.length>0) {            
-            await this.loadDetails(loadDetailRequired,true)
+        catch(err) {
+            this.logger.logEvent({message:'could not process route list load', error:err?.message})
         }
 
-        observer?.emit('done')
+        if (!job.stopped)
+            observer.emit('done')
 
-        await sleep(1)        
-        observer?.stop()
+        await sleep(1)
+        observer.stop()
         if (this.loadObserver===observer)
-            delete this.loadObserver        
-        
+            delete this.loadObserver
+    }
+
+    protected async processSource(job:LoadJob, res:Array<PromiseSettledResult<Array<RouteApiDescription>>>, isExternal:boolean):Promise<LoadDetailsTargets> {
+        const loadDetailRequired: LoadDetailsTargets = []
+
+        try {
+            // for loop as we have asyncs here
+            for ( const p of res) {
+                if (p.status!=='fulfilled') {                   
+                    this.logger.logEvent({message: 'could not load route list',reason:p.reason?.message, type:p.reason?.type})
+                    continue;
+                }
+
+                for (const descr of p.value) {
+                    if (job.stopped)
+                        return loadDetailRequired
+                    if (isExternal && !this.isServerCurrent(job,descr.apiServer))
+                        continue;
+                    if (isExternal && this.processed.includes(descr.id))
+                        continue;
+                    await this.processRouteFromApi(descr,loadDetailRequired)
+                }
+            }
+        }
+        catch(err) {
+            // keep what was processed so far, the load must still end
+            this.logger.logEvent({message:'could not process route list load', error:err?.message})
+        }
+        return loadDetailRequired
+    }
+
+    protected async loadDetailsOfLoad(items:LoadDetailsTargets):Promise<void> {
+        try {
+            await this.loadDetails(items,true)
+        }
+        catch(err) {
+            this.logger.logEvent({message:'could not load route details', error:err?.message})
+        }
     }
 
     private async processRouteFromApi(descr,items) {
@@ -240,6 +353,14 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
 
         if (alreadyProcessed)
             return
+
+        // a route can only be updated by the source it belongs to: a server must never replace a route of Incyclist
+        // (or of another server), whatever version it claims for it
+        if (existing && getOwner(existing)!==getOwner(descr)) {
+            this.processed.push(existing.id)
+            this.logger.logEvent({message:'route skipped, it belongs to another source',id:existing.id,source:descr.apiServer,owner:existing.apiServer})
+            return
+        }
 
         if (ExistingAndNotUpdated(existing, descr)) {
             this.processed.push(existing.id)
@@ -301,11 +422,6 @@ export class RoutesApiLoader extends Loader<RouteApiDescription> {
             if (!isComplete)
                 items.push({route,added:false})
         }
-    }
-
-    stopLoad() {
-        this.loadObserver?.stop()
-        delete this.loadObserver
     }
 
     protected getDescriptionFromDB(id:string) {

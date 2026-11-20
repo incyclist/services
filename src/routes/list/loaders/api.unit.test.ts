@@ -503,54 +503,300 @@ describe('RoutesApiLoader', () => {
     })
 
     describe('loadServer', () => {
-        test('loads only the requested server and emits its routes', async () => {
-            const externalApi = {
-                getRouteDescriptions: byType([descr({ id: 'ext1', apiServer: 'myserver' })], []),
-                getRouteDetails: jest.fn().mockResolvedValue(detail({ id: 'ext1' })),
-                setSource: jest.fn(),
-            }
-            const factory = { create: jest.fn((key?: string) => key ? externalApi : apiMock) }
+        const SERVERS = { myserver: 'https://myserver.example.com', other: 'https://other.example.com' }
+
+        const setup = (apis: Record<string, { getRouteDescriptions: jest.Mock }>) => {
+            userSettingsMock.getValue.mockReturnValue({ ...SERVERS })
+            const withDefaults = Object.fromEntries(Object.entries(apis).map(([key, api]) =>
+                [key, { getRouteDetails: jest.fn().mockResolvedValue(detail()), setSource: jest.fn(), ...api }]))
+            const factory = { create: jest.fn((key?: string) => key ? withDefaults[key] : apiMock) }
             Inject('IncyclistRoutesApi', factory)
             service = new RoutesApiLoader();
             (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
             apiMock.getRouteDescriptions.mockClear()
+            return factory
+        }
+
+        afterEach(() => { useRouteServerStatus().reset() })
+
+        test('loads only the requested server and emits its routes', async () => {
+            setup({ myserver: { getRouteDescriptions: byType([descr({ id: 'ext1', apiServer: 'myserver' })], []) } })
 
             const { added } = await waitDone(service.loadServer('myserver'))
 
             expect(added.map(r => r.description.id)).toEqual(['ext1'])
             expect(apiMock.getRouteDescriptions).not.toHaveBeenCalled()
-            expect(externalApi.getRouteDescriptions).toHaveBeenCalledWith({ type: 'video' }, true)
             expect(useRouteServerStatus().getResult('myserver')).toEqual({ status: 'ok', routeCount: 1 })
-            useRouteServerStatus().reset()
+        })
+
+        test('the routes are owned by the server that was asked, whatever the response claims', async () => {
+            setup({ myserver: { getRouteDescriptions: byType([descr({ id: 'ext1', apiServer: 'other' })], []) } })
+
+            const { added } = await waitDone(service.loadServer('myserver'))
+
+            expect(added[0].description.apiServer).toBe('myserver')
         })
 
         test('server not reachable: done is still emitted and status is unreachable', async () => {
-            const externalApi = { getRouteDescriptions: jest.fn().mockRejectedValue(new Error('down')), getRouteDetails: jest.fn(), setSource: jest.fn() }
-            Inject('IncyclistRoutesApi', { create: jest.fn((key?: string) => key ? externalApi : apiMock) })
-            service = new RoutesApiLoader()
+            setup({ myserver: { getRouteDescriptions: jest.fn().mockRejectedValue(new Error('down')) } })
 
             const { added } = await waitDone(service.loadServer('myserver'))
 
             expect(added).toHaveLength(0)
             expect(useRouteServerStatus().getStatus('myserver')).toBe('unreachable')
-            useRouteServerStatus().reset()
+        })
+
+        test('request times out: status is unreachable instead of staying on loading', async () => {
+            setup({ myserver: { getRouteDescriptions: jest.fn().mockRejectedValue(Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' })) } })
+
+            await waitDone(service.loadServer('myserver'))
+
+            expect(useRouteServerStatus().getStatus('myserver')).toBe('unreachable')
+        })
+
+        test('server is not configured: nothing is requested, done is emitted', async () => {
+            const factory = setup({ myserver: { getRouteDescriptions: jest.fn() } })
+            userSettingsMock.getValue.mockReturnValue(null)
+
+            await waitDone(service.loadServer('myserver'))
+
+            expect(factory.create).not.toHaveBeenCalledWith('myserver')
         })
 
         test('a load is running: starts when it is done', async () => {
-            const externalApi = { getRouteDescriptions: jest.fn().mockResolvedValue([]), getRouteDetails: jest.fn(), setSource: jest.fn() }
-            Inject('IncyclistRoutesApi', { create: jest.fn((key?: string) => key ? externalApi : apiMock) })
-            service = new RoutesApiLoader()
+            const getRouteDescriptions = jest.fn().mockResolvedValue([])
+            setup({ myserver: { getRouteDescriptions }, other: { getRouteDescriptions: jest.fn().mockResolvedValue([]) } })
+            userSettingsMock.getValue.mockReturnValueOnce(null)   // the full load has no external server
 
             const running = waitDone(service.load())
             const single = waitDone(service.loadServer('myserver'))
-            expect(externalApi.getRouteDescriptions).not.toHaveBeenCalled()
+            expect(getRouteDescriptions).not.toHaveBeenCalled()
 
             await running
             await single
 
             // once for the videos and once for the gpx routes of the single load (and not again for the full load)
-            expect(externalApi.getRouteDescriptions).toHaveBeenCalledTimes(2)
-            useRouteServerStatus().reset()
+            expect(getRouteDescriptions).toHaveBeenCalledTimes(2)
+        })
+
+        test('several calls in a row: every observer gets its routes and done', async () => {
+            setup({
+                myserver: { getRouteDescriptions: byType([descr({ id: 'a1' }), descr({ id: 'a2' })], []) },
+                other: { getRouteDescriptions: byType([descr({ id: 'b1' })], []) },
+            })
+
+            const first = waitDone(service.loadServer('myserver'))
+            const second = waitDone(service.loadServer('other'))
+            const third = waitDone(service.loadServer('myserver'))
+
+            const [r1, r2, r3] = await Promise.all([first, second, third])
+
+            expect(r1.added.map(r => r.description.id).sort()).toEqual(['a1', 'a2'])
+            expect(r2.added.map(r => r.description.id)).toEqual(['b1'])
+            expect(r3.added.length + r3.updated.length).toBeGreaterThan(0)   // the db is a mock: the routes are unknown again
+            expect(r2.added.every(r => r.description.apiServer === 'other')).toBe(true)
+            expect(r1.added.every(r => r.description.apiServer === 'myserver')).toBe(true)
+        })
+
+        test('the next load only starts when the previous one has completely finished', async () => {
+            const order: Array<string> = []
+            setup({
+                myserver: { getRouteDescriptions: jest.fn(async () => { order.push('request myserver'); await waitTick(10); return [] }) },
+                other: { getRouteDescriptions: jest.fn(async () => { order.push('request other'); return [] }) },
+            })
+
+            const first = service.loadServer('myserver')
+            first.on('done', () => order.push('done first'))
+            const second = service.loadServer('other')
+
+            await waitDone(second)
+
+            expect(order.indexOf('done first')).toBeGreaterThan(order.lastIndexOf('request myserver'))
+            expect(order.indexOf('request other')).toBeGreaterThan(order.indexOf('done first'))
+        })
+
+        test('while the external servers of a full load are still pending: starts after the full load is done', async () => {
+            let release: (v: Array<RouteApiDescription>) => void
+            const slow = new Promise<Array<RouteApiDescription>>(resolve => { release = resolve })
+            setupApi({ gpx: [descr({ id: 'g1' })] })
+            const servers = {
+                myserver: { getRouteDescriptions: jest.fn(async (q) => q.type === 'video' ? slow : []), getRouteDetails: jest.fn().mockResolvedValue(detail()) },
+                other: { getRouteDescriptions: byType([descr({ id: 'b1' })], []), getRouteDetails: jest.fn().mockResolvedValue(detail()) },
+            }
+            Inject('IncyclistRoutesApi', { create: jest.fn((key?: string) => key ? servers[key] : apiMock) })
+            userSettingsMock.getValue.mockReturnValue({ myserver: SERVERS.myserver })
+            service = new RoutesApiLoader();
+            (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+
+            const events: Array<string> = []
+            const full = service.load()
+            full.on('loaded', () => events.push('full loaded'))
+            full.on('done', () => events.push('full done'))
+            const fullResult = waitDone(full)
+
+            userSettingsMock.getValue.mockReturnValue({ ...SERVERS })
+            const single = service.loadServer('other')
+            single.on('done', () => events.push('single done'))
+            const singleResult = waitDone(single)
+
+            await waitTick(30)
+            // the built-in server is done, the external one is not: the full load is not done and the single load has not started
+            expect(events).toEqual(['full loaded'])
+
+            release([descr({ id: 'x1' })])
+            const [fr, sr] = await Promise.all([fullResult, singleResult])
+
+            expect(events).toEqual(['full loaded', 'full done', 'single done'])
+            expect(fr.added.map(r => r.description.id).sort()).toEqual(['g1', 'x1'])
+            expect(sr.added.map(r => r.description.id)).toEqual(['b1'])
+        })
+
+        test('full load: done is not emitted before the external servers have been processed', async () => {
+            let release: (v: Array<RouteApiDescription>) => void
+            const slow = new Promise<Array<RouteApiDescription>>(resolve => { release = resolve })
+            userSettingsMock.getValue.mockReturnValue({ myserver: SERVERS.myserver })
+            Inject('IncyclistRoutesApi', { create: jest.fn((key?: string) => key ? { getRouteDescriptions: jest.fn(async (q) => q.type === 'video' ? slow : []), getRouteDetails: jest.fn().mockResolvedValue(detail()) } : apiMock) })
+            service = new RoutesApiLoader();
+            (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+
+            const done = jest.fn()
+            const observer = service.load()
+            observer.on('done', done)
+            await waitTick(30)
+            expect(done).not.toHaveBeenCalled()
+
+            release([descr({ id: 'x1' })])
+            const { added } = await waitDone(observer)
+
+            expect(added.map(r => r.description.id)).toEqual(['x1'])
+        })
+
+        test('stopLoad: queued loads are stopped as well', async () => {
+            const getRouteDescriptions = jest.fn().mockResolvedValue([])
+            setup({ myserver: { getRouteDescriptions }, other: { getRouteDescriptions: jest.fn().mockResolvedValue([]) } })
+
+            userSettingsMock.getValue.mockReturnValueOnce(null)   // the full load has no external server
+            service.load()
+            const stopped = jest.fn()
+            const single = service.loadServer('myserver')
+            single.on('stopped', stopped)
+
+            service.stopLoad()
+            await waitTick(20)
+
+            expect(stopped).toHaveBeenCalled()
+            expect(getRouteDescriptions).not.toHaveBeenCalled()
+        })
+
+        describe('route ownership', () => {
+            test('an official route offered by an external server with a higher version is not replaced', async () => {
+                dbGetDescription.mockImplementation((id: string) => id === 'official1' ? { id: 'official1', title: 'Official', version: 1 } : undefined)
+                dbGetDetails.mockResolvedValue(detail({ id: 'official1' }))
+                setup({ myserver: { getRouteDescriptions: byType([descr({ id: 'official1', version: 5, apiServer: 'myserver' })], []) } })
+
+                const { added, updated } = await waitDone(service.loadServer('myserver'))
+
+                expect(added).toHaveLength(0)
+                expect(updated).toHaveLength(0)
+                expect(dbSave).not.toHaveBeenCalled()
+            })
+
+            test('same applies to a full load, where the built-in server provided the id', async () => {
+                setupApi({ gpx: [descr({ id: 'official1', version: 1 })] })
+                userSettingsMock.getValue.mockReturnValue({ myserver: SERVERS.myserver })
+                Inject('IncyclistRoutesApi', { create: jest.fn((key?: string) => key ? { getRouteDescriptions: byType([descr({ id: 'official1', version: 9 })], []), getRouteDetails: jest.fn().mockResolvedValue(detail()) } : apiMock) })
+                service = new RoutesApiLoader();
+                (service as any).verifyCountry = jest.fn().mockResolvedValue(undefined)
+
+                const { added } = await waitDone(service.load())
+
+                expect(added.filter(r => r.description.id === 'official1')).toHaveLength(1)
+                expect(added[0].description.apiServer).toBeUndefined()
+            })
+
+            test('a route of another external server is not replaced', async () => {
+                dbGetDescription.mockReturnValue({ id: 'r1', version: 1, apiServer: 'other', source: 'Other' })
+                setup({ myserver: { getRouteDescriptions: byType([descr({ id: 'r1', version: 5 })], []) } })
+
+                const { added, updated } = await waitDone(service.loadServer('myserver'))
+
+                expect(added.length + updated.length).toBe(0)
+                expect(dbSave).not.toHaveBeenCalled()
+            })
+
+            test('a route of the same server is updated', async () => {
+                dbGetDescription.mockReturnValue({ id: 'r1', version: 1, apiServer: 'myserver', source: 'Myserver' })
+                dbGetDetails.mockResolvedValue(detail({ id: 'r1' }))
+                setup({ myserver: { getRouteDescriptions: byType([descr({ id: 'r1', version: 5 })], []) } })
+
+                const { added, updated } = await waitDone(service.loadServer('myserver'))
+
+                expect(added.length + updated.length).toBeGreaterThan(0)
+                expect(dbSave).toHaveBeenCalled()
+            })
+        })
+
+        describe('server removed while loading', () => {
+            test('status is not set again and its routes are dropped', async () => {
+                let release: (v: Array<RouteApiDescription>) => void
+                const slow = new Promise<Array<RouteApiDescription>>(resolve => { release = resolve })
+                setup({ myserver: { getRouteDescriptions: jest.fn(async (q) => q.type === 'video' ? slow : []) } })
+
+                const result = waitDone(service.loadServer('myserver'))
+                expect(useRouteServerStatus().getStatus('myserver')).toBe('loading')
+
+                // the server is removed: the settings entry and its status are gone
+                userSettingsMock.getValue.mockReturnValue({})
+                useRouteServerStatus().remove('myserver')
+                release([descr({ id: 'x1' })])
+                const { added } = await result
+
+                expect(added).toHaveLength(0)
+                expect(useRouteServerStatus().getStatus('myserver')).toBe('unknown')
+                expect(useRouteServerStatus().getResult('myserver')).toBeUndefined()
+            })
+
+            test('request failing after the removal does not record a status either', async () => {
+                let fail: (e: Error) => void
+                const slow = new Promise<Array<RouteApiDescription>>((_, reject) => { fail = reject })
+                setup({ myserver: { getRouteDescriptions: jest.fn(async () => slow) } })
+
+                const result = waitDone(service.loadServer('myserver'))
+                userSettingsMock.getValue.mockReturnValue({})
+                useRouteServerStatus().remove('myserver')
+                fail(new Error('down'))
+                await result
+
+                expect(useRouteServerStatus().getStatus('myserver')).toBe('unknown')
+            })
+
+            test('removed while its descriptions are being processed: the rest is dropped', async () => {
+                setup({ myserver: { getRouteDescriptions: byType([descr({ id: 'a1' }), descr({ id: 'a2' }), descr({ id: 'a3' })], []) } })
+                const original = (service as any).getDescriptionFromDB.bind(service)
+                let lookups = 0;
+                (service as any).getDescriptionFromDB = (id: string) => {
+                    if (++lookups === 1)
+                        userSettingsMock.getValue.mockReturnValue({})   // removed after the first route
+                    return original(id)
+                }
+
+                const { added } = await waitDone(service.loadServer('myserver'))
+
+                expect(added.map(r => r.description.id)).toEqual(['a1'])
+            })
+
+            test('removed and added again with another address: the result of the old address is dropped', async () => {
+                let release: (v: Array<RouteApiDescription>) => void
+                const slow = new Promise<Array<RouteApiDescription>>(resolve => { release = resolve })
+                setup({ myserver: { getRouteDescriptions: jest.fn(async (q) => q.type === 'video' ? slow : []) } })
+
+                const result = waitDone(service.loadServer('myserver'))
+                userSettingsMock.getValue.mockReturnValue({ myserver: 'https://moved.example.com' })
+                release([descr({ id: 'x1' })])
+                const { added } = await result
+
+                expect(added).toHaveLength(0)
+            })
         })
     })
 
