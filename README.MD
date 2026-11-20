@@ -110,6 +110,67 @@ import { useDeviceConfiguration, initUserSettings } from 'incyclist-services'
 
 `useXXX()` returns a service singleton, and `initXXX()` initializes one where needed.
 
+## Route servers
+
+Besides the built-in Incyclist route server, the app can load routes from additional route
+servers. Each route remembers the server it came from, and that server's name is its *Source*
+in the route list filter.
+
+### Adding a route server as a user
+
+In the app, open **Settings › Routes** (or the **Import Routes** dialog) and choose
+**Add route server**. Pick a server from the known list, or enter an address and a name:
+
+- The address must be `https://`. Plain `http://` is accepted only for servers on your home
+  network (`localhost`, private IP addresses, `*.local` names and single-label names such as
+  `nas`), and not on devices that don't allow it (currently Android).
+- The name (up to 24 letters, numbers, spaces or dashes) is the label shown in the route list.
+  It must not clash with an existing source such as `Local`, `Incyclist` or a connected app.
+
+The server is checked before it is saved. Servers are stored in the user settings under
+`routes.servers.<name>`, so a server can also be added by hand in `settings.json`. Entries
+written there are not validated by the app and keep loading as they are.
+
+### Adding a server to the known list (maintainers)
+
+The known list is the data file [`src/routes/servers/known-servers.json`](./src/routes/servers/known-servers.json).
+It ships empty. While it is empty, the add screen only offers manual entry. To list a server,
+add an entry. No code change is needed:
+
+```json
+[
+  {
+    "id": "alpine-video-club",
+    "name": "Alpine Videos",
+    "url": "https://videos.example.org/api/v1/routes",
+    "description": "Alps & Dolomites, 40+ climbs",
+    "operator": "Alpine Video Club"
+  }
+]
+```
+
+| Field | Rules |
+|---|---|
+| `id` | Required, stable and unique. Used for logging. |
+| `name` | Required. Same rules as a user-entered name (see above). Becomes the source name. |
+| `url` | Required. `https://` only. The server's routes API base URL. |
+| `description` | Required. One short line, about 40 characters. |
+| `operator` | Optional. Shown as "by ...". |
+
+Test the server against Incyclist before listing it. A unit test checks every entry against
+the name and URL rules and for unique ids and URLs, so run `npm test -- src/routes/servers`
+after editing the file. The list is part of the UI bundle, so a change reaches users with the
+next bundle release.
+
+### What a route server must provide
+
+A route server is a plain HTTPS service. Incyclist checks a server by requesting
+`<base-url>/?type=video`, which must answer with a JSON array of route descriptions. Route
+details are then requested from `<base-url>/<route-id>`. A reachable server that answers
+something else, such as an HTML page or a 404, is rejected as "not a route server". Redirects
+that would lead to a URL the app would not accept (for example from `https://` to `http://`)
+are rejected too. Servers loaded by the app currently provide video routes only.
+
 ## Using this library in your own app
 
 The library never calls platform APIs directly. File access, settings storage, secrets,
