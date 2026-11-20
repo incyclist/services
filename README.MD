@@ -114,7 +114,8 @@ import { useDeviceConfiguration, initUserSettings } from 'incyclist-services'
 
 Besides the built-in Incyclist route server, the app can load routes from additional route
 servers. Each route remembers the server it came from, and that server's name is its *Source*
-in the route list filter.
+in the route list filter. A route supplied by an external server stays attributed to that
+server: an Incyclist route with the same id will not replace it.
 
 ### Adding a route server as a user
 
