@@ -353,7 +353,7 @@ describe('RouteServersSettingsDisplayService', () => {
             expect(props().known[0].statusText).toBe('Added ✓ · 1 route')
         })
 
-        test('settings origin: the view stays where it is, the new row is highlighted', async () => {
+        test('settings origin: the view stays where it is', async () => {
             jest.useFakeTimers()
             const closed = jest.fn()
             observer.on('closed', closed)
@@ -363,33 +363,7 @@ describe('RouteServersSettingsDisplayService', () => {
             jest.advanceTimersByTime(2000)
 
             expect(closed).not.toHaveBeenCalled()
-            expect(props()).toMatchObject({ view: 'add', highlightKey: 'Alpine Videos' })
-        })
-
-        test('the highlight is cleared after 3 seconds and the display props are updated', async () => {
-            jest.useFakeTimers()
-            service.showAdd()
-            service.addKnown('alpine')
-            await flush()
-            updates.mockClear()
-
-            jest.advanceTimersByTime(2900)
-            expect(props().highlightKey).toBe('Alpine Videos')
-            jest.advanceTimersByTime(200)
-
-            expect(props().highlightKey).toBeUndefined()
-            expect(updates).toHaveBeenCalled()
-        })
-
-        test('closing cancels the highlight timer', async () => {
-            jest.useFakeTimers()
-            service.showAdd()
-            service.addKnown('alpine')
-            await flush()
-
-            service.close()
-
-            expect(jest.getTimerCount()).toBe(0)
+            expect(props()).toMatchObject({ view: 'add' })
         })
 
         test('import origin: closes with done after the success was shown, like a manual add', async () => {
@@ -591,14 +565,12 @@ describe('RouteServersSettingsDisplayService', () => {
                 expect(list.probeExternalApiProvider).toHaveBeenCalledWith('https://videos.alpine-club.org/', undefined)
                 expect(list.addExternalApiProvider).toHaveBeenCalledWith('Alpine Club', 'https://videos.alpine-club.org/', { origin: 'settings', via: 'manual' })
                 expect(props().manual).toMatchObject({ state: 'success', message: 'Found 3 routes.' })
-                expect(props().highlightKey).toBe('Alpine Club')
                 expect(list.loadExternalApiProvider).toHaveBeenCalledWith('Alpine Club')
                 expect(status.getStatus('Alpine Club')).toBe('loading')
                 expect(props().view).toBe('add')
 
                 jest.advanceTimersByTime(1000)
                 expect(props().view).toBe('list')
-                expect(props().highlightKey).toBe('Alpine Club')
                 expect(props().servers.map(s => s.name)).toContain('Alpine Club')
             })
 

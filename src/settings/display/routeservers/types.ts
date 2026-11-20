@@ -15,8 +15,8 @@ import type { RouteServerStatus } from '../../../routes/servers/types'
  *
  * Adding a server:
  *  - origin 'settings': the dialog stays where it is. A server added manually shows its success for a moment and then
- *    returns to the list (view 'list'). A known server that was added shows as 'added' in the Known section, the new
- *    row is highlighted (`highlightKey`) and the view is not changed.
+ *    returns to the list (view 'list'). A known server that was added shows as 'added' in the Known section
+ *    and the view is not changed.
  *  - origin 'import': a server that was added (manually or from the known list) shows its success for a moment, then
  *    `closed` is emitted with reason 'done', so the app returns to the Import dialog.
  */
@@ -43,7 +43,7 @@ export interface RouteServersClosedEvent {
 export type RouteServersView = 'list' | 'add' | 'add-manual'   // 'add-manual' = phone second step
 
 export interface RouteServerItem {
-    /** storage key = the name as the user typed it. Actions (remove, highlight) use the key */
+    /** storage key = the name as the user typed it. Actions (remove) use the key */
     key: string
     /** name to show: the name as the user typed it (the same as `key`, e.g. 'Ebeling Hoppe'). Never a pascal-cased form */
     name: string
@@ -153,6 +153,4 @@ export interface RouteServersSettingsDisplayProps {
     /** 'Listed servers were checked to work…'. Only set if known is not empty */
     knownNote?: string
     removeDialog?: RemoveServerDialogProps
-    /** key of the row just added. Cleared by the service about 3 seconds later (followed by `changed`) */
-    highlightKey?: string
 }

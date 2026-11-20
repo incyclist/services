@@ -17,7 +17,6 @@ import type {
 } from './types'
 
 const SUCCESS_DELAY_MS = 1000
-const HIGHLIGHT_MS = 3000
 
 // codes that are worth showing while the user is still typing the address. Others ("not a web address",
 // ...) would only be noise for an incomplete address and are reported when the address is submitted.
@@ -50,7 +49,6 @@ export class RouteServersSettingsDisplayService extends IncyclistService {
     protected observer?: Observer
     protected origin: RouteServersOrigin = 'settings'
     protected view: RouteServersView = 'list'
-    protected highlightKey?: string
 
     protected manualUrl = ''
     protected manualName = ''
@@ -75,7 +73,6 @@ export class RouteServersSettingsDisplayService extends IncyclistService {
     // incremented whenever the view is left (back, close, new add view): known servers that are being checked are dropped
     protected viewToken = 0
     protected successTimer?: ReturnType<typeof setTimeout>
-    protected highlightTimer?: ReturnType<typeof setTimeout>
     protected onStatusChanged = this.emitChanged.bind(this)
 
     constructor() {
@@ -362,8 +359,6 @@ export class RouteServersSettingsDisplayService extends IncyclistService {
             props.knownNote = MSG.knownNote
         if (this.removeDialog)
             props.removeDialog = { ...this.removeDialog }
-        if (this.highlightKey)
-            props.highlightKey = this.highlightKey
         return props
     }
 
@@ -518,7 +513,6 @@ export class RouteServersSettingsDisplayService extends IncyclistService {
         try {
             const stored = list.addExternalApiProvider(name.name, address.url, { origin: this.origin, via: 'known' })
             this.knownStates.delete(entry.id)
-            this.setHighlight(stored.name)
             this.startLoading(stored.name)
         }
         catch (err) {
@@ -527,7 +521,7 @@ export class RouteServersSettingsDisplayService extends IncyclistService {
         }
 
         // from the Import dialog the dialog view is done once the server was added, like after a manual add.
-        // From the settings the view stays where it is, the new row is highlighted
+        // From the settings the view stays where it is
         if (this.origin === 'import')
             this.scheduleReturn()
         this.emitChanged()
@@ -629,7 +623,6 @@ export class RouteServersSettingsDisplayService extends IncyclistService {
             const stored = this.getRouteList().addExternalApiProvider(this.manualName, pending.url, { origin: this.origin, via: 'manual' })
             this.manualState = 'success'
             this.message = MSG.found(pending.routeCount)
-            this.setHighlight(stored.name)
             delete this.urlError
             this.startLoading(stored.name)
             this.scheduleReturn()
@@ -826,29 +819,9 @@ export class RouteServersSettingsDisplayService extends IncyclistService {
         this.resetManual()
         this.view = 'list'
         this.origin = 'settings'
-        this.clearHighlight()
         delete this.removeDialog
         delete this.removeKey
         this.knownStates.clear()
-    }
-
-    /** marks the row of a server that was just added. The mark goes away by itself */
-    protected setHighlight(key: string) {
-        this.clearHighlight()
-        this.highlightKey = key
-        this.highlightTimer = setTimeout(() => {
-            delete this.highlightTimer
-            delete this.highlightKey
-            this.emitChanged()
-        }, HIGHLIGHT_MS)
-    }
-
-    protected clearHighlight() {
-        if (this.highlightTimer) {
-            clearTimeout(this.highlightTimer)
-            delete this.highlightTimer
-        }
-        delete this.highlightKey
     }
 
     protected clearSuccessTimer() {
