@@ -400,11 +400,98 @@ describe('RouteListService',()=>{
     })
 
     describe('getRouteSourceLabel',()=>{
-        test('server routes show the name as typed, others their source',()=>{
-            const service = prepareMock(null,{mockLoad:true})
+        let service
+        let userSettingsMock
+        beforeEach(()=>{
+            service = prepareMock(null,{mockLoad:true})
+            userSettingsMock = { getValue: jest.fn().mockReturnValue(null) }
+            Inject('UserSettings', userSettingsMock)
+            Inject('AppsService', { getAvailableServices: jest.fn().mockReturnValue([]), getApps: jest.fn().mockReturnValue([{key:'intervals',name:'Intervals.icu'},{key:'strava',name:'Strava'}]) })
+        })
+        afterEach(()=>{
+            service.reset()
+            Inject('AppsService', null)
+            Inject('UserSettings', null)
+        })
+        const setRoutes = (list:Array<{source:string,apiServer?:string}>) => { service.routes = list.map( description=>({description}) ) }
+
+        test('server route that is not configured: the name as typed',()=>{
             expect(service.getRouteSourceLabel({source:'EbelingHoppe',apiServer:'Ebeling Hoppe'})).toBe('Ebeling Hoppe')
-            expect(service.getRouteSourceLabel({source:'strava'})).toBe('strava')
+        })
+        test('app routes: display name of the app',()=>{
+            expect(service.getRouteSourceLabel({source:'intervals'})).toBe('Intervals.icu')
+            expect(service.getRouteSourceLabel({source:'Strava'})).toBe('Strava')
+        })
+        test('no source: undefined',()=>{
             expect(service.getRouteSourceLabel({})).toBeUndefined()
+            expect(service.getRouteSourceLabel(undefined)).toBeUndefined()
+        })
+        test('source without app or server: the filter option value',()=>{
+            expect(service.getRouteSourceLabel({source:'unknown'})).toBe('Unknown')
+        })
+        test('configured server with the same key wins over the apiServer of the route, as in the filter options',()=>{
+            userSettingsMock.getValue.mockReturnValue({'Abc D':'https://x.example.com'})
+            setRoutes([{source:'AbCd',apiServer:'Ab Cd'}])
+            service['getRoutesForFilterOptions'] = jest.fn().mockReturnValue([{source:'AbCd',apiServer:'Ab Cd'}])
+
+            expect(service.getRouteSourceLabel({source:'AbCd',apiServer:'Ab Cd'})).toBe('Abc D')
+            expect(service.getFilterRouteSourceLabels().AbCd).toBe('Abc D')
+        })
+        test('removed server with differently spelled names: most frequent wins, ties alphabetically',()=>{
+            setRoutes([{source:'AbCd',apiServer:'Ab Cd'},{source:'AbCd',apiServer:'Abc D'},{source:'AbCd',apiServer:'Abc D'}])
+            expect(service.getRouteSourceLabel({source:'AbCd',apiServer:'Ab Cd'})).toBe('Abc D')
+
+            setRoutes([{source:'AbCd',apiServer:'Ab Cd'},{source:'AbCd',apiServer:'Abc D'}])
+            expect(service.getRouteSourceLabel({source:'AbCd',apiServer:'Abc D'})).toBe('Ab Cd')
+            service['getRoutesForFilterOptions'] = jest.fn().mockReturnValue([{source:'AbCd',apiServer:'Abc D'}])
+            expect(service.getFilterRouteSourceLabels().AbCd).toBe('Ab Cd')
+        })
+    })
+
+    describe('getFilterRouteSources order',()=>{
+        test('sorted by label, Local and Incyclist first',()=>{
+            const service = prepareMock(null,{mockLoad:true})
+            Inject('UserSettings', { getValue: jest.fn().mockReturnValue(null) })
+            Inject('AppsService', { getAvailableServices: jest.fn().mockReturnValue([]), getApps: jest.fn().mockReturnValue([]) })
+            service['getRoutesForFilterOptions'] = jest.fn().mockReturnValue([
+                {source:'Zeta'},{source:'AlpineVideos',apiServer:'zz Alpine'},{source:'beta',apiServer:'Beta'}
+            ])
+            expect(service.getFilterRouteSources()).toEqual(['Local','Incyclist','Beta','Zeta','AlpineVideos'])
+            Inject('AppsService', null)
+            Inject('UserSettings', null)
+            service.reset()
+        })
+    })
+
+    describe('getFilters with saved app source',()=>{
+        let service
+        let saved
+        beforeEach(()=>{
+            service = prepareMock(null,{mockLoad:true})
+            saved = {}
+            Inject('UserSettings', { get: jest.fn(()=>saved) })
+            Inject('AppsService', { getApps: jest.fn().mockReturnValue([{key:'intervals',name:'Intervals.icu'}]) })
+            Inject('UnitConverter', { getUnitConversionShortcuts: jest.fn().mockReturnValue([jest.fn(),jest.fn()]) })
+            service.filters = undefined
+        })
+        afterEach(()=>{
+            service.reset()
+            Inject('UnitConverter', null)
+            Inject('AppsService', null)
+            Inject('UserSettings', null)
+        })
+
+        test('value saved by an earlier version is mapped to the app display name',()=>{
+            saved = {routeSource:'Intervals'}
+            expect(service.getFilters().routeSource).toBe('Intervals.icu')
+        })
+        test('joined values: apps are mapped, others stay',()=>{
+            saved = {routeSource:'Local|Intervals|EbelingHoppe'}
+            expect(service.getFilters().routeSource).toBe('Local|Intervals.icu|EbelingHoppe')
+        })
+        test('current and unknown values stay as they are',()=>{
+            saved = {routeSource:'Intervals.icu|Unknown'}
+            expect(service.getFilters().routeSource).toBe('Intervals.icu|Unknown')
         })
     })
 

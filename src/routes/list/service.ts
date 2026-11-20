@@ -306,6 +306,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             if (!this.filters) {
                 const settings = this.getUserSettings()
                 this.filters = settings.get('preferences.search.filter',undefined)
+                this.migrateSavedSourceFilter(this.filters)
 
                 const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
 
@@ -330,6 +331,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         return this.filters
 
+    }
+
+    /** earlier versions saved an app as pascalCase(key) ('Intervals'), the filter now offers its display name ('Intervals.icu') */
+    private migrateSavedSourceFilter(filters?:SearchFilter) {
+        if (!filters?.routeSource)
+            return
+        const apps = this.getAppsService().getApps()
+        filters.routeSource = filters.routeSource.split('|').map( v=> {
+            const app = apps.find( a=>pascalCase(a.key)===v )
+            return app ? app.name : v
+        }).join('|')
     }
 
     protected searchAgain() {
@@ -1776,7 +1788,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
     /**
      * Provides the options of the Source filter: `Local` and `Incyclist` first, then every source that is present
-     * on the routes passing the other filters (apps, route servers - whether configured or not), sorted alphabetically.
+     * on the routes passing the other filters (apps, route servers - whether configured or not), sorted alphabetically by label.
      *
      * The returned strings are the option values (what is passed as `routeSource` to the filter). Sources are
      * identified by `pascalCase(source)`. To show an option, use the labels (see getFilterRouteSourceLabels()),
@@ -1802,17 +1814,52 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     }
 
     /**
-     * The text to show for the source of a route: the name the user gave the route server if the route comes from one,
-     * otherwise the source as it is stored on the route
+     * The text to show for the source of a route (the same text that getFilterRouteSourceLabels() offers for its filter option):
+     * - no source: `undefined`
+     * - app (Strava, Intervals.icu, ...): the display name of the app
+     * - route server: the name the user gave the server (a configured server with the same source key wins, then the most frequent
+     *   server name among the routes of that source, then the `apiServer` of this route)
+     * - anything else: the option value (the pascal-cased source)
      */
     getRouteSourceLabel(description:{source?:string, apiServer?:string}):string|undefined {
-        return description?.apiServer || description?.source
+        return this.getSourceOption(description?.source, description?.apiServer, this.getAppNamesByKey(), this.getConfiguredServerNames())?.label
+    }
+
+    private getConfiguredServerNames():Array<string> {
+        return Array.from(this.getExternalApiProviders()?.keys() ?? [])
+    }
+
+    /** value and label of a source: the single place that decides how a source is named, for filter options and route badges */
+    private getSourceOption(source:string|undefined, apiServer:string|undefined, appNames:Map<string,string>, configured:Array<string>):{value:string,label:string}|undefined {
+        const key = toSourceKey(source)
+        if (!key)
+            return undefined
+
+        const appName = appNames.get(key)
+        if (appName)
+            return {value:appName, label:appName}
+
+        const value = toSourceLabel(source)
+        const server = configured.find( k=>toSourceKey(k)===key ) ?? this.getMostFrequentServerName(key) ?? apiServer
+        return {value, label: server || value}
+    }
+
+    /** the spelling of a server name that most routes of that source carry (ties: alphabetical), so the label is stable */
+    private getMostFrequentServerName(key:string):string|undefined {
+        const counts = new Map<string,number>()
+        for (const r of this.routes ?? []) {
+            const name = r.description?.apiServer
+            if (name && toSourceKey(r.description.source)===key)
+                counts.set(name, (counts.get(name) ?? 0)+1)
+        }
+        const sorted = Array.from(counts.entries()).sort( (a,b)=> b[1]-a[1] || a[0].localeCompare(b[0]) )
+        return sorted[0]?.[0]
     }
 
     protected getFilterRouteSourceOptions(filters:SearchFilter={}):Array<{value:string,label:string}> {
         const fixed = ['Local','Incyclist']
         const appNames = this.getAppNamesByKey()
-        const configured = Array.from(this.getExternalApiProviders()?.keys() ?? [])
+        const configured = this.getConfiguredServerNames()
 
         const found = new Map<string,{value:string,label:string}>()
         this.getRoutesForFilterOptions(filters,'routeSource').forEach(r=> {
@@ -1820,17 +1867,10 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             if (!key || fixed.some( f=>toSourceKey(f)===key) || found.has(key))
                 return;
 
-            const appName = appNames.get(key)
-            if (appName) {
-                found.set(key, {value:appName, label:appName})
-                return
-            }
-            const value = toSourceLabel(r.source)
-            const server = configured.find( k=>toSourceKey(k)===key ) ?? r.apiServer
-            found.set(key, {value, label: server || value})
+            found.set(key, this.getSourceOption(r.source, r.apiServer, appNames, configured))
         })
 
-        const sources = Array.from(found.values()).sort( (a,b)=> a.value.toLowerCase().localeCompare(b.value.toLowerCase()) )
+        const sources = Array.from(found.values()).sort( (a,b)=> a.label.toLowerCase().localeCompare(b.label.toLowerCase()) )
         return [...fixed.map(f=>({value:f,label:f})), ...sources]
     }
 
