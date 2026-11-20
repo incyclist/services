@@ -14,7 +14,6 @@ export * from './monitoring'
 export * from './ride'
 export * from './routes'
 // not part of the routes barrel: the page service imports the route list, which the routes barrel is loaded from
-export * from './routes/servers/page'
 export * from './services'
 export * from './settings'
 export * from './settings/display'

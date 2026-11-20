@@ -1,20 +1,20 @@
-import type { RouteServerStatus } from '../../types'
+import type { RouteServerStatus } from '../../../routes/servers/types'
 
 /**
- * Contract of the page service (RouteServersSettingsPageService)
+ * Contract of the front-end service of the Route Servers dialog (RouteServersSettingsDisplayService)
  *
  * The observer that `open()` returns emits
- *  - `page-update`: the display props changed, read them with `getPageDisplayProps()`
- *  - `closed` with a `RouteServersClosedEvent`: the page is finished. The page service decides why (see
+ *  - `changed` (payload: the display props): the display props changed, they can also be read with `getDisplayProps()`
+ *  - `closed` with a `RouteServersClosedEvent`: the dialog is finished. The service decides why (see
  *    RouteServersCloseReason), the app only follows: it does not need to look at the display props to find out
  *    whether to close the dialog or to go back.
  *
- * Actions (all synchronous, results show up as `page-update`): open, close, showAdd, showManualEntry, back,
+ * Actions (all synchronous, results show up as `changed`): open, close, showAdd, showManualEntry, back,
  * addKnown, retryKnown, setManualUrl, setManualName, checkAndAdd, check, add, confirmAddEmpty, cancelAddEmpty,
  * requestRemove, setRemoveRoutes, confirmRemove, cancelRemove.
  *
  * Adding a server:
- *  - origin 'settings': the page stays where it is. A server added manually shows its success for a moment and then
+ *  - origin 'settings': the dialog stays where it is. A server added manually shows its success for a moment and then
  *    returns to the list (view 'list'). A known server that was added shows as 'added' in the Known section, the new
  *    row is highlighted (`highlightKey`) and the view is not changed.
  *  - origin 'import': a server that was added (manually or from the known list) shows its success for a moment, then
@@ -25,11 +25,11 @@ import type { RouteServerStatus } from '../../types'
 export type RouteServersOrigin = 'settings' | 'import'
 
 /**
- * Why the page was closed:
- *  - 'done':   a server was added from the Import dialog. The app closes the page and goes on with the import
- *  - 'back':   the user went back from the first view of the page. The app returns to where the user came from
+ * Why the dialog was closed:
+ *  - 'done':   a server was added from the Import dialog. The app closes the dialog view and goes on with the import
+ *  - 'back':   the user went back from the first view of the dialog. The app returns to where the user came from
  *              (the Import landing view, or the settings list) WITHOUT closing the surrounding dialog
- *  - 'cancel': the page was closed without a result (close action, or the page was opened again). The app returns to
+ *  - 'cancel': the dialog was closed without a result (close action, or it was opened again). The app returns to
  *              where the user came from (the Import landing view, or the settings list) WITHOUT closing the
  *              surrounding dialog
  */
@@ -153,6 +153,6 @@ export interface RouteServersSettingsDisplayProps {
     /** 'Listed servers were checked to work…'. Only set if known is not empty */
     knownNote?: string
     removeDialog?: RemoveServerDialogProps
-    /** key of the row just added. Cleared by the page service about 3 seconds later (followed by `page-update`) */
+    /** key of the row just added. Cleared by the service about 3 seconds later (followed by `changed`) */
     highlightKey?: string
 }

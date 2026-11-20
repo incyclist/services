@@ -1,19 +1,11 @@
 import { EventLogger } from 'gd-eventlog'
-import { Inject } from '../../../../base/decorators'
-import { RouteServerValidationError } from '../../errors'
-import { RouteServerStatusStore, useRouteServerStatus } from '../../status'
-import { validateRouteServerName, validateRouteServerUrl } from '../../validator'
-import type { KnownRouteServer, RouteServerProbeResult } from '../../types'
-import { RouteServersSettingsPageService } from './service'
+import { Inject } from '../../../base/decorators'
+import { RouteServerValidationError } from '../../../routes/servers/errors'
+import { RouteServerStatusStore, useRouteServerStatus } from '../../../routes/servers/status'
+import { validateRouteServerName, validateRouteServerUrl } from '../../../routes/servers/validator'
+import type { KnownRouteServer, RouteServerProbeResult } from '../../../routes/servers/types'
+import { RouteServersSettingsDisplayService, useRouteServersSettingsDisplay } from './service'
 import type { RouteServersSettingsDisplayProps } from './types'
-
-class TestPageService extends RouteServersSettingsPageService {
-    public allowLocalHttp = true
-    public hint?: string
-
-    protected get allowsLocalHttp() { return this.allowLocalHttp }
-    protected getUnreachableHint(isHomeNetwork: boolean) { return isHomeNetwork ? this.hint : undefined }
-}
 
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve() }
 
@@ -22,8 +14,8 @@ const KNOWN: Array<KnownRouteServer> = [
     { id: 'flanders', name: 'Flanders Classics', url: 'https://flanders.example.org/routes', description: 'Cobbles and bergs' },
 ]
 
-describe('RouteServersSettingsPageService', () => {
-    let service: TestPageService
+describe('RouteServersSettingsDisplayService', () => {
+    let service: RouteServersSettingsDisplayService
     let status: RouteServerStatusStore
     let servers: Map<string, string>
     let counts: Record<string, number>
@@ -32,12 +24,16 @@ describe('RouteServersSettingsPageService', () => {
     let observer
     let updates: jest.Mock
 
+    const setPlatform = (channel: string, platform: string | undefined) => {
+        Inject('Bindings', { appInfo: { getChannel: jest.fn().mockReturnValue(channel), getOS: jest.fn().mockReturnValue({ platform }) } })
+    }
+
     const probeOk = (routeCount: number, url?: string, switchedToHttp?: boolean) =>
         (u: string): Promise<RouteServerProbeResult> => Promise.resolve({ ok: true, routeCount, url: url ?? u, switchedToHttp })
     const probeFail = (code: 'unreachable' | 'not-a-server' | 'server-error', message: string) =>
         (u: string): Promise<RouteServerProbeResult> => Promise.resolve({ ok: false, code, message, url: u })
 
-    const props = (): RouteServersSettingsDisplayProps => service.getPageDisplayProps()
+    const props = (): RouteServersSettingsDisplayProps => service.getDisplayProps()
 
     const createList = () => {
         const nameContext = () => ({ existingNames: Array.from(servers.keys()), reservedNames: ['Local', 'Incyclist', 'strava', 'Strava'] })
@@ -72,19 +68,25 @@ describe('RouteServersSettingsPageService', () => {
         status = useRouteServerStatus()
         Inject('RouteList', list)
         Inject('KnownServers', undefined)
-        service = new TestPageService()
+        setPlatform('desktop', 'linux')
+        service = new RouteServersSettingsDisplayService()
         ;(service as unknown as { getKnownServers: () => Array<KnownRouteServer> }).getKnownServers = () => known
         observer = service.open('settings')
         updates = jest.fn()
-        observer.on('page-update', updates)
+        observer.on('changed', updates)
     })
 
     afterEach(() => {
         service.close()
         status.reset()
         Inject('RouteList', null)
+        Inject('Bindings', null)
         jest.useRealTimers()
         jest.restoreAllMocks()
+    })
+
+    test('the hook returns the singleton, so the state of an open dialog survives between calls', () => {
+        expect(useRouteServersSettingsDisplay()).toBe(service)
     })
 
     describe('open / close', () => {
@@ -110,10 +112,10 @@ describe('RouteServersSettingsPageService', () => {
             observer.on('closed', closed)
             service.close()
             expect(closed).toHaveBeenCalledWith({ reason: 'cancel' })
-            expect(service.getPageObserver()).toBeUndefined()
+            expect(service.getObserver()).toBeUndefined()
         })
 
-        test('opening the page again closes the previous one with the reason cancel', () => {
+        test('opening the dialog again closes the previous one with the reason cancel', () => {
             const closed = jest.fn()
             observer.on('closed', closed)
             service.open('import')
@@ -178,7 +180,7 @@ describe('RouteServersSettingsPageService', () => {
             expect(props().servers[1]).toMatchObject({ status: 'unreachable', routeCount: 4 })
         })
 
-        test('page-update is emitted when a status changes', () => {
+        test('changed is emitted when a status changes', () => {
             status.setLoading('A')
             expect(updates).toHaveBeenCalled()
         })
@@ -201,7 +203,7 @@ describe('RouteServersSettingsPageService', () => {
         })
 
         test('home-network http on a platform that does not allow it counts as added outside the app', () => {
-            service.allowLocalHttp = false
+            setPlatform('mobile', 'android')
             servers.set('Nas', 'http://nas:8080/')
             expect(props().servers[1].addedOutsideApp).toBe(true)
         })
@@ -351,7 +353,7 @@ describe('RouteServersSettingsPageService', () => {
             expect(props().known[0].statusText).toBe('Added ✓ · 1 route')
         })
 
-        test('settings origin: the page stays where it is, the new row is highlighted', async () => {
+        test('settings origin: the view stays where it is, the new row is highlighted', async () => {
             jest.useFakeTimers()
             const closed = jest.fn()
             observer.on('closed', closed)
@@ -364,7 +366,7 @@ describe('RouteServersSettingsPageService', () => {
             expect(props()).toMatchObject({ view: 'add', highlightKey: 'Alpine Videos' })
         })
 
-        test('the highlight is cleared after 3 seconds and the page is updated', async () => {
+        test('the highlight is cleared after 3 seconds and the display props are updated', async () => {
             jest.useFakeTimers()
             service.showAdd()
             service.addKnown('alpine')
@@ -544,7 +546,7 @@ describe('RouteServersSettingsPageService', () => {
                 expect(props().manual.nameError).toBeUndefined()
             })
 
-            test('page-update is emitted on input', () => {
+            test('changed is emitted on input', () => {
                 updates.mockClear()
                 service.setManualUrl('a.example.org')
                 service.setManualName('A')
@@ -745,7 +747,7 @@ describe('RouteServersSettingsPageService', () => {
             })
 
             test('no http fallback is offered if the platform does not allow it', async () => {
-                service.allowLocalHttp = false
+                setPlatform('mobile', 'android')
                 service.setManualUrl('nas:8080')
                 service.checkAndAdd()
                 await flush()
@@ -753,7 +755,7 @@ describe('RouteServersSettingsPageService', () => {
             })
 
             test('home-network http on a platform that does not allow it', () => {
-                service.allowLocalHttp = false
+                setPlatform('mobile', 'android')
                 service.setManualUrl('http://192.168.1.20')
                 expect(props().manual.urlError).toBe("This device can't use servers without https:// yet. Use an https:// address.")
             })
@@ -848,19 +850,51 @@ describe('RouteServersSettingsPageService', () => {
                 expect(servers.size).toBe(0)
             })
 
-            test('hint for unreachable home-network addresses (platform hook)', async () => {
-                service.hint = 'Use the IP.'
+            test('hint for unreachable home-network addresses (mobile only)', async () => {
+                setPlatform('mobile', 'ios')
                 list.probeExternalApiProvider.mockImplementation(probeFail('unreachable', "Couldn't reach this address."))
                 service.setManualUrl('nas:8080')
                 service.check()
                 await flush()
-                expect(props().manual.urlError).toBe("Couldn't reach this address. Use the IP.")
+                expect(props().manual.urlError).toBe("Couldn't reach this address. On phones and tablets, the server's IP address (for example 192.168.1.20) often works better than its name.")
 
                 service.setManualUrl('videos.example.org')
                 service.check()
                 await flush()
                 expect(props().manual.urlError).toBe("Couldn't reach this address.")
             })
+        })
+    })
+
+    describe('platform differences', () => {
+        const allowsLocalHttp = () => (service as unknown as { allowsLocalHttp: boolean }).allowsLocalHttp
+        const hint = (isHomeNetwork: boolean) => (service as unknown as { getUnreachableHint: (v: boolean) => string | undefined }).getUnreachableHint(isHomeNetwork)
+
+        test.each(['desktop', 'web'])('%s: home-network http is allowed, no extra hint', (channel) => {
+            setPlatform(channel, 'linux')
+            expect(allowsLocalHttp()).toBe(true)
+            expect(hint(true)).toBeUndefined()
+        })
+
+        test.each(['ios', 'iOS'])('mobile %s: home-network http is allowed', (platform) => {
+            setPlatform('mobile', platform)
+            expect(allowsLocalHttp()).toBe(true)
+        })
+
+        test.each(['android', 'Android', 'linux', 'win32', 'darwin', 'web', 'ios-simulator', '', undefined])('mobile %s: not positively iOS, not allowed', (platform) => {
+            setPlatform('mobile', platform)
+            expect(allowsLocalHttp()).toBe(false)
+        })
+
+        test('no OS info: not allowed', () => {
+            Inject('Bindings', { appInfo: { getChannel: () => 'mobile' } })
+            expect(allowsLocalHttp()).toBe(false)
+        })
+
+        test('hint for unreachable home-network addresses only, on mobile', () => {
+            setPlatform('mobile', 'android')
+            expect(hint(true)).toBe("On phones and tablets, the server's IP address (for example 192.168.1.20) often works better than its name.")
+            expect(hint(false)).toBeUndefined()
         })
     })
 

@@ -1,14 +1,15 @@
-import { Injectable } from '../../../../base/decorators'
-import { IncyclistService } from '../../../../base/service'
-import { Observer } from '../../../../base/types'
-import type { IObserver } from '../../../../types'
-import { useRouteList } from '../../../list/service'
-import { getKnownRouteServers } from '../../known'
-import { SERVER_MESSAGES as MSG } from '../../messages'
-import { useRouteServerStatus } from '../../status'
-import type { KnownRouteServer, RouteServerProbeResult, RouteServerUrlResult } from '../../types'
-import { RouteServerValidationError } from '../../errors'
-import { normalizeRouteServerUrl, validateRouteServerUrl } from '../../validator'
+import { getBindings } from '../../../api'
+import { Injectable, Singleton } from '../../../base/decorators'
+import { IncyclistService } from '../../../base/service'
+import { Observer } from '../../../base/types'
+import type { IObserver } from '../../../types'
+import { useRouteList } from '../../../routes/list/service'
+import { getKnownRouteServers } from '../../../routes/servers/known'
+import { SERVER_MESSAGES as MSG } from '../../../routes/servers/messages'
+import { useRouteServerStatus } from '../../../routes/servers/status'
+import type { KnownRouteServer, RouteServerProbeResult, RouteServerUrlResult } from '../../../routes/servers/types'
+import { RouteServerValidationError } from '../../../routes/servers/errors'
+import { normalizeRouteServerUrl, validateRouteServerUrl } from '../../../routes/servers/validator'
 import { formatSize, suggestServerName } from './utils'
 import type {
     KnownServerItem, ManualEntryProps, ManualEntryState, RemoveServerDialogProps, RouteServerItem,
@@ -33,17 +34,18 @@ interface KnownState {
 }
 
 /**
- * Page logic of the "Route Servers" settings, shared by all platforms: the list of servers, the
- * add view (known servers and manual entry) and the remove dialog.
+ * Front-end service of the "Route Servers" dialog (Settings tab and Import dialog), shared by all platforms:
+ * the list of servers, the add view (known servers and manual entry) and the remove dialog.
  *
- * The page service decides what is shown (display props, states, texts). The apps decide how it
- * is shown. Platform differences live in the overridable hooks.
+ * The service decides what is shown (display props, states, texts). The apps decide how it is shown.
+ * Platform differences are derived from the app info bindings.
  *
- * It extends IncyclistService and not IncyclistPageService on purpose: this page is a dialog shown over
- * another page, and IncyclistPageService.openPage() would overwrite the current page of the app from inside it.
+ * It is a dialog front-end service and never touches the page bookkeeping (no IncyclistPageService): the dialog
+ * is shown over another page, which must keep receiving pause/resume.
  * The contract (display props and events) is documented in `types.ts`.
  */
-export abstract class RouteServersSettingsPageService extends IncyclistService {
+@Singleton
+export class RouteServersSettingsDisplayService extends IncyclistService {
 
     protected observer?: Observer
     protected origin: RouteServersOrigin = 'settings'
@@ -74,29 +76,43 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
     protected viewToken = 0
     protected successTimer?: ReturnType<typeof setTimeout>
     protected highlightTimer?: ReturnType<typeof setTimeout>
-    protected onStatusChanged = this.updatePage.bind(this)
+    protected onStatusChanged = this.emitChanged.bind(this)
 
     constructor() {
         super('RouteServersSettings')
     }
 
-    // ----- platform hooks -----
+    // ----- platform differences -----
 
-    /** whether `http://` is accepted for servers on the home network on this platform */
+    /**
+     * whether `http://` is accepted for servers on the home network on this platform. Desktop and web: yes.
+     * Mobile: allowlist, only a platform that is positively iOS (Android blocks cleartext traffic, for now).
+     * On any other platform, or if the OS is unknown, `http://` is refused.
+     */
     protected get allowsLocalHttp(): boolean {
-        return true
+        if (this.isDesktop())
+            return true
+        const platform = this.getBindings()?.appInfo?.getOS?.()?.platform
+        return typeof platform === 'string' && platform.toLowerCase() === 'ios'
     }
 
-    /** an additional hint below an address that could not be reached */
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    protected getUnreachableHint(_isHomeNetwork: boolean): string | undefined {
-        return undefined
+    /**
+     * an additional hint below an address that could not be reached. Phones and tablets often can not resolve
+     * names on the home network, so they get a hint to use the IP address instead
+     */
+    protected getUnreachableHint(isHomeNetwork: boolean): string | undefined {
+        return !this.isDesktop() && isHomeNetwork ? MSG.probeLocalHint : undefined
+    }
+
+    protected isDesktop(): boolean {
+        const channel = this.getBindings()?.appInfo?.getChannel?.()
+        return channel === 'desktop' || channel === 'web'
     }
 
     // ----- lifecycle -----
 
     /**
-     * Opens the page. The returned observer emits `page-update` whenever the display props have changed.
+     * Opens the dialog. The returned observer emits `changed` whenever the display props have changed.
      *
      * @param origin 'settings': opened from Settings, starts with the list. 'import': opened from the Import Routes dialog, starts with the add view
      */
@@ -120,9 +136,9 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
     }
 
     /**
-     * Closes the page. The observer emits `closed` with the reason.
+     * Closes the dialog. The observer emits `closed` with the reason.
      *
-     * @param reason 'cancel' (default): closed without a result. The page service itself closes with 'back' and 'done'
+     * @param reason 'cancel' (default): closed without a result. The service itself closes with 'back' and 'done'
      */
     close(reason: RouteServersCloseReason = 'cancel') {
         try {
@@ -142,7 +158,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         }
     }
 
-    getPageObserver(): IObserver | undefined {
+    getObserver(): IObserver | undefined {
         return this.observer
     }
 
@@ -155,13 +171,13 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         this.resetManual()
         this.knownStates.clear()
         this.view = 'add'
-        this.updatePage()
+        this.emitChanged()
     }
 
     /** phone: switches to the second step of the add view (manual entry) */
     showManualEntry() {
         this.view = 'add-manual'
-        this.updatePage()
+        this.emitChanged()
     }
 
     back() {
@@ -180,7 +196,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             return
         }
         this.resetManual()
-        this.updatePage()
+        this.emitChanged()
     }
 
     // ----- known servers -----
@@ -191,7 +207,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             return
 
         this.knownStates.set(id, { state: 'checking' })
-        this.updatePage()
+        this.emitChanged()
 
         this.checkAndAddKnown(entry)
             .catch(err => { this.logError(err, 'addKnown', { id }) })
@@ -220,7 +236,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
 
         this.updateSuggestion(res.valid ? res.host : undefined)
         this.validateNameLive()
-        this.updatePage()
+        this.emitChanged()
     }
 
     setManualName(name: string) {
@@ -232,7 +248,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         if (this.manualState === 'error')
             this.manualState = 'idle'
         this.validateNameLive()
-        this.updatePage()
+        this.emitChanged()
     }
 
     /** one-step entry: checks the address and, if the name is valid, saves the server */
@@ -252,7 +268,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
 
         if (!this.isNameValid()) {
             this.validateNameLive(true)
-            this.updatePage()
+            this.emitChanged()
             return
         }
         this.saveManual()
@@ -266,7 +282,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         if (this.reviewRequired || !this.isNameValid()) {
             this.manualState = 'checked'
             this.message = MSG.found(0)
-            this.updatePage()
+            this.emitChanged()
             return
         }
         this.saveManual()
@@ -280,7 +296,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         this.resetManualResult()
         this.localNote = this.getLocalNote(this.validateManualUrl())
         this.validateNameLive()
-        this.updatePage()
+        this.emitChanged()
     }
 
     // ----- remove -----
@@ -293,7 +309,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         const routeCount = this.getRouteList().getExternalApiProviderRouteCount(key)
         this.removeKey = key
         this.removeDialog = this.buildRemoveDialog(key, routeCount, false)
-        this.updatePage()
+        this.emitChanged()
 
         this.loadDownloadInfo(key, routeCount)
             .catch(err => { this.logError(err, 'requestRemove', { key }) })
@@ -304,7 +320,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             return
         const { key, routeCount, downloadedCount, downloadedSize } = this.removeDialog
         this.removeDialog = this.buildRemoveDialog(key, routeCount, remove, downloadedCount, downloadedSize)
-        this.updatePage()
+        this.emitChanged()
     }
 
     confirmRemove() {
@@ -319,13 +335,13 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
     cancelRemove() {
         delete this.removeDialog
         delete this.removeKey
-        this.updatePage()
+        this.emitChanged()
     }
 
     // ----- display props -----
 
     /** Builds the display props from scratch, so they always reflect the current state of the route list */
-    getPageDisplayProps(): RouteServersSettingsDisplayProps {
+    getDisplayProps(): RouteServersSettingsDisplayProps {
         const servers = this.buildServerItems()
         const known = this.buildKnownItems()
         const isEmpty = servers.length === 1   // only the built-in server
@@ -510,17 +526,17 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             return
         }
 
-        // from the Import dialog the page is done once the server was added, like after a manual add.
-        // From the settings the page stays where it is, the new row is highlighted
+        // from the Import dialog the dialog view is done once the server was added, like after a manual add.
+        // From the settings the view stays where it is, the new row is highlighted
         if (this.origin === 'import')
             this.scheduleReturn()
-        this.updatePage()
+        this.emitChanged()
     }
 
     protected setKnownError(id: string, error: string) {
         this.knownStates.set(id, { state: 'error', error })
         this.logEvent({ message: 'known route server not added', id, error })
-        this.updatePage()
+        this.emitChanged()
     }
 
     // ----- protected helpers: manual entry -----
@@ -534,7 +550,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
                 this.logError(err, 'check')
                 this.manualState = 'error'
                 this.urlError = MSG.probeUnreachable
-                this.updatePage()
+                this.emitChanged()
             })
     }
 
@@ -546,19 +562,19 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         if (!address.valid) {
             this.urlError = address.message
             this.manualState = address.message ? 'error' : 'idle'
-            this.updatePage()
+            this.emitChanged()
             return
         }
         if (!twoStep && !this.isNameValid()) {
             this.validateNameLive(true)
             this.manualState = 'error'
-            this.updatePage()
+            this.emitChanged()
             return
         }
 
         const token = ++this.checkToken
         this.manualState = 'checking'
-        this.updatePage()
+        this.emitChanged()
 
         const probe = await list.probeExternalApiProvider(address.url, address.httpFallbackUrl)
         if (token !== this.checkToken)
@@ -575,7 +591,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         const hint = probe.code === 'unreachable' ? this.getUnreachableHint(isHomeNetwork) : undefined
         this.urlError = hint ? `${probe.message} ${hint}` : probe.message
         this.manualState = 'error'
-        this.updatePage()
+        this.emitChanged()
     }
 
     protected onProbeSucceeded(probe: RouteServerProbeResult, twoStep: boolean) {
@@ -601,7 +617,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             this.saveManual()
             return
         }
-        this.updatePage()
+        this.emitChanged()
     }
 
     protected saveManual() {
@@ -621,7 +637,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         catch (err) {
             this.onSaveFailed(err)
         }
-        this.updatePage()
+        this.emitChanged()
     }
 
     protected onSaveFailed(err: unknown) {
@@ -647,7 +663,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             }
             this.view = 'list'
             this.resetManual()
-            this.updatePage()
+            this.emitChanged()
         }, SUCCESS_DELAY_MS)
     }
 
@@ -749,7 +765,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
 
         const size = info.downloadedBytes === undefined ? undefined : formatSize(info.downloadedBytes)
         this.removeDialog = this.buildRemoveDialog(key, routeCount, this.removeDialog.removeRoutes, info.downloadedCount, size)
-        this.updatePage()
+        this.emitChanged()
     }
 
     protected async removeServer(dialog: RemoveServerDialogProps): Promise<void> {
@@ -760,11 +776,11 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         delete this.removeDialog
         delete this.removeKey
         this.knownStates.clear()
-        this.updatePage()
+        this.emitChanged()
 
         if (dialog.removeRoutes) {
             await list.deleteExternalApiProviderRoutes(dialog.key)
-            this.updatePage()
+            this.emitChanged()
         }
     }
 
@@ -773,7 +789,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
     protected startLoading(key: string) {
         this.getRouteServerStatus().setLoading(key)
         this.getRouteList().loadExternalApiProvider(key)
-            .then(() => { this.updatePage() })
+            .then(() => { this.emitChanged() })
             .catch(err => {
                 this.logError(err, 'loadServer', { key })
                 this.getRouteServerStatus().clearLoading(key)
@@ -823,7 +839,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         this.highlightTimer = setTimeout(() => {
             delete this.highlightTimer
             delete this.highlightKey
-            this.updatePage()
+            this.emitChanged()
         }, HIGHLIGHT_MS)
     }
 
@@ -842,8 +858,13 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         }
     }
 
-    protected updatePage() {
-        this.observer?.emit('page-update')
+    protected emitChanged() {
+        this.observer?.emit('changed', this.getDisplayProps())
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
     }
 
     @Injectable
@@ -861,3 +882,5 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         return getKnownRouteServers()
     }
 }
+
+export const useRouteServersSettingsDisplay = () => new RouteServersSettingsDisplayService()
