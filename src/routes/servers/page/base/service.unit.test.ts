@@ -358,10 +358,36 @@ describe('RouteServersSettingsPageService', () => {
             service.showAdd()
             service.addKnown('alpine')
             await flush()
-            jest.advanceTimersByTime(5000)
+            jest.advanceTimersByTime(2000)
 
             expect(closed).not.toHaveBeenCalled()
             expect(props()).toMatchObject({ view: 'add', highlightKey: 'Alpine Videos' })
+        })
+
+        test('the highlight is cleared after 3 seconds and the page is updated', async () => {
+            jest.useFakeTimers()
+            service.showAdd()
+            service.addKnown('alpine')
+            await flush()
+            updates.mockClear()
+
+            jest.advanceTimersByTime(2900)
+            expect(props().highlightKey).toBe('Alpine Videos')
+            jest.advanceTimersByTime(200)
+
+            expect(props().highlightKey).toBeUndefined()
+            expect(updates).toHaveBeenCalled()
+        })
+
+        test('closing cancels the highlight timer', async () => {
+            jest.useFakeTimers()
+            service.showAdd()
+            service.addKnown('alpine')
+            await flush()
+
+            service.close()
+
+            expect(jest.getTimerCount()).toBe(0)
         })
 
         test('import origin: closes with done after the success was shown, like a manual add', async () => {

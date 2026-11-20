@@ -16,6 +16,7 @@ import type {
 } from './types'
 
 const SUCCESS_DELAY_MS = 1000
+const HIGHLIGHT_MS = 3000
 
 // codes that are worth showing while the user is still typing the address. Others ("not a web address",
 // ...) would only be noise for an incomplete address and are reported when the address is submitted.
@@ -72,6 +73,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
     // incremented whenever the view is left (back, close, new add view): known servers that are being checked are dropped
     protected viewToken = 0
     protected successTimer?: ReturnType<typeof setTimeout>
+    protected highlightTimer?: ReturnType<typeof setTimeout>
     protected onStatusChanged = this.updatePage.bind(this)
 
     constructor() {
@@ -500,7 +502,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         try {
             const stored = list.addExternalApiProvider(name.name, address.url, { origin: this.origin, via: 'known' })
             this.knownStates.delete(entry.id)
-            this.highlightKey = stored.name
+            this.setHighlight(stored.name)
             this.startLoading(stored.name)
         }
         catch (err) {
@@ -611,7 +613,7 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
             const stored = this.getRouteList().addExternalApiProvider(this.manualName, pending.url, { origin: this.origin, via: 'manual' })
             this.manualState = 'success'
             this.message = MSG.found(pending.routeCount)
-            this.highlightKey = stored.name
+            this.setHighlight(stored.name)
             delete this.urlError
             this.startLoading(stored.name)
             this.scheduleReturn()
@@ -808,10 +810,29 @@ export abstract class RouteServersSettingsPageService extends IncyclistService {
         this.resetManual()
         this.view = 'list'
         this.origin = 'settings'
-        delete this.highlightKey
+        this.clearHighlight()
         delete this.removeDialog
         delete this.removeKey
         this.knownStates.clear()
+    }
+
+    /** marks the row of a server that was just added. The mark goes away by itself */
+    protected setHighlight(key: string) {
+        this.clearHighlight()
+        this.highlightKey = key
+        this.highlightTimer = setTimeout(() => {
+            delete this.highlightTimer
+            delete this.highlightKey
+            this.updatePage()
+        }, HIGHLIGHT_MS)
+    }
+
+    protected clearHighlight() {
+        if (this.highlightTimer) {
+            clearTimeout(this.highlightTimer)
+            delete this.highlightTimer
+        }
+        delete this.highlightKey
     }
 
     protected clearSuccessTimer() {

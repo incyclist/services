@@ -27,8 +27,11 @@ export type RouteServersOrigin = 'settings' | 'import'
 /**
  * Why the page was closed:
  *  - 'done':   a server was added from the Import dialog. The app closes the page and goes on with the import
- *  - 'back':   the user went back from the first view of the page. The app returns to where it came from
- *  - 'cancel': the page was closed without a result (close action, or the page was opened again)
+ *  - 'back':   the user went back from the first view of the page. The app returns to where the user came from
+ *              (the Import landing view, or the settings list) WITHOUT closing the surrounding dialog
+ *  - 'cancel': the page was closed without a result (close action, or the page was opened again). The app returns to
+ *              where the user came from (the Import landing view, or the settings list) WITHOUT closing the
+ *              surrounding dialog
  */
 export type RouteServersCloseReason = 'done' | 'back' | 'cancel'
 
@@ -40,9 +43,9 @@ export interface RouteServersClosedEvent {
 export type RouteServersView = 'list' | 'add' | 'add-manual'   // 'add-manual' = phone second step
 
 export interface RouteServerItem {
-    /** storage key = the display name */
+    /** storage key = the name as the user typed it. Actions (remove, highlight) use the key */
     key: string
-    /** display name, as normalised by the validator */
+    /** name to show: the name as the user typed it (the same as `key`, e.g. 'Ebeling Hoppe'). Never a pascal-cased form */
     name: string
     /** 'alpine-videos.example.org'; undefined for the built-in server */
     host?: string
@@ -150,6 +153,6 @@ export interface RouteServersSettingsDisplayProps {
     /** 'Listed servers were checked to work…'. Only set if known is not empty */
     knownNote?: string
     removeDialog?: RemoveServerDialogProps
-    /** row just added */
+    /** key of the row just added. Cleared by the page service about 3 seconds later (followed by `page-update`) */
     highlightKey?: string
 }
