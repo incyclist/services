@@ -39,7 +39,7 @@ describe('validateRouteServerName', () => {
     test('24 characters are accepted', () => {
         expect(validateRouteServerName('a'.repeat(24)).valid).toBe(true)
     })
-    test.each(['__proto__', 'constructor', 'Prototype'])('N10 reserved word %s', (input) => {
+    test.each(['__proto__', 'constructor', 'Prototype', 'All', 'all', 'ALL'])('N10 reserved word %s', (input) => {
         const res = validateRouteServerName(input, ctx)
         expect(res).toMatchObject({ valid: false, code: 'reserved-word', message: "This name can't be used. Choose another name." })
     })

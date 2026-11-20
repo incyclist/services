@@ -7,6 +7,8 @@ import type {
 const MAX_URL_LENGTH = 2048
 const NAME_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} -]{0,23}$/u
 const RESERVED_WORDS = ['constructor', 'prototype', '__proto__', 'local', 'incyclist']
+// 'all' is the placeholder of the Source filter and must not collide with a server's option
+const UNUSABLE_NAMES = ['constructor', 'prototype', '__proto__', 'all']
 const HIDDEN_CHARS = /[\s\p{Cc}\p{Cf}]/u
 const FORBIDDEN_RAW_CHARS = /["\\<>{}|^`]/
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i
@@ -43,7 +45,7 @@ export const validateRouteServerName = (input: string, context: RouteServerNameC
     if (name.length === 0)
         return { valid: false, name, code: 'empty', message: MSG.nameEmpty }
 
-    if (['constructor', 'prototype', '__proto__'].includes(name.toLowerCase()))
+    if (UNUSABLE_NAMES.includes(name.toLowerCase()))
         return { valid: false, name, code: 'reserved-word', message: MSG.nameReservedWord }
 
     if (!NAME_PATTERN.test(name))

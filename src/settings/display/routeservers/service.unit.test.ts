@@ -538,6 +538,9 @@ describe('RouteServersSettingsDisplayService', () => {
                 service.setManualName('constructor')
                 expect(props().manual.nameError).toBe("This name can't be used. Choose another name.")
 
+                service.setManualName('All')
+                expect(props().manual.nameError).toBe("This name can't be used. Choose another name.")
+
                 servers.set('Alpine Videos', 'https://x.example.org')
                 service.setManualName('alpine-videos')
                 expect(props().manual.nameError).toBe("You already have a server called 'Alpine Videos'. Choose another name.")
