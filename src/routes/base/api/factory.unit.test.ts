@@ -1,5 +1,6 @@
 import { Inject } from '../../../base/decorators'
 import { IncyclistRoutesApiFactory } from './factory'
+import { isAllowedRedirectTarget } from '../../servers/validator'
 
 const IncyclistRoutesApiMock = jest.fn()
 
@@ -7,9 +8,11 @@ jest.mock('./api', () => ({
     __esModule: true,
     default: class  {
         setSource: jest.Mock<any, any, any>
+        setRequestOptions: jest.Mock<any, any, any>
         constructor(...args) {
             IncyclistRoutesApiMock(...args)
             this.setSource = jest.fn()
+            this.setRequestOptions = jest.fn()
         }
     },
 }))
@@ -76,13 +79,27 @@ describe('IncyclistRoutesApiFactory', () => {
             expect(api.setSource).toHaveBeenCalledWith('myserver')
         })
 
-        test('non-default key, no server url configured: falls back to using the key as baseUrl', () => {
+        test('non-default key, no server url configured: api that never issues a request', async () => {
             userSettingsMock.getValue.mockReturnValue(null)
 
             const api = factory.create('myserver')
 
-            expect(IncyclistRoutesApiMock).toHaveBeenCalledWith('myserver')
-            expect(api.setSource).toHaveBeenCalledWith('myserver')
+            expect(IncyclistRoutesApiMock).not.toHaveBeenCalled()
+            await expect(api.getRouteDetails('1')).rejects.toThrow("route server 'myserver' is not configured")
+            await expect(api.getRoutePreview('1')).rejects.toThrow('not configured')
+            await expect(api.getRouteDescriptions({type:'video'},true)).rejects.toThrow('not configured')
+            await expect(api.reload()).resolves.toBeUndefined()
+        })
+
+        test('non-default key, no server url configured: not cached, so a server added later is picked up', () => {
+            userSettingsMock.getValue.mockReturnValue(null)
+            const unconfigured = factory.create('myserver')
+
+            userSettingsMock.getValue.mockImplementation((key: string) => key === 'routes.servers.myserver' ? 'https://myserver.example.com' : undefined)
+            const api = factory.create('myserver')
+
+            expect(api).not.toBe(unconfigured)
+            expect(IncyclistRoutesApiMock).toHaveBeenCalledWith('https://myserver.example.com')
         })
 
         test('repeated call with same key: returns cached api instance without creating a new one', () => {
@@ -98,7 +115,7 @@ describe('IncyclistRoutesApiFactory', () => {
         test('repeated call with same non-default key: returns cached api instance without creating a new one', () => {
             // the implementation always caches under the 'default' key, so a
             // second call with a different, non-default key never hits the cache
-            userSettingsMock.getValue.mockReturnValue(null)
+            userSettingsMock.getValue.mockReturnValue('https://myserver.example.com')
 
             const api1 = factory.create('myserver')
             const api2 = factory.create('myserver')
@@ -108,13 +125,50 @@ describe('IncyclistRoutesApiFactory', () => {
         })
 
         test('call with default key after a non-default key was created: returns two different apis', () => {
-            userSettingsMock.getValue.mockReturnValue(null)
+            userSettingsMock.getValue.mockReturnValue('https://myserver.example.com')
 
             const api1 = factory.create('myserver')
             const api2 = factory.create('default')
 
             expect(api2).not.toBe(api1)
             expect(IncyclistRoutesApiMock).toHaveBeenCalledTimes(2)
+        })
+
+        test('server url that follows the address rules: redirects are checked', () => {
+            userSettingsMock.getValue.mockImplementation((key: string) => key === 'routes.servers.myserver' ? 'https://myserver.example.com' : undefined)
+
+            const api = factory.create('myserver')
+
+            expect((api as any).setRequestOptions).toHaveBeenCalledWith({ timeout: 30000, redirectPolicy: isAllowedRedirectTarget })
+        })
+
+        test('server url from the config file that the address rules would refuse: redirects are not checked, timeout applies', () => {
+            userSettingsMock.getValue.mockImplementation((key: string) => key === 'routes.servers.myserver' ? 'http://myserver.example.com' : undefined)
+
+            const api = factory.create('myserver')
+
+            expect((api as any).setRequestOptions).toHaveBeenCalledWith({ timeout: 30000, redirectPolicy: undefined })
+        })
+    })
+
+    describe('invalidate', () => {
+        test('the next create() reads the url again', () => {
+            userSettingsMock.getValue.mockReturnValue('https://one.example.com')
+            const api1 = factory.create('myserver')
+
+            userSettingsMock.getValue.mockReturnValue('https://two.example.com')
+            factory.invalidate('myserver')
+            const api2 = factory.create('myserver')
+
+            expect(api2).not.toBe(api1)
+            expect(IncyclistRoutesApiMock).toHaveBeenLastCalledWith('https://two.example.com')
+        })
+
+        test('other keys stay cached', () => {
+            userSettingsMock.getValue.mockReturnValue('https://other.example.com')
+            const other = factory.create('other')
+            factory.invalidate('myserver')
+            expect(factory.create('other')).toBe(other)
         })
     })
 })

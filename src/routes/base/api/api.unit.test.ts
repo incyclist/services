@@ -1,6 +1,7 @@
 import { EventLogger } from 'gd-eventlog'
 import { Inject } from '../../../base/decorators'
 import IncyclistRoutesApi from './api'
+import { NO_CACHE } from './consts'
 
 const internalGet = jest.fn()
 const externalGet = jest.fn()
@@ -57,8 +58,26 @@ describe('IncyclistRoutesApi', () => {
 
             await api.getRouteDescriptions({ type: 'gpx' })
 
-            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api?private=false', expect.anything())
+            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api?type=route', expect.anything())
             expect(internalGet).not.toHaveBeenCalled()
+        })
+
+        test('external server: video routes are requested with ?type=video', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api?type=video', expect.anything())
+        })
+
+        test('external server: a category is appended to the query', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'gpx', category: 'demo' })
+
+            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api?type=route&category=demo', expect.anything())
         })
     })
 
@@ -366,6 +385,66 @@ describe('IncyclistRoutesApi', () => {
             expect(EventLogger.prototype.logEvent).toHaveBeenCalledWith(
                 expect.objectContaining({ message: 'Error', error: 'boom', fn: 'reload' })
             )
+        })
+    })
+
+    describe('external server request options', () => {
+
+        test('trailing slash of the base url is dropped', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api/v1/')
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(externalGet).toHaveBeenCalledWith('https://custom.routes.api/v1?type=video', expect.anything())
+        })
+
+        test('timeout is added to the request config', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            api.setRequestOptions({ timeout: 10000 })
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(externalGet).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ timeout: 10000, headers: expect.anything() }))
+        })
+
+        test('redirect policy is added to the request config; the shared client enforces it', async () => {
+            const redirectPolicy = jest.fn()
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            api.setRequestOptions({ redirectPolicy })
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(externalGet).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ redirectPolicy, headers: expect.anything() }))
+        })
+
+        test('the request error of the shared client is passed on', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            api.setRequestOptions({ redirectPolicy: () => false })
+            externalGet.mockRejectedValue(Object.assign(new Error('redirect not allowed'), { code: 'ERR_REDIRECT_NOT_ALLOWED' }))
+
+            await expect(api.getRouteDescriptions({ type: 'video' }, true)).rejects.toMatchObject({ code: 'ERR_REDIRECT_NOT_ALLOWED' })
+        })
+
+        test('no request options: the config is passed on unchanged', async () => {
+            api = new IncyclistRoutesApi('https://custom.routes.api')
+            externalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(externalGet).toHaveBeenCalledWith(expect.any(String), NO_CACHE)
+        })
+
+        test('request options are not applied to the Incyclist api', async () => {
+            api = new IncyclistRoutesApi()
+            api.setRequestOptions({ timeout: 10 })
+            internalGet.mockResolvedValue({ data: [] })
+
+            await api.getRouteDescriptions({ type: 'video' })
+
+            expect(internalGet).toHaveBeenCalledWith(expect.any(String), NO_CACHE)
         })
     })
 })

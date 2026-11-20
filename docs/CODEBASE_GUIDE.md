@@ -167,7 +167,7 @@ renders whatever it returns.
 
 ## Dialog front-end services
 
-The classes in `src/settings/display/*` (support, user, ride) are the front-end services for
+The classes in `src/settings/display/*` (support, user, ride, routeservers) are the front-end services for
 dialogs shown over a page. They expose display props and callbacks (`open()` / `close()` /
 `getDisplayProps()`) and never touch page state. Full pages use page services instead.
 Platform differences are derived inside the service from `getBindings().appInfo.getChannel()`.

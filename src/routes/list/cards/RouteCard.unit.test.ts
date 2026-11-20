@@ -464,6 +464,31 @@ describe('RouteCard preview handling', () => {
         });
     });
 
+    describe('deleteDownload', () => {
+
+        const setup = (videoUrl: string) => {
+            const card = createCard({ id: '1', hasVideo: true, videoUrl, isDownloaded: true } as RouteInfo) as any;
+            const unlink = jest.fn().mockResolvedValue(undefined);
+            getBindings().fs = { unlink, existsFile: jest.fn().mockResolvedValue(true) } as any;
+            card.resetDownload = jest.fn().mockResolvedValue(undefined);
+            return { card, unlink };
+        };
+
+        test.each([
+            ['file:///data/user/0/videos/a.mp4', '/data/user/0/videos/a.mp4'],
+            ['video:///Users/me/Movies/a.mp4', '/Users/me/Movies/a.mp4'],
+            ['file:///data/My%20Videos/a.mp4', '/data/My Videos/a.mp4'],
+            ['file:///C:/Videos/a%20b.mp4', 'C:/Videos/a b.mp4'],
+        ])('POSIX and Windows files are deleted with the path the binding expects: %s', async (url, path) => {
+            const { card, unlink } = setup(url);
+
+            await card.deleteDownload();
+
+            expect(unlink).toHaveBeenCalledWith(path);
+            expect(card.resetDownload).toHaveBeenCalled();
+        });
+    });
+
     describe('emitUpdate', () => {
 
         test('pushes the card\'s own display properties to its observer', () => {

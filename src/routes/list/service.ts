@@ -4,6 +4,7 @@ import { IncyclistService } from "../../base/service";
 import { Observer, Singleton } from "../../base/types";
 import { PromiseObserver } from "../../base/types/observer";
 import { RouteApiDetail } from "../base/api/types";
+import { fileUrlToPath } from "../base/parsers/utils";
 import { Route } from "../base/model/route";
 import { RouteInfo } from "../base/types";
 import { analyseElevationNoise, applySmoothing, isSmoothingEligible } from "../base/utils/smoothing";
@@ -26,6 +27,7 @@ import { useUserSettings } from "../../settings";
 import { Injectable } from "../../base/decorators";
 import { RouteSyncFactory } from "../sync/factory";
 import { sleep } from "../../utils/sleep";
+import { settleWithLimit } from "../../utils/settleWithLimit";
 import { RouteDetailsQueue } from "./detailsQueue";
 import { useAppsService } from "../../apps";
 import { useAppState } from "../../appstate";
@@ -39,9 +41,17 @@ import { useRouteLibraryScanner } from "../library/service";
 import { useIncyclistRoutesApi } from "../base/api/factory";
 import { pascalCase } from "../../utils";
 import { useFreeRideService } from "../free-ride";
+import { RouteServerValidationError } from "../servers/errors";
+import { checkRouteServer } from "../servers/probe";
+import { useRouteServerStatus } from "../servers/status";
+import { toSourceKey, toSourceLabel, validateRouteServerName, validateRouteServerUrl } from "../servers/validator";
+import { ROUTE_API as ROUTE_API_KEY, DEFAULT_DOMAIN } from "../base/api/consts";
+import type { RouteServerDownloadInfo, RouteServerNameResult, RouteServerProbeResult, RouteServerUrlResult } from "../servers/types";
 
 
 const SYNC_INTERVAL = 5* 60*1000
+// routes of a removed server that are deleted at the same time
+const DELETE_ROUTES_CONCURRENCY = 4
 
 /** keeps logged measurements readable - they are calibration input, not exact quantities */
 const round = (value:number, digits:number):number => {
@@ -296,6 +306,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             if (!this.filters) {
                 const settings = this.getUserSettings()
                 this.filters = settings.get('preferences.search.filter',undefined)
+                this.migrateSavedSourceFilter(this.filters)
 
                 const [C,U] = this.getUnitConverter().getUnitConversionShortcuts()
 
@@ -320,6 +331,17 @@ export class RouteListService  extends IncyclistService implements IRouteList {
 
         return this.filters
 
+    }
+
+    /** earlier versions saved an app as pascalCase(key) ('Intervals'), the filter now offers its display name ('Intervals.icu') */
+    private migrateSavedSourceFilter(filters?:SearchFilter) {
+        if (!filters?.routeSource)
+            return
+        const apps = this.getAppsService().getApps()
+        filters.routeSource = filters.routeSource.split('|').map( v=> {
+            const app = apps.find( a=>pascalCase(a.key)===v )
+            return app ? app.name : v
+        }).join('|')
     }
 
     protected searchAgain() {
@@ -560,17 +582,19 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         let contentTypes = []
         let routeTypes = []
         let routeSources = []
+        let routeSourceLabels = {}
 
         try {
             countries = this.getFilterCountries(filters);
             contentTypes = this.getFilterContentTypes(filters);
             routeTypes = this.getFilterRouteTypes(filters)
             routeSources = this.getFilterRouteSources(filters)
+            routeSourceLabels = this.getFilterRouteSourceLabels(filters)
         }
         catch (err) {
             this.logError(err,'getFilterOption')
         }
-        return {countries,contentTypes,routeTypes,routeSources}
+        return {countries,contentTypes,routeTypes,routeSources,routeSourceLabels}
     }
 
     onResize() {
@@ -1229,14 +1253,212 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return new Map(Object.entries(obj));
     }
 
-    addExternalApiProvider(key:string, url: string) {
-        this.getUserSettings().set(`routes.servers.${key}`,url)
+    /**
+     * Checks a name for a new route server against the allowlist and against reserved sources
+     * (Local, Incyclist, every app) and the servers that already exist.
+     */
+    validateExternalApiProviderName(name:string):RouteServerNameResult {
+        return validateRouteServerName(name, {
+            existingNames: Array.from(this.getExternalApiProviders()?.keys() ?? []),
+            reservedNames: this.getReservedSourceNames()
+        })
     }
+
+    /**
+     * Checks the address for a new route server
+     *
+     * @param url address as typed by the user
+     * @param props.allowsLocalHttp  whether `http://` is accepted for home-network hosts (platform capability)
+     */
+    validateExternalApiProviderUrl(url:string, props:{allowsLocalHttp?:boolean}={}):RouteServerUrlResult {
+        return validateRouteServerUrl(url, {
+            allowsLocalHttp: props.allowsLocalHttp,
+            existingServers: this.getExistingServers(),
+            builtInUrls: this.getBuiltInRouteApiUrls()
+        })
+    }
+
+    /**
+     * Checks that a candidate address is a route server, without saving it.
+     *
+     * @param url              address (as returned by validateExternalApiProviderUrl)
+     * @param httpFallbackUrl  `http://` variant to try once if `url` could not be reached (home network, no scheme typed)
+     */
+    async probeExternalApiProvider(url:string, httpFallbackUrl?:string):Promise<RouteServerProbeResult> {
+        return await checkRouteServer(url, httpFallbackUrl)
+    }
+
+    /**
+     * Adds a route server. Name and address are checked again against the same rules that the
+     * settings use, so invalid input never reaches the settings.
+     *
+     * The platform capability for home-network `http://` is deliberately not part of this check,
+     * only the format and home-network rules are.
+     *
+     * @param props.origin  where the user added it from (for the log)
+     * @param props.via     whether the address was picked from the list of known servers or typed (for the log)
+     * @throws RouteServerValidationError if name or address are not valid
+     * @returns the name and address as they were stored
+     */
+    addExternalApiProvider(key:string, url: string, props:{origin?:'settings'|'import', via?:'known'|'manual'}={}):{name:string, url:string} {
+        const name = this.validateExternalApiProviderName(key)
+        if (!name.valid)
+            throw new RouteServerValidationError('name', name.code, name.message)
+
+        const address = this.validateExternalApiProviderUrl(url, {allowsLocalHttp:true})
+        if (!address.valid)
+            throw new RouteServerValidationError('url', address.code, address.message)
+
+        this.getUserSettings().set(`routes.servers.${name.name}`,address.url)
+        this.getIncyclistRoutesApi().invalidate(name.name)
+        this.logEvent({message:'route server added', key:name.name, host:address.host, isLocal:address.isLocal, isUnencrypted:address.isUnencrypted, origin:props.origin, via:props.via})
+        return {name:name.name, url:address.url}
+    }
+
     deleteExternalApiProvider(key:string) {
         this.getUserSettings().set(`routes.servers.${key}`,null)
+        this.getIncyclistRoutesApi().invalidate(key)
+        this.getRouteServerStatus().remove(key)
+        this.logEvent({message:'route server removed', key})
+    }
+
+    /**
+     * Loads the routes of one route server right away (e.g. after it was added), so that they
+     * appear in the list without restarting the app.
+     *
+     * @returns resolves when the routes of the server have been processed
+     */
+    loadExternalApiProvider(key:string):Promise<void> {
+        return new Promise<void>( done => {
+            const observer = this.api.loadServer(key)
+            observer.on('route.added', this.addFromApi.bind(this))
+            observer.on('route.updated', this.update.bind(this))
+            observer.once('done', ()=>{ done() })
+            observer.once('stopped', ()=>{ done() })
+        })
+    }
+
+    /** Number of routes of a route server that are in the route list (deleted routes are not counted) */
+    getExternalApiProviderRouteCount(key:string):number {
+        return this.getRoutesOfServer(key).filter( r=>!r.description?.isDeleted ).length
+    }
+
+    /**
+     * Number of routes of a route server, and how many of these have a downloaded video (and how large these are)
+     */
+    async getExternalApiProviderDownloadInfo(key:string):Promise<RouteServerDownloadInfo> {
+        const routes = this.getRoutesOfServer(key).filter( r=>!r.description?.isDeleted )
+        const downloaded = routes.filter( r=>r.description?.isDownloaded )
+
+        let downloadedBytes: number|undefined = 0
+        for (const route of downloaded) {
+            const size = await this.getVideoFileSize(route)
+            if (size===undefined) {
+                downloadedBytes = undefined
+                break
+            }
+            downloadedBytes += size
+        }
+
+        return { routeCount:routes.length, downloadedCount:downloaded.length, downloadedBytes }
+    }
+
+    /**
+     * Deletes all routes of a route server from the route list and the repository, including their downloaded video files
+     *
+     * @returns the number of routes that were deleted and the number that could not be deleted
+     */
+    async deleteExternalApiProviderRoutes(key:string):Promise<{deleted:number, failed:number}> {
+        const routes = this.getRoutesOfServer(key)
+        const results = await settleWithLimit(routes, DELETE_ROUTES_CONCURRENCY, route => this.deleteRouteForServer(route))
+
+        let deleted = 0
+        let failed = 0
+        results.forEach( (res,idx) => {
+            if (res.status==='fulfilled') {
+                deleted++
+                return
+            }
+            failed++
+            this.logError(res.reason,'deleteExternalApiProviderRoutes',{server:key, id:routes[idx].description?.id})
+        })
+
+        this.logEvent({message:'route server routes removed', key, deleted, failed})
+        this.emitLists('updated',{log:true,source:'user'})
+        return {deleted, failed}
     }
 
     // ----- protected and private below this -------
+
+    protected getExistingServers():Record<string,string> {
+        return this.getUserSettings().getValue('routes.servers',null) ?? {}
+    }
+
+    /** names that can not be used for a route server: Local, Incyclist and every app (key and display name), connected or not */
+    protected getReservedSourceNames():Array<string> {
+        const apps = this.getAppsService().getApps()
+        return ['Local','Incyclist', ...apps.flatMap( a=>[a.key,a.name])]
+    }
+
+    protected getBuiltInRouteApiUrls():Array<string> {
+        const settings = this.getUserSettings()
+        const domain = settings.getValue('DOMAIN',DEFAULT_DOMAIN)
+        const urls = [`https://dlws.${domain}/api/v1/routes`]
+        const override = settings.getValue(ROUTE_API_KEY,undefined)
+        if (typeof override==='string')
+            urls.push(override)
+        return urls
+    }
+
+    protected getRoutesOfServer(key:string):Array<Route> {
+        const id = toSourceKey(key)
+        return (this.routes??[]).filter( r=> r.description?.apiServer && toSourceKey(r.description.apiServer)===id )
+    }
+
+    /** the path of the local video file of a route, in the form that the fs binding expects (decoded, absolute POSIX paths keep their leading slash) */
+    protected getVideoFilePath(route:Route):string|undefined {
+        return fileUrlToPath(route.description?.videoUrl)
+    }
+
+    protected async getVideoFileSize(route:Route):Promise<number|undefined> {
+        const path = this.getVideoFilePath(route)
+        if (!path)
+            return undefined
+
+        try {
+            const bindings = this.getBindings()
+            const stat = await bindings?.fs?.stat?.(path)
+            if (typeof stat?.size==='number')
+                return stat.size
+
+            const availability = await bindings?.fileAccess?.getAvailability?.(path)
+            return availability?.sizeBytes
+        }
+        catch {
+            return undefined
+        }
+    }
+
+    protected async deleteRouteForServer(route:Route):Promise<void> {
+        const id = route.description.id
+        const card = this.findCard(id)?.card
+
+        if (card) {
+            if (route.description.isDownloaded)
+                await card.deleteDownload()
+            await card.delete({enforced:true,source:'user'}).wait()
+            return
+        }
+
+        // route without a card (not shown in any list): remove it from the repository directly
+        if (route.description.isDownloaded) {
+            const path = this.getVideoFilePath(route)
+            if (path)
+                await this.getBindings()?.fs?.unlink(path)
+        }
+        await this.db.delete(route)
+        this.forgetRoute(id)
+    }
 
     private applyRouteTypeFilter(filters: SearchFilter, routes: SummaryCardDisplayProps[]) {
         if (filters.routeType) {
@@ -1251,13 +1473,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if (filters.routeSource) {
             const local = filters.routeSource==='Local'
             const internal = filters.routeSource==='Incyclist';
-            const sources = new Set(filters.routeSource.split('|').map(pascalCase))
+            const sources = new Set(filters.routeSource.split('|').map( v=>this.resolveSourceKey(v) ))
             //const sources = [ ...this.getAllExternalRouteSources(), ...this.getAllAppSources()]
             
             routes = routes.filter(r => 
                 (r.source===undefined && !r.isLocal && internal) ||  
                 (r.source===undefined && r.isLocal && local) ||                  
-                (r.source && !internal && sources.has(pascalCase(r.source)))
+                (r.source && !internal && sources.has(toSourceKey(r.source)))
             );
         }
         return routes;
@@ -1564,38 +1786,111 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         return options
     }
 
+    /**
+     * Provides the options of the Source filter: `Local` and `Incyclist` first, then every source that is present
+     * on the routes passing the other filters (apps, route servers - whether configured or not), sorted alphabetically by label.
+     *
+     * The returned strings are the option values (what is passed as `routeSource` to the filter). Sources are
+     * identified by `pascalCase(source)`. To show an option, use the labels (see getFilterRouteSourceLabels()),
+     * which show a route server with the name that the user gave it.
+     */
     protected getFilterRouteSources(filters:SearchFilter={}):Array<string> {
-        const options = ['Local','Incyclist']
+        return this.getFilterRouteSourceOptions(filters).map(o=>o.value)
+    }
 
-        const apps = this.getAllAppSources()
-        const external = this.getAllExternalRouteSources()
+    /**
+     * Provides the text to show for each option of the Source filter.
+     *
+     * Apps are shown with their display name. A route server is shown with the name that the user gave it
+     * (`Ebeling Hoppe`): the configured server whose name matches the source, or the server name that its routes carry.
+     * The value of the option (the key of the returned object) stays the same, so filters keep working.
+     *
+     * @returns the label for every option value that getFilterOptions() offers in `routeSources`
+     */
+    getFilterRouteSourceLabels(filters:SearchFilter={}):Record<string,string> {
+        const labels:Record<string,string> = {}
+        this.getFilterRouteSourceOptions(filters).forEach( o=> { labels[o.value] = o.label })
+        return labels
+    }
 
+    /**
+     * The text to show for the source of a route (the same text that getFilterRouteSourceLabels() offers for its filter option):
+     * - no source: `undefined`
+     * - app (Strava, Intervals.icu, ...): the display name of the app
+     * - route server: the name the user gave the server (a configured server with the same source key wins, then the most frequent
+     *   server name among the routes of that source, then the `apiServer` of this route)
+     * - anything else: the option value (the pascal-cased source)
+     */
+    getRouteSourceLabel(description:{source?:string, apiServer?:string}):string|undefined {
+        return this.getSourceOption(description?.source, description?.apiServer, this.getAppNamesByKey(), this.getConfiguredServerNames())?.label
+    }
+
+    private getConfiguredServerNames():Array<string> {
+        return Array.from(this.getExternalApiProviders()?.keys() ?? [])
+    }
+
+    /** value and label of a source: the single place that decides how a source is named, for filter options and route badges */
+    private getSourceOption(source:string|undefined, apiServer:string|undefined, appNames:Map<string,string>, configured:Array<string>):{value:string,label:string}|undefined {
+        const key = toSourceKey(source)
+        if (!key)
+            return undefined
+
+        const appName = appNames.get(key)
+        if (appName)
+            return {value:appName, label:appName}
+
+        const value = toSourceLabel(source)
+        const server = configured.find( k=>toSourceKey(k)===key ) ?? this.getMostFrequentServerName(key) ?? apiServer
+        return {value, label: server || value}
+    }
+
+    /** the spelling of a server name that most routes of that source carry (ties: alphabetical), so the label is stable */
+    private getMostFrequentServerName(key:string):string|undefined {
+        const counts = new Map<string,number>()
+        for (const r of this.routes ?? []) {
+            const name = r.description?.apiServer
+            if (name && toSourceKey(r.description.source)===key)
+                counts.set(name, (counts.get(name) ?? 0)+1)
+        }
+        const sorted = Array.from(counts.entries()).sort( (a,b)=> b[1]-a[1] || a[0].localeCompare(b[0]) )
+        return sorted[0]?.[0]
+    }
+
+    protected getFilterRouteSourceOptions(filters:SearchFilter={}):Array<{value:string,label:string}> {
+        const fixed = ['Local','Incyclist']
+        const appNames = this.getAppNamesByKey()
+        const configured = this.getConfiguredServerNames()
+
+        const found = new Map<string,{value:string,label:string}>()
         this.getRoutesForFilterOptions(filters,'routeSource').forEach(r=> {
-            const source = pascalCase(r.source)
-            if (!source || options.includes(source))
+            const key = toSourceKey(r.source)
+            if (!key || fixed.some( f=>toSourceKey(f)===key) || found.has(key))
                 return;
 
-
-            if (apps.includes(source) || external.includes(source) ){
-                options.push(source)
-            }
-
+            found.set(key, this.getSourceOption(r.source, r.apiServer, appNames, configured))
         })
 
-        return options
+        const sources = Array.from(found.values()).sort( (a,b)=> a.label.toLowerCase().localeCompare(b.label.toLowerCase()) )
+        return [...fixed.map(f=>({value:f,label:f})), ...sources]
     }
 
     private getAllAppSources():Array<string> {
         const apps= this.getAppsService().getAvailableServices('RouteDownload')??[]
         return apps.map(pascalCase)
-
     }
-    private getAllExternalRouteSources():Array<string> {
-        const external = this.getUserSettings().getValue('routes.servers',null)
-        if (!external)
-            return []
-        const keys = Object.keys(external)??[]
-        return keys.map(pascalCase)
+
+    /** display name of every app by its source key */
+    private getAppNamesByKey():Map<string,string> {
+        const apps = this.getAppsService().getApps()
+        return new Map( apps.map( a=>[toSourceKey(a.key), a.name] ) )
+    }
+
+    /** the source filter offers apps by their display name, routes carry the app key */
+    private resolveSourceKey(value:string):string {
+        const apps = this.getAppsService().getApps()
+        const key = toSourceKey(value)
+        const app = apps.find( a=>toSourceKey(a.name)===key )
+        return app ? toSourceKey(app.key) : key
     }
 
 
@@ -2499,6 +2794,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable 
     protected getIncyclistRoutesApi() {
         return useIncyclistRoutesApi()
+    }
+
+    @Injectable
+    protected getRouteServerStatus() {
+        return useRouteServerStatus()
     }
 
     @Injectable

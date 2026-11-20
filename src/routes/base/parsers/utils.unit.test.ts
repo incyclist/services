@@ -1,6 +1,6 @@
 import path from "path"
 import { FileInfo, getBindings } from "../../../api"
-import { buildVideoUrl, getReferencedFileInfo } from "./utils"
+import { buildFileUrl, buildVideoUrl, fileUrlToPath, getReferencedFileInfo } from "./utils"
 
 describe('Incyclist Parser Utils',()=>{
 
@@ -265,5 +265,45 @@ describe('Incyclist Parser Utils',()=>{
             })
         })
 
+    })
+})
+
+describe('fileUrlToPath', () => {
+    test.each([
+        ['file:///data/user/0/videos/a.mp4', '/data/user/0/videos/a.mp4'],
+        ['video:///home/me/videos/a.mp4', '/home/me/videos/a.mp4'],
+        ['file:///private/var/mobile/a.mp4', '/private/var/mobile/a.mp4'],
+    ])('POSIX path keeps its leading slash: %s', (url, expected) => {
+        expect(fileUrlToPath(url)).toBe(expected)
+    })
+
+    test.each([
+        ['file:///C:/Users/me/a.mp4', 'C:/Users/me/a.mp4'],
+        ['video:///D:\\Videos\\a.mp4', 'D:\\Videos\\a.mp4'],
+    ])('Windows path has no slash before the drive letter: %s', (url, expected) => {
+        expect(fileUrlToPath(url)).toBe(expected)
+    })
+
+    test('percent-encoding is decoded', () => {
+        expect(fileUrlToPath('file:///data/My%20Videos/Z%C3%BCrich%20%2350.mp4')).toBe('/data/My Videos/Zürich #50.mp4')
+        expect(fileUrlToPath('file:///C:/My%20Videos/a.mp4')).toBe('C:/My Videos/a.mp4')
+    })
+
+    test('invalid encoding is left as it is', () => {
+        expect(fileUrlToPath('file:///data/100%.mp4')).toBe('/data/100%.mp4')
+    })
+
+    test('extra leading slash (known malformation) is collapsed', () => {
+        expect(fileUrlToPath('file:////data/a.mp4')).toBe('/data/a.mp4')
+        expect(fileUrlToPath('video:////C:/a.mp4')).toBe('C:/a.mp4')
+    })
+
+    test('round trip with buildFileUrl', () => {
+        expect(fileUrlToPath(buildFileUrl('/data/My Videos/a.mp4'))).toBe('/data/My Videos/a.mp4')
+        expect(fileUrlToPath(buildFileUrl('C:\\Videos\\a b.mp4'))).toBe('C:\\Videos\\a b.mp4')
+    })
+
+    test.each([undefined, '', 'https://example.com/a.mp4', 'content://media/a.mp4', 'file://relative/a.mp4', 'video://./a.mp4'])('no local file url: %s', (url) => {
+        expect(fileUrlToPath(url)).toBeUndefined()
     })
 })

@@ -23,6 +23,8 @@ export interface IFileSystem {
     createWriteStream(...args)
     createReadStream(...args)
     unlink(path)
+    /** optional: size of a file in bytes (used to report the size of downloaded videos) */
+    stat?(path:string):Promise<{size:number}>
 
     access(path:string,mode?:number):Promise<void>
 

@@ -1,0 +1,859 @@
+import { getBindings } from '../../../api'
+import { Injectable, Singleton } from '../../../base/decorators'
+import { IncyclistService } from '../../../base/service'
+import { Observer } from '../../../base/types'
+import type { IObserver } from '../../../types'
+import { useRouteList } from '../../../routes/list/service'
+import { getKnownRouteServers } from '../../../routes/servers/known'
+import { SERVER_MESSAGES as MSG } from '../../../routes/servers/messages'
+import { useRouteServerStatus } from '../../../routes/servers/status'
+import type { KnownRouteServer, RouteServerProbeResult, RouteServerUrlResult } from '../../../routes/servers/types'
+import { RouteServerValidationError } from '../../../routes/servers/errors'
+import { normalizeRouteServerUrl, validateRouteServerUrl } from '../../../routes/servers/validator'
+import { formatSize, suggestServerName } from './utils'
+import type {
+    KnownServerItem, ManualEntryProps, ManualEntryState, RemoveServerDialogProps, RouteServerItem,
+    RouteServersClosedEvent, RouteServersCloseReason, RouteServersOrigin, RouteServersSettingsDisplayProps, RouteServersView
+} from './types'
+
+const SUCCESS_DELAY_MS = 1000
+
+// codes that are worth showing while the user is still typing the address. Others ("not a web address",
+// ...) would only be noise for an incomplete address and are reported when the address is submitted.
+const LIVE_URL_ERRORS = new Set(['whitespace', 'credentials', 'query', 'http-internet', 'http-not-supported', 'duplicate', 'built-in'])
+
+interface PendingServer {
+    url: string
+    routeCount: number
+}
+
+interface KnownState {
+    state: 'checking' | 'error'
+    error?: string
+}
+
+/**
+ * Front-end service of the "Route Servers" dialog (Settings tab and Import dialog), shared by all platforms:
+ * the list of servers, the add view (known servers and manual entry) and the remove dialog.
+ *
+ * The service decides what is shown (display props, states, texts). The apps decide how it is shown.
+ * Platform differences are derived from the app info bindings.
+ *
+ * It is a dialog front-end service and never touches the page bookkeeping (no IncyclistPageService): the dialog
+ * is shown over another page, which must keep receiving pause/resume.
+ * The contract (display props and events) is documented in `types.ts`.
+ */
+@Singleton
+export class RouteServersSettingsDisplayService extends IncyclistService {
+
+    protected observer?: Observer
+    protected origin: RouteServersOrigin = 'settings'
+    protected view: RouteServersView = 'list'
+
+    protected manualUrl = ''
+    protected manualName = ''
+    protected nameTouched = false
+    protected suggestedName?: string
+    protected manualState: ManualEntryState = 'idle'
+    protected urlError?: string
+    protected nameError?: string
+    protected message?: string
+    protected resolvedUrl?: string
+    protected localNote?: string
+    protected pending?: PendingServer
+    // the address needs to be confirmed with 'add()' (two-step entry, or switched to http)
+    protected reviewRequired = false
+
+    protected knownStates: Map<string, KnownState> = new Map()
+    protected removeDialog?: RemoveServerDialogProps
+    protected removeKey?: string
+
+    // incremented whenever a running manual check must not change the state any more (back, close, new input)
+    protected checkToken = 0
+    // incremented whenever the view is left (back, close, new add view): known servers that are being checked are dropped
+    protected viewToken = 0
+    protected successTimer?: ReturnType<typeof setTimeout>
+    protected onStatusChanged = this.emitChanged.bind(this)
+
+    constructor() {
+        super('RouteServersSettings')
+    }
+
+    // ----- platform differences -----
+
+    /**
+     * whether `http://` is accepted for servers on the home network on this platform. Desktop and web: yes.
+     * Mobile: allowlist, only a platform that is positively iOS (Android blocks cleartext traffic, for now).
+     * On any other platform, or if the OS is unknown, `http://` is refused.
+     */
+    protected get allowsLocalHttp(): boolean {
+        if (this.isDesktop())
+            return true
+        const platform = this.getBindings()?.appInfo?.getOS?.()?.platform
+        return typeof platform === 'string' && platform.toLowerCase() === 'ios'
+    }
+
+    /**
+     * an additional hint below an address that could not be reached. Phones and tablets often can not resolve
+     * names on the home network, so they get a hint to use the IP address instead
+     */
+    protected getUnreachableHint(isHomeNetwork: boolean): string | undefined {
+        return !this.isDesktop() && isHomeNetwork ? MSG.probeLocalHint : undefined
+    }
+
+    protected isDesktop(): boolean {
+        const channel = this.getBindings()?.appInfo?.getChannel?.()
+        return channel === 'desktop' || channel === 'web'
+    }
+
+    // ----- lifecycle -----
+
+    /**
+     * Opens the dialog. The returned observer emits `changed` whenever the display props have changed.
+     *
+     * @param origin 'settings': opened from Settings, starts with the list. 'import': opened from the Import Routes dialog, starts with the add view
+     */
+    open(origin: RouteServersOrigin = 'settings'): IObserver {
+        try {
+            if (this.observer)
+                this.close('cancel')
+
+            this.resetState()
+            this.origin = origin
+            this.view = origin === 'import' ? 'add' : 'list'
+            this.observer = new Observer()
+            this.getRouteServerStatus().on('changed', this.onStatusChanged)
+
+            this.logEvent({ message: 'route servers settings opened', origin })
+            return this.observer
+        }
+        catch (err) {
+            this.logError(err, 'open')
+        }
+    }
+
+    /**
+     * Closes the dialog. The observer emits `closed` with the reason.
+     *
+     * @param reason 'cancel' (default): closed without a result. The service itself closes with 'back' and 'done'
+     */
+    close(reason: RouteServersCloseReason = 'cancel') {
+        try {
+            this.checkToken++
+            this.viewToken++
+            this.clearSuccessTimer()
+            this.getRouteServerStatus().off('changed', this.onStatusChanged)
+
+            const observer = this.observer
+            delete this.observer
+            observer?.emit('closed', { reason } satisfies RouteServersClosedEvent)
+            observer?.stop()
+            this.resetState()
+        }
+        catch (err) {
+            this.logError(err, 'close')
+        }
+    }
+
+    getObserver(): IObserver | undefined {
+        return this.observer
+    }
+
+    // ----- navigation -----
+
+    showAdd() {
+        this.checkToken++
+        this.viewToken++
+        this.clearSuccessTimer()
+        this.resetManual()
+        this.knownStates.clear()
+        this.view = 'add'
+        this.emitChanged()
+    }
+
+    /** phone: switches to the second step of the add view (manual entry) */
+    showManualEntry() {
+        this.view = 'add-manual'
+        this.emitChanged()
+    }
+
+    back() {
+        this.checkToken++
+        this.viewToken++
+        this.clearSuccessTimer()
+
+        if (this.view === 'add-manual') {
+            this.view = 'add'
+        }
+        else if (this.view === 'add' && this.origin === 'settings') {
+            this.view = 'list'
+        }
+        else {
+            this.close('back')
+            return
+        }
+        this.resetManual()
+        this.emitChanged()
+    }
+
+    // ----- known servers -----
+
+    addKnown(id: string) {
+        const entry = this.getKnownServers().find(k => k.id === id)
+        if (!entry || this.isKnownAdded(entry) || this.knownStates.get(id)?.state === 'checking')
+            return
+
+        this.knownStates.set(id, { state: 'checking' })
+        this.emitChanged()
+
+        this.checkAndAddKnown(entry)
+            .catch(err => { this.logError(err, 'addKnown', { id }) })
+    }
+
+    retryKnown(id: string) {
+        this.addKnown(id)
+    }
+
+    // ----- manual entry -----
+
+    setManualUrl(url: string) {
+        if (this.manualState === 'checking')
+            return
+
+        this.manualUrl = url ?? ''
+        this.resetManualResult()
+
+        const res = this.validateManualUrl()
+        if (res.valid) {
+            this.localNote = this.getLocalNote(res)
+        }
+        else if (res.message && LIVE_URL_ERRORS.has(res.code)) {
+            this.urlError = res.message
+        }
+
+        this.updateSuggestion(res.valid ? res.host : undefined)
+        this.validateNameLive()
+        this.emitChanged()
+    }
+
+    setManualName(name: string) {
+        if (this.manualState === 'checking')
+            return
+
+        this.manualName = name ?? ''
+        this.nameTouched = true
+        if (this.manualState === 'error')
+            this.manualState = 'idle'
+        this.validateNameLive()
+        this.emitChanged()
+    }
+
+    /** one-step entry: checks the address and, if the name is valid, saves the server */
+    checkAndAdd() {
+        this.startCheck(false)
+    }
+
+    /** two-step entry (phone): checks the address and waits for `add()` */
+    check() {
+        this.startCheck(true)
+    }
+
+    /** saves the server after a successful check (state 'checked') */
+    add() {
+        if (this.manualState !== 'checked' || !this.pending)
+            return
+
+        if (!this.isNameValid()) {
+            this.validateNameLive(true)
+            this.emitChanged()
+            return
+        }
+        this.saveManual()
+    }
+
+    /** the server works, but has no routes: the user wants to add it anyway */
+    confirmAddEmpty() {
+        if (this.manualState !== 'confirm-empty' || !this.pending)
+            return
+
+        if (this.reviewRequired || !this.isNameValid()) {
+            this.manualState = 'checked'
+            this.message = MSG.found(0)
+            this.emitChanged()
+            return
+        }
+        this.saveManual()
+    }
+
+    /** the server works, but has no routes, and the user does not want it: back to the entry, address and name are kept */
+    cancelAddEmpty() {
+        if (this.manualState !== 'confirm-empty')
+            return
+
+        this.resetManualResult()
+        this.localNote = this.getLocalNote(this.validateManualUrl())
+        this.validateNameLive()
+        this.emitChanged()
+    }
+
+    // ----- remove -----
+
+    requestRemove(key: string) {
+        const servers = this.getRouteList().getExternalApiProviders()
+        if (!servers?.has(key))
+            return
+
+        const routeCount = this.getRouteList().getExternalApiProviderRouteCount(key)
+        this.removeKey = key
+        this.removeDialog = this.buildRemoveDialog(key, routeCount, false)
+        this.emitChanged()
+
+        this.loadDownloadInfo(key, routeCount)
+            .catch(err => { this.logError(err, 'requestRemove', { key }) })
+    }
+
+    setRemoveRoutes(remove: boolean) {
+        if (!this.removeDialog)
+            return
+        const { key, routeCount, downloadedCount, downloadedSize } = this.removeDialog
+        this.removeDialog = this.buildRemoveDialog(key, routeCount, remove, downloadedCount, downloadedSize)
+        this.emitChanged()
+    }
+
+    confirmRemove() {
+        const dialog = this.removeDialog
+        if (!dialog)
+            return
+
+        this.removeServer(dialog)
+            .catch(err => { this.logError(err, 'confirmRemove', { key: dialog.key }) })
+    }
+
+    cancelRemove() {
+        delete this.removeDialog
+        delete this.removeKey
+        this.emitChanged()
+    }
+
+    // ----- display props -----
+
+    /** Builds the display props from scratch, so they always reflect the current state of the route list */
+    getDisplayProps(): RouteServersSettingsDisplayProps {
+        const servers = this.buildServerItems()
+        const known = this.buildKnownItems()
+        const isEmpty = servers.length === 1   // only the built-in server
+
+        const props: RouteServersSettingsDisplayProps = {
+            view: this.view,
+            origin: this.origin,
+            servers,
+            isEmpty,
+            known,
+            manual: this.buildManualProps(),
+            trustNote: MSG.trustNote,
+        }
+
+        if (isEmpty)
+            props.emptyState = { title: 'Get more routes from other providers', text: 'Some riders and groups host their own routes, mostly videos. Add their route server and its routes appear in your route list automatically.' }
+        if (known.length > 0)
+            props.knownNote = MSG.knownNote
+        if (this.removeDialog)
+            props.removeDialog = { ...this.removeDialog }
+        return props
+    }
+
+    // ----- protected helpers: list -----
+
+    protected buildServerItems(): Array<RouteServerItem> {
+        const items: Array<RouteServerItem> = [{
+            key: 'Incyclist', name: 'Incyclist', isBuiltIn: true, status: 'ok',
+            statusText: MSG.statusBuiltIn, canRemove: false
+        }]
+
+        const providers = this.getRouteList().getExternalApiProviders()
+        if (!providers)
+            return items
+
+        const names = Array.from(providers.keys()).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+        names.forEach(name => { items.push(this.buildServerItem(name, providers.get(name))) })
+        return items
+    }
+
+    protected buildServerItem(name: string, url: string): RouteServerItem {
+        const list = this.getRouteList()
+        const statusStore = this.getRouteServerStatus()
+
+        const status = statusStore.getStatus(name)
+        // the number of routes of this server that are in the route list. Routes that the server also
+        // offers, but that are already known from another source, are not counted
+        const routeCount = list.getExternalApiProviderRouteCount(name)
+
+        const item: RouteServerItem = {
+            key: name, name, isBuiltIn: false, status, routeCount,
+            statusText: this.getStatusText(status, routeCount), canRemove: true
+        }
+
+        // the entry itself is part of the configuration, so only the format rules are applied here
+        // (a clash with another server is no reason to call an entry "outside the app")
+        const address = validateRouteServerUrl(url, { allowsLocalHttp: this.allowsLocalHttp })
+        item.host = this.getHost(url)
+
+        if (address.valid) {
+            item.isLocal = address.isLocal
+            item.isUnencrypted = address.isUnencrypted
+        }
+        if (address.valid && address.isLocal)
+            item.tag = address.isUnencrypted ? 'Local · not encrypted' : 'Local'
+
+        if (!address.valid || !this.isNameAcceptable(name)) {
+            item.addedOutsideApp = true
+            item.note = 'Added outside the app'
+        }
+        return item
+    }
+
+    protected validateManualUrl() {
+        return this.getRouteList().validateExternalApiProviderUrl(this.manualUrl, { allowsLocalHttp: this.allowsLocalHttp })
+    }
+
+    /** the note for an address that was typed with `http://` */
+    protected getLocalNote(res: RouteServerUrlResult): string | undefined {
+        const isHttpTyped = this.manualUrl.trim().toLowerCase().startsWith('http://')
+        return res.valid && isHttpTyped && res.isUnencrypted ? MSG.localNote : undefined
+    }
+
+    protected isNameAcceptable(name: string): boolean {
+        const res = this.getRouteList().validateExternalApiProviderName(name)
+        return res.valid || res.code === 'duplicate'
+    }
+
+    protected getHost(url: string): string {
+        try {
+            return new URL(url).host
+        }
+        catch {
+            return url
+        }
+    }
+
+    protected getStatusText(status: RouteServerItem['status'], count: number): string {
+        switch (status) {
+            case 'loading': return MSG.statusChecking
+            case 'unreachable': return MSG.statusUnreachable
+            case 'empty': return MSG.statusNoRoutes
+            default: return count > 0 ? MSG.routes(count) : MSG.statusNoRoutes
+        }
+    }
+
+    // ----- protected helpers: known servers -----
+
+    protected buildKnownItems(): Array<KnownServerItem> {
+        return this.getKnownServers().map(entry => {
+            const item: KnownServerItem = { id: entry.id, name: entry.name, description: entry.description, state: 'available' }
+            if (entry.operator)
+                item.operator = entry.operator
+
+            const added = this.findAddedName(entry)
+            const state = this.knownStates.get(entry.id)
+            if (added) {
+                item.state = 'added'
+                const count = this.getRouteList().getExternalApiProviderRouteCount(added)
+                if (count > 0)
+                    item.routeCount = count
+                item.statusText = MSG.knownAdded(count)
+            }
+            else if (state) {
+                item.state = state.state
+                if (state.state === 'checking')
+                    item.statusText = MSG.statusChecking
+                if (state.error)
+                    item.error = state.error
+            }
+            return item
+        })
+    }
+
+    /** name under which the server of a known entry is configured (matched by normalised url, not by name) */
+    protected findAddedName(entry: KnownRouteServer): string | undefined {
+        const providers = this.getRouteList().getExternalApiProviders()
+        if (!providers)
+            return undefined
+
+        const target = normalizeRouteServerUrl(entry.url)
+        return Array.from(providers.entries()).find(([, url]) => normalizeRouteServerUrl(url) === target)?.[0]
+    }
+
+    protected isKnownAdded(entry: KnownRouteServer): boolean {
+        return this.findAddedName(entry) !== undefined
+    }
+
+    protected async checkAndAddKnown(entry: KnownRouteServer): Promise<void> {
+        const token = this.viewToken
+        const list = this.getRouteList()
+
+        const name = list.validateExternalApiProviderName(entry.name)
+        if (!name.valid) {
+            this.setKnownError(entry.id, name.message)
+            return
+        }
+        const address = list.validateExternalApiProviderUrl(entry.url, { allowsLocalHttp: false })
+        if (!address.valid) {
+            this.setKnownError(entry.id, address.message ?? MSG.urlNotAUrl)
+            return
+        }
+
+        const probe = await list.probeExternalApiProvider(address.url)
+        if (token !== this.viewToken)
+            return
+        if (!probe.ok) {
+            this.setKnownError(entry.id, probe.message)
+            return
+        }
+
+        try {
+            const stored = list.addExternalApiProvider(name.name, address.url, { origin: this.origin, via: 'known' })
+            this.knownStates.delete(entry.id)
+            this.startLoading(stored.name)
+        }
+        catch (err) {
+            this.setKnownError(entry.id, this.getErrorMessage(err))
+            return
+        }
+
+        // from the Import dialog the dialog view is done once the server was added, like after a manual add.
+        // From the settings the view stays where it is
+        if (this.origin === 'import')
+            this.scheduleReturn()
+        this.emitChanged()
+    }
+
+    protected setKnownError(id: string, error: string) {
+        this.knownStates.set(id, { state: 'error', error })
+        this.logEvent({ message: 'known route server not added', id, error })
+        this.emitChanged()
+    }
+
+    // ----- protected helpers: manual entry -----
+
+    protected startCheck(twoStep: boolean) {
+        if (this.manualState === 'checking')
+            return
+
+        this.runCheck(twoStep)
+            .catch(err => {
+                this.logError(err, 'check')
+                this.manualState = 'error'
+                this.urlError = MSG.probeUnreachable
+                this.emitChanged()
+            })
+    }
+
+    protected async runCheck(twoStep: boolean): Promise<void> {
+        const list = this.getRouteList()
+        this.resetManualResult()
+
+        const address = list.validateExternalApiProviderUrl(this.manualUrl, { allowsLocalHttp: this.allowsLocalHttp })
+        if (!address.valid) {
+            this.urlError = address.message
+            this.manualState = address.message ? 'error' : 'idle'
+            this.emitChanged()
+            return
+        }
+        if (!twoStep && !this.isNameValid()) {
+            this.validateNameLive(true)
+            this.manualState = 'error'
+            this.emitChanged()
+            return
+        }
+
+        const token = ++this.checkToken
+        this.manualState = 'checking'
+        this.emitChanged()
+
+        const probe = await list.probeExternalApiProvider(address.url, address.httpFallbackUrl)
+        if (token !== this.checkToken)
+            return
+
+        if (!probe.ok) {
+            this.onProbeFailed(probe, address.isLocal)
+            return
+        }
+        this.onProbeSucceeded(probe, twoStep)
+    }
+
+    protected onProbeFailed(probe: RouteServerProbeResult, isHomeNetwork: boolean) {
+        const hint = probe.code === 'unreachable' ? this.getUnreachableHint(isHomeNetwork) : undefined
+        this.urlError = hint ? `${probe.message} ${hint}` : probe.message
+        this.manualState = 'error'
+        this.emitChanged()
+    }
+
+    protected onProbeSucceeded(probe: RouteServerProbeResult, twoStep: boolean) {
+        const url = probe.url
+        this.pending = { url, routeCount: probe.routeCount }
+        this.reviewRequired = twoStep || probe.switchedToHttp === true
+        this.resolvedUrl = url
+        if (url.startsWith('http:'))
+            this.localNote = MSG.localNoteShort
+
+        // the name is suggested again, so the user sees it before confirming (two-step entry)
+        this.updateSuggestion(this.getHost(url))
+
+        if (probe.routeCount === 0) {
+            this.manualState = 'confirm-empty'
+            this.message = MSG.emptyConfirm
+        }
+        else if (this.reviewRequired || !this.isNameValid()) {
+            this.manualState = 'checked'
+            this.message = MSG.found(probe.routeCount)
+        }
+        else {
+            this.saveManual()
+            return
+        }
+        this.emitChanged()
+    }
+
+    protected saveManual() {
+        const pending = this.pending
+        if (!pending)
+            return
+
+        try {
+            const stored = this.getRouteList().addExternalApiProvider(this.manualName, pending.url, { origin: this.origin, via: 'manual' })
+            this.manualState = 'success'
+            this.message = MSG.found(pending.routeCount)
+            delete this.urlError
+            this.startLoading(stored.name)
+            this.scheduleReturn()
+        }
+        catch (err) {
+            this.onSaveFailed(err)
+        }
+        this.emitChanged()
+    }
+
+    protected onSaveFailed(err: unknown) {
+        this.manualState = 'error'
+        if (err instanceof RouteServerValidationError && err.field === 'name') {
+            this.nameError = err.message
+            return
+        }
+        this.urlError = this.getErrorMessage(err)
+    }
+
+    /** after a successful add the confirmation is shown for a moment, then the view moves on */
+    protected scheduleReturn() {
+        this.clearSuccessTimer()
+        const token = this.viewToken
+        this.successTimer = setTimeout(() => {
+            delete this.successTimer
+            if (token !== this.viewToken)
+                return
+            if (this.origin === 'import') {
+                this.close('done')
+                return
+            }
+            this.view = 'list'
+            this.resetManual()
+            this.emitChanged()
+        }, SUCCESS_DELAY_MS)
+    }
+
+    protected updateSuggestion(host?: string) {
+        this.suggestedName = host ? this.validSuggestion(suggestServerName(host)) : undefined
+        if (!this.nameTouched)
+            this.manualName = this.suggestedName ?? ''
+    }
+
+    /** a suggestion that would fail the name rules is not offered */
+    protected validSuggestion(name?: string): string | undefined {
+        if (!name)
+            return undefined
+        return this.getRouteList().validateExternalApiProviderName(name).valid ? name : undefined
+    }
+
+    protected isNameValid(): boolean {
+        return this.getRouteList().validateExternalApiProviderName(this.manualName).valid
+    }
+
+    /**
+     * Updates the name error. An empty name is only reported once the user has typed in the field (or asked for it)
+     */
+    protected validateNameLive(force = false) {
+        delete this.nameError
+        const res = this.getRouteList().validateExternalApiProviderName(this.manualName)
+        if (res.valid)
+            return
+        if (res.code === 'empty' && !(this.nameTouched || force))
+            return
+        this.nameError = res.message
+    }
+
+    protected buildManualProps(): ManualEntryProps {
+        const addressFilled = this.manualUrl.trim().length > 0
+        const nameValid = this.isNameValid()
+        const busy = this.manualState === 'checking' || this.manualState === 'success'
+
+        const props: ManualEntryProps = {
+            url: this.manualUrl,
+            name: this.manualName,
+            nameTouched: this.nameTouched,
+            state: this.manualState,
+            canSubmit: this.manualState === 'checked' ? nameValid : (addressFilled && nameValid && !busy),
+            canCheck: addressFilled && !busy,
+        }
+        if (this.suggestedName)
+            props.suggestedName = this.suggestedName
+        if (this.resolvedUrl)
+            props.resolvedUrl = this.resolvedUrl
+        if (this.localNote)
+            props.localNote = this.localNote
+        if (this.urlError)
+            props.urlError = this.urlError
+        if (this.nameError)
+            props.nameError = this.nameError
+        if (this.message)
+            props.message = this.message
+        return props
+    }
+
+    // ----- protected helpers: remove -----
+
+    protected buildRemoveDialog(key: string, routeCount: number, removeRoutes: boolean, downloadedCount?: number, downloadedSize?: string): RemoveServerDialogProps {
+        const dialog: RemoveServerDialogProps = {
+            key, name: key, routeCount, removeRoutes,
+            title: `Remove "${key}"?`,
+            confirmLabel: routeCount > 0 ? 'Remove server' : 'Remove',
+        }
+        if (downloadedCount)
+            dialog.downloadedCount = downloadedCount
+        if (downloadedSize)
+            dialog.downloadedSize = downloadedSize
+
+        if (routeCount > 0) {
+            dialog.text = `You have ${MSG.routes(routeCount)} from this server in your route list.`
+            dialog.keepLabel = 'Keep these routes'
+            dialog.removeRoutesLabel = this.getRemoveRoutesLabel(downloadedCount, downloadedSize)
+        }
+        return dialog
+    }
+
+    protected getRemoveRoutesLabel(downloadedCount?: number, downloadedSize?: string): string {
+        if (!downloadedCount)
+            return 'Remove these routes too'
+
+        const videos = downloadedCount === 1 ? 'video' : 'videos'
+        const size = downloadedSize ? ` (${downloadedSize})` : ''
+        return `Remove these routes too, including ${downloadedCount} downloaded ${videos}${size}.`
+    }
+
+    protected async loadDownloadInfo(key: string, routeCount: number): Promise<void> {
+        if (routeCount === 0)
+            return
+
+        const info = await this.getRouteList().getExternalApiProviderDownloadInfo(key)
+        if (this.removeKey !== key || !this.removeDialog)
+            return
+
+        const size = info.downloadedBytes === undefined ? undefined : formatSize(info.downloadedBytes)
+        this.removeDialog = this.buildRemoveDialog(key, routeCount, this.removeDialog.removeRoutes, info.downloadedCount, size)
+        this.emitChanged()
+    }
+
+    protected async removeServer(dialog: RemoveServerDialogProps): Promise<void> {
+        const list = this.getRouteList()
+        this.logEvent({ message: 'remove route server', key: dialog.key, removeRoutes: dialog.removeRoutes, routeCount: dialog.routeCount })
+
+        list.deleteExternalApiProvider(dialog.key)
+        delete this.removeDialog
+        delete this.removeKey
+        this.knownStates.clear()
+        this.emitChanged()
+
+        if (dialog.removeRoutes) {
+            await list.deleteExternalApiProviderRoutes(dialog.key)
+            this.emitChanged()
+        }
+    }
+
+    // ----- protected helpers: general -----
+
+    protected startLoading(key: string) {
+        this.getRouteServerStatus().setLoading(key)
+        this.getRouteList().loadExternalApiProvider(key)
+            .then(() => { this.emitChanged() })
+            .catch(err => {
+                this.logError(err, 'loadServer', { key })
+                this.getRouteServerStatus().clearLoading(key)
+            })
+    }
+
+    protected getErrorMessage(err: unknown): string {
+        if (err instanceof RouteServerValidationError)
+            return err.message
+        return MSG.probeUnreachable
+    }
+
+    protected resetManualResult() {
+        this.manualState = 'idle'
+        this.checkToken++
+        delete this.urlError
+        delete this.nameError
+        delete this.message
+        delete this.resolvedUrl
+        delete this.localNote
+        delete this.pending
+        this.reviewRequired = false
+    }
+
+    protected resetManual() {
+        this.manualUrl = ''
+        this.manualName = ''
+        this.nameTouched = false
+        delete this.suggestedName
+        this.resetManualResult()
+    }
+
+    protected resetState() {
+        this.resetManual()
+        this.view = 'list'
+        this.origin = 'settings'
+        delete this.removeDialog
+        delete this.removeKey
+        this.knownStates.clear()
+    }
+
+    protected clearSuccessTimer() {
+        if (this.successTimer) {
+            clearTimeout(this.successTimer)
+            delete this.successTimer
+        }
+    }
+
+    protected emitChanged() {
+        this.observer?.emit('changed', this.getDisplayProps())
+    }
+
+    @Injectable
+    protected getBindings() {
+        return getBindings()
+    }
+
+    @Injectable
+    protected getRouteList() {
+        return useRouteList()
+    }
+
+    @Injectable
+    protected getRouteServerStatus() {
+        return useRouteServerStatus()
+    }
+
+    @Injectable
+    protected getKnownServers(): Array<KnownRouteServer> {
+        return getKnownRouteServers()
+    }
+}
+
+export const useRouteServersSettingsDisplay = () => new RouteServersSettingsDisplayService()

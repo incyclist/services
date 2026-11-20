@@ -8,6 +8,8 @@ import { RoutePoint } from '../types';
 import { Injectable } from '../../../base/decorators';
 import { LatLng } from '../../../utils/geo';
 import { IncyclistExternalRestApiClient } from '../../../api/rest/external';
+import { RedirectPolicy } from '../../../api/rest/types';
+import { trimTrailingSlashes } from '../../../utils/string';
 
 const fixMissingRouteDistances = (points:Array<RoutePoint>) => {
     let routeDistance = 0
@@ -46,6 +48,7 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
     protected baseUrl?: string
     protected isExternal: boolean
     protected source?:string
+    protected requestOptions?:{timeout?:number, redirectPolicy?:RedirectPolicy}
 
     constructor(baseUrl?:string) {
         this.logger = new EventLogger('RouteListApi')
@@ -57,6 +60,18 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
 
     setSource(source:string) {
         this.source = source
+    }
+
+    /**
+     * Optional request controls for external servers. They are applied to every request of this api, by the
+     * shared REST client.
+     *
+     * @param props.timeout  request timeout in ms
+     * @param props.redirectPolicy  decides which redirects are followed (the policy is injected by the owner of the
+     *   api, as the rules that apply depend on how the server was added)
+     */
+    setRequestOptions(props:{timeout?:number, redirectPolicy?:RedirectPolicy}) {
+        this.requestOptions = props
     }
 
     protected logError( err:Error, fn:string, logInfo?) {
@@ -77,7 +92,7 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
 
      protected getBaseUrl() {
         if (this.baseUrl)
-            return this.baseUrl
+            return trimTrailingSlashes(this.baseUrl)
 
         const domain = this.getUserSettings().getValue('DOMAIN',DEFAULT_DOMAIN)
         const defaultUrl = `https://dlws.${domain}/api/v1/routes`
@@ -88,7 +103,14 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
     async getRouteDescriptions(query:RouteDescriptionQuery, throws:boolean = false): Promise<Array<RouteApiDescription>> {
         const {type='gpx',category} = query;
 
-        let url  = (type === 'gpx' ) ? `?private=false` : `/?type=${type}`;
+        let url:string
+        if (this.isExternal) {
+            // route servers are asked for their video routes (?type=video) and their GPX routes (?type=route)
+            url = `?type=${type === 'gpx' ? 'route' : type}`
+        }
+        else {
+            url = (type === 'gpx' ) ? `?private=false` : `/?type=${type}`;
+        }
         if (category)
             url += `&category=${category}`
 
@@ -199,7 +221,13 @@ export default class IncyclistRoutesApi implements IIncyclistRoutesApi {
     protected async _get(url:string, ...args) {
         const api = this.getApi()
         const baseUrl = this.getBaseUrl()
-        return await api.get( baseUrl+url, ...args )       
+        const requestUrl = baseUrl+url
+
+        if (this.isExternal && this.requestOptions) {
+            args = [ {...args[0], ...this.requestOptions}, ...args.slice(1)]
+        }
+
+        return await api.get( requestUrl, ...args )
     }
 
 

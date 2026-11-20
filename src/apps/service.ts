@@ -147,6 +147,11 @@ export class AppsService extends IncyclistService   {
         return supported
     }
 
+    /** Provides key and display name of every app, whether it is connected or not */
+    getApps():Array<{key:string, name:string}> {
+        return this.getServiceMap().map( ({key,name}) => ({key,name}) )
+    }
+
     getName( key:string ) {
         const found = this.getServiceMap().find( r=>r.key===key )
         return found ? found.name : key
