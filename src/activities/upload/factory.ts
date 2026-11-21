@@ -52,9 +52,16 @@ export class ActivityUploadFactory {
             const {service,uploader} = ui
 
             if (uploader.isConnected() && this.getAppsService().isEnabled(service,'ActivityUpload')) {
+                this.getAppsService().logEvent({message:'start activity upload', externalApp:service})
                 const promise = uploader.upload(activity,format)
-                    .then(success=> ({service,success}))
-                    .catch(err => ({service,success:false,error:err.message}))
+                    .then(success=> { 
+                        this.getAppsService().logEvent({message:'activity upload finished', externalApp:service})
+                        return {service,success}
+                    })
+                    .catch(err => {
+                        this.getAppsService().logEvent({message:'activity upload failed', externalApp:service, reason:err.message})
+                        return {service,success:false,error:err.message}
+                    })
                 uploads.push({service,promise,status:undefined})
             }
         })

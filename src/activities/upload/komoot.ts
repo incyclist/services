@@ -68,8 +68,6 @@ export class KomootUpload extends IncyclistService implements IActivityUpload {
             
             const ok =this.ensureInitialized()
             if (!ok) {
-                this.logEvent({message:'Komoot Upload skipped', reason:'not initialized'})
-
                 return false;
             }
 
@@ -107,7 +105,6 @@ export class KomootUpload extends IncyclistService implements IActivityUpload {
 
         }
         catch(err) {
-                this.logEvent({message:'Komoot Upload failure', error: err.message})
                 activity.links.komoot = {
                     error: err.message
                 }

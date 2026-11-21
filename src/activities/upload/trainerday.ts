@@ -71,7 +71,6 @@ export class TrainerDayUpload extends IncyclistService implements IActivityUploa
     async upload(activity: ActivityDetails, format: string = 'TCX'): Promise<boolean> {
 
         if (!this.ensureInitialized()) {
-            this.logEvent({ message: 'TrainerDay Upload skipped', reason: 'not initialized' })
             return false
         }
 
@@ -104,7 +103,6 @@ export class TrainerDayUpload extends IncyclistService implements IActivityUploa
         }
         catch (err) {
             const error = err?.message ?? String(err)
-            this.logEvent({ message: 'TrainerDay Upload failure', error })
             this.setLink(activity, { error })
             return false
         }

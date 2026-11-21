@@ -180,7 +180,6 @@ describe('TrainingPeaksUpload', () => {
 
             expect(success).toBe(false)
             expect(api.upload).not.toHaveBeenCalled()
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainingPeaks Upload skipped', reason: 'not initialized' })
         })
 
         test('unsupported format: error is stored in the links', async () => {
@@ -236,7 +235,6 @@ describe('TrainingPeaksUpload', () => {
 
             expect(success).toBe(false)
             expect(activity.links).toEqual({ trainingpeaks: { error: 'Upload rejected by TrainingPeaks (HTTP 400): invalid' } })
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainingPeaks Upload failure', error: 'Upload rejected by TrainingPeaks (HTTP 400): invalid' })
             expect(api.findWorkout).not.toHaveBeenCalled()
         })
     })

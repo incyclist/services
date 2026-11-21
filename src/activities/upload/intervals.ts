@@ -67,8 +67,6 @@ export class IntervalsUpload extends IncyclistService implements IActivityUpload
             
             const ok =this.ensureInitialized()
             if (!ok) {
-                this.logEvent({message:'Intervals.icu Upload skipped', reason:'not initialized'})
-
                 return false;
             }
 
@@ -98,7 +96,6 @@ export class IntervalsUpload extends IncyclistService implements IActivityUpload
 
         }
         catch(err) {
-            this.logEvent({message:'Intervals.icu Upload failure', error: err.message})
             activity.links.intervals = {
                 error: err.message
             }

@@ -197,7 +197,6 @@ describe ('StravaUpload', ()=>{
                 }
             })
             expect (logSpy).toHaveBeenCalledWith({message:'Strava Upload',format:'TCX'})
-            expect (logSpy).toHaveBeenCalledWith(expect.objectContaining({message:'Strava Upload failure', error:'TEST' }))
   
         })
 
@@ -221,7 +220,6 @@ describe ('StravaUpload', ()=>{
                 }
             })
             expect (logSpy).toHaveBeenCalledWith({message:'Strava Upload',format:'TCX'})
-            expect (logSpy).toHaveBeenCalledWith(expect.objectContaining({message:'Strava Upload failure', error:'duplicate',activityId:'12345' }))
   
         })
 
@@ -254,7 +252,6 @@ describe ('StravaUpload', ()=>{
               const success =     await service.upload(activity as ActivityDetails,'tcx')
               expect(success).toBe(false)
               expect(activity.links).toBeUndefined()
-              expect (logSpy).toHaveBeenCalledWith({message:'Strava Upload skipped', reason:'not initialized'})
               expect(api.upload).not.toHaveBeenCalled()
 
         })

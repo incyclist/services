@@ -69,7 +69,7 @@ describe ('ActivityUploadFactory',()=>{
         let appsService
         beforeEach( ()=>{
             factory = new ActivityUploadFactory()
-            appsService = { isEnabled: jest.fn().mockReturnValue(true) }
+            appsService = { isEnabled: jest.fn().mockReturnValue(true), logEvent:jest.fn() }
             Inject('AppsService', appsService)
         })
         afterEach( ()=>{
