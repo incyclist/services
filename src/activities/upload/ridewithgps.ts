@@ -66,7 +66,6 @@ export class RideWithGpsUpload extends IncyclistService implements IActivityUplo
     async upload(activity: ActivityDetails, format: string = 'TCX'): Promise<boolean> {
 
         if (!this.ensureInitialized()) {
-            this.logEvent({ message: 'RideWithGPS Upload skipped', reason: 'not initialized' })
             return false
         }
 
@@ -82,7 +81,6 @@ export class RideWithGpsUpload extends IncyclistService implements IActivityUplo
         }
         catch (err) {
             const error = err?.message ?? String(err)
-            this.logEvent({ message: 'RideWithGPS Upload failure', error })
             this.setLink(activity, { error })
             return false
         }

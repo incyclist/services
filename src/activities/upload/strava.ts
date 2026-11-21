@@ -67,8 +67,6 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
             
             const ok =this.ensureInitialized()
             if (!ok) {
-                this.logEvent({message:'Strava Upload skipped', reason:'not initialized'})
-
                 return false;
             }
 
@@ -99,7 +97,6 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
         }
         catch(err) {
             if (err instanceof DuplicateError) {
-                this.logEvent({message:'Strava Upload failure', error: 'duplicate', activityId:err.stravaId})
                 activity.links.strava = {
                     activity_id: err.stravaId,
                     url: this.getUrl(err.stravaId)
@@ -107,7 +104,6 @@ export class StravaUpload extends IncyclistService implements IActivityUpload {
     
             }
             else {
-                this.logEvent({message:'Strava Upload failure', error: err.message})
                 activity.links.strava = {
                     error: err.message
                 }

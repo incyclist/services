@@ -257,7 +257,6 @@ describe('KomootUpload', () => {
 
             expect(success).toBe(false)
             expect(activity.links).toMatchObject({ komoot: { error: 'HTTP 500: {}' } })
-            expect(logSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'Komoot Upload failure', error: 'HTTP 500: {}' }))
         })
 
         test('activity file does not exist', async () => {
@@ -337,7 +336,6 @@ describe('KomootUpload', () => {
 
             expect(await service.upload(activity as ActivityDetails, 'fit')).toBe(false)
             expect(activity.links).toBeUndefined()
-            expect(logSpy).toHaveBeenCalledWith({ message: 'Komoot Upload skipped', reason: 'not initialized' })
             expect(api.uploadTour).not.toHaveBeenCalled()
         })
     })

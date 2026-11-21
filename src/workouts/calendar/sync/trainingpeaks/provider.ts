@@ -22,7 +22,7 @@ const NO_FILE_STATUS = new Set([400, 404, 410, 415, 422])
  * unless the formats are known and do not contain ZWO. Workouts that turned out to have no file are not requested again
  * until they are modified.
  */
-export class TrainingPeaksCalendarSyncProvider extends BaseCalendarSyncProvider<TrainingPeaksWorkout> {
+export class TrainingPeaksCalendarSyncProvider extends BaseCalendarSyncProvider<TrainingPeaksWorkout,TrainingPeaksAppConnection> {
 
     /** workouts without usable file (id -> last modification at that time) */
     protected withoutFile: Map<string, string | undefined>

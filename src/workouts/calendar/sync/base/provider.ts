@@ -2,10 +2,10 @@ import { useAppsService } from "../../../../apps"
 import { Injectable } from "../../../../base/decorators"
 import { IncyclistService } from "../../../../base/service"
 import { Observer } from "../../../../base/types"
+import { IConnectedApp } from "../../../../types"
 import { getFirstDayOfCurrentWeek, waitNextTick } from "../../../../utils"
 import { WorkoutCalendarEntry } from "../../types"
 import { IWorkoutSyncProvider } from "../types"
-import { ICalendarSyncConnection } from "./types"
 
 /**
  * Shared logic of the providers that sync the planned workouts of the calendar of an external app.
@@ -15,7 +15,7 @@ import { ICalendarSyncConnection } from "./types"
  *
  * @typeParam T the type of a workout as delivered by the API of the external app
  */
-export abstract class BaseCalendarSyncProvider<T> extends IncyclistService implements IWorkoutSyncProvider {
+export abstract class BaseCalendarSyncProvider<T,C extends IConnectedApp > extends IncyclistService implements IWorkoutSyncProvider {
     protected lastSyncTS: number
     protected observer: Observer
     protected stopRequested: boolean
@@ -50,7 +50,7 @@ export abstract class BaseCalendarSyncProvider<T> extends IncyclistService imple
         this.observer.once('loaded', onDone)
         this.observer.once('stop', () => { this.stopRequested = true })
 
-        this.loadWorkouts().catch(err => { this.logError(err, 'sync') })
+        this.loadWorkouts().catch(err => { this.logError(err, 'sync', {externalApp:this.getApp()}) })
         return this.observer
     }
 
@@ -69,9 +69,6 @@ export abstract class BaseCalendarSyncProvider<T> extends IncyclistService imple
     }
 
     // ------  HOOKS ----------
-
-    /** @returns the connection to the external app */
-    protected abstract getConnection(): ICalendarSyncConnection
 
     /** requests the workouts of the calendar for a range of days */
     protected abstract fetchWorkouts(start: Date, end: Date): Promise<Array<T> | undefined>
@@ -99,6 +96,7 @@ export abstract class BaseCalendarSyncProvider<T> extends IncyclistService imple
                 return []
             }
 
+            this.logEvent({message:'start workout sync',externalApp:this.service})
             const start = getFirstDayOfCurrentWeek()
             const end = new Date(start)
             end.setDate(end.getDate() + this.syncDays)
@@ -111,6 +109,7 @@ export abstract class BaseCalendarSyncProvider<T> extends IncyclistService imple
             this.observer.emit(event, this.workouts, this.service)
             if (completed !== false)
                 this.lastSyncTS = Date.now()
+            this.logEvent({message:'workout sync finished',externalApp:this.service})
             return this.workouts
         }
         catch (err) {
@@ -157,6 +156,13 @@ export abstract class BaseCalendarSyncProvider<T> extends IncyclistService imple
             this.logEvent({ message: `workout ${event}`, externalApp: this.service, workout: entry.workout?.name })
         }
     }
+
+    protected getApp():string {
+        return this.service
+    }
+
+    protected abstract getConnection():C
+
 
     @Injectable
     protected getAppsService() {
