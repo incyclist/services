@@ -31,8 +31,9 @@ export class KomootSyncProvider
     }
 
     async loadDetails(route:Route):Promise<Route> { 
+        const externalApp = this.getApp()
         try {
-            this.logEvent({message:'load route details', id:route?.description?.id, title:route?.description?.title})
+            this.logEvent({message:'load route details', externalApp, id:route?.description?.id, title:route?.description?.title})
 
             const id = this.getOriginalId(route)
             if (!id) return
@@ -43,7 +44,7 @@ export class KomootSyncProvider
             return route
         }
         catch(err) {
-            this.logError(err,'loadDetails',{id:route?.description?.id, title:route?.description?.title})
+            this.logError(err,'loadDetails',{externalApp,id:route?.description?.id, title:route?.description?.title})
         }
         
     }
@@ -75,7 +76,8 @@ export class KomootSyncProvider
 
             }
             catch (err){ 
-                this.logEvent( {message:'could not load routes', reason:err.message})
+
+                this.logEvent( {message:'could not load routes', externalApp:this.getApp(),reason:err.message})
                 done = true
                 error = true
             }
@@ -159,7 +161,7 @@ export class KomootSyncProvider
             }
         }
         catch(err) {
-            this.logError(err,'buildRoutePoints')
+            this.logError(err,'buildRoutePoints',{externalApp:this.getApp()})
         }
         return points
     }
