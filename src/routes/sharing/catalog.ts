@@ -2,7 +2,7 @@ import type { MediaState } from '../../api/localLink/types'
 import { canonicalJson } from '../../link/utils'
 import { fileUrlToPath } from '../base/parsers/utils'
 import type { RouteInfo } from '../base/types'
-import type { CatalogDocument, CatalogEntry } from './types'
+import type { CatalogDocument, CatalogEntry, SharedRouteSummary } from './types'
 
 const STAT_CONCURRENCY = 8
 
@@ -52,6 +52,21 @@ export const getRouteKey = (descr: RouteInfo, linkId: string): string => {
     return descr.routeHash ?? `${linkId}:${descr.id}`
 }
 
+const SUMMARY_KEYS = ['localizedTitle', 'country', 'distance', 'elevation', 'isLoop', 'hasGpx', 'pointsSource', 'videoFormat'] as const
+
+/**
+ * The list-level fields of a route, from a whitelist. Undefined values are omitted, so the
+ * catalog version only changes when a value does. Never paths, urls or timestamps.
+ */
+export const buildSummary = (descr: RouteInfo): SharedRouteSummary => {
+    const summary: Record<string, unknown> = { title: descr.title ?? '' }
+    for (const key of SUMMARY_KEYS) {
+        if (descr[key] !== undefined && descr[key] !== null)
+            summary[key] = descr[key]
+    }
+    return summary as unknown as SharedRouteSummary
+}
+
 const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOptions): Promise<{ entry: CatalogEntry, handles: MediaState['handles'] }> => {
     const handles: MediaState['handles'] = []
     const videoHandle = opts.makeHandle('v', path)
@@ -79,6 +94,8 @@ const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOpti
         entry.thumbHandle = thumbHandle
     if (descr.routeHash)
         entry.routeHash = descr.routeHash
+    if (descr.isLocal && descr.routeHash)
+        entry.summary = buildSummary(descr)
     return { entry, handles }
 }
 

@@ -322,7 +322,7 @@ describe('LocalLinkClientService', () => {
             expect(secure.values.size).toBe(1)
 
             expect(props().links).toMatchObject([{ linkId, displayName: 'Incyclist Computer', reachability: 'reachable', connected: true }])
-            expect(client.getSession(linkId)).toMatchObject({ mediaPort: 6002, catalogVersion: 'cv1', capabilities: ['route-sharing'] })
+            expect(client.getSession(linkId)).toMatchObject({ mediaPort: 6002, catalogVersion: 'cv1', capabilities: ['route-sharing', 'route-descriptor'] })
             expect((mem.files.get(linkId) as { lastSeenAt?: number }).lastSeenAt).toEqual(expect.any(Number))
         })
         test('the pairing request carries a generic device name, not a person name', async () => {

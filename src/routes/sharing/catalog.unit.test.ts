@@ -1,5 +1,5 @@
 import type { RouteInfo } from '../base/types'
-import { buildCatalog, getRouteKey, isShareable } from './catalog'
+import { buildCatalog, buildSummary, getRouteKey, isShareable } from './catalog'
 
 const opts = (sizes: Record<string, number | undefined> = {}) => ({
     linkId: 'L1',
@@ -77,6 +77,40 @@ describe('buildCatalog', () => {
     test('carries no profile data or credentials', async () => {
         const res = await buildCatalog([route({ id: 'a', isLocal: true, routeHash: 'ha', videoUrl: 'video:///d/a.mp4' })], opts())
         expect(Object.keys(res.document.routes[0]).sort()).toEqual(
-            ['mtime', 'origin', 'routeHash', 'routeIdOnComputer', 'routeKey', 'size', 'title', 'videoFormat', 'videoHandle'])
+            ['mtime', 'origin', 'routeHash', 'routeIdOnComputer', 'routeKey', 'size', 'summary', 'title', 'videoFormat', 'videoHandle'])
+    })
+
+    test('summary only for local routes with a hash', async () => {
+        const res = await buildCatalog([
+            route({ id: 'a', isLocal: true, routeHash: 'ha', videoUrl: 'video:///d/a.mp4', distance: 1000 }),
+            route({ id: 'b', isLocal: true, videoUrl: 'video:///d/b.mp4' }),
+            route({ id: 'c', isDownloaded: true, routeHash: 'hc', videoUrl: 'file:///d/c.mp4' }),
+        ], opts())
+        const byId = (id: string) => res.document.routes.find(r => r.routeIdOnComputer === id)!
+        expect(byId('a').summary).toEqual({ title: 'T', distance: 1000 })
+        expect(byId('b').summary).toBeUndefined()
+        expect(byId('b').routeKey).toBe('L1:b')
+        expect(byId('c').summary).toBeUndefined()
+    })
+
+    test('catalog version is stable across rebuilds and ignores fields that are not in the summary', async () => {
+        const make = (tsLastStart: number) => route({
+            id: 'a', isLocal: true, routeHash: 'ha', videoUrl: 'video:///d/a.mp4', distance: 5, tsLastStart, previewUrl: undefined,
+        })
+        const one = await buildCatalog([make(1)], opts())
+        const two = await buildCatalog([make(2)], opts())
+        expect(one.document.catalogVersion).toBe(two.document.catalogVersion)
+        expect(one.document).toEqual(two.document)
+    })
+})
+
+describe('buildSummary', () => {
+    test('copies the whitelisted fields and omits undefined ones', () => {
+        const summary = buildSummary(route({
+            title: 'X', country: 'DE', isLoop: false, hasGpx: true, pointsSource: 'gpx', videoFormat: 'mp4', elevation: undefined,
+            videoUrl: 'video:///C:/Users/bob/a.mp4', tsImported: 1,
+        }))
+        expect(summary).toEqual({ title: 'X', country: 'DE', isLoop: false, hasGpx: true, pointsSource: 'gpx', videoFormat: 'mp4' })
+        expect(JSON.stringify(summary)).not.toContain('bob')
     })
 })

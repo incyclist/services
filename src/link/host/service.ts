@@ -490,7 +490,17 @@ export class LocalLinkService extends IncyclistService {
                 return await this.onPing(conn, msg.id)
             case 'echo':
                 return await this.send(conn, 'echo', { data: msg.b?.data }, msg.id)
+            case 'route-descriptor':
+                return await this.onRouteDescriptor(conn, msg.b, msg.id)
         }
+    }
+
+    protected async onRouteDescriptor(conn: LinkConnection, body: unknown, id?: string): Promise<void> {
+        if (!conn.clientId)
+            return
+        const routeKey = (body as { routeKey?: unknown })?.routeKey
+        const res = await this.getSharing().getDescriptor(typeof routeKey === 'string' ? routeKey : '', conn.id)
+        await this.send(conn, 'route-descriptor', res, id)
     }
 
     protected async onHello(conn: LinkConnection, hello: LinkClientMessage['b']): Promise<void> {

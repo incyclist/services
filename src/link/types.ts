@@ -14,6 +14,8 @@
  * third-party tokens, OAuth data or personal profile data.
  */
 
+import type { RouteDescriptorRequestBody, RouteDescriptorResponseBody } from '../routes/sharing/types'
+
 // --- envelope ---
 
 /** The JSON envelope of every control-channel frame. */
@@ -179,6 +181,7 @@ export interface LinkClientMessageBodies {
     'auth-confirm': AuthConfirmBody
     'ping': EmptyBody
     'echo': EchoBody
+    'route-descriptor': RouteDescriptorRequestBody
 }
 
 /** Bodies of the messages the desktop sends, by message type. */
@@ -193,6 +196,7 @@ export interface LinkServerMessageBodies {
     'catalog-changed': CatalogChangedBody
     'pong': EmptyBody
     'echo': EchoBody
+    'route-descriptor': RouteDescriptorResponseBody
 }
 
 export type LinkClientMessageType = keyof LinkClientMessageBodies

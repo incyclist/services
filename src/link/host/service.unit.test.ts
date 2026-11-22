@@ -95,6 +95,7 @@ describe('LocalLinkService', () => {
         sharing = {
             setTokens: jest.fn(async () => true), start: jest.fn(async () => undefined), stop: jest.fn(),
             getRouteCount: jest.fn(() => 3), getCatalogVersion: jest.fn(() => 'cv1'), on: jest.fn(), off: jest.fn(),
+            getDescriptor: jest.fn(async (routeKey: string) => ({ routeKey, document: 'rd-0123456789abcdef', size: 5, sha256: 'x' })),
         }
         Inject('Sharing', sharing)
         savedCrypto = getBindings().crypto
@@ -465,7 +466,7 @@ describe('LocalLinkService', () => {
             const { phone } = await authenticate()
             const session = phone.inbox().find(m => m.t === 'session') as Msg & { b: Record<string, unknown> }
             expect(session).toBeDefined()
-            expect(session.b).toMatchObject({ mediaPort: 6002, catalogVersion: 'cv1', capabilities: ['route-sharing'] })
+            expect(session.b).toMatchObject({ mediaPort: 6002, catalogVersion: 'cv1', capabilities: ['route-sharing', 'route-descriptor'] })
             expect(Buffer.from(session.b.mediaToken as string, 'base64url')).toHaveLength(32)
             expect((session.b.mediaTokenExpiresAt as number) - Date.now()).toBeGreaterThan(11.9 * 3600_000)
 
@@ -476,6 +477,28 @@ describe('LocalLinkService', () => {
 
             expect(service.getDisplayProps().devices[0]).toMatchObject({ active: true })
             expect(pairedClient()).toHaveProperty('lastSeenAt')
+        })
+
+        test('route-descriptor: answers with the correlation id of the request', async () => {
+            const { phone } = await authenticate()
+            await phone.send('route-descriptor', { routeKey: 'k1' }, 'd1')
+            expect(sharing.getDescriptor).toHaveBeenCalledWith('k1', expect.any(String))
+            expect(phone.last()).toMatchObject({ t: 'route-descriptor', id: 'd1', b: { routeKey: 'k1', document: 'rd-0123456789abcdef' } })
+        })
+
+        test('route-descriptor without a route key is passed on as an empty key', async () => {
+            const { phone } = await authenticate()
+            await phone.send('route-descriptor', {} as never, 'd2')
+            expect(sharing.getDescriptor).toHaveBeenCalledWith('', expect.any(String))
+        })
+
+        test('route-descriptor is refused before authentication', async () => {
+            await service.openPairing()
+            const phone = new Phone(h)
+            await phone.hello()
+            await phone.send('route-descriptor', { routeKey: 'k1' }, 'd3')
+            expect(phone.last()).toMatchObject({ t: 'error', b: { code: 'not-authenticated' } })
+            expect(sharing.getDescriptor).not.toHaveBeenCalled()
         })
 
         test('publishes only the digest of the media token, and persists only the digest', async () => {

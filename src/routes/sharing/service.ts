@@ -7,12 +7,22 @@ import { useUserSettings } from '../../settings/service'
 import { useRouteList } from '../list/service'
 import { buildCatalog } from './catalog'
 import type { CatalogBuild } from './catalog'
+import { DESCRIPTOR_DOCUMENT_PREFIX, DESCRIPTOR_MAX_DOCUMENTS, DESCRIPTOR_MAX_TOTAL_BYTES, DESCRIPTOR_TTL_MS } from './consts'
+import { buildRouteDescriptor } from './descriptor'
+import type { RouteDescriptorError, RouteDescriptorResponseBody } from './types'
 
 const REFRESH_DEBOUNCE_MS = 1500
 const VIDEO_DIR_KEY = 'videos.directory'
 const SETTINGS_REQUESTER = 'RouteSharing'
 
 type Unsubscribe = () => void
+
+interface DescriptorDocument {
+    routeKey: string
+    body: string
+    bytes: number
+    servedAt: number
+}
 
 /**
  * Builds the catalog document and the handle table of the routes this computer shares and
@@ -34,6 +44,9 @@ export class RouteSharingService extends IncyclistService {
     protected refreshAgain = false
     protected refreshTimer?: ReturnType<typeof setTimeout>
     protected unsubscribers: Unsubscribe[] = []
+    protected descriptorDocs = new Map<string, DescriptorDocument>()
+    protected outstanding = new Set<string>()
+    protected descriptorTimer?: ReturnType<typeof setTimeout>
 
     constructor() {
         super('RouteSharing')
@@ -62,6 +75,10 @@ export class RouteSharingService extends IncyclistService {
         this.unsubscribers.forEach(u => u())
         this.unsubscribers = []
         this.catalog = undefined
+        clearTimeout(this.descriptorTimer)
+        this.descriptorTimer = undefined
+        this.descriptorDocs.clear()
+        this.outstanding.clear()
     }
 
     /**
@@ -84,6 +101,64 @@ export class RouteSharingService extends IncyclistService {
         return this.refreshing
     }
 
+    /**
+     * Hands out the details of one local route to a paired phone: builds the whitelisted descriptor,
+     * publishes it as a short-lived document and returns its name, size and digest.
+     *
+     * Only routes of the current catalog that are local and have a `routeHash` are served. At most
+     * {@link DESCRIPTOR_MAX_DOCUMENTS} documents and {@link DESCRIPTOR_MAX_TOTAL_BYTES} bytes are
+     * held (oldest first out); a connection has one request at a time.
+     *
+     * @param routeKey the route's key in the catalog
+     * @param connectionId the control connection that asks
+     */
+    async getDescriptor(routeKey: string, connectionId: string): Promise<RouteDescriptorResponseBody> {
+        const startedAt = Date.now()
+        if (this.outstanding.has(connectionId))
+            return this.descriptorFailed(routeKey, 'busy')
+        this.outstanding.add(connectionId)
+        let name: string | undefined
+        try {
+            const entry = typeof routeKey === 'string' ? this.catalog?.document.routes.find(r => r.routeKey === routeKey) : undefined
+            if (!entry || entry.origin !== 'local' || !entry.routeHash)
+                return this.descriptorFailed(routeKey, 'unknown-route')
+
+            const route = await this.loadRouteWithDetails(entry.routeIdOnComputer)
+            if (!route?.details)
+                return this.descriptorFailed(routeKey, 'no-details')
+
+            const body = JSON.stringify(buildRouteDescriptor(routeKey, route.description, route.details))
+            const bytes = Buffer.byteLength(body)
+            if (bytes > DESCRIPTOR_MAX_TOTAL_BYTES)
+                return this.descriptorFailed(routeKey, 'too-large')
+
+            name = this.descriptorName(routeKey)
+            if (!this.reserveDescriptorSpace(name, bytes))
+                return this.descriptorFailed(routeKey, 'busy')
+            this.descriptorDocs.set(name, { routeKey, body, bytes, servedAt: Date.now() })
+
+            if (!await this.publish()) {
+                this.descriptorDocs.delete(name)
+                return this.descriptorFailed(routeKey, 'publish-failed')
+            }
+            this.scheduleDescriptorExpiry()
+            this.logEvent({
+                message: 'route descriptor served', bytes, pointCount: route.details.points?.length ?? 0,
+                mappingCount: route.details.video?.mappings?.length ?? 0, durationMs: Date.now() - startedAt,
+            })
+            return { routeKey, document: name, size: bytes, sha256: sha256Base64Url(body) }
+        }
+        catch (err) {
+            this.logError(err as Error, 'getDescriptor')
+            if (name)
+                this.descriptorDocs.delete(name)
+            return this.descriptorFailed(routeKey, 'no-details')
+        }
+        finally {
+            this.outstanding.delete(connectionId)
+        }
+    }
+
     getCatalogVersion(): string {
         return this.catalog?.document.catalogVersion ?? ''
     }
@@ -95,6 +170,76 @@ export class RouteSharingService extends IncyclistService {
     reset() {
         this.stop()
         super.reset()
+    }
+
+    protected descriptorFailed(routeKey: string, error: RouteDescriptorError): RouteDescriptorResponseBody {
+        this.logEvent({ message: 'route descriptor failed', reason: error })
+        return { routeKey: typeof routeKey === 'string' ? routeKey : '', error }
+    }
+
+    protected async loadRouteWithDetails(id: string) {
+        const list = this.getRouteList()
+        let route = list.getRoute(id)
+        if (route && !route.details) {
+            await list.getRouteDetails(id)
+            route = list.getRoute(id)
+        }
+        return route
+    }
+
+    /** Opaque and stable within the process: `rd-` and 16 hex characters. */
+    protected descriptorName(routeKey: string): string {
+        this.handleSalt ??= randomBytes(32)
+        const hmac = this.getBindings().crypto.createHmac('sha256', this.handleSalt)
+        hmac.update(`rd|${routeKey}`)
+        return DESCRIPTOR_DOCUMENT_PREFIX + Buffer.from(hmac.digest()).toString('hex').slice(0, 16)
+    }
+
+    /**
+     * Drops expired documents and the document of the same name, then the oldest ones until the new
+     * one fits the count and byte budget.
+     *
+     * @returns false if it does not fit
+     */
+    protected reserveDescriptorSpace(name: string, bytes: number): boolean {
+        this.dropExpiredDescriptors()
+        this.descriptorDocs.delete(name)
+        const total = () => [...this.descriptorDocs.values()].reduce((sum, d) => sum + d.bytes, 0)
+        const fits = () => this.descriptorDocs.size < DESCRIPTOR_MAX_DOCUMENTS && bytes + total() <= DESCRIPTOR_MAX_TOTAL_BYTES
+        while (!fits() && this.descriptorDocs.size > 0) {
+            const oldest = [...this.descriptorDocs.entries()].sort((a, b) => a[1].servedAt - b[1].servedAt)[0]
+            this.descriptorDocs.delete(oldest[0])
+        }
+        return fits()
+    }
+
+    /** @returns true if a document was dropped */
+    protected dropExpiredDescriptors(): boolean {
+        const now = Date.now()
+        let dropped = false
+        for (const [name, doc] of this.descriptorDocs) {
+            if (now - doc.servedAt >= DESCRIPTOR_TTL_MS) {
+                this.descriptorDocs.delete(name)
+                dropped = true
+            }
+        }
+        return dropped
+    }
+
+    protected scheduleDescriptorExpiry(): void {
+        clearTimeout(this.descriptorTimer)
+        if (this.descriptorDocs.size === 0)
+            return
+        const oldest = Math.min(...[...this.descriptorDocs.values()].map(d => d.servedAt))
+        const delay = Math.max(0, oldest + DESCRIPTOR_TTL_MS - Date.now())
+        this.descriptorTimer = setTimeout(() => this.onDescriptorExpiry(), delay)
+        this.descriptorTimer.unref?.()
+    }
+
+    protected onDescriptorExpiry(): void {
+        if (this.dropExpiredDescriptors() && this.started)
+            this.publish().catch(err => this.logError(err, 'descriptorExpiry'))
+        this.scheduleDescriptorExpiry()
     }
 
     protected async runRefresh(): Promise<void> {
@@ -132,7 +277,10 @@ export class RouteSharingService extends IncyclistService {
             const link = this.getBindings().localLink
             if (!link || !this.catalog)
                 return false
-            const documents = { catalog: { body: this.catalog.document, contentType: 'application/json' } }
+            this.dropExpiredDescriptors()
+            const documents: MediaState['documents'] = { catalog: { body: this.catalog.document, contentType: 'application/json' } }
+            for (const [name, doc] of this.descriptorDocs)
+                documents[name] = { body: doc.body, contentType: 'application/json' }
             const res = await link.publishMedia({ documents, handles: this.catalog.handles, tokens: this.tokens })
             if (!res?.ok || res.rejectedHandles?.length || res.rejectedTokens)
                 this.logEvent({ message: 'media publication incomplete', ok: !!res?.ok, rejectedHandles: res?.rejectedHandles?.length, rejectedTokens: res?.rejectedTokens })

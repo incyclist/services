@@ -38,12 +38,12 @@ export const LINK_MAX_AUTH_KIDS = 32
 
 /** Message types the phone sends. Must list every key of `LinkClientMessageBodies`. */
 export const LINK_CLIENT_MESSAGE_TYPES: readonly LinkClientMessageType[] = [
-    'hello', 'pair-request', 'pair-verify', 'auth', 'auth-confirm', 'ping', 'echo',
+    'hello', 'pair-request', 'pair-verify', 'auth', 'auth-confirm', 'ping', 'echo', 'route-descriptor',
 ]
 
 /** Message types the desktop sends. Must list every key of `LinkServerMessageBodies`. */
 export const LINK_SERVER_MESSAGE_TYPES: readonly LinkServerMessageType[] = [
-    'hello', 'error', 'pending', 'paired', 'pair-failed', 'auth-result', 'session', 'catalog-changed', 'pong', 'echo',
+    'hello', 'error', 'pending', 'paired', 'pair-failed', 'auth-result', 'session', 'catalog-changed', 'pong', 'echo', 'route-descriptor',
 ]
 
 /** Unsigned message types the desktop accepts before authentication. */

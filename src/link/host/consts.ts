@@ -41,7 +41,7 @@ export const PAIRING_SECRET_BYTES = 32
 export const LAST_SEEN_PERSIST_INTERVAL_MS = 60_000
 
 /** Capabilities announced in `hello` and `session`. */
-export const LINK_CAPABILITIES = ['route-sharing']
+export const LINK_CAPABILITIES = ['route-sharing', 'route-descriptor']
 
 /** Limit values handed to the transport (it enforces them under its own hard ceilings). */
 export const LINK_LIMITS: LocalLinkLimits = {

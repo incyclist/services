@@ -34,11 +34,11 @@ describe('link channel', () => {
     test('message type lists cover every message type', () => {
         // compile-time: adding a type to the body maps without listing it here fails typecheck
         const client: Record<LinkClientMessageType, true> = {
-            'hello': true, 'pair-request': true, 'pair-verify': true, 'auth': true, 'auth-confirm': true, 'ping': true, 'echo': true,
+            'hello': true, 'pair-request': true, 'pair-verify': true, 'auth': true, 'auth-confirm': true, 'ping': true, 'echo': true, 'route-descriptor': true,
         }
         const server: Record<LinkServerMessageType, true> = {
             'hello': true, 'error': true, 'pending': true, 'paired': true, 'pair-failed': true, 'auth-result': true,
-            'session': true, 'catalog-changed': true, 'pong': true, 'echo': true,
+            'session': true, 'catalog-changed': true, 'pong': true, 'echo': true, 'route-descriptor': true,
         }
         expect([...LINK_CLIENT_MESSAGE_TYPES].sort()).toEqual(Object.keys(client).sort())
         expect([...LINK_SERVER_MESSAGE_TYPES].sort()).toEqual(Object.keys(server).sort())
