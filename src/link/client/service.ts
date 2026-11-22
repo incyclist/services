@@ -16,6 +16,7 @@ import {
     BROWSE_TIMEOUT_MS, DEFAULT_PHONE_NAME, MEDIA_TOKEN_MARGIN_MS, RECONNECT_DELAYS_MS,
 } from './consts'
 import { LinkMediaPath } from './media'
+import { meetsNativeVersion } from './native-requirements'
 import { LinkPairingFlow } from './pairing'
 import type { PairTarget } from './pairing'
 import { LinkRecoveryGate } from './recovery'
@@ -317,11 +318,11 @@ export class LocalLinkClientService extends IncyclistService {
     }
 
     /**
-     * The installed native version must be able to carry the feature. Completed by the native
-     * capability gate, which compares the installed version with a threshold per platform.
+     * The installed native version (not the OTA bundle version) must be at or above the minimum
+     * of its platform. Fails closed: unreleased minimum, unknown platform or unreadable version.
      */
     protected meetsNativeRequirements(): boolean {
-        return true
+        return meetsNativeVersion(this.getPlatform(), getBindings()?.appInfo?.getAppVersion())
     }
 
     protected getPlatform(): LinkClientPlatform {

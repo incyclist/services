@@ -10,6 +10,7 @@ import {
 } from '../../../__tests__/utils/linkFakes'
 import { LocalLinkService } from '../host/service'
 import { LinkClientConnection } from './connection'
+import { LINK_MIN_NATIVE_VERSION } from './native-requirements'
 import { LocalLinkClientService } from './service'
 import type { LinkPairingState, LocalLinkClientDisplayProps } from './types'
 
@@ -65,6 +66,7 @@ describe('LocalLinkClientService', () => {
     let announced: Announcement[]
     let mdns: { connect: jest.Mock, disconnect: jest.Mock, find: jest.Mock }
     let platform: string
+    let appVersion: string
     let savedCrypto: ICryptoBinding
 
     const props = (): LocalLinkClientDisplayProps => client.getDisplayProps()
@@ -117,7 +119,10 @@ describe('LocalLinkClientService', () => {
         bindings.wifi = { net, mdns }
         bindings.db = mem.db
         bindings.secureStorage = secure.binding
-        bindings.appInfo = { getOS: () => ({ platform }), getAppVersion: () => '1.0.0' }
+        appVersion = '1.0.0'
+        LINK_MIN_NATIVE_VERSION.ios = '1.0.0'
+        LINK_MIN_NATIVE_VERSION.android = '1.0.0'
+        bindings.appInfo = { getOS: () => ({ platform }), getAppVersion: () => appVersion }
 
         features = { BRIDGE_MODE: true }
         rideState = 'Idle'
@@ -147,6 +152,8 @@ describe('LocalLinkClientService', () => {
         for (const key of ['AppState', 'DeviceAccess', 'DevicePairing', 'RideDisplay', 'UserSettings', 'Sharing'])
             Inject(key, null)
         getBindings().crypto = savedCrypto
+        LINK_MIN_NATIVE_VERSION.ios = undefined
+        LINK_MIN_NATIVE_VERSION.android = undefined
         for (const key of ['wifi', 'db', 'secureStorage', 'appInfo', 'localLink'])
             delete bindings[key]
         jest.useRealTimers()
@@ -177,6 +184,49 @@ describe('LocalLinkClientService', () => {
             features.BRIDGE_MODE = false
             await client.check()
             expect(net.connects).toEqual([])
+        })
+
+        describe('native version gate', () => {
+            test.each(['ios', 'android'] as const)('%s: below, at and above the minimum', (os) => {
+                platform = os
+                LINK_MIN_NATIVE_VERSION[os] = '1.8.0'
+                appVersion = '1.7.9'
+                expect(client.isSupported()).toBe(false)
+                appVersion = '1.8.0'
+                expect(client.isSupported()).toBe(true)
+                appVersion = '1.9.0'
+                expect(client.isSupported()).toBe(true)
+            })
+            test('the platforms are evaluated independently', () => {
+                LINK_MIN_NATIVE_VERSION.ios = '1.8.0'
+                LINK_MIN_NATIVE_VERSION.android = undefined
+                appVersion = '2.0.0'
+                platform = 'ios'
+                expect(client.isSupported()).toBe(true)
+                platform = 'android'
+                expect(client.isSupported()).toBe(false)
+            })
+            test.each(['ios', 'android'] as const)('%s: an unreleased minimum is unsupported', (os) => {
+                platform = os
+                LINK_MIN_NATIVE_VERSION[os] = undefined
+                expect(client.isSupported()).toBe(false)
+            })
+            test.each([undefined, '', 'abc', '1.x', '1.8.0-beta', 'v1.8.0'])('unreadable version %p is unsupported', (v) => {
+                appVersion = v as string
+                expect(client.isSupported()).toBe(false)
+            })
+            test('unknown platform is unsupported', () => {
+                platform = 'windows'
+                expect(client.isSupported()).toBe(false)
+            })
+            test('unsupported: nothing is listed, search is blocked and gives no permission hint', async () => {
+                LINK_MIN_NATIVE_VERSION.ios = '9.0.0'
+                expect(props().available).toBe(false)
+                expect(props().links).toEqual([])
+                const state = await client.startSearch()
+                expect(state).toEqual({ phase: 'blocked', reason: 'unsupported' })
+                expect(mdns.find).not.toHaveBeenCalled()
+            })
         })
     })
 
