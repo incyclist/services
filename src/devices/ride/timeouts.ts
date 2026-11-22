@@ -12,3 +12,6 @@ const BLE_PAIRING_START_TIMEOUT_MS = 30*1000
 export const getPairingStartTimeout = (adapter:IncyclistDeviceAdapter):number => {
     return adapter?.getSettings?.()?.interface==='ble' ? BLE_PAIRING_START_TIMEOUT_MS : PAIRING_START_TIMEOUT_MS
 }
+
+/** The time a running start of a device is given to stop, before it is restarted by a per-device retry */
+export const DEVICE_RETRY_STOP_TIMEOUT_MS = 5*1000

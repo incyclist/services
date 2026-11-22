@@ -1,7 +1,7 @@
 import { CyclingMode, DeviceData, UpdateRequest } from "incyclist-devices";
 import { Observer } from "../../base/types";
 import { ActiveWorkoutLimit, useWorkoutList, useWorkoutRide } from "../../workouts";
-import { CurrentRideDisplayProps, ICurrentRideService, IRideModeService, IRideModeServiceDisplayProps } from "./types";
+import { CurrentRideDisplayProps, ICurrentRideService, IRideModeService, IRideModeServiceDisplayProps, StartContentInfo } from "./types";
 import { IncyclistService } from "../../base/service";
 import { useDeviceRide } from "../../devices";
 import { Injectable } from "../../base/decorators";
@@ -113,6 +113,15 @@ export class RideModeService extends IncyclistService implements IRideModeServic
      */
     getStartOverlayProps() {
         return {}
+    }
+
+    /**
+     * Describes the content row of the start overlay.
+     *
+     * @returns undefined in the base implementation (no content to wait for)
+     */
+    getStartContentInfo(): StartContentInfo|undefined {
+        return undefined
     }
     /**
      * Returns display properties for rendering the current ride view.

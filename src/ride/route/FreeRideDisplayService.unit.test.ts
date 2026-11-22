@@ -3,6 +3,7 @@ import { Inject } from '../../base/decorators'
 import { createFromJson } from '../../routes'
 import { IIncyclistRoutesApi, RouteApiDetail } from '../../routes/base/api/types'
 import { FreeRideDisplayService } from './FreeRideDisplayService'
+import { GpxDisplayService } from './GpxDisplayService'
 import { Observer } from '../../base/types'
 import { FreeRideStartSettings } from '../../routes/list/types'
 import { FreeRideContinuation } from '../../maps/MapArea/types'
@@ -236,6 +237,35 @@ describe('FreeRideDisplayService', () => {
             service.start()
             await new Promise(resolve => setTimeout(resolve, 100))
             expect(service.emit).toHaveBeenCalledWith('state-update')
+        })
+    })
+
+    describe('getStartContentInfo', () => {
+        let service: FreeRideDisplayService
+
+        beforeEach(() => {
+            service = new FreeRideDisplayService()
+            jest.spyOn(GpxDisplayService.prototype, 'getStartContentInfo').mockReturnValue({ kind: 'map', label: 'Map', state: 'ready' })
+        })
+
+        afterEach(() => {
+            jest.restoreAllMocks()
+        })
+
+        test('is loading until the first options are available, although the view is loaded', () => {
+            jest.spyOn(FreeRideDisplayService.prototype as any, 'currentOptions', 'get').mockReturnValue(undefined)
+            expect(service.getStartContentInfo()).toEqual({ kind: 'map', label: 'Map', state: 'loading' })
+        })
+
+        test('is ready once the options are available', () => {
+            jest.spyOn(FreeRideDisplayService.prototype as any, 'currentOptions', 'get').mockReturnValue([])
+            expect(service.getStartContentInfo().state).toBe('ready')
+        })
+
+        test('keeps the state of the view if that is not ready', () => {
+            jest.spyOn(FreeRideDisplayService.prototype as any, 'currentOptions', 'get').mockReturnValue(undefined)
+            jest.spyOn(GpxDisplayService.prototype, 'getStartContentInfo').mockReturnValue({ kind: 'streetview', label: 'Street View', state: 'unavailable' })
+            expect(service.getStartContentInfo().state).toBe('unavailable')
         })
     })
 

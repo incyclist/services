@@ -157,6 +157,12 @@ describe('RideModeService', () => {
         });
     });
 
+    describe('getStartContentInfo', () => {
+        test('Has no content row', () => {
+            expect(service.getStartContentInfo()).toBeUndefined();
+        });
+    });
+
     describe('getDisplayProperties', () => {
         test('Returns display properties with dashboard columns', () => {
             mockWorkoutList.getSelected.mockReturnValue(null);

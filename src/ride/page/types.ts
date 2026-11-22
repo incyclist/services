@@ -210,6 +210,10 @@ interface RidePageCallbacks {
 
     onRetryStart  ():void
     onIgnoreStart ():void
+    /** start overlay v2: restart a single device while the ride is starting */
+    onRetryStartDevice(udid:string):void
+    /** start overlay v2: stop waiting for a single sensor (this ride only) */
+    onIgnoreStartDevice(udid:string):void
     onCancelStart ():void
     /** Street View only: the rider skips a slow/failing Street View start. */
     onStartWithMap():void

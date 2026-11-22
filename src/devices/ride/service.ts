@@ -1,7 +1,7 @@
 import { sleep } from "../../utils/sleep";
 import { useDeviceAccess } from "../access/service";
 import {AdapterInfo,  ExtendedIncyclistCapability,  IncyclistDeviceSettings, useDeviceConfiguration} from "../configuration";
-import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties } from "./types";
+import { AdapterRideInfo, AdapterStateInfo, LegacyRoute, PreparedRoute, RideServiceCheckFilter, RideServiceDeviceProperties, RetryResult } from "./types";
 import clone from "../../utils/clone";
 import { useUserSettings } from "../../settings";
 import { getLegacyInterface } from "../../utils/logging";
@@ -13,7 +13,7 @@ import { Route } from "../../routes/base/model/route";
 import { useGoogleMaps } from "../../apps";
 import { RouteApiDetail } from "../../routes/base/api/types";
 import { DaumEppProgramEntry, RoutePoint } from "../../routes/base/types";
-import { getPairingStartTimeout } from "./timeouts";
+import { getPairingStartTimeout, DEVICE_RETRY_STOP_TIMEOUT_MS } from "./timeouts";
 
 
 const NO_DATA_THRESHOLD = 10000
@@ -42,6 +42,13 @@ export class DeviceRideService  extends IncyclistService{
     protected rideAdapters: AdapterRideInfo[]
     protected healthChecks = new Set<AdapterRideInfo>()
     protected startPromises: Promise<boolean>[]
+    // per device: token of the latest start attempt. Events of an attempt that was superseded are dropped
+    protected startAttempts = new Map<string,number>()
+    // devices (by udid) with a start attempt that has not settled yet
+    protected inFlightStarts = new Set<string>()
+    // per-device retries that are still running
+    protected retryPromises = new Map<string,Promise<RetryResult>>()
+    protected retryCounts = new Map<string,number>()
     // capabilities each device (by udid) was last successfully started for
     protected startedCapabilities = new Map<string,ExtendedIncyclistCapability[]>()
     protected data:DeviceData  ={}
@@ -742,8 +749,25 @@ export class DeviceRideService  extends IncyclistService{
 
         this.logEvent( {message:`${startType} ${sType} request`,...logProps})
         this.subscribeModeReplaced(ai.adapter)
+
+        // only the latest attempt to start a device is allowed to report its outcome
+        const attempt = startType==='start' ? this.beginStartAttempt(ai.udid) : undefined
+        if (attempt!==undefined)
+            this.inFlightStarts.add(ai.udid)
+        const isSuperseded = () => attempt!==undefined && this.startAttempts.get(ai.udid)!==attempt
+        const settle = () => {
+            if (attempt!==undefined && !isSuperseded())
+                this.inFlightStarts.delete(ai.udid)
+        }
+
         return ai.adapter.start(startProps)
             .then( async (success)=>{
+                settle()
+                if (isSuperseded()) {
+                    this.logEvent({message:`${startType} ${sType} result dropped`, ...logProps, reason:'superseded by a newer attempt'})
+                    return success
+                }
+
                 if (success) {
                     await this.handleStartSuccess(startType, ai, duplicates, sType, logProps);
                     return true
@@ -753,11 +777,22 @@ export class DeviceRideService  extends IncyclistService{
                 return false
             })
             .catch(async err=>{                    
+                settle()
+                if (isSuperseded()) {
+                    this.logEvent({message:`${startType} ${sType} result dropped`, ...logProps, reason:'superseded by a newer attempt'})
+                    return false
+                }
 
                 await this.handleStartRejection(startType, sType, logProps, err, ai, duplicates);
                 return false
             })
 
+    }
+
+    protected beginStartAttempt(udid:string):number {
+        const attempt = (this.startAttempts.get(udid) ?? 0) + 1
+        this.startAttempts.set(udid, attempt)
+        return attempt
     }
 
     // logging must never prevent a device from being started
@@ -1299,12 +1334,117 @@ export class DeviceRideService  extends IncyclistService{
         return this.startAdapters( adapters,'start',props)
     }
 
+    /**
+     * Restarts a single device while the ride is still starting.
+     *
+     * Unlike {@link startRetry} this does not touch any other device: no `start-request` is sent
+     * (so the display keeps the state of all other rows), and it does not wait for starts of other
+     * devices that are still running. If the device itself is still starting, that attempt is
+     * stopped first (bounded by `DEVICE_RETRY_STOP_TIMEOUT_MS`). The outcome of the attempt that was
+     * replaced is never reported.
+     *
+     * @param udid the unique device id of the device
+     * @param props the properties for the start of the device
+     * @returns true if the device was started
+     */
+    async retryStartDevice(udid:string, props:RideServiceDeviceProperties):Promise<boolean> {
+        await this.lazyInit();
+
+        const ai = this.getRideAdapters()?.find( a=>a.udid===udid)
+        if (!ai) {
+            this.logEvent({message:'start device retry skipped', udid, reason:'unknown device'})
+            return false
+        }
+
+        const tsStart = Date.now()
+        const retryAttempt = (this.retryCounts.get(udid) ?? 0) + 1
+        this.retryCounts.set(udid, retryAttempt)
+
+        // supersedes the attempt that might still be running, so that its late events are dropped
+        const token = this.beginStartAttempt(udid)
+
+        const promise = this.runDeviceRetry(ai, props, token)
+        this.retryPromises.set(udid, promise)
+
+        let retryResult:RetryResult
+        try {
+            retryResult = await promise
+        }
+        finally {
+            if (this.retryPromises.get(udid)===promise)
+                this.retryPromises.delete(udid)
+        }
+
+        this.logEvent({
+            message:'start device retry result',
+            device: ai.adapter.getUniqueName(),
+            deviceRole: ai.isControl ? 'trainer' : 'sensor',
+            retryResult,
+            retryDurationMs: Date.now()-tsStart,
+            retryAttempt
+        })
+        return retryResult==='started'
+    }
+
+    protected async runDeviceRetry(ai:AdapterRideInfo, props:RideServiceDeviceProperties, token:number):Promise<RetryResult> {
+        const udid = ai.udid
+        try {
+            if (ai.adapter.isStarted()) {
+                this.emit('start-success', this.getAdapterStateInfo(ai))
+                return 'started'
+            }
+
+            if (this.inFlightStarts.has(udid)) {
+                const stopped = await this.stopWithTimeout(ai, DEVICE_RETRY_STOP_TIMEOUT_MS)
+                if (this.startAttempts.get(udid)!==token)
+                    return 'cancelled'
+
+                if (!stopped) {
+                    this.emit('start-error', this.getAdapterStateInfo(ai), new Error('stop timeout'))
+                    return 'stop-timeout'
+                }
+            }
+
+            const success = await this.startSingleAdapter(ai, [], props, 'start')
+            if (this.startAttempts.get(udid)!==token+1)
+                return 'cancelled'
+
+            return success ? 'started' : 'failed'
+        }
+        catch(err) {
+            this.logError(err,'retryStartDevice')
+            if (this.startAttempts.get(udid)===token || this.startAttempts.get(udid)===token+1)
+                this.emit('start-error', this.getAdapterStateInfo(ai), err)
+            return 'failed'
+        }
+    }
+
+    protected stopWithTimeout(ai:AdapterRideInfo, timeout:number):Promise<boolean> {
+        return new Promise( resolve => {
+            const timer = setTimeout( ()=>{ resolve(false) }, timeout)
+            const done = ()=> { clearTimeout(timer); resolve(true) }
+
+            try {
+                ai.adapter.stop().then(done, done)
+            }
+            catch {
+                done()
+            }
+        })
+    }
+
     async cancelStart():Promise<boolean> {
 
-        if (!this.startPromises)
+        if (!this.startPromises && this.retryPromises.size===0)
             return;
 
         this.logEvent({message:'cancel start'})
+
+        // a per-device retry that is waiting for its device to stop must not start it afterwards
+        this.retryPromises.forEach( (_p,udid)=> {
+            this.beginStartAttempt(udid)
+            this.inFlightStarts.delete(udid)
+        })
 
         const adapters = this.getRideAdapters()
 

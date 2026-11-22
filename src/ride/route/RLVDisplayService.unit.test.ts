@@ -561,6 +561,51 @@ describe('RLVDisplayService', () => {
     });
   });
 
+  describe('getStartContentInfo', () => {
+    const setVideo = (video: any) => {
+      (service as any).isInitialized = true;
+      (service as any).currentVideo = video;
+    };
+
+    test('is a loading video row while the video is not loaded', () => {
+      setVideo({ loaded: false, playback: 'native' });
+      expect(service.getStartContentInfo()).toEqual({ kind: 'video', label: 'Video', state: 'loading' });
+    });
+
+    test('is ready once the video is loaded', () => {
+      setVideo({ loaded: true, playback: 'native' });
+      expect(service.getStartContentInfo().state).toBe('ready');
+    });
+
+    test('is failed if the video could not be loaded', () => {
+      setVideo({ loaded: false, error: 'Could not decode video', playback: 'native' });
+      expect(service.getStartContentInfo().state).toBe('failed');
+    });
+
+    test('reports the progress of an AVI conversion', () => {
+      setVideo({ loaded: false, playback: 'converted', convertPct: 12, convertSeconds: 34, buffering: '34s' });
+      expect(service.getStartContentInfo()).toEqual({
+        kind: 'video', label: 'Video', state: 'loading', progress: { convertPct: 12, convertSeconds: 34 }
+      });
+    });
+
+    test('the progress of an AVI conversion is known before the first update', () => {
+      setVideo({ loaded: false, playback: 'converted' });
+      expect(service.getStartContentInfo().progress).toEqual({ convertPct: undefined, convertSeconds: undefined });
+    });
+
+    test('a native video has no progress', () => {
+      setVideo({ loaded: false, playback: 'native', buffering: '3s' });
+      expect(service.getStartContentInfo().progress).toBeUndefined();
+    });
+
+    test('onConvertUpdate stores the progress', () => {
+      setVideo({ loaded: false, playback: 'converted', syncHelper: { setBufferedTime: jest.fn() } });
+      (service as any).onConvertUpdate(25, 100, 40);
+      expect(service.getStartContentInfo().progress).toEqual({ convertPct: 25, convertSeconds: 40 });
+    });
+  });
+
   describe('getLogProps', () => {
     test('returns object with mode set to video', () => {
       const props = service.getLogProps() as any;

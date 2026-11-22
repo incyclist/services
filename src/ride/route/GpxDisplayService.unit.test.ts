@@ -454,6 +454,57 @@ describe('GpxDisplayService', () => {
         })
     })
 
+    describe('getStartContentInfo', () => {
+        let service: GpxDisplayService
+        const setupView = (view:string) => setupMocks(service, {
+            mockRideService: true,
+            userSettingsGet: jest.fn((key, def) => key === 'preferences.rideView' ? view : def)
+        })
+
+        beforeEach(() => {
+            service = new GpxDisplayService()
+        })
+
+        afterEach(() => {
+            cleanupMocks(service)
+        })
+
+        test('Map is a map row', () => {
+            setupView('map')
+            expect(service.getStartContentInfo()).toEqual({ kind: 'map', label: 'Map', state: 'ready' })
+        })
+
+        test('Satellite View is loading until it reports Loaded', () => {
+            setupView('sat')
+            const loading = service.getStartContentInfo()
+            service['mapLoaded'] = true
+            const loaded = service.getStartContentInfo()
+
+            expect(loading).toEqual({ kind: 'satellite', label: 'Satellite View', state: 'loading' })
+            expect(loaded.state).toBe('ready')
+        })
+
+        test('a map error is reported as failed', () => {
+            setupView('sat')
+            service['mapError'] = 'x'
+            expect(service.getStartContentInfo().state).toBe('failed')
+        })
+
+        test.each([
+            ['waiting', 'waiting'],
+            ['loading', 'loading'],
+            ['slow', 'loading'],
+            ['loaded', 'ready'],
+            ['unavailable', 'unavailable'],
+        ])('Street View %s is reported as %s', (viewState, state) => {
+            setupView('sv')
+            service['svFlowActive'] = true
+            service['svViewState'] = viewState as any
+
+            expect(service.getStartContentInfo()).toEqual({ kind: 'streetview', label: 'Street View', state })
+        })
+    })
+
     describe('isStartRideCompleted', () => {
         let service: GpxDisplayService
 

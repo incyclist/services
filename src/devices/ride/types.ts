@@ -62,3 +62,6 @@ export interface PreparedRoute {
     points: Point[]    
 }
 
+
+/** Outcome of the restart of a single device while the ride is starting */
+export type RetryResult = 'started' | 'failed' | 'stop-timeout' | 'cancelled'
