@@ -21,7 +21,7 @@ export class StravaSyncProvider
 
     async loadDetails(route: Route): Promise<Route> {
         try {
-            this.logEvent({message:'load route details', id:route?.description?.id, title:route?.description?.title})
+            this.logEvent({message:'load route details',  externalApp:this.getApp(),id:route?.description?.id, title:route?.description?.title})
 
             const id = this.getOriginalId(route)
             if (!id) return
@@ -43,7 +43,7 @@ export class StravaSyncProvider
             
         }
         catch(err) {
-            this.logError(err,'loadDetails',{id:route?.description?.id, title:route?.description?.title})
+            this.logError(err,'loadDetails',{externalApp:this.getApp(),id:route?.description?.id, title:route?.description?.title})
         }
         
     }
@@ -72,7 +72,7 @@ export class StravaSyncProvider
 
             }
             catch (err){ 
-                this.logEvent( {message:'could not load tours', reason:err.message})
+                this.logEvent( {message:'could not load tours', externalApp:this.getApp(), reason:err.message})
                 done = true
                 error = true
             }

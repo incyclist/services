@@ -204,7 +204,6 @@ describe('TrainerDayUpload', () => {
 
             expect(success).toBe(false)
             expect(api.uploadActivity).not.toHaveBeenCalled()
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainerDay Upload skipped', reason: 'not initialized' })
         })
 
         test('unsupported format: error is stored in the links', async () => {
@@ -260,7 +259,6 @@ describe('TrainerDayUpload', () => {
 
             expect(success).toBe(false)
             expect(activity.links).toEqual({ trainerday: { error: 'Upload rejected by TrainerDay (HTTP 400): invalid' } })
-            expect(logSpy).toHaveBeenCalledWith({ message: 'TrainerDay Upload failure', error: 'Upload rejected by TrainerDay (HTTP 400): invalid' })
         })
 
         test('fit file delivered as text by a binding that ignores the encoding: fails', async () => {

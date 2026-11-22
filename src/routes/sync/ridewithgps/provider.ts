@@ -34,8 +34,9 @@ export class RideWithGpsSyncProvider
     }
 
     async loadDetails(route: Route): Promise<Route> {
+        const externalApp = this.getApp()
         try {
-            this.logEvent({ message: 'load route details', id: route?.description?.id })
+            this.logEvent({ message: 'load route details', externalApp,id: route?.description?.id })
 
             const id = this.getOriginalId(route)
             if (!id) return
@@ -46,7 +47,7 @@ export class RideWithGpsSyncProvider
             return route
         }
         catch (err) {
-            this.logError(err, 'loadDetails', { id: route?.description?.id })
+            this.logError(err, 'loadDetails', { externalApp,id: route?.description?.id })
         }
     }
 
@@ -98,7 +99,7 @@ export class RideWithGpsSyncProvider
                 await sleep(100) // NOSONAR
             }
             catch (err) {
-                this.logEvent({ message: 'could not load routes', reason: err.message })
+                this.logEvent({ message: 'could not load routes',externalApp:this.getApp(), reason: err.message })
                 done = true
                 error = true
             }
@@ -110,7 +111,7 @@ export class RideWithGpsSyncProvider
     protected isActive(route: RideWithGpsRoute, source: string): boolean {
         const active = source === 'own' ? isOwnActiveRoute(route) : route.archived !== true
         if (!active)
-            this.logEvent({ message: 'route filtered', id: route.id, source, reason: 'archived' + (route.archived === null ? ' or not owned' : '') })
+            this.logEvent({ message: 'route filtered',externalApp:this.getApp(), id: route.id, source, reason: 'archived' + (route.archived === null ? ' or not owned' : '') })
         return active
     }
 
@@ -136,13 +137,13 @@ export class RideWithGpsSyncProvider
                     await sleep(100) // NOSONAR
                 }
                 catch (err) {
-                    this.logEvent({ message: 'could not load collection', id: collection.id, reason: err.message })
+                    this.logEvent({ message: 'could not load collection', externalApp:this.getApp(),id: collection.id, reason: err.message })
                     error = true
                 }
             }
         }
         catch (err) {
-            this.logEvent({ message: 'could not load collections', reason: err.message })
+            this.logEvent({ message: 'could not load collections',  externalApp:this.getApp(),reason: err.message })
             error = true
         }
         return { routes, error }
@@ -199,13 +200,13 @@ export class RideWithGpsSyncProvider
             if (isRoadCyclingRoute(detail))
                 return true
 
-            this.logEvent({ message: 'route skipped', id: route.id, activityTypes: detail.activity_types })
+            this.logEvent({ message: 'route skipped',  externalApp:this.getApp(),id: route.id, activityTypes: detail.activity_types })
             this.excluded.set(String(route.id), route.updated_at)
             return false
         }
         catch (err) {
             // not decided: the route is neither added nor excluded, it is checked again with the next sync
-            this.logEvent({ message: 'could not check the sport of the route', id: route.id, reason: err.message })
+            this.logEvent({ message: 'could not check the sport of the route',  externalApp:this.getApp(),id: route.id, reason: err.message })
             return undefined
         }
     }

@@ -68,7 +68,6 @@ export class TrainingPeaksUpload extends IncyclistService implements IActivityUp
     async upload(activity: ActivityDetails, format: string = 'TCX'): Promise<boolean> {
 
         if (!this.ensureInitialized()) {
-            this.logEvent({ message: 'TrainingPeaks Upload skipped', reason: 'not initialized' })
             return false
         }
 
@@ -97,7 +96,6 @@ export class TrainingPeaksUpload extends IncyclistService implements IActivityUp
             if (err instanceof TrainingPeaksDuplicateError)
                 return await this.onDuplicate(activity)
 
-            this.logEvent({ message: 'TrainingPeaks Upload failure', error: err.message })
             this.setLink(activity, { error: err.message })
             return false
         }

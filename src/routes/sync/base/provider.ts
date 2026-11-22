@@ -94,13 +94,13 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
             this.observer.emit('done')
             return []
         }
-        this.logEvent({message:`start ${app} route sync`})
+        this.logEvent({message:`start route sync`, externalApp:app})
 
         const {routes,done,error,incomplete} = await this.loadRoutesFromApi()
 
         if (error) {
             // nothing is reported (an incomplete list would mark routes as deleted), but the sync has to end
-            this.logEvent({message:`${app} route sync failed`})
+            this.logEvent({message:`route sync failed`,externalApp:app})
             this.observer.emit('done')
             return []
         }
@@ -109,13 +109,13 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
             this.updateLastSyncTime()
 
             this.observer.emit('done')
-            this.logEvent({message:`${app} route sync finished`, added:added?.length, updated:updated?.length,deleted:deleted.length})
+            this.logEvent({message:`route sync finished`, externalApp:app, added:added?.length, updated:updated?.length,deleted:deleted.length})
             return added
 
         }
         else {
             this.observer.emit('done')
-            this.logEvent({message:`${app} route sync stopped`})
+            this.logEvent({message:`route sync stopped`,externalApp:app})
             return []
         }
     }
@@ -263,10 +263,20 @@ export abstract class BaseSyncProvider<T,A extends IExternalAppApi,C extends ICo
     }
 
     protected getSyncKey() {
-        const app = this.getConnection().getAppKey()
+        const app = this.getApp()
         return `apps.${app}.lastSync`
     }
 
+    protected getApp() {
+        let app:string
+        try {
+            app = this.getConnection().getAppKey()
+        }
+        catch (err) {
+            this.logError(err,'getApp')
+        }
+        return app
+    }
 
     @Injectable
     protected getUserSettings() {

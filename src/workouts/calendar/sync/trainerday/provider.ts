@@ -18,7 +18,7 @@ const SYNC_DAYS = 28
  * `bike` are offered; workouts that can not be represented (see `convertTrainerDayWorkout`) are skipped and logged.
  * TrainerDay does not deliver a modification time, so a hash of the content of the workout is used to detect changes.
  */
-export class TrainerDayCalendarSyncProvider extends BaseCalendarSyncProvider<TrainerDayCalendarWorkout> {
+export class TrainerDayCalendarSyncProvider extends BaseCalendarSyncProvider<TrainerDayCalendarWorkout,TrainerDayAppConnection> {
 
     constructor() {
         super('TrainerDayCalendarSync', SERVICE, SYNC_DAYS)

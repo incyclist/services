@@ -95,6 +95,8 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
                 return []
             }
 
+            this.logEvent({message:'start workout sync',externalApp:'intervals'})
+
 
             // set start date to Monday of current week
         
@@ -105,7 +107,7 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
             
             const cycling =cw.filter( w => w.type === 'Ride' || w.type==='VirtualRide')
 
-            this.logger.logEvent({message:'workout sync', externalApp:'intervals', 
+            this.logger.logEvent({message:'workout sync server data', externalApp:'intervals', 
                     oldest: oldest.toLocaleDateString(), cntTotal:cw.length, cntCycling:cycling.length,
                     workouts: cw.map(cw=>`${cw.type}:${cw.name}`).join('|')
                 })
@@ -115,10 +117,14 @@ export class IntervalsCalendarSyncProvider extends IncyclistService implements I
             this.observer.emit(event,this.workouts,'intervals')    
             
             this.lastSyncTS = Date.now()
+            this.logEvent({message:'workout sync finished',externalApp:'intervals'})
+
             return this.workouts 
 
         }
-        catch {
+        catch (err) {
+            this.logEvent({ message: 'workout sync failed', externalApp: 'intervals', error: err.message })
+
             this.observer.emit(event,[],'intervals')
             return []
         }
