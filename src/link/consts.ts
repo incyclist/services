@@ -43,7 +43,7 @@ export const LINK_CLIENT_MESSAGE_TYPES: readonly LinkClientMessageType[] = [
 
 /** Message types the desktop sends. Must list every key of `LinkServerMessageBodies`. */
 export const LINK_SERVER_MESSAGE_TYPES: readonly LinkServerMessageType[] = [
-    'hello', 'error', 'pending', 'paired', 'pair-failed', 'auth-result', 'session', 'pong', 'echo',
+    'hello', 'error', 'pending', 'paired', 'pair-failed', 'auth-result', 'session', 'catalog-changed', 'pong', 'echo',
 ]
 
 /** Unsigned message types the desktop accepts before authentication. */

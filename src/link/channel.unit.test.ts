@@ -38,7 +38,7 @@ describe('link channel', () => {
         }
         const server: Record<LinkServerMessageType, true> = {
             'hello': true, 'error': true, 'pending': true, 'paired': true, 'pair-failed': true, 'auth-result': true,
-            'session': true, 'pong': true, 'echo': true,
+            'session': true, 'catalog-changed': true, 'pong': true, 'echo': true,
         }
         expect([...LINK_CLIENT_MESSAGE_TYPES].sort()).toEqual(Object.keys(client).sort())
         expect([...LINK_SERVER_MESSAGE_TYPES].sort()).toEqual(Object.keys(server).sort())
@@ -167,7 +167,7 @@ describe('link channel', () => {
 
             test('reports a signed unknown type as unknown-type and still advances the sequence', () => {
                 const client = established()
-                const unknown = withMac({ t: 'catalog-changed', s: 1, b: {} }, 's2c')
+                const unknown = withMac({ t: 'some-future-type', s: 1, b: {} }, 's2c')
                 expect(client.decode(unknown)).toEqual({ ok: false, reason: 'unknown-type' })
                 expect(client.decode(unknown)).toEqual({ ok: false, reason: 'replay' })
             })

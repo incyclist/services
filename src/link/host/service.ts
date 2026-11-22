@@ -65,6 +65,7 @@ export class LocalLinkService extends IncyclistService {
     protected lastSeenPersisted = new Map<string, number>()
     protected firewallNotice = false
     protected sharingListener?: () => void
+    protected pushedCatalogVersion?: string
 
     constructor() {
         super('LocalLink')
@@ -344,12 +345,31 @@ export class LocalLinkService extends IncyclistService {
         this.pruneExpiredTokens()
         await sharing.setTokens(this.publishedTokens())
         this.sharingListener?.()
-        const onCatalog = () => this.emitState()
+        const onCatalog = (e?: { catalogVersion?: string }) => this.onCatalogChanged(e?.catalogVersion)
         sharing.on('catalog-changed', onCatalog)
         this.sharingListener = () => sharing.off('catalog-changed', onCatalog)
         await sharing.start(this.getLinkId())
+        // what the phones learn in `session`; only a later change is pushed
+        this.pushedCatalogVersion = sharing.getCatalogVersion()
         this.scheduleTokenExpiry()
         this.checkFirewallNotice()
+    }
+
+    /**
+     * A rebuilt catalog with a new version is pushed once to every authenticated session. The
+     * sharing service already debounces rebuilds; the version check drops repeats.
+     */
+    protected onCatalogChanged(catalogVersion?: string): void {
+        this.emitState()
+        if (!this.running || !catalogVersion || catalogVersion === this.pushedCatalogVersion)
+            return
+        this.pushedCatalogVersion = catalogVersion
+        for (const conn of [...this.connections.values()]) {
+            if (!conn.clientId)
+                continue
+            this.send(conn, 'catalog-changed', { catalogVersion })
+                .catch(err => this.logError(err as Error, 'pushCatalogChanged'))
+        }
     }
 
     protected async stopTransport(): Promise<void> {
@@ -359,6 +379,7 @@ export class LocalLinkService extends IncyclistService {
         this.getSharing().stop()
         this.sharingListener?.()
         this.sharingListener = undefined
+        this.pushedCatalogVersion = undefined
         clearTimeout(this.tokenTimer)
         this.connections.clear()
         this.suffix = undefined

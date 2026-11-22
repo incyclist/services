@@ -147,6 +147,14 @@ export interface SessionBody {
     capabilities: string[]
 }
 
+/**
+ * `catalog-changed`: pushed (signed) on an open session when the computer's route catalog
+ * changed. Not a request: carries no `id`. The phone compares the version with the one it holds.
+ */
+export interface CatalogChangedBody {
+    catalogVersion: string
+}
+
 // --- keepalive and test ---
 
 /** Body of messages that carry no data (`ping`, `pong`). */
@@ -182,6 +190,7 @@ export interface LinkServerMessageBodies {
     'pair-failed': PairFailedBody
     'auth-result': AuthResultBody
     'session': SessionBody
+    'catalog-changed': CatalogChangedBody
     'pong': EmptyBody
     'echo': EchoBody
 }

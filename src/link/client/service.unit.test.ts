@@ -58,6 +58,7 @@ describe('LocalLinkClientService', () => {
     let host: LocalLinkService
     let net: FakeNetwork
     let hostLink: ReturnType<typeof makeHostLink>
+    let sharing: Record<string, jest.Mock>
     let secure: ReturnType<typeof makeMemorySecureStorage>
     let access: FakeAccess
     let devicePairing: { isScanning: jest.Mock, isPairing: jest.Mock }
@@ -135,10 +136,11 @@ describe('LocalLinkClientService', () => {
 
         // the desktop side: the real host service behind a fake transport
         Inject('UserSettings', new UserSettingsMock({}))
-        Inject('Sharing', {
+        sharing = {
             setTokens: jest.fn(async () => true), start: jest.fn(async () => undefined), stop: jest.fn(),
             getRouteCount: jest.fn(() => 3), getCatalogVersion: jest.fn(() => 'cv1'), on: jest.fn(), off: jest.fn(),
-        })
+        }
+        Inject('Sharing', sharing)
         hostLink = makeHostLink()
         bindings.localLink = hostLink.link as unknown as ILocalLinkBinding
         net.endpoints.set(HOST_ID, hostLink.endpoint)
@@ -741,6 +743,20 @@ describe('LocalLinkClientService', () => {
             active.conn.send('echo', { data: 'x' }, 'e1')
             await until(() => pushed.length > 0)
             expect(pushed[0]).toMatchObject({ linkId, message: { t: 'echo', id: 'e1', b: { data: 'x' } } })
+        })
+    })
+
+    describe('catalog-changed push', () => {
+        test('a rebuilt catalog on the computer reaches the phone as a signed push', async () => {
+            const linkId = await pairPhone()
+            const pushed: Array<{ linkId: string, message: { t: string, b: unknown } }> = []
+            client.on('push', e => pushed.push(e))
+
+            const handler = sharing.on.mock.calls.find(c => c[0] === 'catalog-changed')![1]
+            handler({ catalogVersion: 'cv2', routeCount: 4 })
+
+            await until(() => pushed.length > 0)
+            expect(pushed[0]).toMatchObject({ linkId, message: { t: 'catalog-changed', b: { catalogVersion: 'cv2' } } })
         })
     })
 

@@ -418,6 +418,49 @@ describe('LocalLinkService', () => {
             return { secret, linkId, phone }
         }
 
+        describe('catalog-changed push', () => {
+            const catalogChanged = (version: string) => {
+                const call = sharing.on.mock.calls.find(c => c[0] === 'catalog-changed')!
+                call[1]({ catalogVersion: version, routeCount: 4 })
+                return flush()
+            }
+            const pushes = (phone: Phone) => phone.inbox().filter(m => m.t === 'catalog-changed')
+
+            test('is sent signed to every authenticated session, and to nobody else', async () => {
+                const { phone, secret, linkId } = await authenticate()
+                const second = await connect(secret, linkId, 'c3')
+                const outcome = verifyLinkAuthResult(second.phone.last().b as never, second.state)
+                if (!outcome.ok)
+                    throw new Error('auth failed')
+                await second.phone.send('auth-confirm', outcome.confirm)
+                second.phone.channel.establish(outcome.sessionKey)
+                const stranger = new Phone(h, 'c4')
+                await stranger.hello()
+                phone.inbox()
+                second.phone.inbox()
+                stranger.inbox()
+                const strangerFrames = h.sent.c4.length
+
+                await catalogChanged('cv2')
+
+                expect(pushes(phone)).toEqual([expect.objectContaining({ t: 'catalog-changed', b: { catalogVersion: 'cv2' } })])
+                expect(pushes(second.phone)).toHaveLength(1)
+                expect(h.sent.c4).toHaveLength(strangerFrames)
+            })
+
+            test('is not repeated for the same version, and not for the version the session announced', async () => {
+                const { phone } = await authenticate()
+                phone.inbox()
+                await catalogChanged('cv1')
+                expect(pushes(phone)).toHaveLength(0)
+                await catalogChanged('cv2')
+                await catalogChanged('cv2')
+                expect(pushes(phone)).toHaveLength(1)
+                await catalogChanged('cv3')
+                expect(pushes(phone)).toHaveLength(1)
+            })
+        })
+
         test('full handshake: auth, auth-confirm, signed session, ping and echo', async () => {
             const { phone } = await authenticate()
             const session = phone.inbox().find(m => m.t === 'session') as Msg & { b: Record<string, unknown> }

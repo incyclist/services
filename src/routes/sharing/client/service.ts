@@ -1,6 +1,7 @@
 import { Injectable, Singleton } from '../../../base/decorators'
 import { IncyclistService } from '../../../base/service'
 import { useLocalLinkClient } from '../../../link/client/service'
+import type { LinkServerMessage } from '../../../link/types'
 import type { LinkClientSession, LinkMediaAccess } from '../../../link/client/types'
 import { useRouteList } from '../../list/service'
 import type { CatalogDocument, CatalogEntry, SharedRouteEntry } from '../types'
@@ -179,7 +180,7 @@ export class RouteSharingClientService extends IncyclistService {
         const client = this.getLocalLinkClient()
         const onSession = (e: { linkId: string, session?: LinkClientSession }) => this.onSessionChanged(e)
         const onForgotten = (linkId: string) => this.onLinkForgotten(linkId)
-        const onPush = (e: { linkId: string, message?: { t?: string, b?: { catalogVersion?: string } } }) => this.onPush(e)
+        const onPush = (e: { linkId: string, message?: LinkServerMessage }) => this.onPush(e)
         client.on('session-changed', onSession)
         client.on('link-forgotten', onForgotten)
         client.on('push', onPush)
@@ -209,11 +210,12 @@ export class RouteSharingClientService extends IncyclistService {
      * `catalog-changed` is pushed by a computer whose library changed; the body may carry the new
      * version. A push for the version we already hold causes no sync.
      */
-    protected onPush(e: { linkId: string, message?: { t?: string, b?: { catalogVersion?: string } } }): void {
-        if (e?.message?.t !== CATALOG_CHANGED_MESSAGE)
+    protected onPush(e: { linkId: string, message?: LinkServerMessage }): void {
+        const message = e?.message
+        if (message?.t !== CATALOG_CHANGED_MESSAGE)
             return
         const known = this.getStoredVersion(e.linkId)
-        const announced = e.message.b?.catalogVersion
+        const announced = message.b?.catalogVersion
         if (announced !== undefined && announced === known)
             return
         this.syncLink(e.linkId, { force: true }).catch(err => this.logError(err, 'push'))
