@@ -8,7 +8,7 @@ import type { SharedRouteEntry } from '../types'
 import { PROBE_TIMEOUT_MS, UNREACHABLE_TTL_MS } from './consts'
 import { useRouteSharingClient } from './service'
 import type {
-    AvailabilityOptions, LinkSnapshot, ResolvedVideo, ResolveOptions, RouteAvailability, UnavailableReason, VideoAvailability, VideoSourceInput,
+    AvailabilityOptions, LinkSnapshot, OpenRowResult, ResolvedVideo, ResolveOptions, RouteAvailability, UnavailableReason, VideoAvailability, VideoSourceInput,
 } from './types'
 
 const isRemote = (url: string | undefined): url is string => typeof url === 'string' && url.startsWith('http')
@@ -268,10 +268,21 @@ export class RouteVideoResolver extends IncyclistService {
 
     /** @returns the player URL of the row's video if its computer serves it now */
     protected async probe(row: SharedRouteEntry): Promise<string | undefined> {
+        return (await this.openRow(row)).url
+    }
+
+    /**
+     * Checks that the computer of a row serves the row's video now and builds the (ephemeral) URL
+     * with a fresh media token. A stale handle (`404`) is refreshed once; a gone file (`410`) counts a miss.
+     *
+     * @returns the URL, or the reason there is none: `unreachable` (no session, no answer or any other
+     * status) or `gone` (`410`)
+     */
+    async openRow(row: SharedRouteEntry): Promise<OpenRowResult> {
         const media = await this.getLocalLinkClient().getMedia(row.linkId)
         if (!media) {
             this.unreachableAt.set(row.linkId, Date.now())
-            return undefined
+            return { failure: 'unreachable' }
         }
         this.unreachableAt.delete(row.linkId)
 
@@ -284,11 +295,13 @@ export class RouteVideoResolver extends IncyclistService {
                 status = await this.head(media, handle)
             }
         }
-        if (status === 410)
+        if (status === 410) {
             await this.getSharingClient().onGone(row.linkId, row.routeKey)
+            return { failure: 'gone' }
+        }
         if (status < 200 || status >= 300)
-            return undefined
-        return `${media.baseUrl}/v/${handle}?t=${encodeURIComponent(media.token)}`
+            return { failure: 'unreachable' }
+        return { url: `${media.baseUrl}/v/${handle}?t=${encodeURIComponent(media.token)}`, expiresAt: media.expiresAt }
     }
 
     /** @returns the HTTP status of a `HEAD` request to the handle, `0` if it did not answer */

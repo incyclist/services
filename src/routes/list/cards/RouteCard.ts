@@ -1117,6 +1117,16 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
     }
 
+    /**
+     * The video of the route was copied to this device (from a computer): from now on the route
+     * plays from the local file, exactly as after a download.
+     *
+     * @param url the `video://` URL of the local file
+     */
+    async onCopiedToDevice( url:string):Promise<void> {
+        await this.onDownloadCompleted(url)
+    }
+
     protected async onDownloadCompleted( url:string) {
         try {
             getRouteList().logEvent({message:'download completed', route:this.route?.description?.title})
@@ -1154,7 +1164,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const descr = this.getRouteDescription()
 
         descr.originalVideoUrl = descr.videoUrl
-        if (!descr.downloadUrl && descr.videoUrl.startsWith('http')) {
+        if (!descr.downloadUrl && descr.videoUrl?.startsWith('http')) {
             descr.downloadUrl = descr.videoUrl;
         }
         this.save().catch( err=>{ this.logError(err,'saveOriginalVideoUrl') })

@@ -130,3 +130,8 @@ export interface AvailabilityOptions {
     /** the snapshot of the computers; built from the current state if absent */
     links?: LinkSnapshot
 }
+
+/** Outcome of opening the video of a row: the ephemeral URL (with the media token), or why there is none. */
+export type OpenRowResult =
+    | { url: string, expiresAt: number, failure?: undefined }
+    | { url?: undefined, failure: 'unreachable' | 'gone' }

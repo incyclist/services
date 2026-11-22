@@ -33,3 +33,9 @@ export const DESCRIPTOR_DOWNLOAD_TIMEOUT_MS = 30_000
 
 /** Wait before the one retry after the computer answered `busy`. */
 export const DESCRIPTOR_BUSY_RETRY_MS = 2000
+
+/**
+ * Free space asked for on top of the video itself before it is copied to this device: a transfer
+ * that fills the volume completely would take the rest of the app down with it.
+ */
+export const COPY_STORAGE_MARGIN_BYTES = 500 * 1024 * 1024
