@@ -22,6 +22,10 @@ export interface CatalogEntry {
     videoFormat: string
     size: number
     mtime: number
+    /** `official`: a route-server route the phone already knows by `routeKey`; `local`: a route only this computer has */
+    origin?: 'official' | 'local'
+    /** content-derived identity of the route geometry, when the computer knows it */
+    routeHash?: string
 }
 
 /** The catalog document served by a computer's media listener. */

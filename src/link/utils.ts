@@ -105,3 +105,7 @@ export const hmacSha256 = (key: Uint8Array, ...parts: Uint8Array[]): Buffer => {
 
 /** Fresh random bytes from the crypto binding. */
 export const randomBytes = (size: number): Buffer => Buffer.from(getLinkCrypto().randomBytes(size))
+
+/** base64url SHA-256 of a UTF-8 text. */
+export const sha256Base64Url = (text: string): string =>
+    toBase64Url(getLinkCrypto().createHash('sha256').update(text).digest())
