@@ -199,6 +199,119 @@ export type LinkServerMessage = {
     [K in LinkServerMessageType]: LinkEnvelope<K, LinkServerMessageBodies[K]>
 }[LinkServerMessageType]
 
+// --- wire-protocol core ---
+
+/**
+ * Direction of a frame, bound into every frame MAC so that a frame cannot be reflected
+ * back to its sender: `c2s` = phone -> desktop, `s2c` = desktop -> phone.
+ */
+export type LinkDirection = 'c2s' | 's2c'
+
+/** Role of one end of a control connection. */
+export type LinkRole = 'client' | 'server'
+
+/** Supported wire protocol range of one end. */
+export interface LinkProtocolRange {
+    min: LinkProtocolVersion
+    max: LinkProtocolVersion
+}
+
+/** Output of {@link LinkFrameReader.push}: one event per preamble, frame or error found. */
+export type LinkFrameEvent =
+    | { type: 'preamble', version: number }
+    | { type: 'frame', payload: string }
+    | { type: 'error', code: LinkFramingErrorCode }
+
+/**
+ * Framing errors. After an error the reader is dead and the connection must be closed:
+ * the byte stream can no longer be resynchronised.
+ */
+export type LinkFramingErrorCode = 'bad-preamble' | 'unsupported-framing' | 'frame-too-large'
+
+/** Options of a {@link LinkFrameReader}. */
+export interface LinkFrameReaderOptions {
+    /** frames larger than this are an error; capped at the transport's hard ceiling */
+    maxFrameBytes?: number
+    /**
+     * Expect a preamble (`INCYLINK` + u8 version) before the first frame. A client reading the
+     * server's answer sets this to the framing version it requested; the answered version
+     * must be between 1 and this value.
+     */
+    preamble?: { maxVersion: number }
+}
+
+/** Result of decoding an envelope from a frame payload. */
+export type LinkEnvelopeDecodeResult =
+    | { ok: true, envelope: LinkEnvelope }
+    | { ok: false, reason: 'malformed' }
+
+/**
+ * Why a received frame was not accepted.
+ * - `malformed`: not a JSON envelope
+ * - `not-allowed`: before authentication, a type outside the handshake/pairing/auth set
+ * - `unsigned`: after authentication, a frame without MAC
+ * - `bad-mac`: after authentication, a MAC that does not verify
+ * - `replay`: `s` not strictly greater than the last accepted `s` of that direction
+ * - `unknown-type`: a valid frame of a type this version does not know; ignore it
+ */
+export type LinkRejectReason = 'malformed' | 'not-allowed' | 'unsigned' | 'bad-mac' | 'replay' | 'unknown-type'
+
+/** Result of {@link LinkChannel.decode}. */
+export type LinkReceiveResult<M> =
+    | { ok: true, message: M }
+    | { ok: false, reason: LinkRejectReason }
+
+/** A paired computer the phone probes for: its `linkId` and pairing secret. */
+export interface LinkAuthCandidate {
+    linkId: string
+    /** pairing secret, base64url */
+    secret: string
+}
+
+/** A paired phone as the desktop matches it in an `auth` probe. */
+export interface LinkAuthClient {
+    clientId: string
+    /** pairing secret, base64url */
+    secret: string
+}
+
+/** The phone's state of one authentication attempt, kept until `auth-result` arrives. */
+export interface LinkClientAuthState {
+    /** the probe's client nonce, base64url */
+    nc: string
+    /** candidates in the order of the probe's `kids` */
+    candidates: LinkAuthCandidate[]
+}
+
+/** The phone's result of verifying an `auth-result`. */
+export type LinkClientAuthOutcome =
+    | { ok: false }
+    | {
+        ok: true
+        /** the computer that proved its identity */
+        candidate: LinkAuthCandidate
+        /** body of the `auth-confirm` to send (unsigned) */
+        confirm: AuthConfirmBody
+        /** key for every following frame in both directions */
+        sessionKey: Uint8Array
+    }
+
+/** The desktop's state of one authentication attempt, kept until `auth-confirm` arrives. */
+export interface LinkServerAuthState {
+    clientId: string
+    secret: string
+    nc: string
+    ns: string
+}
+
+/** The desktop's answer to an `auth` probe. */
+export interface LinkServerAuthResult {
+    /** body of the `auth-result` to send (unsigned) */
+    body: AuthResultBody
+    /** present only on a match; needed to verify the following `auth-confirm` */
+    state?: LinkServerAuthState
+}
+
 // --- records ---
 
 /** Address of a computer's control listener. */
