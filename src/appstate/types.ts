@@ -1,4 +1,4 @@
-export type FeatureToggle = 'WEBBLE_WINDOWS' | 'MOBILE_NEXT_VIDEO' | 'VIDEO_ROUTE' | 'SV_EAGER_INIT'
+export type FeatureToggle = 'WEBBLE_WINDOWS' | 'MOBILE_NEXT_VIDEO' | 'VIDEO_ROUTE' | 'SV_EAGER_INIT' | 'BRIDGE_MODE'
 
 export type Interfaces = 'ant'|'ble'|'serial'|'wifi'|'tcpip'
 

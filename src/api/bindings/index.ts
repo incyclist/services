@@ -16,6 +16,7 @@ import type { ICryptoBinding } from '../crypto/types'
 import type { IFetchBinding } from '../fetch/types'
 import type { IMapAvailabilityBinding } from '../mapAvailability/types'
 import type { IFileAccessBinding } from '../fileAccess/types'
+import type { ILocalLinkBinding } from '../localLink/types'
 
 
 export interface IUserSettingsBinding {
@@ -48,6 +49,9 @@ export class IncyclistBindings {
     // iOS only: access to files outside the app sandbox. Absent everywhere else, and every
     // feature built on it must stay inert when it is missing or reports isSupported()===false.
     public fileAccess?: IFileAccessBinding
+    // Desktop only: the local-link transport. Absent on mobile and in the browser, and every
+    // feature built on it must stay inert when it is missing or reports isSupported()===false.
+    public localLink?: ILocalLinkBinding
     public ant
     public ble
     public wifi
