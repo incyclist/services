@@ -5,6 +5,7 @@ import { SummaryCardDisplayProps } from "../list/cards/types";
 import { DisplayType, SearchFilter, SearchFilterOptions } from "../list/types";
 import { RouteVideoStatus, VideoKeepChoice } from "../video-availability/types";
 import type { RouteAvailabilityProps } from "../sharing/client/types";
+import type { ThumbnailLinkSource } from "../thumbnails/types";
 
 
 
@@ -32,7 +33,10 @@ export interface RoutePageDisplayProps  {
 // Where the route can be played from (`availability`, `sourceLabel`, `unavailableReason`) is derived
 // from cached state only. The props are absent while route sharing is not available, except on
 // routes that exist only because a computer shares them. `sourceLabel` is one display name, never a count.
-export type RouteItemProps = SummaryCardDisplayProps & Partial<RouteAvailabilityProps>
+//
+// `thumbnailLink` is present on routes that exist only because a computer shares them: it tells the
+// thumbnail cache which computer (and which handle) the thumbnail can be fetched from.
+export type RouteItemProps = SummaryCardDisplayProps & Partial<RouteAvailabilityProps> & { thumbnailLink?: ThumbnailLinkSource }
 
 
 export interface IPageCallBacks  {
@@ -101,6 +105,8 @@ export interface RouteDetailsProps {
     availability?:      RouteAvailabilityProps['availability']
     sourceLabel?:       string
     unavailableReason?: RouteAvailabilityProps['unavailableReason']
+    /** Where the thumbnail of a route that only a computer shares can be fetched from. */
+    thumbnailLink?:     ThumbnailLinkSource
 }
 
 /** Resolved video state for one route - the UI renders this as-is and forwards the actions. */

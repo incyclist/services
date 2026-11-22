@@ -217,6 +217,25 @@ describe('RouteVideoResolver', () => {
         })
     })
 
+    describe('getThumbnailLink', () => {
+        test('prefers the given computer, otherwise the most recently confirmed row that has a thumbnail', () => {
+            rows = [
+                { ...row('A'), thumbHandle: 'tA', lastConfirmedAt: 5 },
+                { ...row('B'), thumbHandle: 'tB', lastConfirmedAt: 9 },
+                { ...row('C'), lastConfirmedAt: 20 },
+            ]
+            expect(resolver.getThumbnailLink('r1', 'A')).toEqual({ linkId: 'A', thumbHandle: 'tA' })
+            expect(resolver.getThumbnailLink('r1')).toEqual({ linkId: 'B', thumbHandle: 'tB' })
+        })
+
+        test('is undefined without a thumbnail and when the lookup fails', () => {
+            rows = [row('A')]
+            expect(resolver.getThumbnailLink('r1')).toBeUndefined()
+            sharing.getRowsForRoute.mockImplementation(() => { throw new Error('boom') })
+            expect(resolver.getThumbnailLink('r1')).toBeUndefined()
+        })
+    })
+
     describe('getRouteAvailability', () => {
         const shared: VideoSourceInput = { id: 'r1', isLocal: true, hasVideo: true, linkShared: true }
         type LinkState = { displayName: string, reachability: string, mediaAvailable?: boolean, capabilities?: string[] }

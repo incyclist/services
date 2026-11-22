@@ -2210,4 +2210,51 @@ describe('RLVDisplayService video diagnostics', () => {
       expect(report).toHaveBeenCalledTimes(1)
     })
   })
+  describe('video source lost', () => {
+    let resolver: any
+    let svc: any
+    const streamed = (extra = {}) => ({ isCurrent: true, isInitial: true, loaded: true, linkId: 'A', route: { description: {} }, ...extra }) as any
+    const error = { code: 2, message: 'network' } as any
+
+    beforeEach(() => {
+      svc = service as any
+      jest.useFakeTimers()
+      resolver = { getLinkSnapshot: jest.fn(() => new Map([['A', { displayName: 'Den PC' }]])) }
+      Inject('VideoResolver', resolver)
+      svc.emit = jest.fn()
+    })
+    afterEach(() => { jest.useRealTimers(); Inject('VideoResolver', null) })
+
+    test('a playback error of a video streamed from a computer names the computer for a short while', () => {
+      const video = streamed()
+      svc.currentVideo = video
+      svc.onVideoPlaybackError(error, video)
+      expect(svc.sourceLost).toEqual({ computerName: 'Den PC' })
+      expect(svc.emit).toHaveBeenCalledWith('state-update')
+
+      jest.advanceTimersByTime(10000)
+      expect(svc.sourceLost).toBeUndefined()
+      expect(svc.emit).toHaveBeenCalledTimes(2)
+    })
+
+    test('a video that does not come from a computer, is not the current one or has not loaded is not reported', () => {
+      const current = streamed({ linkId: undefined })
+      svc.currentVideo = current
+      svc.onVideoPlaybackError(error, current)
+      svc.onVideoPlaybackError(error, streamed())
+      svc.currentVideo = streamed({ loaded: false })
+      svc.onVideoPlaybackError(error, svc.currentVideo)
+      expect(svc.sourceLost).toBeUndefined()
+    })
+
+    test('an unknown computer is not reported, a failing lookup does not throw', () => {
+      const video = streamed()
+      svc.currentVideo = video
+      resolver.getLinkSnapshot.mockReturnValue(new Map())
+      svc.onVideoPlaybackError(error, video)
+      expect(svc.sourceLost).toBeUndefined()
+      resolver.getLinkSnapshot.mockImplementation(() => { throw new Error('boom') })
+      expect(() => svc.onVideoPlaybackError(error, video)).not.toThrow()
+    })
+  })
 })

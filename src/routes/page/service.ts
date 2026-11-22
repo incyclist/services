@@ -26,6 +26,7 @@ import { useLocalLinkClient } from "../../link/client/service";
 import { useRouteSharingClient } from "../sharing/client/service";
 import { useRouteVideoResolver } from "../sharing/client/resolver";
 import type { LinkSnapshot, RouteAvailability } from "../sharing/client/types";
+import type { ThumbnailLinkSource } from "../thumbnails/types";
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -704,13 +705,14 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
      * `availability`, `sourceLabel` and `unavailableReason` of one route for Route Details; absent
      * when route sharing is not available and the route does not depend on it.
      */
-    protected getAvailabilityProps(routeId:string):Partial<RouteAvailability> {
+    protected getAvailabilityProps(routeId:string):Partial<RouteAvailability> & {thumbnailLink?:ThumbnailLinkSource} {
         try {
             const card = this.getRouteList().getCard(routeId)
             const descr = card?.getData()?.description
             if (!card || (!descr?.linkShared && !this.getVideoResolver().isAvailable()))
                 return {}
-            return this.toAvailabilityProps(card.getAvailability())
+            const availability = card.getAvailability()
+            return { ...this.toAvailabilityProps(availability), ...this.getThumbnailLinkProps(routeId, descr?.linkShared, availability.linkId) }
         }
         catch(err:any) {
             this.logError(err,'getAvailabilityProps')
@@ -738,6 +740,13 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         }
     }
 
+    protected getThumbnailLinkProps(routeId:string, linkShared:boolean|undefined, linkId?:string):{thumbnailLink?:ThumbnailLinkSource} {
+        if (!linkShared)
+            return {}
+        const thumbnailLink = this.getVideoResolver().getThumbnailLink?.(routeId, linkId)
+        return thumbnailLink ? {thumbnailLink} : {}
+    }
+
     protected toAvailabilityProps(a:RouteAvailability):Pick<RouteAvailability,'availability'|'sourceLabel'|'unavailableReason'> {
         const props:Pick<RouteAvailability,'availability'|'sourceLabel'|'unavailableReason'> = {availability:a.availability}
         if (a.sourceLabel!==undefined)
@@ -761,8 +770,9 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         return routes.map( route => {
             if (!all && !route.linkShared)
                 return route
-            const props = this.toAvailabilityProps(resolver.getRouteAvailability(route,{hasDetails:route.loaded, links}))
-            const key = `${props.availability}|${props.sourceLabel??''}|${props.unavailableReason??''}`
+            const availability = resolver.getRouteAvailability(route,{hasDetails:route.loaded, links})
+            const props = {...this.toAvailabilityProps(availability), ...this.getThumbnailLinkProps(route.id, route.linkShared, availability.linkId)}
+            const key = `${props.availability}|${props.sourceLabel??''}|${props.unavailableReason??''}|${props.thumbnailLink?.linkId??''}|${props.thumbnailLink?.thumbHandle??''}`
             const cached = previous.get(route.id)
             const decorated = cached?.source===route && cached.key===key ? cached.decorated : {...route,...props}
             this.availabilityCache.set(route.id,{source:route,key,decorated})

@@ -1022,6 +1022,20 @@ describe('RoutesPageService',()=>{
             expect(s.getRoutesDisplayProps()).toBe(routes)
         })
 
+        test('linkShared routes carry the thumbnail source of a computer, others do not', () => {
+            const link = { linkId: 'A', thumbHandle: 't1' }
+            resolver.getThumbnailLink = jest.fn().mockReturnValue(link)
+            setRoutes([item('a'), item('b', { linkShared: true })])
+            const res = s.getRoutesDisplayProps()
+            expect(res[0]).not.toHaveProperty('thumbnailLink')
+            expect(res[1].thumbnailLink).toEqual(link)
+            expect(s.getRoutesDisplayProps()[1]).toBe(res[1])
+            expect(service.getRouteDetailsProps('b').thumbnailLink).toEqual(link)
+
+            resolver.getThumbnailLink.mockReturnValue({ linkId: 'A', thumbHandle: 't2' })
+            expect(s.getRoutesDisplayProps()[1]).not.toBe(res[1])
+        })
+
         test('route details carry the same three props', () => {
             const props = service.getRouteDetailsProps('b')
             expect(props).toMatchObject({ routeId: 'b', availability: 'fromLink', sourceLabel: 'Den PC' })

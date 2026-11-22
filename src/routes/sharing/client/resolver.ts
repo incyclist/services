@@ -153,6 +153,22 @@ export class RouteVideoResolver extends IncyclistService {
         return snapshot
     }
 
+    /**
+     * The computer and handle the thumbnail of a route can be fetched from: the preferred computer if
+     * it has a thumbnail for the route, otherwise the most recently confirmed row that has one.
+     * Cached state only.
+     */
+    getThumbnailLink(routeKey: string, preferLinkId?: string): { linkId: string, thumbHandle: string } | undefined {
+        try {
+            const rows = this.getSharingClient().getRowsForRoute(routeKey).filter(r => !!r.thumbHandle)
+            const row = rows.find(r => r.linkId === preferLinkId) ?? rows.sort((a, b) => b.lastConfirmedAt - a.lastConfirmedAt)[0]
+            return row ? { linkId: row.linkId, thumbHandle: row.thumbHandle! } : undefined
+        }
+        catch {
+            return undefined
+        }
+    }
+
     /** true if a connected computer is known to have the route (cached state only) */
     hasLinkSource(route: VideoSourceInput): boolean {
         try {

@@ -11,7 +11,7 @@ import { useRouteVideoResolver } from "../../routes/sharing/client/resolver";
 import { RouteInfoText, RoutePoint } from "../../routes/base/types";
 import { distanceBetween } from "../../utils/geo";
 import { VideoConversion, VideoSyncHelper, isAudibleRate, resolvePlaybackUrl } from "../../video";
-import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, StartContentInfo, VideoDisplayProps, VideoSegmentProps } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, StartContentInfo, VideoDisplayProps, VideoSourceLostProps, VideoSegmentProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 
 /**
@@ -41,6 +41,9 @@ type VideoState = {
     info?: Array<{start:number, stop:number, props:InfotextDisplayProps}>
 }
 
+/** how long the UI is told that the computer the video is streamed from stopped delivering it */
+const SOURCE_LOST_NOTICE_MS = 10000
+
 /**
  * Service for managing video playback synchronized with route position.
  *
@@ -60,6 +63,8 @@ export class RLVDisplayService extends RouteDisplayService {
     /** false while the playback rate is outside the range in which the audio sounds natural */
     protected audibleRate: boolean = true
     protected infotext?: InfotextDisplayProps
+    protected sourceLost?: VideoSourceLostProps
+    protected sourceLostTimer?: ReturnType<typeof setTimeout>
     protected videosInitialized: boolean = false
     protected startTime: number
     protected isVideoPaused: boolean = false
@@ -241,6 +246,7 @@ export class RLVDisplayService extends RouteDisplayService {
                 startTime,
                 autoConvert,
                 info:this.getInfotextDisplayProps(),
+                sourceLost:this.sourceLost,
                 muted: !this.isVideoAudible(this.currentVideo),
                 loop: this.isLoopEnabled() ? true : undefined,
                 playback: this.currentVideo?.playback,
@@ -274,6 +280,7 @@ export class RLVDisplayService extends RouteDisplayService {
                     autoConvert,
                     hidden: !video.isCurrent,
                     info:video.isCurrent ? this.getInfotextDisplayProps() : undefined,
+                    sourceLost:video.isCurrent ? this.sourceLost : undefined,
                     // hidden (preloaded) videos stay muted, otherwise their sound would overlap
                     muted: !(video.isCurrent && this.isVideoAudible(video)),
                     playback: video.playback,
@@ -492,6 +499,7 @@ export class RLVDisplayService extends RouteDisplayService {
     async stop() {
         try {
             this.currentVideo?.syncHelper.stop()
+            this.clearSourceLost()
             delete this.startTime
             await super.stop()
 
@@ -724,6 +732,36 @@ export class RLVDisplayService extends RouteDisplayService {
     protected onVideoPlaybackError(error:MediaError, video:VideoState = this.currentVideo ) {
 
         this.logEvent({message:'video playback error', video:this.getVideoUrl(video), error:error.message, errorCode:this.getCode(error)})
+        this.checkSourceLost(video)
+    }
+
+    /**
+     * A video that was streamed from a paired computer stopped during the ride: the UI is told for
+     * a short while, naming the computer. Nothing else changes - the ride is not paused or stopped.
+     */
+    protected checkSourceLost(video:VideoState) {
+        try {
+            if (video!==this.currentVideo || !video.linkId || !video.loaded || this.sourceLost)
+                return
+            const computerName = this.getVideoResolver().getLinkSnapshot().get(video.linkId)?.displayName
+            if (!computerName)
+                return
+
+            this.sourceLost = { computerName }
+            this.logEvent({message:'video source lost', computerName})
+            this.sourceLostTimer = setTimeout( ()=>{ this.clearSourceLost(); this.emit('state-update') }, SOURCE_LOST_NOTICE_MS)
+            this.emit('state-update')
+        }
+        catch(err) {
+            this.logError(err,'checkSourceLost')
+        }
+    }
+
+    protected clearSourceLost() {
+        if (this.sourceLostTimer)
+            clearTimeout(this.sourceLostTimer)
+        delete this.sourceLostTimer
+        delete this.sourceLost
     }
 
     protected onVideoPlayBackUpdate(time:number, rate:number,e, video:VideoState = this.currentVideo) {

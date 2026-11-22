@@ -120,12 +120,21 @@ export interface VideoSegmentProps {
     hasNext: boolean
 }
 
+/**
+ * The computer a video is streamed from stopped delivering it during the ride. Present for a short
+ * while only; observation only: the ride keeps being recorded and nothing else changes.
+ */
+export interface VideoSourceLostProps {
+    computerName: string
+}
+
 export interface VideoDisplayProps  {
     src: any        // TODO
     playback: 'native' | 'converted',
     loop?: boolean,
     hidden?: boolean
     info?: InfotextDisplayProps
+    sourceLost?: VideoSourceLostProps
     startTime?: number,
     observer: Observer,
     muted?: boolean
