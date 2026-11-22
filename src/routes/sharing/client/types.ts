@@ -57,3 +57,29 @@ export interface VideoAvailability {
     /** the connected computer that would be used */
     linkId?: string
 }
+
+/** What materialising a computer's catalog changed on this device. */
+export interface MaterializeResult {
+    added: number
+    updated: number
+    removed: number
+    /** the route exists on this device as the user's own import and was left untouched */
+    skippedOwn: number
+    /** a local route without a `routeHash`: not materialised */
+    skippedNoHash: number
+}
+
+/** What triggered the load of a route's details from a computer. */
+export type DescriptorTrigger = 'details' | 'ride' | 'copy'
+
+/** Why the details of a route could not be loaded from a computer. */
+export type DescriptorFailure =
+    | 'unreachable'     // no open session of a computer that has the route
+    | 'unsupported'     // the computers that have the route do not offer `route-descriptor`
+    | 'timeout'
+    | 'busy'
+    | 'unknown-route'
+    | 'too-large'
+    | 'http'
+    | 'malformed'
+    | 'hash-mismatch'

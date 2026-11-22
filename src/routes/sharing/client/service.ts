@@ -3,13 +3,20 @@ import { IncyclistService } from '../../../base/service'
 import { useLocalLinkClient } from '../../../link/client/service'
 import type { LinkServerMessage } from '../../../link/types'
 import type { LinkClientSession, LinkMediaAccess } from '../../../link/client/types'
+import { sleep } from '../../../utils/sleep'
+import { Route } from '../../base/model/route'
+import { addDetails } from '../../base/utils/route'
+import { RouteApiDetail } from '../../base/api/types'
 import { useRouteList } from '../../list/service'
-import type { CatalogDocument, CatalogEntry, SharedRouteEntry } from '../types'
+import type { CatalogDocument, CatalogEntry, SharedRouteEntry, SharedRouteSummary } from '../types'
 import {
-    CATALOG_CHANGED_MESSAGE, CATALOG_TIMEOUT_MS, HANDLE_PATTERN, SYNC_TIMEOUT_MS, UNREACHABLE_TTL_MS,
+    CATALOG_CHANGED_MESSAGE, CATALOG_TIMEOUT_MS, DESCRIPTOR_BUSY_RETRY_MS, DESCRIPTOR_DOWNLOAD_TIMEOUT_MS, DESCRIPTOR_REQUEST_TIMEOUT_MS,
+    HANDLE_PATTERN, ROUTE_HASH_PATTERN, SYNC_TIMEOUT_MS, UNREACHABLE_TTL_MS,
 } from './consts'
+import { DescriptorLoadError, getDescriptorDocument, parseDescriptor } from './descriptor'
 import { SharedRouteRepo } from './repo'
-import type { SyncOptions, SyncResult } from './types'
+import { SharedRouteMaterializer } from './routes'
+import type { DescriptorFailure, DescriptorTrigger, SyncOptions, SyncResult } from './types'
 
 type Unsubscribe = () => void
 
@@ -27,6 +34,40 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number): Promise<T | type
 
 const isText = (v: unknown): v is string => typeof v === 'string' && v.length > 0
 
+const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** The text of a localized title: a string, or a map of language to string. */
+const toLocalizedTitle = (v: unknown): SharedRouteSummary['localizedTitle'] => {
+    if (typeof v === 'string')
+        return v as never
+    if (v === null || typeof v !== 'object' || Array.isArray(v))
+        return undefined
+    const entries = Object.entries(v).filter(([, text]) => typeof text === 'string')
+    return entries.length > 0 ? Object.fromEntries(entries) as never : undefined
+}
+
+const SUMMARY_FIELDS: Array<[keyof SharedRouteSummary, (v: unknown) => boolean]> = [
+    ['country', v => typeof v === 'string'], ['distance', isNumber], ['elevation', isNumber], ['isLoop', v => typeof v === 'boolean'],
+    ['hasGpx', v => typeof v === 'boolean'], ['pointsSource', v => v === 'gpx' || v === 'strava' || v === 'embedded'],
+    ['videoFormat', v => typeof v === 'string'],
+]
+
+/** The summary of a catalog entry; each field is kept only if it has the expected type. Without a string title there is none. */
+const toSummary = (raw: unknown): SharedRouteSummary | undefined => {
+    const s = raw as Record<string, unknown> | undefined
+    if (typeof s?.title !== 'string')
+        return undefined
+    const summary: Record<string, unknown> = { title: s.title }
+    for (const [key, valid] of SUMMARY_FIELDS) {
+        if (valid(s[key]))
+            summary[key] = s[key]
+    }
+    const localizedTitle = toLocalizedTitle(s.localizedTitle)
+    if (localizedTitle !== undefined)
+        summary.localizedTitle = localizedTitle
+    return summary as unknown as SharedRouteSummary
+}
+
 const toCatalogEntry = (raw: unknown): CatalogEntry | undefined => {
     const e = raw as Partial<CatalogEntry>
     if (!isText(e?.routeKey) || !isText(e.routeIdOnComputer) || !isText(e.videoHandle) || !HANDLE_PATTERN.test(e.videoHandle))
@@ -38,6 +79,13 @@ const toCatalogEntry = (raw: unknown): CatalogEntry | undefined => {
     }
     if (isText(e.thumbHandle) && HANDLE_PATTERN.test(e.thumbHandle))
         entry.thumbHandle = e.thumbHandle
+    if (e.origin === 'official' || e.origin === 'local')
+        entry.origin = e.origin
+    if (typeof e.routeHash === 'string' && ROUTE_HASH_PATTERN.test(e.routeHash))
+        entry.routeHash = e.routeHash
+    const summary = toSummary(e.summary)
+    if (summary)
+        entry.summary = summary
     return entry
 }
 
@@ -73,6 +121,14 @@ export class RouteSharingClientService extends IncyclistService {
     protected staleResynced = new Set<string>()
     protected unsubscribers: Unsubscribe[] = []
     protected started = false
+    protected catalogs = new Map<string, CatalogEntry[]>()
+    protected descriptorLoads = new Map<string, Promise<Route>>()
+    protected materializer = new SharedRouteMaterializer({
+        getList: () => this.getRouteList(),
+        getRowsForRoute: routeKey => this.getRowsForRoute(routeKey),
+        log: event => this.logEvent(event),
+        logError: (err, fn) => this.logError(err, fn),
+    })
 
     constructor() {
         super('RouteSharingClient')
@@ -166,7 +222,30 @@ export class RouteSharingClientService extends IncyclistService {
         await this.repo.recordGone(linkId, routeKey)
     }
 
+    /**
+     * Loads the details of a `linkShared` route from a paired computer that has the route and offers
+     * `route-descriptor`, verifies them (digest and `routeHash`) and persists them. A route that already
+     * has details is returned as it is. Uses open sessions only: never connects and never browses.
+     *
+     * @param route the route as it is in the route list; its details are set
+     * @param trigger what needs the details
+     * @throws DescriptorLoadError if no computer could provide verified details; nothing is persisted then
+     */
+    loadDescriptor(route: Route, trigger: DescriptorTrigger): Promise<Route> {
+        if (route.details)
+            return Promise.resolve(route)
+        const routeKey = route.description.id!
+        let load = this.descriptorLoads.get(routeKey)
+        if (!load) {
+            load = this.doLoadDescriptor(route, trigger).finally(() => { this.descriptorLoads.delete(routeKey) })
+            this.descriptorLoads.set(routeKey, load)
+        }
+        return load
+    }
+
     reset() {
+        this.catalogs.clear()
+        this.descriptorLoads.clear()
         this.unsubscribers.forEach(u => u())
         this.unsubscribers = []
         this.started = false
@@ -187,7 +266,10 @@ export class RouteSharingClientService extends IncyclistService {
         this.unsubscribers.push(() => { client.off('session-changed', onSession); client.off('link-forgotten', onForgotten); client.off('push', onPush) })
 
         const list = this.getRouteList()
-        const onLoaded = () => { this.syncAll().catch(err => this.logError(err, 'preload')) }
+        const onLoaded = () => {
+            this.materializeCached().catch(err => this.logError(err, 'materialize'))
+            this.syncAll().catch(err => this.logError(err, 'preload'))
+        }
         list.on('load-done', onLoaded)
         this.unsubscribers.push(() => list.off('load-done', onLoaded))
     }
@@ -202,8 +284,17 @@ export class RouteSharingClientService extends IncyclistService {
     }
 
     protected onLinkForgotten(linkId: string): void {
-        this.repo.forgetLink(linkId).catch(err => this.logError(err, 'forget'))
+        this.catalogs.delete(linkId)
         this.unreachableAt.delete(linkId)
+        this.repo.forgetLink(linkId)
+            .then(() => this.materializer.removeOrphans())
+            .catch(err => this.logError(err, 'forget'))
+    }
+
+    /** Materialises the catalogs that arrived before the route list was loaded. */
+    protected async materializeCached(): Promise<void> {
+        for (const entries of [...this.catalogs.values()])
+            await this.materializer.materialize(entries)
     }
 
     /**
@@ -269,7 +360,131 @@ export class RouteSharingClientService extends IncyclistService {
         const { added, removed } = await this.repo.replaceForLink(linkId, doc.routes)
         await this.getLocalLinkClient().setCatalogVersion(linkId, doc.catalogVersion)
         this.logEvent({ message: 'route sharing catalog synced', routes: doc.routes.length, added, removed })
+        this.catalogs.set(linkId, doc.routes)
+        await this.materialize(doc.routes)
         return { linkId, status: 'synced', added, removed }
+    }
+
+    /** Creates the routes of a catalog on this device; a failure here never fails the sync. */
+    protected async materialize(entries: CatalogEntry[]): Promise<void> {
+        try {
+            await this.materializer.materialize(entries)
+        }
+        catch (err) {
+            this.logError(err as Error, 'materialize')
+        }
+    }
+
+    protected async doLoadDescriptor(route: Route, trigger: DescriptorTrigger): Promise<Route> {
+        const routeKey = route.description.id!
+        const startedAt = Date.now()
+        try {
+            const doc = await this.fetchDescriptor(routeKey)
+            const descriptor = parseDescriptor(doc.body, doc.sha256, routeKey)
+            const details = { ...descriptor.details, id: routeKey, routeHash: routeKey } as unknown as RouteApiDetail
+            if (descriptor.description.segments)
+                route.description.segments = descriptor.description.segments
+            addDetails(route, details)
+            await this.getRouteList().saveRoute(route, true)
+            this.getRouteList().findCard(route)?.card?.emitUpdate()
+            this.logEvent({ message: 'route descriptor loaded', bytes: Buffer.byteLength(doc.body), durationMs: Date.now() - startedAt, trigger })
+            return route
+        }
+        catch (err) {
+            const failure = err instanceof DescriptorLoadError ? err : new DescriptorLoadError('unreachable')
+            if (!(err instanceof DescriptorLoadError))
+                this.logError(err as Error, 'loadDescriptor')
+            this.logEvent({ message: 'route descriptor failed', reason: failure.reason, httpStatus: failure.httpStatus })
+            throw failure
+        }
+    }
+
+    /** The computers that can hand out the descriptor of a route now, most recently seen first. */
+    protected getDescriptorCandidates(routeKey: string): string[] {
+        const client = this.getLocalLinkClient()
+        const lastSeen = new Map(client.getDisplayProps().links.map(l => [l.linkId, l.lastSeenAt ?? 0]))
+        const rows = this.getRowsForRoute(routeKey).filter(r => client.getSession(r.linkId) !== undefined)
+        const capable = rows.filter(r => client.getSession(r.linkId)?.capabilities.includes('route-descriptor'))
+        if (capable.length === 0)
+            throw new DescriptorLoadError(rows.length > 0 ? 'unsupported' : 'unreachable')
+        return capable.sort((a, b) => (lastSeen.get(b.linkId) ?? 0) - (lastSeen.get(a.linkId) ?? 0)).map(r => r.linkId)
+    }
+
+    /** Asks the candidates one after the other; the first computer that hands out a document wins. */
+    protected async fetchDescriptor(routeKey: string): Promise<{ body: string, sha256: string }> {
+        let failure = new DescriptorLoadError('unreachable')
+        for (const linkId of this.getDescriptorCandidates(routeKey)) {
+            try {
+                return await this.fetchFrom(linkId, routeKey)
+            }
+            catch (err) {
+                if (!(err instanceof DescriptorLoadError))
+                    throw err
+                failure = err
+                if (err.reason === 'unknown-route')
+                    await this.onStaleHandle(linkId, routeKey)
+            }
+        }
+        throw failure
+    }
+
+    protected async fetchFrom(linkId: string, routeKey: string): Promise<{ body: string, sha256: string }> {
+        const res = await this.requestDescriptor(linkId, routeKey)
+        const { name, sha256 } = getDescriptorDocument(res)
+        const media = await this.getLocalLinkClient().getMedia(linkId)
+        if (!media)
+            throw new DescriptorLoadError('unreachable')
+        return { body: await this.downloadDocument(media, name), sha256 }
+    }
+
+    protected async requestDescriptor(linkId: string, routeKey: string) {
+        let res = await this.sendDescriptorRequest(linkId, routeKey)
+        if (res.error === 'busy') {
+            await sleep(DESCRIPTOR_BUSY_RETRY_MS)
+            res = await this.sendDescriptorRequest(linkId, routeKey)
+        }
+        if (res.error)
+            throw new DescriptorLoadError(this.toFailure(res.error))
+        return res
+    }
+
+    protected async sendDescriptorRequest(linkId: string, routeKey: string) {
+        try {
+            const reply = await this.getLocalLinkClient().request(linkId, 'route-descriptor', { routeKey }, DESCRIPTOR_REQUEST_TIMEOUT_MS)
+            if (!reply)
+                throw new DescriptorLoadError('unreachable')
+            return reply.b ?? { routeKey }
+        }
+        catch (err) {
+            if (err instanceof DescriptorLoadError)
+                throw err
+            throw new DescriptorLoadError((err as { code?: string })?.code === 'timeout' ? 'timeout' : 'unreachable')
+        }
+    }
+
+    protected toFailure(error: string): DescriptorFailure {
+        if (error === 'unknown-route' || error === 'busy' || error === 'too-large')
+            return error
+        return 'unreachable'
+    }
+
+    protected async downloadDocument(media: LinkMediaAccess, name: string): Promise<string> {
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), DESCRIPTOR_DOWNLOAD_TIMEOUT_MS)
+        try {
+            const response = await fetch(`${media.baseUrl}/${name}`, { headers: { Authorization: `Bearer ${media.token}` }, signal: controller.signal })
+            if (!response.ok)
+                throw new DescriptorLoadError('http', response.status)
+            return await response.text()
+        }
+        catch (err) {
+            if (err instanceof DescriptorLoadError)
+                throw err
+            throw new DescriptorLoadError(controller.signal.aborted ? 'timeout' : 'unreachable')
+        }
+        finally {
+            clearTimeout(timer)
+        }
     }
 
     /**

@@ -144,6 +144,11 @@ export interface    RouteInfo extends RouteBase{
     apiServer?:string,
     isLoopVerified?:boolean
     sourceTreeUri?: string
+    /**
+     * Created on this device from the catalog of a paired computer; the details arrive lazily when
+     * the route is first opened, ridden or copied.
+     */
+    linkShared?: boolean
 }
 
 

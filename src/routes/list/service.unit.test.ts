@@ -1903,4 +1903,93 @@ describe('RouteListService',()=>{
         })
     })
 
+
+    describe('linkShared routes',()=>{
+        let service:MockeableService
+        const sharing = { loadDescriptor: jest.fn() }
+        const shared = () => new Route({ id:'sh1', routeHash:'sh1', title:'Shared', isLocal:true, hasVideo:true, linkShared:true, distance:1000 })
+
+        beforeEach(()=>{
+            new RouteListService().reset()
+            service = prepareMock(null,{mockLoad:true})
+            Inject('RouteSharingClient', sharing)
+            ;(service as any).db.getDetails = jest.fn().mockResolvedValue(undefined)
+            ;(service as any).db.save = jest.fn().mockResolvedValue(undefined)
+            ;(service as any).db.delete = jest.fn().mockResolvedValue(undefined)
+            ;(service as any).api = { loadDetails: jest.fn() }
+        })
+        afterEach(()=>{
+            Inject('RouteSharingClient', null)
+            ;(service as any).reset()
+            ;(new RoutesDbLoader() as any).reset()
+            jest.clearAllMocks()
+        })
+
+        test('details are requested from the computer, never from an API',async ()=>{
+            service.addRoute(shared())
+            sharing.loadDescriptor.mockImplementation(async (route:Route) => { route.details = { id:'sh1', title:'Shared', points:[] } as RouteApiDetail; return route })
+
+            await service.getRouteDetails('sh1')
+
+            expect(sharing.loadDescriptor).toHaveBeenCalledWith(expect.objectContaining({description:expect.objectContaining({id:'sh1'})}),'details')
+            expect((service as any).api.loadDetails).not.toHaveBeenCalled()
+        })
+
+        test('a computer that can not be reached leaves the details absent without an error',async ()=>{
+            service.addRoute(shared())
+            sharing.loadDescriptor.mockRejectedValue(new Error('unreachable'))
+
+            const res = await service.getRouteDetails('sh1')
+
+            expect(res).toMatchObject({ totalDistance: expect.anything() })
+            expect(service.getRoute('sh1')?.details).toBeUndefined()
+            expect((service as any).api.loadDetails).not.toHaveBeenCalled()
+        })
+
+        test('persisted details are used without asking the computer',async ()=>{
+            service.addRoute(shared())
+            ;(service as any).db.getDetails = jest.fn().mockResolvedValue({ id:'sh1', title:'Shared', points:[], video:{} })
+            await service.getRouteDetails('sh1')
+            expect(sharing.loadDescriptor).not.toHaveBeenCalled()
+        })
+
+        test('addRoutes adds several routes with one update event and refreshes known ones in place',()=>{
+            service.addRoute(shared())
+            const emit = jest.spyOn(service,'emitLists')
+            const updated = new Route({ ...shared().description, title:'Renamed' })
+            const other = new Route({ id:'sh2', title:'Other', isLocal:true, hasVideo:true, linkShared:true })
+
+            service.addRoutes([updated, other])
+
+            expect(emit).toHaveBeenCalledTimes(1)
+            expect(service.getRoute('sh1')?.description.title).toBe('Renamed')
+            expect(service.getRoute('sh2')).toBeDefined()
+        })
+
+        test('addRoutes without a new route sends no update event',()=>{
+            service.addRoute(shared())
+            const emit = jest.spyOn(service,'emitLists')
+            service.addRoutes([new Route({ ...shared().description, title:'Renamed' })])
+            expect(emit).not.toHaveBeenCalled()
+        })
+
+        test('saveRoute persists through the db',async ()=>{
+            const route = shared()
+            await service.saveRoute(route, true)
+            expect((service as any).db.save).toHaveBeenCalledWith(route, true)
+        })
+
+        test('removeSharedRoute removes route, card and persisted record',async ()=>{
+            const route = shared()
+            service.addRoute(route)
+            expect(service.findCard('sh1')).toBeDefined()
+
+            await service.removeSharedRoute(route)
+
+            expect(service.getRoute('sh1')).toBeUndefined()
+            expect(service.findCard('sh1')?.card).toBeUndefined()
+            expect((service as any).db.delete).toHaveBeenCalled()
+        })
+    })
+
 })

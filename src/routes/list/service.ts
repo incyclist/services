@@ -38,6 +38,7 @@ import { usePreviewStore } from "../previews/store";
 import { useRouteShapeStore } from "../shapes/store";
 import type { RouteShape } from "../shapes/types";
 import { useRouteLibraryScanner } from "../library/service";
+import { useRouteSharingClient } from "../sharing/client/service";
 import { useIncyclistRoutesApi } from "../base/api/factory";
 import { pascalCase } from "../../utils";
 import { useFreeRideService } from "../free-ride";
@@ -1082,6 +1083,48 @@ export class RouteListService  extends IncyclistService implements IRouteList {
      */
 
     public addRoute(route:Route,source:'user'|'system'|'import'='system'):void {
+        if (this.addRouteToLists(route,source))
+            this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+    }
+
+    /**
+     * Adds many routes with one `updated` event. A route that is already known is refreshed in
+     * place (and its card told to redraw).
+     */
+    public addRoutes(routes:Array<Route>, source:'user'|'system'|'import'='system'):void {
+        let added = false
+        routes.forEach( route => {
+            const known = this.getRoute(route.description.id)
+            added = this.addRouteToLists(route,source) || added
+            if (known)
+                this.findCard(known)?.card?.emitUpdate()
+        })
+        if (added)
+            this.emitLists('updated',{source: source==='user' ? 'user':'system'})
+    }
+
+    /** Persists the description (and the details, if the route has them) of a route. */
+    public saveRoute(route:Route, enforceDetails:boolean=false):Promise<void> {
+        return this.db.save(route, enforceDetails)
+    }
+
+    /**
+     * Removes a route that was created from a computer's catalog: its description, details and card.
+     * No user setting or file of the user is touched.
+     */
+    public async removeSharedRoute(route:Route):Promise<void> {
+        const id = route.description.id
+        const card = this.findCard(id)?.card
+        if (card) {
+            await card.delete({enforced:true,source:'system'}).wait()
+            return
+        }
+        await this.db.delete(route)
+        this.forgetRoute(id)
+    }
+
+    /** @returns true if the lists changed and an `updated` event is due */
+    protected addRouteToLists(route:Route,source:'user'|'system'|'import'):boolean {
         // route already present
         const existing = source==='system' ? this.getRoute(route.description.id) :
             this.routes.find( r=>r.description?.id===route.description.id)
@@ -1094,7 +1137,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             // a system update refreshes a route in place; an explicit user import must also
             // leave the route visible - revive a tombstoned route or one whose card is detached
             if (source==='system' || (!wasDeleted && this.hasAttachedCard(existing))) {
-                return;
+                return false
             }
             route = existing
         }
@@ -1102,7 +1145,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
             this.routes.push(route)
         }
         if (route.description?.isDeleted) {
-            return
+            return false
         }
 
         if (!route.description?.isDeleted) {
@@ -1137,8 +1180,7 @@ export class RouteListService  extends IncyclistService implements IRouteList {
         if ( list.getId()==='myRoutes')
             card.enableDelete(true)    
         
-        this.emitLists('updated',{source: source==='user' ? 'user':'system'})                
-
+        return true
     }
 
     /**
@@ -2252,8 +2294,13 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     protected async loadRouteDetails(route: Route, id: string) {
         route.details = await this.db.getDetails(id);
 
+        // created from a paired computer's catalog: the details come from that computer, never from an API
+        if (!route.details && route.description.linkShared) {
+            await this.loadSharedRouteDetails(route)
+        }
+
         // not in DB yet? must come from external app or API 
-        if (!route.details) {
+        else if (!route.details) {
 
             if (route.description.source) {
                 await this.loadSyncedRouteDetails(route);
@@ -2275,6 +2322,16 @@ export class RouteListService  extends IncyclistService implements IRouteList {
                 route.details.video.selectableSegments = route.details.selectableSegments;
                 delete route.details.selectableSegments;
             }
+        }
+    }
+
+    /** A computer that can not be reached leaves the details absent: the summary stays, the route can not be started. */
+    protected async loadSharedRouteDetails(route: Route) {
+        try {
+            await this.getRouteSharingClient().loadDescriptor(route, 'details')
+        }
+        catch {
+            // already logged by the client
         }
     }
 
@@ -2748,6 +2805,11 @@ export class RouteListService  extends IncyclistService implements IRouteList {
     @Injectable
     protected getUserSettings () {
         return useUserSettings()
+    }
+
+    @Injectable
+    protected getRouteSharingClient() {
+        return useRouteSharingClient()
     }
 
     @Injectable

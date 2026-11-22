@@ -746,6 +746,28 @@ describe('LocalLinkClientService', () => {
         })
     })
 
+    describe('request', () => {
+        test('the reply resolves the request and is not emitted as a push; other messages still are', async () => {
+            const linkId = await pairPhone()
+            const pushed: Array<{ message: { t: string, id?: string } }> = []
+            client.on('push', e => pushed.push(e))
+
+            const handler = sharing.on.mock.calls.find(c => c[0] === 'catalog-changed')![1]
+            handler({ catalogVersion: 'cv9', routeCount: 1 })
+            const reply = await client.request(linkId, 'echo', { data: 42 }, 5000)
+
+            expect(reply).toMatchObject({ t: 'echo', b: { data: 42 } })
+            expect(reply!.id).toMatch(/^[0-9a-f]{16}$/)
+            await until(() => pushed.some(p => p.message.t === 'catalog-changed'))
+            expect(pushed.some(p => p.message.t === 'echo')).toBe(false)
+        })
+        test('without an open session there is no request and nothing is connected', async () => {
+            const linkId = await pairPhone()
+            await client.forget(linkId)
+            expect(await client.request(linkId, 'echo', { data: 1 }, 1000)).toBeUndefined()
+        })
+    })
+
     describe('catalog-changed push', () => {
         test('a rebuilt catalog on the computer reaches the phone as a signed push', async () => {
             const linkId = await pairPhone()

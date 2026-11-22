@@ -21,3 +21,15 @@ export const HANDLE_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 
 /** Message type with which a computer announces that its catalog changed. */
 export const CATALOG_CHANGED_MESSAGE = 'catalog-changed'
+
+/** `getRouteHash()`: MD5 as hex. */
+export const ROUTE_HASH_PATTERN = /^[0-9a-f]{32}$/
+
+/** Time allowed for the `route-descriptor` request on the control session. */
+export const DESCRIPTOR_REQUEST_TIMEOUT_MS = 10_000
+
+/** Time allowed to download a descriptor document. */
+export const DESCRIPTOR_DOWNLOAD_TIMEOUT_MS = 30_000
+
+/** Wait before the one retry after the computer answered `busy`. */
+export const DESCRIPTOR_BUSY_RETRY_MS = 2000

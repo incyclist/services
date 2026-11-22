@@ -7,7 +7,7 @@ import { useDevicePairing } from '../../devices/pairing/service'
 import { useRideDisplay } from '../../ride/display/service'
 import type { CurrentRideState } from '../../ride/base/types'
 import { LINK_MAX_AUTH_KIDS } from '../consts'
-import type { LinkAuthCandidate, LinkProtocolVersion, LinkRecord, PairedBody, SessionBody } from '../types'
+import type { LinkAuthCandidate, LinkClientMessageBodies, LinkProtocolVersion, LinkRecord, LinkServerMessage, PairedBody, SessionBody } from '../types'
 import { fromBase64Url } from '../utils'
 import { LinkBrowse, parseInstanceName } from './browse'
 import type { BrowseResult } from './browse'
@@ -278,6 +278,22 @@ export class LocalLinkClientService extends IncyclistService {
         if (!baseUrl)
             return undefined
         return { baseUrl, token: session.mediaToken, expiresAt: session.mediaTokenExpiresAt, catalogVersion: session.catalogVersion }
+    }
+
+    /**
+     * Sends a signed request on the open session of a computer and waits for its reply. Never
+     * connects and never browses.
+     *
+     * @returns the reply, or `undefined` if there is no open session
+     * @throws LinkConnectionError `timeout` if the computer did not answer in time, `closed` if the session ended
+     */
+    async request<K extends keyof LinkClientMessageBodies & string>(
+        linkId: string, t: K, b: LinkClientMessageBodies[K], timeoutMs: number,
+    ): Promise<Extract<LinkServerMessage, { t: K }> | undefined> {
+        const active = this.sessions.get(linkId)
+        if (!active)
+            return undefined
+        return await active.conn.request(t, b, timeoutMs)
     }
 
     /**

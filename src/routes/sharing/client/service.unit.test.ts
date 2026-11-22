@@ -287,6 +287,78 @@ describe('RouteSharingClientService', () => {
         })
     })
 
+    describe('materialisation', () => {
+        const hash = 'a'.repeat(32)
+        const localDoc = () => ({
+            catalogVersion: 'v1',
+            routes: [{ routeKey: hash, routeIdOnComputer: 'id', title: 'T', videoHandle: 'h', videoFormat: 'mp4', size: 1, mtime: 1, origin: 'local', routeHash: hash, summary: { title: 'Local one', distance: 10 } }],
+        })
+        let routes: Array<{ description: Record<string, unknown> }>
+        let loaded: boolean
+
+        beforeEach(() => {
+            routes = []
+            loaded = true
+            Object.assign(list, {
+                getAllRoutes: () => loaded ? routes : undefined,
+                isStillLoading: () => !loaded,
+                getRoute: (id: string) => routes.find(r => r.description.id === id),
+                getSelected: () => undefined,
+                addRoutes: jest.fn((added: Array<{ description: Record<string, unknown> }>) => { routes.push(...added) }),
+                saveRoute: jest.fn(async () => undefined),
+                removeSharedRoute: jest.fn(async (r: { description: { id: string } }) => { routes = routes.filter(x => x.description.id !== r.description.id) }),
+            })
+        })
+
+        test('a synced catalog creates the routes of that computer', async () => {
+            addLink('A')
+            responses.set('http://A:1', localDoc())
+            await service.syncAll()
+            expect(routes.map(r => r.description.id)).toEqual([hash])
+            expect(routes[0].description).toMatchObject({ title: 'Local one', linkShared: true })
+        })
+
+        test('a catalog that arrived before the route list was loaded is materialised on load-done', async () => {
+            loaded = false
+            addLink('A')
+            responses.set('http://A:1', localDoc())
+            await service.start()
+            await service.syncAll()
+            expect(routes).toHaveLength(0)
+            loaded = true
+            list.emit('load-done')
+            await jest.advanceTimersByTimeAsync(10)
+            expect(routes).toHaveLength(1)
+        })
+
+        test('forgetting the last computer removes the routes that only it had', async () => {
+            addLink('A')
+            addLink('B')
+            responses.set('http://A:1', localDoc())
+            responses.set('http://B:1', localDoc())
+            await service.start()
+            await service.syncAll()
+            expect(routes).toHaveLength(1)
+
+            client.emit('link-forgotten', 'A')
+            await jest.advanceTimersByTimeAsync(10)
+            expect(routes).toHaveLength(1)
+
+            client.emit('link-forgotten', 'B')
+            await jest.advanceTimersByTimeAsync(10)
+            expect(routes).toHaveLength(0)
+        })
+
+        test('an unreachable computer removes nothing', async () => {
+            addLink('A')
+            responses.set('http://A:1', localDoc())
+            await service.syncAll()
+            client.media.delete('A')
+            await service.syncAll({ force: true })
+            expect(routes).toHaveLength(1)
+        })
+    })
+
     describe('onStaleHandle', () => {
         test('resyncs once and returns the new handle', async () => {
             addLink('A')

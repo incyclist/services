@@ -6,6 +6,7 @@ import { encodeLinkFrame, encodeLinkPreamble, LinkFrameReader } from '../framing
 import type {
     LinkAuthCandidate, LinkClientMessageBodies, LinkRejectReason, LinkServerMessage, SessionBody,
 } from '../types'
+import { getLinkCrypto } from '../utils'
 import { isLinkProtocolAccepted } from '../version'
 import { ANSWER_TIMEOUT_MS, CONNECT_TIMEOUT_MS, MAX_FRAME_BYTES, PING_INTERVAL_MS, SILENCE_TIMEOUT_MS } from './consts'
 import type { LinkConnectionErrorCode, LinkHelloResult, LinkSocket } from './types'
@@ -24,6 +25,13 @@ export type LinkAuthenticated =
     | { ok: false }
 
 interface Pending {
+    reject: (err: LinkConnectionError) => void
+    timer: ReturnType<typeof setTimeout>
+}
+
+interface OutstandingRequest {
+    type: string
+    resolve: (msg: LinkServerMessage) => void
     reject: (err: LinkConnectionError) => void
     timer: ReturnType<typeof setTimeout>
 }
@@ -53,6 +61,7 @@ export class LinkClientConnection extends EventEmitter {
     protected connected = false
     protected pingTimer?: ReturnType<typeof setInterval>
     protected lastReceivedAt = Date.now()
+    protected requests = new Map<string, OutstandingRequest>()
 
     constructor(protected socket: LinkSocket) {
         super()
@@ -120,6 +129,32 @@ export class LinkClientConnection extends EventEmitter {
         if (this.closed)
             return Promise.reject(this.failure ?? new LinkConnectionError('closed'))
         return this.wait<LinkServerMessage>(timeoutMs, 'timeout', resolve => { this.deliver = resolve })
+    }
+
+    /**
+     * Sends a request with a fresh correlation id and resolves with the first received message of
+     * the same type and id. That reply is not emitted as `message`; every other message still is.
+     * Call after the handshake, once {@link listen} was called.
+     *
+     * @throws LinkConnectionError `timeout` if no reply arrives in time, `closed` (or the failure) if the connection ends
+     */
+    request<K extends keyof LinkClientMessageBodies & string>(t: K, b: LinkClientMessageBodies[K], timeoutMs: number): Promise<Extract<LinkServerMessage, { t: K }>> {
+        return new Promise((resolve, reject) => {
+            const id = Buffer.from(getLinkCrypto().randomBytes(8)).toString('hex')
+            const timer = setTimeout(() => {
+                this.requests.delete(id)
+                reject(new LinkConnectionError('timeout'))
+            }, timeoutMs)
+            this.requests.set(id, { type: t, resolve: resolve as OutstandingRequest['resolve'], reject, timer })
+            try {
+                this.send(t, b, id)
+            }
+            catch (err) {
+                clearTimeout(timer)
+                this.requests.delete(id)
+                reject(err)
+            }
+        })
     }
 
     /** From now on every received message is emitted as `message`; messages already queued are emitted first. */
@@ -223,6 +258,8 @@ export class LinkClientConnection extends EventEmitter {
     }
 
     protected dispatch(msg: LinkServerMessage): void {
+        if (this.resolveRequest(msg))
+            return
         if (this.listening) {
             if (msg.t !== 'pong')
                 this.emit('message', msg)
@@ -234,6 +271,17 @@ export class LinkClientConnection extends EventEmitter {
             deliver(msg)
         else
             this.queue.push(msg)
+    }
+
+    /** @returns true if the message is the reply of an outstanding request */
+    protected resolveRequest(msg: LinkServerMessage): boolean {
+        const request = msg.id === undefined ? undefined : this.requests.get(msg.id)
+        if (!request || request.type !== msg.t)
+            return false
+        this.requests.delete(msg.id!)
+        clearTimeout(request.timer)
+        request.resolve(msg)
+        return true
     }
 
     protected wait<T>(timeoutMs: number, timeoutCode: LinkConnectionErrorCode, start: (resolve: (v: T) => void) => void): Promise<T> {
@@ -264,6 +312,11 @@ export class LinkClientConnection extends EventEmitter {
             this.pending.reject(failure ?? new LinkConnectionError('closed'))
             this.pending = undefined
         }
+        for (const request of this.requests.values()) {
+            clearTimeout(request.timer)
+            request.reject(failure ?? new LinkConnectionError('closed'))
+        }
+        this.requests.clear()
         try {
             this.socket.destroy()
         }
