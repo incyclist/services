@@ -13,6 +13,7 @@ import { distanceBetween } from "../../utils/geo";
 import { VideoConversion, VideoSyncHelper, isAudibleRate, resolvePlaybackUrl } from "../../video";
 import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, StartContentInfo, VideoDisplayProps, VideoSourceLostProps, VideoSegmentProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
+import { scrubTokens } from '../../utils/scrub'
 
 /**
  * Video state tracking for playback synchronization.
@@ -674,16 +675,16 @@ export class RLVDisplayService extends RouteDisplayService {
         const isCurrentVideo = video === this.currentVideo
 
         if (video.isInitial) {
-            this.logEvent({message: 'could not load video',video:this.getVideoUrl(video),error:error.message, errorCode:this.getCode(error),isCurrentVideo})
+            this.logEvent({message: 'could not load video',video:scrubTokens(this.getVideoUrl(video)),error:scrubTokens(error.message), errorCode:this.getCode(error),isCurrentVideo})
         }
         else {
-            this.logEvent({message: 'could not load next video',video:this.getVideoUrl(video),error:error.message, errorCode:this.getCode(error),isCurrentVideo})
+            this.logEvent({message: 'could not load next video',video:scrubTokens(this.getVideoUrl(video)),error:scrubTokens(error.message), errorCode:this.getCode(error),isCurrentVideo})
 
             // remove all videos with an index >= the video that failed to load
             const errIdx = this.videos.indexOf(video)
             if (errIdx!==-1) {
                 this.videos.splice(errIdx)
-                this.logEvent({message: 'changed video config',videos:this.videos.map( v => this.getVideoUrl(v)).join('|')})                
+                this.logEvent({message: 'changed video config',videos:this.videos.map( v => scrubTokens(this.getVideoUrl(v))).join('|')})                
             }
         }
         this.emit('state-update')
@@ -731,7 +732,7 @@ export class RLVDisplayService extends RouteDisplayService {
 
     protected onVideoPlaybackError(error:MediaError, video:VideoState = this.currentVideo ) {
 
-        this.logEvent({message:'video playback error', video:this.getVideoUrl(video), error:error.message, errorCode:this.getCode(error)})
+        this.logEvent({message:'video playback error', video:scrubTokens(this.getVideoUrl(video)), error:scrubTokens(error.message), errorCode:this.getCode(error)})
         this.checkSourceLost(video)
     }
 

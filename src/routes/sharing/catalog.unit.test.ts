@@ -56,6 +56,23 @@ describe('buildCatalog', () => {
         ])
     })
 
+    test('only known video and image types are shared; counts of the rest are reported', async () => {
+        const res = await buildCatalog([
+            route({ id: 'a', isLocal: true, routeHash: 'ha', videoUrl: 'video:///d/a.mp4', previewUrl: 'file:///d/a.svg' }),
+            route({ id: 'b', isLocal: true, routeHash: 'hb', videoUrl: 'video:///d/b.exe' }),
+            route({ id: 'c', isLocal: true, routeHash: 'hc', videoUrl: 'video:///d/c' }),
+            route({ id: 'd', isLocal: true, routeHash: 'hd', videoUrl: 'video:///d/constructor' }),
+            route({ id: 'e', isLocal: true, routeHash: 'he', videoUrl: 'video:///d/e.MP4', previewUrl: 'file:///d/e.PNG' }),
+        ], opts())
+
+        expect(res.document.routes.map(r => r.routeKey)).toEqual(['ha', 'he'])
+        expect(res.document.routes[0].thumbHandle).toBeUndefined()
+        expect(res.document.routes[1].thumbHandle).toBeDefined()
+        expect(res.handles.map(h => h.path)).toEqual(['/d/a.mp4', '/d/e.MP4', '/d/e.PNG'])
+        expect(res.handles.every(h => h.contentType !== undefined)).toBe(true)
+        expect(res.skipped).toEqual({ video: 3, thumbnail: 1 })
+    })
+
     test('duplicate keys are listed once', async () => {
         const res = await buildCatalog([
             route({ id: 'a', isLocal: true, routeHash: 'same', videoUrl: 'video:///d/a.mp4' }),

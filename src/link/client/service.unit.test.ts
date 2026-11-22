@@ -14,6 +14,9 @@ import { LINK_MIN_NATIVE_VERSION } from './native-requirements'
 import { LocalLinkClientService } from './service'
 import type { LinkPairingState, LocalLinkClientDisplayProps } from './types'
 
+// the global uuid stub returns counters; the pairing record check needs real UUIDs
+jest.mock('uuid', () => ({ v4: () => jest.requireActual('node:crypto').randomUUID() }))
+
 const HOST_ADDRESS = '192.168.1.20'
 const HOST_ID = `${HOST_ADDRESS}:6001`
 const ROGUE_ADDRESS = '192.168.1.99'
@@ -324,6 +327,49 @@ describe('LocalLinkClientService', () => {
             expect(props().links).toMatchObject([{ linkId, displayName: 'Incyclist Computer', reachability: 'reachable', connected: true }])
             expect(client.getSession(linkId)).toMatchObject({ mediaPort: 6002, catalogVersion: 'cv1', capabilities: ['route-sharing', 'route-descriptor'] })
             expect((mem.files.get(linkId) as { lastSeenAt?: number }).lastSeenAt).toEqual(expect.any(Number))
+        })
+        describe('paired record from a computer', () => {
+            const rogueUrl = `${ROGUE_ADDRESS}:${ROGUE_PORT}`
+            const pairWithRogue = async (linkId: unknown, secret = 'A'.repeat(43)) => {
+                const rogue = new RogueEndpoint({
+                    pairingOpen: true,
+                    handler: (msg, send) => {
+                        if (msg.t === 'pair-request')
+                            send('pending', { outcome: 'pending', requestId: 'r1', expiresIn: 120 }, msg.id)
+                        if (msg.t === 'pair-verify')
+                            send('paired', { outcome: 'paired', linkId: linkId as string, secret, name: 'Rogue', protocolVersion: { major: 1, minor: 0 } }, msg.id)
+                    },
+                })
+                net.endpoints.set(rogueUrl, rogue)
+                announced = [{ type: 'incyclist', name: 'Den PC (AAAA)', address: ROGUE_ADDRESS, port: ROGUE_PORT }]
+                await run(client.startSearch())
+                await run(client.selectComputer(rogueUrl))
+                await until(stepIs('code'))
+                client.submitCode('123456')
+                await until(stepIs('failed'))
+            }
+
+            test.each([['not a UUID', 'abc'], ['path-like', '../x'], ['empty', ''], ['not a string', 42]])('a linkId that is %s fails the pairing and stores nothing', async (_n, linkId) => {
+                await pairWithRogue(linkId)
+                expect(pairingState()).toMatchObject({ reason: 'connection-lost', recovery: 'try-again' })
+                expect(mem.files.size).toBe(0)
+                expect(secure.values.size).toBe(0)
+            })
+            // A computer that answers with a linkId we already hold must not replace that record or its
+            // secret, even with a valid-looking exchange. The failure reuses `connection-lost`.
+            test('a linkId that is already paired is refused; record and secret stay untouched', async () => {
+                const linkId = await pairPhone()
+                const record = JSON.stringify(mem.files.get(linkId))
+                const secretKey = `localLink.secret.${linkId}`
+                const secret = secure.values.get(secretKey)
+
+                await pairWithRogue(linkId, 'B'.repeat(43))
+
+                expect(pairingState()).toMatchObject({ reason: 'connection-lost', recovery: 'try-again' })
+                expect(secure.values.get(secretKey)).toBe(secret)
+                expect(JSON.stringify(mem.files.get(linkId))).toBe(record)
+                expect(mem.files.size).toBe(1)
+            })
         })
         test('the pairing request carries a generic device name, not a person name', async () => {
             await pairPhone()

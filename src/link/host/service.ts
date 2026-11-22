@@ -15,7 +15,7 @@ import type {
 import {
     AUTH_MAX_FAILURES_PER_CONNECTION, AUTH_RATE_PER_PEER, AUTH_RATE_WINDOW_MS, AUTH_RESULT_DELAY_MS, DEFAULT_DISPLAY_NAME,
     LAST_SEEN_PERSIST_INTERVAL_MS, LINK_CAPABILITIES, LINK_LIMITS, MEDIA_TOKEN_BYTES, MEDIA_TOKEN_TTL_MS,
-    MEDIA_TOKENS_PER_CLIENT, PAIRING_SECRET_BYTES, SETTINGS_KEY,
+    MEDIA_TOKENS_PER_CLIENT, PAIRING_SECRET_BYTES, PAIRING_TTL_SECONDS, SETTINGS_KEY, UNAUTHENTICATED_DEADLINE_MS,
 } from './consts'
 import { LinkPairing } from './pairing'
 import { SlidingWindowLimiter } from './rate-limit'
@@ -247,7 +247,7 @@ export class LocalLinkService extends IncyclistService {
         clearTimeout(this.tokenTimer)
         this.pairing.reset()
         this.authLimiter.reset()
-        this.connections.clear()
+        this.clearConnections()
         super.reset()
     }
 
@@ -381,7 +381,7 @@ export class LocalLinkService extends IncyclistService {
         this.sharingListener = undefined
         this.pushedCatalogVersion = undefined
         clearTimeout(this.tokenTimer)
-        this.connections.clear()
+        this.clearConnections()
         this.suffix = undefined
         this.hostLabel = undefined
         this.startError = undefined
@@ -435,14 +435,48 @@ export class LocalLinkService extends IncyclistService {
             this.getLink().close(connectionId, 'not-running').catch(() => undefined)
             return
         }
-        this.connections.set(connectionId, {
+        const conn: LinkConnection = {
             id: connectionId, peerAddress: peerAddress ?? '', channel: new LinkServerChannel(), authBusy: false, authFailures: 0,
-        })
+        }
+        this.connections.set(connectionId, conn)
+        this.armDeadline(conn, UNAUTHENTICATED_DEADLINE_MS)
+    }
+
+    /**
+     * A connection must authenticate (or be waiting for its pairing PIN) soon after it was
+     * accepted. While a pair request is pending the deadline extends to the pairing window.
+     */
+    protected armDeadline(conn: LinkConnection, ms: number): void {
+        clearTimeout(conn.deadline)
+        conn.deadline = setTimeout(() => this.onDeadline(conn), ms)
+        conn.deadline.unref?.()
+    }
+
+    protected onDeadline(conn: LinkConnection): void {
+        conn.deadline = undefined
+        if (conn.clientId || this.connections.get(conn.id) !== conn)
+            return
+        if (this.pairing.hasPendingFor(conn.id))
+            return this.armDeadline(conn, PAIRING_TTL_SECONDS * 1000)
+        this.logEvent({ message: 'local-link connection closed', reason: 'auth-timeout' })
+        this.closeConnection(conn.id, 'auth-timeout').catch(() => undefined)
+    }
+
+    protected dropConnection(connectionId: string): LinkConnection | undefined {
+        const conn = this.connections.get(connectionId)
+        clearTimeout(conn?.deadline)
+        this.connections.delete(connectionId)
+        return conn
+    }
+
+    protected clearConnections(): void {
+        for (const conn of this.connections.values())
+            clearTimeout(conn.deadline)
+        this.connections.clear()
     }
 
     protected onConnectionClosed(connectionId: string): void {
-        const conn = this.connections.get(connectionId)
-        this.connections.delete(connectionId)
+        const conn = this.dropConnection(connectionId)
         this.pairing.connectionClosed(connectionId)
         if (conn?.clientId)
             this.emitState()
@@ -599,6 +633,8 @@ export class LocalLinkService extends IncyclistService {
         // from here on every frame in both directions is signed
         conn.channel.establish(key)
         conn.clientId = client.clientId
+        clearTimeout(conn.deadline)
+        conn.deadline = undefined
         this.touch(client.clientId, true)
 
         const token = await this.issueToken(client.clientId)
@@ -685,7 +721,7 @@ export class LocalLinkService extends IncyclistService {
     }
 
     protected async closeConnection(connectionId: string, reason: string): Promise<void> {
-        this.connections.delete(connectionId)
+        this.dropConnection(connectionId)
         await this.getLink().close(connectionId, reason)
     }
 

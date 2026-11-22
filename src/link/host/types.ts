@@ -91,6 +91,8 @@ export interface LinkConnection {
     authBusy: boolean
     authFailures: number
     clientId?: string
+    /** closes the connection if it stays unauthenticated and outside a pairing flow */
+    deadline?: ReturnType<typeof setTimeout>
 }
 
 export type PairRequestResult =

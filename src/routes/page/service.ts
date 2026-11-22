@@ -27,6 +27,7 @@ import { useRouteSharingClient } from "../sharing/client/service";
 import { useRouteVideoResolver } from "../sharing/client/resolver";
 import type { LinkSnapshot, RouteAvailability } from "../sharing/client/types";
 import type { ThumbnailLinkSource } from "../thumbnails/types";
+import { scrubTokens } from '../../utils/scrub'
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -454,7 +455,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
             
             const setttings:any = service.getStartSettings()??{} as any
             const {id,title,videoUrl} = setttings
-            this.logEvent( {message:'Attempting to start a ride',id,title,videoUrl,readyToStart:pairing.isReadyToStart(), } )
+            this.logEvent( {message:'Attempting to start a ride',id,title,videoUrl:scrubTokens(videoUrl),readyToStart:pairing.isReadyToStart(), } )
             
             service.close()       
             const next =  pairing.isReadyToStart() ? '/rideDeviceOK'  : '/pairingStart' 

@@ -48,6 +48,11 @@ export class LinkPairing {
         return this.opened
     }
 
+    /** true while pairing is open and a request of this connection is waiting for its PIN */
+    hasPendingFor(connectionId: string): boolean {
+        return this.opened && this.pending?.connectionId === connectionId
+    }
+
     open(): void {
         if (this.opened)
             return

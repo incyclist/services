@@ -172,7 +172,7 @@ describe('LocalLinkService', () => {
         test('openPairing starts, announces with a random host label and opens pairing', async () => {
             await service.openPairing()
             expect(h.link.setPeerPolicy).toHaveBeenCalledWith({ defaultPrivate: true })
-            expect(h.link.setLimits).toHaveBeenCalled()
+            expect(h.link.setLimits).toHaveBeenCalledWith(expect.objectContaining({ control: expect.objectContaining({ maxFrameBytes: 16 * 1024 }) }))
             const announced = h.link.announce.mock.calls[0][0] as { hostLabel: string }
             expect(announced.hostLabel).toMatch(/^incyclist-[a-z0-9]{8}$/)
             const props = service.getDisplayProps()
@@ -595,6 +595,64 @@ describe('LocalLinkService', () => {
             expect(phone.inbox().length).toBeGreaterThan(0)
             h.emit({ type: 'connection-closed', connectionId: 'c2', reason: 'peer' })
             expect(service.getDisplayProps().devices[0].active).toBe(false)
+        })
+    })
+
+    describe('authentication deadline', () => {
+        const closed = (id: string) => h.link.close.mock.calls.filter(c => c[0] === id)
+
+        test('an idle connection is closed after 10 s', async () => {
+            await service.openPairing()
+            new Phone(h, 'idle')
+            await jest.advanceTimersByTimeAsync(9000)
+            expect(closed('idle')).toHaveLength(0)
+            await jest.advanceTimersByTimeAsync(1500)
+            expect(closed('idle')).toEqual([['idle', 'auth-timeout']])
+        })
+        test('a connection that only said hello is closed', async () => {
+            data.localLink = { auth: { clients: [{ clientId: 'x', clientName: 'P', pairedAt: 1, secret: 'AAAA' }], tokens: [] } }
+            await service.init()
+            const phone = new Phone(h, 'hi')
+            await phone.hello()
+            await jest.advanceTimersByTimeAsync(10_000)
+            expect(closed('hi')).toHaveLength(1)
+        })
+        test('a connection with a pending pair request stays open for the pairing window', async () => {
+            await service.openPairing()
+            const phone = new Phone(h, 'p1')
+            await phone.pair(() => undefined)
+            await jest.advanceTimersByTimeAsync(30_000)
+            expect(closed('p1')).toHaveLength(0)
+            await jest.advanceTimersByTimeAsync(100_000)
+            expect(closed('p1')).toHaveLength(1)
+        })
+        test('an authenticated connection is not closed', async () => {
+            const { paired } = await pairPhone()
+            const phone = new Phone(h, 'c2')
+            await phone.hello()
+            const probe = createLinkAuthProbe([{ linkId: paired.b.linkId, secret: paired.b.secret }])
+            await phone.send('auth', probe.body, 'au')
+            const outcome = verifyLinkAuthResult((phone.last() as Msg & { b: never }).b, probe.state)
+            if (!outcome.ok)
+                throw new Error('auth failed')
+            await phone.send('auth-confirm', outcome.confirm)
+            await jest.advanceTimersByTimeAsync(60_000)
+            expect(closed('c2')).toHaveLength(0)
+        })
+        test('closing the connection clears the timer', async () => {
+            await service.openPairing()
+            new Phone(h, 'gone')
+            h.emit({ type: 'connection-closed', connectionId: 'gone', reason: 'peer' })
+            await jest.advanceTimersByTimeAsync(20_000)
+            expect(closed('gone')).toHaveLength(0)
+        })
+        test('stopping the transport clears the timers', async () => {
+            await service.openPairing()
+            new Phone(h, 'stop')
+            await service.closePairing()
+            h.link.close.mockClear()
+            await jest.advanceTimersByTimeAsync(20_000)
+            expect(closed('stop')).toHaveLength(0)
         })
     })
 

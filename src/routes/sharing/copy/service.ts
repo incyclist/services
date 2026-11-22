@@ -11,6 +11,7 @@ import { useRouteSharingClient } from '../client/service'
 import type { OpenRowResult } from '../client/types'
 import type { SharedRouteEntry } from '../types'
 import type { RouteCopyFailure, RouteCopyState, RouteCopyStateEvent } from './types'
+import { scrubError, scrubTokens } from '../../../utils/scrub'
 
 /** A token that expired mid-copy is renewed at most this many times per copy. */
 const MAX_REESTABLISH = 2
@@ -94,7 +95,7 @@ export class RouteCopyService extends IncyclistService {
 
         const copy: ActiveCopy = { cancelled: false, promise: Promise.resolve({ status: 'idle' }) }
         copy.promise = this.run(routeKey, copy)
-            .catch((err): RouteCopyState => { this.logError(err as Error, 'copyToDevice'); return this.setFailed(routeKey, 'unknown') })
+            .catch((err): RouteCopyState => { this.logError(scrubError(err as Error), 'copyToDevice'); return this.setFailed(routeKey, 'unknown') })
             .finally(() => { this.copies.delete(routeKey) })
         this.copies.set(routeKey, copy)
         return copy.promise
@@ -207,7 +208,7 @@ export class RouteCopyService extends IncyclistService {
                 return 'no-space'
 
             const expired = opened.expiresAt - Date.now() < MEDIA_TOKEN_MARGIN_MS
-            this.logEvent({ message: 'route copy transfer failed', reason: result.error?.message, expired })
+            this.logEvent({ message: 'route copy transfer failed', reason: scrubTokens(result.error?.message), expired })
             const reopened = await this.getResolver().openRow(row)
             if (!isOpened(reopened))
                 return reopened.failure

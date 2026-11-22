@@ -185,6 +185,17 @@ describe('RouteCopyService', () => {
             expect(existing.has('/videos/r1.mp4')).toBe(false)
         })
 
+        test('a transfer error message never reaches the log with a media token', async () => {
+            const spy = jest.spyOn(service as unknown as { logEvent: (e: unknown) => void }, 'logEvent')
+            const result = service.copyToDevice('r1')
+            await flush()
+            lastSession().emit('error', new Error('GET http://192.168.1.5:6002/v/h1?t=SECRETTOKEN failed'))
+            await result
+            const logged = JSON.stringify(spy.mock.calls)
+            expect(logged).toContain('route copy transfer failed')
+            expect(logged).not.toContain('SECRETTOKEN')
+        })
+
         test('a transfer error from a computer that still answers fails as unknown', async () => {
             const result = service.copyToDevice('r1')
             await flush()

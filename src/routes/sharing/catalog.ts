@@ -27,6 +27,8 @@ export interface CatalogBuildOptions {
 export interface CatalogBuild {
     document: CatalogDocument
     handles: MediaState['handles']
+    /** counts of what was left out because of its file type; never paths */
+    skipped: { video: number, thumbnail: number }
 }
 
 const extensionOf = (path: string): string => {
@@ -34,6 +36,9 @@ const extensionOf = (path: string): string => {
     const dot = name.lastIndexOf('.')
     return dot === -1 ? '' : name.slice(dot + 1).toLowerCase()
 }
+
+const isVideoType = (path: string): boolean => Object.hasOwn(VIDEO_TYPES, extensionOf(path))
+const isImageType = (path: string): boolean => Object.hasOwn(IMAGE_TYPES, extensionOf(path))
 
 /** The absolute path of the route's video if it is a local file, else `undefined`. */
 export const getLocalVideoPath = (descr: RouteInfo): string | undefined => fileUrlToPath(descr.videoUrl)
@@ -67,14 +72,17 @@ export const buildSummary = (descr: RouteInfo): SharedRouteSummary => {
     return summary as unknown as SharedRouteSummary
 }
 
-const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOptions): Promise<{ entry: CatalogEntry, handles: MediaState['handles'] }> => {
+type BuiltEntry = { entry: CatalogEntry, handles: MediaState['handles'], thumbnailSkipped: boolean }
+
+const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOptions): Promise<BuiltEntry> => {
     const handles: MediaState['handles'] = []
     const videoHandle = opts.makeHandle('v', path)
     handles.push({ handle: videoHandle, path, contentType: VIDEO_TYPES[extensionOf(path)] })
 
     let thumbHandle: string | undefined
     const thumbPath = fileUrlToPath(descr.previewUrl)
-    if (thumbPath) {
+    const thumbnailSkipped = !!thumbPath && !isImageType(thumbPath)
+    if (thumbPath && !thumbnailSkipped) {
         thumbHandle = opts.makeHandle('t', thumbPath)
         handles.push({ handle: thumbHandle, path: thumbPath, contentType: IMAGE_TYPES[extensionOf(thumbPath)] })
     }
@@ -96,20 +104,27 @@ const buildEntry = async (descr: RouteInfo, path: string, opts: CatalogBuildOpti
         entry.routeHash = descr.routeHash
     if (descr.isLocal && descr.routeHash)
         entry.summary = buildSummary(descr)
-    return { entry, handles }
+    return { entry, handles, thumbnailSkipped }
 }
 
 /**
  * Builds the catalog document and the handle table from the route descriptions.
+ * Only files of a known video type (and, for thumbnails, a known image type) are shared: a route
+ * with another video type is left out, another thumbnail type only drops the thumbnail.
  * Routes whose key already occurred are skipped; entries are sorted by key so that the
  * catalog version only changes when the content does.
  */
 export const buildCatalog = async (descriptions: RouteInfo[], opts: CatalogBuildOptions): Promise<CatalogBuild> => {
     const seen = new Set<string>()
     const candidates: Array<{ descr: RouteInfo, path: string }> = []
+    const skipped = { video: 0, thumbnail: 0 }
     for (const descr of descriptions) {
         if (!isShareable(descr) || !descr.id)
             continue
+        if (!isVideoType(getLocalVideoPath(descr)!)) {
+            skipped.video++
+            continue
+        }
         const key = getRouteKey(descr, opts.linkId)
         if (seen.has(key))
             continue
@@ -117,7 +132,7 @@ export const buildCatalog = async (descriptions: RouteInfo[], opts: CatalogBuild
         candidates.push({ descr, path: getLocalVideoPath(descr)! })
     }
 
-    const built: Array<{ entry: CatalogEntry, handles: MediaState['handles'] }> = []
+    const built: BuiltEntry[] = []
     for (let i = 0; i < candidates.length; i += STAT_CONCURRENCY) {
         const chunk = candidates.slice(i, i + STAT_CONCURRENCY)
         built.push(...await Promise.all(chunk.map(c => buildEntry(c.descr, c.path, opts))))
@@ -126,5 +141,6 @@ export const buildCatalog = async (descriptions: RouteInfo[], opts: CatalogBuild
 
     const routes = built.map(b => b.entry)
     const catalogVersion = opts.hash(canonicalJson(routes))
-    return { document: { catalogVersion, routes }, handles: built.flatMap(b => b.handles) }
+    skipped.thumbnail = built.filter(b => b.thumbnailSkipped).length
+    return { document: { catalogVersion, routes }, handles: built.flatMap(b => b.handles), skipped }
 }

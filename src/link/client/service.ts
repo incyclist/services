@@ -39,6 +39,8 @@ type ProbeResult =
     | { kind: 'session', link: LinkRecord, conn: LinkClientConnection, session: SessionBody, version: LinkProtocolVersion, host: string, port: number }
     | { kind: 'no-match' | 'version' | 'unreachable' }
 
+const UUID_PATTERN = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i
+
 type BrowseOutcome = { ok: true, results: BrowseResult[], interrupted: boolean } | { ok: false, reason: SearchBlockedReason }
 
 type SearchPhase =
@@ -713,6 +715,14 @@ export class LocalLinkClientService extends IncyclistService {
         const record = this.toRecord(target, body)
         if (!record || !fromBase64Url(body.secret)?.length)
             return 'connection-lost'
+        // A stored computer is never overwritten while its secret still authenticates: a computer
+        // that answers with a linkId we already hold must not replace that record or its secret.
+        // Only when the stored secret is dead (e.g. the phone was removed on the computer) is
+        // re-pairing allowed. The refusal reuses `connection-lost`, so the reason enum is unchanged.
+        if (this.store.get(record.linkId) && await this.ensureSession(record.linkId)) {
+            this.logEvent({ message: 'local-link pairing refused', reason: 'already-paired' })
+            return 'connection-lost'
+        }
         if (!await this.store.saveSecret(record.linkId, body.secret))
             return 'storage-unavailable'
         if (!await this.store.save(record)) {
@@ -732,7 +742,7 @@ export class LocalLinkClientService extends IncyclistService {
     }
 
     protected toRecord(target: PairTarget, body: PairedBody): LinkRecord | undefined {
-        if (typeof body?.linkId !== 'string' || !body.linkId || typeof body.secret !== 'string')
+        if (typeof body?.linkId !== 'string' || !UUID_PATTERN.test(body.linkId) || typeof body.secret !== 'string')
             return undefined
         const version = body.protocolVersion
         if (!Number.isInteger(version?.major) || !Number.isInteger(version?.minor))

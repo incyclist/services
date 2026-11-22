@@ -32,6 +32,9 @@ export const AUTH_RATE_PER_PEER = 10
 export const AUTH_RESULT_DELAY_MS = 300
 export const AUTH_MAX_FAILURES_PER_CONNECTION = 3
 
+/** A control connection that is neither authenticated nor in an active pairing flow is closed after this long. */
+export const UNAUTHENTICATED_DEADLINE_MS = 10_000
+
 export const MEDIA_TOKEN_TTL_MS = 12 * 60 * 60 * 1000
 export const MEDIA_TOKEN_BYTES = 32
 export const MEDIA_TOKENS_PER_CLIENT = 8
@@ -45,7 +48,7 @@ export const LINK_CAPABILITIES = ['route-sharing', 'route-descriptor']
 
 /** Limit values handed to the transport (it enforces them under its own hard ceilings). */
 export const LINK_LIMITS: LocalLinkLimits = {
-    control: { maxConnections: 16, maxPerPeer: 4, preambleTimeoutMs: 5000, idleTimeoutMs: 60_000, maxFrameBytes: 64 * 1024, maxFramesPerSec: 20 },
+    control: { maxConnections: 16, maxPerPeer: 4, preambleTimeoutMs: 5000, idleTimeoutMs: 60_000, maxFrameBytes: 16 * 1024, maxFramesPerSec: 20 },
     media: { maxConnections: 32, maxPerPeer: 8, maxConcurrentStreams: 8 },
 }
 
