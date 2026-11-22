@@ -401,6 +401,24 @@ export class RidePageService extends IncyclistPageService implements IRidePageSe
         }
     }
 
+    onRetryStartDevice(udid: string): void {
+        try {
+            this.getRideDisplay().retryStartDevice(udid)
+        }
+        catch (err: any) {
+            this.logError(err, 'onRetryStartDevice')
+        }
+    }
+
+    onIgnoreStartDevice(udid: string): void {
+        try {
+            this.getRideDisplay().ignoreStartDevice(udid)
+        }
+        catch (err: any) {
+            this.logError(err, 'onIgnoreStartDevice')
+        }
+    }
+
     onStartWithMap(): void {
         try {
             this.getRideDisplay().startWithMapFallback()

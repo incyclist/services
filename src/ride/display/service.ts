@@ -6,7 +6,8 @@ import { Injectable } from "../../base/decorators";
 import { Segment, Step, useWorkoutList, useWorkoutRide, Workout } from "../../workouts";
 import { useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
-import { CurrentRideDeviceInfo, CurrentRideState, IRideModeService, RideType } from "../base";
+import { CurrentRideDeviceInfo, CurrentRideState, IRideModeService, RideType, StartContentInfo, StartDeviceState, StartPhase, StartReadyInfo } from "../base";
+import { useAppState } from "../../appstate";
 import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceRide } from "../../devices/ride";
 import { useDeviceConfiguration } from "../../devices/configuration";
 import { usePairingVisitTracker } from "../../devices/page/base/visit-log-factory";
@@ -28,6 +29,17 @@ import { ActivityUpdate } from "../../activities/ride/types";
 import { getCoachesService } from "../../coaches";
 import { useRideViewRestriction } from "../view-restriction/service";
 import { RideViewNoticeActionId, RideViewRestrictionDialogProps } from "../view-restriction/types";
+
+/** a phase change of the start overlay is only reported after it has been stable for this long (ms) */
+const START_PHASE_DELAY = 400
+
+/** time (ms) after which a device, or the content, is reported as "taking longer than usual". Overridable via the `START_SLOW_THRESHOLD` user setting */
+const START_SLOW_THRESHOLD = 10000
+
+/** time (ms) the devices are given to stop when the rider cancels while a device is being retried */
+const CANCEL_DEVICE_STOP_TIMEOUT = 5000
+
+type StartSlowCause = 'devices' | 'content' | 'convert-stall' | 'streetview'
 
 @Singleton
 export class RideDisplayService extends IncyclistService implements ICurrentRideService {
@@ -53,6 +65,27 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected discarding = false
     /** guards the one-time RideModeService.onStartDevicesReady() call */
     protected controlDevicesReadyNotified: boolean = false
+
+    // --- start overlay v2 ---
+
+    /** feature toggle START_OVERLAY_V2 as it was when the ride was started */
+    protected startV2: boolean|undefined
+    protected tsStart: number
+    /** the phase that is shown, and the phase that is waiting to be shown (see START_PHASE_DELAY) */
+    protected reportedPhase: StartPhase
+    protected pendingPhase: StartPhase
+    protected startTimers = new Map<string,NodeJS.Timeout>()
+    protected slowFlags = { devices:false, content:false, stall:false }
+    protected slowLoggedPhases = new Set<StartPhase>()
+    protected slowShown = false
+    protected convertProgressKey: string
+    protected deviceAttempts = new Map<string,{slow:boolean}>()
+    /** sensors that the rider stopped waiting for (udid -> time), valid for the current ride only */
+    protected ignoredDevices = new Map<string,number>()
+    protected deviceRetries = 0
+    protected startTrigger: 'auto' | 'start-button' = 'auto'
+    /** the next start-request is the result of retryStart(): devices that are already started must be kept */
+    protected fullRetryPending = false
 
 
     constructor() {
@@ -93,9 +126,10 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 this.enforceSimulator()
             }
             this.notifyPairingVisitRideStarted(simulate)
+            this.resetStartTracking()
 
             const rideProps =  this.getRideModeService().getLogProps()
-            this.logEvent({ message: 'Start ride', ...rideProps, 
+            this.logEvent({ message: 'Start ride', ...rideProps, startOverlayV2: this.isStartOverlayV2(),
                 bike: this.getBike(),
                 interface: this.getBikeInterface()            
             });
@@ -114,6 +148,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
             this.setState('Starting')
             this.logEvent({message:'overlay shown',overlay:'start overlay' })
+            this.updateStartTracking()
 
         }
         catch(err) {
@@ -140,6 +175,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             const props = this.getStartOverlayProps()
             this.logEvent({message:'button clicked',overlay:'start overlay',button:'Ignore',state:props,eventSource:'user', })
             this.logEvent({message:'overlay closed',overlay:'start overlay' })
+            this.startTrigger = 'start-button'
             this.onStartCompleted()
         }
         catch(err) {
@@ -173,6 +209,8 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 interface: this.getBikeInterface()            
             });
 
+            this.restartDeviceTracking()
+
             // start devices and prepare ride ( load video/map/....)
             this.startDevices(true)
             this.startRide(true)
@@ -182,11 +220,72 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
     }
 
+    /**
+     * Restarts a single device while the ride is still starting. All other devices and the
+     * content of the ride are left alone. A sensor that was ignored is waited for again.
+     *
+     * @param udid the unique device id of the device
+     */
+    retryStartDevice(udid:string):void {
+        try {
+            const device = this.getStartingDevice(udid)
+            if (!device || device.status==='Started')
+                return
+
+            this.logDeviceButton('Retry device', device)
+
+            this.ignoredDevices.delete(udid)
+            this.deviceRetries++
+            device.status = 'Starting'
+            delete device.stateText
+            this.beginDeviceAttempt(udid)
+            this.checkStartStatus()
+
+            this.getDeviceRide().retryStartDevice(udid, this.getDeviceStartProps())
+                .catch( err=>{ this.logError(err,'retryStartDevice') })
+        }
+        catch(err) {
+            this.logError(err,'retryStartDevice')
+        }
+    }
+
+    /**
+     * Stops waiting for a sensor, for this ride only. The sensor is not stopped: if it connects
+     * later, its data is used. If the sensor was the last thing the start was waiting for, the
+     * start overlay closes.
+     *
+     * @param udid the unique device id of the sensor
+     */
+    ignoreStartDevice(udid:string):void {
+        try {
+            const device = this.getStartingDevice(udid)
+            if (!device || device.isControl || device.status==='Started')
+                return
+
+            this.logDeviceButton('Ignore device', device)
+
+            this.ignoredDevices.set(udid, Date.now())
+            this.clearStartTimer(this.getDeviceTimerKey(udid))
+            this.deviceAttempts.delete(udid)
+            this.checkStartStatus()
+        }
+        catch(err) {
+            this.logError(err,'ignoreStartDevice')
+        }
+    }
+
     async cancelStart() {
         try {
             const props = this.getStartOverlayProps()
             const rideProps =  this.getRideModeService().getLogProps()
-            this.logEvent({message:'start ride cancel',reason: 'user cancel',...rideProps, state:props})
+            this.logEvent({message:'start ride cancel',reason: 'user cancel',...rideProps, state:props,
+                startPhase: props.startPhase ?? this.derivePhase(),
+                startElapsedMs: this.getStartElapsed(),
+                slowShown: this.slowShown,
+                deviceRetries: this.deviceRetries,
+                startOverlayV2: this.isStartOverlayV2()
+            })
+            await this.cancelDeviceRetries()
             await this.stopRide({noStateUpdates:true})
 
         }
@@ -613,6 +712,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected async stopRide( props:{exit?:boolean, noStateUpdates?:boolean}={} ):Promise<void> {
 
         try {
+            this.clearStartTimers()
             const prevState = this.state
             const isRedundantCall = prevState==='Finished' || prevState==='Idle' || prevState==='Closing'
 
@@ -776,6 +876,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         }
 
         const ride = this.getRideModeService().isStartRideCompleted()
+        this.updateStartTracking()
         const props = this.getStartOverlayProps()
 
         this.logEvent({message:'start overlay update', ...props})
@@ -1161,7 +1262,16 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
         const logProps = this.getRideModeService().getLogProps()
         this.logEvent({message:'overlay closed',overlay:'start overlay' })        
-        this.logEvent({ message: 'Start success',  ...logProps })
+        this.logEvent({ message: 'Start success',  ...logProps,
+            startElapsedMs: this.getStartElapsed(),
+            startTrigger: this.startTrigger,
+            ignoredSensors: this.ignoredDevices.size,
+            missingSensors: this.getMissingSensors().length,
+            slowShown: this.slowShown,
+            deviceRetries: this.deviceRetries,
+            startOverlayV2: this.isStartOverlayV2()
+        })
+        this.clearStartTimers()
 
         this.state = 'Started'
         this.displayService.off('state-update',this.stateUpdateHandler)
@@ -1192,16 +1302,19 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.updateStartOverlay()            
     }
 
-    protected startDevices(retry?:boolean) {
-        const devices = this.getDeviceRide()
-
+    protected getDeviceStartProps() {
         const startSettings = this.getDeviceStartSettings()??{}
-        const props = {
+        return {
             user: this.user,
             route: this.route,
 
             ...startSettings,
         }
+    }
+
+    protected startDevices(retry?:boolean) {
+        const devices = this.getDeviceRide()
+        const props = this.getDeviceStartProps()
 
         const logError = (err:Error) => {
             this.logError(err,'startDevices')
@@ -1352,13 +1465,21 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected onDeviceStartRequest(devices:AdapterStateInfo[]) {
 
+        // a retry only restarts the devices that are not started yet: the others must not be shown as "Starting"
+        const keepStarted = this.fullRetryPending && this.isStartOverlayV2()
+        this.fullRetryPending = false
+
         this.deviceInfo = devices.map( d=> ({
             name: d.name,
             udid: d.udid,
             isControl: d.isControl,
             capabilities: d.capabilities,
-            status: 'Starting'
+            status: keepStarted && d.isStarted ? 'Started' : 'Starting'
         }))
+        this.deviceInfo.forEach( d=> {
+            if (d.status==='Starting')
+                this.beginDeviceAttempt(d.udid)
+        })
         this.updateStartOverlay()
     }   
 
@@ -1368,15 +1489,27 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
     
     protected async onDeviceStartOK(device:AdapterStateInfo) {
+        this.onIgnoredDeviceStarted(device.udid)
+
         if (this.state!=='Starting')
             return
 
-        const startDevice = this.deviceInfo.find( d=> d.udid===device.udid)
+        const startDevice = this.deviceInfo?.find( d=> d.udid===device.udid)
         if (!startDevice)
             return;
 
+        this.endDeviceAttempt(startDevice.udid)
         startDevice.status = 'Started'
         this.checkStartStatus()
+    }
+
+    protected onIgnoredDeviceStarted(udid:string) {
+        const ts = this.ignoredDevices.get(udid)
+        if (ts===undefined)
+            return
+
+        const device = this.deviceInfo?.find( d=> d.udid===udid)
+        this.logEvent({ message:'ignored sensor connected', device:device?.name, ignoredForMs: Date.now()-ts, afterStart: this.state!=='Starting' })
     }
 
     protected enforceSimulator() {
@@ -1447,6 +1580,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.logEvent({ message: `${key} start error shown`, overlay: 'start overlay', device: startDevice.name, });
         }
 
+        this.endDeviceAttempt(startDevice.udid)
         startDevice.status = 'Error'
         this.checkStartStatus()
 
@@ -1527,7 +1661,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected isSensorsReadyToStart() {
         const devices = this.deviceInfo??[]
 
-        const mandatory = devices?.filter( d=>!d.isControl)??[]
+        const mandatory = devices?.filter( d=>!d.isControl && !this.ignoredDevices.has(d.udid))??[]
         if (!mandatory.length)
             return true
 
@@ -1540,8 +1674,309 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         const devicesState = this.deviceInfo??[]
 
         const displayOverlayProps = this.getRideModeService().getStartOverlayProps()??{}
+
+        if (this.isStartOverlayV2()) {
+            return this.getStartOverlayPropsV2(mode, readyToStart, displayOverlayProps)
+        }
+
         // TODO : Check where devicesState (incorrect) is used - replace with correct property devices
         return {mode, rideState:this.state, devicesState,devices:devicesState,  readyToStart, ...displayOverlayProps}
+    }
+
+    protected getStartOverlayPropsV2(mode:RideType, readyToStart:boolean, displayOverlayProps:Record<string,unknown>):StartOverlayProps {
+        const startPhase = this.reportedPhase ?? this.derivePhase()
+        const devices = (this.deviceInfo??[]).map( d => ({...d, ...this.getDeviceStartFields(d)}) )
+        const startContent = this.getRideModeService().getStartContentInfo?.()
+        const {slow:startSlow} = this.getStartSlow(startPhase, startContent, displayOverlayProps)
+
+        const props:StartOverlayProps = {
+            mode, rideState:this.state, devicesState:devices, devices, readyToStart, ...displayOverlayProps,
+            startPhase, startSlow
+        } as StartOverlayProps
+        if (startContent)
+            props.startContent = startContent
+        if (startPhase==='ready')
+            props.startReadyInfo = this.getStartReadyInfo(displayOverlayProps)
+        return props
+    }
+
+    protected getStartReadyInfo(displayOverlayProps:Record<string,unknown>):StartReadyInfo {
+        const sensors = (this.deviceInfo??[]).filter( d=>!d.isControl && !this.ignoredDevices.has(d.udid) )
+        return {
+            pendingSensors: sensors.filter( d=>d.status==='Starting').map( d=>d.name ),
+            notConnectedSensors: sensors.filter( d=>d.status==='Error').map( d=>d.name ),
+            viewFallback: displayOverlayProps.viewState==='unavailable'
+        }
+    }
+
+    protected getDeviceStartFields(d:CurrentRideDeviceInfo):Pick<CurrentRideDeviceInfo,'startState'|'slow'|'canRetry'|'canIgnore'> {
+        const ignored = !d.isControl && this.ignoredDevices.has(d.udid)
+        const starting = d.status==='Starting'
+        const slow = starting && !ignored && this.deviceAttempts.get(d.udid)?.slow===true
+
+        let startState:StartDeviceState = 'starting'
+        if (d.status==='Started') startState = 'started'
+        else if (ignored) startState = 'ignored'
+        else if (d.stateText) startState = 'uploading'
+        else if (d.status==='Error') startState = d.isControl ? 'failed' : 'not-connected'
+
+        if (d.isControl) {
+            return { startState, slow, canRetry: starting && slow && !d.stateText, canIgnore: false }
+        }
+
+        const stuck = d.status==='Error' || (starting && slow)
+        return {
+            startState, slow,
+            canRetry: stuck || (ignored && d.status!=='Started'),
+            canIgnore: stuck && !ignored
+        }
+    }
+
+    protected derivePhase():StartPhase {
+        if (!this.isStartDeviceReadyToStart())
+            return 'devices'
+        if (!this.getRideModeService().isStartRideCompleted())
+            return 'content'
+        return 'ready'
+    }
+
+    protected getStartSlow(phase:StartPhase, content:StartContentInfo|undefined, displayOverlayProps:Record<string,unknown>):{slow:boolean, cause?:StartSlowCause} {
+        if (phase==='devices') {
+            const controls = (this.deviceInfo??[]).filter( d=>d.isControl )
+            const slow = this.slowFlags.devices && controls.some( d=>d.status==='Starting') && !controls.some( d=>d.stateText )
+            return { slow, cause: 'devices' }
+        }
+        if (phase==='content') {
+            if (content?.kind==='streetview')
+                return { slow: displayOverlayProps.viewState==='slow', cause:'streetview' }
+            if (content?.progress)
+                return { slow: this.slowFlags.stall, cause:'convert-stall' }
+            return { slow: this.slowFlags.content, cause:'content' }
+        }
+        return { slow:false }
+    }
+
+    // ---- start overlay v2: phases, slow detection, anti-flicker ----
+
+    protected isStartOverlayV2():boolean {
+        if (this.startV2!==undefined)
+            return this.startV2
+        try {
+            return this.getAppState().hasFeature('START_OVERLAY_V2') === true
+        }
+        catch {
+            return false
+        }
+    }
+
+    protected getSlowThreshold():number {
+        try {
+            const val = Number(this.getUserSettings().get('START_SLOW_THRESHOLD',undefined))
+            return (val>0 && !Number.isNaN(val)) ? val : START_SLOW_THRESHOLD
+        }
+        catch {
+            return START_SLOW_THRESHOLD
+        }
+    }
+
+    protected getStartElapsed():number {
+        return Date.now() - (this.tsStart ?? Date.now())
+    }
+
+    protected getMissingSensors():CurrentRideDeviceInfo[] {
+        return (this.deviceInfo??[]).filter( d=>!d.isControl && !this.ignoredDevices.has(d.udid) && d.status!=='Started')
+    }
+
+    protected resetStartTracking() {
+        this.clearStartTimers()
+        this.startV2 = undefined
+        this.startV2 = this.isStartOverlayV2()
+        this.tsStart = Date.now()
+        this.reportedPhase = undefined
+        this.pendingPhase = undefined
+        this.slowFlags = { devices:false, content:false, stall:false }
+        this.slowLoggedPhases.clear()
+        this.slowShown = false
+        this.convertProgressKey = undefined
+        this.deviceAttempts.clear()
+        this.ignoredDevices.clear()
+        this.deviceRetries = 0
+        this.startTrigger = 'auto'
+        this.fullRetryPending = false
+
+        if (this.startV2)
+            this.armStartTimer('devices-slow', this.getSlowThreshold(), ()=>{ this.slowFlags.devices = true })
+    }
+
+    /** a full retry of all devices: the time that devices are given starts again */
+    protected restartDeviceTracking() {
+        this.fullRetryPending = true
+        if (!this.isStartOverlayV2())
+            return
+
+        this.slowFlags.devices = false
+        this.armStartTimer('devices-slow', this.getSlowThreshold(), ()=>{ this.slowFlags.devices = true })
+    }
+
+    protected armStartTimer(key:string, ms:number, handler:()=>void) {
+        this.clearStartTimer(key)
+        const timer = setTimeout( ()=>{
+            this.startTimers.delete(key)
+            try {
+                if (this.state!=='Starting')
+                    return
+                handler()
+                this.checkStartStatus()
+            }
+            catch(err) {
+                this.logError(err,'startTimer',{key})
+            }
+        }, ms)
+        this.startTimers.set(key, timer)
+    }
+
+    protected clearStartTimer(key:string) {
+        const timer = this.startTimers.get(key)
+        if (timer) {
+            clearTimeout(timer)
+            this.startTimers.delete(key)
+        }
+    }
+
+    protected clearStartTimers() {
+        this.startTimers.forEach( t=>clearTimeout(t) )
+        this.startTimers.clear()
+    }
+
+    protected getDeviceTimerKey(udid:string) {
+        return `device:${udid}`
+    }
+
+    protected beginDeviceAttempt(udid:string) {
+        if (!this.isStartOverlayV2())
+            return
+
+        const attempt = { slow:false }
+        this.deviceAttempts.set(udid, attempt)
+        this.armStartTimer(this.getDeviceTimerKey(udid), this.getSlowThreshold(), ()=>{ attempt.slow = true })
+    }
+
+    protected endDeviceAttempt(udid:string) {
+        this.clearStartTimer(this.getDeviceTimerKey(udid))
+        this.deviceAttempts.delete(udid)
+    }
+
+    protected updateStartTracking() {
+        if (!this.isStartOverlayV2() || this.state!=='Starting' || !this.displayService)
+            return
+
+        try {
+            this.trackPhase()
+            const content = this.getRideModeService().getStartContentInfo?.()
+            this.trackConvertProgress(content)
+            this.trackSlowShown(content)
+        }
+        catch(err) {
+            this.logError(err,'updateStartTracking')
+        }
+    }
+
+    protected trackPhase() {
+        const phase = this.derivePhase()
+
+        if (this.reportedPhase===undefined) {
+            this.enterPhase(phase)
+            return
+        }
+
+        if (phase===this.pendingPhase)
+            return
+
+        this.pendingPhase = phase
+        this.clearStartTimer('phase')
+        if (phase!==this.reportedPhase) {
+            this.armStartTimer('phase', START_PHASE_DELAY, ()=>{ this.enterPhase(this.pendingPhase) })
+        }
+    }
+
+    protected enterPhase(phase:StartPhase) {
+        this.reportedPhase = phase
+        this.pendingPhase = phase
+
+        if (phase==='content') {
+            this.slowFlags.content = false
+            this.armStartTimer('content-slow', this.getSlowThreshold(), ()=>{ this.slowFlags.content = true })
+        }
+
+        this.logEvent({ message:'start phase entered', mode:this.getLogRideMode(), startPhase:phase, startElapsedMs:this.getStartElapsed(), startOverlayV2:true })
+    }
+
+    /** the conversion of an AVI is stalled, if its progress did not change for the slow threshold */
+    protected trackConvertProgress(content:StartContentInfo|undefined) {
+        if (!content?.progress || content.state!=='loading') {
+            this.clearStartTimer('stall')
+            return
+        }
+
+        const key = `${content.progress.convertPct}|${content.progress.convertSeconds}`
+        if (key===this.convertProgressKey)
+            return
+
+        this.convertProgressKey = key
+        this.slowFlags.stall = false
+        this.armStartTimer('stall', this.getSlowThreshold(), ()=>{ this.slowFlags.stall = true })
+    }
+
+    protected trackSlowShown(content:StartContentInfo|undefined) {
+        const phase = this.reportedPhase
+        if (!phase || this.slowLoggedPhases.has(phase))
+            return
+
+        const { slow, cause } = this.getStartSlow(phase, content, this.getRideModeService().getStartOverlayProps()??{})
+        if (!slow)
+            return
+
+        this.slowLoggedPhases.add(phase)
+        this.slowShown = true
+        this.logEvent({ message:'start slow shown', startPhase:phase, slowCause:cause, startElapsedMs:this.getStartElapsed() })
+    }
+
+    protected getStartingDevice(udid:string):CurrentRideDeviceInfo|undefined {
+        if (this.state!=='Starting')
+            return undefined
+        return this.deviceInfo?.find( d=>d.udid===udid)
+    }
+
+    protected logDeviceButton(button:'Retry device'|'Ignore device', device:CurrentRideDeviceInfo) {
+        const props = this.getStartOverlayProps()
+        const info = props.devices?.find( d=>d.udid===device.udid)
+        this.logEvent({
+            message:'button clicked', overlay:'start overlay', button,
+            device: device.name,
+            deviceRole: device.isControl ? 'trainer' : 'sensor',
+            deviceStartState: info?.startState ?? this.getDeviceStartFields(device).startState,
+            startPhase: props.startPhase ?? this.derivePhase(),
+            eventSource:'user',
+            state: props
+        })
+    }
+
+    /** stops the devices that are being retried, so that they are not left running after the rider cancelled */
+    protected async cancelDeviceRetries() {
+        if (this.deviceRetries===0)
+            return
+
+        let timer:NodeJS.Timeout
+        try {
+            const timeout = new Promise<void>( resolve => { timer = setTimeout(resolve, CANCEL_DEVICE_STOP_TIMEOUT) })
+            await Promise.race([ this.getDeviceRide().cancelStart(), timeout ])
+        }
+        catch(err) {
+            this.logError(err,'cancelDeviceRetries')
+        }
+        finally {
+            clearTimeout(timer)
+        }
     }
 
     protected getDeviceStartSettings() {
@@ -1627,6 +2062,11 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     @Injectable
     protected getDeviceRide() {
         return useDeviceRide() 
+    }
+
+    @Injectable
+    protected getAppState() {
+        return useAppState()
     }
 
     @Injectable

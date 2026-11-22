@@ -1420,6 +1420,25 @@ describe('RidePageService', () => {
             expect(MockRideDisplay.startWithMissingSensors).toHaveBeenCalled()
         })
 
+        test('onRetryStartDevice / onIgnoreStartDevice delegate to RideDisplay with the device', () => {
+            MockRideDisplay.retryStartDevice = jest.fn()
+            MockRideDisplay.ignoreStartDevice = jest.fn()
+
+            s.onRetryStartDevice('udid-1')
+            s.onIgnoreStartDevice('udid-2')
+
+            expect(MockRideDisplay.retryStartDevice).toHaveBeenCalledWith('udid-1')
+            expect(MockRideDisplay.ignoreStartDevice).toHaveBeenCalledWith('udid-2')
+        })
+
+        test('onRetryStartDevice / onIgnoreStartDevice swallow errors', () => {
+            MockRideDisplay.retryStartDevice = jest.fn(() => { throw new Error('x') })
+            MockRideDisplay.ignoreStartDevice = jest.fn(() => { throw new Error('x') })
+
+            expect(() => s.onRetryStartDevice('udid-1')).not.toThrow()
+            expect(() => s.onIgnoreStartDevice('udid-2')).not.toThrow()
+        })
+
         test('onStartWithMap delegates to RideDisplay', () => {
             s.onStartWithMap()
             expect(MockRideDisplay.startWithMapFallback).toHaveBeenCalled()
