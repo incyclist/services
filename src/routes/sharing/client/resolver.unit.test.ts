@@ -216,4 +216,128 @@ describe('RouteVideoResolver', () => {
             expect(resolver.hasLinkSource(official)).toBe(false)
         })
     })
+
+    describe('getRouteAvailability', () => {
+        const shared: VideoSourceInput = { id: 'r1', isLocal: true, hasVideo: true, linkShared: true }
+        type LinkState = { displayName: string, reachability: string, mediaAvailable?: boolean, capabilities?: string[] }
+        let state: Record<string, LinkState>
+
+        beforeEach(() => {
+            state = {}
+            client.getDisplayProps = () => ({
+                links: Object.entries(state).map(([linkId, l]) => ({ linkId, lastSeenAt: lastSeen[linkId], displayName: l.displayName, reachability: l.reachability, mediaAvailable: l.mediaAvailable ?? true })),
+            })
+            client.getSession = (linkId: string) => sessions.has(linkId) ? { linkId, capabilities: state[linkId]?.capabilities ?? ['route-sharing', 'route-descriptor'] } : undefined
+        })
+
+        const link = (linkId: string, extra: Partial<LinkState> = {}, connected = true) => {
+            state[linkId] = { displayName: `PC ${linkId}`, reachability: connected ? 'reachable' : 'not-reachable', ...extra }
+            rows.push(row(linkId))
+            if (connected)
+                sessions.add(linkId)
+        }
+
+        test('linkShared, connected computer with the capability: fromLink with its name; details not needed', () => {
+            link('A')
+            expect(resolver.getRouteAvailability(shared)).toEqual({ canStart: true, availability: 'fromLink', sourceLabel: 'PC A', linkId: 'A' })
+        })
+
+        test('linkShared on two computers: one name, the most recently seen connected one', () => {
+            link('A')
+            link('B')
+            link('C', {}, false)
+            lastSeen = { A: 1, B: 5, C: 9 }
+            const res = resolver.getRouteAvailability(shared)
+            expect(res).toMatchObject({ availability: 'fromLink', sourceLabel: 'PC B' })
+            expect(JSON.stringify(res)).not.toMatch(/\d computers?/)
+        })
+
+        test('linkShared, connected computer without the capability: versionMismatch unless details are persisted', () => {
+            link('A', { capabilities: ['route-sharing'] })
+            expect(resolver.getRouteAvailability(shared)).toEqual({ canStart: false, availability: 'unavailable', unavailableReason: 'versionMismatch', sourceLabel: 'PC A' })
+            expect(resolver.getRouteAvailability(shared, { hasDetails: true })).toMatchObject({ canStart: true, availability: 'fromLink' })
+        })
+
+        test('linkShared, a capable computer is preferred over a more recent one without the capability', () => {
+            link('A')
+            link('B', { capabilities: ['route-sharing'] })
+            lastSeen = { A: 1, B: 9 }
+            expect(resolver.getRouteAvailability(shared)).toMatchObject({ availability: 'fromLink', sourceLabel: 'PC A' })
+        })
+
+        test('linkShared, no connected computer: the most recently seen one, reason from its reachability', () => {
+            link('A', { reachability: 'not-reachable' }, false)
+            link('B', { reachability: 'never-reached' }, false)
+            lastSeen = { A: 9, B: 1 }
+            expect(resolver.getRouteAvailability(shared, { hasDetails: true })).toEqual({ canStart: false, availability: 'unavailable', unavailableReason: 'linkUnreachable', sourceLabel: 'PC A' })
+            lastSeen = { A: 1, B: 9 }
+            expect(resolver.getRouteAvailability(shared)).toMatchObject({ unavailableReason: 'linkNeverReached', sourceLabel: 'PC B' })
+            state.B.reachability = 'version-mismatch'
+            expect(resolver.getRouteAvailability(shared)).toMatchObject({ unavailableReason: 'versionMismatch' })
+        })
+
+        test('linkShared without any row: noSource, no label', () => {
+            expect(resolver.getRouteAvailability(shared)).toEqual({ canStart: false, availability: 'unavailable', unavailableReason: 'noSource' })
+        })
+
+        test('linkShared with a local copy: local', () => {
+            expect(resolver.getRouteAvailability({ ...shared, isDownloaded: true, videoUrl: 'file:///data/x.mp4' })).toEqual({ canStart: true, availability: 'local' })
+        })
+
+        test('linkShared while route sharing is not supported: noSource', () => {
+            link('A')
+            supported = false
+            expect(resolver.getRouteAvailability(shared)).toMatchObject({ canStart: false, unavailableReason: 'noSource' })
+        })
+
+        test('a connected computer whose media can not be played is not a source', () => {
+            link('A', { mediaAvailable: false })
+            expect(resolver.getRouteAvailability(shared)).toMatchObject({ availability: 'unavailable', unavailableReason: 'linkUnreachable' })
+        })
+
+        test('official route: local copy, fromLink with the name, remote', () => {
+            expect(resolver.getRouteAvailability(downloaded)).toEqual({ canStart: true, availability: 'local' })
+            expect(resolver.getRouteAvailability(official)).toEqual({ canStart: true, availability: 'remote' })
+            link('A')
+            expect(resolver.getRouteAvailability(official)).toEqual({ canStart: true, availability: 'fromLink', sourceLabel: 'PC A', linkId: 'A' })
+        })
+
+        test('the phone\'s own routes and routes without video are local', () => {
+            expect(resolver.getRouteAvailability({ id: 'x', isLocal: true, hasVideo: true, videoUrl: 'file:///a.mp4' }).availability).toBe('local')
+            expect(resolver.getRouteAvailability({ id: 'x', hasVideo: false }).availability).toBe('local')
+        })
+
+        test('never causes a request or a probe', () => {
+            link('A')
+            link('B', {}, false)
+            resolver.getRouteAvailability(shared)
+            resolver.getRouteAvailability(official)
+            expect(fetchMock).not.toHaveBeenCalled()
+            expect((client.getMedia as jest.Mock)).not.toHaveBeenCalled()
+        })
+
+        test('a snapshot read once serves many routes', () => {
+            link('A')
+            const getDisplayProps = jest.spyOn(client as { getDisplayProps: () => unknown }, 'getDisplayProps')
+            const links = resolver.getLinkSnapshot()
+            getDisplayProps.mockClear()
+            for (let i = 0; i < 50; i++) {
+                resolver.getRouteAvailability(shared, { links })
+                resolver.getRouteAvailability(official, { links })
+            }
+            expect(getDisplayProps).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('resolve for linkShared routes', () => {
+        const shared: VideoSourceInput = { id: 'r1', isLocal: true, hasVideo: true, linkShared: true }
+
+        test('is eligible and resolves through a computer; without one it is unavailable (no remote original)', async () => {
+            expect(resolver.isEligible(shared)).toBe(true)
+            expect(await resolver.resolve(shared)).toEqual({ source: 'unavailable' })
+            rows = [row('A')]
+            sessions.add('A')
+            expect(await resolver.resolve(shared)).toMatchObject({ source: 'link', linkId: 'A' })
+        })
+    })
 })

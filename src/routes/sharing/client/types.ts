@@ -1,3 +1,4 @@
+import type { LinkReachability } from '../../../link/client/types'
 import type { SharedRouteEntry } from '../types'
 
 /** Outcome of the catalog sync of one computer. */
@@ -29,7 +30,10 @@ export interface ReplaceResult {
 /** The route properties the resolver and the availability check look at. */
 export interface VideoSourceInput {
     id?: string
+    hasVideo?: boolean
     isLocal?: boolean
+    /** created from a computer's catalog: the video can only come from a computer */
+    linkShared?: boolean
     isDownloaded?: boolean
     videoUrl?: string
     originalVideoUrl?: string
@@ -83,3 +87,46 @@ export type DescriptorFailure =
     | 'http'
     | 'malformed'
     | 'hash-mismatch'
+
+/** Why a route can not be played from anywhere right now; the view renders the copy. */
+export type UnavailableReason = 'linkUnreachable' | 'linkNeverReached' | 'versionMismatch' | 'noSource'
+
+/**
+ * Where a route can be played from, as shown in the list and in Route Details. Derived from the
+ * last known state of the computers only: producing it never causes a request.
+ */
+export interface RouteAvailabilityProps {
+    availability: 'local' | 'fromLink' | 'remote' | 'unavailable'
+    /**
+     * Display name of the one computer that would be used (the connected one, otherwise the most
+     * recently seen one). Never a count.
+     */
+    sourceLabel?: string
+    /** set when `availability` is `unavailable` */
+    unavailableReason?: UnavailableReason
+}
+
+export interface RouteAvailability extends RouteAvailabilityProps {
+    canStart: boolean
+    /** the connected computer that would be used */
+    linkId?: string
+}
+
+/** What the availability of many routes needs from the computers; read once per list. */
+export type LinkSnapshot = Map<string, {
+    displayName: string
+    connected: boolean
+    /** the computer offers `route-descriptor` on its open session */
+    descriptor: boolean
+    mediaAvailable: boolean
+    lastSeenAt: number
+    reachability: LinkReachability
+}>
+
+/** Options of the availability check. */
+export interface AvailabilityOptions {
+    /** the route's details are persisted on this device */
+    hasDetails?: boolean
+    /** the snapshot of the computers; built from the current state if absent */
+    links?: LinkSnapshot
+}

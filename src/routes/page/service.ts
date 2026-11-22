@@ -22,6 +22,10 @@ import { PreviewStore, usePreviewStore } from "../previews";
 import { RouteVideoAvailabilityService, useRouteVideoAvailability } from "../video-availability/service";
 import { RouteVideoPageActions, useRouteVideoPageActions } from "../video-availability/pageActions";
 import { RouteVideoState, VideoDownloadRow, VideoKeepChoice } from "../video-availability/types";
+import { useLocalLinkClient } from "../../link/client/service";
+import { useRouteSharingClient } from "../sharing/client/service";
+import { useRouteVideoResolver } from "../sharing/client/resolver";
+import type { LinkSnapshot, RouteAvailability } from "../sharing/client/types";
 
 @Singleton
 export class RoutesPageService extends IncyclistPageService implements IRoutePageService {
@@ -59,6 +63,10 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     protected routeVideoUpdateHandler   = this.onRouteVideoUpdate.bind(this)
     protected downloadRowsUpdateHandler = this.emitDownloadUpdate.bind(this)
     protected accessChangedHandler      = this.updatePageDisplay.bind(this)
+    protected linkStateHandler          = this.updatePageDisplay.bind(this)
+
+    // availability props per route, so that an unchanged route keeps its identity between renders
+    protected availabilityCache: Map<string, {source:RouteItemProps, key:string, decorated:RouteItemProps}> = new Map()
 
     constructor()  {
         super('RoutesPage')
@@ -380,7 +388,8 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         try {
             const service = this.getRouteList()
             const card = service.getCard(id)
-            if (card) {
+            // a route that exists only because a computer shares it offers no delete (without a local copy)
+            if (card && card.canDelete()) {
                 card.delete()
             }
         }
@@ -389,7 +398,55 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         }
     }
 
+    /**
+     * Removes the copy of a route's video on this device and nothing else: the route stays in the
+     * list, demoted from `local` to `fromLink`, `remote` or `unavailable`. Distinct from
+     * {@link onDelete}, which removes the route itself. Nothing is told to any computer.
+     *
+     * @param routeKey the route's id (a route-server id or the `routeHash` of a local route)
+     * @returns false if the route has no copy on this device
+     */
+    async deleteLocalCopy(routeKey: string): Promise<boolean> {
+        try {
+            const card = this.getRouteList().getCard(routeKey)
+            if (!card?.hasLocalCopy()) {
+                return false
+            }
+            await card.deleteDownload()
+            this.updatePageDisplay()
+            return true
+        }
+        catch(err:any) {
+            this.logError(err,'deleteLocalCopy')
+            return false
+        }
+    }
+
     start() {
+        try {
+            const selected = this.getRouteList().getSelected()
+            if (selected?.description?.linkShared && !selected.details) {
+                this.startWhenDetailsLoaded(selected)
+                return
+            }
+            this.startRide()
+        }
+        catch(err:any) {
+            this.logError(err,'start')
+        }
+    }
+
+    /** The details of a route from a computer are loaded before the ride starts; the video is resolved afterwards. */
+    protected startWhenDetailsLoaded(route:Route) {
+        this.getSharingClient().loadDescriptor(route,'ride')
+            .then( ()=>{ this.startRide() })
+            .catch( err=>{
+                this.logError(err,'start')
+                this.updatePageDisplay()
+            })
+    }
+
+    protected startRide() {
         try {
             const service = this.getRouteList()
             const pairing = this.getDevicePairing()
@@ -419,7 +476,7 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
      */
     getRouteDetailsProps(routeId: string): RouteDetailsProps {
         try {
-            return { routeId, attachedWorkout: this.getAttachedWorkoutProps(), video: this.getVideoDetailsProps(routeId) }
+            return { routeId, attachedWorkout: this.getAttachedWorkoutProps(), video: this.getVideoDetailsProps(routeId), ...this.getAvailabilityProps(routeId) }
         }
         catch (err) {
             this.logError(err, 'getRouteDetailsProps')
@@ -643,13 +700,74 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.getPageObserver()?.emit('page-update')
     }
 
+    /**
+     * `availability`, `sourceLabel` and `unavailableReason` of one route for Route Details; absent
+     * when route sharing is not available and the route does not depend on it.
+     */
+    protected getAvailabilityProps(routeId:string):Partial<RouteAvailability> {
+        try {
+            const card = this.getRouteList().getCard(routeId)
+            const descr = card?.getData()?.description
+            if (!card || (!descr?.linkShared && !this.getVideoResolver().isAvailable()))
+                return {}
+            return this.toAvailabilityProps(card.getAvailability())
+        }
+        catch(err:any) {
+            this.logError(err,'getAvailabilityProps')
+            return {}
+        }
+    }
+
+    /**
+     * The list with `availability`, `sourceLabel` and `unavailableReason` on every route (on
+     * `linkShared` routes only, while route sharing is not available). All from cached state; the
+     * state of the computers is read once for the whole list.
+     */
     protected getRoutesDisplayProps():Array<RouteItemProps> {
         const {routes=[]} = this.serviceState??{}
 
         // videoPill lives on the card itself (RouteCard.setVideoPill/getDisplayProperties,
         // architecture.md §3.7.1) - routeProps already carries it, absent whenever there is
         // nothing to show, which is always the case without the fileAccess binding.
-        return routes
+        try {
+            return this.addAvailability(routes)
+        }
+        catch(err:any) {
+            this.logError(err,'getRoutesDisplayProps')
+            return routes
+        }
+    }
+
+    protected toAvailabilityProps(a:RouteAvailability):Pick<RouteAvailability,'availability'|'sourceLabel'|'unavailableReason'> {
+        const props:Pick<RouteAvailability,'availability'|'sourceLabel'|'unavailableReason'> = {availability:a.availability}
+        if (a.sourceLabel!==undefined)
+            props.sourceLabel = a.sourceLabel
+        if (a.unavailableReason!==undefined)
+            props.unavailableReason = a.unavailableReason
+        return props
+    }
+
+    protected addAvailability(routes:Array<RouteItemProps>):Array<RouteItemProps> {
+        const resolver = this.getVideoResolver()
+        const all = resolver.isAvailable()
+        if (!all && !routes.some(r=>r.linkShared)) {
+            this.availabilityCache.clear()
+            return routes
+        }
+
+        const links:LinkSnapshot = resolver.getLinkSnapshot()
+        const previous = this.availabilityCache
+        this.availabilityCache = new Map()
+        return routes.map( route => {
+            if (!all && !route.linkShared)
+                return route
+            const props = this.toAvailabilityProps(resolver.getRouteAvailability(route,{hasDetails:route.loaded, links}))
+            const key = `${props.availability}|${props.sourceLabel??''}|${props.unavailableReason??''}`
+            const cached = previous.get(route.id)
+            const decorated = cached?.source===route && cached.key===key ? cached.decorated : {...route,...props}
+            this.availabilityCache.set(route.id,{source:route,key,decorated})
+            return decorated
+        })
     }
 
     protected getSearchFilters():SearchFilter {
@@ -664,6 +782,11 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.getVideoAvailability().on('route-video-update', this.routeVideoUpdateHandler)
         this.getVideoAvailability().on('download-rows-update', this.downloadRowsUpdateHandler)
         this.getFolderAccess().on('access-changed', this.accessChangedHandler)
+
+        // availability follows the cached state of the computers: a session opened or closed, a catalog synced
+        this.getLocalLinkClient().on('session-changed', this.linkStateHandler)
+        this.getLocalLinkClient().on('state-changed', this.linkStateHandler)
+        this.getSharingClient().on('synced', this.linkStateHandler)
 
         const {observer} = this.serviceState??{}
         if (!observer)
@@ -686,6 +809,9 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.getVideoAvailability().off('route-video-update', this.routeVideoUpdateHandler)
         this.getVideoAvailability().off('download-rows-update', this.downloadRowsUpdateHandler)
         this.getFolderAccess().off('access-changed', this.accessChangedHandler)
+        this.getLocalLinkClient().off('session-changed', this.linkStateHandler)
+        this.getLocalLinkClient().off('state-changed', this.linkStateHandler)
+        this.getSharingClient().off('synced', this.linkStateHandler)
 
         if (!observer)
             return
@@ -1009,6 +1135,21 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
     @Injectable
     protected getVideoPageActions(): RouteVideoPageActions {
         return useRouteVideoPageActions()
+    }
+
+    @Injectable
+    protected getLocalLinkClient() {
+        return useLocalLinkClient()
+    }
+
+    @Injectable
+    protected getSharingClient() {
+        return useRouteSharingClient()
+    }
+
+    @Injectable
+    protected getVideoResolver() {
+        return useRouteVideoResolver()
     }
 
 }

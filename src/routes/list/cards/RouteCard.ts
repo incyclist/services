@@ -16,6 +16,7 @@ import { waitNextTick } from "../../../utils";
 import { DownloadObserver } from "../../download/types";
 import { useRouteDownload } from "../../download/service";
 import { useRouteVideoResolver } from "../../sharing/client/resolver";
+import type { LinkSnapshot, RouteAvailability } from "../../sharing/client/types";
 import { EventLogger } from "gd-eventlog";
 import { checkIsLoop, getNextVideoId, hasNextVideo, getPosition, updateSlopes} from "../../base/utils/route";
 import { applySmoothing, getSmoothingGradient, isSmoothingEligible, MAX_SMOOTHING_LEVEL, SmoothingGradient } from "../../base/utils/smoothing";
@@ -103,7 +104,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
             if (!route)
                 return false
 
-            
+            // the video can only come from a computer, and the details must be on this device or loadable from it
+            if (route.linkShared)
+                return this.getAvailability().canStart
 
             if (!route.hasVideo || !(route.isLocal||route.isDownloaded) || route.videoUrl?.startsWith('http'))
                 return isOnline || (route.hasVideo && this.hasLinkSource(route))
@@ -455,7 +458,25 @@ export class RouteCard extends BaseCard implements Card<Route> {
     }
 
     canDelete() {
+        // a route that exists only because a computer shares it has nothing local to delete (without a local copy)
+        if (this.route?.description?.linkShared && !this.hasLocalCopy())
+            return false
         return this.deleteable
+    }
+
+    /**
+     * Where the route can be played from, from cached state only (never a request).
+     *
+     * @param links the state of the computers, when it was already read for a whole list
+     */
+    getAvailability(links?: LinkSnapshot): RouteAvailability {
+        return this.getVideoResolver().getRouteAvailability(this.getRouteDescription(), { hasDetails: valid(this.getRouteData()), links })
+    }
+
+    /** true if the video of the route is a file on this device */
+    hasLocalCopy(): boolean {
+        const descr = this.route?.description
+        return !!descr?.isDownloaded && !!descr.videoUrl && !descr.videoUrl.startsWith('http')
     }
 
 
@@ -491,7 +512,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         }
         else {
-            if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) ) {            
+            if (descr?.hasVideo && (descr?.isLocal||descr?.isDownloaded) && !descr.linkShared ) {            
                 canStart = false            
                 videoChecking = true
                 videoMissing = this.isVideoMissing()
@@ -507,7 +528,11 @@ export class RouteCard extends BaseCard implements Card<Route> {
         const details = this.getRouteData()
         const detailsAvailable = valid(details)
 
-        if (descr?.hasVideo && !descr.videoUrl) {
+        if (descr?.linkShared) {
+            // the video address comes from the computer when the ride starts; availability decides
+            canStart = this.getAvailability().canStart
+        }
+        else if (descr?.hasVideo && !descr.videoUrl) {
             if (!detailsAvailable) {
                 // Without the details there is no way to tell whether the video is reachable, so the
                 // ride cannot be started yet - but it must not be reported as missing either.
@@ -1341,7 +1366,9 @@ export class RouteCard extends BaseCard implements Card<Route> {
 
         
         this.restoreVideoUrl()
-        descr.tsImported = null
+        // a route that exists because of a computer keeps its place in the list
+        if (!descr.linkShared)
+            descr.tsImported = null
         this.route.details.video.file = undefined
         this.route.details.video.url = descr.videoUrl
 

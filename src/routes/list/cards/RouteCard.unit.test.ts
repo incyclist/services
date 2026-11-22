@@ -641,3 +641,63 @@ describe('RouteCard download/stopDownload race', () => {
         expect(logError).not.toHaveBeenCalled();
     });
 });
+
+describe('RouteCard for routes shared by a computer', () => {
+    const info: RouteInfo = { id: 'h', isLocal: true, hasVideo: true, linkShared: true } as RouteInfo
+    const createCard = (details?: unknown, extra: Partial<RouteInfo> = {}) => {
+        const card = new RouteCard(new Route({ ...info, ...extra }))
+        if (details)
+            card.getData().details = details as never
+        return card
+    }
+    let getRouteAvailability: jest.Mock
+
+    beforeEach(() => {
+        getRouteAvailability = jest.fn().mockReturnValue({ canStart: true, availability: 'fromLink', sourceLabel: 'Den PC' })
+        Inject('VideoResolver', { getRouteAvailability })
+        Inject('OnlineStatusMonitoring', { onlineStatus: true })
+    })
+    afterEach(() => {
+        Inject('VideoResolver', null)
+        Inject('OnlineStatusMonitoring', null)
+    })
+
+    test('canStart follows the availability, which knows whether the details are on this device', () => {
+        expect(createCard().canStart({ isOnline: false } as never)).toBe(true)
+        expect(getRouteAvailability).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'h' }), expect.objectContaining({ hasDetails: false }))
+
+        getRouteAvailability.mockReturnValue({ canStart: false, availability: 'unavailable', unavailableReason: 'linkUnreachable' })
+        expect(createCard({ points: [] }).canStart({ isOnline: true } as never)).toBe(false)
+        expect(getRouteAvailability).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ hasDetails: true }))
+    })
+
+    test('openSettings does not call the route "video missing" because the address comes from the computer', () => {
+        const props = createCard().openSettings()
+        expect(props.canStart).toBe(true)
+        expect(props.videoMissing).toBeFalsy()
+    })
+
+    test('without a local copy there is no delete, with one there is', () => {
+        const card = createCard()
+        card.enableDelete(true)
+        expect(card.canDelete()).toBe(false)
+        expect(card.getDisplayProperties().canDelete).toBe(false)
+
+        const copy = createCard(undefined, { isDownloaded: true, videoUrl: 'file:///data/x.mp4' })
+        copy.enableDelete(true)
+        expect(copy.hasLocalCopy()).toBe(true)
+        expect(copy.canDelete()).toBe(true)
+    })
+
+    test('getAvailability reads the cached state through the resolver', () => {
+        const links = new Map()
+        createCard({ points: [] }).getAvailability(links)
+        expect(getRouteAvailability).toHaveBeenCalledWith(expect.anything(), { hasDetails: true, links })
+    })
+
+    test('the user\'s own local routes keep their delete', () => {
+        const own = new RouteCard(new Route({ id: 'o', isLocal: true, hasVideo: true } as RouteInfo))
+        own.enableDelete(true)
+        expect(own.canDelete()).toBe(true)
+    })
+})
