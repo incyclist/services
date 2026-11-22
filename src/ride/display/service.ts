@@ -7,7 +7,6 @@ import { Segment, Step, useWorkoutList, useWorkoutRide, Workout } from "../../wo
 import { useRouteList } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { CurrentRideDeviceInfo, CurrentRideState, IRideModeService, RideType, StartContentInfo, StartDeviceState, StartPhase, StartReadyInfo } from "../base";
-import { useAppState } from "../../appstate";
 import { AdapterStateInfo, isVirtualShiftingEnabled as checkVirtualShiftingEnabled, useDeviceRide } from "../../devices/ride";
 import { useDeviceConfiguration } from "../../devices/configuration";
 import { usePairingVisitTracker } from "../../devices/page/base/visit-log-factory";
@@ -68,8 +67,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     // --- start overlay v2 ---
 
-    /** feature toggle START_OVERLAY_V2 as it was when the ride was started */
-    protected startV2: boolean|undefined
     protected tsStart: number
     /** the phase that is shown, and the phase that is waiting to be shown (see START_PHASE_DELAY) */
     protected reportedPhase: StartPhase
@@ -129,7 +126,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.resetStartTracking()
 
             const rideProps =  this.getRideModeService().getLogProps()
-            this.logEvent({ message: 'Start ride', ...rideProps, startOverlayV2: this.isStartOverlayV2(),
+            this.logEvent({ message: 'Start ride', ...rideProps,
                 bike: this.getBike(),
                 interface: this.getBikeInterface()            
             });
@@ -282,8 +279,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
                 startPhase: props.startPhase ?? this.derivePhase(),
                 startElapsedMs: this.getStartElapsed(),
                 slowShown: this.slowShown,
-                deviceRetries: this.deviceRetries,
-                startOverlayV2: this.isStartOverlayV2()
+                deviceRetries: this.deviceRetries
             })
             await this.cancelDeviceRetries()
             await this.stopRide({noStateUpdates:true})
@@ -1268,8 +1264,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             ignoredSensors: this.ignoredDevices.size,
             missingSensors: this.getMissingSensors().length,
             slowShown: this.slowShown,
-            deviceRetries: this.deviceRetries,
-            startOverlayV2: this.isStartOverlayV2()
+            deviceRetries: this.deviceRetries
         })
         this.clearStartTimers()
 
@@ -1466,7 +1461,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     protected onDeviceStartRequest(devices:AdapterStateInfo[]) {
 
         // a retry only restarts the devices that are not started yet: the others must not be shown as "Starting"
-        const keepStarted = this.fullRetryPending && this.isStartOverlayV2()
+        const keepStarted = this.fullRetryPending
         this.fullRetryPending = false
 
         this.deviceInfo = devices.map( d=> ({
@@ -1671,19 +1666,12 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     public getStartOverlayProps = ():StartOverlayProps =>{
         const mode = this.getRideType()
         const readyToStart = this.isStartDeviceReadyToStart() && this.getRideModeService().isStartRideCompleted()
-        const devicesState = this.deviceInfo??[]
-
         const displayOverlayProps = this.getRideModeService().getStartOverlayProps()??{}
 
-        if (this.isStartOverlayV2()) {
-            return this.getStartOverlayPropsV2(mode, readyToStart, displayOverlayProps)
-        }
-
-        // TODO : Check where devicesState (incorrect) is used - replace with correct property devices
-        return {mode, rideState:this.state, devicesState,devices:devicesState,  readyToStart, ...displayOverlayProps}
+        return this.buildStartOverlayProps(mode, readyToStart, displayOverlayProps)
     }
 
-    protected getStartOverlayPropsV2(mode:RideType, readyToStart:boolean, displayOverlayProps:Record<string,unknown>):StartOverlayProps {
+    protected buildStartOverlayProps(mode:RideType, readyToStart:boolean, displayOverlayProps:Record<string,unknown>):StartOverlayProps {
         const startPhase = this.reportedPhase ?? this.derivePhase()
         const devices = (this.deviceInfo??[]).map( d => ({...d, ...this.getDeviceStartFields(d)}) )
         const startContent = this.getRideModeService().getStartContentInfo?.()
@@ -1756,18 +1744,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         return { slow:false }
     }
 
-    // ---- start overlay v2: phases, slow detection, anti-flicker ----
-
-    protected isStartOverlayV2():boolean {
-        if (this.startV2!==undefined)
-            return this.startV2
-        try {
-            return this.getAppState().hasFeature('START_OVERLAY_V2') === true
-        }
-        catch {
-            return false
-        }
-    }
+    // ---- start overlay: phases, slow detection, anti-flicker ----
 
     protected getSlowThreshold():number {
         try {
@@ -1789,8 +1766,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
 
     protected resetStartTracking() {
         this.clearStartTimers()
-        this.startV2 = undefined
-        this.startV2 = this.isStartOverlayV2()
         this.tsStart = Date.now()
         this.reportedPhase = undefined
         this.pendingPhase = undefined
@@ -1804,16 +1779,12 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
         this.startTrigger = 'auto'
         this.fullRetryPending = false
 
-        if (this.startV2)
-            this.armStartTimer('devices-slow', this.getSlowThreshold(), ()=>{ this.slowFlags.devices = true })
+        this.armStartTimer('devices-slow', this.getSlowThreshold(), ()=>{ this.slowFlags.devices = true })
     }
 
     /** a full retry of all devices: the time that devices are given starts again */
     protected restartDeviceTracking() {
         this.fullRetryPending = true
-        if (!this.isStartOverlayV2())
-            return
-
         this.slowFlags.devices = false
         this.armStartTimer('devices-slow', this.getSlowThreshold(), ()=>{ this.slowFlags.devices = true })
     }
@@ -1853,9 +1824,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     protected beginDeviceAttempt(udid:string) {
-        if (!this.isStartOverlayV2())
-            return
-
         const attempt = { slow:false }
         this.deviceAttempts.set(udid, attempt)
         this.armStartTimer(this.getDeviceTimerKey(udid), this.getSlowThreshold(), ()=>{ attempt.slow = true })
@@ -1867,7 +1835,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     }
 
     protected updateStartTracking() {
-        if (!this.isStartOverlayV2() || this.state!=='Starting' || !this.displayService)
+        if (this.state!=='Starting' || !this.displayService)
             return
 
         try {
@@ -1908,7 +1876,7 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
             this.armStartTimer('content-slow', this.getSlowThreshold(), ()=>{ this.slowFlags.content = true })
         }
 
-        this.logEvent({ message:'start phase entered', mode:this.getLogRideMode(), startPhase:phase, startElapsedMs:this.getStartElapsed(), startOverlayV2:true })
+        this.logEvent({ message:'start phase entered', mode:this.getLogRideMode(), startPhase:phase, startElapsedMs:this.getStartElapsed() })
     }
 
     /** the conversion of an AVI is stalled, if its progress did not change for the slow threshold */
@@ -2062,11 +2030,6 @@ export class RideDisplayService extends IncyclistService implements ICurrentRide
     @Injectable
     protected getDeviceRide() {
         return useDeviceRide() 
-    }
-
-    @Injectable
-    protected getAppState() {
-        return useAppState()
     }
 
     @Injectable

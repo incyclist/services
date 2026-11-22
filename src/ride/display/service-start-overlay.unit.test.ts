@@ -12,7 +12,6 @@ describe('RideDisplayService - start overlay', () => {
     let mode: any
     let devices: any
     let settings: Record<string, unknown>
-    let v2: boolean
     let rideCompleted: boolean
     let content: StartContentInfo | undefined
     let overlayProps: Record<string, unknown>
@@ -34,7 +33,6 @@ describe('RideDisplayService - start overlay', () => {
 
     beforeEach(() => {
         jest.useFakeTimers()
-        v2 = true
         rideCompleted = true
         content = undefined
         overlayProps = {}
@@ -59,7 +57,6 @@ describe('RideDisplayService - start overlay', () => {
             onStarted: jest.fn(),
         })
 
-        Inject('AppState', { hasFeature: jest.fn((f: string) => f === 'START_OVERLAY_V2' && v2) })
         Inject('UserSettings', { get: jest.fn((k: string, d: unknown) => settings[k] ?? d) })
         Inject('ActivityRide', { getActivity: jest.fn().mockReturnValue({ id: 'a' }), stop: jest.fn().mockResolvedValue(undefined) })
         Inject('DeviceRide', devices)
@@ -87,7 +84,6 @@ describe('RideDisplayService - start overlay', () => {
     afterEach(() => {
         service.clearStartTimers()
         jest.useRealTimers()
-        Inject('AppState', null)
         Inject('UserSettings', null)
         Inject('ActivityRide', null)
         Inject('DeviceRide', null)
@@ -97,43 +93,13 @@ describe('RideDisplayService - start overlay', () => {
         jest.clearAllMocks()
     })
 
-    describe('getStartOverlayProps with the toggle off', () => {
-        test('provides exactly the props of the previous version, and arms no timers', () => {
-            v2 = false
-            overlayProps = { mapType: 'Map', mapState: 'Loaded' }
-            service.start()
-            requestStart(trainer, hrm)
-            deviceOK('T')
-
-            const devicesState = service.deviceInfo
-            expect(props()).toEqual({
-                mode: 'GPX', rideState: 'Starting', devicesState, devices: devicesState, readyToStart: true,
-                mapType: 'Map', mapState: 'Loaded'
-            })
-            expect(props().devices).toBe(service.deviceInfo)
-            expect(Object.keys(props().devices[0])).toEqual(['name', 'udid', 'isControl', 'capabilities', 'status'])
-            expect(jest.getTimerCount()).toBe(0)
-            expect(logged('start phase entered')).toHaveLength(0)
-            expect(logged('Start ride')[0].startOverlayV2).toBe(false)
-        })
-
-        test('a retry of all devices still resets all rows', () => {
-            v2 = false
-            service.start()
-            service.retryStart()
-            requestStart({ ...trainer, isStarted: true }, hrm)
-
-            expect(row('T').status).toBe('Starting')
-        })
-    })
-
     describe('phases', () => {
         test('starts in the devices phase', () => {
             service.start()
             requestStart(trainer, hrm)
 
             expect(props()).toEqual(OC({ startPhase: 'devices', startSlow: false }))
-            expect(logged('start phase entered')).toEqual([OC({ startPhase: 'devices', startElapsedMs: 0, startOverlayV2: true, mode: 'follow-route' })])
+            expect(logged('start phase entered')).toEqual([OC({ startPhase: 'devices', startElapsedMs: 0, mode: 'follow-route' })])
         })
 
         test('Workout: no content row, goes from devices straight to ready', async () => {
@@ -498,7 +464,7 @@ describe('RideDisplayService - start overlay', () => {
             service.ignoreStartDevice('H')
 
             expect(service.getState()).toBe('Started')
-            expect(logged('Start success')[0]).toEqual(OC({ ignoredSensors: 1, missingSensors: 0, startTrigger: 'auto', deviceRetries: 0, startOverlayV2: true }))
+            expect(logged('Start success')[0]).toEqual(OC({ ignoredSensors: 1, missingSensors: 0, startTrigger: 'auto', deviceRetries: 0 }))
             expect(logged('button clicked')).toEqual([OC({ button: 'Ignore device', deviceRole: 'sensor' })])
         })
 
@@ -613,7 +579,7 @@ describe('RideDisplayService - start overlay', () => {
             await service.cancelStart()
 
             expect(devices.cancelStart).toHaveBeenCalled()
-            expect(logged('start ride cancel')[0]).toEqual(OC({ startPhase: 'devices', deviceRetries: 1, slowShown: false, startOverlayV2: true, startElapsedMs: expect.any(Number) }))
+            expect(logged('start ride cancel')[0]).toEqual(OC({ startPhase: 'devices', deviceRetries: 1, slowShown: false, startElapsedMs: expect.any(Number) }))
         })
 
         test('does not wait longer than 5s for the devices to stop', async () => {
@@ -653,7 +619,6 @@ describe('RideDisplayService - start overlay', () => {
             const phase = logged('start phase entered')[0]
             expect(typeof phase.startPhase).toBe('string')
             expect(typeof phase.startElapsedMs).toBe('number')
-            expect(typeof phase.startOverlayV2).toBe('boolean')
 
             const slow = logged('start slow shown')[0]
             expect([typeof slow.startPhase, typeof slow.slowCause, typeof slow.startElapsedMs]).toEqual(['string', 'string', 'number'])
@@ -661,7 +626,7 @@ describe('RideDisplayService - start overlay', () => {
             const success = logged('Start success')[0]
             expect(['startElapsedMs', 'ignoredSensors', 'missingSensors', 'deviceRetries'].map(k => typeof success[k])).toEqual(['number', 'number', 'number', 'number'])
             expect(['startTrigger'].map(k => typeof success[k])).toEqual(['string'])
-            expect(['slowShown', 'startOverlayV2'].map(k => typeof success[k])).toEqual(['boolean', 'boolean'])
+            expect(['slowShown'].map(k => typeof success[k])).toEqual(['boolean'])
         })
     })
 })
