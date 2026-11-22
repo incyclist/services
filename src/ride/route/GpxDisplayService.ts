@@ -7,7 +7,7 @@ import { getHeading } from "../../routes";
 import { Route } from "../../routes/base/model/route";
 import { useRideSettingsDisplay } from "../../settings/display";
 import { RoutePoint } from "../../types";
-import { CurrentPosition, CurrentRideDisplayProps, GpxDisplayProps, RideViewType, RouteDisplayProps } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, GpxDisplayProps, RideViewType, RouteDisplayProps, StartContentInfo } from "../base";
 import { useRideViewRestriction } from "../view-restriction/service";
 import { RouteDisplayService } from "./RouteDisplayService";
 import { SatelliteViewEvent, StreetViewEvent, SvFallbackCause, SvViewState } from "./types";
@@ -392,6 +392,38 @@ export class GpxDisplayService extends RouteDisplayService {
             mapState: this.mapLoaded ? 'Loaded' : 'Loading',
             mapStateError: this.mapError
         }
+    }
+
+    /**
+     * Describes the content row of the start overlay (Street View, Satellite View or Map).
+     *
+     * @returns the kind, label and load state of the view that the ride waits for
+     */
+    getStartContentInfo(): StartContentInfo {
+        const props = this.getStartOverlayProps() as {mapType:string, mapState:string, mapStateError?:string, viewState?:SvViewState}
+        const label = props.mapType
+        const kind = this.getContentKind()
+
+        if (kind==='streetview') {
+            const map: Record<SvViewState,StartContentInfo['state']> = {
+                waiting:'waiting', loading:'loading', slow:'loading', loaded:'ready', unavailable:'unavailable'
+            }
+            return { kind, label, state: map[props.viewState] ?? 'loading' }
+        }
+
+        if (props.mapStateError)
+            return { kind, label, state:'failed' }
+
+        return { kind, label, state: this.isStartRideCompleted() ? 'ready' : 'loading' }
+    }
+
+    protected getContentKind(): StartContentInfo['kind'] {
+        if (this.svFlowActive)
+            return 'streetview'
+        const rideView = this.getRideView()
+        if (rideView==='sat')
+            return 'satellite'
+        return 'map'
     }
 
     /**

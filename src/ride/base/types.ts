@@ -30,6 +30,39 @@ export type CurrentRideDeviceInfo = {
     stateText?:string
     capabilities:Array<ExtendedIncyclistCapability>
     healthStatus?: HealthStatus
+    /** only set when the start overlay v2 is active */
+    startState?: StartDeviceState
+    /** this device's current start attempt took longer than the slow threshold (v2 only) */
+    slow?: boolean
+    /** the start of this single device can be retried (v2 only) */
+    canRetry?: boolean
+    /** the rider can stop waiting for this device (v2 only) */
+    canIgnore?: boolean
+}
+
+/** Phase of the start overlay */
+export type StartPhase = 'devices' | 'content' | 'ready'
+
+/** Display state of a device row in the start overlay. 'failed' = control device, 'not-connected' = sensor */
+export type StartDeviceState = 'starting' | 'uploading' | 'started' | 'not-connected' | 'failed' | 'ignored'
+
+/** Describes the content row (video, map, satellite, street view) of the start overlay */
+export type StartContentInfo = {
+    kind: 'video' | 'map' | 'satellite' | 'streetview'
+    label: string
+    state: 'waiting' | 'loading' | 'ready' | 'unavailable' | 'failed'
+    /** AVI conversion only */
+    progress?: { convertPct?: number, convertSeconds?: number }
+}
+
+/** Details for the helper line of the 'ready' phase */
+export type StartReadyInfo = {
+    /** names of sensors that are still starting (not ignored) */
+    pendingSensors: string[]
+    /** names of sensors that could not be connected (not ignored) */
+    notConnectedSensors: string[]
+    /** Street View fell back to Map */
+    viewFallback: boolean
 }
 
 export interface IRideModeServiceDisplayProps {
@@ -171,6 +204,11 @@ export interface StartOverlayProps {
     rideState: CurrentRideState,
     devices: Array<CurrentRideDeviceInfo>,
     readyToStart: boolean
+    /** the following properties are only provided when the start overlay v2 is active */
+    startPhase?: StartPhase
+    startSlow?: boolean
+    startContent?: StartContentInfo
+    startReadyInfo?: StartReadyInfo
 }
 
 export interface OverlayDisplayProps {
@@ -205,6 +243,8 @@ export interface IRideModeService<T extends IRideModeServiceDisplayProps = IRide
     isStartRideCompleted(): boolean
     getDeviceStartSettings()
     getStartOverlayProps()
+    /** Describes the content row of the start overlay. Undefined if the ride has no content row (e.g. workout only) */
+    getStartContentInfo?(): StartContentInfo|undefined
 
     pause(): void
     resume(): void
@@ -232,6 +272,8 @@ export interface ICurrentRideService {
     startWithMissingSensors(): void;
     startWithMapFallback(): void;
     retryStart(): void;
+    retryStartDevice(udid:string): void;
+    ignoreStartDevice(udid:string): void;
     pause(requester: 'user' | 'device'): void;
     resume(): void;
     stop(exit: boolean): Promise<void>;

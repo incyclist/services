@@ -8,7 +8,7 @@ import { Route } from "../../routes/base/model/route";
 import { RouteInfo, RoutePoint } from "../../routes/base/types";
 import {  FreeRideOption, FreeRideStartSettings } from "../../routes/list/types";
 import { distanceBetween, LatLng } from "../../utils/geo";
-import { CurrentPosition, CurrentRideDisplayProps, FreeRideDisplayProps, GpxDisplayProps, MapOverlayDisplayProps  } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, FreeRideDisplayProps, GpxDisplayProps, MapOverlayDisplayProps, StartContentInfo  } from "../base";
 import { GpxDisplayService } from "./GpxDisplayService";
 import { FreeRideContinuation, IncyclistNode } from "../../maps/MapArea/types";
 import { MapViewPort } from "./types";
@@ -103,6 +103,17 @@ export class FreeRideDisplayService extends GpxDisplayService {
      */
     isStartRideCompleted(): boolean {
         return this.currentOptions!==undefined && super.isStartRideCompleted()
+    }
+
+    /**
+     * Describes the content row of the start overlay. The row stays in 'loading' until the first
+     * set of options has been loaded, even if the view itself is already loaded.
+     */
+    getStartContentInfo(): StartContentInfo {
+        const info = super.getStartContentInfo()
+        if (this.currentOptions===undefined && info.state==='ready')
+            return {...info, state:'loading'}
+        return info
     }
 
     /**

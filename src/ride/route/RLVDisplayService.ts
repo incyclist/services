@@ -10,7 +10,7 @@ import { Route } from "../../routes/base/model/route";
 import { RouteInfoText, RoutePoint } from "../../routes/base/types";
 import { distanceBetween } from "../../utils/geo";
 import { VideoConversion, VideoSyncHelper, isAudibleRate, resolvePlaybackUrl } from "../../video";
-import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, VideoDisplayProps, VideoSegmentProps } from "../base";
+import { CurrentPosition, CurrentRideDisplayProps, InfotextDisplayProps, OverlayDisplayProps, RLVDisplayProps, StartContentInfo, VideoDisplayProps, VideoSegmentProps } from "../base";
 import { RouteDisplayService } from "./RouteDisplayService";
 
 /**
@@ -30,6 +30,8 @@ type VideoState = {
     isInitial: boolean
     buffering?:string
     bufferTime?: number
+    convertPct?: number
+    convertSeconds?: number
     next?: VideoState
     info?: Array<{start:number, stop:number, props:InfotextDisplayProps}>
 }
@@ -521,6 +523,25 @@ export class RLVDisplayService extends RouteDisplayService {
         return state
     }
 
+    /**
+     * Describes the content row of the start overlay. For a video that is converted while the
+     * rider waits, the conversion progress is included.
+     */
+    getStartContentInfo(): StartContentInfo {
+        const videoState = this.getVideoState()
+        let state: StartContentInfo['state'] = 'loading'
+        if (videoState==='Started')
+            state = 'ready'
+        else if (videoState==='Start:Failed')
+            state = 'failed'
+
+        const info: StartContentInfo = { kind:'video', label:'Video', state }
+        if (this.currentVideo?.playback==='converted') {
+            info.progress = { convertPct: this.currentVideo.convertPct, convertSeconds: this.currentVideo.convertSeconds }
+        }
+        return info
+    }
+
     protected getVideoLoadProgress() {
         return {loaded:this.currentVideo?.loaded, bufferTime:this.currentVideo?.bufferTime}
     }
@@ -534,6 +555,8 @@ export class RLVDisplayService extends RouteDisplayService {
             this.onVideoLoaded(0)
         }
         else {
+            this.currentVideo.convertPct = progress
+            this.currentVideo.convertSeconds = time
             if (time!==undefined) {
                 this.currentVideo.buffering = `${time}s`
                 this.currentVideo.bufferTime = time
