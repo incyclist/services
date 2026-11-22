@@ -17,6 +17,8 @@ import type { IFetchBinding } from '../fetch/types'
 import type { IMapAvailabilityBinding } from '../mapAvailability/types'
 import type { IFileAccessBinding } from '../fileAccess/types'
 import type { ILocalLinkBinding } from '../localLink/types'
+import type { ILoopbackPipeBinding } from '../loopbackPipe/types'
+import type { ISecureStorageBinding } from '../secureStorage/types'
 
 
 export interface IUserSettingsBinding {
@@ -52,6 +54,11 @@ export class IncyclistBindings {
     // Desktop only: the local-link transport. Absent on mobile and in the browser, and every
     // feature built on it must stay inert when it is missing or reports isSupported()===false.
     public localLink?: ILocalLinkBinding
+    // Mobile only: the loopback byte pipe that carries media to the player on Android. Absent
+    // elsewhere; media that needs it is reported unavailable when it is missing.
+    public loopbackPipe?: ILoopbackPipeBinding
+    // Mobile only: encrypted storage for the pairing secrets of the local-link. Absent elsewhere.
+    public secureStorage?: ISecureStorageBinding
     public ant
     public ble
     public wifi

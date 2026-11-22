@@ -3295,7 +3295,7 @@ export class DevicePairingService  extends IncyclistService{
         return this.state.scan!==undefined && this.state.scan!==null
     }
 
-    protected isPairing() {
+    isPairing() {
         return this.state.check!==undefined && this.state?.check!==null
     }
 
