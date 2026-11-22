@@ -1,4 +1,5 @@
 import { RouteCard } from "./RouteCard";
+import { Inject } from "../../../base/decorators";
 import { getBindings } from "../../../api";
 import { Route } from "../../base/model/route";
 import { RouteInfo } from "../../base/types";
@@ -328,6 +329,30 @@ describe('RouteCard.canStart', () => {
                 videoUrl: 'https://example.com/route.mp4'
             } as RouteInfo);
             expect(card.canStart({ isOnline: false } as any)).toBe(false);
+        });
+    });
+
+    describe('video available from a paired computer', () => {
+        const awaitingDownload = {
+            hasVideo: true, isDownloaded: false, requiresDownload: true,
+            downloadUrl: 'https://example.com/route.mp4'
+        } as RouteInfo;
+
+        afterEach(() => { Inject('VideoResolver', null) });
+
+        test('can be started while offline if a connected computer has it', () => {
+            Inject('VideoResolver', { hasLinkSource: () => true });
+            expect(createCard(awaitingDownload).canStart({ isOnline: false } as any)).toBe(true);
+        });
+
+        test('stays gated on connectivity if no connected computer has it', () => {
+            Inject('VideoResolver', { hasLinkSource: () => false });
+            expect(createCard(awaitingDownload).canStart({ isOnline: false } as any)).toBe(false);
+        });
+
+        test('a resolver that throws does not enable the route', () => {
+            Inject('VideoResolver', { hasLinkSource: () => { throw new Error('x') } });
+            expect(createCard(awaitingDownload).canStart({ isOnline: false } as any)).toBe(false);
         });
     });
 

@@ -7,6 +7,7 @@ import { LocalizationService, useLocalization } from "../../i18n";
 import { concatPaths } from "../../maps/MapArea/utils";
 import { correctDistanceValues, getNextVideoId, hasNextVideo, RouteListService, useRouteList, validateRoute } from "../../routes";
 import { Route } from "../../routes/base/model/route";
+import { useRouteVideoResolver } from "../../routes/sharing/client/resolver";
 import { RouteInfoText, RoutePoint } from "../../routes/base/types";
 import { distanceBetween } from "../../utils/geo";
 import { VideoConversion, VideoSyncHelper, isAudibleRate, resolvePlaybackUrl } from "../../video";
@@ -32,6 +33,10 @@ type VideoState = {
     bufferTime?: number
     convertPct?: number
     convertSeconds?: number
+    /** the paired computer the video is streamed from; set only while the source is a computer */
+    linkId?: string
+    /** the one fallthrough to the next source after a failed initial load has been used */
+    fellThrough?: boolean
     next?: VideoState
     info?: Array<{start:number, stop:number, props:InfotextDisplayProps}>
 }
@@ -115,6 +120,8 @@ export class RLVDisplayService extends RouteDisplayService {
             const observer = new Observer()
             const video:VideoState = {isCurrent,isInitial:isCurrent,route:videoRoute, loaded:false,observer}
 
+            if (this.canUseLinkSource(video))
+                await this.applyLinkSource(video)
             this.initVideoSource(video)    
 
             
@@ -580,7 +587,75 @@ export class RLVDisplayService extends RouteDisplayService {
             this.emit('state-update')
     }
 
+    /** true if route sharing is available and the route has a remote original (checked without any await, so that other routes are not delayed) */
+    protected canUseLinkSource(video:VideoState):boolean {
+        try {
+            const resolver = this.getVideoResolver()
+            const descr = video.route?.description
+            return !!descr && resolver.isAvailable() && resolver.isEligible(descr)
+        }
+        catch {
+            return false
+        }
+    }
+
+    /**
+     * Official routes can be streamed from a paired computer. The address is set on the ride's own
+     * copy of the route only: it carries a media token and is never persisted.
+     */
+    protected async applyLinkSource(video:VideoState, skipLinks?:string[]):Promise<boolean> {
+        try {
+            const resolver = this.getVideoResolver()
+            const descr = video.route?.description
+            if (!descr || !resolver.isAvailable() || !resolver.isEligible(descr))
+                return false
+
+            const resolved = await resolver.resolve(descr, {skipLinks})
+            if (resolved.source==='link') {
+                descr.videoUrl = resolved.url
+                video.linkId = resolved.linkId
+                return true
+            }
+            if (resolved.source==='remote' && skipLinks?.length) {
+                descr.videoUrl = resolved.url
+                delete video.linkId
+                return true
+            }
+        }
+        catch (err) {
+            this.logError(err,'applyLinkSource')
+        }
+        return false
+    }
+
+    /** The video of the first source did not load: the next source is tried, once. */
+    protected fallThroughToNextSource(error:MediaError, video:VideoState):boolean {
+        if (!video.isInitial || !video.linkId || video.fellThrough)
+            return false
+
+        video.fellThrough = true
+        this.applyLinkSource(video, [video.linkId])
+            .then( changed => {
+                if (changed) {
+                    this.logEvent({message: 'video source changed after load failure'})
+                    delete video.error
+                    this.initVideoSource(video)
+                    this.emit('state-update')
+                    return
+                }
+                this.reportVideoLoadError(error,video)
+            })
+            .catch( err=>{ this.logError(err,'fallThroughToNextSource'); this.reportVideoLoadError(error,video) })
+        return true
+    }
+
     protected onVideoLoadError(error:MediaError, video:VideoState = this.currentVideo )  {
+        if (this.fallThroughToNextSource(error,video))
+            return
+        this.reportVideoLoadError(error,video)
+    }
+
+    protected reportVideoLoadError(error:MediaError, video:VideoState = this.currentVideo )  {
         video.loaded = false
         video.error = this.buildVideoError(error,video)
 
@@ -903,6 +978,12 @@ export class RLVDisplayService extends RouteDisplayService {
     @Injectable
     protected getBindings() {
         return getBindings()
+    }
+
+    /* istanbul ignore next */
+    @Injectable
+    protected getVideoResolver() {
+        return useRouteVideoResolver()
     }
 
     /* istanbul ignore next */

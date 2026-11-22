@@ -2154,4 +2154,60 @@ describe('RLVDisplayService video diagnostics', () => {
       expect((service as any).getSegmentProps(b)).toEqual({ routeId: 'b', index: 1, count: 2, hasNext: false })
     })
   })
+  describe('video from a paired computer', () => {
+    const remoteVideo = () => ({
+      isCurrent: true, isInitial: true, loaded: false,
+      route: { description: { id: 'r1', videoUrl: 'https://cdn/x.mp4', originalVideoUrl: 'https://cdn/x.mp4' } },
+    })
+    let resolver: any
+
+    beforeEach(() => {
+      resolver = {
+        isAvailable: jest.fn(() => true),
+        isEligible: jest.fn(() => true),
+        resolve: jest.fn(async () => ({ source: 'link', linkId: 'A', url: 'http://A:1/v/h?t=t' })),
+      }
+      Inject('VideoResolver', resolver)
+    })
+    afterEach(() => { Inject('VideoResolver', null) })
+
+    test('the ride copy of the route plays from the computer', async () => {
+      const video: any = remoteVideo()
+      await (service as any).applyLinkSource(video)
+      expect(video.route.description.videoUrl).toBe('http://A:1/v/h?t=t')
+      expect(video.linkId).toBe('A')
+    })
+
+    test('nothing is resolved without route sharing', () => {
+      resolver.isAvailable.mockReturnValue(false)
+      expect((service as any).canUseLinkSource(remoteVideo())).toBe(false)
+    })
+
+    test('a failed initial load falls through once to the next source', async () => {
+      const video: any = remoteVideo()
+      video.linkId = 'A'
+      resolver.resolve.mockResolvedValue({ source: 'remote', url: 'https://cdn/x.mp4' })
+      const report = jest.spyOn(service as any, 'reportVideoLoadError')
+
+      ;(service as any).onVideoLoadError({ code: 4, message: 'x' }, video)
+      await new Promise(r => setTimeout(r, 10))
+      expect(resolver.resolve).toHaveBeenCalledWith(expect.anything(), { skipLinks: ['A'] })
+      expect(video.route.description.videoUrl).toBe('https://cdn/x.mp4')
+      expect(video.linkId).toBeUndefined()
+      expect(report).not.toHaveBeenCalled()
+
+      ;(service as any).onVideoLoadError({ code: 4, message: 'x' }, video)
+      expect(report).toHaveBeenCalledTimes(1)
+    })
+
+    test('the error is reported if there is no next source', async () => {
+      const video: any = remoteVideo()
+      video.linkId = 'A'
+      resolver.resolve.mockResolvedValue({ source: 'unavailable' })
+      const report = jest.spyOn(service as any, 'reportVideoLoadError')
+      ;(service as any).onVideoLoadError({ code: 4, message: 'x' }, video)
+      await new Promise(r => setTimeout(r, 10))
+      expect(report).toHaveBeenCalledTimes(1)
+    })
+  })
 })

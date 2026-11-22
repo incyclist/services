@@ -15,6 +15,7 @@ import { valid } from "../../../utils/valid";
 import { waitNextTick } from "../../../utils";
 import { DownloadObserver } from "../../download/types";
 import { useRouteDownload } from "../../download/service";
+import { useRouteVideoResolver } from "../../sharing/client/resolver";
 import { EventLogger } from "gd-eventlog";
 import { checkIsLoop, getNextVideoId, hasNextVideo, getPosition, updateSlopes} from "../../base/utils/route";
 import { applySmoothing, getSmoothingGradient, isSmoothingEligible, MAX_SMOOTHING_LEVEL, SmoothingGradient } from "../../base/utils/smoothing";
@@ -105,7 +106,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             
 
             if (!route.hasVideo || !(route.isLocal||route.isDownloaded) || route.videoUrl?.startsWith('http'))
-                return isOnline
+                return isOnline || (route.hasVideo && this.hasLinkSource(route))
 
             // requiresDownload describes the route, not its current state - it stays true after the
             // video has been downloaded. Without the isDownloaded guard an already-downloaded video
@@ -486,7 +487,7 @@ export class RouteCard extends BaseCard implements Card<Route> {
             // TODO:  final solution
 
             // temporary fix as long we haven't implemented a local 
-            canStart = canStart && (descr?.isLocal || (!descr.requiresDownload ||descr?.isDownloaded))
+            canStart = canStart && (descr?.isLocal || (!descr.requiresDownload ||descr?.isDownloaded) || this.hasLinkSource(descr))
 
         }
         else {
@@ -1438,6 +1439,21 @@ export class RouteCard extends BaseCard implements Card<Route> {
     @Injectable
     protected getBindings() {
         return getBindings()
+    }
+
+    /** true if a connected paired computer is known to have the video (cached state only, never a request) */
+    protected hasLinkSource(descr: RouteInfo): boolean {
+        try {
+            return this.getVideoResolver().hasLinkSource(descr)
+        }
+        catch {
+            return false
+        }
+    }
+
+    @Injectable
+    protected getVideoResolver() {
+        return useRouteVideoResolver()
     }
 
     @Injectable
