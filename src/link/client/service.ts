@@ -221,6 +221,13 @@ export class LocalLinkClientService extends IncyclistService {
             this.emitState()
     }
 
+    /** Records the catalog version a sync of this computer ended with, so that an unchanged version can skip the next sync. */
+    async setCatalogVersion(linkId: string, catalogVersion: string): Promise<void> {
+        await this.ready()
+        if (await this.store.update(linkId, { catalogVersion }))
+            this.emitState()
+    }
+
     /** Forgets a computer: closes its session and deletes its record and secret. The computer is not told. */
     async forget(linkId: string): Promise<void> {
         await this.ready()
