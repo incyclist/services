@@ -20,6 +20,7 @@ import { Inject } from "../../base/decorators";
 import { usePreviewStore } from "../previews/store";
 import { useRouteLibraryScanner } from "../library/service";
 import { RouteListObserver } from "./RouteListObserver";
+import { RoutesPageService } from "../page/service";
 
 import type { ParseResult } from "../types";
 import { RouteServerValidationError } from "../servers/errors";
@@ -1964,6 +1965,37 @@ describe('RouteListService',()=>{
             expect(emit).toHaveBeenCalledTimes(1)
             expect(service.getRoute('sh1')?.description.title).toBe('Renamed')
             expect(service.getRoute('sh2')).toBeDefined()
+        })
+
+        test('a route added through addRoutes shows up on an open Routes page without reopening it',()=>{
+            const page = new RoutesPageService()
+            Inject('RouteList', service)
+            Inject('VideoResolver', { isAvailable: jest.fn().mockReturnValue(true), getLinkSnapshot: jest.fn().mockReturnValue(new Map()), getRouteAvailability: jest.fn().mockReturnValue({ canStart:true, availability:'local' }), getThumbnailLink: jest.fn() })
+            Inject('UserSettings', { getValue: jest.fn((_k:string, d:unknown) => d), get: jest.fn((_k:string, d:unknown) => d) })
+            Inject('VideoAvailability', { on: jest.fn(), off: jest.fn() })
+            Inject('FolderAccess', { on: jest.fn(), off: jest.fn() })
+            Inject('LocalLinkClient', { on: jest.fn(), off: jest.fn() })
+            Inject('SharingClient', { on: jest.fn(), off: jest.fn() })
+            Inject('RouteDownload', { on: jest.fn(), off: jest.fn(), getActiveDownloads: jest.fn().mockReturnValue([]) })
+            try {
+                const p = page as any
+                p.subscribeAllActiveDownloads = jest.fn()
+                jest.spyOn(service,'isStillLoading').mockReturnValue(false)
+                p.serviceState = service.search()
+                p.startEventListener()
+                const before = page.getPageDisplayProps().routes.map( r=>r.id )
+                expect(before).not.toContain('sh1')
+
+                service.addRoutes([shared()], 'system')
+
+                expect(page.getPageDisplayProps().routes.map( r=>r.id )).toContain('sh1')
+                p.stopEventListener()
+            }
+            finally {
+                page.reset()
+                for (const key of ['RouteList','VideoResolver','UserSettings','VideoAvailability','FolderAccess','LocalLinkClient','SharingClient','RouteDownload'])
+                    Inject(key, null)
+            }
         })
 
         test('addRoutes without a new route sends no update event',()=>{

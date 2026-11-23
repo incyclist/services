@@ -2,6 +2,7 @@ import { Inject } from '../../base/decorators'
 import { RoutesPageService } from './service'
 import { RouteCard } from '../list/cards/RouteCard'
 import { Route } from '../base/model/route'
+import { Observer } from '../../base/types/observer'
 import { MobileWorkoutListPageService } from '../../workouts/page/mobile/service'
 
 // Session 2.2 (workout-combo-service-design.md §3.5, §3.8) - RoutesPageService's cross-visibility
@@ -1162,6 +1163,88 @@ describe('RoutesPageService',()=>{
             Inject('LocalLinkClient', { retryNow: jest.fn(() => { throw new Error('boom') }) })
             expect(() => s.retryLinks()).not.toThrow()
             expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'retryLinks')
+        })
+    })
+
+    describe('route list updates', () => {
+        let s
+        let observer: Observer
+        let list: any
+        let filters: any
+        const item = (id: string) => ({ id, title: id, loaded: false }) as any
+
+        beforeEach(() => {
+            setupMocks()
+            observer = new Observer()
+            filters = { title: 'x' }
+            list = {
+                routes: [item('a')],
+                searchRepo: jest.fn(() => ({ routes: [...list.routes], filters, observer })),
+                isStillLoading: jest.fn().mockReturnValue(false),
+                getDisplayType: jest.fn().mockReturnValue('list'),
+                getFilters: jest.fn(() => filters),
+                getFilterOptions: jest.fn().mockReturnValue({}),
+                getCard: jest.fn(),
+            }
+            Inject('RouteList', list)
+            Inject('VideoResolver', { isAvailable: jest.fn().mockReturnValue(false) })
+            Inject('UserSettings', { getValue: jest.fn((_k: string, d: unknown) => d) })
+            s = new RoutesPageService()
+            s.logError = jest.fn()
+            s.serviceState = list.searchRepo()
+            s.updatePageDisplay = jest.fn()
+        })
+
+        afterEach(() => {
+            resetMocks()
+            Inject('RouteList', null)
+            Inject('VideoResolver', null)
+            Inject('UserSettings', null)
+            s.reset()
+        })
+
+        test('a route added while the page is open appears without a new search, filters and observer stay', () => {
+            const before = s.serviceState
+            list.routes.push(item('b'))
+            s.onStateUpdate({ routes: [item('a'), item('b')], filters: { other: true }, observer: new Observer() })
+
+            expect(s.getPageDisplayProps().routes.map((r: any) => r.id)).toEqual(['a', 'b'])
+            expect(s.serviceState.observer).toBe(before.observer)
+            expect(s.serviceState.filters).toBe(before.filters)
+            expect(s.updatePageDisplay).toHaveBeenCalledTimes(1)
+            expect(list.searchRepo).toHaveBeenCalledTimes(1)
+        })
+
+        test('a payload that is not a search state triggers a search with the current filters, without side effects', () => {
+            list.routes.push(item('b'))
+            s.onStateUpdate({ myRoutes: [] })
+            expect(list.searchRepo).toHaveBeenLastCalledWith(filters)
+            expect(s.getPageDisplayProps().routes.map((r: any) => r.id)).toEqual(['a', 'b'])
+            s.onStateUpdate(undefined)
+            s.onStateUpdate(null)
+            s.onStateUpdate('x')
+            expect(s.updatePageDisplay).toHaveBeenCalledTimes(4)
+        })
+
+        test('the subscriptions are untouched by an update', () => {
+            const on = jest.spyOn(observer, 'on')
+            const off = jest.spyOn(observer, 'off')
+            s.onStateUpdate({ routes: [item('a'), item('b')] })
+            expect(on).not.toHaveBeenCalled()
+            expect(off).not.toHaveBeenCalled()
+        })
+
+        test('a failing search does not throw and still renders', () => {
+            list.searchRepo.mockImplementation(() => { throw new Error('boom') })
+            expect(() => s.onStateUpdate({})).not.toThrow()
+            expect(s.logError).toHaveBeenCalledWith(expect.any(Error), 'onStateUpdate')
+            expect(s.updatePageDisplay).toHaveBeenCalled()
+        })
+
+        test('an update before the page was opened is ignored', () => {
+            s.serviceState = undefined
+            expect(() => s.onStateUpdate({ routes: [item('z')] })).not.toThrow()
+            expect(s.serviceState).toBeUndefined()
         })
     })
 })

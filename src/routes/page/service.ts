@@ -1039,8 +1039,30 @@ export class RoutesPageService extends IncyclistPageService implements IRoutePag
         this.updatePageDisplay()
     }
 
-    protected onStateUpdate() {
+    /**
+     * The route list changed ('updated'/'loaded'): the page renders from `serviceState`, so the
+     * new routes must be taken over from the event payload, or searched again with the current
+     * filters if the payload is not a search state. The observer the page subscribed to stays.
+     */
+    protected onStateUpdate(state?: unknown) {
+        try {
+            this.refreshServiceState(state)
+        }
+        catch (err: any) {
+            this.logError(err, 'onStateUpdate')
+        }
         this.updatePageDisplay()
+    }
+
+    protected refreshServiceState(state?: unknown) {
+        const current = this.serviceState
+        if (!current)
+            return
+        const payload = state as Partial<SearchState> | undefined
+        const next = Array.isArray(payload?.routes) ? payload as SearchState : this.getRouteList().searchRepo(current.filters)
+        if (!Array.isArray(next?.routes))
+            return
+        this.serviceState = { ...next, filters: current.filters ?? next.filters, observer: current.observer ?? next.observer }
     }
 
     protected retryLinks() {
