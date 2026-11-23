@@ -21,11 +21,14 @@ const UNHEALTHY_THRESHOLD = 60000
 const RESTART_TIMEOUT = 45000
 const RESTART_RETRY_DELAY = 60000
 
-// The BLE peripheral scan is of no use while a ride is running: devices are connected already and a
-// reconnect re-uses their announcement. Probing/scanning only adds load and, on some stacks, can
-// stall the connections of the devices in use.
+// The background discovery of the interfaces is of no use while a ride is running: devices are connected
+// already and a reconnect re-uses their announcement. It only adds load (on mobile the Wifi interface keeps
+// several mDNS browsers and the multicast lock open, which costs CPU and battery) and, on some stacks, can
+// stall the connections of the devices in use. Interfaces without such a discovery are not listed.
+//  - ble:  the peripheral scan (including the GATT probes of the desktop's WebBLE binding)
+//  - wifi: the mDNS browsers of the Direct Connect interface
 const RIDE_SCAN_PAUSE_REASON = 'ride'
-const RIDE_SCAN_PAUSE_INTERFACES = ['ble']
+const RIDE_SCAN_PAUSE_INTERFACES = ['ble','wifi']
 
 type DuplicateInfo = {
     udid: string;

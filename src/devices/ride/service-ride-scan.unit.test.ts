@@ -4,7 +4,7 @@ import { DeviceRideService } from './service'
 import { AdapterRideInfo } from './types'
 import { Inject } from '../../base/decorators'
 
-// The BLE peripheral scan is paused while a ride is running (reason 'ride') and must be resumed on every
+// The BLE peripheral scan and the Wifi (mDNS) discovery are paused while a ride is running (reason 'ride') and must be resumed on every
 // way a ride can end, without undoing a pause that was requested by the app going to the background.
 
 describe('DeviceRideService - background scan during a ride',()=>{
@@ -43,11 +43,11 @@ describe('DeviceRideService - background scan during a ride',()=>{
         jest.clearAllMocks()
     })
 
-    test('pauses the BLE scan once the ride has started, and only for BLE',async ()=>{
+    test('pauses the BLE scan and the Wifi (mDNS) discovery once the ride has started, and nothing else',async ()=>{
         await service.startAdapters([createInfo('1','2606')],'start')
 
         expect(access.pauseBackgroundActivity).toHaveBeenCalledTimes(1)
-        expect(access.pauseBackgroundActivity).toHaveBeenCalledWith('ride',['ble'])
+        expect(access.pauseBackgroundActivity).toHaveBeenCalledWith('ride',['ble','wifi'])
     })
 
     test.each(['pair','check'] as const)('does not pause the scan for a %s start',async (startType)=>{
@@ -74,7 +74,7 @@ describe('DeviceRideService - background scan during a ride',()=>{
 
         await service.stop()
 
-        expect(access.resumeBackgroundActivity).toHaveBeenCalledWith('ride',['ble'])
+        expect(access.resumeBackgroundActivity).toHaveBeenCalledWith('ride',['ble','wifi'])
     })
 
     test('stopping a single device keeps the scan paused',async ()=>{
@@ -122,7 +122,7 @@ describe('DeviceRideService - background scan during a ride',()=>{
         await service.start({} as any)
 
         expect(service.logEvent).toHaveBeenCalledWith({message:'ride scan pause leaked'})
-        expect(access.resumeBackgroundActivity).toHaveBeenCalledWith('ride',['ble'])
+        expect(access.resumeBackgroundActivity).toHaveBeenCalledWith('ride',['ble','wifi'])
     })
 
     test('a failing pause or resume never breaks the ride',async ()=>{
